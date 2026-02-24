@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/surge-downloader/surge/internal/engine/events"
@@ -16,6 +17,8 @@ import (
 type activeDownload struct {
 	config types.DownloadConfig
 	cancel context.CancelFunc
+	// running is true while the worker goroutine is executing TUIDownload for this config.
+	running atomic.Bool
 }
 
 type WorkerPool struct {
@@ -35,6 +38,8 @@ var (
 	gracefulShutdownPauseSoftTimeout = 10 * time.Second
 	// gracefulShutdownPausePollInterval controls how often shutdown rechecks pause state.
 	gracefulShutdownPausePollInterval = 100 * time.Millisecond
+	// gracefulShutdownPauseHardTimeout prevents indefinite shutdown hangs if a worker is stuck.
+	gracefulShutdownPauseHardTimeout = 30 * time.Second
 )
 
 func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
@@ -282,16 +287,18 @@ func (p *WorkerPool) worker() {
 		ctx, cancel := context.WithCancel(context.Background())
 
 		// Register active download
-		ad := &activeDownload{
-			config: cfg,
-			cancel: cancel,
-		}
-		p.mu.Lock()
-		delete(p.queued, cfg.ID)
-		p.downloads[cfg.ID] = ad
-		p.mu.Unlock()
+			ad := &activeDownload{
+				config: cfg,
+				cancel: cancel,
+			}
+			ad.running.Store(true)
+			p.mu.Lock()
+			delete(p.queued, cfg.ID)
+			p.downloads[cfg.ID] = ad
+			p.mu.Unlock()
 
-		err := TUIDownload(ctx, &ad.config)
+			err := TUIDownload(ctx, &ad.config)
+			ad.running.Store(false)
 
 		// Logic:
 		// 1. If Pause() was called: State.IsPaused() is true. We keep the task in p.downloads (so it can be resumed).
@@ -445,6 +452,12 @@ func (p *WorkerPool) GracefulShutdown() {
 		stillPausing := false
 		for _, ad := range p.downloads {
 			if ad.config.State != nil && ad.config.State.IsPausing() {
+				// If no worker is running this download anymore, pausing is stale.
+				// Normalize it so shutdown can proceed.
+				if !ad.running.Load() {
+					ad.config.State.SetPausing(false)
+					continue
+				}
 				stillPausing = true
 				break
 			}
@@ -458,6 +471,10 @@ func (p *WorkerPool) GracefulShutdown() {
 		if !warned && time.Since(start) >= gracefulShutdownPauseSoftTimeout {
 			utils.Debug("GracefulShutdown: downloads still pausing after %v, continuing to wait for durable pause", gracefulShutdownPauseSoftTimeout)
 			warned = true
+		}
+		if time.Since(start) >= gracefulShutdownPauseHardTimeout {
+			utils.Debug("GracefulShutdown: forcing exit from pausing wait after hard timeout %v", gracefulShutdownPauseHardTimeout)
+			break
 		}
 		<-ticker.C
 	}

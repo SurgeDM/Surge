@@ -350,12 +350,14 @@ func TestWorkerPool_Cancel_RemovesFromMap(t *testing.T) {
 	state := types.NewProgressState("test-id", 1000)
 
 	pool.mu.Lock()
-	pool.downloads["test-id"] = &activeDownload{
+	ad := &activeDownload{
 		config: types.DownloadConfig{
 			ID:    "test-id",
 			State: state,
 		},
 	}
+	ad.running.Store(true)
+	pool.downloads["test-id"] = ad
 	pool.mu.Unlock()
 
 	pool.Cancel("test-id")
@@ -743,21 +745,26 @@ func TestWorkerPool_GracefulShutdown_WaitsPastSoftTimeout(t *testing.T) {
 
 	ps := types.NewProgressState("wait-test-id", 1000)
 	pool.mu.Lock()
-	pool.downloads["wait-test-id"] = &activeDownload{
+	ad := &activeDownload{
 		config: types.DownloadConfig{
 			ID:    "wait-test-id",
 			State: ps,
 		},
 	}
+	ad.running.Store(true)
+	pool.downloads["wait-test-id"] = ad
 	pool.mu.Unlock()
 
 	origSoftTimeout := gracefulShutdownPauseSoftTimeout
 	origPollInterval := gracefulShutdownPausePollInterval
+	origHardTimeout := gracefulShutdownPauseHardTimeout
 	gracefulShutdownPauseSoftTimeout = 30 * time.Millisecond
 	gracefulShutdownPausePollInterval = 5 * time.Millisecond
+	gracefulShutdownPauseHardTimeout = 5 * time.Second
 	defer func() {
 		gracefulShutdownPauseSoftTimeout = origSoftTimeout
 		gracefulShutdownPausePollInterval = origPollInterval
+		gracefulShutdownPauseHardTimeout = origHardTimeout
 	}()
 
 	done := make(chan struct{})
@@ -787,6 +794,49 @@ func TestWorkerPool_GracefulShutdown_WaitsPastSoftTimeout(t *testing.T) {
 	case <-done:
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("GracefulShutdown did not return after pausing was cleared")
+	}
+}
+
+func TestWorkerPool_GracefulShutdown_ClearsStalePausingWithoutWorker(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 1)
+
+	ps := types.NewProgressState("stale-pausing-id", 1000)
+	ps.Pause()
+	ps.SetPausing(true)
+
+	pool.mu.Lock()
+	pool.downloads["stale-pausing-id"] = &activeDownload{
+		config: types.DownloadConfig{
+			ID:    "stale-pausing-id",
+			State: ps,
+		},
+	}
+	pool.mu.Unlock()
+
+	origPollInterval := gracefulShutdownPausePollInterval
+	origHardTimeout := gracefulShutdownPauseHardTimeout
+	gracefulShutdownPausePollInterval = 5 * time.Millisecond
+	gracefulShutdownPauseHardTimeout = 2 * time.Second
+	defer func() {
+		gracefulShutdownPausePollInterval = origPollInterval
+		gracefulShutdownPauseHardTimeout = origHardTimeout
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		pool.GracefulShutdown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("GracefulShutdown should not block on stale pausing state")
+	}
+
+	if ps.IsPausing() {
+		t.Fatal("expected stale pausing flag to be cleared during shutdown")
 	}
 }
 
