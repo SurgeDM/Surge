@@ -40,6 +40,16 @@
     <footer class="footer">
       <div class="auth-row">
         <div class="auth-label">
+          <label for="serverUrl">Server URL</label>
+        </div>
+        <div class="auth-input">
+          <input type="text" id="serverUrl" placeholder="http://127.0.0.1:1700">
+          <button id="saveServerUrl">Save</button>
+        </div>
+        <div class="auth-status" id="serverUrlStatus"></div>
+      </div>
+      <div class="auth-row">
+        <div class="auth-label">
           <label for="authToken">Auth Token</label>
           <span class="auth-help" data-tooltip="Get the token by running: surge token">?</span>
         </div>

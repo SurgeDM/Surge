@@ -6,9 +6,11 @@ const MAX_PORT_SCAN = 100;
 const INTERCEPT_ENABLED_KEY = "interceptEnabled";
 const AUTH_TOKEN_KEY = "authToken";
 const AUTH_VERIFIED_KEY = "authVerified";
+const SERVER_URL_KEY = "serverUrl";
 
 // === State ===
 let cachedPort = null;
+let cachedServerUrl = null;
 let downloads = new Map();
 let lastHealthCheck = 0;
 let isConnected = false;
@@ -119,21 +121,68 @@ async function authHeaders() {
   return { Authorization: `Bearer ${token}` };
 }
 
-chrome.storage.onChanged.addListener((changes, areaName) => {
-  if (areaName !== "local" || !changes[AUTH_TOKEN_KEY]) {
-    return;
+// === Port Discovery / Server URL ===
+
+async function getServerUrlConfig() {
+  if (cachedServerUrl !== null) {
+    return cachedServerUrl;
   }
-  const nextToken = changes[AUTH_TOKEN_KEY].newValue;
-  cachedAuthToken = normalizeToken(nextToken);
+  const result = await chrome.storage.local.get(SERVER_URL_KEY);
+  cachedServerUrl = result[SERVER_URL_KEY] || "";
+  return cachedServerUrl;
+}
+
+async function setServerUrlConfig(url) {
+  const normalized = url ? url.trim().replace(/\/+$/, "") : "";
+  await chrome.storage.local.set({ [SERVER_URL_KEY]: normalized });
+  cachedServerUrl = normalized;
+  return true;
+}
+
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "local") return;
+  if (changes[SERVER_URL_KEY]) {
+    cachedServerUrl = changes[SERVER_URL_KEY].newValue || "";
+  }
+  if (changes[AUTH_TOKEN_KEY]) {
+    cachedAuthToken = normalizeToken(changes[AUTH_TOKEN_KEY].newValue);
+  }
 });
 
-// === Port Discovery ===
+// Returns the base URL to use for API calls (e.g. "http://127.0.0.1:1700")
+// or null if no server can be found
+async function findSurgeUrl() {
+  // 1. Try custom server URL if configured
+  const customUrl = await getServerUrlConfig();
+  if (customUrl) {
+    try {
+      const response = await fetch(`${customUrl}/health`, {
+        method: "GET",
+        signal: AbortSignal.timeout(1000),
+      });
+      if (response.ok) {
+        const contentType = response.headers.get("content-type") || "";
+        if (contentType.includes("application/json")) {
+          const data = await response.json().catch(() => null);
+          if (data && data.status === "ok") {
+            isConnected = true;
+            return customUrl;
+          }
+        }
+      }
+    } catch {}
+    // If a custom URL is configured but unreachable, we don't fall back to localhost scanning
+    // (User explicitly set it to a server, so we shouldn't guess what else to use)
+    isConnected = false;
+    return null;
+  }
 
-async function findSurgePort() {
+  // 2. Fall back to localhost port scanning
   // Try cached port first (with quick timeout)
   if (cachedPort) {
     try {
-      const response = await fetch(`http://127.0.0.1:${cachedPort}/health`, {
+      const url = `http://127.0.0.1:${cachedPort}`;
+      const response = await fetch(`${url}/health`, {
         method: "GET",
         signal: AbortSignal.timeout(300),
       });
@@ -143,7 +192,7 @@ async function findSurgePort() {
           const data = await response.json().catch(() => null);
           if (data && data.status === "ok") {
             isConnected = true;
-            return cachedPort;
+            return url;
           }
         }
       }
@@ -154,7 +203,8 @@ async function findSurgePort() {
   // Scan for available port
   for (let port = DEFAULT_PORT; port < DEFAULT_PORT + MAX_PORT_SCAN; port++) {
     try {
-      const response = await fetch(`http://127.0.0.1:${port}/health`, {
+      const url = `http://127.0.0.1:${port}`;
+      const response = await fetch(`${url}/health`, {
         method: "GET",
         signal: AbortSignal.timeout(200),
       });
@@ -170,7 +220,7 @@ async function findSurgePort() {
         cachedPort = port;
         isConnected = true;
         console.log(`[Surge] Found server on port ${port}`);
-        return port;
+        return url;
       }
     } catch {}
   }
@@ -187,23 +237,23 @@ async function checkSurgeHealth() {
   }
   lastHealthCheck = now;
 
-  const port = await findSurgePort();
-  isConnected = port !== null;
+  const url = await findSurgeUrl();
+  isConnected = url !== null;
   return isConnected;
 }
 
 // === Download List Fetching ===
 
 async function fetchDownloadList() {
-  const port = await findSurgePort();
-  if (!port) {
+  const baseUrl = await findSurgeUrl();
+  if (!baseUrl) {
     isConnected = false;
     return { list: [], authError: false };
   }
 
   try {
     const headers = await authHeaders();
-    const response = await fetch(`http://127.0.0.1:${port}/list`, {
+    const response = await fetch(`${baseUrl}/list`, {
       method: "GET",
       headers,
       signal: AbortSignal.timeout(5000),
@@ -257,14 +307,14 @@ async function fetchDownloadList() {
 }
 
 async function validateAuthToken() {
-  const port = await findSurgePort();
-  if (!port) {
+  const baseUrl = await findSurgeUrl();
+  if (!baseUrl) {
     isConnected = false;
     return { ok: false, error: "no_server" };
   }
   try {
     const headers = await authHeaders();
-    const response = await fetch(`http://127.0.0.1:${port}/list`, {
+    const response = await fetch(`${baseUrl}/list`, {
       method: "GET",
       headers,
       signal: AbortSignal.timeout(3000),
@@ -282,8 +332,8 @@ async function validateAuthToken() {
 // === Download Sending ===
 
 async function sendToSurge(url, filename, absolutePath) {
-  const port = await findSurgePort();
-  if (!port) {
+  const baseUrl = await findSurgeUrl();
+  if (!baseUrl) {
     console.error("[Surge] No server found");
     return { success: false, error: "Server not running" };
   }
@@ -307,7 +357,7 @@ async function sendToSurge(url, filename, absolutePath) {
     }
 
     const auth = await authHeaders();
-    const response = await fetch(`http://127.0.0.1:${port}/download`, {
+    const response = await fetch(`${baseUrl}/download`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -338,12 +388,12 @@ async function sendToSurge(url, filename, absolutePath) {
 // === Download Control ===
 
 async function pauseDownload(id) {
-  const port = await findSurgePort();
-  if (!port) return false;
+  const baseUrl = await findSurgeUrl();
+  if (!baseUrl) return false;
 
   try {
     const headers = await authHeaders();
-    const response = await fetch(`http://127.0.0.1:${port}/pause?id=${id}`, {
+    const response = await fetch(`${baseUrl}/pause?id=${id}`, {
       method: "POST",
       headers,
       signal: AbortSignal.timeout(5000),
@@ -356,12 +406,12 @@ async function pauseDownload(id) {
 }
 
 async function resumeDownload(id) {
-  const port = await findSurgePort();
-  if (!port) return false;
+  const baseUrl = await findSurgeUrl();
+  if (!baseUrl) return false;
 
   try {
     const headers = await authHeaders();
-    const response = await fetch(`http://127.0.0.1:${port}/resume?id=${id}`, {
+    const response = await fetch(`${baseUrl}/resume?id=${id}`, {
       method: "POST",
       headers,
       signal: AbortSignal.timeout(5000),
@@ -374,12 +424,12 @@ async function resumeDownload(id) {
 }
 
 async function cancelDownload(id) {
-  const port = await findSurgePort();
-  if (!port) return false;
+  const baseUrl = await findSurgeUrl();
+  if (!baseUrl) return false;
 
   try {
     const headers = await authHeaders();
-    const response = await fetch(`http://127.0.0.1:${port}/delete?id=${id}`, {
+    const response = await fetch(`${baseUrl}/delete?id=${id}`, {
       method: "DELETE",
       headers,
       signal: AbortSignal.timeout(5000),
@@ -739,6 +789,21 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           sendResponse({ success: true });
           break;
         }
+
+        case "getServerUrl": {
+          const url = await getServerUrlConfig();
+          sendResponse({ url });
+          break;
+        }
+
+        case "setServerUrl": {
+          await setServerUrlConfig(message.url);
+          // Setting a new Server URL invalidates our health history and could change our connected status immediately
+          lastHealthCheck = 0;
+          sendResponse({ success: true });
+          break;
+        }
+
         case "getDownloads": {
           const { list, authError } = await fetchDownloadList();
           sendResponse({

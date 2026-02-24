@@ -1,78 +1,104 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=360">
-  <title>Surge</title>
-  <link rel="stylesheet" href="popup.css">
-</head>
-<body>
-  <div class="container">
-    <!-- Header -->
-    <header class="header">
-      <div class="logo">
-        <img src="icons/icon48.png" alt="Surge">
-        <h1>SURGE</h1>
-      </div>
-      <div class="status-badge" id="serverStatus">
-        <span class="status-dot" id="statusDot"></span>
-        <span class="status-text" id="statusText">Connecting...</span>
-      </div>
-    </header>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=360" />
+    <title>Surge</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <div class="container">
+      <!-- Header -->
+      <header class="header">
+        <div class="logo">
+          <img src="icons/icon48.png" alt="Surge" />
+          <h1>SURGE</h1>
+        </div>
+        <div class="status-badge" id="serverStatus">
+          <span class="status-dot" id="statusDot"></span>
+          <span class="status-text" id="statusText">Connecting...</span>
+        </div>
+      </header>
 
-    <!-- Downloads Section -->
-    <section class="downloads-section">
-      <div class="downloads-header">
-        <span class="section-title">Downloads</span>
-        <span class="download-count" id="downloadCount">0</span>
-      </div>
-      
-      <div class="downloads-list" id="downloadsList">
-        <div class="empty-state" id="emptyState">
-          <div class="empty-icon">📦</div>
-          <p>No active downloads</p>
-          <p class="empty-hint">Downloads will appear here automatically</p>
+      <!-- Downloads Section -->
+      <section class="downloads-section">
+        <div class="downloads-header">
+          <span class="section-title">Downloads</span>
+          <span class="download-count" id="downloadCount">0</span>
         </div>
-      </div>
-    </section>
 
-    <!-- Footer -->
-    <footer class="footer">
-      <div class="auth-row">
-        <div class="auth-label">
-          <label for="authToken">Auth Token</label>
-          <span class="auth-help" data-tooltip="Get the token by running: surge token">?</span>
+        <div class="downloads-list" id="downloadsList">
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon">📦</div>
+            <p>No active downloads</p>
+            <p class="empty-hint">Downloads will appear here automatically</p>
+          </div>
         </div>
-        <div class="auth-input">
-          <input type="password" id="authToken" placeholder="Paste token from Surge">
-          <button id="saveToken">Save</button>
-        </div>
-        <div class="auth-status" id="authStatus"></div>
-      </div>
-      <label class="toggle-row">
-        <span>Intercept Downloads</span>
-        <div class="toggle">
-          <input type="checkbox" id="interceptToggle" checked>
-          <span class="toggle-slider"></span>
-        </div>
-      </label>
-    </footer>
-  </div>
+      </section>
 
-  <!-- Duplicate Download Modal -->
-  <div class="modal-overlay hidden" id="duplicateModal">
-    <div class="modal-container">
-      <div class="modal-icon">⚠️</div>
-      <h2 class="modal-title">Duplicate Download</h2>
-      <p class="modal-message">This file is already being downloaded:</p>
-      <p class="modal-filename" id="duplicateFilename">filename.zip</p>
-      <div class="modal-actions">
-        <button class="modal-btn modal-btn-secondary" id="duplicateSkip">Skip</button>
-        <button class="modal-btn modal-btn-primary" id="duplicateConfirm">Download Anyway</button>
+      <!-- Footer -->
+      <footer class="footer">
+        <div class="auth-row">
+          <div class="auth-label">
+            <label for="serverUrl">Server URL</label>
+          </div>
+          <div class="auth-input">
+            <input
+              type="text"
+              id="serverUrl"
+              placeholder="http://127.0.0.1:1700"
+            />
+            <button id="saveServerUrl">Save</button>
+          </div>
+          <div class="auth-status" id="serverUrlStatus"></div>
+        </div>
+        <div class="auth-row">
+          <div class="auth-label">
+            <label for="authToken">Auth Token</label>
+            <span
+              class="auth-help"
+              data-tooltip="Get the token by running: surge token"
+              >?</span
+            >
+          </div>
+          <div class="auth-input">
+            <input
+              type="password"
+              id="authToken"
+              placeholder="Paste token from Surge"
+            />
+            <button id="saveToken">Save</button>
+          </div>
+          <div class="auth-status" id="authStatus"></div>
+        </div>
+        <label class="toggle-row">
+          <span>Intercept Downloads</span>
+          <div class="toggle">
+            <input type="checkbox" id="interceptToggle" checked />
+            <span class="toggle-slider"></span>
+          </div>
+        </label>
+      </footer>
+    </div>
+
+    <!-- Duplicate Download Modal -->
+    <div class="modal-overlay hidden" id="duplicateModal">
+      <div class="modal-container">
+        <div class="modal-icon">⚠️</div>
+        <h2 class="modal-title">Duplicate Download</h2>
+        <p class="modal-message">This file is already being downloaded:</p>
+        <p class="modal-filename" id="duplicateFilename">filename.zip</p>
+        <div class="modal-actions">
+          <button class="modal-btn modal-btn-secondary" id="duplicateSkip">
+            Skip
+          </button>
+          <button class="modal-btn modal-btn-primary" id="duplicateConfirm">
+            Download Anyway
+          </button>
+        </div>
       </div>
     </div>
-  </div>
 
-  <script src="popup.js"></script>
-</body>
+    <script src="popup.js"></script>
+  </body>
 </html>
