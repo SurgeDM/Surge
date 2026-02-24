@@ -120,6 +120,9 @@ surge token
 Connect to a running Surge daemon (local or remote).
 
 ```bash
+# Connect to local server (auto-detected)
+surge connect
+
 # Connect to a remote daemon
 surge connect 192.168.1.10:1700 --token <token>
 

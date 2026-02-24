@@ -194,6 +194,54 @@ func TestCorsMiddleware_PassesThrough(t *testing.T) {
 }
 
 // =============================================================================
+// connect auto-detection Tests
+// =============================================================================
+
+func TestConnectCmd_AutoDetectsLocalServer(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	if err := config.EnsureDirs(); err != nil {
+		t.Fatalf("Failed to ensure dirs: %v", err)
+	}
+
+	// Save a port to simulate a running server
+	saveActivePort(1700)
+	defer removeActivePort()
+
+	// readActivePort should find the port
+	port := readActivePort()
+	if port != 1700 {
+		t.Fatalf("Expected port 1700, got %d", port)
+	}
+
+	// The constructed target should resolve correctly
+	target := fmt.Sprintf("127.0.0.1:%d", port)
+	baseURL, err := resolveConnectBaseURL(target, false)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if baseURL != "http://127.0.0.1:1700" {
+		t.Fatalf("Expected http://127.0.0.1:1700, got %s", baseURL)
+	}
+}
+
+func TestConnectCmd_NoServerRunning(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	if err := config.EnsureDirs(); err != nil {
+		t.Fatalf("Failed to ensure dirs: %v", err)
+	}
+
+	// No port file exists — should return 0
+	port := readActivePort()
+	if port != 0 {
+		t.Fatalf("Expected port 0 (no server), got %d", port)
+	}
+}
+
+// =============================================================================
 // connect target resolution Tests
 // =============================================================================
 
