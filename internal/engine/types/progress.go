@@ -277,7 +277,7 @@ func (ps *ProgressState) RestoreBitmap(bitmap []byte, actualChunkSize int64) {
 		return
 	}
 
-	utils.Debug("RestoreBitmap: Len=%d, ChunkSize=%d", len(bitmap), actualChunkSize)
+	//utils.Debug("RestoreBitmap: Len=%d, ChunkSize=%d", len(bitmap), actualChunkSize)
 
 	ps.ChunkBitmap = bitmap
 	ps.ActualChunkSize = actualChunkSize
