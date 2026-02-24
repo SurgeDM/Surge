@@ -1,7 +1,6 @@
 package concurrent
 
 import (
-	"sync/atomic"
 	"time"
 
 	"github.com/surge-downloader/surge/internal/utils"
@@ -67,7 +66,7 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 
 		// Check for absolute stall: no data received for StallTimeout
 		// This catches dead connections that the relative speed check misses
-		lastActivity := atomic.LoadInt64(&active.LastActivity)
+		lastActivity := active.LastActivity.Load()
 		if lastActivity > 0 {
 			timeSinceData := now.Sub(time.Unix(0, lastActivity))
 			if timeSinceData >= stallTimeout {

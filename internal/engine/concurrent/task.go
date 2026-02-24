@@ -12,28 +12,28 @@ import (
 // ActiveTask tracks a task currently being processed by a worker
 type ActiveTask struct {
 	Task          types.Task
-	CurrentOffset int64 // Atomic
-	StopAt        int64 // Atomic
+	CurrentOffset atomic.Int64
+	StopAt        atomic.Int64
 
 	// Health monitoring fields
-	LastActivity int64              // Atomic: Unix nano timestamp of last data received
+	LastActivity atomic.Int64       // Unix nano timestamp of last data received
 	Speed        float64            // EMA-smoothed speed in bytes/sec (protected by mutex)
 	StartTime    time.Time          // When this task started
 	Cancel       context.CancelFunc // Cancel function to abort this task
 	SpeedMu      sync.Mutex         // Protects Speed field
 
 	// Sliding window for recent speed tracking
-	WindowStart time.Time // When current measurement window started
-	WindowBytes int64     // Bytes downloaded in current window (atomic)
+	WindowStart time.Time    // When current measurement window started
+	WindowBytes atomic.Int64 // Bytes downloaded in current window
 
 	// Hedged request tracking
-	Hedged int32 // Atomic: 1 if an idle worker is already racing this task
+	Hedged atomic.Int32 // 1 if an idle worker is already racing this task
 }
 
 // RemainingBytes returns the number of bytes left for this task
 func (at *ActiveTask) RemainingBytes() int64 {
-	current := atomic.LoadInt64(&at.CurrentOffset)
-	stopAt := atomic.LoadInt64(&at.StopAt)
+	current := at.CurrentOffset.Load()
+	stopAt := at.StopAt.Load()
 	if current >= stopAt {
 		return 0
 	}
@@ -42,8 +42,8 @@ func (at *ActiveTask) RemainingBytes() int64 {
 
 // RemainingTask returns a Task representing the remaining work, or nil if complete
 func (at *ActiveTask) RemainingTask() *types.Task {
-	current := atomic.LoadInt64(&at.CurrentOffset)
-	stopAt := atomic.LoadInt64(&at.StopAt)
+	current := at.CurrentOffset.Load()
+	stopAt := at.StopAt.Load()
 	if current >= stopAt {
 		return nil
 	}
@@ -57,7 +57,7 @@ func (at *ActiveTask) GetSpeed() float64 {
 	at.SpeedMu.Unlock()
 
 	// Check for stall
-	lastActivity := atomic.LoadInt64(&at.LastActivity)
+	lastActivity := at.LastActivity.Load()
 	if lastActivity == 0 {
 		return speed
 	}

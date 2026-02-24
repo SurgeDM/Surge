@@ -163,12 +163,13 @@ func TestHealth_StallDetection(t *testing.T) {
 
 	// Worker with last activity 2 seconds ago (exceeds 1s StallTimeout)
 	stalledCtx, stalledCancel := context.WithCancel(ctx)
-	d.activeTasks[0] = &ActiveTask{
-		StartTime:    now.Add(-10 * time.Second),
-		LastActivity: now.Add(-2 * time.Second).UnixNano(), // Stalled for 2s
-		Speed:        5 * 1024 * 1024,                      // 5 MB/s (fast speed, but stalled)
-		Cancel:       stalledCancel,
+	active := &ActiveTask{
+		StartTime: now.Add(-10 * time.Second),
+		Cancel:    stalledCancel,
 	}
+	active.LastActivity.Store(now.Add(-2 * time.Second).UnixNano()) // Stalled for 2s
+	active.Speed = 5 * 1024 * 1024                                  // 5 MB/s (fast speed, but stalled)
+	d.activeTasks[0] = active
 
 	d.checkWorkerHealth()
 

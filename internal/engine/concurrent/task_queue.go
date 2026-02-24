@@ -14,7 +14,7 @@ type TaskQueue struct {
 	mu          sync.Mutex
 	cond        *sync.Cond
 	done        bool
-	idleWorkers int64 // Atomic counter for idle workers
+	idleWorkers atomic.Int64 // Atomic counter for idle workers
 }
 
 func NewTaskQueue() *TaskQueue {
@@ -42,7 +42,7 @@ func (q *TaskQueue) PushMultiple(tasks []types.Task) {
 
 func (q *TaskQueue) Pop() (types.Task, bool) {
 	// Mark as idle while waiting
-	atomic.AddInt64(&q.idleWorkers, 1)
+	q.idleWorkers.Add(1)
 
 	q.mu.Lock()
 	defer q.mu.Unlock()
@@ -52,7 +52,7 @@ func (q *TaskQueue) Pop() (types.Task, bool) {
 	}
 
 	// No longer idle once we have work (or are done)
-	atomic.AddInt64(&q.idleWorkers, -1)
+	q.idleWorkers.Add(-1)
 
 	if len(q.tasks) == 0 {
 		return types.Task{}, false
@@ -83,7 +83,7 @@ func (q *TaskQueue) Len() int {
 }
 
 func (q *TaskQueue) IdleWorkers() int64 {
-	return atomic.LoadInt64(&q.idleWorkers)
+	return q.idleWorkers.Load()
 }
 
 // DrainRemaining returns all remaining tasks in the queue (used for pause/resume)
