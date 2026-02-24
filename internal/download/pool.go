@@ -28,6 +28,15 @@ type WorkerPool struct {
 	maxDownloads int
 }
 
+var (
+	// gracefulShutdownPauseSoftTimeout controls when we emit a warning that
+	// pausing is taking longer than expected. It is intentionally soft; shutdown
+	// continues waiting for durable pause persistence.
+	gracefulShutdownPauseSoftTimeout = 10 * time.Second
+	// gracefulShutdownPausePollInterval controls how often shutdown rechecks pause state.
+	gracefulShutdownPausePollInterval = 100 * time.Millisecond
+)
+
 func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
 	if maxDownloads < 1 {
 		maxDownloads = 3 // Default to 3 if invalid
@@ -426,11 +435,10 @@ func (p *WorkerPool) GracefulShutdown() {
 
 	// Wait for any downloads in "Pausing" state to finish transitioning
 	// This ensures we don't exit while a database write is pending/active
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	ticker := time.NewTicker(100 * time.Millisecond)
+	ticker := time.NewTicker(gracefulShutdownPausePollInterval)
 	defer ticker.Stop()
+	start := time.Now()
+	warned := false
 
 	for {
 		p.mu.RLock()
@@ -447,13 +455,11 @@ func (p *WorkerPool) GracefulShutdown() {
 			break
 		}
 
-		select {
-		case <-ctx.Done():
-			utils.Debug("GracefulShutdown: timed out waiting for downloads to pause")
-			return // Return from function, loop will exit
-		case <-ticker.C:
-			continue
+		if !warned && time.Since(start) >= gracefulShutdownPauseSoftTimeout {
+			utils.Debug("GracefulShutdown: downloads still pausing after %v, continuing to wait for durable pause", gracefulShutdownPauseSoftTimeout)
+			warned = true
 		}
+		<-ticker.C
 	}
 
 	p.wg.Wait() // Blocks until all workers call Done()

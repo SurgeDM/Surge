@@ -737,6 +737,59 @@ func TestWorkerPool_GracefulShutdown_PausesAll(t *testing.T) {
 	}
 }
 
+func TestWorkerPool_GracefulShutdown_WaitsPastSoftTimeout(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 1)
+
+	ps := types.NewProgressState("wait-test-id", 1000)
+	pool.mu.Lock()
+	pool.downloads["wait-test-id"] = &activeDownload{
+		config: types.DownloadConfig{
+			ID:    "wait-test-id",
+			State: ps,
+		},
+	}
+	pool.mu.Unlock()
+
+	origSoftTimeout := gracefulShutdownPauseSoftTimeout
+	origPollInterval := gracefulShutdownPausePollInterval
+	gracefulShutdownPauseSoftTimeout = 30 * time.Millisecond
+	gracefulShutdownPausePollInterval = 5 * time.Millisecond
+	defer func() {
+		gracefulShutdownPauseSoftTimeout = origSoftTimeout
+		gracefulShutdownPausePollInterval = origPollInterval
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		pool.GracefulShutdown()
+		close(done)
+	}()
+
+	deadline := time.Now().Add(250 * time.Millisecond)
+	for !ps.IsPausing() && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
+	}
+	if !ps.IsPausing() {
+		t.Fatal("expected graceful shutdown to set pausing=true")
+	}
+
+	// Wait beyond the soft timeout. Shutdown should still be blocked.
+	time.Sleep(gracefulShutdownPauseSoftTimeout + 20*time.Millisecond)
+	select {
+	case <-done:
+		t.Fatal("GracefulShutdown returned before pausing was cleared")
+	default:
+	}
+
+	ps.SetPausing(false)
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("GracefulShutdown did not return after pausing was cleared")
+	}
+}
+
 func TestWorkerPool_ConcurrentPauseCancel(t *testing.T) {
 	ch := make(chan any, 100)
 	pool := NewWorkerPool(ch, 3)
