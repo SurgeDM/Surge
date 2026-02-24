@@ -16,6 +16,21 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
+const (
+	// DefaultInlineHashMaxBytes bounds synchronous hash work during pause persistence.
+	// Larger files skip hash computation so shutdown can persist state quickly.
+	DefaultInlineHashMaxBytes int64 = 64 * types.MB
+)
+
+// SaveStateOptions controls pause-state persistence behavior.
+type SaveStateOptions struct {
+	// SkipFileHash disables file_hash computation entirely for this save.
+	SkipFileHash bool
+	// MaxInlineFileHashBytes limits synchronous hashing to files <= this size.
+	// If zero or negative, DefaultInlineHashMaxBytes is used.
+	MaxInlineFileHashBytes int64
+}
+
 // URLHash returns a short hash of the URL for master list keying
 // This is used for tracking completed downloads by URL
 func URLHash(url string) string {
@@ -25,6 +40,11 @@ func URLHash(url string) string {
 
 // SaveState saves download state to SQLite
 func SaveState(url string, destPath string, state *types.DownloadState) error {
+	return SaveStateWithOptions(url, destPath, state, SaveStateOptions{})
+}
+
+// SaveStateWithOptions saves download state to SQLite with custom persistence options.
+func SaveStateWithOptions(url string, destPath string, state *types.DownloadState, opts SaveStateOptions) error {
 	// Ensure ID is set
 	if state.ID == "" {
 		// Try to find existing ID using StateHash equivalent or just generate new
@@ -39,16 +59,25 @@ func SaveState(url string, destPath string, state *types.DownloadState) error {
 		state.CreatedAt = time.Now().Unix()
 	}
 
-	return withTx(func(tx *sql.Tx) error {
-		// Compute file hash for integrity verification
-		surgePath := state.DestPath + types.IncompleteSuffix
-		fileHash, _ := computeFileHash(surgePath)
+	maxInlineHashBytes := opts.MaxInlineFileHashBytes
+	if maxInlineHashBytes <= 0 {
+		maxInlineHashBytes = DefaultInlineHashMaxBytes
+	}
+	if opts.SkipFileHash {
+		state.FileHash = ""
+	} else {
+		fileHash, err := computeFileHashIfSmall(state.DestPath+types.IncompleteSuffix, maxInlineHashBytes)
+		if err != nil {
+			utils.Debug("SaveState: skipping file hash for %s: %v", state.DestPath, err)
+		}
 		state.FileHash = fileHash
+	}
 
+	return withTx(func(tx *sql.Tx) error {
 		// 1. Upsert into downloads table
 		_, err := tx.Exec(`
-			INSERT INTO downloads (
-				id, url, dest_path, filename, status, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size, file_hash
+				INSERT INTO downloads (
+					id, url, dest_path, filename, status, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size, file_hash
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				url=excluded.url,
@@ -126,7 +155,22 @@ func SaveState(url string, destPath string, state *types.DownloadState) error {
 		}
 
 		return nil
-	})
+		})
+}
+
+func computeFileHashIfSmall(path string, maxBytes int64) (string, error) {
+	if maxBytes <= 0 {
+		maxBytes = DefaultInlineHashMaxBytes
+	}
+
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", err
+	}
+	if info.Size() > maxBytes {
+		return "", nil
+	}
+	return computeFileHash(path)
 }
 
 // LoadState loads download state from SQLite
