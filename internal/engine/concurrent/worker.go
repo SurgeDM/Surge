@@ -278,6 +278,11 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			n, err := resp.Body.Read(buf[readSoFar:readSize])
 			if n > 0 {
 				readSoFar += n
+				// CONTINUOUS HEALTH KEEPALIVE:
+				// Update LastActivity directly off the TCP socket instead of waiting for the buffer
+				// to completely fill and hit disk. This prevents the Health Monitor from killing
+				// workers on slightly slower networks during the 500KB buffer acquisition.
+				atomic.StoreInt64(&activeTask.LastActivity, time.Now().UnixNano())
 			}
 			if err != nil {
 				readErr = err
@@ -311,7 +316,6 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			offset += int64(readSoFar)
 			atomic.StoreInt64(&activeTask.CurrentOffset, offset)
 			atomic.AddInt64(&activeTask.WindowBytes, int64(readSoFar))
-			atomic.StoreInt64(&activeTask.LastActivity, now.UnixNano())
 
 			// Calculate effective contribution (clamping to StopAt is done above via readSoFar truncation)
 			// So readSoFar is exactly what we wrote and what we "own"

@@ -240,10 +240,6 @@ func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 			// Copy headers from original request to redirect request
 			if len(via) > 0 {
 				for key, vals := range via[0].Header {
-					// Skip Range header - we set our own for parallel downloads
-					if key == "Range" {
-						continue
-					}
 					req.Header[key] = vals
 				}
 			}
