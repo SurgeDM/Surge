@@ -32,11 +32,24 @@ type UpdateCheckResultMsg struct {
 	Info *version.UpdateInfo
 }
 
+type shutdownCompleteMsg struct {
+	err error
+}
+
 // checkForUpdateCmd performs an async update check
 func checkForUpdateCmd(currentVersion string) tea.Cmd {
 	return func() tea.Msg {
 		info, _ := version.CheckForUpdate(currentVersion)
 		return UpdateCheckResultMsg{Info: info}
+	}
+}
+
+func shutdownCmd(service interface{ Shutdown() error }) tea.Cmd {
+	return func() tea.Msg {
+		if service == nil {
+			return shutdownCompleteMsg{}
+		}
+		return shutdownCompleteMsg{err: service.Shutdown()}
 	}
 }
 
@@ -200,6 +213,22 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 	if m.Settings == nil {
 		m.Settings = config.DefaultSettings()
+	}
+
+	if m.shuttingDown {
+		switch msg := msg.(type) {
+		case shutdownCompleteMsg:
+			if msg.err != nil {
+				utils.Debug("TUI shutdown error: %v", msg.err)
+			}
+			return m, tea.Quit
+		case tea.WindowSizeMsg:
+			m.width = msg.Width
+			m.height = msg.Height
+			return m, nil
+		default:
+			return m, nil
+		}
 	}
 
 	switch msg := msg.(type) {
@@ -438,15 +467,21 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Notification tick is still used but logs don't expire
 		return m, nil
 
-	case UpdateCheckResultMsg:
-		if msg.Info != nil && msg.Info.UpdateAvailable {
-			m.UpdateInfo = msg.Info
-			m.state = UpdateAvailableState
-		}
-		return m, nil
+		case UpdateCheckResultMsg:
+			if msg.Info != nil && msg.Info.UpdateAvailable {
+				m.UpdateInfo = msg.Info
+				m.state = UpdateAvailableState
+			}
+			return m, nil
 
-	// Handle filepicker messages for all message types when in FilePickerState
-	default:
+		case shutdownCompleteMsg:
+			if msg.err != nil {
+				utils.Debug("TUI shutdown error: %v", msg.err)
+			}
+			return m, tea.Quit
+
+		// Handle filepicker messages for all message types when in FilePickerState
+		default:
 		if m.state == FilePickerState {
 			var cmd tea.Cmd
 			m.filepicker, cmd = m.filepicker.Update(msg)
@@ -571,22 +606,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateListTitle()
 				m.UpdateListItems()
 				return m, nil
-			}
-			// Quit
-			if key.Matches(msg, m.keys.Dashboard.Quit) {
-				// Graceful shutdown
-				if m.Service != nil {
-					_ = m.Service.Shutdown()
 				}
-				return m, tea.Quit
-			}
-			if key.Matches(msg, m.keys.Dashboard.ForceQuit) {
-				// Force quit (same as shutdown for now, or just exit)
-				if m.Service != nil {
-					_ = m.Service.Shutdown()
+				// Quit
+				if key.Matches(msg, m.keys.Dashboard.Quit) {
+					m.shuttingDown = true
+					return m, shutdownCmd(m.Service)
 				}
-				return m, tea.Quit
-			}
+				if key.Matches(msg, m.keys.Dashboard.ForceQuit) {
+					m.shuttingDown = true
+					return m, shutdownCmd(m.Service)
+				}
 
 			// Add download
 			if key.Matches(msg, m.keys.Dashboard.Add) {

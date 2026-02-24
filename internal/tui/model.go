@@ -152,6 +152,8 @@ type RootModel struct {
 	InitialDarkBackground bool // Captured at startup for "System" theme
 
 	logoCache string // Cached logo with gradient applied
+
+	shuttingDown bool
 }
 
 // NewDownloadModel creates a new download model
