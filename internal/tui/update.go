@@ -326,8 +326,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				d.done = true
 				cmds = append(cmds, d.progress.SetPercent(1.0))
 
-				speed := 0.0
-				if msg.Elapsed.Seconds() > 0 {
+				speed := d.Speed
+				if msg.Elapsed.Seconds() >= 1 {
+					speed = float64(d.Total) / float64(int(msg.Elapsed.Seconds()))
+				} else if msg.Elapsed.Seconds() > 0 {
 					speed = float64(d.Total) / msg.Elapsed.Seconds()
 				}
 				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("✔ Done: %s (%.2f MB/s)", d.Filename, speed/Megabyte)))
