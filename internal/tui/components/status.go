@@ -19,18 +19,32 @@ const (
 
 // statusInfo holds the display properties for each status
 type statusInfo struct {
-	icon  string
-	label string
-	color lipgloss.TerminalColor
+	icon         string
+	label        string
+	color        lipgloss.TerminalColor
+	renderedFull string
+	renderedIcon string
 }
 
-var statusMap = map[DownloadStatus]statusInfo{
-	StatusQueued:      {"⋯", "Queued", colors.StatePaused},
-	StatusDownloading: {"⬇", "Downloading", colors.StateDownloading},
-	StatusPaused:      {"⏸", "Paused", colors.StatePaused},
-	StatusComplete:    {"✔", "Completed", colors.StateDone},
-	StatusError:       {"✖", "Error", colors.StateError},
+func initStatusMap() map[DownloadStatus]statusInfo {
+	m := map[DownloadStatus]statusInfo{
+		StatusQueued:      {"⋯", "Queued", colors.StatePaused, "", ""},
+		StatusDownloading: {"⬇", "Downloading", colors.StateDownloading, "", ""},
+		StatusPaused:      {"⏸", "Paused", colors.StatePaused, "", ""},
+		StatusComplete:    {"✔", "Completed", colors.StateDone, "", ""},
+		StatusError:       {"✖", "Error", colors.StateError, "", ""},
+	}
+
+	// Pre-render the styled strings so we don't allocate per-frame
+	for status, info := range m {
+		info.renderedFull = lipgloss.NewStyle().Foreground(info.color).Render(info.icon + " " + info.label)
+		info.renderedIcon = lipgloss.NewStyle().Foreground(info.color).Render(info.icon)
+		m[status] = info
+	}
+	return m
 }
+
+var statusMap = initStatusMap()
 
 // Icon returns the status icon
 func (s DownloadStatus) Icon() string {
@@ -58,14 +72,18 @@ func (s DownloadStatus) Color() lipgloss.TerminalColor {
 
 // Render returns the styled icon + label combination
 func (s DownloadStatus) Render() string {
-	info := statusMap[s]
-	return lipgloss.NewStyle().Foreground(info.color).Render(info.icon + " " + info.label)
+	if info, ok := statusMap[s]; ok {
+		return info.renderedFull
+	}
+	return "Unknown"
 }
 
 // RenderIcon returns just the styled icon
 func (s DownloadStatus) RenderIcon() string {
-	info := statusMap[s]
-	return lipgloss.NewStyle().Foreground(info.color).Render(info.icon)
+	if info, ok := statusMap[s]; ok {
+		return info.renderedIcon
+	}
+	return "?"
 }
 
 // DetermineStatus determines the DownloadStatus based on download state

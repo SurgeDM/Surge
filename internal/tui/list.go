@@ -62,7 +62,13 @@ func (i DownloadItem) FilterValue() string {
 
 // Custom delegate for rendering download items
 type downloadDelegate struct {
-	keys *delegateKeyMap
+	keys           *delegateKeyMap
+	baseTitleStyle lipgloss.Style
+	baseDescStyle  lipgloss.Style
+	selTitleStyle  lipgloss.Style
+	selDescStyle   lipgloss.Style
+	prefixNormal   string
+	prefixSelected string
 }
 
 type delegateKeyMap struct {
@@ -84,8 +90,20 @@ func newDelegateKeyMap() *delegateKeyMap {
 }
 
 func newDownloadDelegate() downloadDelegate {
+	baseTitle := lipgloss.NewStyle().Foreground(ColorWhite).Bold(true)
+	baseDesc := lipgloss.NewStyle().Foreground(ColorLightGray)
+
+	selTitle := lipgloss.NewStyle().Foreground(ColorNeonPink).Bold(true)
+	selDesc := lipgloss.NewStyle().Foreground(ColorNeonCyan)
+
 	return downloadDelegate{
-		keys: newDelegateKeyMap(),
+		keys:           newDelegateKeyMap(),
+		baseTitleStyle: baseTitle,
+		baseDescStyle:  baseDesc,
+		selTitleStyle:  selTitle,
+		selDescStyle:   selDesc,
+		prefixNormal:   "  ",
+		prefixSelected: lipgloss.NewStyle().Foreground(ColorNeonPink).Render("▌ "),
 	}
 }
 
@@ -104,29 +122,16 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 
 	isSelected := index == m.Index()
 
-	// Title styling
-	titleStyle := lipgloss.NewStyle().
-		Foreground(ColorWhite).
-		Bold(true)
-
-	// Description styling
-	descStyle := lipgloss.NewStyle().
-		Foreground(ColorLightGray)
-
-	// Selected item styling
-	if isSelected {
-		titleStyle = titleStyle.Foreground(ColorNeonPink)
-		descStyle = descStyle.Foreground(ColorNeonCyan)
-	}
-
-	// Left border indicator for selected item
+	var titleStyle, descStyle lipgloss.Style
 	var prefix string
 	if isSelected {
-		prefix = lipgloss.NewStyle().
-			Foreground(ColorNeonPink).
-			Render("▌ ")
+		titleStyle = d.selTitleStyle
+		descStyle = d.selDescStyle
+		prefix = d.prefixSelected
 	} else {
-		prefix = "  "
+		titleStyle = d.baseTitleStyle
+		descStyle = d.baseDescStyle
+		prefix = d.prefixNormal
 	}
 
 	// Truncate title if needed
