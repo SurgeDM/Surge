@@ -27,6 +27,10 @@ const authTokenInput = document.getElementById('authToken');
 const saveTokenButton = document.getElementById('saveToken');
 const authStatus = document.getElementById('authStatus');
 
+const serverUrlInput = document.getElementById('serverUrl');
+const saveServerUrlButton = document.getElementById('saveServerUrl');
+const serverUrlStatus = document.getElementById('serverUrlStatus');
+
 // Duplicate modal elements
 const duplicateModal = document.getElementById('duplicateModal');
 const duplicateFilename = document.getElementById('duplicateFilename');
@@ -87,6 +91,10 @@ async function apiCall(action, params = {}) {
         }
         case 'getStatus':
           return { enabled: true }; // Always enabled in standalone
+        case 'getServerUrl':
+          return { url: '' };
+        case 'setServerUrl':
+          return { success: true };
         case 'pauseDownload': {
           const response = await fetch(`${SURGE_API_BASE}/pause?id=${params.id}`, { method: 'POST' });
           return { success: response.ok };
@@ -558,6 +566,18 @@ async function init() {
 
   // Load auth token (extension mode only)
   if (isExtensionContext && authTokenInput) {
+    // Load Server URL
+    if (serverUrlInput) {
+      try {
+        const urlResponse = await apiCall('getServerUrl');
+        if (urlResponse && typeof urlResponse.url === 'string') {
+          serverUrlInput.value = urlResponse.url;
+        }
+      } catch (error) {
+        console.error('[Surge Popup] Error loading server URL:', error);
+      }
+    }
+
     try {
       const response = await apiCall('getAuthToken');
       if (response && typeof response.token === 'string') {
@@ -634,7 +654,7 @@ window.addEventListener('unload', () => {
 
 // Save auth token
 if (isExtensionContext && saveTokenButton && authTokenInput) {
-      saveTokenButton.addEventListener('click', async () => {
+  saveTokenButton.addEventListener('click', async () => {
     authEditPendingSave = false;
     if (!serverConnected) {
       if (authStatus) {
@@ -712,6 +732,56 @@ if (isExtensionContext && saveTokenButton && authTokenInput) {
         authTokenInput.disabled = false;
       }
       saveTokenButton.disabled = false;
+    }
+  });
+}
+
+// Save server URL
+if (isExtensionContext && saveServerUrlButton && serverUrlInput) {
+  saveServerUrlButton.addEventListener('click', async () => {
+    let url = serverUrlInput.value.trim();
+    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+      url = 'http://' + url;
+      serverUrlInput.value = url;
+    }
+    
+    serverUrlInput.disabled = true;
+    saveServerUrlButton.disabled = true;
+    if (serverUrlStatus) {
+      serverUrlStatus.className = 'auth-status';
+      serverUrlStatus.textContent = 'Saving...';
+    }
+
+    try {
+      await apiCall('setServerUrl', { url });
+      if (serverUrlStatus) {
+        serverUrlStatus.className = 'auth-status ok';
+        serverUrlStatus.textContent = 'Saved';
+        setTimeout(() => {
+          if (serverUrlStatus.textContent === 'Saved') {
+            serverUrlStatus.textContent = '';
+            serverUrlStatus.className = 'auth-status';
+          }
+        }, 3000);
+      }
+      // Re-trigger fetch to pick up new server health immediately
+      fetchDownloads();
+    } catch (error) {
+      console.error('[Surge Popup] Error saving server URL:', error);
+      if (serverUrlStatus) {
+        serverUrlStatus.className = 'auth-status err';
+        serverUrlStatus.textContent = 'Failed to save';
+      }
+    } finally {
+      serverUrlInput.disabled = false;
+      saveServerUrlButton.disabled = false;
+    }
+  });
+
+  serverUrlInput.addEventListener('input', () => {
+    if (serverUrlStatus) {
+      serverUrlStatus.className = 'auth-status';
+      serverUrlStatus.textContent = '';
     }
   });
 }

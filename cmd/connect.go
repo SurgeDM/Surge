@@ -16,11 +16,24 @@ import (
 )
 
 var connectCmd = &cobra.Command{
-	Use:   "connect <host:port>",
+	Use:   "connect [host:port]",
 	Short: "Connect TUI to a running Surge daemon",
-	Args:  cobra.ExactArgs(1),
+	Long:  `Connect to a running Surge daemon and open the TUI. When no target is specified, auto-detects a locally running server.`,
+	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		connectAndRunTUI(cmd, args[0])
+		var target string
+		if len(args) > 0 {
+			target = args[0]
+		} else {
+			port := readActivePort()
+			if port == 0 {
+				fmt.Println("No local Surge server detected. Start one with 'surge' or 'surge server', or specify a target: surge connect <host:port>")
+				os.Exit(1)
+			}
+			target = fmt.Sprintf("127.0.0.1:%d", port)
+			fmt.Printf("Auto-detected local server on port %d\n", port)
+		}
+		connectAndRunTUI(cmd, target)
 	},
 }
 
