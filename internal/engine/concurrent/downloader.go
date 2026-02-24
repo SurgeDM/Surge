@@ -304,12 +304,12 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	}
 
 	// Determine connections and chunk size
-	// Determine connections and chunk size
 	numConns := d.getInitialConnections(fileSize)
 	chunkSize := d.determineChunkSize(fileSize, numConns)
 
 	// Create tuned HTTP client for concurrent downloads
 	client := d.newConcurrentClient(numConns)
+	defer client.CloseIdleConnections()
 
 	// Initialize chunk visualization
 	if d.State != nil {

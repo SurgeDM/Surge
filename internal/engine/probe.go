@@ -53,6 +53,7 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 			return nil
 		},
 	}
+	defer client.CloseIdleConnections()
 
 	// Retry logic for probe request
 	for i := 0; i < 3; i++ {

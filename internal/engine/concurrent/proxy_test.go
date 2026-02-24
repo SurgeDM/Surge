@@ -41,6 +41,7 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 
 		// Execute
 		client := &http.Client{}
+		defer client.CloseIdleConnections()
 		resp, err := client.Do(req)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)

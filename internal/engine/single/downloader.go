@@ -53,6 +53,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	if err != nil {
 		return err
 	}
+	defer d.Client.CloseIdleConnections()
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			utils.Debug("Error closing response body: %v", err)
