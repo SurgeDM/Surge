@@ -27,7 +27,8 @@ type ActiveTask struct {
 	WindowBytes int64     // Bytes downloaded in current window (atomic)
 
 	// Hedged request tracking
-	Hedged int32 // Atomic: 1 if an idle worker is already racing this task
+	Hedged          int32  // Atomic: 1 if an idle worker is already racing this task
+	SharedMaxOffset *int64 // Atomic: highest offset reached by any racing worker
 }
 
 // RemainingBytes returns the number of bytes left for this task

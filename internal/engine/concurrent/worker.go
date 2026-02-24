@@ -63,13 +63,17 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			taskCtx, taskCancel := context.WithCancel(ctx)
 			now := time.Now()
 			activeTask := &ActiveTask{
-				Task:          task,
-				CurrentOffset: task.Offset,
-				StopAt:        task.Offset + task.Length,
-				LastActivity:  now.UnixNano(),
-				StartTime:     now,
-				Cancel:        taskCancel,
-				WindowStart:   now, // Initialize sliding window
+				Task:            task,
+				CurrentOffset:   task.Offset,
+				StopAt:          task.Offset + task.Length,
+				LastActivity:    now.UnixNano(),
+				StartTime:       now,
+				Cancel:          taskCancel,
+				WindowStart:     now, // Initialize sliding window
+				SharedMaxOffset: task.SharedMaxOffset,
+			}
+			if task.SharedMaxOffset != nil {
+				activeTask.Hedged = 1 // Prevent infinite hedging of hedged tasks
 			}
 			d.activeMu.Lock()
 			d.activeTasks[id] = activeTask
@@ -314,16 +318,45 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			now := time.Now()
 			rangeStart := offset // Start of this write
 			offset += int64(readSoFar)
-			atomic.StoreInt64(&activeTask.CurrentOffset, offset)
-			atomic.AddInt64(&activeTask.WindowBytes, int64(readSoFar))
 
-			// Calculate effective contribution (clamping to StopAt is done above via readSoFar truncation)
-			// So readSoFar is exactly what we wrote and what we "own"
-
-			if pendingStart == -1 {
-				pendingStart = rangeStart
+			// Compute newly written bytes deduplicated across racing workers
+			var newlyWritten int64
+			if activeTask.SharedMaxOffset != nil {
+				for {
+					maxOff := atomic.LoadInt64(activeTask.SharedMaxOffset)
+					if offset <= maxOff {
+						// This exact byte range was already reported by the racing worker!
+						newlyWritten = 0
+						break
+					}
+					if rangeStart >= maxOff {
+						// Entirely new progress
+						if atomic.CompareAndSwapInt64(activeTask.SharedMaxOffset, maxOff, offset) {
+							newlyWritten = int64(readSoFar)
+							break
+						}
+					} else {
+						// Partially new progress
+						if atomic.CompareAndSwapInt64(activeTask.SharedMaxOffset, maxOff, offset) {
+							newlyWritten = offset - maxOff
+							break
+						}
+					}
+				}
+			} else {
+				newlyWritten = int64(readSoFar)
 			}
-			pendingBytes += int64(readSoFar)
+
+			atomic.StoreInt64(&activeTask.CurrentOffset, offset)
+			atomic.AddInt64(&activeTask.WindowBytes, newlyWritten)
+
+			// Calculate effective contribution
+			if newlyWritten > 0 {
+				if pendingStart == -1 {
+					pendingStart = offset - newlyWritten
+				}
+				pendingBytes += newlyWritten
+			}
 
 			// Check thresholds
 			if pendingBytes >= batchSizeThreshold || now.Sub(lastUpdate) >= batchTimeThreshold {
@@ -471,16 +504,24 @@ func (d *ConcurrentDownloader) HedgeWork(queue *TaskQueue) bool {
 		return false // Another goroutine hedged it first
 	}
 
-	// Create a duplicate task for the remaining byte range
 	current := atomic.LoadInt64(&bestActive.CurrentOffset)
 	stopAt := atomic.LoadInt64(&bestActive.StopAt)
 	if current >= stopAt {
 		return false
 	}
 
+	// Initialize the shared deduplication state for both tasks
+	if bestActive.SharedMaxOffset == nil {
+		maxOff := new(int64)
+		*maxOff = current
+		bestActive.SharedMaxOffset = maxOff
+	}
+
+	// Create a duplicate task for the remaining byte range
 	hedgedTask := types.Task{
-		Offset: current,
-		Length: stopAt - current,
+		Offset:          current,
+		Length:          stopAt - current,
+		SharedMaxOffset: bestActive.SharedMaxOffset,
 	}
 
 	queue.Push(hedgedTask)
