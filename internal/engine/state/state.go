@@ -1,6 +1,7 @@
 package state
 
 import (
+	"crypto/md5"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -17,18 +18,21 @@ import (
 )
 
 const (
-	// DefaultInlineHashMaxBytes bounds synchronous hash work during pause persistence.
-	// Larger files skip hash computation so shutdown can persist state quickly.
-	DefaultInlineHashMaxBytes int64 = 64 * types.MB
+	// DefaultInlineHashTimeout bounds synchronous hash work during pause persistence.
+	// If hashing takes longer than this, we skip storing file_hash for this snapshot.
+	DefaultInlineHashTimeout = 10 * time.Second
+
+	hashPrefixMD5    = "md5:"
+	hashPrefixSHA256 = "sha256:"
 )
 
 // SaveStateOptions controls pause-state persistence behavior.
 type SaveStateOptions struct {
 	// SkipFileHash disables file_hash computation entirely for this save.
 	SkipFileHash bool
-	// MaxInlineFileHashBytes limits synchronous hashing to files <= this size.
-	// If zero or negative, DefaultInlineHashMaxBytes is used.
-	MaxInlineFileHashBytes int64
+	// InlineHashTimeout limits synchronous hashing time.
+	// If zero or negative, DefaultInlineHashTimeout is used.
+	InlineHashTimeout time.Duration
 }
 
 // URLHash returns a short hash of the URL for master list keying
@@ -59,16 +63,18 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 		state.CreatedAt = time.Now().Unix()
 	}
 
-	maxInlineHashBytes := opts.MaxInlineFileHashBytes
-	if maxInlineHashBytes <= 0 {
-		maxInlineHashBytes = DefaultInlineHashMaxBytes
+	hashTimeout := opts.InlineHashTimeout
+	if hashTimeout <= 0 {
+		hashTimeout = DefaultInlineHashTimeout
 	}
 	if opts.SkipFileHash {
 		state.FileHash = ""
 	} else {
-		fileHash, err := computeFileHashIfSmall(state.DestPath+types.IncompleteSuffix, maxInlineHashBytes)
+		fileHash, timedOut, err := computeFileHashMD5WithTimeout(state.DestPath+types.IncompleteSuffix, hashTimeout)
 		if err != nil {
-			utils.Debug("SaveState: skipping file hash for %s: %v", state.DestPath, err)
+			utils.Debug("SaveState: skipping file hash for %s due to error: %v", state.DestPath, err)
+		} else if timedOut {
+			utils.Debug("SaveState: skipping file hash for %s after timeout %v", state.DestPath, hashTimeout)
 		}
 		state.FileHash = fileHash
 	}
@@ -154,23 +160,85 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 			}
 		}
 
-		return nil
+			return nil
 		})
 }
 
-func computeFileHashIfSmall(path string, maxBytes int64) (string, error) {
-	if maxBytes <= 0 {
-		maxBytes = DefaultInlineHashMaxBytes
+func computeFileHashMD5WithTimeout(path string, timeout time.Duration) (string, bool, error) {
+	if timeout <= 0 {
+		timeout = DefaultInlineHashTimeout
 	}
 
-	info, err := os.Stat(path)
+	f, err := os.Open(path)
 	if err != nil {
-		return "", err
+		return "", false, err
 	}
-	if info.Size() > maxBytes {
-		return "", nil
+	defer func() { _ = f.Close() }()
+
+	h := md5.New()
+	buf := make([]byte, 1024*1024)
+	deadline := time.Now().Add(timeout)
+
+	for {
+		if time.Now().After(deadline) {
+			return "", true, nil
+		}
+		n, readErr := f.Read(buf)
+		if n > 0 {
+			if _, err := h.Write(buf[:n]); err != nil {
+				return "", false, fmt.Errorf("failed to update md5 hash: %w", err)
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return "", false, fmt.Errorf("failed to read file for md5 hash: %w", readErr)
+		}
 	}
-	return computeFileHash(path)
+
+	return hashPrefixMD5 + hex.EncodeToString(h.Sum(nil)), false, nil
+}
+
+func compareAgainstStoredFileHash(path string, storedHash string) (bool, error) {
+	algo, expected := parseStoredHash(storedHash)
+	switch algo {
+	case "md5":
+		current, timedOut, err := computeFileHashMD5WithTimeout(path, DefaultInlineHashTimeout)
+		if err != nil {
+			return false, err
+		}
+		if timedOut {
+			utils.Debug("Integrity: hash timed out for %s, skipping verification", path)
+			return true, nil
+		}
+		return strings.EqualFold(strings.TrimPrefix(current, hashPrefixMD5), expected), nil
+	case "sha256":
+		current, err := computeFileHash(path)
+		if err != nil {
+			return false, err
+		}
+		return strings.EqualFold(current, expected), nil
+	default:
+		return false, fmt.Errorf("unsupported hash format: %q", storedHash)
+	}
+}
+
+func parseStoredHash(storedHash string) (algo, value string) {
+	trimmed := strings.TrimSpace(storedHash)
+	lower := strings.ToLower(trimmed)
+	switch {
+	case strings.HasPrefix(lower, hashPrefixMD5):
+		return "md5", trimmed[len(hashPrefixMD5):]
+	case strings.HasPrefix(lower, hashPrefixSHA256):
+		return "sha256", trimmed[len(hashPrefixSHA256):]
+	case len(trimmed) == 32:
+		return "md5", trimmed
+	case len(trimmed) == 64:
+		return "sha256", trimmed
+	default:
+		return "", trimmed
+	}
 }
 
 // LoadState loads download state from SQLite
@@ -823,19 +891,18 @@ func ValidateIntegrity() (int, error) {
 			return removed, fmt.Errorf("failed to stat %s: %w", surgePath, statErr)
 		}
 
-		// If we have a stored hash, verify it
-		if e.fileHash != "" {
-			currentHash, err := computeFileHash(surgePath)
-			if err != nil {
-				return removed, fmt.Errorf("failed to hash %s: %w", surgePath, err)
-			}
-
-			if currentHash != e.fileHash {
-				// File has been tampered with — remove entry and corrupted file
-				utils.Debug("Integrity: hash mismatch for %s (expected %s, got %s), removing", surgePath, e.fileHash, currentHash)
-				if err := removeIncompleteFilePath(surgePath); err != nil {
-					return removed, fmt.Errorf("failed to remove tampered file %s: %w", surgePath, err)
+			// If we have a stored hash, verify it
+			if e.fileHash != "" {
+				matches, err := compareAgainstStoredFileHash(surgePath, e.fileHash)
+				if err != nil {
+					return removed, fmt.Errorf("failed to verify hash for %s: %w", surgePath, err)
 				}
+				if !matches {
+					// File has been tampered with — remove entry and corrupted file
+					utils.Debug("Integrity: hash mismatch for %s (expected %s), removing", surgePath, e.fileHash)
+					if err := removeIncompleteFilePath(surgePath); err != nil {
+						return removed, fmt.Errorf("failed to remove tampered file %s: %w", surgePath, err)
+					}
 				if err := removeDownloadAndTasks(e.id); err != nil {
 					return removed, fmt.Errorf("failed to remove tampered entry %s: %w", e.id, err)
 				}

@@ -144,9 +144,12 @@ func TestSaveStateWithOptions_ComputesHashForSmallFile(t *testing.T) {
 	if err := os.WriteFile(surgePath, content, 0o644); err != nil {
 		t.Fatalf("failed to write .surge file: %v", err)
 	}
-	expectedHash, err := computeFileHash(surgePath)
+	expectedHash, timedOut, err := computeFileHashMD5WithTimeout(surgePath, time.Second)
 	if err != nil {
-		t.Fatalf("computeFileHash failed: %v", err)
+		t.Fatalf("computeFileHashMD5WithTimeout failed: %v", err)
+	}
+	if timedOut {
+		t.Fatal("computeFileHashMD5WithTimeout unexpectedly timed out")
 	}
 
 	downloadState := &types.DownloadState{
@@ -162,7 +165,7 @@ func TestSaveStateWithOptions_ComputesHashForSmallFile(t *testing.T) {
 	}
 
 	err = SaveStateWithOptions(testURL, testDestPath, downloadState, SaveStateOptions{
-		MaxInlineFileHashBytes: int64(len(content) + 1),
+		InlineHashTimeout: time.Second,
 	})
 	if err != nil {
 		t.Fatalf("SaveStateWithOptions failed: %v", err)
@@ -177,7 +180,7 @@ func TestSaveStateWithOptions_ComputesHashForSmallFile(t *testing.T) {
 	}
 }
 
-func TestSaveStateWithOptions_SkipsHashForLargeFileButPersistsState(t *testing.T) {
+func TestSaveStateWithOptions_SkipsHashOnTimeoutButPersistsState(t *testing.T) {
 	tmpDir := setupTestDB(t)
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 	defer CloseDB()
@@ -204,7 +207,7 @@ func TestSaveStateWithOptions_SkipsHashForLargeFileButPersistsState(t *testing.T
 	}
 
 	err := SaveStateWithOptions(testURL, testDestPath, downloadState, SaveStateOptions{
-		MaxInlineFileHashBytes: 1, // force skip
+		InlineHashTimeout: time.Nanosecond, // force timeout/skip
 	})
 	if err != nil {
 		t.Fatalf("SaveStateWithOptions failed: %v", err)
