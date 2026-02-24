@@ -119,12 +119,18 @@ jobs:
           echo "BENCH_URL=$BENCH_URL" >> $GITHUB_ENV
           echo "BENCH_ITERATIONS=$BENCH_ITERATIONS" >> $GITHUB_ENV
 
+      - name: Prepare Surge Logs
+        if: always()
+        run: |
+          mkdir -p current/surge_logs
+          cp -r ~/.local/state/surge/logs/* current/surge_logs/ || true
+
       - name: Upload Surge Diagnostic Logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: surge-benchmark-logs
-          path: ~/.local/state/surge/logs/
+          path: current/surge_logs/
 
       - name: Comment PR
         if: github.event_name == 'pull_request'
