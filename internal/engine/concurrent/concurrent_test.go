@@ -371,6 +371,47 @@ func TestConcurrentDownloader_Cancellation(t *testing.T) {
 	}
 }
 
+func TestConcurrentDownloader_PauseAtCompletionFinalizesAsCompleted(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(256 * types.KB)
+	server := testutil.NewMockServerT(t,
+		testutil.WithFileSize(fileSize),
+		testutil.WithRangeSupport(true),
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "pause_completion_test.bin")
+	progressState := types.NewProgressState("pause-complete-test", fileSize)
+	progressState.Pause()
+	runtime := &types.RuntimeConfig{
+		MaxConnectionsPerHost: 4,
+		MinChunkSize:          32 * types.KB,
+	}
+	downloader := NewConcurrentDownloader("pause-complete-id", nil, progressState, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
+	if err != nil {
+		t.Fatalf("Download failed: %v", err)
+	}
+	if progressState.IsPaused() {
+		t.Fatal("progress state should be resumed after completion-boundary pause handling")
+	}
+	if err := testutil.VerifyFileSize(destPath, fileSize); err != nil {
+		t.Fatal(err)
+	}
+	if testutil.FileExists(destPath + types.IncompleteSuffix) {
+		t.Fatal(".surge file should be removed when completion finalization path runs")
+	}
+	if _, err := state.LoadState(server.URL(), destPath); err == nil {
+		t.Fatal("paused state should not be persisted when download has no remaining work")
+	}
+}
+
 func TestConcurrentDownloader_ProgressTracking(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
