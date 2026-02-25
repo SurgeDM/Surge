@@ -36,6 +36,7 @@ const (
 	BatchFilePickerState                      // BatchFilePickerState is 9
 	BatchConfirmState                         // BatchConfirmState is 10
 	UpdateAvailableState                      // UpdateAvailableState is 11
+	URLUpdateState                            // URLUpdateState is 12
 )
 
 const (
@@ -136,6 +137,9 @@ type RootModel struct {
 	// Batch import
 	pendingBatchURLs []string // URLs pending batch import
 	batchFilePath    string   // Path to the batch file
+
+	// URL Refresh
+	urlUpdateInput textinput.Model // Text input for updating URL
 
 	// Keybindings
 	keys KeyMap
@@ -296,6 +300,12 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	searchInput.Width = 30
 	searchInput.Prompt = ""
 
+	// Initialize URL update input
+	urlUpdateInput := textinput.New()
+	urlUpdateInput.Placeholder = "https://example.com/newlink.zip"
+	urlUpdateInput.Width = InputWidth
+	urlUpdateInput.Prompt = ""
+
 	m := RootModel{
 		downloads:             downloads,
 		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
@@ -311,6 +321,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		Settings:              settings,
 		SettingsInput:         settingsInput,
 		searchInput:           searchInput,
+		urlUpdateInput:        urlUpdateInput,
 		keys:                  Keys,
 		ServerPort:            serverPort,
 		CurrentVersion:        currentVersion,

@@ -467,21 +467,21 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Notification tick is still used but logs don't expire
 		return m, nil
 
-		case UpdateCheckResultMsg:
-			if msg.Info != nil && msg.Info.UpdateAvailable {
-				m.UpdateInfo = msg.Info
-				m.state = UpdateAvailableState
-			}
-			return m, nil
+	case UpdateCheckResultMsg:
+		if msg.Info != nil && msg.Info.UpdateAvailable {
+			m.UpdateInfo = msg.Info
+			m.state = UpdateAvailableState
+		}
+		return m, nil
 
-		case shutdownCompleteMsg:
-			if msg.err != nil {
-				utils.Debug("TUI shutdown error: %v", msg.err)
-			}
-			return m, tea.Quit
+	case shutdownCompleteMsg:
+		if msg.err != nil {
+			utils.Debug("TUI shutdown error: %v", msg.err)
+		}
+		return m, tea.Quit
 
-		// Handle filepicker messages for all message types when in FilePickerState
-		default:
+	// Handle filepicker messages for all message types when in FilePickerState
+	default:
 		if m.state == FilePickerState {
 			var cmd tea.Cmd
 			m.filepicker, cmd = m.filepicker.Update(msg)
@@ -606,16 +606,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.updateListTitle()
 				m.UpdateListItems()
 				return m, nil
-				}
-				// Quit
-				if key.Matches(msg, m.keys.Dashboard.Quit) {
-					m.shuttingDown = true
-					return m, shutdownCmd(m.Service)
-				}
-				if key.Matches(msg, m.keys.Dashboard.ForceQuit) {
-					m.shuttingDown = true
-					return m, shutdownCmd(m.Service)
-				}
+			}
+			// Quit
+			if key.Matches(msg, m.keys.Dashboard.Quit) {
+				m.shuttingDown = true
+				return m, shutdownCmd(m.Service)
+			}
+			if key.Matches(msg, m.keys.Dashboard.ForceQuit) {
+				m.shuttingDown = true
+				return m, shutdownCmd(m.Service)
+			}
 
 			// Add download
 			if key.Matches(msg, m.keys.Dashboard.Add) {
@@ -737,6 +737,25 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							filePath = d.Destination + types.IncompleteSuffix
 						}
 						_ = openFile(filePath)
+					}
+				}
+				return m, nil
+			}
+
+			// Refresh URL
+			if key.Matches(msg, m.keys.Dashboard.Refresh) {
+				if d := m.GetSelectedDownload(); d != nil {
+					if m.Service == nil {
+						m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
+						return m, nil
+					}
+					// Only allow refresh if download is paused or errored
+					if d.paused || d.err != nil {
+						m.state = URLUpdateState
+						m.urlUpdateInput.SetValue(d.URL)
+						m.urlUpdateInput.Focus()
+					} else {
+						m.addLogEntry(LogStyleError.Render("✖ Pause download before refreshing URL"))
 					}
 				}
 				return m, nil
@@ -1403,6 +1422,35 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, nil
+
+		case URLUpdateState:
+			if key.Matches(msg, m.keys.Input.Esc) {
+				m.state = DashboardState
+				m.urlUpdateInput.SetValue("")
+				m.urlUpdateInput.Blur()
+				return m, nil
+			}
+			if key.Matches(msg, m.keys.Input.Enter) {
+				newURL := strings.TrimSpace(m.urlUpdateInput.Value())
+				if newURL != "" {
+					if d := m.GetSelectedDownload(); d != nil {
+						if err := m.Service.UpdateURL(d.ID, newURL); err != nil {
+							m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to update URL: %s", err.Error())))
+						} else {
+							m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("✔ URL Updated: %s", d.Filename)))
+							d.URL = newURL
+						}
+					}
+				}
+				m.state = DashboardState
+				m.urlUpdateInput.SetValue("")
+				m.urlUpdateInput.Blur()
+				return m, nil
+			}
+
+			var cmd tea.Cmd
+			m.urlUpdateInput, cmd = m.urlUpdateInput.Update(msg)
+			return m, cmd
 		}
 	}
 

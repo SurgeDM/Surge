@@ -198,6 +198,23 @@ func (m RootModel) View() string {
 		return m.renderModalWithOverlay(box)
 	}
 
+	if m.state == URLUpdateState {
+		modal := components.AddDownloadModal{
+			Title:           "Refresh URL",
+			Inputs:          []textinput.Model{m.urlUpdateInput},
+			Labels:          []string{"New URL:"},
+			FocusedInput:    0,
+			BrowseHintIndex: -1, // No browse hint needed
+			Help:            m.help,
+			HelpKeys:        m.keys.Input,
+			BorderColor:     ColorNeonPink,
+			Width:           80,
+			Height:          8,
+		}
+		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		return m.renderModalWithOverlay(box)
+	}
+
 	// === MAIN DASHBOARD LAYOUT ===
 
 	availableWidth := m.width - 2
