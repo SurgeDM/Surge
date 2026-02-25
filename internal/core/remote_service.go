@@ -172,6 +172,19 @@ func (s *RemoteDownloadService) ResumeBatch(ids []string) []error {
 	return errs
 }
 
+// UpdateURL updates the URL of a paused or errored download via the remote API.
+func (s *RemoteDownloadService) UpdateURL(id string, newURL string) error {
+	req := map[string]string{
+		"url": newURL,
+	}
+	resp, err := s.doRequest("PUT", "/update-url?id="+url.QueryEscape(id), req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return nil
+}
+
 // Delete cancels and removes a download.
 func (s *RemoteDownloadService) Delete(id string) error {
 	resp, err := s.doRequest("POST", "/delete?id="+url.QueryEscape(id), nil)

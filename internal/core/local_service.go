@@ -689,6 +689,15 @@ func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
 	return errs
 }
 
+// UpdateURL updates the URL of a paused or errored download
+func (s *LocalDownloadService) UpdateURL(id string, newURL string) error {
+	if s.Pool == nil {
+		return fmt.Errorf("worker pool not initialized")
+	}
+
+	return s.Pool.UpdateURL(id, newURL)
+}
+
 // Delete cancels and removes a download.
 func (s *LocalDownloadService) Delete(id string) error {
 	if s.Pool == nil {

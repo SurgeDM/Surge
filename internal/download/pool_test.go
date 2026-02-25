@@ -1003,3 +1003,46 @@ func TestWorkerPool_GetStatus_IncludesDestPath(t *testing.T) {
 		t.Fatalf("dest_path = %q, want %q", got.DestPath, destPath)
 	}
 }
+
+func TestWorkerPool_UpdateURL(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 3)
+
+	activeState := types.NewProgressState("active-id", 1000)
+	pool.mu.Lock()
+	activeDownload := &activeDownload{
+		config: types.DownloadConfig{
+			ID:    "active-id",
+			URL:   "http://example.com/old.zip",
+			State: activeState,
+		},
+	}
+	activeDownload.running.Store(true)
+	pool.downloads["active-id"] = activeDownload
+	pool.mu.Unlock()
+
+	// 1. Try updating a running download
+	err := pool.UpdateURL("active-id", "http://example.com/new.zip")
+	if err == nil {
+		t.Error("Expected error when updating URL for active download")
+	}
+
+	// 2. Try updating a paused download
+	activeState.Paused.Store(true)
+	activeDownload.running.Store(false)
+
+	err = pool.UpdateURL("active-id", "http://example.com/new.zip")
+	if err != nil && err.Error() != "database not initialized" {
+		t.Errorf("Expected database not initialized error, got %v", err)
+	}
+
+	// 3. Try updating a queued download
+	pool.mu.Lock()
+	pool.queued["queued-id"] = types.DownloadConfig{ID: "queued-id"}
+	pool.mu.Unlock()
+
+	err = pool.UpdateURL("queued-id", "http://example.com/new.zip")
+	if err == nil || err.Error() != "cannot update URL for a queued download, please cancel or wait for it to start" {
+		t.Errorf("Expected queued error, got %v", err)
+	}
+}

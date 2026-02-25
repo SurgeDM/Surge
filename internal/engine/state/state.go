@@ -160,8 +160,8 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 			}
 		}
 
-			return nil
-		})
+		return nil
+	})
 }
 
 func computeFileHashMD5WithTimeout(path string, timeout time.Duration) (string, bool, error) {
@@ -587,6 +587,28 @@ func UpdateStatus(id string, status string) error {
 	return nil
 }
 
+// UpdateURL updates the URL of a download by ID
+func UpdateURL(id string, newURL string) error {
+	db := getDBHelper()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	newHash := URLHash(newURL)
+
+	result, err := db.Exec("UPDATE downloads SET url = ?, url_hash = ? WHERE id = ?", newURL, newHash, id)
+	if err != nil {
+		return fmt.Errorf("failed to update url: %w", err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("download not found: %s", id)
+	}
+
+	return nil
+}
+
 // PauseAllDownloads pauses all non-completed downloads
 func PauseAllDownloads() error {
 	db := getDBHelper()
@@ -891,18 +913,18 @@ func ValidateIntegrity() (int, error) {
 			return removed, fmt.Errorf("failed to stat %s: %w", surgePath, statErr)
 		}
 
-			// If we have a stored hash, verify it
-			if e.fileHash != "" {
-				matches, err := compareAgainstStoredFileHash(surgePath, e.fileHash)
-				if err != nil {
-					return removed, fmt.Errorf("failed to verify hash for %s: %w", surgePath, err)
+		// If we have a stored hash, verify it
+		if e.fileHash != "" {
+			matches, err := compareAgainstStoredFileHash(surgePath, e.fileHash)
+			if err != nil {
+				return removed, fmt.Errorf("failed to verify hash for %s: %w", surgePath, err)
+			}
+			if !matches {
+				// File has been tampered with — remove entry and corrupted file
+				utils.Debug("Integrity: hash mismatch for %s (expected %s), removing", surgePath, e.fileHash)
+				if err := removeIncompleteFilePath(surgePath); err != nil {
+					return removed, fmt.Errorf("failed to remove tampered file %s: %w", surgePath, err)
 				}
-				if !matches {
-					// File has been tampered with — remove entry and corrupted file
-					utils.Debug("Integrity: hash mismatch for %s (expected %s), removing", surgePath, e.fileHash)
-					if err := removeIncompleteFilePath(surgePath); err != nil {
-						return removed, fmt.Errorf("failed to remove tampered file %s: %w", surgePath, err)
-					}
 				if err := removeDownloadAndTasks(e.id); err != nil {
 					return removed, fmt.Errorf("failed to remove tampered entry %s: %w", e.id, err)
 				}

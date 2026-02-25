@@ -2,6 +2,7 @@ package download
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -280,6 +281,38 @@ func (p *WorkerPool) Resume(downloadID string) bool {
 	return true
 }
 
+// UpdateURL updates the URL of a download by ID.
+// It fails if the download is actively downloading (not paused or errored).
+func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
+	p.mu.RLock()
+	ad, exists := p.downloads[downloadID]
+	_, qExists := p.queued[downloadID]
+	p.mu.RUnlock()
+
+	if qExists {
+		return fmt.Errorf("cannot update URL for a queued download, please cancel or wait for it to start")
+	}
+
+	if exists && ad != nil {
+		// If it exists in the active pool, it must be paused
+		if ad.config.State != nil && !ad.config.State.IsPaused() {
+			if ad.running.Load() {
+				return fmt.Errorf("download is currently active, please pause it before updating the URL")
+			}
+		}
+
+		// Update the active download's config
+		ad.config.URL = newURL
+	}
+
+	// Update persistent state and master list
+	if err := state.UpdateURL(downloadID, newURL); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (p *WorkerPool) worker() {
 	for cfg := range p.taskChan {
 		p.wg.Add(1)
@@ -287,18 +320,18 @@ func (p *WorkerPool) worker() {
 		ctx, cancel := context.WithCancel(context.Background())
 
 		// Register active download
-			ad := &activeDownload{
-				config: cfg,
-				cancel: cancel,
-			}
-			ad.running.Store(true)
-			p.mu.Lock()
-			delete(p.queued, cfg.ID)
-			p.downloads[cfg.ID] = ad
-			p.mu.Unlock()
+		ad := &activeDownload{
+			config: cfg,
+			cancel: cancel,
+		}
+		ad.running.Store(true)
+		p.mu.Lock()
+		delete(p.queued, cfg.ID)
+		p.downloads[cfg.ID] = ad
+		p.mu.Unlock()
 
-			err := TUIDownload(ctx, &ad.config)
-			ad.running.Store(false)
+		err := TUIDownload(ctx, &ad.config)
+		ad.running.Store(false)
 
 		// Logic:
 		// 1. If Pause() was called: State.IsPaused() is true. We keep the task in p.downloads (so it can be resumed).
