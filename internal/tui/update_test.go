@@ -500,3 +500,32 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 		t.Errorf("Expected no prompt state, got %v", newRoot.state)
 	}
 }
+
+func TestUpdate_RefreshShortcut(t *testing.T) {
+	dm := NewDownloadModel("id-1", "http://example.com/file", "file", 100)
+	dm.paused = true
+
+	m := RootModel{
+		downloads:      []*DownloadModel{dm},
+		list:           NewDownloadList(40, 10),
+		state:          DashboardState,
+		keys:           Keys,
+		urlUpdateInput: textinput.New(),
+		Service:        core.NewLocalDownloadServiceWithInput(nil, nil),
+	}
+	m.UpdateListItems()
+	m.list.Select(0) // Select the paused download
+
+	// Simulate pressing 'r' (Refresh)
+	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+
+	updated, _ := m.Update(msg)
+	newRoot := updated.(RootModel)
+
+	if newRoot.state != URLUpdateState {
+		t.Errorf("Expected state to change to URLUpdateState, got %v", newRoot.state)
+	}
+	if newRoot.urlUpdateInput.Value() != "http://example.com/file" {
+		t.Errorf("Expected urlUpdateInput to be pre-filled with 'http://example.com/file', got '%s'", newRoot.urlUpdateInput.Value())
+	}
+}
