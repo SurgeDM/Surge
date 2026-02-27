@@ -53,7 +53,6 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	if err != nil {
 		return err
 	}
-	defer d.Client.CloseIdleConnections()
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
 			utils.Debug("Error closing response body: %v", err)
@@ -71,6 +70,17 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		return err
 	}
 
+	preallocated := false
+	if fileSize > 0 {
+		if err := outFile.Truncate(fileSize); err != nil {
+			return fmt.Errorf("failed to preallocate file: %w", err)
+		}
+		if _, err := outFile.Seek(0, io.SeekStart); err != nil {
+			return fmt.Errorf("failed to reset file offset: %w", err)
+		}
+		preallocated = true
+	}
+
 	// Track whether we completed successfully for cleanup
 	success := false
 	defer func() {
@@ -81,42 +91,26 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	}()
 
 	start := time.Now()
-
-	// Copy response body to file with context cancellation support
-	var written int64
 	buf := make([]byte, d.Runtime.GetWorkerBufferSize())
+	var written int64
 
-	for {
-		// Check for context cancellation (allows clean shutdown)
-		select {
-		case <-ctx.Done():
-			// Can't resume - server doesn't support Range requests
-			return ctx.Err()
-		default:
+	if d.State == nil {
+		written, err = io.CopyBuffer(outFile, resp.Body, buf)
+	} else {
+		progressWriter := newProgressWriter(outFile, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
+		written, err = io.CopyBuffer(progressWriter, resp.Body, buf)
+		progressWriter.Flush()
+	}
+	if err != nil {
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			return ctxErr
 		}
+		return fmt.Errorf("copy error: %w", err)
+	}
 
-		nr, readErr := resp.Body.Read(buf)
-		if nr > 0 {
-			nw, writeErr := outFile.Write(buf[0:nr])
-			if nw > 0 {
-				written += int64(nw)
-				if d.State != nil {
-					d.State.Downloaded.Store(written)
-					d.State.VerifiedProgress.Store(written)
-				}
-			}
-			if writeErr != nil {
-				return fmt.Errorf("write error: %w", writeErr)
-			}
-			if nr != nw {
-				return io.ErrShortWrite
-			}
-		}
-		if readErr != nil {
-			if readErr == io.EOF {
-				break // Done reading
-			}
-			return fmt.Errorf("read error: %w", readErr)
+	if preallocated && written != fileSize {
+		if err := outFile.Truncate(written); err != nil {
+			return fmt.Errorf("truncate error: %w", err)
 		}
 	}
 
@@ -139,7 +133,10 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	success = true // Mark successful so defer doesn't clean up
 
 	elapsed := time.Since(start)
-	speed := float64(written) / elapsed.Seconds()
+	speed := 0.0
+	if elapsed > 0 {
+		speed = float64(written) / elapsed.Seconds()
+	}
 	utils.Debug("\nDownloaded %s in %s (%s/s)\n",
 		destPath,
 		elapsed.Round(time.Second),
@@ -147,6 +144,61 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	)
 
 	return nil
+}
+
+type progressWriter struct {
+	file          *os.File
+	state         *types.ProgressState
+	batchSize     int64
+	batchInterval time.Duration
+	written       int64
+	pending       int64
+	lastFlush     time.Time
+}
+
+func newProgressWriter(file *os.File, state *types.ProgressState, batchSize int64, batchInterval time.Duration) *progressWriter {
+	if batchSize <= 0 {
+		batchSize = types.WorkerBatchSize
+	}
+	return &progressWriter{
+		file:          file,
+		state:         state,
+		batchSize:     batchSize,
+		batchInterval: batchInterval,
+		lastFlush:     time.Now(),
+	}
+}
+
+func (w *progressWriter) Write(p []byte) (int, error) {
+	n, err := w.file.Write(p)
+	if n <= 0 || w.state == nil {
+		return n, err
+	}
+
+	written := int64(n)
+	w.written += written
+	w.pending += written
+	if w.pending >= w.batchSize || (w.batchInterval > 0 && time.Since(w.lastFlush) >= w.batchInterval) {
+		w.Flush()
+	}
+	return n, err
+}
+
+func (w *progressWriter) Flush() {
+	if w.state == nil {
+		w.pending = 0
+		w.lastFlush = time.Now()
+		return
+	}
+
+	if w.pending == 0 && w.written == 0 {
+		return
+	}
+
+	w.state.Downloaded.Store(w.written)
+	w.state.VerifiedProgress.Store(w.written)
+	w.pending = 0
+	w.lastFlush = time.Now()
 }
 
 // copyFile copies a file from src to dst (fallback when rename fails)
