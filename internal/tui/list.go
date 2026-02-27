@@ -20,6 +20,9 @@ type DownloadItem struct {
 }
 
 func (i DownloadItem) Title() string {
+	if i.download.Filename == "" || i.download.Filename == "Queued" {
+		return i.download.URL
+	}
 	return i.download.Filename
 }
 
@@ -57,6 +60,9 @@ func (i DownloadItem) Description() string {
 }
 
 func (i DownloadItem) FilterValue() string {
+	if i.download.Filename == "" || i.download.Filename == "Queued" {
+		return i.download.URL
+	}
 	return i.download.Filename
 }
 

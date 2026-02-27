@@ -788,9 +788,19 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 	statusBox := statusStyle.Render(statusStr)
 
 	// --- 2. File Information Section ---
+	displayFilename := d.Filename
+	if displayFilename == "" || displayFilename == "Queued" {
+		displayFilename = d.URL
+	}
+
+	displayPath := d.Destination
+	if displayPath == "" {
+		displayPath = d.URL
+	}
+
 	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("File: "), StatsValueStyle.Render(truncateString(d.Filename, contentWidth-8))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Path: "), StatsValueStyle.Render(truncateString(d.Destination, contentWidth-8))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("File: "), StatsValueStyle.Render(truncateString(displayFilename, contentWidth-8))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Path: "), StatsValueStyle.Render(truncateString(displayPath, contentWidth-8))),
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(ColorLightGray).Render(d.ID)),
 	)
 	fileSection := sectionStyle.Render(fileInfoContent)
