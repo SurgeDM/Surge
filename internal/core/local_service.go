@@ -153,7 +153,7 @@ func (s *LocalDownloadService) broadcastLoop() {
 
 func (s *LocalDownloadService) reportProgressLoop() {
 	lastSpeeds := make(map[string]float64)
-	lastChunkProgress := make(map[string]time.Time)
+	lastChunkSnapshot := make(map[string]time.Time)
 
 	for range s.reportTicker.C {
 		if s.Pool == nil {
@@ -164,12 +164,13 @@ func (s *LocalDownloadService) reportProgressLoop() {
 		var batch events.BatchProgressMsg
 
 		activeConfigs := s.Pool.GetAll()
-		for _, cfg := range activeConfigs {
-			if cfg.State == nil || cfg.State.IsPaused() || cfg.State.Done.Load() {
-				// Clean up speed history for inactive
-				delete(lastSpeeds, cfg.ID)
-				continue
-			}
+			for _, cfg := range activeConfigs {
+				if cfg.State == nil || cfg.State.IsPaused() || cfg.State.Done.Load() {
+					// Clean up speed history for inactive
+					delete(lastSpeeds, cfg.ID)
+					delete(lastChunkSnapshot, cfg.ID)
+					continue
+				}
 
 			// Calculate Progress
 			downloaded, total, totalElapsed, sessionElapsed, connections, sessionStart := cfg.State.GetProgress()
@@ -200,20 +201,18 @@ func (s *LocalDownloadService) reportProgressLoop() {
 				ActiveConnections: int(connections),
 			}
 
-			// Add Chunk Bitmap for visualization (if initialized)
-			bitmap, width, _, chunkSize, chunkProgress := cfg.State.GetBitmap()
-			if width > 0 && len(bitmap) > 0 {
-				msg.ChunkBitmap = bitmap
-				msg.BitmapWidth = width
-				msg.ActualChunkSize = chunkSize
-
-				// Send chunk progress less frequently to keep updates lightweight.
-				// Chunk map is meant to be intuitive, not perfectly accurate.
-				if time.Since(lastChunkProgress[cfg.ID]) >= 500*time.Millisecond {
-					msg.ChunkProgress = chunkProgress
-					lastChunkProgress[cfg.ID] = time.Now()
+				// Chunk snapshots are expensive due to bitmap/progress copies.
+				// Send them at a lower cadence than scalar progress fields.
+				if time.Since(lastChunkSnapshot[cfg.ID]) >= 500*time.Millisecond {
+					bitmap, width, _, chunkSize, chunkProgress := cfg.State.GetBitmapSnapshot(true)
+					if width > 0 && len(bitmap) > 0 {
+						msg.ChunkBitmap = bitmap
+						msg.BitmapWidth = width
+						msg.ActualChunkSize = chunkSize
+						msg.ChunkProgress = chunkProgress
+						lastChunkSnapshot[cfg.ID] = time.Now()
+					}
 				}
-			}
 
 			batch = append(batch, msg)
 		}
