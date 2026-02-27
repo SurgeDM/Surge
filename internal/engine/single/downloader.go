@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"time"
 
@@ -26,12 +28,60 @@ type SingleDownloader struct {
 
 // NewSingleDownloader creates a new single-threaded downloader with all required parameters
 func NewSingleDownloader(id string, progressCh chan<- any, state *types.ProgressState, runtime *types.RuntimeConfig) *SingleDownloader {
+	if runtime == nil {
+		runtime = &types.RuntimeConfig{}
+	}
+
 	return &SingleDownloader{
-		Client:       &http.Client{Timeout: 0},
+		Client:       newSingleClient(runtime),
 		ProgressChan: progressCh,
 		ID:           id,
 		State:        state,
 		Runtime:      runtime,
+	}
+}
+
+func newSingleClient(runtime *types.RuntimeConfig) *http.Client {
+	proxyFunc := http.ProxyFromEnvironment
+	if runtime.ProxyURL != "" {
+		if parsedURL, err := url.Parse(runtime.ProxyURL); err == nil {
+			proxyFunc = http.ProxyURL(parsedURL)
+		} else {
+			utils.Debug("Invalid proxy URL %s: %v", runtime.ProxyURL, err)
+		}
+	}
+
+	transport := &http.Transport{
+		MaxIdleConns:        types.DefaultMaxIdleConns,
+		MaxIdleConnsPerHost: runtime.GetMaxConnectionsPerHost(),
+		MaxConnsPerHost:     runtime.GetMaxConnectionsPerHost(),
+		Proxy:               proxyFunc,
+
+		IdleConnTimeout:       types.DefaultIdleConnTimeout,
+		TLSHandshakeTimeout:   types.DefaultTLSHandshakeTimeout,
+		ResponseHeaderTimeout: types.DefaultResponseHeaderTimeout,
+		ExpectContinueTimeout: types.DefaultExpectContinueTimeout,
+
+		DisableCompression: true,
+		DialContext: (&net.Dialer{
+			Timeout:   types.DialTimeout,
+			KeepAlive: types.KeepAliveDuration,
+		}).DialContext,
+	}
+
+	return &http.Client{
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			if len(via) > 0 {
+				for key, vals := range via[0].Header {
+					req.Header[key] = vals
+				}
+			}
+			return nil
+		},
 	}
 }
 

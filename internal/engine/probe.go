@@ -54,8 +54,23 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 
 	// Retry logic for probe request
 	for i := 0; i < 3; i++ {
+		// Stop if parent context is already done
+		if ctx.Err() != nil {
+			if err == nil {
+				err = fmt.Errorf("probe request aborted: %w", ctx.Err())
+			}
+			break
+		}
+
 		if i > 0 {
-			time.Sleep(1 * time.Second)
+			select {
+			case <-ctx.Done():
+				err = fmt.Errorf("probe request aborted during retry: %w", ctx.Err())
+			case <-time.After(1 * time.Second):
+			}
+			if ctx.Err() != nil {
+				break
+			}
 			utils.Debug("Retrying probe... attempt %d", i+1)
 		}
 
@@ -115,7 +130,9 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 	}
 
 	defer func() {
-		_, _ = io.Copy(io.Discard, resp.Body) // Drain any remaining data
+		// Only drain a small amount of data (32KB) to allow connection reuse for small responses (e.g., 206 Partial Content).
+		// For large responses (e.g., 200 OK), reading the whole file into discard takes too long.
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 32*1024))
 		_ = resp.Body.Close()
 	}()
 
