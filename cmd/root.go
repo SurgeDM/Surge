@@ -587,6 +587,41 @@ func startHTTPServer(ln net.Listener, port int, defaultOutputDir string, service
 		}
 	})
 
+	// Update URL endpoint (Protected)
+	mux.HandleFunc("/update-url", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPut {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "Missing id parameter", http.StatusBadRequest)
+			return
+		}
+
+		var req map[string]string
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		newURL := req["url"]
+		if newURL == "" {
+			http.Error(w, "Missing url parameter in body", http.StatusBadRequest)
+			return
+		}
+
+		if err := service.UpdateURL(id, newURL); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		if err := json.NewEncoder(w).Encode(map[string]string{"status": "updated", "id": id, "url": newURL}); err != nil {
+			utils.Debug("Failed to encode response: %v", err)
+		}
+	})
+
 	// Wrap mux with Auth and CORS (CORS outermost to ensure 401/403 include headers)
 	handler := corsMiddleware(authMiddleware(authToken, mux))
 

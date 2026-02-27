@@ -63,14 +63,20 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			taskCtx, taskCancel := context.WithCancel(ctx)
 			now := time.Now()
 			activeTask := &ActiveTask{
-				Task:          task,
-				CurrentOffset: task.Offset,
-				StopAt:        task.Offset + task.Length,
-				LastActivity:  now.UnixNano(),
-				StartTime:     now,
-				Cancel:        taskCancel,
-				WindowStart:   now, // Initialize sliding window
+				Task:            task,
+				StartTime:       now,
+				Cancel:          taskCancel,
+				WindowStart:     now, // Initialize sliding window
+				SharedMaxOffset: task.SharedMaxOffset,
 			}
+			if task.SharedMaxOffset != nil {
+				// Prevent infinite hedging of hedged tasks.
+				activeTask.Hedged.Store(1)
+			}
+			activeTask.CurrentOffset.Store(task.Offset)
+			activeTask.StopAt.Store(task.Offset + task.Length)
+			activeTask.LastActivity.Store(now.UnixNano())
+
 			d.activeMu.Lock()
 			d.activeTasks[id] = activeTask
 			d.activeMu.Unlock()
@@ -140,8 +146,8 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 			if lastErr == nil {
 				// Check if we stopped early due to stealing
-				stopAt := atomic.LoadInt64(&activeTask.StopAt)
-				current := atomic.LoadInt64(&activeTask.CurrentOffset)
+				stopAt := activeTask.StopAt.Load()
+				current := activeTask.CurrentOffset.Load()
 				if current < task.Offset+task.Length && current >= stopAt {
 					// We were stopped early this is expected success for the partial work
 					// The stolen part is already in the queue
@@ -152,7 +158,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 			// Resume-on-retry: update task to reflect remaining work
 			// This prevents double-counting bytes on retry
-			current := atomic.LoadInt64(&activeTask.CurrentOffset)
+			current := activeTask.CurrentOffset.Load()
 			if current > task.Offset {
 				task = types.Task{Offset: current, Length: task.Offset + task.Length - current}
 			}
@@ -251,7 +257,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 	offset := task.Offset
 	for {
 		// Check if we should stop
-		stopAt := atomic.LoadInt64(&activeTask.StopAt)
+		stopAt := activeTask.StopAt.Load()
 		if offset >= stopAt {
 			// Stealing happened, stop here
 			return nil
@@ -278,6 +284,11 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			n, err := resp.Body.Read(buf[readSoFar:readSize])
 			if n > 0 {
 				readSoFar += n
+				// CONTINUOUS HEALTH KEEPALIVE:
+				// Update LastActivity directly off the TCP socket instead of waiting for the buffer
+				// to completely fill and hit disk. This prevents the Health Monitor from killing
+				// workers on slightly slower networks during the 500KB buffer acquisition.
+				activeTask.LastActivity.Store(time.Now().UnixNano())
 			}
 			if err != nil {
 				readErr = err
@@ -293,7 +304,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 
 			// check stopAt again before writing
 			// truncate readSoFar
-			currentStopAt := atomic.LoadInt64(&activeTask.StopAt)
+			currentStopAt := activeTask.StopAt.Load()
 			if offset+int64(readSoFar) > currentStopAt {
 				readSoFar = int(currentStopAt - offset)
 				if readSoFar <= 0 {
@@ -309,17 +320,46 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			now := time.Now()
 			rangeStart := offset // Start of this write
 			offset += int64(readSoFar)
-			atomic.StoreInt64(&activeTask.CurrentOffset, offset)
-			atomic.AddInt64(&activeTask.WindowBytes, int64(readSoFar))
-			atomic.StoreInt64(&activeTask.LastActivity, now.UnixNano())
 
-			// Calculate effective contribution (clamping to StopAt is done above via readSoFar truncation)
-			// So readSoFar is exactly what we wrote and what we "own"
-
-			if pendingStart == -1 {
-				pendingStart = rangeStart
+			// Compute newly written bytes deduplicated across racing workers
+			var newlyWritten int64
+			if activeTask.SharedMaxOffset != nil {
+				for {
+					maxOff := activeTask.SharedMaxOffset.Load()
+					if offset <= maxOff {
+						// This exact byte range was already reported by the racing worker!
+						newlyWritten = 0
+						break
+					}
+					if rangeStart >= maxOff {
+						// Entirely new progress
+						if activeTask.SharedMaxOffset.CompareAndSwap(maxOff, offset) {
+							newlyWritten = int64(readSoFar)
+							break
+						}
+					} else {
+						// Partially new progress
+						if activeTask.SharedMaxOffset.CompareAndSwap(maxOff, offset) {
+							newlyWritten = offset - maxOff
+							break
+						}
+					}
+				}
+			} else {
+				newlyWritten = int64(readSoFar)
 			}
-			pendingBytes += int64(readSoFar)
+
+			activeTask.CurrentOffset.Store(offset)
+			activeTask.WindowBytes.Add(newlyWritten)
+			activeTask.LastActivity.Store(now.UnixNano())
+
+			// Calculate effective contribution
+			if newlyWritten > 0 {
+				if pendingStart == -1 {
+					pendingStart = offset - newlyWritten
+				}
+				pendingBytes += newlyWritten
+			}
 
 			// Check thresholds
 			if pendingBytes >= batchSizeThreshold || now.Sub(lastUpdate) >= batchTimeThreshold {
@@ -330,7 +370,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			// This relies on WindowBytes which is updated atomically above, so independent of batching
 			windowElapsed := now.Sub(activeTask.WindowStart).Seconds()
 			if windowElapsed >= 2.0 {
-				windowBytes := atomic.SwapInt64(&activeTask.WindowBytes, 0)
+				windowBytes := activeTask.WindowBytes.Swap(0)
 				recentSpeed := float64(windowBytes) / windowElapsed
 
 				activeTask.SpeedMu.Lock()
@@ -391,13 +431,13 @@ func (d *ConcurrentDownloader) StealWork(queue *TaskQueue) bool {
 		return false
 	}
 
-	current := atomic.LoadInt64(&active.CurrentOffset)
+	current := active.CurrentOffset.Load()
 	newStopAt := current + splitSize
 
 	// Update the active task stop point
-	atomic.StoreInt64(&active.StopAt, newStopAt)
+	active.StopAt.Store(newStopAt)
 
-	finalCurrent := atomic.LoadInt64(&active.CurrentOffset)
+	finalCurrent := active.CurrentOffset.Load()
 
 	// The actual start of the stolen chunk must be after where the worker effectively stops.
 	stolenStart := newStopAt
@@ -406,7 +446,7 @@ func (d *ConcurrentDownloader) StealWork(queue *TaskQueue) bool {
 	}
 
 	// Double check: ensure we didn't race and lose the chunk
-	currentStopAt := atomic.LoadInt64(&active.StopAt)
+	currentStopAt := active.StopAt.Load()
 	if stolenStart >= currentStopAt && currentStopAt != newStopAt {
 		utils.Debug("StealWork race detected: stolenStart >= currentStopAt")
 	}
@@ -448,7 +488,7 @@ func (d *ConcurrentDownloader) HedgeWork(queue *TaskQueue) bool {
 
 	for _, active := range d.activeTasks {
 		// Skip tasks already being raced
-		if atomic.LoadInt32(&active.Hedged) != 0 {
+		if active.Hedged.Load() != 0 {
 			continue
 		}
 		remaining := active.RemainingBytes()
@@ -463,20 +503,29 @@ func (d *ConcurrentDownloader) HedgeWork(queue *TaskQueue) bool {
 	}
 
 	// Mark as hedged so we don't create multiple duplicates
-	if !atomic.CompareAndSwapInt32(&bestActive.Hedged, 0, 1) {
+	if !bestActive.Hedged.CompareAndSwap(0, 1) {
 		return false // Another goroutine hedged it first
 	}
 
 	// Create a duplicate task for the remaining byte range
-	current := atomic.LoadInt64(&bestActive.CurrentOffset)
-	stopAt := atomic.LoadInt64(&bestActive.StopAt)
+	current := bestActive.CurrentOffset.Load()
+	stopAt := bestActive.StopAt.Load()
 	if current >= stopAt {
 		return false
 	}
 
+	// Initialize the shared deduplication state for both tasks
+	if bestActive.SharedMaxOffset == nil {
+		maxOff := &atomic.Int64{}
+		maxOff.Store(current)
+		bestActive.SharedMaxOffset = maxOff
+	}
+
+	// Create a duplicate task for the remaining byte range
 	hedgedTask := types.Task{
-		Offset: current,
-		Length: stopAt - current,
+		Offset:          current,
+		Length:          stopAt - current,
+		SharedMaxOffset: bestActive.SharedMaxOffset,
 	}
 
 	queue.Push(hedgedTask)

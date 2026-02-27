@@ -10,17 +10,17 @@ on:
   workflow_dispatch:
     inputs:
       url:
-        description: 'URL to download for benchmarking'
+        description: "URL to download for benchmarking"
         required: true
-        default: 'https://sin-speed.hetzner.com/1GB.bin'
+        default: "https://sin-speed.hetzner.com/1GB.bin"
       iterations:
-        description: 'Number of iterations'
+        description: "Number of iterations"
         required: true
-        default: '5'
+        default: "5"
       baseline:
-        description: 'Compare against baseline (main branch)? [y/n]'
+        description: "Compare against baseline (main branch)? [y/n]"
         required: true
-        default: 'n'
+        default: "n"
 
 permissions:
   contents: read
@@ -76,16 +76,16 @@ jobs:
 
         run: |
           cd current
-          
+
           # 1. Build the command arguments dynamically
           ARGS=""
-          
+
           # Add URL (Positional argument in your script)
           ARGS="$ARGS $BENCH_URL"
-          
+
           # Add Iterations
           ARGS="$ARGS -n $BENCH_ITERATIONS"
-          
+
           # Add Baseline ONLY if requested
           if [[ "$BASELINE_COMPARE" == "y" ]]; then
             echo "Comparing against baseline..."
@@ -114,3 +114,33 @@ jobs:
           echo '```' >> $GITHUB_STEP_SUMMARY
           cat benchmark_output.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
+
+          # Export env vars for the comment step
+          echo "BENCH_URL=$BENCH_URL" >> $GITHUB_ENV
+          echo "BENCH_ITERATIONS=$BENCH_ITERATIONS" >> $GITHUB_ENV
+
+      - name: Prepare Surge Logs
+        if: always()
+        run: |
+          mkdir -p current/surge_logs
+          cp -r ~/.local/state/surge/logs/* current/surge_logs/ || true
+
+      - name: Upload Surge Diagnostic Logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: surge-benchmark-logs
+          path: current/surge_logs/
+
+      - name: Comment PR
+        if: github.event_name == 'pull_request'
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: benchmark
+          message: |
+            ## 🚀 Benchmark Results
+            **Target:** ${{ env.BENCH_URL }}
+            **Iterations:** ${{ env.BENCH_ITERATIONS }}
+            ```
+            ${{ env.BENCHMARK_RESULTS }}
+            ```

@@ -240,10 +240,6 @@ func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 			// Copy headers from original request to redirect request
 			if len(via) > 0 {
 				for key, vals := range via[0].Header {
-					// Skip Range header - we set our own for parallel downloads
-					if key == "Range" {
-						continue
-					}
 					req.Header[key] = vals
 				}
 			}
@@ -304,12 +300,12 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	}
 
 	// Determine connections and chunk size
-	// Determine connections and chunk size
 	numConns := d.getInitialConnections(fileSize)
 	chunkSize := d.determineChunkSize(fileSize, numConns)
 
 	// Create tuned HTTP client for concurrent downloads
 	client := d.newConcurrentClient(numConns)
+	defer client.CloseIdleConnections()
 
 	// Initialize chunk visualization
 	if d.State != nil {
@@ -326,6 +322,33 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			utils.Debug("Error closing file: %v", err)
 		}
 	}()
+	finalizeCompletedDownload := func() error {
+		// Final sync
+		if err := outFile.Sync(); err != nil {
+			return fmt.Errorf("failed to sync file: %w", err)
+		}
+
+		// Close file before renaming
+		_ = outFile.Close()
+
+		// Rename from .surge to final destination
+		if err := os.Rename(workingPath, destPath); err != nil {
+			// Check for race condition: did someone else already rename it?
+			if os.IsNotExist(err) {
+				if info, statErr := os.Stat(destPath); statErr == nil && info.Size() == fileSize {
+					utils.Debug("Race condition detected: File already exists and has correct size. Treating as success.")
+					// Clean up state just in case, though usually done by caller
+					_ = state.DeleteState(d.ID, d.URL, destPath)
+					return nil
+				}
+			}
+			return fmt.Errorf("failed to rename completed file: %w", err)
+		}
+
+		// Delete state file on successful completion
+		_ = state.DeleteState(d.ID, d.URL, destPath)
+		return nil
+	}
 
 	tasks := createTasks(fileSize, chunkSize)
 
@@ -530,6 +553,12 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		for _, task := range remainingTasks {
 			remainingBytes += task.Length
 		}
+		if remainingBytes == 0 {
+			utils.Debug("Download pause requested at completion boundary; finalizing as completed")
+			d.State.Resume()
+			_, _ = d.State.FinalizeSession(fileSize)
+			return finalizeCompletedDownload()
+		}
 		computedDownloaded := fileSize - remainingBytes
 
 		// Calculate total elapsed time
@@ -575,32 +604,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		return downloadErr
 	}
 
-	// Final sync
-	if err := outFile.Sync(); err != nil {
-		return fmt.Errorf("failed to sync file: %w", err)
-	}
-
-	// Close file before renaming
-	_ = outFile.Close()
-
-	// Rename from .surge to final destination
-	if err := os.Rename(workingPath, destPath); err != nil {
-		// Check for race condition: did someone else already rename it?
-		if os.IsNotExist(err) {
-			if info, statErr := os.Stat(destPath); statErr == nil && info.Size() == fileSize {
-				utils.Debug("Race condition detected: File already exists and has correct size. Treating as success.")
-				// Clean up state just in case, though usually done by caller
-				_ = state.DeleteState(d.ID, d.URL, destPath)
-				return nil
-			}
-		}
-		return fmt.Errorf("failed to rename completed file: %w", err)
-	}
-
-	// Delete state file on successful completion
-	_ = state.DeleteState(d.ID, d.URL, destPath)
-
 	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
-
-	return nil
+	return finalizeCompletedDownload()
 }

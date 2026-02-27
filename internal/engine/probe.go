@@ -44,15 +44,13 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 			// Copy headers from original request to redirect request
 			if len(via) > 0 {
 				for key, vals := range via[0].Header {
-					if key == "Range" {
-						continue
-					}
 					req.Header[key] = vals
 				}
 			}
 			return nil
 		},
 	}
+	defer client.CloseIdleConnections()
 
 	// Retry logic for probe request
 	for i := 0; i < 3; i++ {

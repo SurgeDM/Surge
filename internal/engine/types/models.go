@@ -1,9 +1,12 @@
 package types
 
+import "sync/atomic"
+
 // Task represents a byte range to download
 type Task struct {
-	Offset int64 `json:"offset"`
-	Length int64 `json:"length"`
+	Offset          int64         `json:"offset"`
+	Length          int64         `json:"length"`
+	SharedMaxOffset *atomic.Int64 `json:"-"` // Used to deduplicate byte counting in hedged requests
 }
 
 // DownloadState represents persisted download state for resume

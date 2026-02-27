@@ -132,6 +132,110 @@ func TestSaveLoadState(t *testing.T) {
 	}
 }
 
+func TestSaveStateWithOptions_ComputesHashForSmallFile(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	testURL := "https://test.example.com/hash-small.zip"
+	testDestPath := filepath.Join(tmpDir, "hash-small.zip")
+	surgePath := testDestPath + types.IncompleteSuffix
+	content := []byte("small paused content")
+	if err := os.WriteFile(surgePath, content, 0o644); err != nil {
+		t.Fatalf("failed to write .surge file: %v", err)
+	}
+	expectedHash, timedOut, err := computeFileHashMD5WithTimeout(surgePath, time.Second)
+	if err != nil {
+		t.Fatalf("computeFileHashMD5WithTimeout failed: %v", err)
+	}
+	if timedOut {
+		t.Fatal("computeFileHashMD5WithTimeout unexpectedly timed out")
+	}
+
+	downloadState := &types.DownloadState{
+		ID:         "hash-small-id",
+		URL:        testURL,
+		DestPath:   testDestPath,
+		Filename:   "hash-small.zip",
+		TotalSize:  int64(len(content)),
+		Downloaded: int64(len(content) / 2),
+		Tasks: []types.Task{
+			{Offset: int64(len(content) / 2), Length: int64(len(content) / 2)},
+		},
+	}
+
+	err = SaveStateWithOptions(testURL, testDestPath, downloadState, SaveStateOptions{
+		InlineHashTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("SaveStateWithOptions failed: %v", err)
+	}
+
+	loaded, err := LoadState(testURL, testDestPath)
+	if err != nil {
+		t.Fatalf("LoadState failed: %v", err)
+	}
+	if loaded.FileHash != expectedHash {
+		t.Fatalf("FileHash = %q, want %q", loaded.FileHash, expectedHash)
+	}
+}
+
+func TestSaveStateWithOptions_SkipsHashOnTimeoutButPersistsState(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	testURL := "https://test.example.com/hash-large.zip"
+	testDestPath := filepath.Join(tmpDir, "hash-large.zip")
+	surgePath := testDestPath + types.IncompleteSuffix
+	content := make([]byte, 256*1024)
+	if err := os.WriteFile(surgePath, content, 0o644); err != nil {
+		t.Fatalf("failed to write .surge file: %v", err)
+	}
+
+	downloadState := &types.DownloadState{
+		ID:         "hash-large-id",
+		URL:        testURL,
+		DestPath:   testDestPath,
+		Filename:   "hash-large.zip",
+		TotalSize:  int64(len(content)),
+		Downloaded: 128 * 1024,
+		Tasks: []types.Task{
+			{Offset: 128 * 1024, Length: 64 * 1024},
+			{Offset: 192 * 1024, Length: 64 * 1024},
+		},
+	}
+
+	err := SaveStateWithOptions(testURL, testDestPath, downloadState, SaveStateOptions{
+		InlineHashTimeout: time.Nanosecond, // force timeout/skip
+	})
+	if err != nil {
+		t.Fatalf("SaveStateWithOptions failed: %v", err)
+	}
+
+	loaded, err := LoadState(testURL, testDestPath)
+	if err != nil {
+		t.Fatalf("LoadState failed: %v", err)
+	}
+	if loaded.FileHash != "" {
+		t.Fatalf("FileHash = %q, want empty when hash is skipped", loaded.FileHash)
+	}
+	if len(loaded.Tasks) != 2 {
+		t.Fatalf("Tasks count = %d, want 2", len(loaded.Tasks))
+	}
+
+	entry, err := GetDownload(downloadState.ID)
+	if err != nil {
+		t.Fatalf("GetDownload failed: %v", err)
+	}
+	if entry == nil {
+		t.Fatal("expected persisted download entry")
+	}
+	if entry.Status != "paused" {
+		t.Fatalf("entry status = %q, want paused", entry.Status)
+	}
+}
+
 func TestDeleteState(t *testing.T) {
 	tmpDir := setupTestDB(t)
 	defer func() { _ = os.RemoveAll(tmpDir) }()

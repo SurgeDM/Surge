@@ -26,6 +26,7 @@ type DashboardKeyMap struct {
 	BatchImport key.Binding
 	Search      key.Binding
 	Pause       key.Binding
+	Refresh     key.Binding
 	Delete      key.Binding
 	Settings    key.Binding
 	Log         key.Binding
@@ -157,6 +158,10 @@ var Keys = KeyMap{
 		Pause: key.NewBinding(
 			key.WithKeys("p"),
 			key.WithHelp("p", "pause/resume"),
+		),
+		Refresh: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "refresh url"),
 		),
 		Delete: key.NewBinding(
 			key.WithKeys("x"),
@@ -409,14 +414,14 @@ var Keys = KeyMap{
 
 // ShortHelp returns keybindings to show in the mini help view
 func (k DashboardKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.TabQueued, k.TabActive, k.TabDone, k.Add, k.BatchImport, k.Search, k.Pause, k.Delete, k.OpenFile, k.Settings, k.Quit}
+	return []key.Binding{k.TabQueued, k.TabActive, k.TabDone, k.Add, k.BatchImport, k.Search, k.Pause, k.Refresh, k.Delete, k.OpenFile, k.Settings, k.Quit}
 }
 
 // FullHelp returns keybindings for the expanded help view
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab},
-		{k.Add, k.Search, k.Pause, k.Delete, k.Settings},
+		{k.Add, k.Search, k.Pause, k.Refresh, k.Delete, k.Settings},
 		{k.Log, k.History, k.Quit},
 	}
 }

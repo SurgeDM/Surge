@@ -32,11 +32,24 @@ type UpdateCheckResultMsg struct {
 	Info *version.UpdateInfo
 }
 
+type shutdownCompleteMsg struct {
+	err error
+}
+
 // checkForUpdateCmd performs an async update check
 func checkForUpdateCmd(currentVersion string) tea.Cmd {
 	return func() tea.Msg {
 		info, _ := version.CheckForUpdate(currentVersion)
 		return UpdateCheckResultMsg{Info: info}
+	}
+}
+
+func shutdownCmd(service interface{ Shutdown() error }) tea.Cmd {
+	return func() tea.Msg {
+		if service == nil {
+			return shutdownCompleteMsg{}
+		}
+		return shutdownCompleteMsg{err: service.Shutdown()}
 	}
 }
 
@@ -202,6 +215,22 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Settings = config.DefaultSettings()
 	}
 
+	if m.shuttingDown {
+		switch msg := msg.(type) {
+		case shutdownCompleteMsg:
+			if msg.err != nil {
+				utils.Debug("TUI shutdown error: %v", msg.err)
+			}
+			return m, tea.Quit
+		case tea.WindowSizeMsg:
+			m.width = msg.Width
+			m.height = msg.Height
+			return m, nil
+		default:
+			return m, nil
+		}
+	}
+
 	switch msg := msg.(type) {
 
 	case resumeResultMsg:
@@ -326,8 +355,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				d.done = true
 				cmds = append(cmds, d.progress.SetPercent(1.0))
 
-				speed := 0.0
-				if msg.Elapsed.Seconds() > 0 {
+				speed := d.Speed
+				if msg.Elapsed.Seconds() >= 1 {
+					speed = float64(d.Total) / float64(int(msg.Elapsed.Seconds()))
+				} else if msg.Elapsed.Seconds() > 0 {
 					speed = float64(d.Total) / msg.Elapsed.Seconds()
 				}
 				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("✔ Done: %s (%.2f MB/s)", d.Filename, speed/Megabyte)))
@@ -442,6 +473,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.state = UpdateAvailableState
 		}
 		return m, nil
+
+	case shutdownCompleteMsg:
+		if msg.err != nil {
+			utils.Debug("TUI shutdown error: %v", msg.err)
+		}
+		return m, tea.Quit
 
 	// Handle filepicker messages for all message types when in FilePickerState
 	default:
@@ -572,18 +609,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Quit
 			if key.Matches(msg, m.keys.Dashboard.Quit) {
-				// Graceful shutdown
-				if m.Service != nil {
-					_ = m.Service.Shutdown()
-				}
-				return m, tea.Quit
+				m.shuttingDown = true
+				return m, shutdownCmd(m.Service)
 			}
 			if key.Matches(msg, m.keys.Dashboard.ForceQuit) {
-				// Force quit (same as shutdown for now, or just exit)
-				if m.Service != nil {
-					_ = m.Service.Shutdown()
-				}
-				return m, tea.Quit
+				m.shuttingDown = true
+				return m, shutdownCmd(m.Service)
 			}
 
 			// Add download
@@ -706,6 +737,25 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							filePath = d.Destination + types.IncompleteSuffix
 						}
 						_ = openFile(filePath)
+					}
+				}
+				return m, nil
+			}
+
+			// Refresh URL
+			if key.Matches(msg, m.keys.Dashboard.Refresh) {
+				if d := m.GetSelectedDownload(); d != nil {
+					if m.Service == nil {
+						m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
+						return m, nil
+					}
+					// Only allow refresh if download is paused or errored
+					if d.paused || d.err != nil {
+						m.state = URLUpdateState
+						m.urlUpdateInput.SetValue(d.URL)
+						m.urlUpdateInput.Focus()
+					} else {
+						m.addLogEntry(LogStyleError.Render("✖ Pause download before refreshing URL"))
 					}
 				}
 				return m, nil
@@ -1372,6 +1422,35 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, nil
+
+		case URLUpdateState:
+			if key.Matches(msg, m.keys.Input.Esc) {
+				m.state = DashboardState
+				m.urlUpdateInput.SetValue("")
+				m.urlUpdateInput.Blur()
+				return m, nil
+			}
+			if key.Matches(msg, m.keys.Input.Enter) {
+				newURL := strings.TrimSpace(m.urlUpdateInput.Value())
+				if newURL != "" {
+					if d := m.GetSelectedDownload(); d != nil {
+						if err := m.Service.UpdateURL(d.ID, newURL); err != nil {
+							m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to update URL: %s", err.Error())))
+						} else {
+							m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("✔ URL Updated: %s", d.Filename)))
+							d.URL = newURL
+						}
+					}
+				}
+				m.state = DashboardState
+				m.urlUpdateInput.SetValue("")
+				m.urlUpdateInput.Blur()
+				return m, nil
+			}
+
+			var cmd tea.Cmd
+			m.urlUpdateInput, cmd = m.urlUpdateInput.Update(msg)
+			return m, cmd
 		}
 	}
 

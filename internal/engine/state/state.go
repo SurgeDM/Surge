@@ -1,6 +1,7 @@
 package state
 
 import (
+	"crypto/md5"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -16,6 +17,24 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
+const (
+	// DefaultInlineHashTimeout bounds synchronous hash work during pause persistence.
+	// If hashing takes longer than this, we skip storing file_hash for this snapshot.
+	DefaultInlineHashTimeout = 10 * time.Second
+
+	hashPrefixMD5    = "md5:"
+	hashPrefixSHA256 = "sha256:"
+)
+
+// SaveStateOptions controls pause-state persistence behavior.
+type SaveStateOptions struct {
+	// SkipFileHash disables file_hash computation entirely for this save.
+	SkipFileHash bool
+	// InlineHashTimeout limits synchronous hashing time.
+	// If zero or negative, DefaultInlineHashTimeout is used.
+	InlineHashTimeout time.Duration
+}
+
 // URLHash returns a short hash of the URL for master list keying
 // This is used for tracking completed downloads by URL
 func URLHash(url string) string {
@@ -25,6 +44,11 @@ func URLHash(url string) string {
 
 // SaveState saves download state to SQLite
 func SaveState(url string, destPath string, state *types.DownloadState) error {
+	return SaveStateWithOptions(url, destPath, state, SaveStateOptions{})
+}
+
+// SaveStateWithOptions saves download state to SQLite with custom persistence options.
+func SaveStateWithOptions(url string, destPath string, state *types.DownloadState, opts SaveStateOptions) error {
 	// Ensure ID is set
 	if state.ID == "" {
 		// Try to find existing ID using StateHash equivalent or just generate new
@@ -39,16 +63,27 @@ func SaveState(url string, destPath string, state *types.DownloadState) error {
 		state.CreatedAt = time.Now().Unix()
 	}
 
-	return withTx(func(tx *sql.Tx) error {
-		// Compute file hash for integrity verification
-		surgePath := state.DestPath + types.IncompleteSuffix
-		fileHash, _ := computeFileHash(surgePath)
+	hashTimeout := opts.InlineHashTimeout
+	if hashTimeout <= 0 {
+		hashTimeout = DefaultInlineHashTimeout
+	}
+	if opts.SkipFileHash {
+		state.FileHash = ""
+	} else {
+		fileHash, timedOut, err := computeFileHashMD5WithTimeout(state.DestPath+types.IncompleteSuffix, hashTimeout)
+		if err != nil {
+			utils.Debug("SaveState: skipping file hash for %s due to error: %v", state.DestPath, err)
+		} else if timedOut {
+			utils.Debug("SaveState: skipping file hash for %s after timeout %v", state.DestPath, hashTimeout)
+		}
 		state.FileHash = fileHash
+	}
 
+	return withTx(func(tx *sql.Tx) error {
 		// 1. Upsert into downloads table
 		_, err := tx.Exec(`
-			INSERT INTO downloads (
-				id, url, dest_path, filename, status, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size, file_hash
+				INSERT INTO downloads (
+					id, url, dest_path, filename, status, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size, file_hash
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				url=excluded.url,
@@ -127,6 +162,83 @@ func SaveState(url string, destPath string, state *types.DownloadState) error {
 
 		return nil
 	})
+}
+
+func computeFileHashMD5WithTimeout(path string, timeout time.Duration) (string, bool, error) {
+	if timeout <= 0 {
+		timeout = DefaultInlineHashTimeout
+	}
+
+	f, err := os.Open(path)
+	if err != nil {
+		return "", false, err
+	}
+	defer func() { _ = f.Close() }()
+
+	h := md5.New()
+	buf := make([]byte, 1024*1024)
+	deadline := time.Now().Add(timeout)
+
+	for {
+		if time.Now().After(deadline) {
+			return "", true, nil
+		}
+		n, readErr := f.Read(buf)
+		if n > 0 {
+			if _, err := h.Write(buf[:n]); err != nil {
+				return "", false, fmt.Errorf("failed to update md5 hash: %w", err)
+			}
+		}
+		if readErr == io.EOF {
+			break
+		}
+		if readErr != nil {
+			return "", false, fmt.Errorf("failed to read file for md5 hash: %w", readErr)
+		}
+	}
+
+	return hashPrefixMD5 + hex.EncodeToString(h.Sum(nil)), false, nil
+}
+
+func compareAgainstStoredFileHash(path string, storedHash string) (bool, error) {
+	algo, expected := parseStoredHash(storedHash)
+	switch algo {
+	case "md5":
+		current, timedOut, err := computeFileHashMD5WithTimeout(path, DefaultInlineHashTimeout)
+		if err != nil {
+			return false, err
+		}
+		if timedOut {
+			utils.Debug("Integrity: hash timed out for %s, skipping verification", path)
+			return true, nil
+		}
+		return strings.EqualFold(strings.TrimPrefix(current, hashPrefixMD5), expected), nil
+	case "sha256":
+		current, err := computeFileHash(path)
+		if err != nil {
+			return false, err
+		}
+		return strings.EqualFold(current, expected), nil
+	default:
+		return false, fmt.Errorf("unsupported hash format: %q", storedHash)
+	}
+}
+
+func parseStoredHash(storedHash string) (algo, value string) {
+	trimmed := strings.TrimSpace(storedHash)
+	lower := strings.ToLower(trimmed)
+	switch {
+	case strings.HasPrefix(lower, hashPrefixMD5):
+		return "md5", trimmed[len(hashPrefixMD5):]
+	case strings.HasPrefix(lower, hashPrefixSHA256):
+		return "sha256", trimmed[len(hashPrefixSHA256):]
+	case len(trimmed) == 32:
+		return "md5", trimmed
+	case len(trimmed) == 64:
+		return "sha256", trimmed
+	default:
+		return "", trimmed
+	}
 }
 
 // LoadState loads download state from SQLite
@@ -475,6 +587,28 @@ func UpdateStatus(id string, status string) error {
 	return nil
 }
 
+// UpdateURL updates the URL of a download by ID
+func UpdateURL(id string, newURL string) error {
+	db := getDBHelper()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	newHash := URLHash(newURL)
+
+	result, err := db.Exec("UPDATE downloads SET url = ?, url_hash = ? WHERE id = ?", newURL, newHash, id)
+	if err != nil {
+		return fmt.Errorf("failed to update url: %w", err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("download not found: %s", id)
+	}
+
+	return nil
+}
+
 // PauseAllDownloads pauses all non-completed downloads
 func PauseAllDownloads() error {
 	db := getDBHelper()
@@ -781,14 +915,13 @@ func ValidateIntegrity() (int, error) {
 
 		// If we have a stored hash, verify it
 		if e.fileHash != "" {
-			currentHash, err := computeFileHash(surgePath)
+			matches, err := compareAgainstStoredFileHash(surgePath, e.fileHash)
 			if err != nil {
-				return removed, fmt.Errorf("failed to hash %s: %w", surgePath, err)
+				return removed, fmt.Errorf("failed to verify hash for %s: %w", surgePath, err)
 			}
-
-			if currentHash != e.fileHash {
+			if !matches {
 				// File has been tampered with — remove entry and corrupted file
-				utils.Debug("Integrity: hash mismatch for %s (expected %s, got %s), removing", surgePath, e.fileHash, currentHash)
+				utils.Debug("Integrity: hash mismatch for %s (expected %s), removing", surgePath, e.fileHash)
 				if err := removeIncompleteFilePath(surgePath); err != nil {
 					return removed, fmt.Errorf("failed to remove tampered file %s: %w", surgePath, err)
 				}

@@ -350,12 +350,14 @@ func TestWorkerPool_Cancel_RemovesFromMap(t *testing.T) {
 	state := types.NewProgressState("test-id", 1000)
 
 	pool.mu.Lock()
-	pool.downloads["test-id"] = &activeDownload{
+	ad := &activeDownload{
 		config: types.DownloadConfig{
 			ID:    "test-id",
 			State: state,
 		},
 	}
+	ad.running.Store(true)
+	pool.downloads["test-id"] = ad
 	pool.mu.Unlock()
 
 	pool.Cancel("test-id")
@@ -737,6 +739,107 @@ func TestWorkerPool_GracefulShutdown_PausesAll(t *testing.T) {
 	}
 }
 
+func TestWorkerPool_GracefulShutdown_WaitsPastSoftTimeout(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 1)
+
+	ps := types.NewProgressState("wait-test-id", 1000)
+	pool.mu.Lock()
+	ad := &activeDownload{
+		config: types.DownloadConfig{
+			ID:    "wait-test-id",
+			State: ps,
+		},
+	}
+	ad.running.Store(true)
+	pool.downloads["wait-test-id"] = ad
+	pool.mu.Unlock()
+
+	origSoftTimeout := gracefulShutdownPauseSoftTimeout
+	origPollInterval := gracefulShutdownPausePollInterval
+	origHardTimeout := gracefulShutdownPauseHardTimeout
+	gracefulShutdownPauseSoftTimeout = 30 * time.Millisecond
+	gracefulShutdownPausePollInterval = 5 * time.Millisecond
+	gracefulShutdownPauseHardTimeout = 5 * time.Second
+	defer func() {
+		gracefulShutdownPauseSoftTimeout = origSoftTimeout
+		gracefulShutdownPausePollInterval = origPollInterval
+		gracefulShutdownPauseHardTimeout = origHardTimeout
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		pool.GracefulShutdown()
+		close(done)
+	}()
+
+	deadline := time.Now().Add(250 * time.Millisecond)
+	for !ps.IsPausing() && time.Now().Before(deadline) {
+		time.Sleep(2 * time.Millisecond)
+	}
+	if !ps.IsPausing() {
+		t.Fatal("expected graceful shutdown to set pausing=true")
+	}
+
+	// Wait beyond the soft timeout. Shutdown should still be blocked.
+	time.Sleep(gracefulShutdownPauseSoftTimeout + 20*time.Millisecond)
+	select {
+	case <-done:
+		t.Fatal("GracefulShutdown returned before pausing was cleared")
+	default:
+	}
+
+	ps.SetPausing(false)
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("GracefulShutdown did not return after pausing was cleared")
+	}
+}
+
+func TestWorkerPool_GracefulShutdown_ClearsStalePausingWithoutWorker(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 1)
+
+	ps := types.NewProgressState("stale-pausing-id", 1000)
+	ps.Pause()
+	ps.SetPausing(true)
+
+	pool.mu.Lock()
+	pool.downloads["stale-pausing-id"] = &activeDownload{
+		config: types.DownloadConfig{
+			ID:    "stale-pausing-id",
+			State: ps,
+		},
+	}
+	pool.mu.Unlock()
+
+	origPollInterval := gracefulShutdownPausePollInterval
+	origHardTimeout := gracefulShutdownPauseHardTimeout
+	gracefulShutdownPausePollInterval = 5 * time.Millisecond
+	gracefulShutdownPauseHardTimeout = 2 * time.Second
+	defer func() {
+		gracefulShutdownPausePollInterval = origPollInterval
+		gracefulShutdownPauseHardTimeout = origHardTimeout
+	}()
+
+	done := make(chan struct{})
+	go func() {
+		pool.GracefulShutdown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(300 * time.Millisecond):
+		t.Fatal("GracefulShutdown should not block on stale pausing state")
+	}
+
+	if ps.IsPausing() {
+		t.Fatal("expected stale pausing flag to be cleared during shutdown")
+	}
+}
+
 func TestWorkerPool_ConcurrentPauseCancel(t *testing.T) {
 	ch := make(chan any, 100)
 	pool := NewWorkerPool(ch, 3)
@@ -898,5 +1001,48 @@ func TestWorkerPool_GetStatus_IncludesDestPath(t *testing.T) {
 	}
 	if got.DestPath != destPath {
 		t.Fatalf("dest_path = %q, want %q", got.DestPath, destPath)
+	}
+}
+
+func TestWorkerPool_UpdateURL(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 3)
+
+	activeState := types.NewProgressState("active-id", 1000)
+	pool.mu.Lock()
+	activeDownload := &activeDownload{
+		config: types.DownloadConfig{
+			ID:    "active-id",
+			URL:   "http://example.com/old.zip",
+			State: activeState,
+		},
+	}
+	activeDownload.running.Store(true)
+	pool.downloads["active-id"] = activeDownload
+	pool.mu.Unlock()
+
+	// 1. Try updating a running download
+	err := pool.UpdateURL("active-id", "http://example.com/new.zip")
+	if err == nil {
+		t.Error("Expected error when updating URL for active download")
+	}
+
+	// 2. Try updating a paused download
+	activeState.Paused.Store(true)
+	activeDownload.running.Store(false)
+
+	err = pool.UpdateURL("active-id", "http://example.com/new.zip")
+	if err != nil && err.Error() != "database not initialized" {
+		t.Errorf("Expected database not initialized error, got %v", err)
+	}
+
+	// 3. Try updating a queued download
+	pool.mu.Lock()
+	pool.queued["queued-id"] = types.DownloadConfig{ID: "queued-id"}
+	pool.mu.Unlock()
+
+	err = pool.UpdateURL("queued-id", "http://example.com/new.zip")
+	if err == nil || err.Error() != "cannot update URL for a queued download, please cancel or wait for it to start" {
+		t.Errorf("Expected queued error, got %v", err)
 	}
 }
