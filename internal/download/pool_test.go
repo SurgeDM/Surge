@@ -161,6 +161,7 @@ func TestWorkerPool_Pause_ActiveDownload(t *testing.T) {
 func TestWorkerPool_Pause_NilState(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 3)
+	canceled := make(chan struct{}, 1)
 
 	// Add download with nil state
 	pool.mu.Lock()
@@ -168,6 +169,12 @@ func TestWorkerPool_Pause_NilState(t *testing.T) {
 		config: types.DownloadConfig{
 			ID:    "test-id",
 			State: nil,
+		},
+		cancel: func() {
+			select {
+			case canceled <- struct{}{}:
+			default:
+			}
 		},
 	}
 	pool.mu.Unlock()
@@ -187,6 +194,13 @@ func TestWorkerPool_Pause_NilState(t *testing.T) {
 		}
 	case <-time.After(100 * time.Millisecond):
 		t.Error("Expected pause message to be sent")
+	}
+
+	select {
+	case <-canceled:
+		// expected
+	case <-time.After(100 * time.Millisecond):
+		t.Error("Expected pause to cancel worker context")
 	}
 }
 

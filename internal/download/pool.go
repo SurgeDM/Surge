@@ -158,12 +158,23 @@ func (p *WorkerPool) Pause(downloadID string) bool {
 
 	// Set paused flag and cancel context
 	if ad.config.State != nil {
-		// Idempotency: If already pausing or paused, do nothing
-		if ad.config.State.IsPausing() || ad.config.State.IsPaused() {
+		// Idempotency: If already paused, do nothing.
+		if ad.config.State.IsPaused() {
+			return true
+		}
+		// If transition is already in progress, still ensure worker context is canceled.
+		if ad.config.State.IsPausing() {
+			if ad.cancel != nil {
+				ad.cancel()
+			}
 			return true
 		}
 		ad.config.State.SetPausing(true) // Mark as transitioning to pause
 		ad.config.State.Pause()
+	}
+	// Always cancel worker context as a safety net (single downloader does not set state cancel itself).
+	if ad.cancel != nil {
+		ad.cancel()
 	}
 
 	// Send pause message
@@ -323,6 +334,9 @@ func (p *WorkerPool) worker() {
 		ad := &activeDownload{
 			config: cfg,
 			cancel: cancel,
+		}
+		if ad.config.State != nil {
+			ad.config.State.SetCancelFunc(cancel)
 		}
 		ad.running.Store(true)
 		p.mu.Lock()
