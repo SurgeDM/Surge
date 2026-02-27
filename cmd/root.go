@@ -417,63 +417,28 @@ func startHTTPServer(ln net.Listener, port int, defaultOutputDir string, service
 			select {
 			case <-done:
 				return
-			case msg, ok := <-stream:
-				if !ok {
-					return
-				}
+				case msg, ok := <-stream:
+					if !ok {
+						return
+					}
 
-				// Encode message to JSON
-				data, err := json.Marshal(msg)
-				if err != nil {
-					utils.Debug("Error marshaling event: %v", err)
-					continue
-				}
+					frames, err := events.EncodeSSEMessages(msg)
+					if err != nil {
+						utils.Debug("Error encoding SSE event: %v", err)
+						continue
+					}
+					if len(frames) == 0 {
+						continue
+					}
 
-				// Determine event type name based on struct
-				// Events are in internal/engine/events package
-				eventType := "unknown"
-				switch msg := msg.(type) {
-				case events.DownloadStartedMsg:
-					eventType = "started"
-				case events.DownloadCompleteMsg:
-					eventType = "complete"
-				case events.DownloadErrorMsg:
-					eventType = "error"
-				case events.ProgressMsg:
-					eventType = "progress"
-				case events.DownloadPausedMsg:
-					eventType = "paused"
-				case events.DownloadResumedMsg:
-					eventType = "resumed"
-				case events.DownloadQueuedMsg:
-					eventType = "queued"
-				case events.DownloadRemovedMsg:
-					eventType = "removed"
-				case events.DownloadRequestMsg:
-					eventType = "request"
-				case events.SystemLogMsg:
-					eventType = "system"
-				case events.BatchProgressMsg:
-					// Unroll batch and send individual progress events
-					for _, p := range msg {
-						data, _ := json.Marshal(p)
-						_, _ = fmt.Fprintf(w, "event: progress\n")
-						_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
+					for _, frame := range frames {
+						_, _ = fmt.Fprintf(w, "event: %s\n", frame.Event)
+						_, _ = fmt.Fprintf(w, "data: %s\n\n", frame.Data)
 					}
 					flusher.Flush()
-					continue // Skip default send
 				}
-
-				// SSE Format:
-				// event: <type>
-				// data: <json>
-				// \n
-				_, _ = fmt.Fprintf(w, "event: %s\n", eventType)
-				_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
-				flusher.Flush()
 			}
-		}
-	})
+		})
 
 	// Download endpoint (Protected + Public for simple GET status if needed? No, let's protect all for now)
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
