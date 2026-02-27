@@ -70,6 +70,8 @@ func initDB() error {
 		length INTEGER,
 		FOREIGN KEY(download_id) REFERENCES downloads(id) ON DELETE CASCADE
 	);
+
+	CREATE INDEX IF NOT EXISTS idx_tasks_download_id ON tasks(download_id);
 	`
 
 	if _, err := db.Exec(query); err != nil {
