@@ -18,6 +18,11 @@ var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
 	"AppleWebKit/537.36 (KHTML, like Gecko) " +
 	"Chrome/120.0.0.0 Safari/537.36"
 
+var (
+	probeClientOnce sync.Once
+	probeClient     *http.Client
+)
+
 // ProbeResult contains all metadata from server probe
 type ProbeResult struct {
 	FileSize      int64
@@ -34,23 +39,7 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 	var resp *http.Response
 	var err error
 
-	// Create a client that preserves headers on redirects (for authenticated downloads)
-	client := &http.Client{
-		Timeout: types.ProbeTimeout,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
-			}
-			// Copy headers from original request to redirect request
-			if len(via) > 0 {
-				for key, vals := range via[0].Header {
-					req.Header[key] = vals
-				}
-			}
-			return nil
-		},
-	}
-	defer client.CloseIdleConnections()
+	client := getProbeClient()
 
 	// Retry logic for probe request
 	for i := 0; i < 3; i++ {
@@ -60,10 +49,10 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 		}
 
 		probeCtx, cancel := context.WithTimeout(ctx, types.ProbeTimeout)
-		defer cancel()
 
 		req, reqErr := http.NewRequestWithContext(probeCtx, http.MethodGet, rawurl, nil)
 		if reqErr != nil {
+			cancel()
 			err = fmt.Errorf("failed to create probe request: %w", reqErr)
 			break // Fatal error, don't retry
 		}
@@ -90,7 +79,12 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 			utils.Debug("Probe got %d, retrying without Range header", resp.StatusCode)
 			_ = resp.Body.Close() // Close previous response
 
-			reqNoRange, _ := http.NewRequestWithContext(probeCtx, http.MethodGet, rawurl, nil)
+			reqNoRange, reqNoRangeErr := http.NewRequestWithContext(probeCtx, http.MethodGet, rawurl, nil)
+			if reqNoRangeErr != nil {
+				cancel()
+				err = fmt.Errorf("failed to create probe request without range: %w", reqNoRangeErr)
+				break
+			}
 
 			// Copy headers but SKIP Range
 			for key, val := range headers {
@@ -104,6 +98,8 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 
 			resp, err = client.Do(reqNoRange)
 		}
+
+		cancel()
 
 		if err == nil {
 			break // Success
@@ -172,6 +168,29 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 		result.Filename, result.FileSize, result.SupportsRange)
 
 	return result, nil
+}
+
+func getProbeClient() *http.Client {
+	probeClientOnce.Do(func() {
+		// Reuse a single client to share connection pools across probe calls.
+		probeClient = &http.Client{
+			Timeout: types.ProbeTimeout,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				if len(via) >= 10 {
+					return fmt.Errorf("stopped after 10 redirects")
+				}
+				// Preserve headers for authenticated redirect probes.
+				if len(via) > 0 {
+					for key, vals := range via[0].Header {
+						req.Header[key] = vals
+					}
+				}
+				return nil
+			},
+		}
+	})
+
+	return probeClient
 }
 
 // ProbeMirrors concurrently checks a list of mirrors and returns valid ones and errors
