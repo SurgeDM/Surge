@@ -1,41 +1,41 @@
 /* === Surge Browser Extension - Polished Dark Theme === */
 /* Premium design with subtle retro neon accents */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap");
 
 :root {
   /* Core Colors */
   --accent-primary: #ff79c6;
   --accent-secondary: #bd93f9;
   --accent-tertiary: #8be9fd;
-  
+
   /* Backgrounds */
   --bg-base: #0f0f14;
   --bg-elevated: #16161e;
   --bg-surface: #1e1e28;
   --bg-hover: #262633;
-  
+
   /* Text */
   --text-primary: #e4e4eb;
   --text-secondary: #9898a6;
   --text-muted: #5c5c6e;
-  
+
   /* Borders */
   --border-subtle: rgba(255, 255, 255, 0.06);
   --border-default: rgba(255, 255, 255, 0.1);
   --border-active: var(--accent-primary);
-  
+
   /* States */
   --success: #4ade80;
   --warning: #fbbf24;
   --error: #f87171;
   --info: #60a5fa;
-  
+
   /* Effects */
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
   --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
   --shadow-glow: 0 0 20px rgba(255, 121, 198, 0.15);
-  
+
   /* Spacing */
   --radius-sm: 6px;
   --radius-md: 10px;
@@ -50,8 +50,13 @@
 
 body {
   width: 360px;
-  max-height: 540px;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+  height: 540px;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    system-ui,
+    sans-serif;
   font-size: 13px;
   background: var(--bg-base);
   color: var(--text-primary);
@@ -92,7 +97,11 @@ body {
   font-size: 18px;
   font-weight: 700;
   letter-spacing: 2px;
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary),
+    var(--accent-secondary)
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -136,7 +145,6 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  max-height: 380px;
   background: var(--bg-elevated);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
@@ -161,7 +169,11 @@ body {
 }
 
 .download-count {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary),
+    var(--accent-secondary)
+  );
   color: white;
   font-size: 11px;
   font-weight: 700;
@@ -174,7 +186,7 @@ body {
 .downloads-list {
   flex: 1;
   overflow-y: auto;
-  padding: 12px;
+  padding: 0 12px 12px 12px;
 }
 
 /* === Download Item (Collapsible) === */
@@ -270,7 +282,10 @@ body {
   max-height: 0;
   overflow: hidden;
   opacity: 0;
-  transition: max-height 0.25s ease, opacity 0.2s ease, padding 0.25s ease;
+  transition:
+    max-height 0.25s ease,
+    opacity 0.2s ease,
+    padding 0.25s ease;
   padding: 0 14px;
   border-top: 1px solid transparent;
 }
@@ -332,14 +347,16 @@ body {
 
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, var(--accent-primary), var(--accent-secondary));
+  background: linear-gradient(
+    90deg,
+    var(--accent-primary),
+    var(--accent-secondary)
+  );
   border-radius: 3px;
   transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1);
   position: relative;
   box-shadow: 0 0 12px rgba(255, 121, 198, 0.4);
 }
-
-
 
 .progress-text {
   display: flex;
@@ -444,9 +461,10 @@ body {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 48px 24px;
+  padding: 32px 24px;
   color: var(--text-muted);
   text-align: center;
+  height: 100%;
 }
 
 .empty-icon {
@@ -524,7 +542,9 @@ body {
   opacity: 0;
   transform: translateY(4px);
   pointer-events: none;
-  transition: opacity 0.15s ease, transform 0.15s ease;
+  transition:
+    opacity 0.15s ease,
+    transform 0.15s ease;
   z-index: 20;
 }
 
@@ -619,7 +639,7 @@ body {
 }
 
 .toggle-slider::before {
-  content: '';
+  content: "";
   position: absolute;
   height: 18px;
   width: 18px;
@@ -631,7 +651,11 @@ body {
 }
 
 .toggle input:checked + .toggle-slider {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary),
+    var(--accent-secondary)
+  );
   border-color: transparent;
   box-shadow: var(--shadow-glow);
 }
@@ -666,8 +690,14 @@ body {
 
 /* === Animations === */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(-4px); }
-  to { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .download-item {
@@ -700,7 +730,9 @@ body {
   max-width: 320px;
   width: 100%;
   text-align: center;
-  box-shadow: var(--shadow-md), 0 0 40px rgba(255, 121, 198, 0.1);
+  box-shadow:
+    var(--shadow-md),
+    0 0 40px rgba(255, 121, 198, 0.1);
   animation: modalSlideIn 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -774,7 +806,11 @@ body {
 }
 
 .modal-btn-primary {
-  background: linear-gradient(135deg, var(--accent-primary), var(--accent-secondary));
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary),
+    var(--accent-secondary)
+  );
   color: white;
   box-shadow: 0 2px 8px rgba(255, 121, 198, 0.3);
 }
