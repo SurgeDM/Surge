@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/surge-downloader/surge/internal/engine/types"
@@ -26,6 +27,13 @@ type SingleDownloader struct {
 	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
 }
 
+type singleTransportKey struct {
+	proxyURL string
+	maxConns int
+}
+
+var singleTransportCache sync.Map // map[singleTransportKey]*http.Transport
+
 // NewSingleDownloader creates a new single-threaded downloader with all required parameters
 func NewSingleDownloader(id string, progressCh chan<- any, state *types.ProgressState, runtime *types.RuntimeConfig) *SingleDownloader {
 	if runtime == nil {
@@ -42,6 +50,40 @@ func NewSingleDownloader(id string, progressCh chan<- any, state *types.Progress
 }
 
 func newSingleClient(runtime *types.RuntimeConfig) *http.Client {
+	transport := getSharedSingleTransport(runtime)
+
+	return &http.Client{
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			if len(via) > 0 {
+				for key, vals := range via[0].Header {
+					req.Header[key] = vals
+				}
+			}
+			return nil
+		},
+	}
+}
+
+func getSharedSingleTransport(runtime *types.RuntimeConfig) *http.Transport {
+	key := singleTransportKey{
+		proxyURL: runtime.ProxyURL,
+		maxConns: runtime.GetMaxConnectionsPerHost(),
+	}
+
+	if cached, ok := singleTransportCache.Load(key); ok {
+		return cached.(*http.Transport)
+	}
+
+	transport := newSingleTransport(runtime)
+	actual, _ := singleTransportCache.LoadOrStore(key, transport)
+	return actual.(*http.Transport)
+}
+
+func newSingleTransport(runtime *types.RuntimeConfig) *http.Transport {
 	proxyFunc := http.ProxyFromEnvironment
 	if runtime.ProxyURL != "" {
 		if parsedURL, err := url.Parse(runtime.ProxyURL); err == nil {
@@ -51,7 +93,7 @@ func newSingleClient(runtime *types.RuntimeConfig) *http.Client {
 		}
 	}
 
-	transport := &http.Transport{
+	return &http.Transport{
 		MaxIdleConns:        types.DefaultMaxIdleConns,
 		MaxIdleConnsPerHost: runtime.GetMaxConnectionsPerHost(),
 		MaxConnsPerHost:     runtime.GetMaxConnectionsPerHost(),
@@ -67,21 +109,6 @@ func newSingleClient(runtime *types.RuntimeConfig) *http.Client {
 			Timeout:   types.DialTimeout,
 			KeepAlive: types.KeepAliveDuration,
 		}).DialContext,
-	}
-
-	return &http.Client{
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
-			}
-			if len(via) > 0 {
-				for key, vals := range via[0].Header {
-					req.Header[key] = vals
-				}
-			}
-			return nil
-		},
 	}
 }
 
@@ -122,11 +149,8 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 	preallocated := false
 	if fileSize > 0 {
-		if err := outFile.Truncate(fileSize); err != nil {
+		if err := preallocateFile(outFile, fileSize); err != nil {
 			return fmt.Errorf("failed to preallocate file: %w", err)
-		}
-		if _, err := outFile.Seek(0, io.SeekStart); err != nil {
-			return fmt.Errorf("failed to reset file offset: %w", err)
 		}
 		preallocated = true
 	}
@@ -141,15 +165,14 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	}()
 
 	start := time.Now()
-	buf := make([]byte, d.Runtime.GetWorkerBufferSize())
 	var written int64
 
 	if d.State == nil {
-		written, err = io.CopyBuffer(outFile, resp.Body, buf)
+		written, err = io.Copy(outFile, resp.Body)
 	} else {
-		progressWriter := newProgressWriter(outFile, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
-		written, err = io.CopyBuffer(progressWriter, resp.Body, buf)
-		progressWriter.Flush()
+		progressReader := newProgressReader(resp.Body, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
+		written, err = io.Copy(outFile, progressReader)
+		progressReader.Flush()
 	}
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
@@ -196,8 +219,8 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	return nil
 }
 
-type progressWriter struct {
-	file          *os.File
+type progressReader struct {
+	reader        io.Reader
 	state         *types.ProgressState
 	batchSize     int64
 	batchInterval time.Duration
@@ -206,12 +229,12 @@ type progressWriter struct {
 	lastFlush     time.Time
 }
 
-func newProgressWriter(file *os.File, state *types.ProgressState, batchSize int64, batchInterval time.Duration) *progressWriter {
+func newProgressReader(reader io.Reader, state *types.ProgressState, batchSize int64, batchInterval time.Duration) *progressReader {
 	if batchSize <= 0 {
 		batchSize = types.WorkerBatchSize
 	}
-	return &progressWriter{
-		file:          file,
+	return &progressReader{
+		reader:        reader,
 		state:         state,
 		batchSize:     batchSize,
 		batchInterval: batchInterval,
@@ -219,8 +242,8 @@ func newProgressWriter(file *os.File, state *types.ProgressState, batchSize int6
 	}
 }
 
-func (w *progressWriter) Write(p []byte) (int, error) {
-	n, err := w.file.Write(p)
+func (w *progressReader) Read(p []byte) (int, error) {
+	n, err := w.reader.Read(p)
 	if n <= 0 || w.state == nil {
 		return n, err
 	}
@@ -234,7 +257,7 @@ func (w *progressWriter) Write(p []byte) (int, error) {
 	return n, err
 }
 
-func (w *progressWriter) Flush() {
+func (w *progressReader) Flush() {
 	if w.state == nil {
 		w.pending = 0
 		w.lastFlush = time.Now()
