@@ -354,10 +354,10 @@ func (ps *ProgressState) getChunkState(index int) ChunkStatus {
 // UpdateChunkStatus updates the bitmap based on byte range
 func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkStatus) {
 	ps.mu.Lock()
-	defer ps.mu.Unlock()
 
 	if ps.ActualChunkSize == 0 || len(ps.ChunkBitmap) == 0 {
 		utils.Debug("UpdateChunkStatus skipped: ActualChunkSize=%d, BitmapLen=%d", ps.ActualChunkSize, len(ps.ChunkBitmap))
+		ps.mu.Unlock()
 		return
 	}
 
@@ -376,6 +376,8 @@ func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkSta
 	if endIdx >= ps.BitmapWidth {
 		endIdx = ps.BitmapWidth - 1
 	}
+
+	var totalIncrement int64
 
 	for i := startIdx; i <= endIdx; i++ {
 		// Calculate precise overlap with this chunk
@@ -411,10 +413,10 @@ func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkSta
 				increment = remainingSpace
 			}
 
-			if increment > 0 {
-				ps.ChunkProgress[i] += increment
-				ps.VerifiedProgress.Add(increment)
-			}
+				if increment > 0 {
+					ps.ChunkProgress[i] += increment
+					totalIncrement += increment
+				}
 
 			if ps.ChunkProgress[i] >= (chunkEnd - chunkStart) {
 				ps.ChunkProgress[i] = chunkEnd - chunkStart // clamp
@@ -432,6 +434,12 @@ func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkSta
 				ps.setChunkState(i, ChunkDownloading)
 			}
 		}
+	}
+
+	ps.mu.Unlock()
+
+	if totalIncrement > 0 {
+		ps.VerifiedProgress.Add(totalIncrement)
 	}
 }
 
