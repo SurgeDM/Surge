@@ -227,6 +227,7 @@ type progressReader struct {
 	written       int64
 	pending       int64
 	lastFlush     time.Time
+	readChecks    uint8
 }
 
 func newProgressReader(reader io.Reader, state *types.ProgressState, batchSize int64, batchInterval time.Duration) *progressReader {
@@ -251,16 +252,35 @@ func (w *progressReader) Read(p []byte) (int, error) {
 	written := int64(n)
 	w.written += written
 	w.pending += written
-	if w.pending >= w.batchSize || (w.batchInterval > 0 && time.Since(w.lastFlush) >= w.batchInterval) {
-		w.Flush()
+	if w.pending >= w.batchSize {
+		w.flushWithTime(time.Now())
+		return n, err
 	}
+
+	if w.batchInterval > 0 {
+		// Check wall-clock interval periodically to avoid calling time.Now on every read.
+		w.readChecks++
+		if w.readChecks >= 8 {
+			now := time.Now()
+			if now.Sub(w.lastFlush) >= w.batchInterval {
+				w.flushWithTime(now)
+			}
+			w.readChecks = 0
+		}
+	}
+
 	return n, err
 }
 
 func (w *progressReader) Flush() {
+	w.flushWithTime(time.Now())
+}
+
+func (w *progressReader) flushWithTime(now time.Time) {
 	if w.state == nil {
 		w.pending = 0
-		w.lastFlush = time.Now()
+		w.lastFlush = now
+		w.readChecks = 0
 		return
 	}
 
@@ -271,7 +291,8 @@ func (w *progressReader) Flush() {
 	w.state.Downloaded.Store(w.written)
 	w.state.VerifiedProgress.Store(w.written)
 	w.pending = 0
-	w.lastFlush = time.Now()
+	w.lastFlush = now
+	w.readChecks = 0
 }
 
 // copyFile copies a file from src to dst (fallback when rename fails)
