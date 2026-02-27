@@ -280,6 +280,11 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			return nil
 		}
 
+		downloaded := int64(0)
+		if cfg.State != nil {
+			downloaded = cfg.State.Downloaded.Load()
+		}
+
 		// Persist error state
 		if err := state.AddToMasterList(types.DownloadEntry{
 			ID:         cfg.ID,
@@ -289,7 +294,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			Filename:   finalFilename,
 			Status:     "error",
 			TotalSize:  probe.FileSize,
-			Downloaded: cfg.State.Downloaded.Load(),
+			Downloaded: downloaded,
 		}); err != nil {
 			utils.Debug("Failed to persist error state: %v", err)
 		}
