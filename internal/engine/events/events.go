@@ -115,6 +115,8 @@ type DownloadResumedMsg struct {
 type DownloadQueuedMsg struct {
 	DownloadID string
 	Filename   string
+	URL        string
+	DestPath   string
 }
 
 type DownloadRemovedMsg struct {

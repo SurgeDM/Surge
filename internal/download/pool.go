@@ -67,9 +67,19 @@ func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 	p.mu.Unlock()
 
 	if p.progressCh != nil && !cfg.IsResume {
+		destPath := cfg.DestPath
+		if destPath == "" && cfg.State != nil {
+			destPath = cfg.State.GetDestPath()
+		}
+		if destPath == "" {
+			destPath = cfg.OutputPath
+		}
+
 		p.progressCh <- events.DownloadQueuedMsg{
 			DownloadID: cfg.ID,
 			Filename:   cfg.Filename,
+			URL:        cfg.URL,
+			DestPath:   destPath,
 		}
 	}
 

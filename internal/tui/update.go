@@ -419,7 +419,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if !found {
 			// Add placeholder
-			newDownload := NewDownloadModel(msg.DownloadID, "", msg.Filename, 0)
+			newDownload := NewDownloadModel(msg.DownloadID, msg.URL, msg.Filename, 0)
+			newDownload.Destination = msg.DestPath
 			m.downloads = append(m.downloads, newDownload)
 			m.UpdateListItems()
 		}
