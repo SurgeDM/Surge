@@ -253,6 +253,63 @@ func TestReadURLsFromFile_ParsesAndFilters(t *testing.T) {
 	}
 }
 
+func TestReadURLsFromFile_WhitespaceAndInlineComments(t *testing.T) {
+	tmpDir := t.TempDir()
+	urlFile := filepath.Join(tmpDir, "urls.txt")
+	content := strings.Join([]string{
+		"https://example.com/a.zip https://example.com/b.zip",
+		"https://example.com/c.zip    # inline comment",
+		"   ",
+		"# full comment",
+		"https://example.com/d.zip\thttps://example.com/e.zip",
+	}, "\n")
+	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write url file: %v", err)
+	}
+
+	urls, err := readURLsFromFile(urlFile)
+	if err != nil {
+		t.Fatalf("readURLsFromFile returned error: %v", err)
+	}
+
+	want := []string{
+		"https://example.com/a.zip",
+		"https://example.com/b.zip",
+		"https://example.com/c.zip",
+		"https://example.com/d.zip",
+		"https://example.com/e.zip",
+	}
+	if len(urls) != len(want) {
+		t.Fatalf("expected %d urls, got %d (%v)", len(want), len(urls), urls)
+	}
+	for i := range want {
+		if urls[i] != want[i] {
+			t.Fatalf("url[%d] = %q, want %q", i, urls[i], want[i])
+		}
+	}
+}
+
+func TestReadURLsFromFile_LongLine(t *testing.T) {
+	tmpDir := t.TempDir()
+	urlFile := filepath.Join(tmpDir, "urls.txt")
+	longToken := strings.Repeat("a", 70*1024)
+	longURL := "https://example.com/" + longToken
+	if err := os.WriteFile(urlFile, []byte(longURL+"\n"), 0o644); err != nil {
+		t.Fatalf("failed to write url file: %v", err)
+	}
+
+	urls, err := readURLsFromFile(urlFile)
+	if err != nil {
+		t.Fatalf("readURLsFromFile returned error for long URL: %v", err)
+	}
+	if len(urls) != 1 {
+		t.Fatalf("expected 1 url, got %d", len(urls))
+	}
+	if urls[0] != longURL {
+		t.Fatalf("long URL mismatch")
+	}
+}
+
 func TestReadURLsFromFile_MissingFile(t *testing.T) {
 	_, err := readURLsFromFile(filepath.Join(t.TempDir(), "missing.txt"))
 	if err == nil {

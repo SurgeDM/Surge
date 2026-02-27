@@ -30,7 +30,8 @@ func readActivePort() int {
 	return port
 }
 
-// readURLsFromFile reads URLs from a file, one per line
+// readURLsFromFile reads URLs from a file.
+// Accepts one URL per line or whitespace-separated URLs, and ignores comments.
 func readURLsFromFile(filepath string) ([]string, error) {
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -40,10 +41,20 @@ func readURLsFromFile(filepath string) ([]string, error) {
 
 	var urls []string
 	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
-		if line != "" && !strings.HasPrefix(line, "#") {
-			urls = append(urls, line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		if idx := strings.Index(line, "#"); idx >= 0 {
+			line = strings.TrimSpace(line[:idx])
+		}
+		if line == "" {
+			continue
+		}
+		for _, token := range strings.Fields(line) {
+			urls = append(urls, token)
 		}
 	}
 	return urls, scanner.Err()
