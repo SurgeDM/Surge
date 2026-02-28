@@ -23,8 +23,9 @@ try:
 except ImportError:
     HAS_MATPLOTLIB = False
 
-MB = 1024 * 1024
-GB = 1024 * 1024 * 1024
+KB = 1 << 10
+MB = 1 << 20
+GB = 1 << 30
 
 
 @dataclass

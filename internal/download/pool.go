@@ -512,7 +512,7 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 		sessionDownloaded := downloaded - sessionStart
 		if sessionElapsed.Seconds() > 0 && sessionDownloaded > 0 {
 			bytesPerSec := float64(sessionDownloaded) / sessionElapsed.Seconds()
-			status.Speed = bytesPerSec / (1024 * 1024)
+			status.Speed = bytesPerSec / float64(types.MB)
 		}
 	}
 

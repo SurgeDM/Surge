@@ -382,12 +382,12 @@ func (m *RootModel) setNetworkSetting(key, value, typ string) error {
 	case "min_chunk_size":
 		// Parse as MB and convert to bytes
 		if v, err := strconv.ParseFloat(value, 64); err == nil {
-			m.Settings.Network.MinChunkSize = int64(v * 1024 * 1024)
+			m.Settings.Network.MinChunkSize = int64(v * float64(MB))
 		}
 	case "worker_buffer_size":
 		// Keep buffer in KB
 		if v, err := strconv.ParseFloat(value, 64); err == nil {
-			m.Settings.Network.WorkerBufferSize = int(v * 1024)
+			m.Settings.Network.WorkerBufferSize = int(v * float64(KB))
 		}
 	}
 	return nil
@@ -515,13 +515,13 @@ func formatSettingValueForEdit(value interface{}, typ, key string) string {
 	switch key {
 	case "min_chunk_size":
 		if v, ok := value.(int64); ok {
-			mb := float64(v) / (1024 * 1024)
+			mb := float64(v) / float64(MB)
 			return fmt.Sprintf("%.1f", mb)
 		}
 	case "worker_buffer_size":
 		v := reflect.ValueOf(value)
 		if v.Kind() == reflect.Int {
-			kb := float64(v.Int()) / 1024
+			kb := float64(v.Int()) / float64(KB)
 			return fmt.Sprintf("%.0f", kb)
 		}
 	case "slow_worker_grace_period", "stall_timeout":

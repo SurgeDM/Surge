@@ -130,8 +130,8 @@ func CategoryOrder() []string {
 }
 
 const (
-	KB = 1024
-	MB = 1024 * KB
+	KB = 1 << 10
+	MB = 1 << 20
 )
 
 // DefaultSettings returns a new Settings instance with sensible defaults.

@@ -7,6 +7,11 @@ import (
 	"time"
 )
 
+const (
+	KB = 1 << 10
+	MB = 1 << 20
+)
+
 // BenchmarkMetrics collects performance metrics during download
 type BenchmarkMetrics struct {
 	StartTime     time.Time
@@ -94,7 +99,7 @@ func (bm *BenchmarkMetrics) GetResults() BenchmarkResults {
 
 	throughput := float64(0)
 	if elapsed.Seconds() > 0 {
-		throughput = float64(bm.TotalBytes) / elapsed.Seconds() / (1024 * 1024)
+		throughput = float64(bm.TotalBytes) / elapsed.Seconds() / float64(MB)
 	}
 
 	return BenchmarkResults{
@@ -105,7 +110,7 @@ func (bm *BenchmarkMetrics) GetResults() BenchmarkResults {
 		RetryCount:     int(bm.RetryCount.Load()),
 		MaxConnections: int(bm.ConnectionMax.Load()),
 		AvgConnections: avgConnections,
-		MemoryUsedMB:   float64(bm.PeakMemAlloc-bm.StartMemAlloc) / (1024 * 1024),
+		MemoryUsedMB:   float64(bm.PeakMemAlloc-bm.StartMemAlloc) / float64(MB),
 	}
 }
 
@@ -151,7 +156,7 @@ func formatInt(i int) string {
 }
 
 func formatBytes(b int64) string {
-	const unit = 1024
+	const unit = KB
 	if b < unit {
 		return sprintf("%d B", b)
 	}

@@ -181,7 +181,7 @@ func computeFileHashMD5WithTimeout(path string, timeout time.Duration) (string, 
 	defer func() { _ = f.Close() }()
 
 	h := md5.New()
-	buf := make([]byte, 1024*1024)
+	buf := make([]byte, types.MB)
 	deadline := time.Now().Add(timeout)
 
 	for {

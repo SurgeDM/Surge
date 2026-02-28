@@ -41,7 +41,7 @@ func readURLsFromFile(filepath string) ([]string, error) {
 
 	var urls []string
 	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+	scanner.Buffer(make([]byte, 64*types.KB), types.MB)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {

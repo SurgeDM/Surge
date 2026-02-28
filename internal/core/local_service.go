@@ -21,10 +21,10 @@ func completedSpeedMBps(entry types.DownloadEntry) float64 {
 		return 0
 	}
 	if entry.AvgSpeed > 0 {
-		return entry.AvgSpeed / (1024 * 1024)
+		return entry.AvgSpeed / float64(types.MB)
 	}
 	if entry.TimeTaken > 0 {
-		return float64(entry.TotalSize) * 1000 / float64(entry.TimeTaken) / (1024 * 1024)
+		return float64(entry.TotalSize) * 1000 / float64(entry.TimeTaken) / float64(types.MB)
 	}
 	return 0
 }
@@ -361,12 +361,12 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 				if status.Status == "downloading" {
 					sessionDownloaded := downloaded - sessionStart
 					if sessionElapsed.Seconds() > 0 && sessionDownloaded > 0 {
-						status.Speed = float64(sessionDownloaded) / sessionElapsed.Seconds() / (1024 * 1024)
+						status.Speed = float64(sessionDownloaded) / sessionElapsed.Seconds() / float64(types.MB)
 
 						// Calculate ETA (seconds remaining)
 						remaining := status.TotalSize - status.Downloaded
 						if remaining > 0 && status.Speed > 0 {
-							speedBytes := status.Speed * 1024 * 1024
+							speedBytes := status.Speed * float64(types.MB)
 							status.ETA = int64(float64(remaining) / speedBytes)
 						}
 					}

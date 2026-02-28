@@ -16,8 +16,8 @@ class AnalyzeTests(unittest.TestCase):
         self.assertAlmostEqual(analyze.percentile(values, 0.95), 3.85)
 
     def test_filter_data_worker_and_time(self):
-        t1 = analyze.Task(datetime(2026, 2, 15, 10, 0, 1), 0, 1024, 1.0)
-        t2 = analyze.Task(datetime(2026, 2, 15, 10, 0, 2), 1024, 1024, 1.0)
+        t1 = analyze.Task(datetime(2026, 2, 15, 10, 0, 1), 0, analyze.KB, 1.0)
+        t2 = analyze.Task(datetime(2026, 2, 15, 10, 0, 2), analyze.KB, analyze.KB, 1.0)
         w1 = analyze.WorkerStats(worker_id=1, start_time=datetime(2026, 2, 15, 10, 0, 0), end_time=datetime(2026, 2, 15, 10, 0, 3), tasks=[t1])
         w2 = analyze.WorkerStats(worker_id=2, start_time=datetime(2026, 2, 15, 10, 0, 0), end_time=datetime(2026, 2, 15, 10, 0, 3), tasks=[t2])
 

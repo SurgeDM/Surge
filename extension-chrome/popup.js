@@ -3,6 +3,8 @@
 // Also supports standalone testing via direct HTTP calls
 
 const SURGE_API_BASE = 'http://127.0.0.1:1700';
+const KB = 1 << 10;
+const MB = 1 << 20;
 
 // === State ===
 let downloads = new Map();
@@ -341,15 +343,15 @@ function extractFilename(url) {
 function formatSize(bytes) {
   if (!bytes || bytes === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(1024));
-  const value = bytes / Math.pow(1024, i);
+  const i = Math.floor(Math.log(bytes) / Math.log(KB));
+  const value = bytes / Math.pow(KB, i);
   return value.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
 }
 
 function formatSpeed(mbps) {
   if (!mbps || mbps <= 0) return '--';
-  if (mbps < 0.01) return (mbps * 1024 * 1024).toFixed(0) + ' B/s';
-  if (mbps < 1) return (mbps * 1024).toFixed(1) + ' KB/s';
+  if (mbps < 0.01) return (mbps * MB).toFixed(0) + ' B/s';
+  if (mbps < 1) return (mbps * KB).toFixed(1) + ' KB/s';
   return mbps.toFixed(1) + ' MB/s';
 }
 

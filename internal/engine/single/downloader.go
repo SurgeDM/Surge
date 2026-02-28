@@ -36,7 +36,7 @@ var singleTransportCache sync.Map // map[singleTransportKey]*http.Transport
 
 var bufPool = sync.Pool{
 	New: func() any {
-		b := make([]byte, 32*1024)
+		b := make([]byte, 32*types.KB)
 		return &b
 	},
 }
@@ -335,7 +335,7 @@ func copyFile(src, dst string) error {
 		}
 	}()
 
-	buf := make([]byte, 1024*1024)
+	buf := make([]byte, types.MB)
 	if _, err := io.CopyBuffer(out, in, buf); err != nil {
 		return err
 	}

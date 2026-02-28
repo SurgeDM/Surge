@@ -25,7 +25,8 @@ from typing import Optional, List, Callable
 # =============================================================================
 IS_WINDOWS = platform.system() == "Windows"
 EXE_SUFFIX = ".exe" if IS_WINDOWS else ""
-MB = 1024 * 1024
+KB = 1 << 10
+MB = 1 << 20
 DEFAULT_TEST_URL = "https://sin-speed.hetzner.com/1GB.bin"
 
 # =============================================================================

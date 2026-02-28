@@ -128,7 +128,7 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 	defer func() {
 		// Only drain a small amount of data (32KB) to allow connection reuse for small responses (e.g., 206 Partial Content).
 		// For large responses (e.g., 200 OK), reading the whole file into discard takes too long.
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 32*1024))
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 32*types.KB))
 		_ = resp.Body.Close()
 	}()
 

@@ -33,7 +33,7 @@ func CreateTestFile(dir, name string, size int64, random bool) (string, error) {
 
 	if random {
 		// Write in chunks for large files
-		chunkSize := int64(64 * 1024) // 64KB
+		chunkSize := int64(64 * KB) // 64KB
 		chunk := make([]byte, chunkSize)
 		remaining := size
 
@@ -75,7 +75,7 @@ func CreateSurgeFile(dir, name string, totalSize, downloadedSize int64) (string,
 
 	// Fill downloaded portion with data
 	if downloadedSize > 0 {
-		chunk := make([]byte, min(downloadedSize, 64*1024))
+		chunk := make([]byte, min(downloadedSize, 64*KB))
 		for i := range chunk {
 			chunk[i] = byte(i % 256)
 		}

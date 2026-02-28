@@ -7,6 +7,7 @@ const INTERCEPT_ENABLED_KEY = "interceptEnabled";
 const AUTH_TOKEN_KEY = "authToken";
 const AUTH_VERIFIED_KEY = "authVerified";
 const SERVER_URL_KEY = "serverUrl";
+const MB = 1 << 20;
 
 // === State ===
 let cachedPort = null;
@@ -285,7 +286,7 @@ async function fetchDownloadList() {
         if (dl.status === "downloading" && dl.speed > 0 && dl.total_size > 0) {
           const remaining = dl.total_size - dl.downloaded;
           // Speed is in MB/s, convert to bytes/s
-          const speedBytes = dl.speed * 1024 * 1024;
+          const speedBytes = dl.speed * MB;
           eta = Math.ceil(remaining / speedBytes);
         }
         return { ...dl, eta };

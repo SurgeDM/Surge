@@ -67,7 +67,7 @@ func (s *RemoteDownloadService) doRequest(method, path string, body interface{})
 	if resp.StatusCode >= 400 {
 		defer func() { _ = resp.Body.Close() }()
 		// Limit error body read to 1KB to prevent DoS
-		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, types.KB))
 		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
