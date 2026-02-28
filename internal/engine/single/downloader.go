@@ -15,8 +15,6 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
-const singleProgressPublishStride = 64 * 1024
-
 // SingleDownloader handles single-threaded downloads for servers that don't support range requests.
 // NOTE: Pause/resume is NOT supported because this downloader is only used when
 // the server doesn't support Range headers. If interrupted, the download must restart.
