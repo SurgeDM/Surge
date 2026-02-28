@@ -270,7 +270,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 				if s.AvgSpeed > 0 {
 					dm.Speed = s.AvgSpeed
 				} else if s.Speed > 0 {
-					dm.Speed = s.Speed * Megabyte
+					dm.Speed = s.Speed * float64(MB)
 				}
 				if s.Status == "completed" && s.TimeTaken > 0 {
 					dm.Elapsed = time.Duration(s.TimeTaken) * time.Millisecond

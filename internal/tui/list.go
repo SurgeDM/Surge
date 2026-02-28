@@ -53,7 +53,7 @@ func (i DownloadItem) Description() string {
 
 	speedInfo := ""
 	if d.Speed > 0 {
-		speedInfo = fmt.Sprintf(" • %.2f MB/s", d.Speed/Megabyte)
+		speedInfo = fmt.Sprintf(" • %.2f MB/s", d.Speed/float64(MB))
 	}
 
 	return fmt.Sprintf("%s • %.0f%%%s • %s", styledStatus, pct, speedInfo, sizeInfo)

@@ -843,12 +843,12 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 	if d.done {
 		if elapsed.Seconds() >= 1 {
 			avgSpeed := float64(d.Total) / float64(int(elapsed.Seconds()))
-			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/Megabyte)
+			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(MB))
 		} else if d.Speed > 0 {
-			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", d.Speed/Megabyte)
+			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", d.Speed/float64(MB))
 		} else if elapsed.Seconds() > 0 {
 			avgSpeed := float64(d.Total) / elapsed.Seconds()
-			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/Megabyte)
+			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(MB))
 		} else {
 			speedStr = "N/A"
 		}
@@ -860,7 +860,7 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 		speedStr = "Paused"
 		etaStr = "∞"
 	} else {
-		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/Megabyte)
+		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/float64(MB))
 		if d.Total > 0 {
 			remaining := d.Total - d.Downloaded
 			etaSeconds := float64(remaining) / d.Speed
@@ -987,7 +987,7 @@ func (m RootModel) calcTotalSpeed() float64 {
 		}
 		total += d.Speed
 	}
-	return total / Megabyte
+	return total / float64(MB)
 }
 
 func (m RootModel) ComputeViewStats() ViewStats {

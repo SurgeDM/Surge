@@ -30,6 +30,8 @@ const (
 	// Channel Buffers - use consolidated constant from downloader
 	ProgressChannelBuffer = types.ProgressChannelBuffer
 
-	// Units - use consolidated constant from downloader
-	Megabyte = types.Megabyte
+	// Units - use consolidated constants from downloader
+	KB = types.KB
+	MB = types.MB
+	GB = types.GB
 )

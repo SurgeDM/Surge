@@ -10,9 +10,6 @@ const (
 	MB = 1024 * KB
 	GB = 1024 * MB
 
-	// Megabyte as float for display calculations
-	Megabyte = 1024.0 * 1024.0
-
 	// IncompleteSuffix is appended to files while downloading
 	IncompleteSuffix = ".surge"
 )
