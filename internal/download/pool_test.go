@@ -497,6 +497,45 @@ func TestWorkerPool_Cancel_DoesNotRemoveIncompleteFile(t *testing.T) {
 	}
 }
 
+func TestWorkerPool_Cancel_QueuedDownload_RemovesFromQueueAndEmitsEvent(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := &WorkerPool{
+		progressCh: ch,
+		downloads:  make(map[string]*activeDownload),
+		queued: map[string]types.DownloadConfig{
+			"queued-id": {
+				ID:       "queued-id",
+				Filename: "queued.bin",
+			},
+		},
+	}
+
+	pool.Cancel("queued-id")
+
+	pool.mu.RLock()
+	_, exists := pool.queued["queued-id"]
+	pool.mu.RUnlock()
+	if exists {
+		t.Fatal("expected queued download to be removed from queue")
+	}
+
+	select {
+	case msg := <-ch:
+		removed, ok := msg.(events.DownloadRemovedMsg)
+		if !ok {
+			t.Fatalf("expected DownloadRemovedMsg, got %T", msg)
+		}
+		if removed.DownloadID != "queued-id" {
+			t.Fatalf("removed id = %q, want queued-id", removed.DownloadID)
+		}
+		if removed.Filename != "queued.bin" {
+			t.Fatalf("removed filename = %q, want queued.bin", removed.Filename)
+		}
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("expected removal message for queued cancel")
+	}
+}
+
 func TestWorkerPool_Resume_NonExistentDownload(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 3)

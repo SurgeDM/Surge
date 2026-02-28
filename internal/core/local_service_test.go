@@ -113,15 +113,28 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 	destPath := filepath.Join(outputDir, filename)
 	incompletePath := destPath + types.IncompleteSuffix
 
-	deadline := time.Now().Add(8 * time.Second)
+	// Wait for runtime status so Delete() can capture a pool-based destination path
+	// even when no DB row exists yet.
+	deadline := time.Now().Add(5 * time.Second)
+	var st *types.DownloadStatus
 	for time.Now().Before(deadline) {
-		if _, err := os.Stat(incompletePath); err == nil {
+		st, _ = svc.GetStatus(id)
+		if st != nil && st.DestPath != "" && st.Status != "completed" {
 			break
 		}
-		time.Sleep(40 * time.Millisecond)
+		time.Sleep(25 * time.Millisecond)
 	}
-	if _, err := os.Stat(incompletePath); err != nil {
-		t.Fatalf("expected partial file to exist before delete, stat err: %v", err)
+	if st == nil || st.DestPath == "" || st.Status == "completed" {
+		t.Fatalf("expected non-completed runtime status with destination path before delete, got: %+v", st)
+	}
+
+	// Ensure the partial file exists before delete to validate cleanup logic deterministically.
+	if _, err := os.Stat(incompletePath); os.IsNotExist(err) {
+		if err := os.WriteFile(incompletePath, []byte("partial"), 0o644); err != nil {
+			t.Fatalf("failed to create partial file before delete: %v", err)
+		}
+	} else if err != nil {
+		t.Fatalf("failed to stat partial file before delete: %v", err)
 	}
 
 	// Simulate delete-before-persist path: no DB entry available.

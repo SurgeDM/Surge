@@ -222,31 +222,42 @@ func (p *WorkerPool) PauseAll() {
 // Cancel cancels and removes a download by ID
 func (p *WorkerPool) Cancel(downloadID string) {
 	p.mu.Lock()
-	ad, exists := p.downloads[downloadID]
-	if exists {
+	ad, activeExists := p.downloads[downloadID]
+	qCfg, queuedExists := p.queued[downloadID]
+	if activeExists {
 		delete(p.downloads, downloadID)
+	}
+	if queuedExists {
+		delete(p.queued, downloadID)
 	}
 	p.mu.Unlock()
 
-	if !exists || ad == nil {
+	if !activeExists && !queuedExists {
 		return
 	}
 
-	// Cancel the context to stop workers
-	if ad.cancel != nil {
-		ad.cancel()
-	}
+	removedFilename := ""
+	if activeExists && ad != nil {
+		removedFilename = ad.config.Filename
 
-	// Mark as done to stop polling
-	if ad.config.State != nil {
-		ad.config.State.Done.Store(true)
+		// Cancel the context to stop workers
+		if ad.cancel != nil {
+			ad.cancel()
+		}
+
+		// Mark as done to stop polling
+		if ad.config.State != nil {
+			ad.config.State.Done.Store(true)
+		}
+	} else if queuedExists {
+		removedFilename = qCfg.Filename
 	}
 
 	// Send removal message
 	if p.progressCh != nil {
 		p.progressCh <- events.DownloadRemovedMsg{
 			DownloadID: downloadID,
-			Filename:   ad.config.Filename,
+			Filename:   removedFilename,
 		}
 	}
 }
@@ -336,6 +347,14 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 
 func (p *WorkerPool) worker() {
 	for cfg := range p.taskChan {
+		p.mu.RLock()
+		_, stillQueued := p.queued[cfg.ID]
+		p.mu.RUnlock()
+		if !stillQueued {
+			// Canceled while waiting in queue.
+			continue
+		}
+
 		p.wg.Add(1)
 		// Create cancellable context
 		ctx, cancel := context.WithCancel(context.Background())
