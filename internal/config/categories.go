@@ -1,6 +1,10 @@
 package config
 
-import "errors"
+import (
+	"errors"
+	"regexp"
+	"sync"
+)
 
 // Category defines a download category for auto-sorting.
 type Category struct {
@@ -63,4 +67,73 @@ func DefaultCategories() []Category {
 			Path:        GetPicturesDir(),
 		},
 	}
+}
+
+var (
+	patternCache = make(map[string]*regexp.Regexp)
+	patternMu    sync.RWMutex
+)
+
+// getCompiledPattern returns a compiled regular expression, using a cache to avoid recompiling.
+func getCompiledPattern(pattern string) *regexp.Regexp {
+	patternMu.RLock()
+	re, ok := patternCache[pattern]
+	patternMu.RUnlock()
+	if ok {
+		return re
+	}
+
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil
+	}
+
+	patternMu.Lock()
+	patternCache[pattern] = re
+	patternMu.Unlock()
+	return re
+}
+
+// GetCategoryForFile returns the matched category for a given filename.
+// Returns an error if the filename matches multiple categories.
+func GetCategoryForFile(filename string, categories []Category) (*Category, error) {
+	if filename == "" || len(categories) == 0 {
+		return nil, nil
+	}
+
+	var matched *Category
+
+	for i := range categories {
+		cat := &categories[i]
+		if cat.Pattern == "" {
+			continue
+		}
+
+		re := getCompiledPattern(cat.Pattern)
+		if re != nil && re.MatchString(filename) {
+			if matched != nil {
+				return nil, errors.New("filename matches multiple categories")
+			}
+			matched = cat
+		}
+	}
+
+	return matched, nil
+}
+
+// ResolveCategoryPath returns the Path of a category.
+func ResolveCategoryPath(cat *Category, defaultDownloadDir string) string {
+	if cat == nil || cat.Path == "" {
+		return ""
+	}
+	return cat.Path
+}
+
+// CategoryNames returns a slice of category names.
+func CategoryNames(categories []Category) []string {
+	names := make([]string, len(categories))
+	for i, cat := range categories {
+		names[i] = cat.Name
+	}
+	return names
 }
