@@ -2,9 +2,8 @@ package cmd
 
 import (
 	"encoding/json"
-	"fmt"
-	"net"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,32 +17,19 @@ import (
 	"github.com/surge-downloader/surge/internal/engine/types"
 )
 
-func waitForServerReady(t *testing.T, baseURL string) {
+func startAuthedTestServer(t *testing.T, service core.DownloadService, token string) string {
 	t.Helper()
 
-	deadline := time.Now().Add(5 * time.Second)
-	var lastErr error
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", service)
+	handler := corsMiddleware(authMiddleware(token, mux))
 
-	for time.Now().Before(deadline) {
-		resp, err := http.Get(baseURL + "/health")
-		if err == nil {
-			_ = resp.Body.Close()
-			if resp.StatusCode == http.StatusOK {
-				return
-			}
-			lastErr = fmt.Errorf("unexpected status %d", resp.StatusCode)
-		} else {
-			lastErr = err
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
-
-	t.Fatalf("server did not become ready at %s: %v", baseURL, lastErr)
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	return server.URL
 }
 
 func TestCLI_NewEndpoints(t *testing.T) {
-	requireTCPListener(t)
-
 	tempDir := t.TempDir()
 
 	// xdg package variables are initialized on load, so setting env vars
@@ -85,23 +71,13 @@ func TestCLI_NewEndpoints(t *testing.T) {
 	GlobalProgressCh = make(chan any, 100)
 	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 4)
 
-	// Create listener
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Failed to create listener: %v", err)
-	}
-	port := ln.Addr().(*net.TCPAddr).Port
-
-	// Start server in background
+	// Start server
 	svc := core.NewLocalDownloadService(GlobalPool)
 	const authToken = "test-token-new-endpoints"
-	go startHTTPServer(ln, port, "", svc, authToken)
-
-	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-	waitForServerReady(t, baseURL)
+	baseURL := startAuthedTestServer(t, svc, authToken)
 
 	seedPausedState := func(id string) {
-		testURL := "http://example.com/test"
+		testURL := baseURL + "/health?seed=" + id
 		destPath := filepath.Join(tempDir, id+".bin")
 		if err := state.SaveState(testURL, destPath, &types.DownloadState{
 			ID:         id,
@@ -118,7 +94,7 @@ func TestCLI_NewEndpoints(t *testing.T) {
 		}
 	}
 
-	client := &http.Client{}
+	client := &http.Client{Timeout: 3 * time.Second}
 
 	doRequest := func(method, url string) (*http.Response, error) {
 		req, err := http.NewRequest(method, url, nil)
@@ -174,6 +150,16 @@ func TestCLI_NewEndpoints(t *testing.T) {
 		if result["status"] != "resumed" {
 			t.Errorf("Expected status 'resumed', got %v", result["status"])
 		}
+
+		// Cleanup resumed download so it cannot interfere with following tests.
+		cleanupResp, cleanupErr := doRequest(http.MethodPost, baseURL+"/delete?id="+id)
+		if cleanupErr != nil {
+			t.Fatalf("Failed to cleanup resumed download: %v", cleanupErr)
+		}
+		defer func() { _ = cleanupResp.Body.Close() }()
+		if cleanupResp.StatusCode != http.StatusOK {
+			t.Fatalf("Cleanup delete expected 200 OK, got %d", cleanupResp.StatusCode)
+		}
 	})
 
 	t.Run("Delete Endpoint", func(t *testing.T) {
@@ -213,8 +199,6 @@ func TestCLI_NewEndpoints(t *testing.T) {
 }
 
 func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
-	requireTCPListener(t)
-
 	tempDir := t.TempDir()
 
 	oldConfigHome := xdg.ConfigHome
@@ -251,18 +235,11 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	GlobalProgressCh = make(chan any, 100)
 	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 2)
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Failed to create listener: %v", err)
-	}
-	port := ln.Addr().(*net.TCPAddr).Port
+	// Start server
 	svc := core.NewLocalDownloadService(GlobalPool)
 	const authToken = "test-token-delete-endpoint"
-	go startHTTPServer(ln, port, "", svc, authToken)
-
-	baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-	waitForServerReady(t, baseURL)
-	client := &http.Client{}
+	baseURL := startAuthedTestServer(t, svc, authToken)
+	client := &http.Client{Timeout: 3 * time.Second}
 
 	doRequest := func(method, url string) (*http.Response, error) {
 		req, err := http.NewRequest(method, url, nil)
