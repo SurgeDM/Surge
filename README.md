@@ -220,6 +220,7 @@ The Surge extension intercepts browser downloads and sends them straight to your
 ## Community & Contributing
 
 We love community contributions! Whether it's a bug fix, a new feature, or just cleaning up typos.
+PRs are always welcome. For a quick guide, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
 You can check out the [Discussions](https://github.com/surge-downloader/surge/discussions) for any questions or ideas, or follow us on [X (Twitter)](https://x.com/SurgeDownloader)!
 
