@@ -110,23 +110,22 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 		t.Fatalf("failed to add download: %v", err)
 	}
 
-	destPath := filepath.Join(outputDir, filename)
-	incompletePath := destPath + types.IncompleteSuffix
-
-	// Wait for runtime status so Delete() can capture a pool-based destination path
-	// even when no DB row exists yet.
-	deadline := time.Now().Add(5 * time.Second)
+	// Wait until the download is actively running and exposes its resolved destination path.
+	deadline := time.Now().Add(8 * time.Second)
 	var st *types.DownloadStatus
+	var runtimeDestPath string
 	for time.Now().Before(deadline) {
 		st, _ = svc.GetStatus(id)
-		if st != nil && st.DestPath != "" && st.Status != "completed" {
+		if st != nil && st.DestPath != "" && st.Status == "downloading" {
+			runtimeDestPath = st.DestPath
 			break
 		}
 		time.Sleep(25 * time.Millisecond)
 	}
-	if st == nil || st.DestPath == "" || st.Status == "completed" {
-		t.Fatalf("expected non-completed runtime status with destination path before delete, got: %+v", st)
+	if runtimeDestPath == "" {
+		t.Fatalf("expected active runtime status with destination path before delete, got: %+v", st)
 	}
+	incompletePath := runtimeDestPath + types.IncompleteSuffix
 
 	// Ensure the partial file exists before delete to validate cleanup logic deterministically.
 	if _, err := os.Stat(incompletePath); os.IsNotExist(err) {

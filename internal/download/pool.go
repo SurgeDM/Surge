@@ -41,6 +41,10 @@ var (
 	gracefulShutdownPausePollInterval = 100 * time.Millisecond
 	// gracefulShutdownPauseHardTimeout prevents indefinite shutdown hangs if a worker is stuck.
 	gracefulShutdownPauseHardTimeout = 30 * time.Second
+	// cancelStopWaitTimeout bounds how long Cancel waits for an active worker to exit.
+	cancelStopWaitTimeout = 3 * time.Second
+	// cancelStopPollInterval controls polling cadence while waiting for cancel to take effect.
+	cancelStopPollInterval = 10 * time.Millisecond
 )
 
 func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
@@ -243,6 +247,13 @@ func (p *WorkerPool) Cancel(downloadID string) {
 		// Cancel the context to stop workers
 		if ad.cancel != nil {
 			ad.cancel()
+		}
+
+		// Best effort: wait for worker to exit so delete cleanup doesn't race with
+		// downloader startup that can recreate the .surge file after removal.
+		deadline := time.Now().Add(cancelStopWaitTimeout)
+		for ad.running.Load() && time.Now().Before(deadline) {
+			time.Sleep(cancelStopPollInterval)
 		}
 
 		// Mark as done to stop polling
