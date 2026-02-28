@@ -301,7 +301,7 @@ func (m *MockServer) handleRequest(w http.ResponseWriter, r *http.Request) {
 		if m.FailAfterBytes > 0 && bytesWritten >= m.FailAfterBytes {
 			m.FailedRequests.Add(1)
 			// Abruptly close connection by not writing more
-			return
+			panic(http.ErrAbortHandler)
 		}
 
 		remaining := length - bytesWritten
@@ -325,7 +325,11 @@ func (m *MockServer) handleRequest(w http.ResponseWriter, r *http.Request) {
 
 		// Add byte latency
 		if m.ByteLatency > 0 {
-			time.Sleep(m.ByteLatency * time.Duration(n))
+			select {
+			case <-time.After(m.ByteLatency * time.Duration(n)):
+			case <-r.Context().Done():
+				return // Client disconnected during latency
+			}
 		}
 	}
 }
@@ -523,7 +527,11 @@ func (s *StreamingMockServer) handleStreamingRequest(w http.ResponseWriter, r *h
 
 		// Add byte latency
 		if s.ByteLatency > 0 {
-			time.Sleep(s.ByteLatency * time.Duration(n) / 1024) // Per KB
+			select {
+			case <-time.After(s.ByteLatency * time.Duration(n) / 1024): // Per KB
+			case <-r.Context().Done():
+				return
+			}
 		}
 	}
 }

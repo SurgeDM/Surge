@@ -34,6 +34,13 @@ type singleTransportKey struct {
 
 var singleTransportCache sync.Map // map[singleTransportKey]*http.Transport
 
+var bufPool = sync.Pool{
+	New: func() any {
+		b := make([]byte, 32*1024)
+		return &b
+	},
+}
+
 // NewSingleDownloader creates a new single-threaded downloader with all required parameters
 func NewSingleDownloader(id string, progressCh chan<- any, state *types.ProgressState, runtime *types.RuntimeConfig) *SingleDownloader {
 	if runtime == nil {
@@ -116,6 +123,8 @@ func newSingleTransport(runtime *types.RuntimeConfig) *http.Transport {
 // This is used for servers that don't support Range requests.
 // If interrupted, the download cannot be resumed and must restart from the beginning.
 func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string, fileSize int64, filename string) error {
+	defer d.Client.CloseIdleConnections()
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
 	if err != nil {
 		return err
@@ -167,11 +176,15 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	start := time.Now()
 	var written int64
 
+	bufPtr := bufPool.Get().(*[]byte)
+	buf := *bufPtr
+	defer bufPool.Put(bufPtr)
+
 	if d.State == nil {
-		written, err = io.Copy(outFile, resp.Body)
+		written, err = io.CopyBuffer(outFile, resp.Body, buf)
 	} else {
 		progressReader := newProgressReader(resp.Body, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
-		written, err = io.Copy(outFile, progressReader)
+		written, err = io.CopyBuffer(outFile, progressReader, buf)
 		progressReader.Flush()
 	}
 	if err != nil {

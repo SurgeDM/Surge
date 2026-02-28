@@ -146,7 +146,7 @@ func TestPreallocateFile(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	const size = int64(2 * types.MB)
 	if err := preallocateFile(file, size); err != nil {
@@ -556,5 +556,40 @@ func TestSingleDownloader_Download_ContentIntegrity(t *testing.T) {
 	}
 	if allZero {
 		t.Error("Content should not be all zeros with random data")
+	}
+}
+
+// =============================================================================
+// Benchmarks
+// =============================================================================
+
+func BenchmarkSingleDownloader(b *testing.B) {
+	tmpDir, cleanup, _ := testutil.TempDir("surge-bench-single")
+	defer cleanup()
+
+	fileSize := int64(10 * types.MB)
+	server := testutil.NewMockServer(
+		testutil.WithFileSize(fileSize),
+		testutil.WithRangeSupport(false),
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "bench_single.bin")
+	state := types.NewProgressState("bench-single", fileSize)
+	runtime := &types.RuntimeConfig{}
+
+	downloader := NewSingleDownloader("bench-id", nil, state, runtime)
+
+	b.ResetTimer()
+	b.ReportAllocs()
+
+	for i := 0; i < b.N; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := downloader.Download(ctx, server.URL(), destPath, fileSize, "bench.bin")
+		if err != nil {
+			b.Fatalf("Download failed: %v", err)
+		}
+		cancel()
+		_ = os.Remove(destPath)
 	}
 }

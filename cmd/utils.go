@@ -53,9 +53,7 @@ func readURLsFromFile(filepath string) ([]string, error) {
 		if line == "" {
 			continue
 		}
-		for _, token := range strings.Fields(line) {
-			urls = append(urls, token)
-		}
+		urls = append(urls, strings.Fields(line)...)
 	}
 	return urls, scanner.Err()
 }
