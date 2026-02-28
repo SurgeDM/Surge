@@ -78,7 +78,7 @@ func readURLsFromFile(filepath string) ([]string, error) {
 	var urls []string
 	seen := make(map[string]bool)
 	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64*KB), MB)
+	scanner.Buffer(make([]byte, 64*config.KB), config.MB)
 	for scanner.Scan() {
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
@@ -174,6 +174,24 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	// For Local Service, we can generate it here. For Remote, the server might do it,
 	// but sending a unique filename is safer.
 	finalFilename := m.generateUniqueFilename(path, filename)
+
+	// Auto-route to category folder when enabled
+	if m.Settings.General.CategoryEnabled && finalFilename != "" {
+		if cat, err := config.GetCategoryForFile(finalFilename, m.Settings.General.Categories); err == nil && cat != nil {
+			if catPath := config.ResolveCategoryPath(cat, m.Settings.General.DefaultDownloadDir); catPath != "" {
+				// Don't override if user explicitly provided a path (e.g. extension prompt)
+				// We can infer defaultness by comparing to DefaultDownloadDir
+				defaultDir := m.Settings.General.DefaultDownloadDir
+				if defaultDir == "" {
+					defaultDir = "."
+				}
+				if path == utils.EnsureAbsPath(defaultDir) {
+					path = utils.EnsureAbsPath(catPath)
+					_ = os.MkdirAll(path, 0o755)
+				}
+			}
+		}
+	}
 
 	// Call Service Add
 	// Note: We don't construct DownloadConfig/DownloadModel manually here for the queue
@@ -353,7 +371,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if msg.Elapsed.Seconds() > 0 {
 					speed = float64(d.Total) / msg.Elapsed.Seconds()
 				}
-				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("✔ Done: %s (%.2f MB/s)", d.Filename, speed/float64(MB))))
+				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("✔ Done: %s (%.2f MB/s)", d.Filename, speed/float64(config.MB))))
 				break
 			}
 		}
