@@ -39,7 +39,15 @@ jobs:
         run: |
           set +e
           out_file="go-test-${MATRIX_OS}.jsonl"
-          go test -json -coverprofile=coverage.out "./..." 2>&1 | tee "$out_file"
+
+          cover_arg=""
+          if go tool covdata >/dev/null 2>&1; then
+            cover_arg="-coverprofile=coverage.out"
+          else
+            echo "Warning: go tool covdata is unavailable; running tests without coverage profile." >&2
+          fi
+
+          go test -json $cover_arg "./..." 2>&1 | tee "$out_file"
           status=${PIPESTATUS[0]}
 
           failed_tests_file="failed_tests_${MATRIX_OS}.txt"
@@ -98,7 +106,7 @@ jobs:
           if-no-files-found: ignore
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
-        if: matrix.os == 'ubuntu-latest' && success()
+        if: matrix.os == 'ubuntu-latest' && success() && hashFiles('coverage.out') != ''
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
