@@ -182,37 +182,8 @@ jobs:
               .filter(([, data]) => data.exitCode !== 0)
               .sort(([a], [b]) => a.localeCompare(b));
 
-            if (!context.payload.pull_request) {
-              core.info('No pull_request payload; skipping comment upsert.');
-              return;
-            }
-
             if (failing.length === 0 && process.env.NEEDS_TEST_RESULT && process.env.NEEDS_TEST_RESULT !== 'success' && byOS.size === 0) {
               core.setFailed('Tests did not succeed but no test failure artifacts were found; cannot post failure comment.');
-              return;
-            }
-
-            const issueNumber = context.payload.pull_request.number;
-            const comments = await github.paginate(github.rest.issues.listComments, {
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              per_page: 100,
-            });
-            const existing = comments.find((c) => c.user?.type === 'Bot' && c.body?.includes(marker));
-
-            if (failing.length === 0) {
-              if (existing) {
-                try {
-                  await github.rest.issues.deleteComment({
-                    owner: context.repo.owner,
-                    repo: context.repo.repo,
-                    comment_id: existing.id,
-                  });
-                } catch (err) {
-                  core.warning(`Failed deleting stale failure comment: ${err.message}`);
-                }
-              }
               return;
             }
 
@@ -237,28 +208,67 @@ jobs:
               return lines.join('\n');
             });
 
-            const body = [
-              marker,
+            const summaryBody = [
               '## Go Test Failures',
               `Run: [${context.runId}](${runUrl})`,
               '',
               ...sections,
             ].join('\n');
+            const body = [marker, summaryBody].join('\n');
 
-            if (existing) {
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existing.id,
-                body,
-              });
-            } else {
-              await github.rest.issues.createComment({
+            if (!context.payload.pull_request) {
+              core.warning('No pull_request payload; cannot upsert test-failure comment.');
+              if (failing.length > 0) {
+                await core.summary.addRaw(summaryBody).write();
+              }
+              return;
+            }
+
+            try {
+              const issueNumber = context.payload.pull_request.number;
+              const comments = await github.paginate(github.rest.issues.listComments, {
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issueNumber,
-                body,
+                per_page: 100,
               });
+              const existing = comments.find((c) => c.user?.type === 'Bot' && c.body?.includes(marker));
+
+              if (failing.length === 0) {
+                if (existing) {
+                  try {
+                    await github.rest.issues.deleteComment({
+                      owner: context.repo.owner,
+                      repo: context.repo.repo,
+                      comment_id: existing.id,
+                    });
+                  } catch (err) {
+                    core.warning(`Failed deleting stale failure comment: ${err.message}`);
+                  }
+                }
+                return;
+              }
+
+              if (existing) {
+                await github.rest.issues.updateComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  comment_id: existing.id,
+                  body,
+                });
+              } else {
+                await github.rest.issues.createComment({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: issueNumber,
+                  body,
+                });
+              }
+            } catch (err) {
+              core.warning(`Failed to upsert PR failure comment: ${err.message}`);
+              if (failing.length > 0) {
+                await core.summary.addRaw(summaryBody).write();
+              }
             }
 
   release:
