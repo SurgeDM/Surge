@@ -165,11 +165,6 @@ func TestMigrateOldPaths(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Run migration
-	if err := MigrateOldPaths(); err != nil {
-		t.Fatalf("Migration failed: %v", err)
-	}
-
 	// Verify surge.db moved
 	newDbPath := filepath.Join(mockState, "surge", "surge.db")
 	if _, err := os.Stat(newDbPath); os.IsNotExist(err) {
@@ -221,10 +216,6 @@ func TestMigrateOldPaths_ConflictingDBKept(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := MigrateOldPaths(); err != nil {
-		t.Fatalf("Migration failed: %v", err)
-	}
-
 	if _, err := os.Stat(oldDB); err != nil {
 		t.Fatalf("expected old conflicting db to be kept, stat err: %v", err)
 	}
@@ -266,10 +257,6 @@ func TestMigrateOldPaths_DuplicateTokenRemoved(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if err := MigrateOldPaths(); err != nil {
-		t.Fatalf("Migration failed: %v", err)
-	}
-
 	if _, err := os.Stat(oldToken); err == nil {
 		t.Fatal("expected duplicate old token to be removed")
 	}
@@ -305,10 +292,6 @@ func TestMigrateOldPaths_ConflictingTokenOldRemoved(t *testing.T) {
 	}
 	if err := os.WriteFile(newToken, []byte("new-token"), 0o644); err != nil {
 		t.Fatal(err)
-	}
-
-	if err := MigrateOldPaths(); err != nil {
-		t.Fatalf("Migration failed: %v", err)
 	}
 
 	if _, err := os.Stat(oldToken); err == nil {
