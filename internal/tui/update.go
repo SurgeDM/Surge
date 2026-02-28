@@ -161,7 +161,7 @@ func (m RootModel) checkForDuplicate(url string) *DownloadModel {
 }
 
 // startDownload initiates a new download
-func (m RootModel) startDownload(url string, mirrors []string, headers map[string]string, path, filename, id string) (RootModel, tea.Cmd) {
+func (m RootModel) startDownload(url string, mirrors []string, headers map[string]string, path string, isDefaultPath bool, filename, id string) (RootModel, tea.Cmd) {
 	if m.Service == nil {
 		m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
 		return m, nil
@@ -176,19 +176,11 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	finalFilename := m.generateUniqueFilename(path, filename)
 
 	// Auto-route to category folder when enabled
-	if m.Settings.General.CategoryEnabled && finalFilename != "" {
+	if m.Settings.General.CategoryEnabled && finalFilename != "" && isDefaultPath {
 		if cat, err := config.GetCategoryForFile(finalFilename, m.Settings.General.Categories); err == nil && cat != nil {
 			if catPath := config.ResolveCategoryPath(cat, m.Settings.General.DefaultDownloadDir); catPath != "" {
-				// Don't override if user explicitly provided a path (e.g. extension prompt)
-				// We can infer defaultness by comparing to DefaultDownloadDir
-				defaultDir := m.Settings.General.DefaultDownloadDir
-				if defaultDir == "" {
-					defaultDir = "."
-				}
-				if path == utils.EnsureAbsPath(defaultDir) {
-					path = utils.EnsureAbsPath(catPath)
-					_ = os.MkdirAll(path, 0o755)
-				}
+				path = utils.EnsureAbsPath(catPath)
+				_ = os.MkdirAll(path, 0o755)
 			}
 		}
 	}
@@ -261,7 +253,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case events.DownloadRequestMsg:
 		// ... existing logic ...
 		path := msg.Path
+		isDefaultPath := false
 		if path == "" {
+			isDefaultPath = true
 			path = m.Settings.General.DefaultDownloadDir
 			if path == "" {
 				path = "."
@@ -299,7 +293,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		return m.startDownload(msg.URL, msg.Mirrors, msg.Headers, path, msg.Filename, msg.ID)
+		return m.startDownload(msg.URL, msg.Mirrors, msg.Headers, path, isDefaultPath, msg.Filename, msg.ID)
 
 	case events.DownloadStartedMsg:
 		found := false
@@ -941,7 +935,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.inputs[2].SetValue(path) // Keep path
 				m.inputs[3].SetValue("")
 
-				return m.startDownload(url, mirrors, nil, path, filename, "")
+				return m.startDownload(url, mirrors, nil, path, false, filename, "")
 			}
 
 			// Up/Down navigation between inputs
@@ -1069,7 +1063,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key.Matches(msg, m.keys.Duplicate.Continue) {
 				// Continue anyway - startDownload handles unique filename generation
 				m.state = DashboardState
-				return m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingFilename, "")
+				return m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, false, m.pendingFilename, "")
 			}
 			if key.Matches(msg, m.keys.Duplicate.Cancel) {
 				// Cancel - don't add
@@ -1141,7 +1135,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				// No duplicate (or warning disabled) - add to queue
 				m.state = DashboardState
-				return m.startDownload(m.pendingURL, nil, m.pendingHeaders, m.pendingPath, m.pendingFilename, "")
+				return m.startDownload(m.pendingURL, nil, m.pendingHeaders, m.pendingPath, false, m.pendingFilename, "")
 			}
 			if key.Matches(msg, m.keys.Extension.Cancel) {
 				// Cancelled
@@ -1229,7 +1223,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						skipped++
 						continue
 					}
-					m, _ = m.startDownload(url, nil, nil, path, "", "")
+					m, _ = m.startDownload(url, nil, nil, path, true, "", "")
 					added++
 				}
 

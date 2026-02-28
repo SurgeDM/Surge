@@ -64,7 +64,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	testFilename := "file.zip"
 
 	// Start download with relative path "."
-	m, _ = m.startDownload(testURL, nil, nil, ".", testFilename, "id-1")
+	m, _ = m.startDownload(testURL, nil, nil, ".", true, testFilename, "id-1")
 
 	// 4. Verify Immediate State
 	if len(m.downloads) != 1 {
