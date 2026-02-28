@@ -380,13 +380,22 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case events.DownloadErrorMsg:
+		found := false
 		for _, d := range m.downloads {
 			if d.ID == msg.DownloadID {
 				d.err = msg.Err
 				d.done = true
 				m.addLogEntry(LogStyleError.Render("✖ Error: " + d.Filename))
+				found = true
 				break
 			}
+		}
+		if !found {
+			newDownload := NewDownloadModel(msg.DownloadID, "", msg.Filename, 0)
+			newDownload.err = msg.Err
+			newDownload.done = true
+			m.downloads = append(m.downloads, newDownload)
+			m.addLogEntry(LogStyleError.Render("✖ Error: " + msg.Filename))
 		}
 		m.UpdateListItems()
 		return m, tea.Batch(cmds...)
