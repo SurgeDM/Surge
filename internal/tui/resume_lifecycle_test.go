@@ -3,6 +3,8 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -71,16 +73,29 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	dm := m.downloads[0]
 
 	expectedPathA := filepath.Join(dirA, testFilename)
+	canonicalForCompare := func(p string) string {
+		p = filepath.Clean(p)
+		if eval, err := filepath.EvalSymlinks(p); err == nil {
+			p = eval
+		} else {
+			// Files may not exist yet; resolve symlinks on parent directory if possible.
+			dir := filepath.Dir(p)
+			base := filepath.Base(p)
+			if evalDir, dirErr := filepath.EvalSymlinks(dir); dirErr == nil {
+				p = filepath.Join(evalDir, base)
+			}
+		}
+		if abs, err := filepath.Abs(p); err == nil {
+			p = abs
+		}
+		p = filepath.Clean(p)
+		if runtime.GOOS == "windows" {
+			p = strings.ToLower(p)
+		}
+		return p
+	}
 	sameResolvedPath := func(a, b string) bool {
-		if a == b {
-			return true
-		}
-		evalA, errA := filepath.EvalSymlinks(a)
-		evalB, errB := filepath.EvalSymlinks(b)
-		if errA == nil && errB == nil {
-			return evalA == evalB
-		}
-		return filepath.Clean(a) == filepath.Clean(b)
+		return canonicalForCompare(a) == canonicalForCompare(b)
 	}
 
 	// We expect the Destination to be absolute path
