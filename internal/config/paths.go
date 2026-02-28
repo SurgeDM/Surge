@@ -80,6 +80,10 @@ func GetVideosDir() string {
 	return xdg.UserDirs.Videos
 }
 
+func GetPicturesDir() string {
+	return xdg.UserDirs.Pictures
+}
+
 // GetLogsDir returns the directory for logs
 func GetLogsDir() string {
 	return filepath.Join(GetStateDir(), "logs")
