@@ -127,7 +127,6 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            const core = require('@actions/core');
 
             const marker = '<!-- surge-test-failures -->';
             const artifactDir = 'test-failure-data';
