@@ -71,15 +71,21 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	dm := m.downloads[0]
 
 	expectedPathA := filepath.Join(dirA, testFilename)
+	sameResolvedPath := func(a, b string) bool {
+		if a == b {
+			return true
+		}
+		evalA, errA := filepath.EvalSymlinks(a)
+		evalB, errB := filepath.EvalSymlinks(b)
+		if errA == nil && errB == nil {
+			return evalA == evalB
+		}
+		return filepath.Clean(a) == filepath.Clean(b)
+	}
 
 	// We expect the Destination to be absolute path
-	if dm.Destination != expectedPathA {
-		// Resolve symlinks just in case
-		evalA, _ := filepath.EvalSymlinks(expectedPathA)
-		evalDest, _ := filepath.EvalSymlinks(dm.Destination)
-		if evalDest != evalA {
-			t.Errorf("Initial download path mismatch.\nGot:  %s\nWant: %s", dm.Destination, expectedPathA)
-		}
+	if !sameResolvedPath(dm.Destination, expectedPathA) {
+		t.Errorf("Initial download path mismatch.\nGot:  %s\nWant: %s", dm.Destination, expectedPathA)
 	}
 
 	// 5. Simulate "Pause" / Persistence
@@ -119,7 +125,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 
 	// 8. The CRITICAL CHECK
 	// The loaded entry.DestPath MUST be DirA, not DirB
-	if entry.DestPath != expectedPathA {
+	if !sameResolvedPath(entry.DestPath, expectedPathA) {
 		t.Errorf("Resumed path incorrect.\nGot:  %s\nWant: %s", entry.DestPath, expectedPathA)
 	}
 
