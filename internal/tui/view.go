@@ -55,8 +55,8 @@ func formatDurationForUI(d time.Duration) string {
 func (m RootModel) renderModalWithOverlay(modal string) string {
 	// Place modal centered with dark gray background fill for overlay effect
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal,
-		lipgloss.WithWhitespaceChars("░"),
-		lipgloss.WithWhitespaceForeground(lipgloss.Color("236")),
+		lipgloss.WithWhitespaceChars(" "), // Changed from "░" to avoid terminal rendering glitches
+		lipgloss.WithWhitespaceBackground(lipgloss.Color("236")),
 	)
 }
 

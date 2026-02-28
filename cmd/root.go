@@ -1031,7 +1031,9 @@ func processDownloads(urls []string, outputDir string, port int) int {
 
 		_, err := GlobalService.Add(url, outPath, "", mirrors, nil)
 		if err != nil {
-			fmt.Printf("Error adding %s: %v\n", url, err)
+			_ = GlobalService.Publish(events.SystemLogMsg{
+				Message: fmt.Sprintf("Error adding %s: %v", url, err),
+			})
 			continue
 		}
 		atomic.AddInt32(&activeDownloads, 1)
