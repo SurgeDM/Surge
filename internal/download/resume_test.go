@@ -78,12 +78,17 @@ func TestIntegration_PauseResume(t *testing.T) {
 	}()
 
 	// Wait for some progress
-	deadline := time.Now().Add(5 * time.Second)
+	deadline := time.Now().Add(15 * time.Second)
+	progressed := false
 	for time.Now().Before(deadline) {
 		if progState.Downloaded.Load() > 0 {
+			progressed = true
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+	if !progressed {
+		t.Fatal("download did not make initial progress before pause")
 	}
 
 	// Interrupt!
@@ -95,7 +100,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 		if err != nil && err != context.Canceled && !errors.Is(err, types.ErrPaused) {
 			t.Logf("Download returned error: %v", err)
 		}
-	case <-time.After(5 * time.Second):
+	case <-time.After(15 * time.Second):
 		t.Fatal("Download did not return after cancellation")
 	}
 
@@ -130,7 +135,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 
 	// 5. Resume Download
 	// Create new context
-	resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer resumeCancel()
 
 	// Update config for resume

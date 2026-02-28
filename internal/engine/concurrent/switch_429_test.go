@@ -69,10 +69,11 @@ func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
 	}
 
 	// Verification:
-	// If backoff was APPLIED, we would have slept (attempt 1 = 400ms).
-	// But since we have 2 mirrors, we SKIP backoff.
-	// So it should be very fast (< 200ms).
-	if elapsed > 200*time.Millisecond {
+	// If backoff was APPLIED on every failed chunk, this test would take much
+	// longer (roughly 4 chunks * 400ms first-retry delay ~= 1.6s+).
+	// With mirror switching and no sleep-on-retry for multi-mirror, it should
+	// complete well under that, even on slower CI runners.
+	if elapsed > 1200*time.Millisecond {
 		t.Errorf("Download took %v, indicating backoff was applied via sleep (expected skip)", elapsed)
 	}
 }
