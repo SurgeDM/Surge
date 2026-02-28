@@ -37,6 +37,10 @@ func GetStateDir() string {
 	return filepath.Join(xdg.StateHome, "surge")
 }
 
+func GetDownloadsDir() string {
+	return xdg.UserDirs.Download
+}
+
 func GetRuntimeDir() string {
 	return filepath.Join(xdg.RuntimeDir, "surge")
 }
@@ -47,6 +51,10 @@ func GetDocumentsDir() string {
 
 func GetMusicDir() string {
 	return xdg.UserDirs.Music
+}
+
+func GetVideosDir() string {
+	return xdg.UserDirs.Videos
 }
 
 // GetLogsDir returns the directory for logs

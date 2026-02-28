@@ -136,24 +136,8 @@ const (
 
 // DefaultSettings returns a new Settings instance with sensible defaults.
 func DefaultSettings() *Settings {
-	homeDir, _ := os.UserHomeDir()
 
-	defaultDir := ""
-
-	// Check XDG_DOWNLOAD_DIR
-	if xdgDir := os.Getenv("XDG_DOWNLOAD_DIR"); xdgDir != "" {
-		if info, err := os.Stat(xdgDir); err == nil && info.IsDir() {
-			defaultDir = xdgDir
-		}
-	}
-
-	// Check ~/Downloads if not set
-	if defaultDir == "" && homeDir != "" {
-		downloadsDir := filepath.Join(homeDir, "Downloads")
-		if info, err := os.Stat(downloadsDir); err == nil && info.IsDir() {
-			defaultDir = downloadsDir
-		}
-	}
+	defaultDir := GetDownloadsDir()
 
 	return &Settings{
 		General: GeneralSettings{
