@@ -19,6 +19,7 @@ jobs:
   test:
     name: Test and Check (${{ matrix.os }})
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
@@ -120,6 +121,8 @@ jobs:
           merge-multiple: true
       - name: Upsert PR comment with failed tests
         uses: actions/github-script@v7
+        env:
+          NEEDS_TEST_RESULT: ${{ needs.test.result }}
         with:
           script: |
             const fs = require('fs');
@@ -165,10 +168,22 @@ jobs:
                 byOS.set(osName, { exitCode, failedTests, failedPackages, summary });
               }
             }
+            core.info(`Parsed failure artifacts for OS entries: ${[...byOS.keys()].join(', ') || '(none)'}`);
+            core.info(`needs.test.result=${process.env.NEEDS_TEST_RESULT || '(unset)'}`);
 
             const failing = [...byOS.entries()]
               .filter(([, data]) => data.exitCode !== 0)
               .sort(([a], [b]) => a.localeCompare(b));
+
+            if (!context.payload.pull_request) {
+              core.info('No pull_request payload; skipping comment upsert.');
+              return;
+            }
+
+            if (failing.length === 0 && process.env.NEEDS_TEST_RESULT && process.env.NEEDS_TEST_RESULT !== 'success' && byOS.size === 0) {
+              core.setFailed('Tests did not succeed but no test failure artifacts were found; cannot post failure comment.');
+              return;
+            }
 
             const issueNumber = context.payload.pull_request.number;
             const comments = await github.paginate(github.rest.issues.listComments, {
@@ -223,24 +238,20 @@ jobs:
               ...sections,
             ].join('\n');
 
-            try {
-              if (existing) {
-                await github.rest.issues.updateComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: existing.id,
-                  body,
-                });
-              } else {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issueNumber,
-                  body,
-                });
-              }
-            } catch (err) {
-              core.warning(`Failed to upsert PR comment: ${err.message}`);
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body,
+              });
             }
 
   release:
