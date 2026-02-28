@@ -168,6 +168,11 @@ func computeFileHashMD5WithTimeout(path string, timeout time.Duration) (string, 
 	if timeout <= 0 {
 		timeout = DefaultInlineHashTimeout
 	}
+	// Guard against sub-timer-resolution deadlines that can behave nondeterministically
+	// across platforms (especially on Windows). These effectively mean "skip hashing".
+	if timeout < time.Microsecond {
+		return "", true, nil
+	}
 
 	f, err := os.Open(path)
 	if err != nil {

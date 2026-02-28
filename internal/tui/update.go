@@ -54,12 +54,12 @@ func shutdownCmd(service interface{ Shutdown() error }) tea.Cmd {
 
 // openBrowser opens a URL in the default browser
 func openBrowser(url string) error {
-	return open.Run(url)
+	return open.Start(url)
 }
 
 // openFile opens a file with the system's default application
 func openFile(path string) error {
-	return open.Run(path)
+	return open.Start(path)
 }
 
 // readURLsFromFile reads URLs from a file, accepting one-per-line or whitespace-separated URLs.

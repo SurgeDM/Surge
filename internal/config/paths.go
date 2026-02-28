@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/adrg/xdg"
 )
@@ -13,19 +14,58 @@ import (
 // macOS: ~/Library/Application Support/surge
 // Windows: %APPDATA%/surge
 func GetSurgeDir() string {
+	if runtime.GOOS == "windows" {
+		// Preserve legacy location for existing Windows installs.
+		if appData := strings.TrimSpace(os.Getenv("APPDATA")); appData != "" {
+			return filepath.Join(appData, "surge")
+		}
+	}
 	return filepath.Join(xdg.ConfigHome, "surge")
 }
 
 func GetStateDir() string {
+	// Keep state co-located with config on Windows for backward compatibility.
+	if runtime.GOOS == "windows" {
+		return GetSurgeDir()
+	}
 	return filepath.Join(xdg.StateHome, "surge")
 }
 
 func GetDownloadsDir() string {
-	return xdg.UserDirs.Download
+	// Prefer XDG/user-dirs value when it points to a real directory.
+	if dir := strings.TrimSpace(xdg.UserDirs.Download); dir != "" {
+		if info, err := os.Stat(dir); err == nil && info.IsDir() {
+			return dir
+		}
+	}
+
+	// Fallback to ~/Downloads only if it exists.
+	if home, err := os.UserHomeDir(); err == nil && strings.TrimSpace(home) != "" {
+		fallback := filepath.Join(home, "Downloads")
+		if info, err := os.Stat(fallback); err == nil && info.IsDir() {
+			return fallback
+		}
+	}
+
+	// Final fallback: empty means "current directory" in existing callers.
+	return ""
 }
 
 func GetRuntimeDir() string {
-	return filepath.Join(xdg.RuntimeDir, "surge")
+	runtimeBase := strings.TrimSpace(xdg.RuntimeDir)
+
+	// In headless Linux sessions, XDG_RUNTIME_DIR is often unset and xdg.RuntimeDir
+	// may point to /run/user/<uid>, which can be absent/unwritable. Use a writable
+	// state-dir fallback in that case.
+	if runtime.GOOS == "linux" && strings.TrimSpace(os.Getenv("XDG_RUNTIME_DIR")) == "" {
+		runtimeBase = ""
+	}
+
+	if runtimeBase == "" {
+		return filepath.Join(GetStateDir(), "runtime")
+	}
+
+	return filepath.Join(runtimeBase, "surge")
 }
 
 func GetDocumentsDir() string {
