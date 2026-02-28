@@ -2,25 +2,25 @@ package tui
 
 import (
 	"bytes"
-	"testing"
 	"github.com/charmbracelet/bubbles/list"
+	"testing"
 )
 
 func BenchmarkDownloadDelegateRender(b *testing.B) {
 	d := newDownloadDelegate()
 	m := list.New([]list.Item{}, d, 100, 100)
-	
-	// mock download logic 
+
+	// mock download logic
 	di := DownloadItem{
 		download: &DownloadModel{
-			ID: "123",
-			Filename: "ubuntu-22.04.iso",
-			Total: 1024 * 1024 * 1000,
+			ID:         "123",
+			Filename:   "ubuntu-22.04.iso",
+			Total:      1024 * 1024 * 1000,
 			Downloaded: 1024 * 1024 * 500,
-			Speed: 10 * 1024 * 1024,
+			Speed:      10 * 1024 * 1024,
 		},
 	}
-	
+
 	var buf bytes.Buffer
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {

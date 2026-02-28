@@ -646,35 +646,35 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 				utils.Debug("Requesting TUI confirmation for: %s (Duplicate: %v)", req.URL, isDuplicate)
 
 				// Send request to TUI
-					if err := service.Publish(events.DownloadRequestMsg{
-						ID:       downloadID,
-						URL:      urlForAdd,
+				if err := service.Publish(events.DownloadRequestMsg{
+					ID:       downloadID,
+					URL:      urlForAdd,
 					Filename: req.Filename,
 					Path:     outPath, // Use the path we resolved (default or requested)
 					Mirrors:  mirrorsForAdd,
 					Headers:  req.Headers,
-					}); err != nil {
-						http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
-						return
-					}
+				}); err != nil {
+					http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
+					return
+				}
 
-					// Return 202 Accepted to indicate it's pending approval
-					writeJSONResponse(w, http.StatusAccepted, map[string]string{
-						"status":  "pending_approval",
-						"message": "Download request sent to TUI for confirmation",
-						"id":      downloadID, // ID might change if user modifies it, but useful for tracking
+				// Return 202 Accepted to indicate it's pending approval
+				writeJSONResponse(w, http.StatusAccepted, map[string]string{
+					"status":  "pending_approval",
+					"message": "Download request sent to TUI for confirmation",
+					"id":      downloadID, // ID might change if user modifies it, but useful for tracking
+				})
+				return
+			} else {
+				// Headless mode check
+				if settings.General.ExtensionPrompt || (settings.General.WarnOnDuplicate && isDuplicate) {
+					writeJSONResponse(w, http.StatusConflict, map[string]string{
+						"status":  "error",
+						"message": "Download rejected: Duplicate download or approval required (Headless mode)",
 					})
 					return
-				} else {
-					// Headless mode check
-					if settings.General.ExtensionPrompt || (settings.General.WarnOnDuplicate && isDuplicate) {
-						writeJSONResponse(w, http.StatusConflict, map[string]string{
-							"status":  "error",
-							"message": "Download rejected: Duplicate download or approval required (Headless mode)",
-						})
-						return
-					}
 				}
+			}
 		}
 	}
 
@@ -795,10 +795,6 @@ func init() {
 
 // initializeGlobalState sets up the environment and configures the engine state and logging
 func initializeGlobalState() {
-	// Attempt migration first (Linux only)
-	if err := config.MigrateOldPaths(); err != nil {
-		fmt.Fprintf(os.Stderr, "Migration warning: %v\n", err)
-	}
 
 	stateDir := config.GetStateDir()
 	logsDir := config.GetLogsDir()

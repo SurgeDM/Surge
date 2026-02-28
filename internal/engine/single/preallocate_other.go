@@ -10,4 +10,3 @@ func preallocateFile(file *os.File, size int64) error {
 	}
 	return file.Truncate(size)
 }
-

@@ -302,21 +302,21 @@ func (s *RemoteDownloadService) connectSSE(ctx context.Context, ch chan interfac
 			}
 		}
 
-			if eventType == "" || len(dataLines) == 0 {
-				continue
-			}
-			jsonData := strings.Join(dataLines, "\n")
+		if eventType == "" || len(dataLines) == 0 {
+			continue
+		}
+		jsonData := strings.Join(dataLines, "\n")
 
-			msg, ok, err := events.DecodeSSEMessage(eventType, []byte(jsonData))
-			if err != nil {
-				continue
-			}
-			if !ok {
-				continue
-			}
+		msg, ok, err := events.DecodeSSEMessage(eventType, []byte(jsonData))
+		if err != nil {
+			continue
+		}
+		if !ok {
+			continue
+		}
 
-			// Non-blocking send
-			select {
+		// Non-blocking send
+		select {
 		case ch <- msg:
 		default:
 			// Drop message if channel is full to prevent blocking the reader

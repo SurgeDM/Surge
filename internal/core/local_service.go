@@ -164,13 +164,13 @@ func (s *LocalDownloadService) reportProgressLoop() {
 		var batch events.BatchProgressMsg
 
 		activeConfigs := s.Pool.GetAll()
-			for _, cfg := range activeConfigs {
-				if cfg.State == nil || cfg.State.IsPaused() || cfg.State.Done.Load() {
-					// Clean up speed history for inactive
-					delete(lastSpeeds, cfg.ID)
-					delete(lastChunkSnapshot, cfg.ID)
-					continue
-				}
+		for _, cfg := range activeConfigs {
+			if cfg.State == nil || cfg.State.IsPaused() || cfg.State.Done.Load() {
+				// Clean up speed history for inactive
+				delete(lastSpeeds, cfg.ID)
+				delete(lastChunkSnapshot, cfg.ID)
+				continue
+			}
 
 			// Calculate Progress
 			downloaded, total, totalElapsed, sessionElapsed, connections, sessionStart := cfg.State.GetProgress()
@@ -201,18 +201,18 @@ func (s *LocalDownloadService) reportProgressLoop() {
 				ActiveConnections: int(connections),
 			}
 
-				// Chunk snapshots are expensive due to bitmap/progress copies.
-				// Send them at a lower cadence than scalar progress fields.
-				if time.Since(lastChunkSnapshot[cfg.ID]) >= 500*time.Millisecond {
-					bitmap, width, _, chunkSize, chunkProgress := cfg.State.GetBitmapSnapshot(true)
-					if width > 0 && len(bitmap) > 0 {
-						msg.ChunkBitmap = bitmap
-						msg.BitmapWidth = width
-						msg.ActualChunkSize = chunkSize
-						msg.ChunkProgress = chunkProgress
-						lastChunkSnapshot[cfg.ID] = time.Now()
-					}
+			// Chunk snapshots are expensive due to bitmap/progress copies.
+			// Send them at a lower cadence than scalar progress fields.
+			if time.Since(lastChunkSnapshot[cfg.ID]) >= 500*time.Millisecond {
+				bitmap, width, _, chunkSize, chunkProgress := cfg.State.GetBitmapSnapshot(true)
+				if width > 0 && len(bitmap) > 0 {
+					msg.ChunkBitmap = bitmap
+					msg.BitmapWidth = width
+					msg.ActualChunkSize = chunkSize
+					msg.ChunkProgress = chunkProgress
+					lastChunkSnapshot[cfg.ID] = time.Now()
 				}
+			}
 
 			batch = append(batch, msg)
 		}

@@ -413,10 +413,10 @@ func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkSta
 				increment = remainingSpace
 			}
 
-				if increment > 0 {
-					ps.ChunkProgress[i] += increment
-					totalIncrement += increment
-				}
+			if increment > 0 {
+				ps.ChunkProgress[i] += increment
+				totalIncrement += increment
+			}
 
 			if ps.ChunkProgress[i] >= (chunkEnd - chunkStart) {
 				ps.ChunkProgress[i] = chunkEnd - chunkStart // clamp

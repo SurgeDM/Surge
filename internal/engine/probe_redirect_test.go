@@ -2,10 +2,10 @@ package engine_test
 
 import (
 	"context"
+	"github.com/surge-downloader/surge/internal/engine"
 	"net/http"
 	"net/http/httptest"
 	"testing"
-	"github.com/surge-downloader/surge/internal/engine"
 )
 
 func TestProbeRedirectRange(t *testing.T) {
