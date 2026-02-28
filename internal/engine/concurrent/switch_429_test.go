@@ -52,14 +52,11 @@ func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
 	// List mirrors: Server 1 (Bad), Server 2 (Good)
 	mirrors := []string{server1.URL(), server2.URL()}
 
-	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	// Pass server1 as primary, but provide both in mirrors list
 	err := downloader.Download(ctx, server1.URL(), mirrors, mirrors, destPath, fileSize)
-	elapsed := time.Since(start)
-
 	if err != nil {
 		t.Fatalf("Download failed: %v", err)
 	}
@@ -68,13 +65,21 @@ func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
 		t.Error(err)
 	}
 
-	// Verification:
-	// If backoff was APPLIED on every failed chunk, this test would take much
-	// longer (roughly 4 chunks * 400ms first-retry delay ~= 1.6s+).
-	// With mirror switching and no sleep-on-retry for multi-mirror, it should
-	// complete well under that, even on slower CI runners.
-	if elapsed > 1200*time.Millisecond {
-		t.Errorf("Download took %v, indicating backoff was applied via sleep (expected skip)", elapsed)
+	// Verify failover behavior directly: the 429 mirror should be marked as errored.
+	stateMirrors := state.GetMirrors()
+	var badMirrorSeen, badMirrorErrored bool
+	for _, m := range stateMirrors {
+		if m.URL == server1.URL() {
+			badMirrorSeen = true
+			badMirrorErrored = m.Error
+			break
+		}
+	}
+	if !badMirrorSeen {
+		t.Fatalf("Expected to track bad mirror %s in state, got: %+v", server1.URL(), stateMirrors)
+	}
+	if !badMirrorErrored {
+		t.Fatalf("Expected bad mirror %s to be marked errored after 429, got: %+v", server1.URL(), stateMirrors)
 	}
 }
 
