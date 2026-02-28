@@ -13,24 +13,7 @@ import (
 // macOS: ~/Library/Application Support/surge
 // Windows: %APPDATA%/surge
 func GetSurgeDir() string {
-	switch runtime.GOOS {
-	case "windows":
-		appData := os.Getenv("APPDATA")
-		if appData == "" {
-			appData = filepath.Join(os.Getenv("USERPROFILE"), "AppData", "Roaming")
-		}
-		return filepath.Join(appData, "surge")
-	case "darwin": // MacOS
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, "Library", "Application Support", "surge")
-	default: // Linux
-		configHome := os.Getenv("XDG_CONFIG_HOME")
-		if configHome == "" {
-			home, _ := os.UserHomeDir()
-			configHome = filepath.Join(home, ".config")
-		}
-		return filepath.Join(configHome, "surge")
-	}
+	return filepath.Join(xdg.ConfigHome, "surge")
 }
 
 func GetStateDir() string {

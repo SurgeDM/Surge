@@ -4,12 +4,11 @@ import (
 	"bufio"
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
+	"github.com/skratchdot/open-golang/open"
 	"github.com/surge-downloader/surge/internal/clipboard"
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/engine/events"
@@ -55,30 +54,12 @@ func shutdownCmd(service interface{ Shutdown() error }) tea.Cmd {
 
 // openBrowser opens a URL in the default browser
 func openBrowser(url string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("rundll32", "url.dll,FileProtocolHandler", url)
-	default: // linux and others
-		cmd = exec.Command("xdg-open", url)
-	}
-	return cmd.Start()
+	return open.Run(url)
 }
 
 // openFile opens a file with the system's default application
 func openFile(path string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", path)
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", "", path)
-	default: // linux and others
-		cmd = exec.Command("xdg-open", path)
-	}
-	return cmd.Start()
+	return open.Run(path)
 }
 
 // readURLsFromFile reads URLs from a file, accepting one-per-line or whitespace-separated URLs.

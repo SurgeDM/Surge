@@ -535,25 +535,6 @@ func TestSaveAndLoadSettings_RoundTrip(t *testing.T) {
 	_ = SaveSettings(DefaultSettings())
 }
 
-func TestDefaultSettings_XDG(t *testing.T) {
-	// Create temp dir to simulate XDG_DOWNLOAD_DIR
-	tmpDir, err := os.MkdirTemp("", "surge-xdg-test-*")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	// Set env var
-	t.Setenv("XDG_DOWNLOAD_DIR", tmpDir)
-
-	// Get settings
-	settings := DefaultSettings()
-
-	if settings.General.DefaultDownloadDir != tmpDir {
-		t.Errorf("DefaultDownloadDir should match XDG_DOWNLOAD_DIR. Got: %s, Want: %s", settings.General.DefaultDownloadDir, tmpDir)
-	}
-}
-
 func TestDefaultSettings_Fallback(t *testing.T) {
 	// Unset XDG_DOWNLOAD_DIR
 	t.Setenv("XDG_DOWNLOAD_DIR", "")

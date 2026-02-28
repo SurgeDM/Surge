@@ -9,11 +9,10 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
-	"unicode"
 
 	"github.com/h2non/filetype"
+	"github.com/kennygrant/sanitize"
 	"github.com/vfaronov/httpheader"
 )
 
@@ -110,7 +109,7 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 		}
 	}
 
-	if filename == "" || filename == "." || filename == "/" {
+	if filename == "" || filename == "." || filename == "/" || filename == "_" {
 		filename = "download.bin"
 		if verbose {
 			fmt.Fprintln(os.Stderr, "Falling back to default filename: download.bin")
@@ -120,39 +119,17 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 	return filename, body, nil
 }
 
-var ansiRegex = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
-
 func sanitizeFilename(name string) string {
-	// Replace backslashes with forward slashes first so filepath.Base treats them as separators
+	// The kennygrant/sanitize package replaces invalid characters,
+	// handles control characters, and performs general filename safety.
+	// We retain some basic fallback logic for absolute basics.
+
 	name = strings.ReplaceAll(name, "\\", "/")
 	name = filepath.Base(name)
-	if name == "." {
-		return name
-	}
-	if name == "/" || name == "\\" {
+
+	if name == "." || name == "/" || name == "\\" {
 		return "_"
 	}
-	name = strings.TrimSpace(name)
 
-	// Remove ANSI escape codes
-	name = ansiRegex.ReplaceAllString(name, "")
-
-	// Remove control characters
-	name = strings.Map(func(r rune) rune {
-		if unicode.IsControl(r) {
-			return -1
-		}
-		return r
-	}, name)
-
-	name = strings.ReplaceAll(name, "/", "_")
-	// Additional standard replacements for windows/linux safety
-	name = strings.ReplaceAll(name, ":", "_")
-	name = strings.ReplaceAll(name, "*", "_")
-	name = strings.ReplaceAll(name, "?", "_")
-	name = strings.ReplaceAll(name, "\"", "_")
-	name = strings.ReplaceAll(name, "<", "_")
-	name = strings.ReplaceAll(name, ">", "_")
-	name = strings.ReplaceAll(name, "|", "_")
-	return name
+	return sanitize.Name(name)
 }

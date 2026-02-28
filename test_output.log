@@ -1,0 +1,20 @@
+FAIL	github.com/surge-downloader/surge [build failed]
+FAIL	github.com/surge-downloader/surge/cmd [build failed]
+ok  	github.com/surge-downloader/surge/internal/benchmark	(cached)
+ok  	github.com/surge-downloader/surge/internal/clipboard	(cached)
+ok  	github.com/surge-downloader/surge/internal/config	0.011s
+FAIL	github.com/surge-downloader/surge/internal/core [build failed]
+FAIL	github.com/surge-downloader/surge/internal/download [build failed]
+ok  	github.com/surge-downloader/surge/internal/engine	(cached)
+FAIL	github.com/surge-downloader/surge/internal/engine/concurrent [build failed]
+ok  	github.com/surge-downloader/surge/internal/engine/events	(cached)
+FAIL	github.com/surge-downloader/surge/internal/engine/single [build failed]
+ok  	github.com/surge-downloader/surge/internal/engine/state	(cached)
+ok  	github.com/surge-downloader/surge/internal/engine/types	(cached)
+ok  	github.com/surge-downloader/surge/internal/testutil	(cached)
+FAIL	github.com/surge-downloader/surge/internal/tui [build failed]
+?   	github.com/surge-downloader/surge/internal/tui/colors	[no test files]
+ok  	github.com/surge-downloader/surge/internal/tui/components	(cached)
+ok  	github.com/surge-downloader/surge/internal/utils	(cached)
+?   	github.com/surge-downloader/surge/internal/version	[no test files]
+FAIL
