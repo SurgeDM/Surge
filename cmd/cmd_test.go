@@ -65,25 +65,28 @@ func TestFindAvailablePort_ReturnsListener(t *testing.T) {
 
 func TestFindAvailablePort_SkipsOccupiedPorts(t *testing.T) {
 	requireTCPListener(t)
-	// Occupy a port
-	ln1, err := net.Listen("tcp", fmt.Sprintf("%s:52000", getServerBindHost()))
+	// Occupy any port
+	ln1, err := net.Listen("tcp", fmt.Sprintf("%s:0", getServerBindHost()))
 	if err != nil {
-		t.Fatalf("Failed to occupy port: %v", err)
+		t.Fatalf("Failed to occupy any port: %v", err)
 	}
 	defer func() { _ = ln1.Close() }()
 
-	// findAvailablePort should skip 52000 and find another
-	port, ln2 := findAvailablePort(52000)
+	occupiedPort := ln1.Addr().(*net.TCPAddr).Port
+
+	// findAvailablePort should skip occupiedPort and find another
+	port, ln2 := findAvailablePort(occupiedPort)
 	if ln2 == nil {
 		t.Fatal("findAvailablePort returned nil listener")
 	}
 	defer func() { _ = ln2.Close() }()
 
-	if port == 52000 {
-		t.Error("Should have skipped occupied port 52000")
+	if port == occupiedPort {
+		t.Errorf("Should have skipped occupied port %d", occupiedPort)
 	}
-	if port < 52001 || port >= 52100 {
-		t.Errorf("Port %d is outside expected range", port)
+	// It should check and return the next port
+	if port < occupiedPort+1 || port >= occupiedPort+100 {
+		t.Errorf("Port %d is outside expected range [%d-%d]", port, occupiedPort+1, occupiedPort+100)
 	}
 }
 

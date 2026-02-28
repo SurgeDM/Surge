@@ -489,10 +489,6 @@ func TestPrintDownloads_JSONEmpty(t *testing.T) {
 	out := captureStdout(t, func() {
 		printDownloads(true, "", "", false)
 	})
-	var infos []downloadInfo
-	if err := json.Unmarshal([]byte(out), &infos); err != nil {
-		// If it's empty output "[]" this works fine, if it's not we filter
-	}
 
 	// Ensure our specific test entries from other tests aren't the only reason it's failing
 	// Actually wait, this test expects the database to be empty.

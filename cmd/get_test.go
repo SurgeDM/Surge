@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/adrg/xdg"
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/core"
 	"github.com/surge-downloader/surge/internal/download"
@@ -19,6 +20,38 @@ import (
 
 func TestCLI_NewEndpoints(t *testing.T) {
 	requireTCPListener(t)
+
+	tempDir := t.TempDir()
+
+	// xdg package variables are initialized on load, so setting env vars
+	// won't change the paths in tests. Directly override them instead.
+	oldConfigHome := xdg.ConfigHome
+	oldDataHome := xdg.DataHome
+	oldStateHome := xdg.StateHome
+	oldCacheHome := xdg.CacheHome
+	oldRuntimeDir := xdg.RuntimeDir
+
+	xdg.ConfigHome = tempDir
+	xdg.DataHome = tempDir
+	xdg.StateHome = tempDir
+	xdg.CacheHome = tempDir
+	xdg.RuntimeDir = tempDir
+
+	t.Cleanup(func() {
+		xdg.ConfigHome = oldConfigHome
+		xdg.DataHome = oldDataHome
+		xdg.StateHome = oldStateHome
+		xdg.CacheHome = oldCacheHome
+		xdg.RuntimeDir = oldRuntimeDir
+	})
+
+	t.Setenv("APPDATA", tempDir)
+	t.Setenv("USERPROFILE", tempDir)
+	t.Setenv("XDG_CONFIG_HOME", tempDir)
+	t.Setenv("XDG_STATE_HOME", tempDir)
+	t.Setenv("XDG_RUNTIME_DIR", tempDir)
+	t.Setenv("HOME", tempDir)
+
 	state.CloseDB()
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("EnsureDirs failed: %v", err)
@@ -152,18 +185,34 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	requireTCPListener(t)
 
 	tempDir := t.TempDir()
-	originalConfigHome := os.Getenv("XDG_CONFIG_HOME")
-	if err := os.Setenv("XDG_CONFIG_HOME", tempDir); err != nil {
-		t.Fatalf("failed to set XDG_CONFIG_HOME: %v", err)
-	}
-	defer func() {
-		if originalConfigHome == "" {
-			_ = os.Unsetenv("XDG_CONFIG_HOME")
-		} else {
-			_ = os.Setenv("XDG_CONFIG_HOME", originalConfigHome)
-		}
+
+	oldConfigHome := xdg.ConfigHome
+	oldDataHome := xdg.DataHome
+	oldStateHome := xdg.StateHome
+	oldCacheHome := xdg.CacheHome
+	oldRuntimeDir := xdg.RuntimeDir
+
+	xdg.ConfigHome = tempDir
+	xdg.DataHome = tempDir
+	xdg.StateHome = tempDir
+	xdg.CacheHome = tempDir
+	xdg.RuntimeDir = tempDir
+
+	t.Cleanup(func() {
+		xdg.ConfigHome = oldConfigHome
+		xdg.DataHome = oldDataHome
+		xdg.StateHome = oldStateHome
+		xdg.CacheHome = oldCacheHome
+		xdg.RuntimeDir = oldRuntimeDir
 		state.CloseDB()
-	}()
+	})
+
+	t.Setenv("APPDATA", tempDir)
+	t.Setenv("USERPROFILE", tempDir)
+	t.Setenv("XDG_CONFIG_HOME", tempDir)
+	t.Setenv("XDG_STATE_HOME", tempDir)
+	t.Setenv("XDG_RUNTIME_DIR", tempDir)
+	t.Setenv("HOME", tempDir)
 
 	state.CloseDB()
 	initializeGlobalState()

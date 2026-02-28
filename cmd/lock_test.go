@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/surge-downloader/surge/internal/config"
@@ -13,6 +14,15 @@ import (
 func TestAcquireLock(t *testing.T) {
 	// Setup isolation
 	tempDir := t.TempDir()
+
+	// xdg package variables are initialized on load, so setting env vars
+	// won't change the path in tests. Directly override it instead.
+	oldRuntimeDir := xdg.RuntimeDir
+	xdg.RuntimeDir = tempDir
+	defer func() {
+		xdg.RuntimeDir = oldRuntimeDir
+	}()
+
 	t.Setenv("XDG_CONFIG_HOME", tempDir)
 	t.Setenv("XDG_RUNTIME_DIR", tempDir) // Runtime dir for lock file
 
