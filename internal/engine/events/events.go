@@ -115,6 +115,8 @@ type DownloadResumedMsg struct {
 type DownloadQueuedMsg struct {
 	DownloadID string
 	Filename   string
+	URL        string
+	DestPath   string
 }
 
 type DownloadRemovedMsg struct {
@@ -139,4 +141,156 @@ type DownloadRequestMsg struct {
 	Path     string
 	Mirrors  []string
 	Headers  map[string]string
+}
+
+const (
+	EventTypeProgress = "progress"
+	EventTypeStarted  = "started"
+	EventTypeComplete = "complete"
+	EventTypeError    = "error"
+	EventTypePaused   = "paused"
+	EventTypeResumed  = "resumed"
+	EventTypeQueued   = "queued"
+	EventTypeRemoved  = "removed"
+	EventTypeRequest  = "request"
+	EventTypeSystem   = "system"
+)
+
+// SSEMessage represents one server-sent event frame.
+type SSEMessage struct {
+	Event string
+	Data  []byte
+}
+
+// EncodeSSEMessages converts an event payload into one or more SSE messages.
+// BatchProgressMsg is flattened into multiple "progress" events.
+func EncodeSSEMessages(msg interface{}) ([]SSEMessage, error) {
+	switch m := msg.(type) {
+	case BatchProgressMsg:
+		frames := make([]SSEMessage, 0, len(m))
+		for _, p := range m {
+			data, err := json.Marshal(p)
+			if err != nil {
+				return nil, err
+			}
+			frames = append(frames, SSEMessage{
+				Event: EventTypeProgress,
+				Data:  data,
+			})
+		}
+		return frames, nil
+	default:
+		eventType, ok := EventTypeForMessage(msg)
+		if !ok {
+			return nil, nil
+		}
+		data, err := json.Marshal(msg)
+		if err != nil {
+			return nil, err
+		}
+		return []SSEMessage{{
+			Event: eventType,
+			Data:  data,
+		}}, nil
+	}
+}
+
+// EventTypeForMessage maps message payloads to SSE event type names.
+func EventTypeForMessage(msg interface{}) (string, bool) {
+	switch msg.(type) {
+	case ProgressMsg:
+		return EventTypeProgress, true
+	case DownloadStartedMsg:
+		return EventTypeStarted, true
+	case DownloadCompleteMsg:
+		return EventTypeComplete, true
+	case DownloadErrorMsg:
+		return EventTypeError, true
+	case DownloadPausedMsg:
+		return EventTypePaused, true
+	case DownloadResumedMsg:
+		return EventTypeResumed, true
+	case DownloadQueuedMsg:
+		return EventTypeQueued, true
+	case DownloadRemovedMsg:
+		return EventTypeRemoved, true
+	case DownloadRequestMsg:
+		return EventTypeRequest, true
+	case SystemLogMsg:
+		return EventTypeSystem, true
+	default:
+		return "", false
+	}
+}
+
+// DecodeSSEMessage decodes one SSE event payload into the corresponding message.
+func DecodeSSEMessage(eventType string, data []byte) (interface{}, bool, error) {
+	var msg interface{}
+
+	switch eventType {
+	case EventTypeProgress:
+		var m ProgressMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, true, err
+		}
+		msg = m
+	case EventTypeStarted:
+		var m DownloadStartedMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, true, err
+		}
+		msg = m
+	case EventTypeComplete:
+		var m DownloadCompleteMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, true, err
+		}
+		msg = m
+	case EventTypeError:
+		var m DownloadErrorMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, true, err
+		}
+		msg = m
+	case EventTypePaused:
+		var m DownloadPausedMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, true, err
+		}
+		msg = m
+	case EventTypeResumed:
+		var m DownloadResumedMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, true, err
+		}
+		msg = m
+	case EventTypeQueued:
+		var m DownloadQueuedMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, true, err
+		}
+		msg = m
+	case EventTypeRemoved:
+		var m DownloadRemovedMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, true, err
+		}
+		msg = m
+	case EventTypeRequest:
+		var m DownloadRequestMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, true, err
+		}
+		msg = m
+	case EventTypeSystem:
+		var m SystemLogMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, true, err
+		}
+		msg = m
+	default:
+		return nil, false, nil
+	}
+
+	return msg, true, nil
 }

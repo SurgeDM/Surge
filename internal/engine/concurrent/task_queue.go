@@ -15,6 +15,8 @@ type TaskQueue struct {
 	cond        *sync.Cond
 	done        bool
 	idleWorkers atomic.Int64 // Atomic counter for idle workers
+	waiting     atomic.Int64 // Number of workers currently waiting on cond
+	size        atomic.Int64 // Queue size to avoid lock contention in Len callers
 }
 
 func NewTaskQueue() *TaskQueue {
@@ -23,43 +25,45 @@ func NewTaskQueue() *TaskQueue {
 	return tq
 }
 
-// Push adds a task and wakes ALL waiting workers via Broadcast.
-// This ensures idle workers compete for re-queued/hedged tasks,
-// preventing the same slow worker from monopolizing work.
 func (q *TaskQueue) Push(t types.Task) {
 	q.mu.Lock()
 	q.tasks = append(q.tasks, t)
-	q.cond.Broadcast()
+	q.size.Add(1)
+	q.signalWaitingWorkersLocked(1)
 	q.mu.Unlock()
 }
 
 func (q *TaskQueue) PushMultiple(tasks []types.Task) {
+	if len(tasks) == 0 {
+		return
+	}
+
 	q.mu.Lock()
 	q.tasks = append(q.tasks, tasks...)
-	q.cond.Broadcast()
+	q.size.Add(int64(len(tasks)))
+	q.signalWaitingWorkersLocked(len(tasks))
 	q.mu.Unlock()
 }
 
 func (q *TaskQueue) Pop() (types.Task, bool) {
-	// Mark as idle while waiting
-	q.idleWorkers.Add(1)
-
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	for len(q.tasks) == 0 && !q.done {
+	for len(q.tasks) == q.head && !q.done {
+		q.idleWorkers.Add(1)
+		q.waiting.Add(1)
 		q.cond.Wait()
+		q.waiting.Add(-1)
+		q.idleWorkers.Add(-1)
 	}
 
-	// No longer idle once we have work (or are done)
-	q.idleWorkers.Add(-1)
-
-	if len(q.tasks) == 0 {
+	if len(q.tasks) == q.head {
 		return types.Task{}, false
 	}
 
 	t := q.tasks[q.head]
 	q.head++
+	q.size.Add(-1)
 	if q.head > len(q.tasks)/2 {
 
 		// slice instead of copy to avoid allocation
@@ -77,9 +81,7 @@ func (q *TaskQueue) Close() {
 }
 
 func (q *TaskQueue) Len() int {
-	q.mu.Lock()
-	defer q.mu.Unlock()
-	return len(q.tasks) - q.head
+	return int(q.size.Load())
 }
 
 func (q *TaskQueue) IdleWorkers() int64 {
@@ -99,5 +101,25 @@ func (q *TaskQueue) DrainRemaining() []types.Task {
 	copy(remaining, q.tasks[q.head:])
 	q.tasks = nil
 	q.head = 0
+	q.size.Store(0)
 	return remaining
+}
+
+func (q *TaskQueue) signalWaitingWorkersLocked(maxSignals int) {
+	if maxSignals <= 0 {
+		return
+	}
+
+	waiting := int(q.waiting.Load())
+	if waiting <= 0 {
+		return
+	}
+
+	if maxSignals > waiting {
+		maxSignals = waiting
+	}
+
+	for i := 0; i < maxSignals; i++ {
+		q.cond.Signal()
+	}
 }

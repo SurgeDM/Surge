@@ -302,79 +302,21 @@ func (s *RemoteDownloadService) connectSSE(ctx context.Context, ch chan interfac
 			}
 		}
 
-		if eventType == "" || len(dataLines) == 0 {
-			continue
-		}
-		jsonData := strings.Join(dataLines, "\n")
+			if eventType == "" || len(dataLines) == 0 {
+				continue
+			}
+			jsonData := strings.Join(dataLines, "\n")
 
-		var msg interface{}
-		switch eventType {
-		case "progress":
-			var m events.ProgressMsg
-			if err := json.Unmarshal([]byte(jsonData), &m); err != nil {
+			msg, ok, err := events.DecodeSSEMessage(eventType, []byte(jsonData))
+			if err != nil {
 				continue
 			}
-			msg = m
-		case "started":
-			var m events.DownloadStartedMsg
-			if err := json.Unmarshal([]byte(jsonData), &m); err != nil {
+			if !ok {
 				continue
 			}
-			msg = m
-		case "complete":
-			var m events.DownloadCompleteMsg
-			if err := json.Unmarshal([]byte(jsonData), &m); err != nil {
-				continue
-			}
-			msg = m
-		case "error":
-			var m events.DownloadErrorMsg
-			if err := json.Unmarshal([]byte(jsonData), &m); err != nil {
-				continue
-			}
-			msg = m
-		case "paused":
-			var m events.DownloadPausedMsg
-			if err := json.Unmarshal([]byte(jsonData), &m); err != nil {
-				continue
-			}
-			msg = m
-		case "resumed":
-			var m events.DownloadResumedMsg
-			if err := json.Unmarshal([]byte(jsonData), &m); err != nil {
-				continue
-			}
-			msg = m
-		case "queued":
-			var m events.DownloadQueuedMsg
-			if err := json.Unmarshal([]byte(jsonData), &m); err != nil {
-				continue
-			}
-			msg = m
-		case "removed":
-			var m events.DownloadRemovedMsg
-			if err := json.Unmarshal([]byte(jsonData), &m); err != nil {
-				continue
-			}
-			msg = m
-		case "request":
-			var m events.DownloadRequestMsg
-			if err := json.Unmarshal([]byte(jsonData), &m); err != nil {
-				continue
-			}
-			msg = m
-		case "system":
-			var m events.SystemLogMsg
-			if err := json.Unmarshal([]byte(jsonData), &m); err != nil {
-				continue
-			}
-			msg = m
-		default:
-			continue
-		}
 
-		// Non-blocking send
-		select {
+			// Non-blocking send
+			select {
 		case ch <- msg:
 		default:
 			// Drop message if channel is full to prevent blocking the reader

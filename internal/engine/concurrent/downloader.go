@@ -567,7 +567,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		var actualChunkSize int64
 
 		// Get persisted bitmap data
-		bitmap, _, _, chunkSize, _ := d.State.GetBitmap()
+			bitmap, _, _, chunkSize, _ := d.State.GetBitmapSnapshot(false)
 		chunkBitmap = bitmap
 		actualChunkSize = chunkSize
 

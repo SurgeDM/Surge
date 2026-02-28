@@ -15,6 +15,8 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
+const singleProgressPublishStride = 64 * 1024
+
 // SingleDownloader handles single-threaded downloads for servers that don't support range requests.
 // NOTE: Pause/resume is NOT supported because this downloader is only used when
 // the server doesn't support Range headers. If interrupted, the download must restart.
@@ -205,6 +207,11 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	}
 	if err := outFile.Close(); err != nil {
 		return fmt.Errorf("close error: %w", err)
+	}
+
+	if d.State != nil {
+		d.State.Downloaded.Store(written)
+		d.State.VerifiedProgress.Store(written)
 	}
 
 	// Rename .surge file to final destination

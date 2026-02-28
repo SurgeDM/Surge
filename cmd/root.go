@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"crypto/subtle"
-	"encoding/json"
 	"fmt"
 	"net"
 	"net/http"
@@ -373,254 +372,7 @@ func startHTTPServer(ln net.Listener, port int, defaultOutputDir string, service
 	}
 
 	mux := http.NewServeMux()
-
-	// Health check endpoint (Public)
-	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]interface{}{
-			"status": "ok",
-			"port":   port,
-		}); err != nil {
-			utils.Debug("Failed to encode response: %v", err)
-		}
-	})
-
-	// SSE Events Endpoint (Protected)
-	mux.HandleFunc("/events", func(w http.ResponseWriter, r *http.Request) {
-		// Set headers for SSE
-		w.Header().Set("Content-Type", "text/event-stream")
-		w.Header().Set("Cache-Control", "no-cache")
-		w.Header().Set("Connection", "keep-alive")
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-
-		// Get event stream
-		stream, cleanup, err := service.StreamEvents(r.Context())
-		if err != nil {
-			http.Error(w, "Failed to subscribe to events", http.StatusInternalServerError)
-			return
-		}
-		defer cleanup()
-
-		// Flush headers immediately
-		flusher, ok := w.(http.Flusher)
-		if !ok {
-			http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
-			return
-		}
-		flusher.Flush()
-
-		// Send events
-		// Create a closer notifier
-		done := r.Context().Done()
-
-		for {
-			select {
-			case <-done:
-				return
-			case msg, ok := <-stream:
-				if !ok {
-					return
-				}
-
-				// Encode message to JSON
-				data, err := json.Marshal(msg)
-				if err != nil {
-					utils.Debug("Error marshaling event: %v", err)
-					continue
-				}
-
-				// Determine event type name based on struct
-				// Events are in internal/engine/events package
-				eventType := "unknown"
-				switch msg := msg.(type) {
-				case events.DownloadStartedMsg:
-					eventType = "started"
-				case events.DownloadCompleteMsg:
-					eventType = "complete"
-				case events.DownloadErrorMsg:
-					eventType = "error"
-				case events.ProgressMsg:
-					eventType = "progress"
-				case events.DownloadPausedMsg:
-					eventType = "paused"
-				case events.DownloadResumedMsg:
-					eventType = "resumed"
-				case events.DownloadQueuedMsg:
-					eventType = "queued"
-				case events.DownloadRemovedMsg:
-					eventType = "removed"
-				case events.DownloadRequestMsg:
-					eventType = "request"
-				case events.SystemLogMsg:
-					eventType = "system"
-				case events.BatchProgressMsg:
-					// Unroll batch and send individual progress events
-					for _, p := range msg {
-						data, _ := json.Marshal(p)
-						_, _ = fmt.Fprintf(w, "event: progress\n")
-						_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
-					}
-					flusher.Flush()
-					continue // Skip default send
-				}
-
-				// SSE Format:
-				// event: <type>
-				// data: <json>
-				// \n
-				_, _ = fmt.Fprintf(w, "event: %s\n", eventType)
-				_, _ = fmt.Fprintf(w, "data: %s\n\n", data)
-				flusher.Flush()
-			}
-		}
-	})
-
-	// Download endpoint (Protected + Public for simple GET status if needed? No, let's protect all for now)
-	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
-		handleDownload(w, r, defaultOutputDir, service)
-	})
-
-	// Pause endpoint (Protected)
-	mux.HandleFunc("/pause", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		id := r.URL.Query().Get("id")
-		if id == "" {
-			http.Error(w, "Missing id parameter", http.StatusBadRequest)
-			return
-		}
-
-		if err := service.Pause(id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]string{"status": "paused", "id": id}); err != nil {
-			utils.Debug("Failed to encode response: %v", err)
-		}
-	})
-
-	// Resume endpoint (Protected)
-	mux.HandleFunc("/resume", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		id := r.URL.Query().Get("id")
-		if id == "" {
-			http.Error(w, "Missing id parameter", http.StatusBadRequest)
-			return
-		}
-
-		if err := service.Resume(id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]string{"status": "resumed", "id": id}); err != nil {
-			utils.Debug("Failed to encode response: %v", err)
-		}
-	})
-
-	// Delete endpoint (Protected)
-	mux.HandleFunc("/delete", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodDelete && r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		id := r.URL.Query().Get("id")
-		if id == "" {
-			http.Error(w, "Missing id parameter", http.StatusBadRequest)
-			return
-		}
-
-		if err := service.Delete(id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]string{"status": "deleted", "id": id}); err != nil {
-			utils.Debug("Failed to encode response: %v", err)
-		}
-	})
-
-	// List endpoint (Protected)
-	mux.HandleFunc("/list", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		statuses, err := service.List()
-		if err != nil {
-			http.Error(w, "Failed to list downloads: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(statuses); err != nil {
-			utils.Debug("Failed to encode response: %v", err)
-		}
-	})
-
-	// History endpoint (Protected)
-	mux.HandleFunc("/history", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodGet {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		history, err := service.History()
-		if err != nil {
-			http.Error(w, "Failed to retrieve history: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(history); err != nil {
-			utils.Debug("Failed to encode response: %v", err)
-		}
-	})
-
-	// Update URL endpoint (Protected)
-	mux.HandleFunc("/update-url", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPut {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-		id := r.URL.Query().Get("id")
-		if id == "" {
-			http.Error(w, "Missing id parameter", http.StatusBadRequest)
-			return
-		}
-
-		var req map[string]string
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		newURL := req["url"]
-		if newURL == "" {
-			http.Error(w, "Missing url parameter in body", http.StatusBadRequest)
-			return
-		}
-
-		if err := service.UpdateURL(id, newURL); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		if err := json.NewEncoder(w).Encode(map[string]string{"status": "updated", "id": id, "url": newURL}); err != nil {
-			utils.Debug("Failed to encode response: %v", err)
-		}
-	})
+	registerHTTPRoutes(mux, port, defaultOutputDir, service)
 
 	// Wrap mux with Auth and CORS (CORS outermost to ensure 401/403 include headers)
 	handler := corsMiddleware(authMiddleware(authToken, mux))
@@ -754,8 +506,6 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 			return
 		}
 
-		w.Header().Set("Content-Type", "application/json")
-
 		if service == nil {
 			http.Error(w, "Service unavailable", http.StatusInternalServerError)
 			return
@@ -767,9 +517,7 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 			return
 		}
 
-		if err := json.NewEncoder(w).Encode(status); err != nil {
-			utils.Debug("Failed to encode response: %v", err)
-		}
+		writeJSONResponse(w, http.StatusOK, status)
 		return
 	}
 
@@ -786,15 +534,10 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 	}
 
 	var req DownloadRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+	if err := decodeJSONBody(r, &req); err != nil {
 		http.Error(w, "Invalid JSON: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	defer func() {
-		if err := r.Body.Close(); err != nil {
-			utils.Debug("Error closing body: %v", err)
-		}
-	}()
 
 	if req.URL == "" {
 		http.Error(w, "URL is required", http.StatusBadRequest)
@@ -903,43 +646,35 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 				utils.Debug("Requesting TUI confirmation for: %s (Duplicate: %v)", req.URL, isDuplicate)
 
 				// Send request to TUI
-				if err := service.Publish(events.DownloadRequestMsg{
-					ID:       downloadID,
-					URL:      urlForAdd,
+					if err := service.Publish(events.DownloadRequestMsg{
+						ID:       downloadID,
+						URL:      urlForAdd,
 					Filename: req.Filename,
 					Path:     outPath, // Use the path we resolved (default or requested)
 					Mirrors:  mirrorsForAdd,
 					Headers:  req.Headers,
-				}); err != nil {
-					http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
-					return
-				}
-
-				w.Header().Set("Content-Type", "application/json")
-				// Return 202 Accepted to indicate it's pending approval
-				w.WriteHeader(http.StatusAccepted)
-				if err := json.NewEncoder(w).Encode(map[string]string{
-					"status":  "pending_approval",
-					"message": "Download request sent to TUI for confirmation",
-					"id":      downloadID, // ID might change if user modifies it, but useful for tracking
-				}); err != nil {
-					utils.Debug("Failed to encode response: %v", err)
-				}
-				return
-			} else {
-				// Headless mode check
-				if settings.General.ExtensionPrompt || (settings.General.WarnOnDuplicate && isDuplicate) {
-					w.Header().Set("Content-Type", "application/json")
-					w.WriteHeader(http.StatusConflict)
-					if err := json.NewEncoder(w).Encode(map[string]string{
-						"status":  "error",
-						"message": "Download rejected: Duplicate download or approval required (Headless mode)",
 					}); err != nil {
-						utils.Debug("Failed to encode response: %v", err)
+						http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
+						return
 					}
+
+					// Return 202 Accepted to indicate it's pending approval
+					writeJSONResponse(w, http.StatusAccepted, map[string]string{
+						"status":  "pending_approval",
+						"message": "Download request sent to TUI for confirmation",
+						"id":      downloadID, // ID might change if user modifies it, but useful for tracking
+					})
 					return
+				} else {
+					// Headless mode check
+					if settings.General.ExtensionPrompt || (settings.General.WarnOnDuplicate && isDuplicate) {
+						writeJSONResponse(w, http.StatusConflict, map[string]string{
+							"status":  "error",
+							"message": "Download rejected: Duplicate download or approval required (Headless mode)",
+						})
+						return
+					}
 				}
-			}
 		}
 	}
 
@@ -953,14 +688,11 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 	// Increment active downloads counter
 	atomic.AddInt32(&activeDownloads, 1)
 
-	w.Header().Set("Content-Type", "application/json")
-	if err := json.NewEncoder(w).Encode(map[string]string{
+	writeJSONResponse(w, http.StatusOK, map[string]string{
 		"status":  "queued",
 		"message": "Download queued successfully",
 		"id":      newID,
-	}); err != nil {
-		utils.Debug("Failed to encode response: %v", err)
-	}
+	})
 }
 
 // processDownloads handles the logic of adding downloads either to local pool or remote server

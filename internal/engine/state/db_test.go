@@ -161,3 +161,29 @@ func TestInitDB_createsDir(t *testing.T) {
 		t.Errorf("Database file not created at %s", dbPath)
 	}
 }
+
+func TestInitDB_CreatesTasksDownloadIDIndex(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	d, err := GetDB()
+	if err != nil {
+		t.Fatalf("GetDB failed: %v", err)
+	}
+
+	var indexName string
+	err = d.QueryRow(`
+		SELECT name
+		FROM sqlite_master
+		WHERE type = 'index'
+		  AND name = 'idx_tasks_download_id'
+	`).Scan(&indexName)
+	if err != nil {
+		t.Fatalf("failed to query tasks index: %v", err)
+	}
+
+	if indexName != "idx_tasks_download_id" {
+		t.Fatalf("unexpected index name: %q", indexName)
+	}
+}
