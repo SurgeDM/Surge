@@ -272,6 +272,8 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 		values["slow_worker_grace_period"] = m.Settings.Performance.SlowWorkerGracePeriod
 		values["stall_timeout"] = m.Settings.Performance.StallTimeout
 		values["speed_ema_alpha"] = m.Settings.Performance.SpeedEmaAlpha
+	case "Categories":
+		values["category_enabled"] = m.Settings.General.CategoryEnabled
 	}
 
 	return values
@@ -297,6 +299,10 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 		return m.setNetworkSetting(key, value, meta.Type)
 	case "Performance":
 		return m.setPerformanceSetting(key, value, meta.Type)
+	case "Categories":
+		if key == "category_enabled" {
+			m.Settings.General.CategoryEnabled = !m.Settings.General.CategoryEnabled
+		}
 	}
 
 	return nil
@@ -382,12 +388,12 @@ func (m *RootModel) setNetworkSetting(key, value, typ string) error {
 	case "min_chunk_size":
 		// Parse as MB and convert to bytes
 		if v, err := strconv.ParseFloat(value, 64); err == nil {
-			m.Settings.Network.MinChunkSize = int64(v * float64(MB))
+			m.Settings.Network.MinChunkSize = int64(v * float64(config.MB))
 		}
 	case "worker_buffer_size":
 		// Keep buffer in KB
 		if v, err := strconv.ParseFloat(value, 64); err == nil {
-			m.Settings.Network.WorkerBufferSize = int(v * float64(KB))
+			m.Settings.Network.WorkerBufferSize = int(v * float64(config.KB))
 		}
 	}
 	return nil
@@ -515,13 +521,13 @@ func formatSettingValueForEdit(value interface{}, typ, key string) string {
 	switch key {
 	case "min_chunk_size":
 		if v, ok := value.(int64); ok {
-			mb := float64(v) / float64(MB)
+			mb := float64(v) / float64(config.MB)
 			return fmt.Sprintf("%.1f", mb)
 		}
 	case "worker_buffer_size":
 		v := reflect.ValueOf(value)
 		if v.Kind() == reflect.Int {
-			kb := float64(v.Int()) / float64(KB)
+			kb := float64(v.Int()) / float64(config.KB)
 			return fmt.Sprintf("%.0f", kb)
 		}
 	case "slow_worker_grace_period", "stall_timeout":
@@ -657,6 +663,11 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.Performance.StallTimeout = defaults.Performance.StallTimeout
 		case "speed_ema_alpha":
 			m.Settings.Performance.SpeedEmaAlpha = defaults.Performance.SpeedEmaAlpha
+		}
+	case "Categories":
+		switch key {
+		case "category_enabled":
+			m.Settings.General.CategoryEnabled = defaults.General.CategoryEnabled
 		}
 	}
 }
