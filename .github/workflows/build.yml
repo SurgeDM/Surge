@@ -41,10 +41,10 @@ jobs:
           out_file="go-test-${MATRIX_OS}.jsonl"
 
           cover_arg=""
-          if go tool covdata >/dev/null 2>&1; then
+          if go help testflag 2>/dev/null | grep -q -- '-coverprofile'; then
             cover_arg="-coverprofile=coverage.out"
           else
-            echo "Warning: go tool covdata is unavailable; running tests without coverage profile." >&2
+            echo "Warning: go test -coverprofile is unavailable; running tests without coverage profile." >&2
           fi
 
           go test -json $cover_arg "./..." 2>&1 | tee "$out_file"
