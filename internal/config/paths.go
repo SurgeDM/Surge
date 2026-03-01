@@ -9,6 +9,13 @@ import (
 	"github.com/adrg/xdg"
 )
 
+func getXDGBaseDir(envKey, fallback string) string {
+	if dir := strings.TrimSpace(os.Getenv(envKey)); dir != "" {
+		return dir
+	}
+	return fallback
+}
+
 // GetSurgeDir returns the directory for configuration files (settings.json).
 // Linux: $XDG_CONFIG_HOME/surge or ~/.config/surge
 // macOS: ~/Library/Application Support/surge
@@ -20,7 +27,7 @@ func GetSurgeDir() string {
 			return filepath.Join(appData, "surge")
 		}
 	}
-	return filepath.Join(xdg.ConfigHome, "surge")
+	return filepath.Join(getXDGBaseDir("XDG_CONFIG_HOME", xdg.ConfigHome), "surge")
 }
 
 func GetStateDir() string {
@@ -28,7 +35,7 @@ func GetStateDir() string {
 	if runtime.GOOS == "windows" {
 		return GetSurgeDir()
 	}
-	return filepath.Join(xdg.StateHome, "surge")
+	return filepath.Join(getXDGBaseDir("XDG_STATE_HOME", xdg.StateHome), "surge")
 }
 
 func GetDownloadsDir() string {
@@ -52,12 +59,16 @@ func GetDownloadsDir() string {
 }
 
 func GetRuntimeDir() string {
-	runtimeBase := strings.TrimSpace(xdg.RuntimeDir)
+	runtimeEnv := strings.TrimSpace(os.Getenv("XDG_RUNTIME_DIR"))
+	runtimeBase := runtimeEnv
+	if runtimeBase == "" {
+		runtimeBase = strings.TrimSpace(xdg.RuntimeDir)
+	}
 
 	// In headless Linux sessions, XDG_RUNTIME_DIR is often unset and xdg.RuntimeDir
 	// may point to /run/user/<uid>, which can be absent/unwritable. Use a writable
 	// state-dir fallback in that case.
-	if runtime.GOOS == "linux" && strings.TrimSpace(os.Getenv("XDG_RUNTIME_DIR")) == "" {
+	if runtime.GOOS == "linux" && runtimeEnv == "" {
 		runtimeBase = ""
 	}
 

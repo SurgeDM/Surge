@@ -9,6 +9,46 @@ import (
 	"github.com/adrg/xdg"
 )
 
+func TestGetSurgeDir_HonorsRuntimeXDGConfigHomeOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("non-windows behavior")
+	}
+
+	tmp := t.TempDir()
+	oldConfigHome := xdg.ConfigHome
+	xdg.ConfigHome = filepath.Join(t.TempDir(), "fallback-config")
+	t.Cleanup(func() {
+		xdg.ConfigHome = oldConfigHome
+	})
+
+	t.Setenv("XDG_CONFIG_HOME", tmp)
+
+	want := filepath.Join(tmp, "surge")
+	if got := GetSurgeDir(); got != want {
+		t.Fatalf("GetSurgeDir() = %q, want %q", got, want)
+	}
+}
+
+func TestGetStateDir_HonorsRuntimeXDGStateHomeOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("non-windows behavior")
+	}
+
+	tmp := t.TempDir()
+	oldStateHome := xdg.StateHome
+	xdg.StateHome = filepath.Join(t.TempDir(), "fallback-state")
+	t.Cleanup(func() {
+		xdg.StateHome = oldStateHome
+	})
+
+	t.Setenv("XDG_STATE_HOME", tmp)
+
+	want := filepath.Join(tmp, "surge")
+	if got := GetStateDir(); got != want {
+		t.Fatalf("GetStateDir() = %q, want %q", got, want)
+	}
+}
+
 func TestGetRuntimeDir_FallsBackToStateDirWhenXDGUnsetOnLinux(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("linux-specific behavior")
