@@ -37,6 +37,7 @@ const (
 	BatchConfirmState                         // BatchConfirmState is 10
 	UpdateAvailableState                      // UpdateAvailableState is 11
 	URLUpdateState                            // URLUpdateState is 12
+	CategoryManagerState                      // CategoryManagerState is 13
 )
 
 const (
@@ -140,6 +141,14 @@ type RootModel struct {
 
 	// URL Refresh
 	urlUpdateInput textinput.Model // Text input for updating URL
+
+	// Category manager
+	categoryFilter  string             // Dashboard filter ("" = all)
+	catMgrCursor    int                // Selected category index
+	catMgrEditing   bool               // Whether editing a category
+	catMgrEditField int                // 0=Name, 1=Description, 2=Pattern, 3=Path
+	catMgrInputs    [4]textinput.Model // Inputs for Name, Description, Pattern, Path
+	catMgrIsNew     bool               // Whether adding a new category
 
 	// Keybindings
 	keys KeyMap
@@ -270,7 +279,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 				if s.AvgSpeed > 0 {
 					dm.Speed = s.AvgSpeed
 				} else if s.Speed > 0 {
-					dm.Speed = s.Speed * float64(MB)
+					dm.Speed = s.Speed * float64(config.MB)
 				}
 				if s.Status == "completed" && s.TimeTaken > 0 {
 					dm.Elapsed = time.Duration(s.TimeTaken) * time.Millisecond
@@ -306,6 +315,27 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	urlUpdateInput.Width = InputWidth
 	urlUpdateInput.Prompt = ""
 
+	// Initialize Category Manager inputs
+	catNameInput := textinput.New()
+	catNameInput.Placeholder = "Videos"
+	catNameInput.Width = 30
+	catNameInput.Prompt = ""
+
+	catDescInput := textinput.New()
+	catDescInput.Placeholder = "Video files (.mp4, .mkv)"
+	catDescInput.Width = 50
+	catDescInput.Prompt = ""
+
+	catPatternInput := textinput.New()
+	catPatternInput.Placeholder = "(?i)\\.(mp4|mkv)$"
+	catPatternInput.Width = 50
+	catPatternInput.Prompt = ""
+
+	catPathInput := textinput.New()
+	catPathInput.Placeholder = "/home/user/Videos"
+	catPathInput.Width = 50
+	catPathInput.Prompt = ""
+
 	m := RootModel{
 		downloads:             downloads,
 		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
@@ -322,6 +352,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		SettingsInput:         settingsInput,
 		searchInput:           searchInput,
 		urlUpdateInput:        urlUpdateInput,
+		catMgrInputs:          [4]textinput.Model{catNameInput, catDescInput, catPatternInput, catPathInput},
 		keys:                  Keys,
 		ServerPort:            serverPort,
 		CurrentVersion:        currentVersion,

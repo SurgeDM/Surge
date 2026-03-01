@@ -14,26 +14,28 @@ type KeyMap struct {
 	SettingsEditor SettingsEditorKeyMap
 	BatchConfirm   BatchConfirmKeyMap
 	Update         UpdateKeyMap
+	CategoryMgr    CategoryManagerKeyMap
 }
 
 // DashboardKeyMap defines keybindings for the main dashboard
 type DashboardKeyMap struct {
-	TabQueued   key.Binding
-	TabActive   key.Binding
-	TabDone     key.Binding
-	NextTab     key.Binding
-	Add         key.Binding
-	BatchImport key.Binding
-	Search      key.Binding
-	Pause       key.Binding
-	Refresh     key.Binding
-	Delete      key.Binding
-	Settings    key.Binding
-	Log         key.Binding
-	History     key.Binding
-	OpenFile    key.Binding
-	Quit        key.Binding
-	ForceQuit   key.Binding
+	TabQueued      key.Binding
+	TabActive      key.Binding
+	TabDone        key.Binding
+	NextTab        key.Binding
+	Add            key.Binding
+	BatchImport    key.Binding
+	Search         key.Binding
+	Pause          key.Binding
+	Refresh        key.Binding
+	Delete         key.Binding
+	Settings       key.Binding
+	Log            key.Binding
+	History        key.Binding
+	OpenFile       key.Binding
+	Quit           key.Binding
+	ForceQuit      key.Binding
+	CategoryFilter key.Binding
 	// Navigation
 	Up   key.Binding
 	Down key.Binding
@@ -124,6 +126,18 @@ type UpdateKeyMap struct {
 	NeverRemind key.Binding
 }
 
+// CategoryManagerKeyMap defines keybindings for the category manager
+type CategoryManagerKeyMap struct {
+	Up     key.Binding
+	Down   key.Binding
+	Edit   key.Binding
+	Add    key.Binding
+	Delete key.Binding
+	Toggle key.Binding // toggle enable/disable
+	Tab    key.Binding
+	Close  key.Binding
+}
+
 // Keys contains all the keybindings for the application
 var Keys = KeyMap{
 	Dashboard: DashboardKeyMap{
@@ -190,6 +204,10 @@ var Keys = KeyMap{
 		ForceQuit: key.NewBinding(
 			key.WithKeys("ctrl+c"),
 			key.WithHelp("ctrl+c", "force quit"),
+		),
+		CategoryFilter: key.NewBinding(
+			key.WithKeys("c"),
+			key.WithHelp("c", "category"),
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
@@ -410,18 +428,28 @@ var Keys = KeyMap{
 			key.WithHelp("n", "never remind"),
 		),
 	},
+	CategoryMgr: CategoryManagerKeyMap{
+		Up:     key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
+		Down:   key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
+		Edit:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "edit")),
+		Add:    key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add")),
+		Delete: key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),
+		Toggle: key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "toggle")),
+		Tab:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next field")),
+		Close:  key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "save & close")),
+	},
 }
 
 // ShortHelp returns keybindings to show in the mini help view
 func (k DashboardKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.TabQueued, k.TabActive, k.TabDone, k.Add, k.BatchImport, k.Search, k.Pause, k.Refresh, k.Delete, k.OpenFile, k.Settings, k.Quit}
+	return []key.Binding{k.TabQueued, k.TabActive, k.TabDone, k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.OpenFile, k.Settings, k.Quit}
 }
 
 // FullHelp returns keybindings for the expanded help view
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab},
-		{k.Add, k.Search, k.Pause, k.Refresh, k.Delete, k.Settings},
+		{k.Add, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings},
 		{k.Log, k.History, k.Quit},
 	}
 }
@@ -499,4 +527,12 @@ func (k UpdateKeyMap) ShortHelp() []key.Binding {
 
 func (k UpdateKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{k.OpenGitHub, k.IgnoreNow, k.NeverRemind}}
+}
+
+func (k CategoryManagerKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Up, k.Down, k.Edit, k.Add, k.Delete, k.Tab, k.Toggle, k.Close}
+}
+
+func (k CategoryManagerKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.Up, k.Down, k.Edit, k.Add, k.Delete, k.Tab, k.Toggle, k.Close}}
 }
