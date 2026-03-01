@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/tui/colors"
 	"github.com/surge-downloader/surge/internal/tui/components"
 	"github.com/surge-downloader/surge/internal/utils"
@@ -114,6 +115,10 @@ func (m RootModel) View() string {
 
 	if m.state == SettingsState {
 		return m.viewSettings()
+	}
+
+	if m.state == CategoryManagerState {
+		return m.viewCategoryManager()
 	}
 
 	if m.state == DuplicateWarningState {
@@ -843,12 +848,12 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 	if d.done {
 		if elapsed.Seconds() >= 1 {
 			avgSpeed := float64(d.Total) / float64(int(elapsed.Seconds()))
-			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(MB))
+			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(config.MB))
 		} else if d.Speed > 0 {
-			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", d.Speed/float64(MB))
+			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", d.Speed/float64(config.MB))
 		} else if elapsed.Seconds() > 0 {
 			avgSpeed := float64(d.Total) / elapsed.Seconds()
-			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(MB))
+			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(config.MB))
 		} else {
 			speedStr = "N/A"
 		}
@@ -860,7 +865,7 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 		speedStr = "Paused"
 		etaStr = "∞"
 	} else {
-		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/float64(MB))
+		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/float64(config.MB))
 		if d.Total > 0 {
 			remaining := d.Total - d.Downloaded
 			etaSeconds := float64(remaining) / d.Speed
@@ -987,7 +992,7 @@ func (m RootModel) calcTotalSpeed() float64 {
 		}
 		total += d.Speed
 	}
-	return total / float64(MB)
+	return total / float64(config.MB)
 }
 
 func (m RootModel) ComputeViewStats() ViewStats {
