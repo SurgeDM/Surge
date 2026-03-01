@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/subtle"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -798,13 +799,16 @@ func initializeGlobalState() {
 
 	stateDir := config.GetStateDir()
 	logsDir := config.GetLogsDir()
+	stateDBPath := filepath.Join(stateDir, "surge.db")
+
+	migrateLegacyStateDB(stateDBPath)
 
 	// Ensure directories exist
 	_ = os.MkdirAll(stateDir, 0o755)
 	_ = os.MkdirAll(logsDir, 0o755)
 
 	// Config engine state
-	state.Configure(filepath.Join(stateDir, "surge.db"))
+	state.Configure(stateDBPath)
 
 	// Config logging
 	utils.ConfigureDebug(logsDir)
@@ -818,6 +822,87 @@ func initializeGlobalState() {
 		retention = config.DefaultSettings().General.LogRetentionCount
 	}
 	utils.CleanupLogs(retention)
+}
+
+func migrateLegacyStateDB(stateDBPath string) {
+	if stateDBPath == "" {
+		return
+	}
+	if _, err := os.Stat(stateDBPath); err == nil {
+		return
+	}
+
+	legacyCandidates := []string{
+		filepath.Join(config.GetSurgeDir(), "state", "surge.db"),
+		filepath.Join(config.GetSurgeDir(), "surge.db"),
+	}
+
+	for _, legacyPath := range legacyCandidates {
+		if legacyPath == "" {
+			continue
+		}
+		if samePath(stateDBPath, legacyPath) {
+			continue
+		}
+		if _, err := os.Stat(legacyPath); err != nil {
+			continue
+		}
+
+		if err := os.MkdirAll(filepath.Dir(stateDBPath), 0o755); err != nil {
+			utils.Debug("Failed to create state dir for DB migration: %v", err)
+			return
+		}
+
+		if err := moveFileWithFallback(legacyPath, stateDBPath); err != nil {
+			utils.Debug("Failed to migrate legacy DB from %s to %s: %v", legacyPath, stateDBPath, err)
+			continue
+		}
+
+		for _, suffix := range []string{"-wal", "-shm"} {
+			_ = moveFileWithFallback(legacyPath+suffix, stateDBPath+suffix)
+		}
+
+		utils.Debug("Migrated legacy state DB from %s to %s", legacyPath, stateDBPath)
+		return
+	}
+}
+
+func moveFileWithFallback(src, dst string) error {
+	if src == "" || dst == "" {
+		return fmt.Errorf("invalid migration path")
+	}
+
+	if err := os.Rename(src, dst); err == nil {
+		return nil
+	}
+
+	srcFile, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = srcFile.Close()
+	}()
+
+	dstFile, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = dstFile.Close()
+	}()
+
+	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		return err
+	}
+
+	return os.Remove(src)
+}
+
+func samePath(a, b string) bool {
+	cleanA := filepath.Clean(a)
+	cleanB := filepath.Clean(b)
+	return cleanA == cleanB
 }
 
 func resumePausedDownloads() {
