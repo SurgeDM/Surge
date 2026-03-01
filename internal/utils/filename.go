@@ -59,6 +59,9 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 	}
 
 	filename := sanitizeFilename(candidate)
+	if sanitizedBecameExtensionOnly(candidate, filename) {
+		filename = ""
+	}
 
 	header := make([]byte, 512)
 	n, rerr := io.ReadFull(resp.Body, header)
@@ -117,6 +120,16 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 	}
 
 	return filename, body, nil
+}
+
+func sanitizedBecameExtensionOnly(original, sanitized string) bool {
+	sanitizedBase := filepath.Base(strings.TrimSpace(sanitized))
+	if sanitizedBase == "" || !strings.HasPrefix(sanitizedBase, ".") || filepath.Ext(sanitizedBase) != sanitizedBase {
+		return false
+	}
+
+	originalBase := filepath.Base(strings.TrimSpace(original))
+	return !strings.HasPrefix(originalBase, ".")
 }
 
 func sanitizeFilename(name string) string {

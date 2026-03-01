@@ -120,6 +120,13 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 			body:     []byte("random data"),
 			expected: "download.bin",
 		},
+		{
+			name:     "Fallback: Extension-only sanitized output from unicode name",
+			url:      "https://example.com/download?filename=文件.zip",
+			headers:  http.Header{},
+			body:     []byte("random data"),
+			expected: "download.bin",
+		},
 	}
 
 	for _, tt := range tests {
