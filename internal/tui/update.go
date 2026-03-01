@@ -789,6 +789,31 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
+			if key.Matches(msg, m.keys.Dashboard.CategoryFilter) {
+				if !m.Settings.General.CategoryEnabled || len(m.Settings.General.Categories) == 0 {
+					m.addLogEntry(LogStyleError.Render("✖ Enable categories in Settings first"))
+					return m, nil
+				}
+				names := config.CategoryNames(m.Settings.General.Categories)
+				cycle := append([]string{""}, names...)
+				cycle = append(cycle, "Uncategorized")
+				current := 0
+				for i, n := range cycle {
+					if n == m.categoryFilter {
+						current = i
+						break
+					}
+				}
+				m.categoryFilter = cycle[(current+1)%len(cycle)]
+				label := m.categoryFilter
+				if label == "" {
+					label = "All"
+				}
+				m.addLogEntry(LogStyleStarted.Render("📂 Filter: " + label))
+				m.UpdateListItems()
+				return m, nil
+			}
+
 			if key.Matches(msg, m.keys.Dashboard.BatchImport) {
 				m.state = BatchFilePickerState
 				m.filepicker = newFilepicker(m.PWD)
@@ -1356,6 +1381,14 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Edit / Toggle
 			if key.Matches(msg, m.keys.Settings.Edit) {
+				// Categories tab → open Category Manager
+				categories := config.CategoryOrder()
+				if m.SettingsActiveTab < len(categories) && categories[m.SettingsActiveTab] == "Categories" {
+					m.catMgrCursor = 0
+					m.state = CategoryManagerState
+					return m, nil
+				}
+
 				key := m.getCurrentSettingKey()
 				// Prevent editing ignored settings
 				if key == "max_global_connections" {
@@ -1465,6 +1498,145 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			var cmd tea.Cmd
 			m.urlUpdateInput, cmd = m.urlUpdateInput.Update(msg)
 			return m, cmd
+
+		case CategoryManagerState:
+			cats := m.Settings.General.Categories
+
+			// Handle editing mode
+			if m.catMgrEditing {
+				if key.Matches(msg, m.keys.CategoryMgr.Close) {
+					// Cancel editing
+					m.catMgrEditing = false
+					m.catMgrIsNew = false
+					for i := range m.catMgrInputs {
+						m.catMgrInputs[i].Blur()
+					}
+					// If was adding new, remove the placeholder
+					if m.catMgrIsNew && m.catMgrCursor < len(m.Settings.General.Categories) {
+						m.Settings.General.Categories = append(
+							m.Settings.General.Categories[:m.catMgrCursor],
+							m.Settings.General.Categories[m.catMgrCursor+1:]...,
+						)
+						if m.catMgrCursor > 0 {
+							m.catMgrCursor--
+						}
+					}
+					return m, nil
+				}
+				if key.Matches(msg, m.keys.CategoryMgr.Tab) {
+					// Cycle fields
+					m.catMgrInputs[m.catMgrEditField].Blur()
+					m.catMgrEditField = (m.catMgrEditField + 1) % 4
+					m.catMgrInputs[m.catMgrEditField].Focus()
+					return m, nil
+				}
+				if key.Matches(msg, m.keys.CategoryMgr.Edit) {
+					// Save edits
+					if m.catMgrCursor < len(m.Settings.General.Categories) {
+						target := &m.Settings.General.Categories[m.catMgrCursor]
+						target.Name = strings.TrimSpace(m.catMgrInputs[0].Value())
+						target.Description = strings.TrimSpace(m.catMgrInputs[1].Value())
+						target.Pattern = strings.TrimSpace(m.catMgrInputs[2].Value())
+						target.Path = strings.TrimSpace(m.catMgrInputs[3].Value())
+					}
+					m.catMgrEditing = false
+					m.catMgrIsNew = false
+					for i := range m.catMgrInputs {
+						m.catMgrInputs[i].Blur()
+					}
+					return m, nil
+				}
+
+				// Pass to active text input
+				var cmd tea.Cmd
+				m.catMgrInputs[m.catMgrEditField], cmd = m.catMgrInputs[m.catMgrEditField].Update(msg)
+				return m, cmd
+			}
+
+			// Not editing - handle navigation
+			if key.Matches(msg, m.keys.CategoryMgr.Close) {
+				_ = config.SaveSettings(m.Settings)
+				m.state = DashboardState
+				return m, nil
+			}
+
+			if key.Matches(msg, m.keys.CategoryMgr.Up) {
+				if m.catMgrCursor > 0 {
+					m.catMgrCursor--
+				}
+				return m, nil
+			}
+			if key.Matches(msg, m.keys.CategoryMgr.Down) {
+				if m.catMgrCursor < len(cats) { // len(cats) = "+Add" row
+					m.catMgrCursor++
+				}
+				return m, nil
+			}
+
+			if key.Matches(msg, m.keys.CategoryMgr.Toggle) {
+				m.Settings.General.CategoryEnabled = !m.Settings.General.CategoryEnabled
+				return m, nil
+			}
+
+			if key.Matches(msg, m.keys.CategoryMgr.Delete) {
+				if m.catMgrCursor < len(cats) {
+					m.Settings.General.Categories = append(
+						m.Settings.General.Categories[:m.catMgrCursor],
+						m.Settings.General.Categories[m.catMgrCursor+1:]...,
+					)
+					if m.catMgrCursor >= len(m.Settings.General.Categories) && m.catMgrCursor > 0 {
+						m.catMgrCursor--
+					}
+				}
+				return m, nil
+			}
+
+			if key.Matches(msg, m.keys.CategoryMgr.Add) {
+				// Add new blank category
+				newCat := config.Category{Name: "New Category"}
+				m.Settings.General.Categories = append(m.Settings.General.Categories, newCat)
+				m.catMgrCursor = len(m.Settings.General.Categories) - 1
+				m.catMgrIsNew = true
+				// Enter edit mode
+				m.catMgrEditing = true
+				m.catMgrEditField = 0
+				m.catMgrInputs[0].SetValue(newCat.Name)
+				m.catMgrInputs[1].SetValue(newCat.Description)
+				m.catMgrInputs[2].SetValue(newCat.Pattern)
+				m.catMgrInputs[3].SetValue(newCat.Path)
+				m.catMgrInputs[0].Focus()
+				return m, nil
+			}
+
+			if key.Matches(msg, m.keys.CategoryMgr.Edit) {
+				if m.catMgrCursor < len(cats) {
+					// Edit existing
+					cat := cats[m.catMgrCursor]
+					m.catMgrEditing = true
+					m.catMgrEditField = 0
+					m.catMgrInputs[0].SetValue(cat.Name)
+					m.catMgrInputs[1].SetValue(cat.Description)
+					m.catMgrInputs[2].SetValue(cat.Pattern)
+					m.catMgrInputs[3].SetValue(cat.Path)
+					m.catMgrInputs[0].Focus()
+				} else {
+					// On "+ Add Category" row, same as Add
+					newCat := config.Category{Name: "New Category"}
+					m.Settings.General.Categories = append(m.Settings.General.Categories, newCat)
+					m.catMgrCursor = len(m.Settings.General.Categories) - 1
+					m.catMgrIsNew = true
+					m.catMgrEditing = true
+					m.catMgrEditField = 0
+					m.catMgrInputs[0].SetValue(newCat.Name)
+					m.catMgrInputs[1].SetValue(newCat.Description)
+					m.catMgrInputs[2].SetValue(newCat.Pattern)
+					m.catMgrInputs[3].SetValue(newCat.Path)
+					m.catMgrInputs[0].Focus()
+				}
+				return m, nil
+			}
+
+			return m, nil
 		}
 	}
 
