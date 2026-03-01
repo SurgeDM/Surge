@@ -3,6 +3,7 @@ package tui
 import (
 	"bufio"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -175,9 +176,14 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	// but sending a unique filename is safer.
 	finalFilename := m.generateUniqueFilename(path, filename)
 
+	categoryFilename := finalFilename
+	if categoryFilename == "" {
+		categoryFilename = inferFilenameFromURL(url)
+	}
+
 	// Auto-route to category folder when enabled
-	if m.Settings.General.CategoryEnabled && finalFilename != "" && isDefaultPath {
-		if cat, err := config.GetCategoryForFile(finalFilename, m.Settings.General.Categories); err == nil && cat != nil {
+	if m.Settings.General.CategoryEnabled && categoryFilename != "" && isDefaultPath {
+		if cat, err := config.GetCategoryForFile(categoryFilename, m.Settings.General.Categories); err == nil && cat != nil {
 			if catPath := config.ResolveCategoryPath(cat, m.Settings.General.DefaultDownloadDir); catPath != "" {
 				path = utils.EnsureAbsPath(catPath)
 				_ = os.MkdirAll(path, 0o755)
@@ -208,6 +214,40 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	utils.Debug("Added to Queue (via Service): %s -> %s", url, finalFilename)
 
 	return m, nil
+}
+
+func inferFilenameFromURL(rawURL string) string {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil {
+		return ""
+	}
+
+	query := parsed.Query()
+	if name := strings.TrimSpace(query.Get("filename")); name != "" {
+		return filepath.Base(name)
+	}
+	if name := strings.TrimSpace(query.Get("file")); name != "" {
+		return filepath.Base(name)
+	}
+
+	base := strings.TrimSpace(filepath.Base(parsed.Path))
+	if base == "" || base == "." || base == "/" {
+		return ""
+	}
+	return base
+}
+
+func (m RootModel) defaultDownloadPath() string {
+	if m.Settings != nil {
+		if path := strings.TrimSpace(m.Settings.General.DefaultDownloadDir); path != "" {
+			return path
+		}
+	}
+	return "."
+}
+
+func (m RootModel) isDefaultDownloadPath(path string) bool {
+	return utils.EnsureAbsPath(path) == utils.EnsureAbsPath(m.defaultDownloadPath())
 }
 
 // Update handles messages and updates the model
@@ -252,14 +292,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case events.DownloadRequestMsg:
 		// ... existing logic ...
-		path := msg.Path
-		isDefaultPath := false
+		path := strings.TrimSpace(msg.Path)
+		isDefaultPath := m.isDefaultDownloadPath(path)
 		if path == "" {
 			isDefaultPath = true
-			path = m.Settings.General.DefaultDownloadDir
-			if path == "" {
-				path = "."
-			}
+			path = m.defaultDownloadPath()
 		}
 
 		duplicate := m.checkForDuplicate(msg.URL)
@@ -270,6 +307,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingMirrors = msg.Mirrors
 			m.pendingHeaders = msg.Headers
 			m.pendingPath = path
+			m.pendingIsDefaultPath = isDefaultPath
 			m.pendingFilename = msg.Filename
 			m.duplicateInfo = duplicate.Filename
 			m.state = DuplicateWarningState
@@ -281,6 +319,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingMirrors = msg.Mirrors
 			m.pendingHeaders = msg.Headers
 			m.pendingPath = path
+			m.pendingIsDefaultPath = isDefaultPath
 			m.pendingFilename = msg.Filename
 			m.inputs[2].SetValue(path)
 			m.inputs[3].SetValue(msg.Filename)
@@ -932,12 +971,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
-				path := m.inputs[2].Value()
+				pathInput := strings.TrimSpace(m.inputs[2].Value())
+				path := pathInput
+				isDefaultPath := m.isDefaultDownloadPath(path)
 				if path == "" {
-					path = m.Settings.General.DefaultDownloadDir
-					if path == "" {
-						path = "."
-					}
+					isDefaultPath = true
+					path = m.defaultDownloadPath()
 				}
 				filename := m.inputs[3].Value()
 
@@ -947,6 +986,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.pendingMirrors = mirrors
 					m.pendingHeaders = nil
 					m.pendingPath = path
+					m.pendingIsDefaultPath = isDefaultPath
 					m.pendingFilename = filename
 					m.duplicateInfo = d.Filename
 					m.state = DuplicateWarningState
@@ -960,7 +1000,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.inputs[2].SetValue(path) // Keep path
 				m.inputs[3].SetValue("")
 
-				return m.startDownload(url, mirrors, nil, path, false, filename, "")
+				return m.startDownload(url, mirrors, nil, path, isDefaultPath, filename, "")
 			}
 
 			// Up/Down navigation between inputs
@@ -1088,7 +1128,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key.Matches(msg, m.keys.Duplicate.Continue) {
 				// Continue anyway - startDownload handles unique filename generation
 				m.state = DashboardState
-				return m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, false, m.pendingFilename, "")
+				return m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
 			}
 			if key.Matches(msg, m.keys.Duplicate.Cancel) {
 				// Cancel - don't add
@@ -1146,8 +1186,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key.Matches(msg, m.keys.Extension.Confirm) {
 				m.pendingPath = strings.TrimSpace(m.inputs[2].Value())
 				m.pendingFilename = strings.TrimSpace(m.inputs[3].Value())
+				m.pendingIsDefaultPath = m.isDefaultDownloadPath(m.pendingPath)
 				if m.pendingPath == "" {
-					m.pendingPath = "."
+					m.pendingIsDefaultPath = true
+					m.pendingPath = m.defaultDownloadPath()
 				}
 
 				// Confirmed - proceed to add (checking for duplicates first)
@@ -1160,7 +1202,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				// No duplicate (or warning disabled) - add to queue
 				m.state = DashboardState
-				return m.startDownload(m.pendingURL, nil, m.pendingHeaders, m.pendingPath, false, m.pendingFilename, "")
+				return m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
 			}
 			if key.Matches(msg, m.keys.Extension.Cancel) {
 				// Cancelled
@@ -1505,14 +1547,14 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Handle editing mode
 			if m.catMgrEditing {
 				if key.Matches(msg, m.keys.CategoryMgr.Close) {
+					wasNew := m.catMgrIsNew
 					// Cancel editing
 					m.catMgrEditing = false
-					m.catMgrIsNew = false
 					for i := range m.catMgrInputs {
 						m.catMgrInputs[i].Blur()
 					}
 					// If was adding new, remove the placeholder
-					if m.catMgrIsNew && m.catMgrCursor < len(m.Settings.General.Categories) {
+					if wasNew && m.catMgrCursor < len(m.Settings.General.Categories) {
 						m.Settings.General.Categories = append(
 							m.Settings.General.Categories[:m.catMgrCursor],
 							m.Settings.General.Categories[m.catMgrCursor+1:]...,
@@ -1521,6 +1563,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 							m.catMgrCursor--
 						}
 					}
+					m.catMgrIsNew = false
 					return m, nil
 				}
 				if key.Matches(msg, m.keys.CategoryMgr.Tab) {

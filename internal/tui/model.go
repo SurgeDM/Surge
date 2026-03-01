@@ -101,12 +101,13 @@ type RootModel struct {
 	historyCursor  int
 
 	// Duplicate detection
-	pendingURL      string   // URL pending confirmation
-	pendingPath     string   // Path pending confirmation
-	pendingFilename string   // Filename pending confirmation
-	pendingMirrors  []string // Mirrors pending confirmation
-	pendingHeaders  map[string]string
-	duplicateInfo   string // Info about the duplicate
+	pendingURL           string // URL pending confirmation
+	pendingPath          string // Path pending confirmation
+	pendingIsDefaultPath bool
+	pendingFilename      string   // Filename pending confirmation
+	pendingMirrors       []string // Mirrors pending confirmation
+	pendingHeaders       map[string]string
+	duplicateInfo        string // Info about the duplicate
 
 	// Graph Data
 	SpeedHistory           []float64 // Stores the last ~60 ticks of speed data
@@ -444,6 +445,13 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 			}
 		}
 
+		// Apply dashboard category filter.
+		if m.categoryFilter != "" && m.Settings != nil && m.Settings.General.CategoryEnabled {
+			if !m.matchesCategoryFilter(d) {
+				continue
+			}
+		}
+
 		// Apply search filter if query is set
 		if m.searchQuery != "" {
 			if !strings.Contains(strings.ToLower(d.FilenameLower), searchLower) {
@@ -454,6 +462,32 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 		filtered = append(filtered, d)
 	}
 	return filtered
+}
+
+func (m RootModel) matchesCategoryFilter(d *DownloadModel) bool {
+	filter := m.categoryFilter
+	if filter == "" {
+		return true
+	}
+
+	filename := strings.TrimSpace(d.Filename)
+	if filename == "" || filename == "Queued" {
+		if d.Destination != "" {
+			if destBase := strings.TrimSpace(filepath.Base(d.Destination)); strings.Contains(destBase, ".") {
+				filename = destBase
+			}
+		}
+	}
+	if filename == "" || filename == "Queued" {
+		filename = inferFilenameFromURL(d.URL)
+	}
+
+	cat, err := config.GetCategoryForFile(filename, m.Settings.General.Categories)
+	if filter == "Uncategorized" {
+		return err != nil || cat == nil
+	}
+
+	return err == nil && cat != nil && cat.Name == filter
 }
 
 // newFilepicker creates a fresh filepicker instance with consistent settings.
