@@ -22,7 +22,7 @@ type GeneralSettings struct {
 	AutoResume         bool       `json:"auto_resume"`
 	SkipUpdateCheck    bool       `json:"skip_update_check"`
 	CategoryEnabled    bool       `json:"category_enabled"`
-	Categories         []Category `json:"categories,omitempty"`
+	Categories         []Category `json:"categories"`
 
 	ClipboardMonitor  bool `json:"clipboard_monitor"`
 	Theme             int  `json:"theme"`

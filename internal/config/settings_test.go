@@ -478,6 +478,37 @@ func TestLoadSettings_RealFunction(t *testing.T) {
 	_ = SaveSettings(DefaultSettings())
 }
 
+func TestSaveAndLoadSettings_PreservesEmptyCategories(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+
+	settings := DefaultSettings()
+	settings.General.Categories = []Category{}
+
+	if err := SaveSettings(settings); err != nil {
+		t.Fatalf("SaveSettings failed: %v", err)
+	}
+
+	data, err := os.ReadFile(GetSettingsPath())
+	if err != nil {
+		t.Fatalf("read settings file: %v", err)
+	}
+	if !strings.Contains(string(data), `"categories": []`) {
+		t.Fatalf("expected explicit empty categories array in settings.json, got: %s", string(data))
+	}
+
+	loaded, err := LoadSettings()
+	if err != nil {
+		t.Fatalf("LoadSettings failed: %v", err)
+	}
+
+	if loaded.General.Categories == nil {
+		t.Fatal("expected categories slice to be non-nil after load")
+	}
+	if len(loaded.General.Categories) != 0 {
+		t.Fatalf("expected zero categories after reload, got %d", len(loaded.General.Categories))
+	}
+}
+
 func TestSaveAndLoadSettings_RoundTrip(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	// Test complete round trip via real functions
