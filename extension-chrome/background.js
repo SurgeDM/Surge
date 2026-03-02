@@ -510,6 +510,46 @@ function shouldSkipUrl(url) {
   return false;
 }
 
+function sanitizeFilenameHint(name) {
+  const trimmed = (name || "").trim();
+  if (!trimmed || trimmed === "." || trimmed === "..") {
+    return "";
+  }
+
+  const lowered = trimmed.toLowerCase();
+  if (lowered === "unknown" || lowered === "unknown file") {
+    return "";
+  }
+
+  return trimmed;
+}
+
+function filenameFromURL(rawUrl) {
+  if (!rawUrl) return "";
+
+  const parseCandidate = (candidateUrl) => {
+    if (!candidateUrl) return "";
+    const clean = candidateUrl.split("#")[0].split("?")[0];
+    const base = clean.split("/").pop() || "";
+    try {
+      return sanitizeFilenameHint(decodeURIComponent(base));
+    } catch {
+      return sanitizeFilenameHint(base);
+    }
+  };
+
+  try {
+    const parsed = new URL(rawUrl);
+    return parseCandidate(parsed.pathname || "");
+  } catch {
+    return parseCandidate(rawUrl);
+  }
+}
+
+function displayFilename(url, filenameHint) {
+  return sanitizeFilenameHint(filenameHint) || filenameFromURL(url) || "Unknown file";
+}
+
 // === Path Extraction ===
 
 function extractPathInfo(downloadItem) {
@@ -542,6 +582,11 @@ function extractPathInfo(downloadItem) {
         directory = parts.join("/");
       }
     }
+  }
+
+  filename = sanitizeFilenameHint(filename);
+  if (!filename) {
+    filename = filenameFromURL(downloadItem.url);
   }
 
   return { filename, directory };
@@ -603,8 +648,7 @@ async function handleDownloadIntercept(downloadItem) {
     // Store pending duplicate and prompt user
     const pendingId = `dup_${++pendingDuplicateCounter}`;
     const { filename, directory } = extractPathInfo(downloadItem);
-    const displayName =
-      filename || downloadItem.url.split("/").pop() || "Unknown file";
+    const displayName = displayFilename(downloadItem.url, filename);
 
     pendingDuplicates.set(pendingId, {
       downloadItem,
@@ -678,7 +722,7 @@ async function handleDownloadIntercept(downloadItem) {
           type: "basic",
           iconUrl: "icons/icon48.png",
           title: "Surge - Confirmation Required",
-          message: `Click to confirm download: ${filename || downloadItem.url.split("/").pop()}`,
+          message: `Click to confirm download: ${displayFilename(downloadItem.url, filename)}`,
           requireInteraction: true,
         });
         return; // Don't auto-open popup for pending interactions
@@ -689,7 +733,7 @@ async function handleDownloadIntercept(downloadItem) {
         type: "basic",
         iconUrl: "icons/icon48.png",
         title: "Surge",
-        message: `Download started: ${filename || downloadItem.url.split("/").pop()}`,
+        message: `Download started: ${displayFilename(downloadItem.url, filename)}`,
       });
 
       // Auto-open the popup to show download progress
@@ -861,7 +905,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
                 type: "basic",
                 iconUrl: "icons/icon48.png",
                 title: "Surge",
-                message: `Download started: ${pending.filename || pending.url.split("/").pop()}`,
+                message: `Download started: ${displayFilename(pending.url, pending.filename)}`,
               });
             }
 
@@ -870,10 +914,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               const [nextId, nextData] = pendingDuplicates
                 .entries()
                 .next().value;
-              const nextName =
-                nextData.filename ||
-                nextData.url.split("/").pop() ||
-                "Unknown file";
+              const nextName = displayFilename(nextData.url, nextData.filename);
 
               chrome.runtime
                 .sendMessage({
@@ -911,10 +952,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               const [nextId, nextData] = pendingDuplicates
                 .entries()
                 .next().value;
-              const nextName =
-                nextData.filename ||
-                nextData.url.split("/").pop() ||
-                "Unknown file";
+              const nextName = displayFilename(nextData.url, nextData.filename);
 
               chrome.runtime
                 .sendMessage({
@@ -934,8 +972,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           for (const [id, data] of pendingDuplicates) {
             duplicates.push({
               id,
-              filename:
-                data.filename || data.url.split("/").pop() || "Unknown file",
+              filename: displayFilename(data.url, data.filename),
               url: data.url,
             });
           }
