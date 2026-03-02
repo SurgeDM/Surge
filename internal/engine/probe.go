@@ -172,6 +172,14 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 		utils.Debug("Error determining filename: %v", err)
 		name = "download.bin"
 	}
+	if filenameHint == "" && isGenericProbeFilename(name) {
+		if fallbackName, fallbackErr := probeFilenameWithoutRange(ctx, client, rawurl, headers); fallbackErr != nil {
+			utils.Debug("Fallback metadata probe for filename failed: %v", fallbackErr)
+		} else if !isGenericProbeFilename(fallbackName) {
+			utils.Debug("Fallback metadata probe improved filename: %s -> %s", name, fallbackName)
+			name = fallbackName
+		}
+	}
 
 	if filenameHint != "" {
 		result.Filename = filenameHint
@@ -185,6 +193,75 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 		result.Filename, result.FileSize, result.SupportsRange)
 
 	return result, nil
+}
+
+func isGenericProbeFilename(name string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(name))
+	return normalized == "" ||
+		normalized == "." ||
+		normalized == "/" ||
+		normalized == "\\" ||
+		normalized == "_" ||
+		normalized == "download" ||
+		normalized == "download.bin"
+}
+
+func probeFilenameWithoutRange(ctx context.Context, client *http.Client, rawurl string, headers map[string]string) (string, error) {
+	headReq, err := newMetadataRequest(ctx, http.MethodHead, rawurl, headers)
+	if err != nil {
+		return "", err
+	}
+	headResp, err := client.Do(headReq)
+	if err == nil {
+		defer func() {
+			_, _ = io.Copy(io.Discard, io.LimitReader(headResp.Body, 8*1024))
+			_ = headResp.Body.Close()
+		}()
+		if headResp.StatusCode >= 200 && headResp.StatusCode < 300 {
+			name, _, resolveErr := utils.DetermineFilename(rawurl, headResp, false)
+			if resolveErr == nil && name != "" {
+				return name, nil
+			}
+		}
+	}
+
+	getReq, err := newMetadataRequest(ctx, http.MethodGet, rawurl, headers)
+	if err != nil {
+		return "", err
+	}
+	getResp, err := client.Do(getReq)
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, io.LimitReader(getResp.Body, 8*1024))
+		_ = getResp.Body.Close()
+	}()
+	if getResp.StatusCode < 200 || getResp.StatusCode >= 300 {
+		return "", fmt.Errorf("metadata GET request returned status %d", getResp.StatusCode)
+	}
+
+	name, _, err := utils.DetermineFilename(rawurl, getResp, false)
+	if err != nil {
+		return "", err
+	}
+	return name, nil
+}
+
+func newMetadataRequest(ctx context.Context, method, rawurl string, headers map[string]string) (*http.Request, error) {
+	req, err := http.NewRequestWithContext(ctx, method, rawurl, nil)
+	if err != nil {
+		return nil, err
+	}
+	for key, val := range headers {
+		if !strings.EqualFold(key, "Range") {
+			req.Header.Set(key, val)
+		}
+	}
+	if req.Header.Get("User-Agent") == "" {
+		req.Header.Set("User-Agent", ua)
+	}
+	return req, nil
 }
 
 func getProbeClient() *http.Client {
