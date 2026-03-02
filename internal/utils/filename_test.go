@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"net/url"
 	"testing"
 )
 
@@ -141,4 +142,51 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDetermineFilename_UsesFinalRedirectURLPath(t *testing.T) {
+	resp := &http.Response{
+		Header: http.Header{},
+		Body:   io.NopCloser(bytes.NewReader([]byte("x"))),
+		Request: &http.Request{
+			URL: mustParseURL(t, "https://cdn.example.com/files/final-name.bin"),
+		},
+	}
+
+	filename, _, err := DetermineFilename("https://drive.example.com/download?id=abc123", resp, false)
+	if err != nil {
+		t.Fatalf("DetermineFilename returned error: %v", err)
+	}
+
+	if filename != "final-name.bin" {
+		t.Fatalf("filename = %q, want %q", filename, "final-name.bin")
+	}
+}
+
+func TestDetermineFilename_ContentDispositionFallback(t *testing.T) {
+	resp := &http.Response{
+		Header: http.Header{
+			// Missing disposition type; strict parser rejects this, fallback should recover.
+			"Content-Disposition": []string{`filename*=UTF-8''queued%20report.pdf`},
+		},
+		Body: io.NopCloser(bytes.NewReader([]byte("x"))),
+	}
+
+	filename, _, err := DetermineFilename("https://example.com/", resp, false)
+	if err != nil {
+		t.Fatalf("DetermineFilename returned error: %v", err)
+	}
+
+	if filename != "queued report.pdf" {
+		t.Fatalf("filename = %q, want %q", filename, "queued report.pdf")
+	}
+}
+
+func mustParseURL(t *testing.T, raw string) *url.URL {
+	t.Helper()
+	u, err := url.Parse(raw)
+	if err != nil {
+		t.Fatalf("url parse failed: %v", err)
+	}
+	return u
 }
