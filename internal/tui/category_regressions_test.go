@@ -40,7 +40,7 @@ func TestStartDownload_RoutesDefaultPathWithURLDerivedFilename(t *testing.T) {
 	if len(m.downloads) != 1 {
 		t.Fatalf("expected 1 download, got %d", len(m.downloads))
 	}
-	if got, want := m.downloads[0].Destination, imageDir; got != want {
+	if got, want := m.downloads[0].Destination, filepath.Join(imageDir, "screenshot.jpg"); got != want {
 		t.Fatalf("destination = %q, want %q", got, want)
 	}
 }

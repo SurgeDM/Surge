@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -175,6 +176,9 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	// For Local Service, we can generate it here. For Remote, the server might do it,
 	// but sending a unique filename is safer.
 	finalFilename := m.generateUniqueFilename(path, filename)
+	if finalFilename == "" {
+		finalFilename = inferFilenameFromURL(url)
+	}
 
 	categoryFilename := finalFilename
 	if categoryFilename == "" {
@@ -186,7 +190,10 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		if cat, err := config.GetCategoryForFile(categoryFilename, m.Settings.General.Categories); err == nil && cat != nil {
 			if catPath := config.ResolveCategoryPath(cat, m.Settings.General.DefaultDownloadDir); catPath != "" {
 				path = utils.EnsureAbsPath(catPath)
-				_ = os.MkdirAll(path, 0o755)
+				if err := os.MkdirAll(path, 0o755); err != nil {
+					m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to create category path %s: %v", path, err)))
+					return m, nil
+				}
 			}
 		}
 	}
@@ -830,6 +837,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			if key.Matches(msg, m.keys.Dashboard.CategoryFilter) {
 				if !m.Settings.General.CategoryEnabled || len(m.Settings.General.Categories) == 0 {
+					if m.categoryFilter != "" {
+						m.categoryFilter = ""
+						m.addLogEntry(LogStyleStarted.Render("📂 Filter: All"))
+						m.UpdateListItems()
+						return m, nil
+					}
 					m.addLogEntry(LogStyleError.Render("✖ Enable categories in Settings first"))
 					return m, nil
 				}
@@ -1575,13 +1588,39 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				if key.Matches(msg, m.keys.CategoryMgr.Edit) {
 					// Save edits
-					if m.catMgrCursor < len(m.Settings.General.Categories) {
-						target := &m.Settings.General.Categories[m.catMgrCursor]
-						target.Name = strings.TrimSpace(m.catMgrInputs[0].Value())
-						target.Description = strings.TrimSpace(m.catMgrInputs[1].Value())
-						target.Pattern = strings.TrimSpace(m.catMgrInputs[2].Value())
-						target.Path = strings.TrimSpace(m.catMgrInputs[3].Value())
+					if m.catMgrCursor < 0 || m.catMgrCursor >= len(m.Settings.General.Categories) {
+						m.addLogEntry(LogStyleError.Render("✖ Invalid category selection"))
+						return m, nil
 					}
+
+					name := strings.TrimSpace(m.catMgrInputs[0].Value())
+					description := strings.TrimSpace(m.catMgrInputs[1].Value())
+					pattern := strings.TrimSpace(m.catMgrInputs[2].Value())
+					path := strings.TrimSpace(m.catMgrInputs[3].Value())
+
+					if name == "" {
+						m.addLogEntry(LogStyleError.Render("✖ Category name cannot be empty"))
+						return m, nil
+					}
+					if pattern == "" {
+						m.addLogEntry(LogStyleError.Render("✖ Category pattern cannot be empty"))
+						return m, nil
+					}
+					if _, err := regexp.Compile(pattern); err != nil {
+						m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Invalid category pattern: %v", err)))
+						return m, nil
+					}
+					if path == "" {
+						m.addLogEntry(LogStyleError.Render("✖ Category path cannot be empty"))
+						return m, nil
+					}
+
+					target := &m.Settings.General.Categories[m.catMgrCursor]
+					target.Name = name
+					target.Description = description
+					target.Pattern = pattern
+					target.Path = filepath.Clean(path)
+
 					m.catMgrEditing = false
 					m.catMgrIsNew = false
 					for i := range m.catMgrInputs {

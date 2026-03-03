@@ -112,6 +112,10 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 		}
 	}
 
+	if sanitizedBecameExtensionOnly(candidate, filename) {
+		filename = ""
+	}
+
 	if filename == "" || filename == "." || filename == "/" || filename == "_" {
 		filename = "download.bin"
 		if verbose {
@@ -129,6 +133,9 @@ func sanitizedBecameExtensionOnly(original, sanitized string) bool {
 	}
 
 	originalBase := filepath.Base(strings.TrimSpace(original))
+	if originalBase == "" || originalBase == "." || originalBase == "/" {
+		return true
+	}
 	return !strings.HasPrefix(originalBase, ".")
 }
 

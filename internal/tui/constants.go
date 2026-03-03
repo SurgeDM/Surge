@@ -22,7 +22,6 @@ const (
 	PopupWidth             = 70 // Consistent width for all popup dialogs
 
 	// Viewport layout
-	// Viewport layout
 	CardHeight       = 2  // Compact rows for cyberpunk theme
 	HeaderHeight     = 8  // Logo + Graph height
 	FilePickerHeight = 12 // Height for file picker display

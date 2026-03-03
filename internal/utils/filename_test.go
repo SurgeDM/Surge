@@ -127,6 +127,13 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 			body:     []byte("random data"),
 			expected: "download.bin",
 		},
+		{
+			name:     "Fallback: MIME inference should not recreate hidden extension-only filename",
+			url:      "https://example.com/download?filename=文件",
+			headers:  http.Header{},
+			body:     pdfContent,
+			expected: "download.bin",
+		},
 	}
 
 	for _, tt := range tests {
