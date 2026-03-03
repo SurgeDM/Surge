@@ -769,9 +769,6 @@ func setupIsolatedCmdState(t *testing.T) {
 
 	state.CloseDB()
 	state.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
-	t.Cleanup(func() {
-		state.CloseDB()
-	})
 }
 
 func captureStdout(t *testing.T, fn func()) string {

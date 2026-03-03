@@ -888,12 +888,13 @@ func moveFileWithFallback(src, dst string) error {
 	if err != nil {
 		return err
 	}
-	defer func() {
-		_ = dstFile.Close()
-	}()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
 		_ = dstFile.Close()
+		_ = os.Remove(dst)
+		return err
+	}
+	if err := dstFile.Close(); err != nil {
 		_ = os.Remove(dst)
 		return err
 	}
