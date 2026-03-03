@@ -126,9 +126,9 @@ func newDeterministicStreamingServer(t *testing.T, fileSize int64) *testutil.Str
 		fileSize,
 		testutil.WithRangeSupport(true),
 		testutil.WithLatency(10*time.Millisecond),
-		// Streaming server applies ByteLatency per KB. This keeps tests deterministic
-		// and provides a stable pause window without making the suite too slow.
-		testutil.WithByteLatency(500*time.Microsecond),
+		// Streaming server applies ByteLatency per byte. Keep this tiny so we still
+		// get a deterministic pause window without stretching integration test timeouts.
+		testutil.WithByteLatency(500*time.Nanosecond),
 	)
 }
 

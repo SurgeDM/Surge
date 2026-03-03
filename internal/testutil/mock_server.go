@@ -530,7 +530,7 @@ func (s *StreamingMockServer) handleStreamingRequest(w http.ResponseWriter, r *h
 		// Add byte latency
 		if s.ByteLatency > 0 {
 			select {
-			case <-time.After(s.ByteLatency * time.Duration(n) / types.KB): // Per KB
+			case <-time.After(s.ByteLatency * time.Duration(n)): // Per byte
 			case <-r.Context().Done():
 				return
 			}

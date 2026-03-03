@@ -172,22 +172,20 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	// Enforce absolute path
 	path = utils.EnsureAbsPath(path)
 
-	// Generate unique filename to avoid overwriting (if not provided)
-	// For Local Service, we can generate it here. For Remote, the server might do it,
-	// but sending a unique filename is safer.
-	finalFilename := m.generateUniqueFilename(path, filename)
-	if finalFilename == "" {
-		finalFilename = inferFilenameFromURL(url)
-	}
-
-	categoryFilename := finalFilename
+	candidateFilename := strings.TrimSpace(filename)
+	categoryFilename := candidateFilename
 	if categoryFilename == "" {
 		categoryFilename = inferFilenameFromURL(url)
 	}
 
 	// Auto-route to category folder when enabled
 	if m.Settings.General.CategoryEnabled && categoryFilename != "" && isDefaultPath {
-		if cat, err := config.GetCategoryForFile(categoryFilename, m.Settings.General.Categories); err == nil && cat != nil {
+		cat, err := config.GetCategoryForFile(categoryFilename, m.Settings.General.Categories)
+		if err != nil {
+			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Category match error for %s: %v", categoryFilename, err)))
+			return m, nil
+		}
+		if cat != nil {
 			if catPath := config.ResolveCategoryPath(cat, m.Settings.General.DefaultDownloadDir); catPath != "" {
 				path = utils.EnsureAbsPath(catPath)
 				if err := os.MkdirAll(path, 0o755); err != nil {
@@ -196,6 +194,14 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 				}
 			}
 		}
+	}
+
+	// Generate unique filename after the final destination path is known.
+	// For Local Service, we can generate it here. For Remote, the server might do it,
+	// but sending a unique filename is safer.
+	finalFilename := m.generateUniqueFilename(path, candidateFilename)
+	if finalFilename == "" {
+		finalFilename = m.generateUniqueFilename(path, categoryFilename)
 	}
 
 	// Call Service Add
