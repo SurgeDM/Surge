@@ -188,6 +188,12 @@ func computeFileHashMD5WithTimeout(path string, timeout time.Duration) (string, 
 			if _, err := h.Write(buf[:n]); err != nil {
 				return "", false, fmt.Errorf("failed to update md5 hash: %w", err)
 			}
+			// Some platforms can return n>0 and io.EOF in the same read.
+			// Re-check deadline after hashing the chunk so very small timeouts
+			// deterministically skip hash persistence.
+			if time.Now().After(deadline) {
+				return "", true, nil
+			}
 		}
 		if readErr == io.EOF {
 			break
