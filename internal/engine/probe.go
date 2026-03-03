@@ -68,25 +68,14 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 
 		probeCtx, cancel := context.WithTimeout(ctx, types.ProbeTimeout)
 
-		req, reqErr := http.NewRequestWithContext(probeCtx, http.MethodGet, rawurl, nil)
+		req, reqErr := newMetadataRequest(probeCtx, http.MethodGet, rawurl, headers)
 		if reqErr != nil {
 			cancel()
 			err = fmt.Errorf("failed to create probe request: %w", reqErr)
 			break // Fatal error, don't retry
 		}
 
-		// Apply custom headers first (from browser extension: cookies, auth, etc.)
-		for key, val := range headers {
-			if key != "Range" { // Skip Range, we set our own
-				req.Header.Set(key, val)
-			}
-		}
-
 		req.Header.Set("Range", "bytes=0-0")
-		// Set User-Agent only if not provided in custom headers
-		if req.Header.Get("User-Agent") == "" {
-			req.Header.Set("User-Agent", ua)
-		}
 
 		resp, err = client.Do(req)
 
@@ -97,21 +86,11 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 			utils.Debug("Probe got %d, retrying without Range header", resp.StatusCode)
 			_ = resp.Body.Close() // Close previous response
 
-			reqNoRange, reqNoRangeErr := http.NewRequestWithContext(probeCtx, http.MethodGet, rawurl, nil)
+			reqNoRange, reqNoRangeErr := newMetadataRequest(probeCtx, http.MethodGet, rawurl, headers)
 			if reqNoRangeErr != nil {
 				cancel()
 				err = fmt.Errorf("failed to create probe request without range: %w", reqNoRangeErr)
 				break
-			}
-
-			// Copy headers but SKIP Range
-			for key, val := range headers {
-				if key != "Range" {
-					reqNoRange.Header.Set(key, val)
-				}
-			}
-			if reqNoRange.Header.Get("User-Agent") == "" {
-				reqNoRange.Header.Set("User-Agent", ua)
 			}
 
 			resp, err = client.Do(reqNoRange)
