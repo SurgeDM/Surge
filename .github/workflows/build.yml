@@ -241,7 +241,9 @@ jobs:
               });
               const existing = comments.find((c) => c.user?.type === 'Bot' && c.body?.includes(marker));
 
-              if (failing.length === 0) {
+              const testsSucceeded = (process.env.NEEDS_TEST_RESULT || '') === 'success';
+
+              if (failing.length === 0 && testsSucceeded) {
                 if (existing) {
                   try {
                     await github.rest.issues.deleteComment({
