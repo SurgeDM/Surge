@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -22,6 +23,8 @@ var (
 	probeClientOnce sync.Once
 	probeClient     *http.Client
 )
+
+const metadataProbeTimeout = 10 * time.Second
 
 // ProbeResult contains all metadata from server probe
 type ProbeResult struct {
@@ -207,7 +210,10 @@ func isGenericProbeFilename(name string) bool {
 }
 
 func probeFilenameWithoutRange(ctx context.Context, client *http.Client, rawurl string, headers map[string]string) (string, error) {
-	headReq, err := newMetadataRequest(ctx, http.MethodHead, rawurl, headers)
+	metaCtx, cancel := context.WithTimeout(ctx, metadataProbeTimeout)
+	defer cancel()
+
+	headReq, err := newMetadataRequest(metaCtx, http.MethodHead, rawurl, headers)
 	if err != nil {
 		return "", err
 	}
@@ -224,13 +230,25 @@ func probeFilenameWithoutRange(ctx context.Context, client *http.Client, rawurl 
 			}
 		}
 	}
+	if err != nil && (errors.Is(err, context.DeadlineExceeded) || errors.Is(metaCtx.Err(), context.DeadlineExceeded)) {
+		return "", fmt.Errorf("metadata HEAD probe timed out: %w", err)
+	}
+	if metaErr := metaCtx.Err(); metaErr != nil {
+		return "", metaErr
+	}
 
-	getReq, err := newMetadataRequest(ctx, http.MethodGet, rawurl, headers)
+	getReq, err := newMetadataRequest(metaCtx, http.MethodGet, rawurl, headers)
 	if err != nil {
 		return "", err
 	}
 	getResp, err := client.Do(getReq)
 	if err != nil {
+		if errors.Is(err, context.DeadlineExceeded) || errors.Is(metaCtx.Err(), context.DeadlineExceeded) {
+			return "", fmt.Errorf("metadata GET probe timed out: %w", err)
+		}
+		if metaErr := metaCtx.Err(); metaErr != nil {
+			return "", metaErr
+		}
 		return "", err
 	}
 	defer func() {
