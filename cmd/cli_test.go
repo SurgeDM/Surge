@@ -468,16 +468,11 @@ func TestPrintDownloads_FromDatabase_TableAndJSON(t *testing.T) {
 	if err := json.Unmarshal([]byte(jsonOut), &infos); err != nil {
 		t.Fatalf("failed to decode json output: %v (out=%q)", err, jsonOut)
 	}
-
-	// We might have other tests leaking into the DB. Just find ours.
-	found := false
-	for _, info := range infos {
-		if info.ID == entry.ID {
-			found = true
-			break
-		}
+	if len(infos) != 1 {
+		t.Fatalf("expected 1 json entry, got %d: %+v", len(infos), infos)
 	}
-	if !found {
+	got := infos[0]
+	if got.ID != entry.ID || got.Filename != entry.Filename || got.Status != entry.Status || got.Downloaded != entry.Downloaded || got.TotalSize != entry.TotalSize || got.Progress != 50 {
 		t.Fatalf("unexpected JSON payload: %+v", infos)
 	}
 }
@@ -489,12 +484,12 @@ func TestPrintDownloads_JSONEmpty(t *testing.T) {
 	out := captureStdout(t, func() {
 		printDownloads(true, "", "", false)
 	})
-
-	// Ensure our specific test entries from other tests aren't the only reason it's failing
-	// Actually wait, this test expects the database to be empty.
-	// We'll just verify it's a valid JSON array.
-	if !strings.HasPrefix(strings.TrimSpace(out), "[") {
-		t.Fatalf("expected json array, got %q", strings.TrimSpace(out))
+	var infos []any
+	if err := json.Unmarshal([]byte(out), &infos); err != nil {
+		t.Fatalf("failed to parse json output: %v (out=%q)", err, out)
+	}
+	if len(infos) != 0 {
+		t.Fatalf("expected empty json array, got %d entries: %+v", len(infos), infos)
 	}
 }
 
@@ -766,11 +761,7 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 
 func setupIsolatedCmdState(t *testing.T) {
 	t.Helper()
-	tempDir := t.TempDir()
-	t.Setenv("APPDATA", tempDir)
-	t.Setenv("USERPROFILE", tempDir)
-	t.Setenv("XDG_CONFIG_HOME", tempDir)
-	t.Setenv("HOME", tempDir)
+	setupXDGEnvIsolation(t)
 
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("EnsureDirs failed: %v", err)
