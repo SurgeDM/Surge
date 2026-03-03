@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -421,6 +422,15 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 
 // Add queues a new download.
 func (s *LocalDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string) (string, error) {
+	return s.add(url, path, filename, mirrors, headers, "")
+}
+
+// AddWithID queues a new download using a caller-provided id when non-empty.
+func (s *LocalDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string) (string, error) {
+	return s.add(url, path, filename, mirrors, headers, id)
+}
+
+func (s *LocalDownloadService) add(url string, path string, filename string, mirrors []string, headers map[string]string, requestedID string) (string, error) {
 	if s.Pool == nil {
 		return "", fmt.Errorf("worker pool not initialized")
 	}
@@ -440,7 +450,13 @@ func (s *LocalDownloadService) Add(url string, path string, filename string, mir
 	}
 	outPath = utils.EnsureAbsPath(outPath)
 
-	id := uuid.New().String()
+	id := strings.TrimSpace(requestedID)
+	if id == "" {
+		id = uuid.New().String()
+	}
+	if st := s.Pool.GetStatus(id); st != nil {
+		return "", fmt.Errorf("download id already exists")
+	}
 
 	// Create configuration
 	state := types.NewProgressState(id, 0)

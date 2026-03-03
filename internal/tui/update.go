@@ -209,7 +209,23 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	// We rely on the event stream to update the UI, OR we add it optimistically.
 	// Optimistic addition gives better UX.
 
-	newID, err := m.Service.Add(url, path, finalFilename, mirrors, headers)
+	var (
+		newID string
+		err   error
+	)
+	requestID := strings.TrimSpace(id)
+	if requestID != "" {
+		type idAwareAdder interface {
+			AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string) (string, error)
+		}
+		if svcWithID, ok := m.Service.(idAwareAdder); ok {
+			newID, err = svcWithID.AddWithID(url, path, finalFilename, mirrors, headers, requestID)
+		} else {
+			newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers)
+		}
+	} else {
+		newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers)
+	}
 	if err != nil {
 		m.addLogEntry(LogStyleError.Render("✖ Failed to add download: " + err.Error()))
 		return m, nil
@@ -237,14 +253,18 @@ func inferFilenameFromURL(rawURL string) string {
 
 	query := parsed.Query()
 	if name := strings.TrimSpace(query.Get("filename")); name != "" {
-		return filepath.Base(name)
+		if base := strings.TrimSpace(filepath.Base(name)); base != "" && base != "." && base != ".." && base != "/" {
+			return base
+		}
 	}
 	if name := strings.TrimSpace(query.Get("file")); name != "" {
-		return filepath.Base(name)
+		if base := strings.TrimSpace(filepath.Base(name)); base != "" && base != "." && base != ".." && base != "/" {
+			return base
+		}
 	}
 
 	base := strings.TrimSpace(filepath.Base(parsed.Path))
-	if base == "" || base == "." || base == "/" {
+	if base == "" || base == "." || base == ".." || base == "/" {
 		return ""
 	}
 	return base

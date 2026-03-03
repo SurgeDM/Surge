@@ -177,6 +177,27 @@ func TestLocalDownloadService_Shutdown_Idempotent(t *testing.T) {
 	}
 }
 
+func TestLocalDownloadService_AddWithID_UsesProvidedID(t *testing.T) {
+	ch := make(chan interface{}, 8)
+	pool := download.NewWorkerPool(ch, 1)
+	svc := NewLocalDownloadServiceWithInput(pool, ch)
+	defer func() { _ = svc.Shutdown() }()
+
+	requestID := "provided-id-001"
+	outputDir := t.TempDir()
+	gotID, err := svc.AddWithID("https://example.com/file.bin", outputDir, "file.bin", nil, nil, requestID)
+	if err != nil {
+		t.Fatalf("AddWithID failed: %v", err)
+	}
+	if gotID != requestID {
+		t.Fatalf("AddWithID returned %q, want %q", gotID, requestID)
+	}
+
+	if st := pool.GetStatus(requestID); st == nil {
+		t.Fatalf("expected pool status for request id %q", requestID)
+	}
+}
+
 func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	tempDir := t.TempDir()
 	state.CloseDB()
