@@ -85,8 +85,6 @@ var rootCmd = &cobra.Command{
 			return
 		}
 
-		initializeGlobalState()
-
 		// Attempt to acquire lock
 		isMaster, err := AcquireLock()
 		if err != nil {
@@ -104,6 +102,8 @@ var rootCmd = &cobra.Command{
 				utils.Debug("Error releasing lock: %v", err)
 			}
 		}()
+
+		initializeGlobalState()
 
 		startupIntegrityMessage = runStartupIntegrityCheck()
 
@@ -893,6 +893,8 @@ func moveFileWithFallback(src, dst string) error {
 	}()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		_ = dstFile.Close()
+		_ = os.Remove(dst)
 		return err
 	}
 
