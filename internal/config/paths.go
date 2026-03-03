@@ -62,9 +62,16 @@ func GetDownloadsDir() string {
 
 func GetRuntimeDir() string {
 	runtimeEnv := strings.TrimSpace(os.Getenv("XDG_RUNTIME_DIR"))
+	if runtimeEnv != "" && !filepath.IsAbs(runtimeEnv) {
+		runtimeEnv = ""
+	}
+
 	runtimeBase := runtimeEnv
 	if runtimeBase == "" {
 		runtimeBase = strings.TrimSpace(xdg.RuntimeDir)
+		if runtimeBase != "" && !filepath.IsAbs(runtimeBase) {
+			runtimeBase = ""
+		}
 	}
 
 	// In headless Linux sessions, XDG_RUNTIME_DIR is often unset and xdg.RuntimeDir

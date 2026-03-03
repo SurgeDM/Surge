@@ -88,10 +88,10 @@ func TestGetCategoryForFile_MultipleMatches(t *testing.T) {
 
 	cat, err := GetCategoryForFile("test.txt", cats)
 	if err == nil {
-		t.Errorf("Expected error for multiple matches, got nil")
+		t.Fatalf("Expected error for multiple matches, got nil")
 	}
 	if cat != nil {
-		t.Errorf("Expected nil category for multiple matches, got %v", cat)
+		t.Fatalf("Expected nil category for multiple matches, got %v", cat)
 	}
 	if err.Error() != "filename matches multiple categories" {
 		t.Errorf("Unexpected error message: %v", err)
@@ -115,6 +115,12 @@ func TestResolveCategoryPath(t *testing.T) {
 	pathEmpty := ResolveCategoryPath(catEmpty, "/default")
 	if pathEmpty != "/default" {
 		t.Errorf("Expected /default for empty category path, got %s", pathEmpty)
+	}
+
+	catWhitespace := &Category{Path: "   "}
+	pathWhitespace := ResolveCategoryPath(catWhitespace, "/default")
+	if pathWhitespace != "/default" {
+		t.Errorf("Expected /default for whitespace category path, got %s", pathWhitespace)
 	}
 }
 

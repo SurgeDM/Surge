@@ -98,6 +98,10 @@ func (bm *BenchmarkMetrics) GetResults() BenchmarkResults {
 	if elapsed.Seconds() > 0 {
 		throughput = float64(bm.TotalBytes) / elapsed.Seconds() / float64(types.MB)
 	}
+	memDelta := uint64(0)
+	if bm.PeakMemAlloc >= bm.StartMemAlloc {
+		memDelta = bm.PeakMemAlloc - bm.StartMemAlloc
+	}
 
 	return BenchmarkResults{
 		TotalTime:      elapsed,
@@ -107,7 +111,7 @@ func (bm *BenchmarkMetrics) GetResults() BenchmarkResults {
 		RetryCount:     int(bm.RetryCount.Load()),
 		MaxConnections: int(bm.ConnectionMax.Load()),
 		AvgConnections: avgConnections,
-		MemoryUsedMB:   float64(bm.PeakMemAlloc-bm.StartMemAlloc) / float64(types.MB),
+		MemoryUsedMB:   float64(memDelta) / float64(types.MB),
 	}
 }
 

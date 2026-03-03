@@ -111,6 +111,26 @@ func TestGetRuntimeDir_UsesXDGWhenSet(t *testing.T) {
 	}
 }
 
+func TestGetRuntimeDir_RejectsRelativeXDGValues(t *testing.T) {
+	tmp := t.TempDir()
+
+	oldStateHome := xdg.StateHome
+	oldRuntimeDir := xdg.RuntimeDir
+	xdg.StateHome = tmp
+	xdg.RuntimeDir = "relative-runtime-dir"
+	t.Cleanup(func() {
+		xdg.StateHome = oldStateHome
+		xdg.RuntimeDir = oldRuntimeDir
+	})
+
+	t.Setenv("XDG_RUNTIME_DIR", "relative-env-runtime")
+
+	want := filepath.Join(GetStateDir(), "runtime")
+	if got := GetRuntimeDir(); got != want {
+		t.Fatalf("GetRuntimeDir() = %q, want %q", got, want)
+	}
+}
+
 func TestGetDownloadsDir_FallbackBehavior(t *testing.T) {
 	tmp := t.TempDir()
 

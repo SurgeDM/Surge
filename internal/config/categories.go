@@ -152,10 +152,14 @@ func GetCategoryForFile(filename string, categories []Category) (*Category, erro
 
 // ResolveCategoryPath returns the Path of a category.
 func ResolveCategoryPath(cat *Category, defaultDownloadDir string) string {
-	if cat == nil || cat.Path == "" {
+	if cat == nil {
 		return defaultDownloadDir
 	}
-	return cat.Path
+	trimmed := strings.TrimSpace(cat.Path)
+	if trimmed == "" {
+		return defaultDownloadDir
+	}
+	return trimmed
 }
 
 // CategoryNames returns a slice of category names.
