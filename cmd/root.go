@@ -801,7 +801,9 @@ func initializeGlobalState() {
 	logsDir := config.GetLogsDir()
 	stateDBPath := filepath.Join(stateDir, "surge.db")
 
-	migrateLegacyStateDB(stateDBPath)
+	if err := migrateLegacyStateDB(stateDBPath); err != nil {
+		utils.Debug("State DB migration error: %v", err)
+	}
 
 	// Ensure directories exist
 	_ = os.MkdirAll(stateDir, 0o755)
@@ -824,12 +826,12 @@ func initializeGlobalState() {
 	utils.CleanupLogs(retention)
 }
 
-func migrateLegacyStateDB(stateDBPath string) {
+func migrateLegacyStateDB(stateDBPath string) error {
 	if stateDBPath == "" {
-		return
+		return nil
 	}
 	if _, err := os.Stat(stateDBPath); err == nil {
-		return
+		return nil
 	}
 
 	legacyCandidates := []string{
@@ -850,7 +852,7 @@ func migrateLegacyStateDB(stateDBPath string) {
 
 		if err := os.MkdirAll(filepath.Dir(stateDBPath), 0o755); err != nil {
 			utils.Debug("Failed to create state dir for DB migration: %v", err)
-			return
+			return err
 		}
 
 		if err := moveFileWithFallback(legacyPath, stateDBPath); err != nil {
@@ -859,12 +861,21 @@ func migrateLegacyStateDB(stateDBPath string) {
 		}
 
 		for _, suffix := range []string{"-wal", "-shm"} {
-			_ = moveFileWithFallback(legacyPath+suffix, stateDBPath+suffix)
+			srcSidecar := legacyPath + suffix
+			dstSidecar := stateDBPath + suffix
+			if err := moveFileWithFallback(srcSidecar, dstSidecar); err != nil {
+				if os.IsNotExist(err) {
+					continue
+				}
+				utils.Debug("Failed to migrate legacy DB sidecar %s from %s to %s: %v", suffix, legacyPath, stateDBPath, err)
+				return err
+			}
 		}
 
 		utils.Debug("Migrated legacy state DB from %s to %s", legacyPath, stateDBPath)
-		return
+		return nil
 	}
+	return nil
 }
 
 func moveFileWithFallback(src, dst string) error {
@@ -884,7 +895,12 @@ func moveFileWithFallback(src, dst string) error {
 		_ = srcFile.Close()
 	}()
 
-	dstFile, err := os.Create(dst)
+	srcInfo, err := srcFile.Stat()
+	if err != nil {
+		return err
+	}
+
+	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode().Perm())
 	if err != nil {
 		return err
 	}
