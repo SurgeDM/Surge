@@ -182,3 +182,23 @@ func TestWindowsPathsKeepLegacyAppData(t *testing.T) {
 		t.Fatalf("GetStateDir() = %q, want %q", got, want)
 	}
 }
+
+func TestWindowsPathsIgnoreRelativeAppData(t *testing.T) {
+	if runtime.GOOS != "windows" {
+		t.Skip("windows-specific behavior")
+	}
+
+	tmp := t.TempDir()
+	oldConfigHome := xdg.ConfigHome
+	xdg.ConfigHome = filepath.Join(tmp, "xdg-config")
+	t.Cleanup(func() {
+		xdg.ConfigHome = oldConfigHome
+	})
+
+	t.Setenv("APPDATA", "relative-appdata")
+
+	want := filepath.Join(xdg.ConfigHome, "surge")
+	if got := GetSurgeDir(); got != want {
+		t.Fatalf("GetSurgeDir() = %q, want %q", got, want)
+	}
+}

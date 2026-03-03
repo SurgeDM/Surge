@@ -26,7 +26,9 @@ func GetSurgeDir() string {
 	if runtime.GOOS == "windows" {
 		// Preserve legacy location for existing Windows installs.
 		if appData := strings.TrimSpace(os.Getenv("APPDATA")); appData != "" {
-			return filepath.Join(appData, "surge")
+			if filepath.IsAbs(appData) {
+				return filepath.Join(appData, "surge")
+			}
 		}
 	}
 	return filepath.Join(getXDGBaseDir("XDG_CONFIG_HOME", xdg.ConfigHome), "surge")

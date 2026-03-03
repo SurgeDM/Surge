@@ -16,6 +16,9 @@ type Category struct {
 }
 
 func (c *Category) Validate() error {
+	if c == nil {
+		return errors.New("category cannot be nil")
+	}
 	if strings.TrimSpace(c.Name) == "" {
 		return errors.New("category name cannot be empty")
 	}
@@ -152,12 +155,13 @@ func GetCategoryForFile(filename string, categories []Category) (*Category, erro
 
 // ResolveCategoryPath returns the Path of a category.
 func ResolveCategoryPath(cat *Category, defaultDownloadDir string) string {
+	defaultPath := strings.TrimSpace(defaultDownloadDir)
 	if cat == nil {
-		return defaultDownloadDir
+		return defaultPath
 	}
 	trimmed := strings.TrimSpace(cat.Path)
 	if trimmed == "" {
-		return defaultDownloadDir
+		return defaultPath
 	}
 	return trimmed
 }

@@ -122,9 +122,19 @@ func TestResolveCategoryPath(t *testing.T) {
 	if pathWhitespace != "/default" {
 		t.Errorf("Expected /default for whitespace category path, got %s", pathWhitespace)
 	}
+
+	pathTrimmedDefault := ResolveCategoryPath(catWhitespace, "   /default  ")
+	if pathTrimmedDefault != "/default" {
+		t.Errorf("Expected trimmed default path, got %s", pathTrimmedDefault)
+	}
 }
 
 func TestCategoryValidate_RejectsWhitespaceFields(t *testing.T) {
+	var nilCategory *Category
+	if err := nilCategory.Validate(); err == nil || err.Error() != "category cannot be nil" {
+		t.Fatalf("expected nil category validation error, got %v", err)
+	}
+
 	cat := Category{Name: "   ", Pattern: `(?i)\.txt$`, Path: "/tmp"}
 	if err := cat.Validate(); err == nil || err.Error() != "category name cannot be empty" {
 		t.Fatalf("expected name validation error, got %v", err)
