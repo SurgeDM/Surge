@@ -16,13 +16,13 @@ type Category struct {
 }
 
 func (c *Category) Validate() error {
-	if c.Name == "" {
+	if strings.TrimSpace(c.Name) == "" {
 		return errors.New("category name cannot be empty")
 	}
-	if c.Pattern == "" {
+	if strings.TrimSpace(c.Pattern) == "" {
 		return errors.New("category pattern cannot be empty")
 	}
-	if c.Path == "" {
+	if strings.TrimSpace(c.Path) == "" {
 		return errors.New("category path cannot be empty")
 	}
 	return nil
@@ -111,6 +111,9 @@ func getCompiledPattern(pattern string) *regexp.Regexp {
 
 	re, err := regexp.Compile(pattern)
 	if err != nil {
+		patternMu.Lock()
+		patternCache[pattern] = nil
+		patternMu.Unlock()
 		return nil
 	}
 
@@ -150,7 +153,7 @@ func GetCategoryForFile(filename string, categories []Category) (*Category, erro
 // ResolveCategoryPath returns the Path of a category.
 func ResolveCategoryPath(cat *Category, defaultDownloadDir string) string {
 	if cat == nil || cat.Path == "" {
-		return ""
+		return defaultDownloadDir
 	}
 	return cat.Path
 }

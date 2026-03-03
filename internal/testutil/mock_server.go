@@ -12,11 +12,8 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
-)
 
-const (
-	KB = 1 << 10
-	MB = 1 << 20
+	"github.com/surge-downloader/surge/internal/engine/types"
 )
 
 // MockServer is a configurable HTTP test server for download testing.
@@ -133,7 +130,7 @@ func WithMaxConcurrentRequests(n int) MockServerOption {
 // NewMockServer creates a new mock HTTP server with the given options.
 func NewMockServer(opts ...MockServerOption) *MockServer {
 	m := &MockServer{
-		FileSize:       MB, // 1MB default
+		FileSize:       types.MB, // 1MB default
 		SupportsRanges: true,
 		ContentType:    "application/octet-stream",
 		Filename:       "testfile.bin",
@@ -158,7 +155,7 @@ func NewMockServer(opts ...MockServerOption) *MockServer {
 func NewMockServerT(t *testing.T, opts ...MockServerOption) *MockServer {
 	t.Helper()
 	m := &MockServer{
-		FileSize:       MB,
+		FileSize:       types.MB,
 		SupportsRanges: true,
 		ContentType:    "application/octet-stream",
 		Filename:       "testfile.bin",
@@ -299,7 +296,7 @@ func (m *MockServer) handleRequest(w http.ResponseWriter, r *http.Request) {
 	bytesWritten := int64(0)
 
 	// Write in chunks to support byte latency and fail-after-bytes
-	chunkSize := int64(32 * KB) // 32KB chunks
+	chunkSize := int64(32 * types.KB) // 32KB chunks
 	for bytesWritten < length {
 		// Check if we should fail (per-request byte count, not global)
 		// This allows retry logic to work - new requests can succeed
@@ -418,7 +415,7 @@ func NewStreamingMockServer(fileSize int64, opts ...MockServerOption) *Streaming
 	}
 
 	// Only allocate a small buffer for streaming
-	m.data = make([]byte, 64*KB) // 64KB buffer
+	m.data = make([]byte, 64*types.KB) // 64KB buffer
 	if m.RandomData {
 		_, _ = rand.Read(m.data)
 	}
@@ -443,7 +440,7 @@ func NewStreamingMockServerT(t *testing.T, fileSize int64, opts ...MockServerOpt
 		opt(m)
 	}
 
-	m.data = make([]byte, 64*KB)
+	m.data = make([]byte, 64*types.KB)
 	if m.RandomData {
 		_, _ = rand.Read(m.data)
 	}
@@ -533,7 +530,7 @@ func (s *StreamingMockServer) handleStreamingRequest(w http.ResponseWriter, r *h
 		// Add byte latency
 		if s.ByteLatency > 0 {
 			select {
-			case <-time.After(s.ByteLatency * time.Duration(n) / KB): // Per KB
+			case <-time.After(s.ByteLatency * time.Duration(n) / types.KB): // Per KB
 			case <-r.Context().Done():
 				return
 			}

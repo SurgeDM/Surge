@@ -107,8 +107,31 @@ func TestResolveCategoryPath(t *testing.T) {
 
 	catNil := (*Category)(nil)
 	pathNil := ResolveCategoryPath(catNil, "/default")
-	if pathNil != "" {
-		t.Errorf("Expected empty string for nil category, got %s", pathNil)
+	if pathNil != "/default" {
+		t.Errorf("Expected /default for nil category, got %s", pathNil)
+	}
+
+	catEmpty := &Category{Path: ""}
+	pathEmpty := ResolveCategoryPath(catEmpty, "/default")
+	if pathEmpty != "/default" {
+		t.Errorf("Expected /default for empty category path, got %s", pathEmpty)
+	}
+}
+
+func TestCategoryValidate_RejectsWhitespaceFields(t *testing.T) {
+	cat := Category{Name: "   ", Pattern: `(?i)\.txt$`, Path: "/tmp"}
+	if err := cat.Validate(); err == nil || err.Error() != "category name cannot be empty" {
+		t.Fatalf("expected name validation error, got %v", err)
+	}
+
+	cat = Category{Name: "Docs", Pattern: "   ", Path: "/tmp"}
+	if err := cat.Validate(); err == nil || err.Error() != "category pattern cannot be empty" {
+		t.Fatalf("expected pattern validation error, got %v", err)
+	}
+
+	cat = Category{Name: "Docs", Pattern: `(?i)\.txt$`, Path: "   "}
+	if err := cat.Validate(); err == nil || err.Error() != "category path cannot be empty" {
+		t.Fatalf("expected path validation error, got %v", err)
 	}
 }
 

@@ -49,6 +49,26 @@ func TestGetStateDir_HonorsRuntimeXDGStateHomeOverride(t *testing.T) {
 	}
 }
 
+func TestGetSurgeDir_IgnoresRelativeRuntimeXDGConfigHomeOverride(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("non-windows behavior")
+	}
+
+	tmp := t.TempDir()
+	oldConfigHome := xdg.ConfigHome
+	xdg.ConfigHome = tmp
+	t.Cleanup(func() {
+		xdg.ConfigHome = oldConfigHome
+	})
+
+	t.Setenv("XDG_CONFIG_HOME", "relative/path")
+
+	want := filepath.Join(tmp, "surge")
+	if got := GetSurgeDir(); got != want {
+		t.Fatalf("GetSurgeDir() = %q, want %q", got, want)
+	}
+}
+
 func TestGetRuntimeDir_FallsBackToStateDirWhenXDGUnsetOnLinux(t *testing.T) {
 	if runtime.GOOS != "linux" {
 		t.Skip("linux-specific behavior")

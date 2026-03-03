@@ -11,7 +11,9 @@ import (
 
 func getXDGBaseDir(envKey, fallback string) string {
 	if dir := strings.TrimSpace(os.Getenv(envKey)); dir != "" {
-		return dir
+		if filepath.IsAbs(dir) {
+			return dir
+		}
 	}
 	return fallback
 }
