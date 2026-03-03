@@ -31,8 +31,13 @@ type ProbeResult struct {
 
 // uniqueFilePath returns a unique file path by appending (1), (2), etc. if the file exists
 func uniqueFilePath(path string) string {
+	// Canonicalize before existence checks.
+	path = filepath.Clean(path)
+
 	// Check if file exists (both final and incomplete)
+	// #nosec G304 -- destination path is intentionally user-selected output.
 	if _, err := os.Stat(path); os.IsNotExist(err) {
+		// #nosec G304 -- destination path is intentionally user-selected output.
 		if _, err := os.Stat(path + types.IncompleteSuffix); os.IsNotExist(err) {
 			return path // Neither exists, use original
 		}
