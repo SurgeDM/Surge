@@ -41,13 +41,19 @@ jobs:
           out_file="go-test-${MATRIX_OS}.jsonl"
 
           cover_arg=""
-          if go help testflag 2>/dev/null | grep -q -- '-coverprofile'; then
-            cover_arg="-coverprofile=coverage.out"
-          else
-            echo "Warning: go test -coverprofile is unavailable; running tests without coverage profile." >&2
+          if [ "$RUNNER_OS" = "Linux" ]; then
+            if go help testflag 2>/dev/null | grep -q -- '-coverprofile'; then
+              cover_arg="-coverprofile=coverage.out"
+            else
+              echo "Warning: go test -coverprofile is unavailable; running tests without coverage profile." >&2
+            fi
           fi
 
-          go test -json $cover_arg "./..." 2>&1 | tee "$out_file"
+          if [ -n "$cover_arg" ]; then
+            go test -json "$cover_arg" "./..." 2>&1 | tee "$out_file"
+          else
+            go test -json "./..." 2>&1 | tee "$out_file"
+          fi
           status=${PIPESTATUS[0]}
 
           failed_tests_file="failed_tests_${MATRIX_OS}.txt"
