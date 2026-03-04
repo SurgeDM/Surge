@@ -19,6 +19,13 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
+// safeSendProgress sends msg on ch, recovering from panics caused by sending
+// on a closed channel (which can happen during shutdown).
+func safeSendProgress(ch chan<- any, msg any) {
+	defer func() { recover() }()
+	ch <- msg
+}
+
 // ProbeResult contains all metadata from server probe
 type ProbeResult struct {
 	FileSize      int64
@@ -172,14 +179,14 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 
 	// Send download started message
 	if cfg.ProgressCh != nil {
-		cfg.ProgressCh <- events.DownloadStartedMsg{
+		safeSendProgress(cfg.ProgressCh, events.DownloadStartedMsg{
 			DownloadID: cfg.ID,
 			URL:        cfg.URL,
 			Filename:   finalFilename,
 			Total:      probe.FileSize,
 			DestPath:   destPath,
 			State:      cfg.State,
-		}
+		})
 	}
 
 	// Update shared state
@@ -266,13 +273,13 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		}
 
 		if cfg.ProgressCh != nil {
-			cfg.ProgressCh <- events.DownloadCompleteMsg{
+			safeSendProgress(cfg.ProgressCh, events.DownloadCompleteMsg{
 				DownloadID: cfg.ID,
 				Filename:   finalFilename,
 				Elapsed:    elapsed,
 				Total:      probe.FileSize,
 				AvgSpeed:   avgSpeed,
-			}
+			})
 		}
 	} else if downloadErr != nil && !isPaused {
 		// Verify it's not a cancellation error
