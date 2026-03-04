@@ -475,7 +475,9 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 	if st := s.Pool.GetStatus(id); st != nil {
 		return "", fmt.Errorf("download id already exists")
 	}
-	if entry, err := state.GetDownload(id); err == nil && entry != nil {
+	if entry, err := state.GetDownload(id); err != nil {
+		return "", fmt.Errorf("failed to query download state: %w", err)
+	} else if entry != nil {
 		return "", fmt.Errorf("download id already exists")
 	}
 

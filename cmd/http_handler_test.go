@@ -13,6 +13,7 @@ import (
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/core"
 	"github.com/surge-downloader/surge/internal/download"
+	"github.com/surge-downloader/surge/internal/engine/state"
 )
 
 func TestHandleDownload_PathResolution(t *testing.T) {
@@ -22,6 +23,11 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	// Ensure a clean state DB for the test scope.
+	state.CloseDB()
+	state.Configure(filepath.Join(tempDir, "surge.db"))
+	defer state.CloseDB()
 
 	// Mock XDG_CONFIG_HOME to affect GetSurgeDir() on Linux
 	originalConfigHome := os.Getenv("XDG_CONFIG_HOME")

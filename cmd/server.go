@@ -23,9 +23,7 @@ var serverCmd = &cobra.Command{
 	Short: "Manage the Surge background server (daemon)",
 	Long:  `Run the Surge background server in headless mode.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		mustInitializeGlobalState()
-
-		// Attempt to acquire lock
+		// Attempt to acquire lock before any global state initialization
 		isMaster, err := AcquireLock()
 		if err != nil {
 			fmt.Printf("Error acquiring lock: %v\n", err)
@@ -41,6 +39,8 @@ var serverCmd = &cobra.Command{
 				utils.Debug("Error releasing lock: %v", err)
 			}
 		}()
+
+		mustInitializeGlobalState()
 
 		msg := runStartupIntegrityCheck()
 		utils.Debug("%s", msg)
@@ -64,9 +64,7 @@ var serverStartCmd = &cobra.Command{
 	Use:   "start [url]...",
 	Short: "Start the Surge server in headless mode",
 	Run: func(cmd *cobra.Command, args []string) {
-		mustInitializeGlobalState()
-
-		// Attempt to acquire lock
+		// Attempt to acquire lock before any global state initialization
 		isMaster, err := AcquireLock()
 		if err != nil {
 			fmt.Printf("Error acquiring lock: %v\n", err)
@@ -82,6 +80,8 @@ var serverStartCmd = &cobra.Command{
 				utils.Debug("Error releasing lock: %v", err)
 			}
 		}()
+
+		mustInitializeGlobalState()
 
 		msg := runStartupIntegrityCheck()
 		utils.Debug("%s", msg)
