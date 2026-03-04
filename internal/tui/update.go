@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -253,17 +254,17 @@ func inferFilenameFromURL(rawURL string) string {
 
 	query := parsed.Query()
 	if name := strings.TrimSpace(query.Get("filename")); name != "" {
-		if base := strings.TrimSpace(filepath.Base(name)); base != "" && base != "." && base != ".." && base != "/" {
+		if base := strings.TrimSpace(path.Base(name)); base != "" && base != "." && base != ".." && base != "/" {
 			return base
 		}
 	}
 	if name := strings.TrimSpace(query.Get("file")); name != "" {
-		if base := strings.TrimSpace(filepath.Base(name)); base != "" && base != "." && base != ".." && base != "/" {
+		if base := strings.TrimSpace(path.Base(name)); base != "" && base != "." && base != ".." && base != "/" {
 			return base
 		}
 	}
 
-	base := strings.TrimSpace(filepath.Base(parsed.Path))
+	base := strings.TrimSpace(path.Base(parsed.Path))
 	if base == "" || base == "." || base == ".." || base == "/" {
 		return ""
 	}

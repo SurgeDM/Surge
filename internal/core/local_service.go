@@ -52,6 +52,7 @@ type LocalDownloadService struct {
 	listenerMu sync.Mutex
 
 	reportTicker *time.Ticker
+	reportWG     sync.WaitGroup
 
 	// Lifecycle
 	ctx    context.Context
@@ -103,7 +104,11 @@ func NewLocalDownloadServiceWithInput(pool *download.WorkerPool, inputCh chan in
 	// Start progress reporter
 	if pool != nil {
 		s.reportTicker = time.NewTicker(ReportInterval)
-		go s.reportProgressLoop()
+		s.reportWG.Add(1)
+		go func() {
+			defer s.reportWG.Done()
+			s.reportProgressLoop()
+		}()
 	}
 
 	return s
@@ -156,7 +161,17 @@ func (s *LocalDownloadService) reportProgressLoop() {
 	lastSpeeds := make(map[string]float64)
 	lastChunkSnapshot := make(map[string]time.Time)
 
-	for range s.reportTicker.C {
+	if s.reportTicker == nil {
+		return
+	}
+
+	for {
+		select {
+		case <-s.ctx.Done():
+			return
+		case <-s.reportTicker.C:
+		}
+
 		if s.Pool == nil {
 			continue
 		}
@@ -221,6 +236,8 @@ func (s *LocalDownloadService) reportProgressLoop() {
 		// Send batch to InputCh (non-blocking) if not empty
 		if len(batch) > 0 {
 			select {
+			case <-s.ctx.Done():
+				return
 			case s.InputCh <- batch:
 			default:
 			}
@@ -308,6 +325,7 @@ func (s *LocalDownloadService) Shutdown() error {
 
 		// Stop listeners and broadcaster
 		s.cancel()
+		s.reportWG.Wait()
 
 		// Close input channel to stop broadcaster
 		if s.InputCh != nil {
@@ -455,6 +473,9 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 		id = uuid.New().String()
 	}
 	if st := s.Pool.GetStatus(id); st != nil {
+		return "", fmt.Errorf("download id already exists")
+	}
+	if entry, err := state.GetDownload(id); err == nil && entry != nil {
 		return "", fmt.Errorf("download id already exists")
 	}
 
