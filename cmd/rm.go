@@ -18,7 +18,7 @@ var rmCmd = &cobra.Command{
 	Long:    `Remove a download by its ID. Use --clean to remove all completed downloads.`,
 	Args:    cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		initializeGlobalState()
+		mustInitializeGlobalState()
 
 		clean, _ := cmd.Flags().GetBool("clean")
 

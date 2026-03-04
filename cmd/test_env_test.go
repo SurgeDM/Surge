@@ -1,14 +1,18 @@
 package cmd
 
 import (
+	"sync"
 	"testing"
 
 	"github.com/adrg/xdg"
 	"github.com/surge-downloader/surge/internal/engine/state"
 )
 
+var xdgEnvMu sync.Mutex
+
 func setupXDGEnvIsolation(t *testing.T) string {
 	t.Helper()
+	xdgEnvMu.Lock()
 
 	tempDir := t.TempDir()
 
@@ -31,6 +35,7 @@ func setupXDGEnvIsolation(t *testing.T) string {
 		xdg.CacheHome = oldCacheHome
 		xdg.RuntimeDir = oldRuntimeDir
 		state.CloseDB()
+		xdgEnvMu.Unlock()
 	})
 
 	t.Setenv("APPDATA", tempDir)

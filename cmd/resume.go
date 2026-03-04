@@ -16,7 +16,7 @@ var resumeCmd = &cobra.Command{
 	Long:  `Resume a paused download by its ID. Use --all to resume all paused downloads.`,
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		initializeGlobalState()
+		mustInitializeGlobalState()
 
 		all, _ := cmd.Flags().GetBool("all")
 

@@ -16,7 +16,7 @@ var pauseCmd = &cobra.Command{
 	Long:  `Pause a download by its ID. Use --all to pause all downloads.`,
 	Args:  cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		initializeGlobalState()
+		mustInitializeGlobalState()
 
 		all, _ := cmd.Flags().GetBool("all")
 

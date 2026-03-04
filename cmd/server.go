@@ -23,7 +23,7 @@ var serverCmd = &cobra.Command{
 	Short: "Manage the Surge background server (daemon)",
 	Long:  `Run the Surge background server in headless mode.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		initializeGlobalState()
+		mustInitializeGlobalState()
 
 		// Attempt to acquire lock
 		isMaster, err := AcquireLock()
@@ -64,7 +64,7 @@ var serverStartCmd = &cobra.Command{
 	Use:   "start [url]...",
 	Short: "Start the Surge server in headless mode",
 	Run: func(cmd *cobra.Command, args []string) {
-		initializeGlobalState()
+		mustInitializeGlobalState()
 
 		// Attempt to acquire lock
 		isMaster, err := AcquireLock()

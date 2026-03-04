@@ -18,7 +18,7 @@ var refreshCmd = &cobra.Command{
 	Long:  `Update the source URL of a download by its ID. It must be paused or in an error state to be refreshed.`,
 	Args:  cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		initializeGlobalState()
+		mustInitializeGlobalState()
 
 		id := args[0]
 		newURL := args[1]

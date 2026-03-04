@@ -31,7 +31,9 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	tempDir := setupXDGEnvIsolation(t)
 
 	state.CloseDB()
-	initializeGlobalState()
+	if err := initializeGlobalState(); err != nil {
+		t.Fatalf("initializeGlobalState failed: %v", err)
+	}
 
 	GlobalProgressCh = make(chan any, 100)
 	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 2)

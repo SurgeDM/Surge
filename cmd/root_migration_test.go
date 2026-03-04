@@ -51,7 +51,9 @@ func TestInitializeGlobalState_MigratesLegacyStateDB(t *testing.T) {
 	}
 	state.CloseDB()
 
-	initializeGlobalState()
+	if err := initializeGlobalState(); err != nil {
+		t.Fatalf("initializeGlobalState failed: %v", err)
+	}
 
 	entry, err := state.GetDownload(id)
 	if err != nil {

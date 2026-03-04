@@ -103,7 +103,7 @@ var rootCmd = &cobra.Command{
 			}
 		}()
 
-		initializeGlobalState()
+		mustInitializeGlobalState()
 
 		startupIntegrityMessage = runStartupIntegrityCheck()
 
@@ -794,15 +794,22 @@ func init() {
 	rootCmd.SetVersionTemplate("Surge v{{.Version}}\n")
 }
 
+func mustInitializeGlobalState() {
+	if err := initializeGlobalState(); err != nil {
+		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
+		os.Exit(1)
+	}
+}
+
 // initializeGlobalState sets up the environment and configures the engine state and logging
-func initializeGlobalState() {
+func initializeGlobalState() error {
 
 	stateDir := config.GetStateDir()
 	logsDir := config.GetLogsDir()
 	stateDBPath := filepath.Join(stateDir, "surge.db")
 
 	if err := migrateLegacyStateDB(stateDBPath); err != nil {
-		utils.Debug("State DB migration error: %v", err)
+		return fmt.Errorf("state DB migration failed: %w", err)
 	}
 
 	// Ensure directories exist
@@ -824,6 +831,7 @@ func initializeGlobalState() {
 		retention = config.DefaultSettings().General.LogRetentionCount
 	}
 	utils.CleanupLogs(retention)
+	return nil
 }
 
 func migrateLegacyStateDB(stateDBPath string) error {

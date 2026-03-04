@@ -14,7 +14,7 @@ var addCmd = &cobra.Command{
 	Long:    `Add one or more URLs to the download queue of a running Surge instance.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// Initialize Global State (needed for config/paths)
-		initializeGlobalState()
+		mustInitializeGlobalState()
 
 		batchFile, _ := cmd.Flags().GetString("batch")
 		output, _ := cmd.Flags().GetString("output")
