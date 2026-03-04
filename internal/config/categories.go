@@ -2,6 +2,7 @@ package config
 
 import (
 	"errors"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
@@ -25,10 +26,23 @@ func (c *Category) Validate() error {
 	if strings.TrimSpace(c.Pattern) == "" {
 		return errors.New("category pattern cannot be empty")
 	}
+	if _, err := regexp.Compile(strings.TrimSpace(c.Pattern)); err != nil {
+		return err
+	}
 	if strings.TrimSpace(c.Path) == "" {
 		return errors.New("category path cannot be empty")
 	}
 	return nil
+}
+
+func existingDirOrFallback(dir, fallback string) string {
+	trimmed := strings.TrimSpace(dir)
+	if trimmed != "" {
+		if info, err := os.Stat(trimmed); err == nil && info.IsDir() {
+			return trimmed
+		}
+	}
+	return fallback
 }
 
 // DefaultCategories returns the default set of download categories.
@@ -38,25 +52,13 @@ func DefaultCategories() []Category {
 		downloadsDir = "."
 	}
 
-	videosDir := strings.TrimSpace(GetVideosDir())
-	if videosDir == "" {
-		videosDir = downloadsDir
-	}
+	videosDir := existingDirOrFallback(GetVideosDir(), downloadsDir)
 
-	musicDir := strings.TrimSpace(GetMusicDir())
-	if musicDir == "" {
-		musicDir = downloadsDir
-	}
+	musicDir := existingDirOrFallback(GetMusicDir(), downloadsDir)
 
-	documentsDir := strings.TrimSpace(GetDocumentsDir())
-	if documentsDir == "" {
-		documentsDir = downloadsDir
-	}
+	documentsDir := existingDirOrFallback(GetDocumentsDir(), downloadsDir)
 
-	picturesDir := strings.TrimSpace(GetPicturesDir())
-	if picturesDir == "" {
-		picturesDir = downloadsDir
-	}
+	picturesDir := existingDirOrFallback(GetPicturesDir(), downloadsDir)
 
 	return []Category{
 		{

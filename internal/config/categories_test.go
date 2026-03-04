@@ -2,7 +2,10 @@ package config
 
 import (
 	"encoding/json"
+	"path/filepath"
 	"testing"
+
+	"github.com/adrg/xdg"
 )
 
 func TestDefaultCategories(t *testing.T) {
@@ -148,6 +151,42 @@ func TestCategoryValidate_RejectsWhitespaceFields(t *testing.T) {
 	cat = Category{Name: "Docs", Pattern: `(?i)\.txt$`, Path: "   "}
 	if err := cat.Validate(); err == nil || err.Error() != "category path cannot be empty" {
 		t.Fatalf("expected path validation error, got %v", err)
+	}
+
+	cat = Category{Name: "Docs", Pattern: "[", Path: "/tmp"}
+	if err := cat.Validate(); err == nil {
+		t.Fatal("expected invalid regex validation error, got nil")
+	}
+}
+
+func TestDefaultCategories_FallbackWhenUserDirsMissing(t *testing.T) {
+	tmp := t.TempDir()
+	oldVideos := xdg.UserDirs.Videos
+	oldMusic := xdg.UserDirs.Music
+	oldDocuments := xdg.UserDirs.Documents
+	oldPictures := xdg.UserDirs.Pictures
+	xdg.UserDirs.Videos = filepath.Join(tmp, "missing-videos")
+	xdg.UserDirs.Music = filepath.Join(tmp, "missing-music")
+	xdg.UserDirs.Documents = filepath.Join(tmp, "missing-documents")
+	xdg.UserDirs.Pictures = filepath.Join(tmp, "missing-pictures")
+	t.Cleanup(func() {
+		xdg.UserDirs.Videos = oldVideos
+		xdg.UserDirs.Music = oldMusic
+		xdg.UserDirs.Documents = oldDocuments
+		xdg.UserDirs.Pictures = oldPictures
+	})
+
+	cats := DefaultCategories()
+	pathByName := make(map[string]string, len(cats))
+	for _, cat := range cats {
+		pathByName[cat.Name] = cat.Path
+	}
+
+	downloadsPath := pathByName["Compressed"]
+	for _, name := range []string{"Videos", "Music", "Documents", "Images"} {
+		if got := pathByName[name]; got != downloadsPath {
+			t.Fatalf("%s path = %q, want fallback %q", name, got, downloadsPath)
+		}
 	}
 }
 
