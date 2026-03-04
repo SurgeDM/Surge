@@ -25,6 +25,7 @@ type activeDownload struct {
 type WorkerPool struct {
 	taskChan     chan types.DownloadConfig
 	progressCh   chan<- any
+	progressDone chan struct{} // closed when progressCh must no longer be sent to
 	downloads    map[string]*activeDownload      // Track active downloads for pause/resume
 	queued       map[string]types.DownloadConfig // Track queued downloads
 	mu           sync.RWMutex
@@ -54,6 +55,7 @@ func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
 	pool := &WorkerPool{
 		taskChan:     make(chan types.DownloadConfig, 100), // We make it buffered to avoid blocking add
 		progressCh:   progressCh,
+		progressDone: make(chan struct{}),
 		downloads:    make(map[string]*activeDownload),
 		queued:       make(map[string]types.DownloadConfig),
 		maxDownloads: maxDownloads,
@@ -79,12 +81,12 @@ func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 			destPath = cfg.OutputPath
 		}
 
-		p.progressCh <- events.DownloadQueuedMsg{
+		p.trySendProgress(events.DownloadQueuedMsg{
 			DownloadID: cfg.ID,
 			Filename:   cfg.Filename,
 			URL:        cfg.URL,
 			DestPath:   destPath,
-		}
+		})
 	}
 
 	p.taskChan <- cfg
@@ -197,11 +199,11 @@ func (p *WorkerPool) Pause(downloadID string) bool {
 		if ad.config.State != nil {
 			downloaded = ad.config.State.VerifiedProgress.Load()
 		}
-		p.progressCh <- events.DownloadPausedMsg{
+		p.trySendProgress(events.DownloadPausedMsg{
 			DownloadID: downloadID,
 			Filename:   ad.config.Filename,
 			Downloaded: downloaded,
-		}
+		})
 	}
 	return true
 }
@@ -266,10 +268,10 @@ func (p *WorkerPool) Cancel(downloadID string) {
 
 	// Send removal message
 	if p.progressCh != nil {
-		p.progressCh <- events.DownloadRemovedMsg{
+		p.trySendProgress(events.DownloadRemovedMsg{
 			DownloadID: downloadID,
 			Filename:   removedFilename,
-		}
+		})
 	}
 }
 
@@ -316,10 +318,10 @@ func (p *WorkerPool) Resume(downloadID string) bool {
 
 	// Send resume message
 	if p.progressCh != nil {
-		p.progressCh <- events.DownloadResumedMsg{
+		p.trySendProgress(events.DownloadResumedMsg{
 			DownloadID: downloadID,
 			Filename:   ad.config.Filename,
-		}
+		})
 	}
 	return true
 }
@@ -406,11 +408,11 @@ func (p *WorkerPool) worker() {
 				cfg.State.SetError(err)
 			}
 			if p.progressCh != nil {
-				p.progressCh <- events.DownloadErrorMsg{
+				p.trySendProgress(events.DownloadErrorMsg{
 					DownloadID: cfg.ID,
 					Filename:   cfg.Filename,
 					Err:        err,
-				}
+				})
 			}
 			// Clean up errored download from tracking (don't save to .surge)
 			p.mu.Lock()
@@ -519,6 +521,21 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 	return status
 }
 
+// trySendProgress sends msg on progressCh unless progressDone has been closed,
+// preventing a panic from sending on a closed channel after shutdown.
+func (p *WorkerPool) trySendProgress(msg any) {
+	select {
+	case <-p.progressDone:
+		return
+	default:
+	}
+	select {
+	case <-p.progressDone:
+		return
+	case p.progressCh <- msg:
+	}
+}
+
 // GracefulShutdown pauses all downloads and waits for them to save state
 func (p *WorkerPool) GracefulShutdown() {
 	// Persist queued downloads first so they don't disappear on process shutdown.
@@ -567,6 +584,11 @@ func (p *WorkerPool) GracefulShutdown() {
 	}
 
 	p.wg.Wait() // Blocks until all workers call Done()
+
+	// Signal that progressCh must no longer be sent to, then close taskChan
+	// so worker goroutines exit their range loop.
+	close(p.progressDone)
+	close(p.taskChan)
 }
 
 func (p *WorkerPool) persistQueuedForShutdown() {
