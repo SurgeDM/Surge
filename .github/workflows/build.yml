@@ -189,7 +189,7 @@ jobs:
               .filter(([, data]) => data.exitCode !== 0)
               .sort(([a], [b]) => a.localeCompare(b));
 
-            if (failing.length === 0 && process.env.NEEDS_TEST_RESULT && process.env.NEEDS_TEST_RESULT !== 'success' && byOS.size === 0) {
+            if (failing.length === 0 && process.env.NEEDS_TEST_RESULT && process.env.NEEDS_TEST_RESULT !== 'success') {
               core.setFailed('Tests did not succeed but no test failure artifacts were found; cannot post failure comment.');
               return;
             }
