@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: write
+  checks: write
 
 jobs:
   test:
@@ -30,261 +31,31 @@ jobs:
         with:
           go-version: "1.24.4"
           check-latest: false
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
       - name: Build
         shell: bash
         run: go build -v ./...
       - name: Test
         shell: bash
-        env:
-          MATRIX_OS: ${{ matrix.os }}
         run: |
-          set +e
-          out_file="go-test-${MATRIX_OS}.jsonl"
-
           cover_arg=""
           if [ "$RUNNER_OS" = "Linux" ]; then
-            if go help testflag 2>/dev/null | grep -q -- '-coverprofile'; then
-              cover_arg="-coverprofile=coverage.out"
-            else
-              echo "Warning: go test -coverprofile is unavailable; running tests without coverage profile." >&2
-            fi
+            cover_arg="-- -coverprofile=coverage.out"
           fi
-
-          if [ -n "$cover_arg" ]; then
-            go test -json "$cover_arg" "./..." 2>&1 | tee "$out_file"
-          else
-            go test -json "./..." 2>&1 | tee "$out_file"
-          fi
-          status=${PIPESTATUS[0]}
-
-          failed_tests_file="failed_tests_${MATRIX_OS}.txt"
-          failed_packages_file="failed_packages_${MATRIX_OS}.txt"
-          exit_code_file="test_exit_code_${MATRIX_OS}.txt"
-          summary_file="test_summary_${MATRIX_OS}.txt"
-          test_results_file="test_results_${MATRIX_OS}.tsv"
-
-          awk '
-            /"Test":"/ && /"Action":"(pass|fail)"/ {
-              action = ""
-              test = ""
-              if (match($0, /"Action":"[^"]+"/)) {
-                action = substr($0, RSTART + 10, RLENGTH - 11)
-              }
-              if (match($0, /"Test":"[^"]+"/)) {
-                test = substr($0, RSTART + 8, RLENGTH - 9)
-              }
-              if ((action == "pass" || action == "fail") && test != "") {
-                status[test] = action
-              }
-            }
-            END {
-              for (t in status) {
-                print t "\t" status[t]
-              }
-            }
-          ' "$out_file" > "$test_results_file"
-
-          awk -F '\t' '$2 == "fail" { print $1 }' "$test_results_file" | sort -u > "$failed_tests_file"
-
-          awk '
-            /"Action":"fail"/ && !/"Test":/ {
-              if (match($0, /"Package":"[^"]+"/)) {
-                print substr($0, RSTART + 11, RLENGTH - 12)
-              }
-            }
-          ' "$out_file" | sort -u > "$failed_packages_file"
-          total_tests=$(wc -l < "$test_results_file" | tr -d ' ')
-          passed_tests=$(awk -F '\t' '$2 == "pass" { c++ } END { print c + 0 }' "$test_results_file")
-          failed_tests=$(awk -F '\t' '$2 == "fail" { c++ } END { print c + 0 }' "$test_results_file")
-
-          {
-            printf 'total=%s\n' "$total_tests"
-            printf 'passed=%s\n' "$passed_tests"
-            printf 'failed=%s\n' "$failed_tests"
-          } > "$summary_file"
-
-          printf '%s\n' "$status" > "$exit_code_file"
-
-          exit "$status"
-      - name: Upload test failure data
-        if: always() && github.event_name == 'pull_request'
-        uses: actions/upload-artifact@v4
+          gotestsum --junitfile test-results.xml --format testdox $cover_arg ./...
+      - name: Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
         with:
-          name: test-failure-data-${{ matrix.os }}
-          path: |
-            failed_tests_${{ matrix.os }}.txt
-            failed_packages_${{ matrix.os }}.txt
-            test_exit_code_${{ matrix.os }}.txt
-            test_summary_${{ matrix.os }}.txt
-          if-no-files-found: ignore
+          name: Test Results (${{ matrix.os }})
+          path: test-results.xml
+          reporter: java-junit
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         if: matrix.os == 'ubuntu-latest' && success() && hashFiles('coverage.out') != ''
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-
-  comment-failed-tests:
-    name: Comment Failed Tests
-    needs: test
-    if: always() && github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      issues: write
-      pull-requests: write
-    steps:
-      - name: Download failure artifacts
-        continue-on-error: true
-        uses: actions/download-artifact@v4
-        with:
-          path: test-failure-data
-          pattern: test-failure-data-*
-          merge-multiple: true
-      - name: Upsert PR comment with failed tests
-        uses: actions/github-script@v7
-        env:
-          NEEDS_TEST_RESULT: ${{ needs.test.result }}
-        with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-
-            const marker = '<!-- surge-test-failures -->';
-            const artifactDir = 'test-failure-data';
-
-            function readLines(filePath) {
-              if (!fs.existsSync(filePath)) return [];
-              return fs.readFileSync(filePath, 'utf8')
-                .split(/\r?\n/)
-                .map((s) => s.trim())
-                .filter(Boolean);
-            }
-
-            function escapeBackticks(s) {
-              return s.replace(/`/g, '\\`');
-            }
-
-            function readSummary(filePath) {
-              const out = { total: 0, passed: 0, failed: 0 };
-              for (const line of readLines(filePath)) {
-                const [k, v] = line.split('=');
-                const n = Number.parseInt(v || '0', 10);
-                if (k && Number.isFinite(n)) out[k] = n;
-              }
-              return out;
-            }
-
-            const byOS = new Map();
-            if (fs.existsSync(artifactDir)) {
-              for (const name of fs.readdirSync(artifactDir)) {
-                const m = name.match(/^test_exit_code_(.+)\.txt$/);
-                if (!m) continue;
-                const osName = m[1];
-                const exitCodeLines = readLines(path.join(artifactDir, `test_exit_code_${osName}.txt`));
-                const exitCode = Number.parseInt(exitCodeLines[0] || '0', 10);
-                const failedTests = readLines(path.join(artifactDir, `failed_tests_${osName}.txt`));
-                const failedPackages = readLines(path.join(artifactDir, `failed_packages_${osName}.txt`));
-                const summary = readSummary(path.join(artifactDir, `test_summary_${osName}.txt`));
-                byOS.set(osName, { exitCode, failedTests, failedPackages, summary });
-              }
-            }
-            core.info(`Parsed failure artifacts for OS entries: ${[...byOS.keys()].join(', ') || '(none)'}`);
-            core.info(`needs.test.result=${process.env.NEEDS_TEST_RESULT || '(unset)'}`);
-
-            const failing = [...byOS.entries()]
-              .filter(([, data]) => data.exitCode !== 0)
-              .sort(([a], [b]) => a.localeCompare(b));
-
-            if (failing.length === 0 && process.env.NEEDS_TEST_RESULT && process.env.NEEDS_TEST_RESULT !== 'success') {
-              core.setFailed('Tests did not succeed but no test failure artifacts were found; cannot post failure comment.');
-              return;
-            }
-
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const sections = failing.map(([osName, data]) => {
-              const lines = [`### \`${osName}\``];
-              lines.push(`Summary: ${data.summary.passed}/${data.summary.total} tests passed, ${data.summary.failed}/${data.summary.total} tests failed`);
-              lines.push('');
-              if (data.failedTests.length > 0) {
-                lines.push('Failed tests:');
-                for (const testName of data.failedTests) {
-                  lines.push(`- \`${escapeBackticks(testName)}\``);
-                }
-              } else if (data.failedPackages.length > 0) {
-                lines.push('Go reported package/setup failure:');
-                for (const pkg of data.failedPackages.slice(0, 20)) {
-                  lines.push(`- \`${escapeBackticks(pkg)}\``);
-                }
-              } else {
-                lines.push('- `go test` failed before emitting a test-level failure line.');
-              }
-              return lines.join('\n');
-            });
-
-            const summaryBody = [
-              '## Go Test Failures',
-              `Run: [${context.runId}](${runUrl})`,
-              '',
-              ...sections,
-            ].join('\n');
-            const body = [marker, summaryBody].join('\n');
-
-            if (!context.payload.pull_request) {
-              core.warning('No pull_request payload; cannot upsert test-failure comment.');
-              if (failing.length > 0) {
-                await core.summary.addRaw(summaryBody).write();
-              }
-              return;
-            }
-
-            try {
-              const issueNumber = context.payload.pull_request.number;
-              const comments = await github.paginate(github.rest.issues.listComments, {
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: issueNumber,
-                per_page: 100,
-              });
-              const existing = comments.find((c) => c.user?.type === 'Bot' && c.body?.includes(marker));
-
-              const testsSucceeded = (process.env.NEEDS_TEST_RESULT || '') === 'success';
-
-              if (failing.length === 0 && testsSucceeded) {
-                if (existing) {
-                  try {
-                    await github.rest.issues.deleteComment({
-                      owner: context.repo.owner,
-                      repo: context.repo.repo,
-                      comment_id: existing.id,
-                    });
-                  } catch (err) {
-                    core.warning(`Failed deleting stale failure comment: ${err.message}`);
-                  }
-                }
-                return;
-              }
-
-              if (existing) {
-                await github.rest.issues.updateComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  comment_id: existing.id,
-                  body,
-                });
-              } else {
-                await github.rest.issues.createComment({
-                  owner: context.repo.owner,
-                  repo: context.repo.repo,
-                  issue_number: issueNumber,
-                  body,
-                });
-              }
-            } catch (err) {
-              core.warning(`Failed to upsert PR failure comment: ${err.message}`);
-              if (failing.length > 0) {
-                await core.summary.addRaw(summaryBody).write();
-              }
-            }
 
   release:
     name: Release
