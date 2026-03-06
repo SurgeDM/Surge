@@ -35,7 +35,7 @@ func CreateTestFile(dir, name string, size int64, random bool) (string, error) {
 
 	if random {
 		// Write in chunks for large files
-			chunkSize := int64(64 * types.KB) // 64KB
+		chunkSize := int64(64 * types.KB) // 64KB
 		chunk := make([]byte, chunkSize)
 		remaining := size
 
