@@ -86,7 +86,13 @@ jobs:
 
           awk -F '\t' '$2 == "fail" { print $1 }' "$test_results_file" | sort -u > "$failed_tests_file"
 
-          grep -E '^FAIL[[:space:]]' "$out_file" | sed 's/\r$//' > "$failed_packages_file" || true
+          awk '
+            /"Action":"fail"/ && !/"Test":/ {
+              if (match($0, /"Package":"[^"]+"/)) {
+                print substr($0, RSTART + 11, RLENGTH - 12)
+              }
+            }
+          ' "$out_file" | sort -u > "$failed_packages_file"
           total_tests=$(wc -l < "$test_results_file" | tr -d ' ')
           passed_tests=$(awk -F '\t' '$2 == "pass" { c++ } END { print c + 0 }' "$test_results_file")
           failed_tests=$(awk -F '\t' '$2 == "fail" { c++ } END { print c + 0 }' "$test_results_file")
