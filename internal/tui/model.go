@@ -150,6 +150,7 @@ type RootModel struct {
 	catMgrEditField int                // 0=Name, 1=Description, 2=Pattern, 3=Path
 	catMgrInputs    [4]textinput.Model // Inputs for Name, Description, Pattern, Path
 	catMgrIsNew     bool               // Whether adding a new category
+	catMgrFileBrowsing bool            // Whether browsing for a category path
 
 	// Keybindings
 	keys KeyMap

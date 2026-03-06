@@ -1074,6 +1074,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state = ExtensionConfirmationState
 					return m, nil
 				}
+				if m.catMgrFileBrowsing {
+					m.catMgrFileBrowsing = false
+					m.state = CategoryManagerState
+					return m, nil
+				}
 				m.state = InputState
 				return m, nil
 			}
@@ -1103,6 +1108,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.state = ExtensionConfirmationState
 					return m, nil
 				}
+				if m.catMgrFileBrowsing {
+					m.catMgrInputs[3].SetValue(m.filepicker.CurrentDirectory)
+					m.catMgrFileBrowsing = false
+					m.state = CategoryManagerState
+					return m, nil
+				}
 				m.inputs[2].SetValue(m.filepicker.CurrentDirectory)
 				m.state = InputState
 				return m, nil
@@ -1124,6 +1135,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.inputs[2].SetValue(path)
 					m.ExtensionFileBrowsing = false
 					m.state = ExtensionConfirmationState
+					return m, nil
+				}
+				if m.catMgrFileBrowsing {
+					m.catMgrInputs[3].SetValue(path)
+					m.catMgrFileBrowsing = false
+					m.state = CategoryManagerState
 					return m, nil
 				}
 				// Set the path input value and return to input state
@@ -1607,6 +1624,20 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				if key.Matches(msg, m.keys.CategoryMgr.Tab) {
+					// On Path field, open file picker for directory browsing
+					if m.catMgrEditField == 3 {
+						browseDir := strings.TrimSpace(m.catMgrInputs[3].Value())
+						if browseDir == "" {
+							browseDir = m.Settings.General.DefaultDownloadDir
+						}
+						if browseDir == "" {
+							browseDir = m.PWD
+						}
+						m.catMgrFileBrowsing = true
+						m.state = FilePickerState
+						m.filepicker = newFilepicker(browseDir)
+						return m, m.filepicker.Init()
+					}
 					// Cycle fields
 					m.catMgrInputs[m.catMgrEditField].Blur()
 					m.catMgrEditField = (m.catMgrEditField + 1) % 4
