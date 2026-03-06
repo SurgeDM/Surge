@@ -45,7 +45,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.24.4+auto"
+          go-version: "1.25.0+auto"
           cache-dependency-path: current/go.sum
 
       - name: Update APT
