@@ -11,12 +11,15 @@ import (
 	"github.com/surge-downloader/surge/internal/download"
 )
 
-func newCategoryTestModel(settings *config.Settings) RootModel {
+func newCategoryTestModel(t *testing.T, settings *config.Settings) RootModel {
+	t.Helper()
 	ch := make(chan any, 16)
 	pool := download.NewWorkerPool(ch, 1)
+	svc := core.NewLocalDownloadServiceWithInput(pool, ch)
+	t.Cleanup(func() { _ = svc.Shutdown() })
 	return RootModel{
 		Settings: settings,
-		Service:  core.NewLocalDownloadServiceWithInput(pool, ch),
+		Service:  svc,
 		list:     NewDownloadList(80, 20),
 		keys:     Keys,
 		inputs:   []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
@@ -34,7 +37,7 @@ func TestStartDownload_RoutesDefaultPathWithURLDerivedFilename(t *testing.T) {
 		{Name: "Images", Pattern: `(?i)\.(jpg|jpeg|png)$`, Path: imageDir},
 	}
 
-	m := newCategoryTestModel(settings)
+	m := newCategoryTestModel(t, settings)
 	m, _ = m.startDownload("https://example.com/screenshot.jpg", nil, nil, rootDir, true, "", "")
 
 	if len(m.downloads) != 1 {
@@ -57,7 +60,7 @@ func TestUpdate_InputSubmit_BlankPathUsesDefaultPathRouting(t *testing.T) {
 		{Name: "Music", Pattern: `(?i)\.(mp3|flac)$`, Path: musicDir},
 	}
 
-	m := newCategoryTestModel(settings)
+	m := newCategoryTestModel(t, settings)
 	m.state = InputState
 	m.focusedInput = 3
 	m.inputs[0].SetValue("https://example.com/song.mp3")
@@ -86,7 +89,7 @@ func TestUpdate_DuplicateContinuePreservesDefaultPathRouting(t *testing.T) {
 		{Name: "Videos", Pattern: `(?i)\.mp4$`, Path: videoDir},
 	}
 
-	m := newCategoryTestModel(settings)
+	m := newCategoryTestModel(t, settings)
 	m.state = DuplicateWarningState
 	m.pendingURL = "https://example.com/movie.mp4"
 	m.pendingPath = rootDir
@@ -116,7 +119,7 @@ func TestUpdate_ExtensionConfirmBlankPathUsesDefaultPathRouting(t *testing.T) {
 		{Name: "Documents", Pattern: `(?i)\.pdf$`, Path: docDir},
 	}
 
-	m := newCategoryTestModel(settings)
+	m := newCategoryTestModel(t, settings)
 	m.state = ExtensionConfirmationState
 	m.pendingURL = "https://example.com/report.pdf"
 	m.inputs[2].SetValue("")

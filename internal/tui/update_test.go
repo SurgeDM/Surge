@@ -431,10 +431,12 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	// Setup initial model
 	ch := make(chan any, 100)
 	pool := download.NewWorkerPool(ch, 1)
+	svc := core.NewLocalDownloadServiceWithInput(pool, ch)
+	t.Cleanup(func() { _ = svc.Shutdown() })
 
 	m := RootModel{
 		Settings:    config.DefaultSettings(),
-		Service:     core.NewLocalDownloadServiceWithInput(pool, ch),
+		Service:     svc,
 		logViewport: viewport.New(40, 5),
 		list:        NewDownloadList(40, 10),
 		inputs:      []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},

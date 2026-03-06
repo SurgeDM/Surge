@@ -211,3 +211,83 @@ func TestCategoryJSON_RoundTrip(t *testing.T) {
 		t.Errorf("Pattern did not survive round trip: %s != %s", c.Pattern, c2.Pattern)
 	}
 }
+
+func TestCategoryNames(t *testing.T) {
+	// Nil input
+	if names := CategoryNames(nil); len(names) != 0 {
+		t.Errorf("Expected empty names for nil input, got %v", names)
+	}
+
+	// Empty input
+	if names := CategoryNames([]Category{}); len(names) != 0 {
+		t.Errorf("Expected empty names for empty input, got %v", names)
+	}
+
+	// Normal input
+	cats := []Category{
+		{Name: "A", Pattern: `\.a$`, Path: "/a"},
+		{Name: "B", Pattern: `\.b$`, Path: "/b"},
+	}
+	names := CategoryNames(cats)
+	if len(names) != 2 || names[0] != "A" || names[1] != "B" {
+		t.Errorf("Expected [A B], got %v", names)
+	}
+}
+
+func TestGetCategoryForFile_EmptyInputs(t *testing.T) {
+	cats := []Category{
+		{Name: "Doc", Pattern: `\.pdf$`, Path: "/doc"},
+	}
+
+	// Empty filename with non-empty categories
+	cat, err := GetCategoryForFile("", cats)
+	if err != nil || cat != nil {
+		t.Errorf("Expected nil, nil for empty filename; got cat=%v, err=%v", cat, err)
+	}
+
+	// Non-empty filename with nil categories
+	cat, err = GetCategoryForFile("test.pdf", nil)
+	if err != nil || cat != nil {
+		t.Errorf("Expected nil, nil for nil categories; got cat=%v, err=%v", cat, err)
+	}
+
+	// Non-empty filename with empty categories
+	cat, err = GetCategoryForFile("test.pdf", []Category{})
+	if err != nil || cat != nil {
+		t.Errorf("Expected nil, nil for empty categories; got cat=%v, err=%v", cat, err)
+	}
+}
+
+func TestGetCompiledPattern_Concurrent(t *testing.T) {
+	// Stress-test the pattern cache with concurrent access
+	patterns := []string{
+		`(?i)\.mp4$`, `(?i)\.pdf$`, `(?i)\.zip$`,
+		`(?i)\.jpg$`, `(?i)\.mp3$`, `[`, // invalid
+	}
+
+	done := make(chan struct{})
+	for i := 0; i < 20; i++ {
+		go func() {
+			for j := 0; j < 100; j++ {
+				for _, p := range patterns {
+					_ = getCompiledPattern(p)
+				}
+			}
+			done <- struct{}{}
+		}()
+	}
+
+	for i := 0; i < 20; i++ {
+		<-done
+	}
+
+	// Verify invalid pattern returns nil
+	if re := getCompiledPattern("["); re != nil {
+		t.Error("Expected nil for invalid pattern")
+	}
+
+	// Verify valid pattern returns non-nil
+	if re := getCompiledPattern(`(?i)\.mp4$`); re == nil {
+		t.Error("Expected non-nil for valid pattern")
+	}
+}
