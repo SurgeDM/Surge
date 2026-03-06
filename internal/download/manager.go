@@ -22,7 +22,7 @@ import (
 // safeSendProgress sends msg on ch, recovering from panics caused by sending
 // on a closed channel (which can happen during shutdown).
 func safeSendProgress(ch chan<- any, msg any) {
-	defer func() { recover() }()
+	defer func() { _ = recover() }()
 	ch <- msg
 }
 

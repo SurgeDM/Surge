@@ -228,6 +228,7 @@ func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, toke
 	if found == nil {
 		fmt.Fprintf(os.Stderr, "Error: download not found: %s\n", partialID)
 		os.Exit(1)
+		return
 	}
 
 	var progress float64
