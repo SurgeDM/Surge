@@ -1035,6 +1035,4 @@ func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
 // Accepts pre-styled title strings
 // Example: ╭─ 🔍 Search... ─────────── Downloads ─╮
 // Delegates to components.RenderBtopBox for the actual rendering
-func renderBtopBox(leftTitle, rightTitle string, content string, width, height int, borderColor lipgloss.TerminalColor) string {
-	return components.RenderBtopBox(leftTitle, rightTitle, content, width, height, borderColor)
-}
+var renderBtopBox = components.RenderBtopBox
