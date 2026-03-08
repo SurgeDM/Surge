@@ -424,6 +424,16 @@ type resumeResultMsg struct {
 	err error
 }
 
+// FindDownloadByID finds a download by its ID
+func (m *RootModel) FindDownloadByID(id string) *DownloadModel {
+	for _, d := range m.downloads {
+		if d.ID == id {
+			return d
+		}
+	}
+	return nil
+}
+
 // Helper to get downloads for the current tab
 func (m RootModel) getFilteredDownloads() []*DownloadModel {
 	var filtered []*DownloadModel
@@ -455,7 +465,7 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 
 		// Apply search filter if query is set
 		if m.searchQuery != "" {
-			if !strings.Contains(strings.ToLower(d.FilenameLower), searchLower) {
+			if !strings.Contains(d.FilenameLower, searchLower) {
 				continue
 			}
 		}

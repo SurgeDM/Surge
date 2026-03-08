@@ -353,13 +353,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Auto-resume failed for %s: %v", msg.id, msg.err)))
 			return m, nil
 		}
-		for _, d := range m.downloads {
-			if d.ID == msg.id {
-				d.paused = false
-				d.pausing = false
-				d.resuming = true
-				break
-			}
+		if d := m.FindDownloadByID(msg.id); d != nil {
+			d.paused = false
+			d.pausing = false
+			d.resuming = true
 		}
 		return m, nil
 
@@ -409,29 +406,26 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case events.DownloadStartedMsg:
 		found := false
-		for _, d := range m.downloads {
-			if d.ID == msg.DownloadID {
-				d.Filename = msg.Filename
-				d.FilenameLower = strings.ToLower(msg.Filename)
-				d.Total = msg.Total
-				d.Destination = msg.DestPath
-				d.StartTime = time.Now()
-				d.paused = false
-				d.pausing = false
-				// Keep resuming=true for resumed downloads until real transfer starts.
-				// Update progress bar
-				if d.Total > 0 {
-					d.progress.SetPercent(0)
-				}
-				if d.state == nil && msg.State != nil {
-					d.state = msg.State
-				}
-				if d.state != nil {
-					d.state.SetTotalSize(msg.Total) // Keep state updated for verification if needed
-				}
-				found = true
-				break
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.Filename = msg.Filename
+			d.FilenameLower = strings.ToLower(msg.Filename)
+			d.Total = msg.Total
+			d.Destination = msg.DestPath
+			d.StartTime = time.Now()
+			d.paused = false
+			d.pausing = false
+			// Keep resuming=true for resumed downloads until real transfer starts.
+			// Update progress bar
+			if d.Total > 0 {
+				d.progress.SetPercent(0)
 			}
+			if d.state == nil && msg.State != nil {
+				d.state = msg.State
+			}
+			if d.state != nil {
+				d.state.SetTotalSize(msg.Total) // Keep state updated for verification if needed
+			}
+			found = true
 		}
 
 		if !found {
@@ -459,11 +453,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case events.DownloadCompleteMsg:
-		for _, d := range m.downloads {
-			if d.ID == msg.DownloadID {
-				if d.done {
-					break
-				}
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			if !d.done {
 				d.Total = msg.Total
 				d.Downloaded = d.Total
 				d.Elapsed = msg.Elapsed
@@ -478,7 +469,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					speed = float64(d.Total) / msg.Elapsed.Seconds()
 				}
 				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("✔ Done: %s (%.2f MB/s)", d.Filename, speed/float64(config.MB))))
-				break
 			}
 		}
 		m.UpdateListItems()
@@ -486,14 +476,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case events.DownloadErrorMsg:
 		found := false
-		for _, d := range m.downloads {
-			if d.ID == msg.DownloadID {
-				d.err = msg.Err
-				d.done = true
-				m.addLogEntry(LogStyleError.Render("✖ Error: " + d.Filename))
-				found = true
-				break
-			}
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.err = msg.Err
+			d.done = true
+			m.addLogEntry(LogStyleError.Render("✖ Error: " + d.Filename))
+			found = true
 		}
 		if !found {
 			newDownload := NewDownloadModel(msg.DownloadID, "", msg.Filename, 0)
@@ -506,29 +493,23 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, tea.Batch(cmds...)
 
 	case events.DownloadPausedMsg:
-		for _, d := range m.downloads {
-			if d.ID == msg.DownloadID {
-				d.paused = true
-				d.pausing = false
-				d.resuming = false
-				d.Downloaded = msg.Downloaded
-				d.Speed = 0
-				m.addLogEntry(LogStylePaused.Render("⏸ Paused: " + d.Filename))
-				break
-			}
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.paused = true
+			d.pausing = false
+			d.resuming = false
+			d.Downloaded = msg.Downloaded
+			d.Speed = 0
+			m.addLogEntry(LogStylePaused.Render("⏸ Paused: " + d.Filename))
 		}
 		m.UpdateListItems()
 		return m, tea.Batch(cmds...)
 
 	case events.DownloadResumedMsg:
-		for _, d := range m.downloads {
-			if d.ID == msg.DownloadID {
-				d.paused = false
-				d.pausing = false
-				d.resuming = true
-				m.addLogEntry(LogStyleStarted.Render("▶ Resumed: " + d.Filename))
-				break
-			}
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.paused = false
+			d.pausing = false
+			d.resuming = true
+			m.addLogEntry(LogStyleStarted.Render("▶ Resumed: " + d.Filename))
 		}
 		m.UpdateListItems()
 		return m, tea.Batch(cmds...)
@@ -536,11 +517,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case events.DownloadQueuedMsg:
 		// We optimistically added it, but if it came from elsewhere, handle it
 		found := false
-		for _, d := range m.downloads {
-			if d.ID == msg.DownloadID {
-				found = true
-				break
-			}
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			found = true
 		}
 		if !found {
 			// Add placeholder
