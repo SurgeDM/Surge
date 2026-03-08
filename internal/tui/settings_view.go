@@ -447,54 +447,50 @@ func (m *RootModel) setPerformanceSetting(key, value, typ string) error {
 
 // getCurrentSettingKey returns the key of the currently selected setting
 func (m RootModel) getCurrentSettingKey() string {
-	categories := config.CategoryOrder()
-	if len(categories) == 0 {
-		return ""
-	}
-	if m.SettingsActiveTab < 0 || m.SettingsActiveTab >= len(categories) {
-		return ""
-	}
-	metadata := config.GetSettingsMetadata()
-	currentCategory := categories[m.SettingsActiveTab]
-	settingsMeta := metadata[currentCategory]
-
-	if m.SettingsSelectedRow < len(settingsMeta) {
-		return settingsMeta[m.SettingsSelectedRow].Key
+	meta := m.getCurrentSettingMeta()
+	if meta != nil {
+		return meta.Key
 	}
 	return ""
 }
 
+// getCurrentSettingMeta returns the metadata for the currently selected setting
+func (m RootModel) getCurrentSettingMeta() *config.SettingMeta {
+	categories := config.CategoryOrder()
+	if m.SettingsActiveTab < 0 || m.SettingsActiveTab >= len(categories) {
+		return nil
+	}
+
+	activeCategory := categories[m.SettingsActiveTab]
+	settingsMap := config.GetSettingsMetadata()
+	settingsList, ok := settingsMap[activeCategory]
+	if !ok || m.SettingsSelectedRow < 0 || m.SettingsSelectedRow >= len(settingsList) {
+		return nil
+	}
+	return &settingsList[m.SettingsSelectedRow]
+}
+
 // getCurrentSettingType returns the type of the currently selected setting
 func (m RootModel) getCurrentSettingType() string {
-	categories := config.CategoryOrder()
-	if len(categories) == 0 {
-		return ""
+	meta := m.getCurrentSettingMeta()
+	if meta != nil {
+		return meta.Type
 	}
-	if m.SettingsActiveTab < 0 || m.SettingsActiveTab >= len(categories) {
-		return ""
-	}
-	metadata := config.GetSettingsMetadata()
-	currentCategory := categories[m.SettingsActiveTab]
-	settingsMeta := metadata[currentCategory]
-
-	if m.SettingsSelectedRow < len(settingsMeta) {
-		return settingsMeta[m.SettingsSelectedRow].Type
-	}
-	return ""
+	return "string"
 }
 
 // getSettingsCount returns the number of settings in the current category
 func (m RootModel) getSettingsCount() int {
 	categories := config.CategoryOrder()
-	if len(categories) == 0 {
-		return 0
+	if m.SettingsActiveTab >= 0 && m.SettingsActiveTab < len(categories) {
+		activeCategory := categories[m.SettingsActiveTab]
+		settingsMap := config.GetSettingsMetadata()
+
+		if settingsList, ok := settingsMap[activeCategory]; ok {
+			return len(settingsList)
+		}
 	}
-	if m.SettingsActiveTab < 0 || m.SettingsActiveTab >= len(categories) {
-		return 0
-	}
-	metadata := config.GetSettingsMetadata()
-	currentCategory := categories[m.SettingsActiveTab]
-	return len(metadata[currentCategory])
+	return 0
 }
 
 // getSettingUnit returns the unit suffix for the currently selected setting
