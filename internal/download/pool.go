@@ -66,26 +66,53 @@ func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
 	return pool
 }
 
+// syncConfigFromState syncs Filename, DestPath, and Mirrors from the associated state.
+func syncConfigFromState(cfg *types.DownloadConfig) {
+	if cfg.State == nil {
+		return
+	}
+	if fn := cfg.State.GetFilename(); fn != "" {
+		cfg.Filename = fn
+	}
+	if dp := cfg.State.GetDestPath(); dp != "" {
+		cfg.DestPath = dp
+	}
+	if ms := cfg.State.GetMirrors(); len(ms) > 0 {
+		var urls []string
+		for _, m := range ms {
+			urls = append(urls, m.URL)
+		}
+		cfg.Mirrors = urls
+	}
+}
+
+// resolveDestPath resolves the destination path consistently from config, state, and output bounds.
+func resolveDestPath(cfg *types.DownloadConfig) string {
+	destPath := cfg.DestPath
+	if destPath == "" && cfg.State != nil {
+		destPath = cfg.State.GetDestPath()
+	}
+	if destPath == "" && cfg.OutputPath != "" && cfg.Filename != "" {
+		destPath = filepath.Join(cfg.OutputPath, cfg.Filename)
+	}
+	if destPath == "" {
+		destPath = cfg.OutputPath // default fallback
+	}
+	return destPath
+}
+
 // Add adds a new download task to the pool
 func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 	p.mu.Lock()
 	p.queued[cfg.ID] = cfg
 	p.mu.Unlock()
 
-	if p.progressCh != nil && !cfg.IsResume {
-		destPath := cfg.DestPath
-		if destPath == "" && cfg.State != nil {
-			destPath = cfg.State.GetDestPath()
-		}
-		if destPath == "" {
-			destPath = cfg.OutputPath
-		}
-
+	if !cfg.IsResume {
 		p.trySendProgress(events.DownloadQueuedMsg{
 			DownloadID: cfg.ID,
 			Filename:   cfg.Filename,
 			URL:        cfg.URL,
-			DestPath:   destPath,
+			DestPath:   resolveDestPath(&cfg),
 		})
 	}
 
@@ -95,7 +122,6 @@ func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 // HasDownload checks if a download with the given URL already exists
 func (p *WorkerPool) HasDownload(url string) bool {
 	p.mu.RLock()
-	// Check active downloads
 	for _, ad := range p.downloads {
 		if ad.config.URL == url {
 			p.mu.RUnlock()
@@ -104,14 +130,9 @@ func (p *WorkerPool) HasDownload(url string) bool {
 	}
 	p.mu.RUnlock()
 
-	// Check persistent store (completed/queued/paused)
-	// We do this outside the lock to avoid holding it during DB query
+	// Check persistent store
 	exists, err := state.CheckDownloadExists(url)
-	if err == nil && exists {
-		return true
-	}
-
-	return false
+	return err == nil && exists
 }
 
 // ActiveCount returns the number of currently active (downloading/pausing) downloads
@@ -139,21 +160,7 @@ func (p *WorkerPool) GetAll() []types.DownloadConfig {
 	var configs []types.DownloadConfig
 	for _, ad := range p.downloads {
 		cfg := ad.config
-		if cfg.State != nil {
-			if fn := cfg.State.GetFilename(); fn != "" {
-				cfg.Filename = fn
-			}
-			if dp := cfg.State.GetDestPath(); dp != "" {
-				cfg.DestPath = dp
-			}
-			if ms := cfg.State.GetMirrors(); len(ms) > 0 {
-				var urls []string
-				for _, m := range ms {
-					urls = append(urls, m.URL)
-				}
-				cfg.Mirrors = urls
-			}
-		}
+		syncConfigFromState(&cfg)
 		configs = append(configs, cfg)
 	}
 	for _, cfg := range p.queued {
@@ -194,17 +201,15 @@ func (p *WorkerPool) Pause(downloadID string) bool {
 	}
 
 	// Send pause message
-	if p.progressCh != nil {
-		downloaded := int64(0)
-		if ad.config.State != nil {
-			downloaded = ad.config.State.VerifiedProgress.Load()
-		}
-		p.trySendProgress(events.DownloadPausedMsg{
-			DownloadID: downloadID,
-			Filename:   ad.config.Filename,
-			Downloaded: downloaded,
-		})
+	downloaded := int64(0)
+	if ad.config.State != nil {
+		downloaded = ad.config.State.VerifiedProgress.Load()
 	}
+	p.trySendProgress(events.DownloadPausedMsg{
+		DownloadID: downloadID,
+		Filename:   ad.config.Filename,
+		Downloaded: downloaded,
+	})
 	return true
 }
 
@@ -267,12 +272,10 @@ func (p *WorkerPool) Cancel(downloadID string) {
 	}
 
 	// Send removal message
-	if p.progressCh != nil {
-		p.trySendProgress(events.DownloadRemovedMsg{
-			DownloadID: downloadID,
-			Filename:   removedFilename,
-		})
-	}
+	p.trySendProgress(events.DownloadRemovedMsg{
+		DownloadID: downloadID,
+		Filename:   removedFilename,
+	})
 }
 
 // Resume resumes a paused download by ID. Returns true if found and resumed (or already running), false otherwise.
@@ -301,15 +304,7 @@ func (p *WorkerPool) Resume(downloadID string) bool {
 	if ad.config.State != nil {
 		ad.config.State.Resume()
 		ad.config.State.SyncSessionStart()
-
-		// Hot-resume needs the resolved path from the first run, otherwise
-		// TUIDownload cannot load persisted state and may start a fresh file.
-		if destPath := ad.config.State.GetDestPath(); destPath != "" {
-			ad.config.DestPath = destPath
-		}
-		if filename := ad.config.State.GetFilename(); filename != "" {
-			ad.config.Filename = filename
-		}
+		syncConfigFromState(&ad.config)
 	}
 
 	// Re-queue the download
@@ -317,12 +312,10 @@ func (p *WorkerPool) Resume(downloadID string) bool {
 	p.Add(ad.config)
 
 	// Send resume message
-	if p.progressCh != nil {
-		p.trySendProgress(events.DownloadResumedMsg{
-			DownloadID: downloadID,
-			Filename:   ad.config.Filename,
-		})
-	}
+	p.trySendProgress(events.DownloadResumedMsg{
+		DownloadID: downloadID,
+		Filename:   ad.config.Filename,
+	})
 	return true
 }
 
@@ -407,19 +400,17 @@ func (p *WorkerPool) worker() {
 			if cfg.State != nil {
 				cfg.State.SetError(err)
 			}
-			if p.progressCh != nil {
-				p.trySendProgress(events.DownloadErrorMsg{
-					DownloadID: cfg.ID,
-					Filename:   cfg.Filename,
-					Err:        err,
-				})
-			}
+			p.trySendProgress(events.DownloadErrorMsg{
+				DownloadID: cfg.ID,
+				Filename:   cfg.Filename,
+				Err:        err,
+			})
 			// Clean up errored download from tracking (don't save to .surge)
 			p.mu.Lock()
 			delete(p.downloads, cfg.ID)
 			p.mu.Unlock()
 
-		} else if !isPaused {
+		} else {
 			// Only mark as done if not paused
 			if cfg.State != nil {
 				cfg.State.Done.Store(true)
@@ -448,15 +439,11 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 	}
 
 	if qExists {
-		destPath := qCfg.DestPath
-		if destPath == "" && qCfg.State != nil {
-			destPath = qCfg.State.GetDestPath()
-		}
 		return &types.DownloadStatus{
 			ID:         id,
 			URL:        qCfg.URL,
 			Filename:   qCfg.Filename,
-			DestPath:   destPath,
+			DestPath:   resolveDestPath(&qCfg),
 			Status:     "queued",
 			Downloaded: 0,
 			TotalSize:  0, // Metadata not yet fetched
@@ -604,26 +591,14 @@ func (p *WorkerPool) persistQueuedForShutdown() {
 			continue
 		}
 
-		filename := cfg.Filename
-		destPath := cfg.DestPath
-		if cfg.State != nil {
-			if fn := cfg.State.GetFilename(); fn != "" {
-				filename = fn
-			}
-			if dp := cfg.State.GetDestPath(); dp != "" {
-				destPath = dp
-			}
-		}
-		if destPath == "" && cfg.OutputPath != "" && filename != "" {
-			destPath = filepath.Join(cfg.OutputPath, filename)
-		}
+		syncConfigFromState(&cfg)
 
 		if err := state.AddToMasterList(types.DownloadEntry{
 			ID:         cfg.ID,
 			URL:        cfg.URL,
 			URLHash:    state.URLHash(cfg.URL),
-			DestPath:   destPath,
-			Filename:   filename,
+			DestPath:   resolveDestPath(&cfg),
+			Filename:   cfg.Filename,
 			Status:     "queued",
 			TotalSize:  0,
 			Downloaded: 0,
