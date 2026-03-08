@@ -34,8 +34,6 @@ type ProbeResult struct {
 	ContentType   string
 }
 
-
-
 // uniqueFilePath returns a unique file path by appending (1), (2), etc. if the file exists
 func uniqueFilePath(path string) string {
 	// Check if file exists (both final and incomplete)
@@ -164,7 +162,6 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	}
 	finalFilename := filepath.Base(destPath)
 	utils.Debug("Destination path: %s", destPath)
-
 
 	if cfg.State != nil {
 		cfg.State.SetFilename(finalFilename)
