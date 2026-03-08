@@ -149,6 +149,40 @@ func (m *RootModel) removeDownloadByID(id string) bool {
 	return false
 }
 
+func (m *RootModel) handleFilePickerSelection(path string) (tea.Model, tea.Cmd) {
+	if m.SettingsFileBrowsing {
+		m.Settings.General.DefaultDownloadDir = path
+		m.SettingsFileBrowsing = false
+		m.state = SettingsState
+		return m, nil
+	}
+	if m.ExtensionFileBrowsing {
+		m.inputs[2].SetValue(path)
+		m.ExtensionFileBrowsing = false
+		m.state = ExtensionConfirmationState
+		return m, nil
+	}
+	m.inputs[2].SetValue(path)
+	m.state = InputState
+	return m, nil
+}
+
+func (m *RootModel) handleFilePickerGotoHome() tea.Cmd {
+	defaultDir := m.Settings.General.DefaultDownloadDir
+	if defaultDir == "" {
+		homeDir, _ := os.UserHomeDir()
+		defaultDir = filepath.Join(homeDir, "Downloads")
+	}
+	m.filepicker = newFilepicker(defaultDir)
+	return m.filepicker.Init()
+}
+
+func (m *RootModel) resetFilepickerToDirMode() {
+	m.filepicker.FileAllowed = false
+	m.filepicker.DirAllowed = true
+	m.filepicker.AllowedTypes = nil
+}
+
 // checkForDuplicate checks if a compatible download already exists
 func (m RootModel) checkForDuplicate(url string) *DownloadModel {
 	if !m.Settings.General.WarnOnDuplicate {
@@ -580,22 +614,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Check if a directory was selected
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-				// Check if we were browsing for settings
-				if m.SettingsFileBrowsing {
-					m.Settings.General.DefaultDownloadDir = path
-					m.SettingsFileBrowsing = false
-					m.state = SettingsState
-					return m, nil
-				}
-				if m.ExtensionFileBrowsing {
-					m.inputs[2].SetValue(path)
-					m.ExtensionFileBrowsing = false
-					m.state = ExtensionConfirmationState
-					return m, nil
-				}
-				m.inputs[2].SetValue(path)
-				m.state = InputState
-				return m, nil
+				return m.handleFilePickerSelection(path)
 			}
 
 			return m, cmd
@@ -611,9 +630,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				urls, err := readURLsFromFile(path)
 				if err != nil {
 					m.addLogEntry(LogStyleError.Render("✖ Failed to read batch file: " + err.Error()))
-					// Reset filepicker and return
-					m.filepicker.FileAllowed = false
-					m.filepicker.DirAllowed = true
+					m.resetFilepickerToDirMode()
 					m.state = DashboardState
 					return m, nil
 				}
@@ -623,8 +640,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.batchFilePath = path
 
 				// Reset filepicker to directory mode
-				m.filepicker.FileAllowed = false
-				m.filepicker.DirAllowed = true
+				m.resetFilepickerToDirMode()
 
 				m.state = BatchConfirmState
 				return m, nil
@@ -1078,38 +1094,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// H key to jump to default download directory
 			if key.Matches(msg, m.keys.FilePicker.GotoHome) {
-				defaultDir := m.Settings.General.DefaultDownloadDir
-				if defaultDir == "" {
-					homeDir, _ := os.UserHomeDir()
-					defaultDir = filepath.Join(homeDir, "Downloads")
-				}
-				m.filepicker = newFilepicker(defaultDir)
-				return m, m.filepicker.Init()
+				return m, m.handleFilePickerGotoHome()
 			}
 
 			// '.' to select current directory
 			if key.Matches(msg, m.keys.FilePicker.UseDir) {
-				if m.SettingsFileBrowsing {
-					m.Settings.General.DefaultDownloadDir = m.filepicker.CurrentDirectory
-					m.SettingsFileBrowsing = false
-					m.state = SettingsState
-					return m, nil
-				}
-				if m.ExtensionFileBrowsing {
-					m.inputs[2].SetValue(m.filepicker.CurrentDirectory)
-					m.ExtensionFileBrowsing = false
-					m.state = ExtensionConfirmationState
-					return m, nil
-				}
-				if m.catMgrFileBrowsing {
-					m.catMgrInputs[3].SetValue(m.filepicker.CurrentDirectory)
-					m.catMgrFileBrowsing = false
-					m.state = CategoryManagerState
-					return m, nil
-				}
-				m.inputs[2].SetValue(m.filepicker.CurrentDirectory)
-				m.state = InputState
-				return m, nil
+				return m.handleFilePickerSelection(m.filepicker.CurrentDirectory)
 			}
 
 			// Pass key to filepicker
@@ -1118,28 +1108,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Check if a directory was selected
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-				if m.SettingsFileBrowsing {
-					m.Settings.General.DefaultDownloadDir = path
-					m.SettingsFileBrowsing = false
-					m.state = SettingsState
-					return m, nil
-				}
-				if m.ExtensionFileBrowsing {
-					m.inputs[2].SetValue(path)
-					m.ExtensionFileBrowsing = false
-					m.state = ExtensionConfirmationState
-					return m, nil
-				}
 				if m.catMgrFileBrowsing {
 					m.catMgrInputs[3].SetValue(path)
 					m.catMgrFileBrowsing = false
 					m.state = CategoryManagerState
 					return m, nil
 				}
-				// Set the path input value and return to input state
-				m.inputs[2].SetValue(path)
-				m.state = InputState
-				return m, nil
+				return m.handleFilePickerSelection(path)
 			}
 
 			return m, cmd
@@ -1259,24 +1234,17 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case BatchFilePickerState:
 			if key.Matches(msg, m.keys.FilePicker.Cancel) {
 				// Reset filepicker to directory mode and return
-				m.filepicker.FileAllowed = false
-				m.filepicker.DirAllowed = true
-				m.filepicker.AllowedTypes = nil
+				m.resetFilepickerToDirMode()
 				m.state = DashboardState
 				return m, nil
 			}
 
 			// H key to jump to default download directory
 			if key.Matches(msg, m.keys.FilePicker.GotoHome) {
-				defaultDir := m.Settings.General.DefaultDownloadDir
-				if defaultDir == "" {
-					homeDir, _ := os.UserHomeDir()
-					defaultDir = filepath.Join(homeDir, "Downloads")
-				}
-				m.filepicker = newFilepicker(defaultDir)
+				cmd := m.handleFilePickerGotoHome()
 				m.filepicker.FileAllowed = true
 				m.filepicker.DirAllowed = false
-				return m, m.filepicker.Init()
+				return m, cmd
 			}
 
 			// Pass key to filepicker
@@ -1290,9 +1258,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if err != nil {
 					m.addLogEntry(LogStyleError.Render("✖ Failed to read batch file: " + err.Error()))
 					// Reset filepicker and return
-					m.filepicker.FileAllowed = false
-					m.filepicker.DirAllowed = true
-					m.filepicker.AllowedTypes = nil
+					m.resetFilepickerToDirMode()
 					m.state = DashboardState
 					return m, nil
 				}
@@ -1302,9 +1268,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.batchFilePath = path
 
 				// Reset filepicker to directory mode
-				m.filepicker.FileAllowed = false
-				m.filepicker.DirAllowed = true
-				m.filepicker.AllowedTypes = nil
+				m.resetFilepickerToDirMode()
 
 				m.state = BatchConfirmState
 				return m, nil
