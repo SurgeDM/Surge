@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"bufio"
 	"bytes"
 	"encoding/json"
 	"errors"
@@ -28,34 +27,6 @@ func readActivePort() int {
 	var port int
 	_, _ = fmt.Sscanf(string(data), "%d", &port)
 	return port
-}
-
-// readURLsFromFile reads URLs from a file.
-// Accepts one URL per line or whitespace-separated URLs, and ignores comments.
-func readURLsFromFile(filepath string) ([]string, error) {
-	file, err := os.Open(filepath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
-	}
-	defer func() { _ = file.Close() }()
-
-	var urls []string
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64*types.KB), types.MB)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		if idx := strings.Index(line, "#"); idx >= 0 {
-			line = strings.TrimSpace(line[:idx])
-		}
-		if line == "" {
-			continue
-		}
-		urls = append(urls, strings.Fields(line)...)
-	}
-	return urls, scanner.Err()
 }
 
 // ParseURLArg parses a command line argument that might contain comma-separated mirrors
@@ -184,6 +155,42 @@ func GetRemoteDownloads(baseURL string, token string) ([]types.DownloadStatus, e
 	}
 
 	return statuses, nil
+}
+
+// ExecuteAPIAction connects to the server, resolves the ID, and sends a request.
+// It prints a success message and then exits if successful, or prints an error and exits on failure.
+func ExecuteAPIAction(rawID, endpoint, method, successMsg string) {
+	baseURL, token, err := resolveAPIConnection(true)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to connect to Surge server: %v\n", err)
+		os.Exit(1)
+	}
+
+	id, err := resolveDownloadID(rawID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to resolve download ID: %v\n", err)
+		os.Exit(1)
+	}
+
+	resp, err := doAPIRequest(method, baseURL, token, fmt.Sprintf("%s/%s", endpoint, id), nil)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Failed to send request to server: %v\n", err)
+		os.Exit(1)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			utils.Debug("Error closing response body: %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		fmt.Fprintf(os.Stderr, "Server error: %s - %s\n", resp.Status, string(body))
+		os.Exit(1)
+	}
+
+	fmt.Println(successMsg)
+	os.Exit(0)
 }
 
 // resolveDownloadID resolves a partial ID (prefix) to a full download ID.

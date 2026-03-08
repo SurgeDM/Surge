@@ -3,12 +3,10 @@ package cmd
 import (
 	"fmt"
 	"net/http"
-	"net/url"
 	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/utils"
 )
 
 var rmCmd = &cobra.Command{
@@ -38,39 +36,13 @@ var rmCmd = &cobra.Command{
 			return
 		}
 
-		baseURL, token, err := resolveAPIConnection(true)
+		_, _, err := resolveAPIConnection(true)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 			os.Exit(1)
 		}
 
-		id := args[0]
-
-		// Resolve partial ID to full ID
-		id, err = resolveDownloadID(id)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-
-		// Send to running server
-		path := fmt.Sprintf("/delete?id=%s", url.QueryEscape(id))
-		resp, err := doAPIRequest(http.MethodPost, baseURL, token, path, nil)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error connecting to server: %v\n", err)
-			os.Exit(1)
-		}
-		defer func() {
-			if err := resp.Body.Close(); err != nil {
-				utils.Debug("Error closing response body: %v", err)
-			}
-		}()
-
-		if resp.StatusCode != http.StatusOK {
-			fmt.Fprintf(os.Stderr, "Error: server returned %s\n", resp.Status)
-			os.Exit(1)
-		}
-		fmt.Printf("Removed download %s\n", id[:8])
+		ExecuteAPIAction(args[0], "/delete", http.MethodPost, "Removed download")
 	},
 }
 

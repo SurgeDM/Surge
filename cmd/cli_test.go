@@ -233,7 +233,7 @@ func TestReadURLsFromFile_ParsesAndFilters(t *testing.T) {
 		t.Fatalf("failed to write url file: %v", err)
 	}
 
-	urls, err := readURLsFromFile(urlFile)
+	urls, err := utils.ReadURLsFromFile(urlFile)
 	if err != nil {
 		t.Fatalf("readURLsFromFile returned error: %v", err)
 	}
@@ -267,7 +267,7 @@ func TestReadURLsFromFile_WhitespaceAndInlineComments(t *testing.T) {
 		t.Fatalf("failed to write url file: %v", err)
 	}
 
-	urls, err := readURLsFromFile(urlFile)
+	urls, err := utils.ReadURLsFromFile(urlFile)
 	if err != nil {
 		t.Fatalf("readURLsFromFile returned error: %v", err)
 	}
@@ -298,7 +298,7 @@ func TestReadURLsFromFile_LongLine(t *testing.T) {
 		t.Fatalf("failed to write url file: %v", err)
 	}
 
-	urls, err := readURLsFromFile(urlFile)
+	urls, err := utils.ReadURLsFromFile(urlFile)
 	if err != nil {
 		t.Fatalf("readURLsFromFile returned error for long URL: %v", err)
 	}
@@ -311,7 +311,7 @@ func TestReadURLsFromFile_LongLine(t *testing.T) {
 }
 
 func TestReadURLsFromFile_MissingFile(t *testing.T) {
-	_, err := readURLsFromFile(filepath.Join(t.TempDir(), "missing.txt"))
+	_, err := utils.ReadURLsFromFile(filepath.Join(t.TempDir(), "missing.txt"))
 	if err == nil {
 		t.Fatal("expected an error for missing file")
 	}

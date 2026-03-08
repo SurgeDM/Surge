@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/spf13/cobra"
+	"github.com/surge-downloader/surge/internal/utils"
 )
 
 var addCmd = &cobra.Command{
@@ -27,7 +28,7 @@ var addCmd = &cobra.Command{
 
 		// 2. URLs from batch file
 		if batchFile != "" {
-			fileUrls, err := readURLsFromFile(batchFile)
+			fileUrls, err := utils.ReadURLsFromFile(batchFile)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error reading batch file: %v\n", err)
 				os.Exit(1)

@@ -135,11 +135,11 @@ var rootCmd = &cobra.Command{
 			urls = append(urls, args...)
 
 			if batchFile != "" {
-				fileUrls, err := readURLsFromFile(batchFile)
+				fileURLs, err := utils.ReadURLsFromFile(batchFile)
 				if err != nil {
 					fmt.Fprintf(os.Stderr, "Error reading batch file: %v\n", err)
 				} else {
-					urls = append(urls, fileUrls...)
+					urls = append(urls, fileURLs...)
 				}
 			}
 
