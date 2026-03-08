@@ -28,7 +28,6 @@ var resumeCmd = &cobra.Command{
 			return
 		}
 
-
 		ExecuteAPIAction(args[0], "/resume", http.MethodPost, "Resumed download")
 	},
 }

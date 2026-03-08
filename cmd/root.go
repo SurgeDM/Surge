@@ -768,8 +768,6 @@ func getSettings() *config.Settings {
 	return settings
 }
 
-
-
 func resumePausedDownloads() {
 	settings := getSettings()
 

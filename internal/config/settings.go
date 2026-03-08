@@ -46,7 +46,6 @@ type NetworkSettings struct {
 	WorkerBufferSize       int    `json:"worker_buffer_size"`
 }
 
-
 // PerformanceSettings contains performance tuning parameters.
 type PerformanceSettings struct {
 	MaxTaskRetries        int           `json:"max_task_retries"`

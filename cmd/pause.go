@@ -23,7 +23,6 @@ var pauseCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-
 		if all {
 			// TODO: Implement /pause-all endpoint or iterate
 			fmt.Println("Pausing all downloads is not yet implemented for running server.")
