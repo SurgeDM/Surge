@@ -98,7 +98,14 @@ func readURLsFromFile(filepath string) ([]string, error) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if idx := strings.Index(line, "#"); idx >= 0 {
+		idx := -1
+		for i := 0; i < len(line); i++ {
+			if line[i] == '#' && i > 0 && (line[i-1] == ' ' || line[i-1] == '\t') {
+				idx = i
+				break
+			}
+		}
+		if idx > 0 {
 			line = strings.TrimSpace(line[:idx])
 		}
 		if line == "" {
