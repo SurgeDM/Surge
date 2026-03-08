@@ -51,6 +51,7 @@ var (
 	GlobalService           core.DownloadService
 	serverProgram           *tea.Program
 	startupIntegrityMessage string
+	globalSettings          *config.Settings
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -68,12 +69,12 @@ var rootCmd = &cobra.Command{
 		GlobalProgressCh = make(chan any, 100)
 
 		// Initialize Global Worker Pool
-		// Load max downloads from settings
-		settings, err := config.LoadSettings()
+		var err error
+		globalSettings, err = config.LoadSettings()
 		if err != nil {
-			settings = config.DefaultSettings()
+			globalSettings = config.DefaultSettings()
 		}
-		GlobalPool = download.NewWorkerPool(GlobalProgressCh, settings.Network.MaxConcurrentDownloads)
+		GlobalPool = download.NewWorkerPool(GlobalProgressCh, globalSettings.Network.MaxConcurrentDownloads)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if hostTarget := resolveHostTarget(); hostTarget != "" {
@@ -505,11 +506,15 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		return
 	}
 
-	// Load settings once for use throughout the function
-	settings, err := config.LoadSettings()
-	if err != nil {
-		// Fallback to defaults if loading fails (though LoadSettings handles missing file)
-		settings = config.DefaultSettings()
+	var settings *config.Settings
+	if globalSettings != nil {
+		settings = globalSettings
+	} else {
+		var err error
+		settings, err = config.LoadSettings()
+		if err != nil {
+			settings = config.DefaultSettings()
+		}
 	}
 
 	var req DownloadRequest
@@ -668,9 +673,15 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		return 0
 	}
 
-	settings, err := config.LoadSettings()
-	if err != nil {
-		settings = config.DefaultSettings()
+	var settings *config.Settings
+	if globalSettings != nil {
+		settings = globalSettings
+	} else {
+		var err error
+		settings, err = config.LoadSettings()
+		if err != nil {
+			settings = config.DefaultSettings()
+		}
 	}
 
 	for _, arg := range urls {
@@ -783,12 +794,16 @@ func initializeGlobalState() error {
 	utils.ConfigureDebug(logsDir)
 
 	// Clean up old logs
-	settings, err := config.LoadSettings()
 	var retention int
-	if err == nil {
-		retention = settings.General.LogRetentionCount
+	if globalSettings != nil {
+		retention = globalSettings.General.LogRetentionCount
 	} else {
-		retention = config.DefaultSettings().General.LogRetentionCount
+		settings, err := config.LoadSettings()
+		if err == nil {
+			retention = settings.General.LogRetentionCount
+		} else {
+			retention = config.DefaultSettings().General.LogRetentionCount
+		}
 	}
 	utils.CleanupLogs(retention)
 	return nil
@@ -893,9 +908,15 @@ func samePath(a, b string) bool {
 }
 
 func resumePausedDownloads() {
-	settings, err := config.LoadSettings()
-	if err != nil {
-		return // Can't check preference
+	var settings *config.Settings
+	if globalSettings != nil {
+		settings = globalSettings
+	} else {
+		var err error
+		settings, err = config.LoadSettings()
+		if err != nil {
+			return // Can't check preference
+		}
 	}
 
 	pausedEntries, err := state.LoadPausedDownloads()
