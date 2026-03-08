@@ -1209,23 +1209,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.filepicker = newFilepicker(browseDir)
 				return m, m.filepicker.Init()
 			}
-			if key.Matches(msg, m.keys.Extension.Next) {
+			if key.Matches(msg, m.keys.Extension.Next) || key.Matches(msg, m.keys.Extension.Prev) {
 				if m.focusedInput == 2 {
 					m.focusedInput = 3
 				} else {
 					m.focusedInput = 2
-				}
-				for i := range m.inputs {
-					m.inputs[i].Blur()
-				}
-				m.inputs[m.focusedInput].Focus()
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.Extension.Prev) {
-				if m.focusedInput == 3 {
-					m.focusedInput = 2
-				} else {
-					m.focusedInput = 3
 				}
 				for i := range m.inputs {
 					m.inputs[i].Blur()
@@ -1400,33 +1388,15 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.state = DashboardState
 				return m, nil
 			}
-			if key.Matches(msg, m.keys.Settings.Tab1) {
-				if categoryCount > 0 {
-					m.SettingsActiveTab = 0
+			tabBindings := []key.Binding{m.keys.Settings.Tab1, m.keys.Settings.Tab2, m.keys.Settings.Tab3, m.keys.Settings.Tab4}
+			for i, binding := range tabBindings {
+				if key.Matches(msg, binding) {
+					if categoryCount > i {
+						m.SettingsActiveTab = i
+					}
+					m.SettingsSelectedRow = 0
+					return m, nil
 				}
-				m.SettingsSelectedRow = 0
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.Settings.Tab2) {
-				if categoryCount > 1 {
-					m.SettingsActiveTab = 1
-				}
-				m.SettingsSelectedRow = 0
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.Settings.Tab3) {
-				if categoryCount > 2 {
-					m.SettingsActiveTab = 2
-				}
-				m.SettingsSelectedRow = 0
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.Settings.Tab4) {
-				if categoryCount > 3 {
-					m.SettingsActiveTab = 3
-				}
-				m.SettingsSelectedRow = 0
-				return m, nil
 			}
 
 			// Tab Navigation
