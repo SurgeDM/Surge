@@ -128,6 +128,12 @@ func (p *WorkerPool) HasDownload(url string) bool {
 			return true
 		}
 	}
+	for _, qd := range p.queued {
+		if qd.URL == url {
+			p.mu.RUnlock()
+			return true
+		}
+	}
 	p.mu.RUnlock()
 
 	// Check persistent store

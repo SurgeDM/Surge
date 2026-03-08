@@ -67,7 +67,13 @@ func openWithSystem(path string) error {
 	default: // linux and others
 		cmd = exec.Command("xdg-open", path)
 	}
-	return cmd.Start()
+	err := cmd.Start()
+	if err == nil {
+		go func() {
+			_ = cmd.Wait()
+		}()
+	}
+	return err
 }
 
 // readURLsFromFile reads URLs from a file, accepting one-per-line or whitespace-separated URLs.
@@ -160,6 +166,12 @@ func (m *RootModel) handleFilePickerSelection(path string) (tea.Model, tea.Cmd) 
 		m.inputs[2].SetValue(path)
 		m.ExtensionFileBrowsing = false
 		m.state = ExtensionConfirmationState
+		return m, nil
+	}
+	if m.catMgrFileBrowsing {
+		m.catMgrInputs[3].SetValue(path)
+		m.catMgrFileBrowsing = false
+		m.state = CategoryManagerState
 		return m, nil
 	}
 	m.inputs[2].SetValue(path)
