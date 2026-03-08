@@ -66,7 +66,7 @@ func TestFindAvailablePort_ReturnsListener(t *testing.T) {
 func TestFindAvailablePort_SkipsOccupiedPorts(t *testing.T) {
 	requireTCPListener(t)
 	// Occupy any port
-	ln1, err := net.Listen("tcp", fmt.Sprintf("%s:0", getServerBindHost()))
+	ln1, err := net.Listen("tcp", fmt.Sprintf("%s:0", serverBindHost))
 	if err != nil {
 		t.Fatalf("Failed to occupy any port: %v", err)
 	}
@@ -329,7 +329,7 @@ func TestIsLocalHost(t *testing.T) {
 }
 
 func TestGetServerBindHost(t *testing.T) {
-	host := getServerBindHost()
+	host := serverBindHost
 	if host != "0.0.0.0" {
 		t.Errorf("getServerBindHost should be 0.0.0.0, got: %q", host)
 	}
