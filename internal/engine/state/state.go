@@ -320,37 +320,18 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 }
 
 // DeleteState removes the state from SQLite
-func DeleteState(id string, url string, destPath string) error {
+func DeleteState(id string) error {
 	db := getDBHelper()
 	if db == nil {
 		return fmt.Errorf("database not initialized")
 	}
 
-	var result sql.Result
-	var err error
-
 	if id == "" {
 		return fmt.Errorf("id cannot be empty")
 	}
 
-	result, err = db.Exec("DELETE FROM downloads WHERE id = ?", id)
-
-	if err != nil {
+	if err := removeDownloadAndTasks(id); err != nil {
 		return fmt.Errorf("failed to delete state: %w", err)
-	}
-
-	// Tasks are deleted via CASCADE or we strictly rely on download_id
-	// Since we defined CASCADE in schema, it should be fine.
-	// But 'tasks' table has foreign key constraint, assuming SQLite FKs are enabled.
-	// We should probably ensure FKs are enabled or manually delete tasks.
-	// For safety, let's manually delete if we didn't use CASCADE in creation or forgot to enable FK.
-	// actually, let's just trust our schema but also execute a cleanup just deeply in case.
-	// (Implementation detail: FK support needs `PRAGMA foreign_keys = ON`)
-
-	// Check rows affected
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		return nil // Already gone or didn't exist
 	}
 
 	return nil

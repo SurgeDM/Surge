@@ -338,7 +338,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 				if info, statErr := os.Stat(destPath); statErr == nil && info.Size() == fileSize {
 					utils.Debug("Race condition detected: File already exists and has correct size. Treating as success.")
 					// Clean up state just in case, though usually done by caller
-					_ = state.DeleteState(d.ID, d.URL, destPath)
+					_ = state.DeleteState(d.ID)
 					return nil
 				}
 			}
@@ -346,7 +346,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		}
 
 		// Delete state file on successful completion
-		_ = state.DeleteState(d.ID, d.URL, destPath)
+		_ = state.DeleteState(d.ID)
 		return nil
 	}
 

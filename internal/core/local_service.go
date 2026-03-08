@@ -760,7 +760,7 @@ func (s *LocalDownloadService) Delete(id string) error {
 	// Cleanup persisted state and partials if available
 	if entry, err := state.GetDownload(id); err == nil && entry != nil {
 		removedFilename = entry.Filename
-		_ = state.DeleteState(entry.ID, entry.URL, entry.DestPath)
+		_ = state.DeleteState(entry.ID)
 		if entry.DestPath != "" && entry.Status != "completed" {
 			_ = state.RemoveIncompleteFile(entry.DestPath)
 		}

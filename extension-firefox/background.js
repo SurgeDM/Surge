@@ -381,6 +381,14 @@ async function sendToSurge(url, filename, absolutePath) {
       const data = await response.json();
       console.log('[Surge] Download queued:', data);
       return { success: true, data };
+    } else if (response.status === 409) {
+      const errorText = await response.text();
+      let msg = "Download rejected: duplicate or approval required (headless mode)";
+      try {
+        const json = JSON.parse(errorText);
+        if (json.message) msg = json.message;
+      } catch (e) {}
+      return { success: false, error: msg };
     } else {
       const error = await response.text();
       console.error('[Surge] Failed to queue download:', response.status, error);

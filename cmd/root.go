@@ -68,11 +68,7 @@ var rootCmd = &cobra.Command{
 		GlobalProgressCh = make(chan any, 100)
 
 		// Initialize Global Worker Pool
-		var err error
-		globalSettings, err = config.LoadSettings()
-		if err != nil {
-			globalSettings = config.DefaultSettings()
-		}
+		globalSettings = getSettings()
 		GlobalPool = download.NewWorkerPool(GlobalProgressCh, globalSettings.Network.MaxConcurrentDownloads)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
@@ -490,16 +486,7 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		return
 	}
 
-	var settings *config.Settings
-	if globalSettings != nil {
-		settings = globalSettings
-	} else {
-		var err error
-		settings, err = config.LoadSettings()
-		if err != nil {
-			settings = config.DefaultSettings()
-		}
-	}
+	settings := getSettings()
 
 	var req DownloadRequest
 	if err := decodeJSONBody(r, &req); err != nil {
@@ -657,16 +644,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		return 0
 	}
 
-	var settings *config.Settings
-	if globalSettings != nil {
-		settings = globalSettings
-	} else {
-		var err error
-		settings, err = config.LoadSettings()
-		if err != nil {
-			settings = config.DefaultSettings()
-		}
-	}
+	settings := getSettings()
 
 	for _, arg := range urls {
 		// Validation
@@ -774,34 +752,26 @@ func initializeGlobalState() error {
 	utils.ConfigureDebug(logsDir)
 
 	// Clean up old logs
-	var retention int
-	if globalSettings != nil {
-		retention = globalSettings.General.LogRetentionCount
-	} else {
-		settings, err := config.LoadSettings()
-		if err == nil {
-			retention = settings.General.LogRetentionCount
-		} else {
-			retention = config.DefaultSettings().General.LogRetentionCount
-		}
-	}
+	retention := getSettings().General.LogRetentionCount
 	utils.CleanupLogs(retention)
 	return nil
+}
+
+func getSettings() *config.Settings {
+	if globalSettings != nil {
+		return globalSettings
+	}
+	settings, err := config.LoadSettings()
+	if err != nil {
+		return config.DefaultSettings()
+	}
+	return settings
 }
 
 
 
 func resumePausedDownloads() {
-	var settings *config.Settings
-	if globalSettings != nil {
-		settings = globalSettings
-	} else {
-		var err error
-		settings, err = config.LoadSettings()
-		if err != nil {
-			return // Can't check preference
-		}
-	}
+	settings := getSettings()
 
 	pausedEntries, err := state.LoadPausedDownloads()
 	if err != nil {

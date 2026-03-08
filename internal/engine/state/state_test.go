@@ -263,7 +263,7 @@ func TestDeleteState(t *testing.T) {
 	}
 
 	// Delete state
-	if err := DeleteState(id, testURL, testDestPath); err != nil {
+	if err := DeleteState(id); err != nil {
 		t.Fatalf("DeleteState failed: %v", err)
 	}
 
