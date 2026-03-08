@@ -224,7 +224,8 @@ func TestReadURLsFromFile_ParsesAndFilters(t *testing.T) {
 		"",
 		"   # comment line",
 		"https://example.com/a.zip",
-		"  https://example.com/b.zip  ",
+		"https://example.com/a.zip", // Duplicate
+		"  https://example.com/b.zip#fragment  ",
 		"   ",
 		"#another-comment",
 		"https://example.com/c.zip",
@@ -240,7 +241,7 @@ func TestReadURLsFromFile_ParsesAndFilters(t *testing.T) {
 
 	want := []string{
 		"https://example.com/a.zip",
-		"https://example.com/b.zip",
+		"https://example.com/b.zip#fragment",
 		"https://example.com/c.zip",
 	}
 	if len(urls) != len(want) {
@@ -250,6 +251,16 @@ func TestReadURLsFromFile_ParsesAndFilters(t *testing.T) {
 		if urls[i] != want[i] {
 			t.Fatalf("url[%d] = %q, want %q", i, urls[i], want[i])
 		}
+	}
+
+	// Test empty / comment-only file
+	emptyFile := filepath.Join(tmpDir, "empty.txt")
+	if err := os.WriteFile(emptyFile, []byte("# just a comment\n\n  "), 0o644); err != nil {
+		t.Fatalf("failed to write empty url file: %v", err)
+	}
+	_, err = utils.ReadURLsFromFile(emptyFile)
+	if err == nil {
+		t.Fatalf("expected an error for empty/comment-only file, got nil")
 	}
 }
 

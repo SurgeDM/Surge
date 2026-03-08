@@ -17,6 +17,8 @@ func ReadURLsFromFile(filepath string) ([]string, error) {
 	defer func() { _ = file.Close() }()
 
 	var urls []string
+	seen := make(map[string]bool)
+
 	scanner := bufio.NewScanner(file)
 	// 64KB initial, 1MB max
 	scanner.Buffer(make([]byte, 64*1024), 1024*1024)
@@ -25,13 +27,28 @@ func ReadURLsFromFile(filepath string) ([]string, error) {
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
 		}
-		if idx := strings.Index(line, "#"); idx >= 0 {
-			line = strings.TrimSpace(line[:idx])
+		if idx := strings.Index(line, "#"); idx > 0 {
+			// Only treat '#' as a comment if it is preceded by whitespace
+			if line[idx-1] == ' ' || line[idx-1] == '\t' {
+				line = strings.TrimSpace(line[:idx])
+			}
 		}
 		if line == "" {
 			continue
 		}
-		urls = append(urls, strings.Fields(line)...)
+		for _, u := range strings.Fields(line) {
+			if !seen[u] {
+				seen[u] = true
+				urls = append(urls, u)
+			}
+		}
 	}
-	return urls, scanner.Err()
+
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+	if len(urls) == 0 {
+		return nil, fmt.Errorf("no valid URLs found in file")
+	}
+	return urls, nil
 }

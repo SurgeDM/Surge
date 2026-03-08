@@ -23,12 +23,6 @@ var pauseCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// baseURL and token are unused, only check for error
-		_, _, err := resolveAPIConnection(true)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
 
 		if all {
 			// TODO: Implement /pause-all endpoint or iterate

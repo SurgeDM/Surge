@@ -36,12 +36,6 @@ var rmCmd = &cobra.Command{
 			return
 		}
 
-		_, _, err := resolveAPIConnection(true)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-
 		ExecuteAPIAction(args[0], "/delete", http.MethodPost, "Removed download")
 	},
 }
