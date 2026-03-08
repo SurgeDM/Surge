@@ -46,35 +46,6 @@ type NetworkSettings struct {
 	WorkerBufferSize       int    `json:"worker_buffer_size"`
 }
 
-// UnmarshalJSON implements custom JSON unmarshalling for Settings.
-// This provides backward compatibility with the legacy "connections" + "chunks"
-// migrating them into the new unified "network" field.
-func (s *Settings) UnmarshalJSON(data []byte) error {
-	// Use an alias to avoid infinite recursion (alias has no methods)
-	type Alias Settings
-	if err := json.Unmarshal(data, (*Alias)(s)); err != nil {
-		return err
-	}
-
-	// Check if the JSON had legacy keys instead of "network"
-	var raw map[string]json.RawMessage
-	if err := json.Unmarshal(data, &raw); err != nil {
-		return nil // Already parsed above, ignore raw parse errors
-	}
-
-	if _, hasNetwork := raw["network"]; !hasNetwork {
-		// Migrate legacy "connections" key (overlays onto Network)
-		if conn, ok := raw["connections"]; ok {
-			_ = json.Unmarshal(conn, &s.Network)
-		}
-		// Migrate legacy "chunks" key (overlays chunk fields onto Network)
-		if chunks, ok := raw["chunks"]; ok {
-			_ = json.Unmarshal(chunks, &s.Network)
-		}
-	}
-
-	return nil
-}
 
 // PerformanceSettings contains performance tuning parameters.
 type PerformanceSettings struct {

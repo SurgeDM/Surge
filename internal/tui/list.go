@@ -96,11 +96,11 @@ func newDelegateKeyMap() *delegateKeyMap {
 }
 
 func newDownloadDelegate() downloadDelegate {
-	baseTitle := lipgloss.NewStyle().Foreground(ColorWhite).Bold(true)
-	baseDesc := lipgloss.NewStyle().Foreground(ColorLightGray)
+	baseTitle := lipgloss.NewStyle().Foreground(colors.White).Bold(true)
+	baseDesc := lipgloss.NewStyle().Foreground(colors.LightGray)
 
-	selTitle := lipgloss.NewStyle().Foreground(ColorNeonPink).Bold(true)
-	selDesc := lipgloss.NewStyle().Foreground(ColorNeonCyan)
+	selTitle := lipgloss.NewStyle().Foreground(colors.NeonPink).Bold(true)
+	selDesc := lipgloss.NewStyle().Foreground(colors.NeonCyan)
 
 	return downloadDelegate{
 		keys:           newDelegateKeyMap(),
@@ -109,7 +109,7 @@ func newDownloadDelegate() downloadDelegate {
 		selTitleStyle:  selTitle,
 		selDescStyle:   selDesc,
 		prefixNormal:   "  ",
-		prefixSelected: lipgloss.NewStyle().Foreground(ColorNeonPink).Render("▌ "),
+		prefixSelected: lipgloss.NewStyle().Foreground(colors.NeonPink).Render("▌ "),
 	}
 }
 
@@ -183,19 +183,19 @@ func NewDownloadList(width, height int) list.Model {
 
 	// Style the list
 	l.Styles.Title = lipgloss.NewStyle().
-		Foreground(ColorNeonPink).
+		Foreground(colors.NeonPink).
 		Bold(true).
 		Padding(0, 1)
 
 	l.Styles.FilterPrompt = lipgloss.NewStyle().
-		Foreground(ColorNeonCyan)
+		Foreground(colors.NeonCyan)
 
 	l.Styles.FilterCursor = lipgloss.NewStyle().
-		Foreground(ColorNeonPink)
+		Foreground(colors.NeonPink)
 
 	// No items message - bright color for cyberpunk theme
 	l.Styles.NoItems = lipgloss.NewStyle().
-		Foreground(ColorNeonCyan).
+		Foreground(colors.NeonCyan).
 		Padding(2, 0)
 
 	l.SetStatusBarItemName("download", "downloads")

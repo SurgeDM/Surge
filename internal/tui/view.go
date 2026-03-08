@@ -73,7 +73,7 @@ func (m RootModel) View() string {
 			Detail:      "Please wait",
 			Keys:        components.ConfirmationKeyMap{},
 			Help:        m.help,
-			BorderColor: ColorNeonCyan,
+			BorderColor: colors.NeonCyan,
 			Width:       60,
 			Height:      10,
 		}
@@ -93,7 +93,7 @@ func (m RootModel) View() string {
 			BrowseHintIndex: 2,
 			Help:            m.help,
 			HelpKeys:        m.keys.Input,
-			BorderColor:     ColorNeonPink,
+			BorderColor:     colors.NeonPink,
 			Width:           80,
 			Height:          11,
 		}
@@ -107,7 +107,7 @@ func (m RootModel) View() string {
 			m.filepicker,
 			m.help,
 			m.keys.FilePicker,
-			ColorNeonPink,
+			colors.NeonPink,
 		)
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.renderModalWithOverlay(box)
@@ -128,7 +128,7 @@ func (m RootModel) View() string {
 			Detail:      truncateString(m.duplicateInfo, 50),
 			Keys:        m.keys.Duplicate,
 			Help:        m.help,
-			BorderColor: ColorNeonPink,
+			BorderColor: colors.NeonPink,
 			Width:       60,
 			Height:      10,
 		}
@@ -152,7 +152,7 @@ func (m RootModel) View() string {
 			BrowseHintIndex: 0,
 			Help:            m.help,
 			HelpKeys:        m.keys.Extension,
-			BorderColor:     ColorNeonCyan,
+			BorderColor:     colors.NeonCyan,
 			Width:           86,
 			Height:          13,
 		}
@@ -166,7 +166,7 @@ func (m RootModel) View() string {
 			m.filepicker,
 			m.help,
 			m.keys.FilePicker,
-			ColorNeonCyan,
+			colors.NeonCyan,
 		)
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.renderModalWithOverlay(box)
@@ -180,7 +180,7 @@ func (m RootModel) View() string {
 			Detail:      truncateString(m.batchFilePath, 50),
 			Keys:        m.keys.BatchConfirm,
 			Help:        m.help,
-			BorderColor: ColorNeonCyan,
+			BorderColor: colors.NeonCyan,
 			Width:       60,
 			Height:      10,
 		}
@@ -195,7 +195,7 @@ func (m RootModel) View() string {
 			Detail:      fmt.Sprintf("Current: %s", m.UpdateInfo.CurrentVersion),
 			Keys:        m.keys.Update,
 			Help:        m.help,
-			BorderColor: ColorNeonCyan,
+			BorderColor: colors.NeonCyan,
 			Width:       60,
 			Height:      12,
 		}
@@ -212,7 +212,7 @@ func (m RootModel) View() string {
 			BrowseHintIndex: -1, // No browse hint needed
 			Help:            m.help,
 			HelpKeys:        m.keys.Input,
-			BorderColor:     ColorNeonPink,
+			BorderColor:     colors.NeonPink,
 			Width:           80,
 			Height:          8,
 		}
@@ -285,7 +285,7 @@ func (m RootModel) View() string {
 	} else {
 		// Default Placeholder
 		detailContent = lipgloss.Place(detailWidth, 8, lipgloss.Center, lipgloss.Center,
-			lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("No Download Selected"))
+			lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No Download Selected"))
 	}
 
 	// Exact height from content + borders
@@ -417,13 +417,13 @@ func (m RootModel) View() string {
 	if m.logoCache != "" {
 		logoContent = m.logoCache
 	} else {
-		gradientLogo := ApplyGradient(logoText, ColorNeonPink, ColorNeonPurple)
+		gradientLogo := ApplyGradient(logoText, colors.NeonPink, colors.NeonPurple)
 		m.logoCache = lipgloss.NewStyle().Render(gradientLogo)
 		logoContent = m.logoCache
 	}
 
 	// Server info box (below logo, same width)
-	greenDot := lipgloss.NewStyle().Foreground(ColorStateDownloading).Render("●")
+	greenDot := lipgloss.NewStyle().Foreground(colors.StateDownloading).Render("●")
 	host := m.ServerHost
 	if host == "" {
 		host = "127.0.0.1"
@@ -432,9 +432,9 @@ func (m RootModel) View() string {
 
 	var statusLine string
 	if m.IsRemote {
-		statusLine = lipgloss.NewStyle().Foreground(ColorNeonCyan).Bold(true).Render(" Connected to " + serverAddr)
+		statusLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render(" Connected to " + serverAddr)
 	} else {
-		statusLine = lipgloss.NewStyle().Foreground(ColorNeonCyan).Bold(true).Render(" Serving at " + serverAddr)
+		statusLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render(" Serving at " + serverAddr)
 	}
 
 	serverContentWidth := logoWidth - 4
@@ -459,7 +459,7 @@ func (m RootModel) View() string {
 		logoBoxHeight = 1
 	}
 	logoBox := lipgloss.Place(logoWidth, logoBoxHeight, lipgloss.Center, lipgloss.Center, logoContent)
-	serverBox := renderBtopBox("", PaneTitleStyle.Render(" Server "), serverPortContent, logoWidth, serverBoxHeight, ColorGray)
+	serverBox := renderBtopBox("", PaneTitleStyle.Render(" Server "), serverPortContent, logoWidth, serverBoxHeight, colors.Gray)
 
 	// Combine logo and server box vertically
 	logoColumn := lipgloss.JoinVertical(lipgloss.Left, logoBox, serverBox)
@@ -474,9 +474,9 @@ func (m RootModel) View() string {
 	logContent := m.logViewport.View()
 
 	// Use different border color when focused
-	logBorderColor := ColorGray
+	logBorderColor := colors.Gray
 	if m.logFocused {
-		logBorderColor = ColorNeonPink
+		logBorderColor = colors.NeonPink
 	}
 	logBox := renderBtopBox(PaneTitleStyle.Render(" Activity Log "), "", logContent, logWidth, headerHeight, logBorderColor)
 
@@ -546,9 +546,9 @@ func (m RootModel) View() string {
 	speedMbps := currentSpeed * 8
 	topMbps := topSpeed * 8
 
-	valueStyle := lipgloss.NewStyle().Foreground(ColorNeonCyan).Bold(true)
-	labelStyleStats := lipgloss.NewStyle().Foreground(ColorLightGray)
-	dimStyle := lipgloss.NewStyle().Foreground(ColorGray)
+	valueStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
+	labelStyleStats := lipgloss.NewStyle().Foreground(colors.LightGray)
+	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
 
 	statsContent := lipgloss.JoinVertical(lipgloss.Left,
 		fmt.Sprintf("%s %s", valueStyle.Render("▼"), valueStyle.Render(fmt.Sprintf("%.2f MB/s", currentSpeed))),
@@ -563,7 +563,7 @@ func (m RootModel) View() string {
 	// Style stats with a border box
 	statsBoxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(ColorGray).
+		BorderForeground(colors.Gray).
 		Padding(0, 1).
 		Width(statsBoxWidth).
 		Height(graphContentHeight)
@@ -577,10 +577,10 @@ func (m RootModel) View() string {
 	}
 
 	// Render the Graph
-	graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, ColorNeonPink, nil)
+	graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, colors.NeonPink, nil)
 
 	// Create Y-axis (right side of graph)
-	axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(ColorNeonCyan).Align(lipgloss.Right)
+	axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)
 	label := func(v float64) string {
 		if v <= 0 {
 			return "0 MB/s"
@@ -628,7 +628,7 @@ func (m RootModel) View() string {
 	)
 
 	// Render single network activity box containing stats + graph
-	graphBox := renderBtopBox(PaneTitleStyle.Render(" Network Activity "), "", graphWithPadding, rightWidth, graphHeight, ColorNeonCyan)
+	graphBox := renderBtopBox(PaneTitleStyle.Render(" Network Activity "), "", graphWithPadding, rightWidth, graphHeight, colors.NeonCyan)
 
 	// --- SECTION 3: DOWNLOAD LIST (Bottom Left) ---
 	// Tab Bar
@@ -637,15 +637,15 @@ func (m RootModel) View() string {
 	// Search bar (shown when search is active or has a query)
 	var leftTitle string
 	if m.searchActive || m.searchQuery != "" {
-		searchIcon := lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("> ")
+		searchIcon := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("> ")
 		var searchDisplay string
 		if m.searchActive {
 			searchDisplay = m.searchInput.View() +
-				lipgloss.NewStyle().Foreground(ColorGray).Render(" [esc exit]")
+				lipgloss.NewStyle().Foreground(colors.Gray).Render(" [esc exit]")
 		} else {
 			// Show query with clear hint
-			searchDisplay = lipgloss.NewStyle().Foreground(ColorNeonPink).Render(m.searchQuery) +
-				lipgloss.NewStyle().Foreground(ColorGray).Render(" [f to clear]")
+			searchDisplay = lipgloss.NewStyle().Foreground(colors.NeonPink).Render(m.searchQuery) +
+				lipgloss.NewStyle().Foreground(colors.Gray).Render(" [f to clear]")
 		}
 		// Pad the search bar to look like a title block
 		leftTitle = " " + lipgloss.JoinHorizontal(lipgloss.Left, searchIcon, searchDisplay) + " "
@@ -663,10 +663,10 @@ func (m RootModel) View() string {
 
 		if m.searchQuery != "" {
 			listContent = lipgloss.Place(listContentWidth, listContentHeight, lipgloss.Center, lipgloss.Center,
-				lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("No matching downloads"))
+				lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No matching downloads"))
 		} else {
 			listContent = lipgloss.Place(listContentWidth, listContentHeight, lipgloss.Center, lipgloss.Center,
-				lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("No downloads"))
+				lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No downloads"))
 		}
 	} else {
 		// ensure list fills the height
@@ -679,16 +679,16 @@ func (m RootModel) View() string {
 	listInner := lipgloss.NewStyle().Padding(1, 2).Render(listInnerContent)
 
 	// Determine border color for downloads box based on focus
-	downloadsBorderColor := ColorNeonPink
+	downloadsBorderColor := colors.NeonPink
 	if m.logFocused {
-		downloadsBorderColor = ColorGray
+		downloadsBorderColor = colors.Gray
 	}
 	listBox := renderBtopBox(leftTitle, PaneTitleStyle.Render(" Downloads "), listInner, leftWidth, listHeight, downloadsBorderColor)
 
 	// --- SECTION 4: DETAILS PANE (Middle Right) ---
 	// detailContent and selected are already calculated in the layout section
 
-	detailBox := renderBtopBox("", PaneTitleStyle.Render(" File Details "), detailContent, rightWidth, detailHeight, ColorGray)
+	detailBox := renderBtopBox("", PaneTitleStyle.Render(" File Details "), detailContent, rightWidth, detailHeight, colors.Gray)
 
 	// --- SECTION 5: CHUNK MAP PANE (Bottom Right) ---
 	var chunkBox string
@@ -722,11 +722,11 @@ func (m RootModel) View() string {
 				}
 
 				chunkContent = lipgloss.Place(placeholderWidth, chunkMapHeight-2, lipgloss.Center, lipgloss.Center,
-					lipgloss.NewStyle().Foreground(ColorGray).Render(msg))
+					lipgloss.NewStyle().Foreground(colors.Gray).Render(msg))
 			}
 		}
 
-		chunkBox = renderBtopBox("", PaneTitleStyle.Render(" Chunk Map "), chunkContent, rightWidth, chunkMapHeight, ColorGray)
+		chunkBox = renderBtopBox("", PaneTitleStyle.Render(" Chunk Map "), chunkContent, rightWidth, chunkMapHeight, colors.Gray)
 	}
 
 	// --- ASSEMBLY ---
@@ -773,7 +773,7 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 
 	// Separator Style
 	divider := lipgloss.NewStyle().
-		Foreground(ColorGray).
+		Foreground(colors.Gray).
 		Width(contentWidth).
 		Render("\n" + strings.Repeat("─", contentWidth) + "\n")
 
@@ -786,7 +786,7 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 	statusStr := getDownloadStatus(d)
 	statusStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(ColorGray).
+		BorderForeground(colors.Gray).
 		Width(contentWidth).
 		Align(lipgloss.Center)
 
@@ -806,7 +806,7 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("File: "), StatsValueStyle.Render(truncateString(displayFilename, contentWidth-8))),
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Path: "), StatsValueStyle.Render(truncateString(displayPath, contentWidth-8))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(ColorLightGray).Render(d.ID)),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray).Render(d.ID)),
 	)
 	fileSection := sectionStyle.Render(fileInfoContent)
 
@@ -818,7 +818,7 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 	d.progress.Width = progressWidth
 	progView := d.progress.ViewAs(pct)
 
-	progLabel := lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("Progress: ")
+	progLabel := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Progress: ")
 	progContent := lipgloss.JoinVertical(lipgloss.Left, progLabel, progView)
 
 	// Progress bar has its own width handling usually, but let's wrap it to be sure
@@ -932,7 +932,7 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 		}
 		// More prominent Mirrors display
 		mirrorLabel := StatsLabelStyle.Render("Mirrors")
-		mirrorStats := lipgloss.NewStyle().Foreground(ColorLightGray).Render(fmt.Sprintf("%d Active / %d Total (%d Errors)", activeCount, total, errorCount))
+		mirrorStats := lipgloss.NewStyle().Foreground(colors.LightGray).Render(fmt.Sprintf("%d Active / %d Total (%d Errors)", activeCount, total, errorCount))
 
 		mirrorSection = sectionStyle.Render(lipgloss.JoinVertical(lipgloss.Left, mirrorLabel, mirrorStats))
 	}
@@ -941,7 +941,7 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 	var errorSection string
 	if d.err != nil {
 		errorSection = sectionStyle.
-			Render(lipgloss.NewStyle().Foreground(ColorStateError).Render("Error: " + d.err.Error()))
+			Render(lipgloss.NewStyle().Foreground(colors.StateError).Render("Error: " + d.err.Error()))
 	}
 
 	// Combine with Dividers

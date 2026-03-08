@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/subtle"
 	"fmt"
-	"io"
 	"net"
 	"net/http"
 	"os"
@@ -417,33 +416,18 @@ func ensureAuthToken() string {
 		return token
 	}
 
-	legacyTokenFile := filepath.Join(config.GetSurgeDir(), "token")
-	if token, err := readTokenFromFile(legacyTokenFile); err == nil {
-		if err := writeTokenToFile(stateTokenFile, token); err != nil {
-			utils.Debug("Failed to mirror legacy token to state dir: %v", err)
-		}
-		return token
-	}
-
 	token := uuid.New().String()
 	if err := writeTokenToFile(stateTokenFile, token); err != nil {
 		utils.Debug("Failed to write token file in state dir: %v", err)
-		if errLegacy := writeTokenToFile(legacyTokenFile, token); errLegacy != nil {
-			utils.Debug("Failed to write token file in legacy config dir: %v", errLegacy)
-		}
 	}
 	return token
 }
 
 func persistAuthToken(token string) {
 	stateTokenFile := filepath.Join(config.GetStateDir(), "token")
-	legacyTokenFile := filepath.Join(config.GetSurgeDir(), "token")
 
 	if err := writeTokenToFile(stateTokenFile, token); err != nil {
 		utils.Debug("Failed to write token file in state dir: %v", err)
-	}
-	if err := writeTokenToFile(legacyTokenFile, token); err != nil {
-		utils.Debug("Failed to write token file in legacy config dir: %v", err)
 	}
 }
 
@@ -779,10 +763,6 @@ func initializeGlobalState() error {
 	logsDir := config.GetLogsDir()
 	stateDBPath := filepath.Join(stateDir, "surge.db")
 
-	if err := migrateLegacyStateDB(stateDBPath); err != nil {
-		return fmt.Errorf("state DB migration failed: %w", err)
-	}
-
 	// Ensure directories exist
 	_ = os.MkdirAll(stateDir, 0o755)
 	_ = os.MkdirAll(logsDir, 0o755)
@@ -809,103 +789,7 @@ func initializeGlobalState() error {
 	return nil
 }
 
-func migrateLegacyStateDB(stateDBPath string) error {
-	if stateDBPath == "" {
-		return nil
-	}
-	if _, err := os.Stat(stateDBPath); err == nil {
-		return nil
-	}
 
-	legacyCandidates := []string{
-		filepath.Join(config.GetSurgeDir(), "state", "surge.db"),
-		filepath.Join(config.GetSurgeDir(), "surge.db"),
-	}
-
-	for _, legacyPath := range legacyCandidates {
-		if legacyPath == "" {
-			continue
-		}
-		if samePath(stateDBPath, legacyPath) {
-			continue
-		}
-		if _, err := os.Stat(legacyPath); err != nil {
-			continue
-		}
-
-		if err := os.MkdirAll(filepath.Dir(stateDBPath), 0o755); err != nil {
-			utils.Debug("Failed to create state dir for DB migration: %v", err)
-			return err
-		}
-
-		if err := moveFileWithFallback(legacyPath, stateDBPath); err != nil {
-			utils.Debug("Failed to migrate legacy DB from %s to %s: %v", legacyPath, stateDBPath, err)
-			continue
-		}
-
-		for _, suffix := range []string{"-wal", "-shm"} {
-			srcSidecar := legacyPath + suffix
-			dstSidecar := stateDBPath + suffix
-			if err := moveFileWithFallback(srcSidecar, dstSidecar); err != nil {
-				if os.IsNotExist(err) {
-					continue
-				}
-				utils.Debug("Failed to migrate legacy DB sidecar %s from %s to %s: %v", suffix, legacyPath, stateDBPath, err)
-				return err
-			}
-		}
-
-		utils.Debug("Migrated legacy state DB from %s to %s", legacyPath, stateDBPath)
-		return nil
-	}
-	return nil
-}
-
-func moveFileWithFallback(src, dst string) error {
-	if src == "" || dst == "" {
-		return fmt.Errorf("invalid migration path")
-	}
-
-	if err := os.Rename(src, dst); err == nil {
-		return nil
-	}
-
-	srcFile, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		_ = srcFile.Close()
-	}()
-
-	srcInfo, err := srcFile.Stat()
-	if err != nil {
-		return err
-	}
-
-	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode().Perm())
-	if err != nil {
-		return err
-	}
-
-	if _, err := io.Copy(dstFile, srcFile); err != nil {
-		_ = dstFile.Close()
-		_ = os.Remove(dst)
-		return err
-	}
-	if err := dstFile.Close(); err != nil {
-		_ = os.Remove(dst)
-		return err
-	}
-
-	return os.Remove(src)
-}
-
-func samePath(a, b string) bool {
-	cleanA := filepath.Clean(a)
-	cleanB := filepath.Clean(b)
-	return cleanA == cleanB
-}
 
 func resumePausedDownloads() {
 	var settings *config.Settings

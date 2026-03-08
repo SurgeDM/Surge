@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/surge-downloader/surge/internal/config"
+	"github.com/surge-downloader/surge/internal/tui/colors"
 	"github.com/surge-downloader/surge/internal/tui/components"
 
 	"github.com/charmbracelet/lipgloss"
@@ -37,9 +38,9 @@ func (m RootModel) viewSettings() string {
 	if width < 40 || height < 10 {
 		content := lipgloss.NewStyle().
 			Padding(1, 2).
-			Foreground(ColorLightGray).
+			Foreground(colors.LightGray).
 			Render("Terminal too small for settings view")
-		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, ColorNeonPurple)
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.NeonPurple)
 		return m.renderModalWithOverlay(box)
 	}
 
@@ -61,7 +62,7 @@ func (m RootModel) viewSettings() string {
 		tabs = append(tabs, components.Tab{Label: cat, Count: -1})
 	}
 	// Purple theme for settings tabs
-	settingsActiveTab := lipgloss.NewStyle().Foreground(ColorNeonPurple)
+	settingsActiveTab := lipgloss.NewStyle().Foreground(colors.NeonPurple)
 	tabBar := components.RenderNumberedTabBar(tabs, m.SettingsActiveTab, settingsActiveTab, TabStyle)
 
 	// === CONTENT AREA ===
@@ -92,17 +93,17 @@ func (m RootModel) viewSettings() string {
 
 		// Highlight selected row with better visual treatment
 		if i == m.SettingsSelectedRow {
-			style := lipgloss.NewStyle().Foreground(ColorNeonPurple).Bold(true)
+			style := lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
 			cursor := "▸ "
 
 			if meta.Key == "max_global_connections" {
-				style = lipgloss.NewStyle().Foreground(ColorGray)
+				style = lipgloss.NewStyle().Foreground(colors.Gray)
 				cursor = "# "
 			}
 
 			line = style.Render(cursor + line)
 		} else {
-			style := lipgloss.NewStyle().Foreground(ColorLightGray)
+			style := lipgloss.NewStyle().Foreground(colors.LightGray)
 
 			if meta.Key == "max_global_connections" {
 				style = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#aaaaaa", Dark: "238"}) // Darker gray
@@ -119,7 +120,7 @@ func (m RootModel) viewSettings() string {
 	// Wrap list in a bordered box with better padding
 	listBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(ColorGray).
+		BorderForeground(colors.Gray).
 		Width(leftWidth).
 		Padding(1, 1).
 		Render(listContent)
@@ -132,7 +133,7 @@ func (m RootModel) viewSettings() string {
 
 		// Get unit suffix
 		unit := m.getSettingUnit()
-		unitStyle := lipgloss.NewStyle().Foreground(ColorGray)
+		unitStyle := lipgloss.NewStyle().Foreground(colors.Gray)
 
 		// Format value
 		var valueStr string
@@ -156,10 +157,10 @@ func (m RootModel) viewSettings() string {
 
 		// Value section with better styling
 		valueLabelStyle := lipgloss.NewStyle().
-			Foreground(ColorNeonCyan).
+			Foreground(colors.NeonCyan).
 			Bold(true)
 		valueContentStyle := lipgloss.NewStyle().
-			Foreground(ColorWhite)
+			Foreground(colors.White)
 
 		valueDisplay := valueLabelStyle.Render(valueLabel) + valueContentStyle.Render(valueStr)
 
@@ -169,12 +170,12 @@ func (m RootModel) viewSettings() string {
 			dividerWidth = 1
 		}
 		divider := lipgloss.NewStyle().
-			Foreground(ColorGray).
+			Foreground(colors.Gray).
 			Render(strings.Repeat("─", dividerWidth))
 
 		// Description with better formatting
 		descDisplay := lipgloss.NewStyle().
-			Foreground(ColorLightGray).
+			Foreground(colors.LightGray).
 			Width(rightWidth - 4).
 			Render(meta.Description)
 
@@ -196,7 +197,7 @@ func (m RootModel) viewSettings() string {
 	// Calculate divider height based on listBox height
 	listBoxHeight := lipgloss.Height(listBox)
 	dividerStyle := lipgloss.NewStyle().
-		Foreground(ColorGray)
+		Foreground(colors.Gray)
 	if listBoxHeight < 1 {
 		listBoxHeight = 1
 	}
@@ -207,7 +208,7 @@ func (m RootModel) viewSettings() string {
 
 	// === HELP TEXT using Bubbles help ===
 	helpStyle := lipgloss.NewStyle().
-		Foreground(ColorGray).
+		Foreground(colors.Gray).
 		Width(width - 6).
 		Align(lipgloss.Center)
 	helpText := helpStyle.Render(m.help.View(m.keys.Settings))
@@ -237,7 +238,7 @@ func (m RootModel) viewSettings() string {
 		padding+helpText,
 	)
 
-	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, ColorNeonPurple)
+	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, colors.NeonPurple)
 
 	return m.renderModalWithOverlay(box)
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/core"
 	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/tui/colors"
 	"github.com/surge-downloader/surge/internal/version"
 )
 
@@ -297,8 +298,8 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	// Initialize help
 	helpModel := help.New()
-	helpModel.Styles.ShortKey = lipgloss.NewStyle().Foreground(ColorLightGray)
-	helpModel.Styles.ShortDesc = lipgloss.NewStyle().Foreground(ColorGray)
+	helpModel.Styles.ShortKey = lipgloss.NewStyle().Foreground(colors.LightGray)
+	helpModel.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.Gray)
 
 	// Initialize settings input for editing
 	settingsInput := textinput.New()

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/surge-downloader/surge/internal/tui/colors"
 )
 
 var ansiEscapeRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
@@ -111,8 +112,8 @@ func BenchmarkLogoGradient(b *testing.B) {
 /____/\__,_/_/   \__, /\___/ 
                 /____/       `
 
-	startColor := ColorNeonPink
-	endColor := ColorNeonPurple
+	startColor := colors.NeonPink
+	endColor := colors.NeonPurple
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -130,7 +131,7 @@ func BenchmarkCachedLogo(b *testing.B) {
 
 	m := InitialRootModel(1701, "test-version", nil, false)
 	// Pre-warm cache
-	gradientLogo := ApplyGradient(logoText, ColorNeonPink, ColorNeonPurple)
+	gradientLogo := ApplyGradient(logoText, colors.NeonPink, colors.NeonPurple)
 	m.logoCache = lipgloss.NewStyle().Render(gradientLogo)
 
 	b.ResetTimer()
@@ -138,7 +139,7 @@ func BenchmarkCachedLogo(b *testing.B) {
 		if m.logoCache != "" {
 			_ = m.logoCache
 		} else {
-			_ = ApplyGradient(logoText, ColorNeonPink, ColorNeonPurple)
+			_ = ApplyGradient(logoText, colors.NeonPink, colors.NeonPurple)
 		}
 	}
 }

@@ -60,7 +60,12 @@ func initDB() error {
 		created_at INTEGER,
 		paused_at INTEGER,
 		completed_at INTEGER,
-		time_taken INTEGER
+		time_taken INTEGER,
+		mirrors TEXT,
+		chunk_bitmap BLOB,
+		actual_chunk_size INTEGER,
+		avg_speed REAL,
+		file_hash TEXT
 	);
 
 	CREATE TABLE IF NOT EXISTS tasks (
@@ -77,19 +82,6 @@ func initDB() error {
 	if _, err := db.Exec(query); err != nil {
 		return fmt.Errorf("failed to create tables: %w", err)
 	}
-
-	// Migration: Add mirrors column if not exists
-	_, _ = db.Exec("ALTER TABLE downloads ADD COLUMN mirrors TEXT")
-
-	// Migration: Add chunk bitmap columns
-	_, _ = db.Exec("ALTER TABLE downloads ADD COLUMN chunk_bitmap BLOB")
-	_, _ = db.Exec("ALTER TABLE downloads ADD COLUMN actual_chunk_size INTEGER")
-
-	// Migration: Add avg_speed for completed download stats
-	_, _ = db.Exec("ALTER TABLE downloads ADD COLUMN avg_speed REAL")
-
-	// Migration: Add file_hash for integrity verification of paused downloads
-	_, _ = db.Exec("ALTER TABLE downloads ADD COLUMN file_hash TEXT")
 
 	return nil
 }

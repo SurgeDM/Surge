@@ -2,8 +2,9 @@ package tui
 
 import (
 	"bytes"
-	"github.com/charmbracelet/bubbles/list"
 	"testing"
+
+	"github.com/charmbracelet/bubbles/list"
 )
 
 func BenchmarkDownloadDelegateRender(b *testing.B) {

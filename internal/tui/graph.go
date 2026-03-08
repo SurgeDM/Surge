@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/surge-downloader/surge/internal/tui/colors"
 	"github.com/surge-downloader/surge/internal/utils"
 
 	"github.com/charmbracelet/lipgloss"
@@ -36,7 +37,7 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, col
 	}
 
 	// Styles
-	gridStyle := lipgloss.NewStyle().Foreground(ColorGray)
+	gridStyle := lipgloss.NewStyle().Foreground(colors.Gray)
 	// barStyle := lipgloss.NewStyle().Foreground(color)
 
 	// 1. Prepare the canvas with a Grid
@@ -154,10 +155,10 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, col
 // overlayStatsBox renders stats on top of the graph in the top-right area
 func overlayStatsBox(graph string, stats *GraphStats, width, height int) string {
 	// Create the stats box content - btop style
-	valueStyle := lipgloss.NewStyle().Foreground(ColorNeonCyan).Bold(true)
-	labelStyle := lipgloss.NewStyle().Foreground(ColorLightGray)
-	headerStyle := lipgloss.NewStyle().Foreground(ColorNeonPink).Bold(true)
-	dimStyle := lipgloss.NewStyle().Foreground(ColorGray)
+	valueStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
+	labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray)
+	headerStyle := lipgloss.NewStyle().Foreground(colors.NeonPink).Bold(true)
+	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
 
 	speedMbps := stats.DownloadSpeed * 8
 	topMbps := stats.DownloadTop * 8

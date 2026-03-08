@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/charmbracelet/lipgloss"
+	"github.com/surge-downloader/surge/internal/tui/colors"
 )
 
 // viewCategoryManager renders the category management screen.
@@ -31,9 +32,9 @@ func (m RootModel) viewCategoryManager() string {
 	if width < 40 || height < 10 {
 		content := lipgloss.NewStyle().
 			Padding(1, 2).
-			Foreground(ColorLightGray).
+			Foreground(colors.LightGray).
 			Render("Terminal too small for category manager")
-		box := renderBtopBox(PaneTitleStyle.Render(" Category Manager "), "", content, width, height, ColorNeonPurple)
+		box := renderBtopBox(PaneTitleStyle.Render(" Category Manager "), "", content, width, height, colors.NeonPurple)
 		return m.renderModalWithOverlay(box)
 	}
 
@@ -41,15 +42,15 @@ func (m RootModel) viewCategoryManager() string {
 
 	// === TOGGLE BAR ===
 	enabledStr := "OFF"
-	enabledColor := ColorGray
+	enabledColor := colors.Gray
 	if m.Settings.General.CategoryEnabled {
 		enabledStr = "ON"
-		enabledColor = ColorStateDownloading
+		enabledColor = colors.StateDownloading
 	}
 	toggleStyle := lipgloss.NewStyle().Foreground(enabledColor).Bold(true)
-	toggleLine := lipgloss.NewStyle().Foreground(ColorLightGray).Render("  Auto-Sort Downloads: ") +
+	toggleLine := lipgloss.NewStyle().Foreground(colors.LightGray).Render("  Auto-Sort Downloads: ") +
 		toggleStyle.Render(enabledStr) +
-		lipgloss.NewStyle().Foreground(ColorGray).Render("  (t to toggle)")
+		lipgloss.NewStyle().Foreground(colors.Gray).Render("  (t to toggle)")
 
 	// === LEFT PANE: Category List ===
 	leftWidth := 26
@@ -65,26 +66,26 @@ func (m RootModel) viewCategoryManager() string {
 	for i, cat := range cats {
 		line := cat.Name
 		if i == m.catMgrCursor && !m.catMgrEditing {
-			style := lipgloss.NewStyle().Foreground(ColorNeonPurple).Bold(true)
+			style := lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
 			line = style.Render("▸ " + line)
 		} else {
-			style := lipgloss.NewStyle().Foreground(ColorLightGray)
+			style := lipgloss.NewStyle().Foreground(colors.LightGray)
 			line = style.Render("  " + line)
 		}
 		listLines = append(listLines, line)
 	}
 
 	// "+ Add Category" row
-	addLine := lipgloss.NewStyle().Foreground(ColorNeonCyan).Render("  + Add Category")
+	addLine := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("  + Add Category")
 	if m.catMgrCursor == len(cats) && !m.catMgrEditing {
-		addLine = lipgloss.NewStyle().Foreground(ColorNeonCyan).Bold(true).Render("▸ + Add Category")
+		addLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render("▸ + Add Category")
 	}
 	listLines = append(listLines, addLine)
 
 	listContent := lipgloss.JoinVertical(lipgloss.Left, listLines...)
 	listBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(ColorGray).
+		BorderForeground(colors.Gray).
 		Width(leftWidth).
 		Padding(1, 1).
 		Render(listContent)
@@ -97,12 +98,12 @@ func (m RootModel) viewCategoryManager() string {
 		fieldLabels := []string{"Name:", "Description:", "Pattern:", "Path:"}
 		var fieldLines []string
 		for i, label := range fieldLabels {
-			labelStyle := lipgloss.NewStyle().Foreground(ColorNeonCyan).Bold(true)
+			labelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
 			var valueStr string
 			if i == m.catMgrEditField {
 				valueStr = m.catMgrInputs[i].View()
 			} else {
-				valStyle := lipgloss.NewStyle().Foreground(ColorWhite)
+				valStyle := lipgloss.NewStyle().Foreground(colors.White)
 				valueStr = valStyle.Render(m.catMgrInputs[i].Value())
 			}
 			fieldLines = append(fieldLines, labelStyle.Render(label))
@@ -112,7 +113,7 @@ func (m RootModel) viewCategoryManager() string {
 			}
 		}
 
-		editHint := lipgloss.NewStyle().Foreground(ColorGray).Render(
+		editHint := lipgloss.NewStyle().Foreground(colors.Gray).Render(
 			"tab: next field  enter: save  esc: cancel")
 		fieldLines = append(fieldLines, "", editHint)
 
@@ -120,9 +121,9 @@ func (m RootModel) viewCategoryManager() string {
 	} else if m.catMgrCursor < len(cats) {
 		// View mode - show selected category details
 		cat := cats[m.catMgrCursor]
-		labelStyle := lipgloss.NewStyle().Foreground(ColorNeonCyan).Bold(true)
-		valueStyle := lipgloss.NewStyle().Foreground(ColorWhite)
-		dimStyle := lipgloss.NewStyle().Foreground(ColorGray)
+		labelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
+		valueStyle := lipgloss.NewStyle().Foreground(colors.White)
+		dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
 
 		dividerWidth := rightWidth - 4
 		if dividerWidth < 1 {
@@ -146,7 +147,7 @@ func (m RootModel) viewCategoryManager() string {
 		)
 	} else {
 		// On "+ Add Category" row
-		rightContent = lipgloss.NewStyle().Foreground(ColorGray).
+		rightContent = lipgloss.NewStyle().Foreground(colors.Gray).
 			Width(rightWidth - 4).
 			Render("Press Enter to create a new category\nor 'a' to add.")
 	}
@@ -158,7 +159,7 @@ func (m RootModel) viewCategoryManager() string {
 
 	// === VERTICAL DIVIDER ===
 	listBoxHeight := lipgloss.Height(listBox)
-	dividerStyle := lipgloss.NewStyle().Foreground(ColorGray)
+	dividerStyle := lipgloss.NewStyle().Foreground(colors.Gray)
 	if listBoxHeight < 1 {
 		listBoxHeight = 1
 	}
@@ -169,14 +170,14 @@ func (m RootModel) viewCategoryManager() string {
 
 	// === HELP ===
 	helpStyle := lipgloss.NewStyle().
-		Foreground(ColorGray).
+		Foreground(colors.Gray).
 		Width(width - 6).
 		Align(lipgloss.Center)
 	helpText := helpStyle.Render(m.help.View(m.keys.CategoryMgr))
 
 	// === INFO LINE ===
 	catCount := fmt.Sprintf("%d categories", len(cats))
-	infoLine := lipgloss.NewStyle().Foreground(ColorGray).Render("  " + catCount)
+	infoLine := lipgloss.NewStyle().Foreground(colors.Gray).Render("  " + catCount)
 
 	// Layout
 	toggleBarHeight := lipgloss.Height(toggleLine)
@@ -201,6 +202,6 @@ func (m RootModel) viewCategoryManager() string {
 		padding+helpText,
 	)
 
-	box := renderBtopBox(PaneTitleStyle.Render(" Category Manager "), "", fullContent, width, height, ColorNeonPurple)
+	box := renderBtopBox(PaneTitleStyle.Render(" Category Manager "), "", fullContent, width, height, colors.NeonPurple)
 	return m.renderModalWithOverlay(box)
 }

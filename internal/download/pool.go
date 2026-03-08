@@ -511,6 +511,9 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 // trySendProgress sends msg on progressCh unless progressDone has been closed,
 // preventing a panic from sending on a closed channel after shutdown.
 func (p *WorkerPool) trySendProgress(msg any) {
+	if p.progressCh == nil {
+		return
+	}
 	select {
 	case <-p.progressDone:
 		return
