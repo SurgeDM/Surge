@@ -144,13 +144,13 @@ type RootModel struct {
 	urlUpdateInput textinput.Model // Text input for updating URL
 
 	// Category manager
-	categoryFilter  string             // Dashboard filter ("" = all)
-	catMgrCursor    int                // Selected category index
-	catMgrEditing   bool               // Whether editing a category
-	catMgrEditField int                // 0=Name, 1=Description, 2=Pattern, 3=Path
-	catMgrInputs    [4]textinput.Model // Inputs for Name, Description, Pattern, Path
-	catMgrIsNew     bool               // Whether adding a new category
-	catMgrFileBrowsing bool            // Whether browsing for a category path
+	categoryFilter     string             // Dashboard filter ("" = all)
+	catMgrCursor       int                // Selected category index
+	catMgrEditing      bool               // Whether editing a category
+	catMgrEditField    int                // 0=Name, 1=Description, 2=Pattern, 3=Path
+	catMgrInputs       [4]textinput.Model // Inputs for Name, Description, Pattern, Path
+	catMgrIsNew        bool               // Whether adding a new category
+	catMgrFileBrowsing bool               // Whether browsing for a category path
 
 	// Keybindings
 	keys KeyMap
