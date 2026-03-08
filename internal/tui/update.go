@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"net/url"
 	"os"
+	"os/exec"
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"time"
 
-	"github.com/skratchdot/open-golang/open"
 	"github.com/surge-downloader/surge/internal/clipboard"
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/engine/events"
@@ -55,14 +56,18 @@ func shutdownCmd(service interface{ Shutdown() error }) tea.Cmd {
 	}
 }
 
-// openBrowser opens a URL in the default browser
-func openBrowser(url string) error {
-	return open.Start(url)
-}
-
-// openFile opens a file with the system's default application
-func openFile(path string) error {
-	return open.Start(path)
+// openWithSystem opens a file or URL with the system's default application
+func openWithSystem(path string) error {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", path)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", "", path)
+	default: // linux and others
+		cmd = exec.Command("xdg-open", path)
+	}
+	return cmd.Start()
 }
 
 // readURLsFromFile reads URLs from a file, accepting one-per-line or whitespace-separated URLs.
@@ -673,33 +678,25 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			// Tab switching
-			if key.Matches(msg, m.keys.Dashboard.TabQueued) {
-				m.activeTab = TabQueued
+			switchTab := func(tab int) (tea.Model, tea.Cmd) {
+				m.activeTab = tab
 				m.ManualTabSwitch = true
 				m.updateListTitle()
 				m.UpdateListItems()
 				return m, nil
+			}
+
+			if key.Matches(msg, m.keys.Dashboard.TabQueued) {
+				return switchTab(TabQueued)
 			}
 			if key.Matches(msg, m.keys.Dashboard.TabActive) {
-				m.activeTab = TabActive
-				m.ManualTabSwitch = true
-				m.updateListTitle()
-				m.UpdateListItems()
-				return m, nil
+				return switchTab(TabActive)
 			}
 			if key.Matches(msg, m.keys.Dashboard.TabDone) {
-				m.activeTab = TabDone
-				m.ManualTabSwitch = true
-				m.updateListTitle()
-				m.UpdateListItems()
-				return m, nil
+				return switchTab(TabDone)
 			}
 			// Quit
-			if key.Matches(msg, m.keys.Dashboard.Quit) {
-				m.shuttingDown = true
-				return m, shutdownCmd(m.Service)
-			}
-			if key.Matches(msg, m.keys.Dashboard.ForceQuit) {
+			if key.Matches(msg, m.keys.Dashboard.Quit, m.keys.Dashboard.ForceQuit) {
 				m.shuttingDown = true
 				return m, shutdownCmd(m.Service)
 			}
@@ -721,15 +718,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.inputs[1].SetValue("") // Clear mirrors
 				m.inputs[1].Blur()
 
+				url := ""
 				if m.Settings.General.ClipboardMonitor {
-					if url := clipboard.ReadURL(); url != "" {
-						m.inputs[0].SetValue(url)
-					} else {
-						m.inputs[0].SetValue("")
-					}
-				} else {
-					m.inputs[0].SetValue("")
+					url = clipboard.ReadURL()
 				}
+				m.inputs[0].SetValue(url)
 				return m, nil
 			}
 
@@ -823,7 +816,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 						if !d.done {
 							filePath = d.Destination + types.IncompleteSuffix
 						}
-						_ = openFile(filePath)
+						_ = openWithSystem(filePath)
 					}
 				}
 				return m, nil
@@ -1547,7 +1540,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key.Matches(msg, m.keys.Update.OpenGitHub) {
 				// Open the release page in browser
 				if m.UpdateInfo != nil && m.UpdateInfo.ReleaseURL != "" {
-					_ = openBrowser(m.UpdateInfo.ReleaseURL)
+					_ = openWithSystem(m.UpdateInfo.ReleaseURL)
 				}
 				m.state = DashboardState
 				m.UpdateInfo = nil
