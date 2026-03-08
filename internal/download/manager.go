@@ -34,7 +34,7 @@ type ProbeResult struct {
 	ContentType   string
 }
 
-// probeServer has been moved to internal/engine/probe.go
+
 
 // uniqueFilePath returns a unique file path by appending (1), (2), etc. if the file exists
 func uniqueFilePath(path string) string {
@@ -62,10 +62,7 @@ func uniqueFilePath(path string) string {
 			numStr := cleanName[openParen+1 : len(cleanName)-1]
 			if num, err := strconv.Atoi(numStr); err == nil && num > 0 {
 				base = cleanName[:openParen]
-				// Preserve original whitespace in base if it was "file (1)" -> "file "
-				// But we trimmed name. Let's rely on string slicing of cleanName?
-				// No, if cleanName was trimmed, base might differ from "name".
-				// But we construct new name using "base".
+				// Parsing "file (1)" -> "file " preserves original whitespace.
 				counter = num + 1
 			}
 		}
@@ -168,9 +165,6 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	finalFilename := filepath.Base(destPath)
 	utils.Debug("Destination path: %s", destPath)
 
-	// Update filename in config so caller (WorkerPool) sees it
-	// cfg.Filename = finalFilename
-	// cfg.DestPath = destPath // Save resolved path for resume logic (WorkerPool)
 
 	if cfg.State != nil {
 		cfg.State.SetFilename(finalFilename)
