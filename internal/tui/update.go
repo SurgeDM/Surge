@@ -248,6 +248,17 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	path = utils.EnsureAbsPath(path)
 
 	candidateFilename := strings.TrimSpace(filename)
+	requestID := strings.TrimSpace(id)
+
+	// Build an optimistic destination using the same routing rules as processing layer.
+	resolvedPath := path
+	resolvedFilename := candidateFilename
+	if p, f, err := processing.ResolveDestination(url, candidateFilename, path, isDefaultPath, m.Settings, nil, nil); err == nil {
+		resolvedPath = p
+		resolvedFilename = f
+	} else {
+		utils.Debug("Optimistic destination resolve failed for %s: %v", url, err)
+	}
 
 	// Call Orchestrator Enqueue
 	req := &processing.DownloadRequest{
@@ -261,7 +272,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		SkipApproval:       true,
 	}
 
-	optimisticFilename := candidateFilename
+	optimisticFilename := resolvedFilename
 	if optimisticFilename == "" {
 		base := url
 		if idx := strings.Index(base, "?"); idx >= 0 {
@@ -274,7 +285,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		}
 	}
 
-	optimisticID := strings.TrimSpace(id)
+	optimisticID := requestID
 	if optimisticID == "" {
 		optimisticID = fmt.Sprintf("pending-%d", time.Now().UnixNano())
 	}
@@ -285,29 +296,44 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 
 	newDownload := NewDownloadModel(optimisticID, url, displayName, 0)
 	if optimisticFilename != "" {
-		newDownload.Destination = filepath.Join(path, optimisticFilename)
+		newDownload.Destination = filepath.Join(resolvedPath, optimisticFilename)
 	} else {
-		newDownload.Destination = path
+		newDownload.Destination = resolvedPath
 	}
 	m.downloads = append(m.downloads, newDownload)
 	m.SelectedDownloadID = optimisticID
 	m.activeTab = TabQueued
 	m.UpdateListItems()
 
-	requestID := strings.TrimSpace(id)
-
 	// Legacy path for tests or startup wiring where processing is not injected yet.
 	if m.Orchestrator == nil {
-		newID, err := m.Service.Add(
-			url,
-			path,
-			candidateFilename,
-			mirrors,
-			headers,
-			!isDefaultPath,
-			0,
-			false,
+		var (
+			newID string
+			err   error
 		)
+		if requestID != "" {
+			newID, err = m.Service.AddWithID(
+				url,
+				resolvedPath,
+				resolvedFilename,
+				mirrors,
+				headers,
+				requestID,
+				0,
+				false,
+			)
+		} else {
+			newID, err = m.Service.Add(
+				url,
+				resolvedPath,
+				resolvedFilename,
+				mirrors,
+				headers,
+				!isDefaultPath,
+				0,
+				false,
+			)
+		}
 		if err != nil {
 			m.removeDownloadByID(optimisticID)
 			m.UpdateListItems()
@@ -340,7 +366,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 			tempID:   optimisticID,
 			id:       newID,
 			url:      url,
-			path:     path,
+			path:     resolvedPath,
 			filename: optimisticFilename,
 		}
 	}
