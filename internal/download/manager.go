@@ -123,7 +123,6 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		// Resume: use saved destination path directly (don't generate new unique name)
 		finalDestPath = savedState.DestPath
 		finalFilename = filepath.Base(finalDestPath)
-		destPath = filepath.Dir(finalDestPath)
 		utils.Debug("Resuming download, using saved destPath: %s", finalDestPath)
 	}
 	utils.Debug("Destination path: %s", finalDestPath)
