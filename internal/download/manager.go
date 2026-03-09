@@ -87,13 +87,6 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	finalFilename := cfg.Filename
 	finalDestPath := filepath.Join(destPath, finalFilename)
 
-	// Auto-create output directory if it doesn't exist
-	if _, err := os.Stat(destPath); os.IsNotExist(err) {
-		if mkErr := os.MkdirAll(destPath, 0o755); mkErr != nil {
-			utils.Debug("Failed to create output directory: %v", mkErr)
-		}
-	}
-
 	// Local mirrors slice to avoid modifying config (race condition)
 	mirrors := make([]string, len(cfg.Mirrors))
 	copy(mirrors, cfg.Mirrors)

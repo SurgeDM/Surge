@@ -3,8 +3,11 @@ package processing
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 
 	"github.com/surge-downloader/surge/internal/config"
+	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
@@ -141,6 +144,16 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve destination: %w", err)
 	}
+	if err := os.MkdirAll(finalPath, 0o755); err != nil {
+		return "", fmt.Errorf("failed to create destination directory: %w", err)
+	}
+
+	surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
+	file, err := os.Create(surgePath)
+	if err != nil {
+		return "", fmt.Errorf("failed to pre-create working file: %w", err)
+	}
+	_ = file.Close()
 
 	newID, err := mgr.addWithIDFunc(
 		req.URL,
