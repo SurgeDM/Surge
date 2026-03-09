@@ -262,7 +262,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	if d.State != nil {
 		d.State.URL = rawurl
 		d.State.DestPath = destPath
-		
+
 		var statuses []types.MirrorStatus
 		// Add primary
 		statuses = append(statuses, types.MirrorStatus{URL: rawurl, Active: true})

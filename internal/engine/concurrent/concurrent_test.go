@@ -318,7 +318,6 @@ func TestConcurrentDownloader_SmallFile(t *testing.T) {
 		t.Error(err)
 	}
 
-
 }
 
 func TestConcurrentDownloader_MediumFile(t *testing.T) {
@@ -640,7 +639,6 @@ func TestConcurrentDownloader_ResumePartialDownload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resume download failed: %v", err)
 	}
-
 
 }
 

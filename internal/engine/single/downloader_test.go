@@ -378,8 +378,6 @@ func TestSingleDownloader_Download_Success(t *testing.T) {
 		t.Error(err)
 	}
 
-
-
 	// Verify progress was tracked
 	if state.Downloaded.Load() != fileSize {
 		t.Errorf("Downloaded %d != fileSize %d", state.Downloaded.Load(), fileSize)
