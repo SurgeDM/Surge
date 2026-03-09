@@ -600,17 +600,19 @@ func (s *LocalDownloadService) Resume(id string) error {
 	}
 
 	cfg := types.DownloadConfig{
-		URL:        entry.URL,
-		OutputPath: outputPath,
-		DestPath:   entry.DestPath,
-		ID:         id,
-		Filename:   entry.Filename,
-		IsResume:   true,
-		ProgressCh: s.InputCh,
-		State:      dmState,
-		SavedState: savedState, // Pass loaded state to avoid re-query
-		Runtime:    types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
-		Mirrors:    mirrorURLs,
+		URL:           entry.URL,
+		OutputPath:    outputPath,
+		DestPath:      entry.DestPath,
+		ID:            id,
+		Filename:      entry.Filename,
+		TotalSize:     entry.TotalSize,
+		SupportsRange: savedState != nil && len(savedState.Tasks) > 0,
+		IsResume:      true,
+		ProgressCh:    s.InputCh,
+		State:         dmState,
+		SavedState:    savedState, // Pass loaded state to avoid re-query
+		Runtime:       types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
+		Mirrors:       mirrorURLs,
 	}
 
 	s.Pool.Add(cfg)
@@ -710,17 +712,19 @@ func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
 		dmState.SyncSessionStart()
 
 		cfg := types.DownloadConfig{
-			URL:        savedState.URL,
-			OutputPath: outputPath,
-			DestPath:   savedState.DestPath,
-			ID:         id,
-			Filename:   savedState.Filename,
-			IsResume:   true,
-			ProgressCh: s.InputCh,
-			State:      dmState,
-			SavedState: savedState, // Pass loaded state to avoid re-query
-			Runtime:    types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
-			Mirrors:    mirrorURLs,
+			URL:           savedState.URL,
+			OutputPath:    outputPath,
+			DestPath:      savedState.DestPath,
+			ID:            id,
+			Filename:      savedState.Filename,
+			TotalSize:     savedState.TotalSize,
+			SupportsRange: len(savedState.Tasks) > 0,
+			IsResume:      true,
+			ProgressCh:    s.InputCh,
+			State:         dmState,
+			SavedState:    savedState, // Pass loaded state to avoid re-query
+			Runtime:       types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
+			Mirrors:       mirrorURLs,
 		}
 
 		s.Pool.Add(cfg)
