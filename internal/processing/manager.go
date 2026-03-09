@@ -13,16 +13,13 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
-// AddDownloadFunc represents a function capable of adding a download to the engine or queue
-// url, path, filename, mirrors, headers, isExplicitCategory, totalSize, supportsRange
+// AddDownloadFunc is the lifecycle's handoff into the engine-facing queue layer.
 type AddDownloadFunc func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error)
 
-// AddDownloadWithIDFunc adds a download with a predefined UUID (used by daemon/TUI for syncing)
+// AddDownloadWithIDFunc preserves caller-chosen ids when a remote/UI layer already owns them.
 type AddDownloadWithIDFunc func(string, string, string, []string, map[string]string, string, int64, bool) (string, error)
 
-// LifecycleManager orchestrates the life of a download outside of the core HTTP engine.
-// It handles probing, category routing, file conflict resolution, and settings management.
-// IsNameActiveFunc checks whether a given filename is already being downloaded in a directory.
+// IsNameActiveFunc lets routing treat in-flight downloads as filename conflicts within a directory.
 type IsNameActiveFunc func(dir, name string) bool
 
 type LifecycleManager struct {
@@ -30,7 +27,7 @@ type LifecycleManager struct {
 	settingsMu    sync.RWMutex
 	addFunc       AddDownloadFunc
 	addWithIDFunc AddDownloadWithIDFunc
-	IsNameActive  IsNameActiveFunc // Optional; set by wiring layer
+	isNameActive  IsNameActiveFunc
 }
 
 const maxWorkingFileReservationAttempts = 100
@@ -55,13 +52,13 @@ func precreateWorkingFile(destPath, filename string) error {
 
 // buildIsNameActive returns the configured callback or a safe no-op.
 func (mgr *LifecycleManager) buildIsNameActive() func(string, string) bool {
-	if mgr.IsNameActive != nil {
-		return mgr.IsNameActive
+	if mgr.isNameActive != nil {
+		return mgr.isNameActive
 	}
 	return func(string, string) bool { return false }
 }
 
-func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithIDFunc) *LifecycleManager {
+func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithIDFunc, isNameActive ...IsNameActiveFunc) *LifecycleManager {
 	// Snapshot settings once so enqueue can still make routing decisions even if
 	// a later disk read fails or the caller never opens the settings UI.
 	settings, err := config.LoadSettings()
@@ -69,21 +66,27 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 		settings = config.DefaultSettings()
 	}
 
+	var activeCheck IsNameActiveFunc
+	if len(isNameActive) > 0 {
+		activeCheck = isNameActive[0]
+	}
+
 	return &LifecycleManager{
 		settings:      settings,
 		addFunc:       addFunc,
 		addWithIDFunc: addWithIDFunc,
+		isNameActive:  activeCheck,
 	}
 }
 
-// GetSettings returns the current routing/settings snapshot used by the lifecycle layer.
+// GetSettings exposes the snapshot currently driving enqueue decisions.
 func (m *LifecycleManager) GetSettings() *config.Settings {
 	m.settingsMu.RLock()
 	defer m.settingsMu.RUnlock()
 	return m.settings
 }
 
-// SaveSettings persists settings and updates the active instance.
+// SaveSettings swaps in a new routing snapshot for future enqueue calls.
 func (m *LifecycleManager) SaveSettings(s *config.Settings) error {
 	if err := config.SaveSettings(s); err != nil {
 		return err
@@ -94,7 +97,7 @@ func (m *LifecycleManager) SaveSettings(s *config.Settings) error {
 	return nil
 }
 
-// DownloadRequest represents a verified request coming from the UI or API.
+// DownloadRequest carries the already-approved inputs needed to probe and reserve a file path.
 type DownloadRequest struct {
 	URL                string
 	Filename           string
@@ -106,7 +109,7 @@ type DownloadRequest struct {
 	SkipApproval       bool
 }
 
-// Enqueue processes a download request and adds it to the engine.
+// Enqueue probes and reserves a stable destination before dispatching to the queue layer.
 func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) (string, error) {
 	if mgr.addFunc == nil {
 		return "", fmt.Errorf("add function unavailable")
@@ -127,7 +130,7 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 	})
 }
 
-// EnqueueWithID works identical to Enqueue but passes an explicit requestID to the engine
+// EnqueueWithID does the same lifecycle work as Enqueue while preserving a caller-owned id.
 func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadRequest, requestID string) (string, error) {
 	if mgr.addWithIDFunc == nil {
 		return "", fmt.Errorf("addWithID function unavailable")
@@ -194,4 +197,10 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 	}
 
 	return "", fmt.Errorf("failed to reserve unique working file for %q after %d attempts", req.URL, maxWorkingFileReservationAttempts)
+}
+
+// IsNameActive reports whether the configured active-download callback would
+// treat the given directory/name pair as an in-flight conflict.
+func (mgr *LifecycleManager) IsNameActive(dir, name string) bool {
+	return mgr.buildIsNameActive()(dir, name)
 }

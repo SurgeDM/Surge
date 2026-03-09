@@ -109,9 +109,6 @@ func TestNewLocalLifecycleManager_WiresNameActivityCheck(t *testing.T) {
 	}
 
 	mgr := newLocalLifecycleManager(nil, getAll)
-	if mgr.IsNameActive == nil {
-		t.Fatal("expected IsNameActive to be wired")
-	}
 	if !mgr.IsNameActive(".", "active.bin") {
 		t.Fatal("expected wired IsNameActive callback to inspect active downloads")
 	}

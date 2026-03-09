@@ -117,9 +117,7 @@ func newLocalLifecycleManager(service core.DownloadService, getAll func() []type
 		}
 	}
 
-	mgr := processing.NewLifecycleManager(addFunc, addWithIDFunc)
-	mgr.IsNameActive = buildPoolIsNameActive(getAll)
-	return mgr
+	return processing.NewLifecycleManager(addFunc, addWithIDFunc, buildPoolIsNameActive(getAll))
 }
 
 func startLifecycleEventWorker(service core.DownloadService, mgr *processing.LifecycleManager) (func(), error) {
