@@ -75,6 +75,16 @@ func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 		}
 	}
 
+	// Wait briefly for event worker to actually apply the DB deletion after emitting the event
+	deletionDeadline := time.Now().Add(500 * time.Millisecond)
+	for time.Now().Before(deletionDeadline) {
+		entry, _ := state.GetDownload(id)
+		if entry == nil {
+			return // Success, it is gone
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
 	entry, err := state.GetDownload(id)
 	if err != nil {
 		t.Fatalf("failed querying deleted entry: %v", err)
