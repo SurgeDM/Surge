@@ -35,14 +35,14 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 		case events.DownloadPausedMsg:
 			// Update master list with paused status and progress
 			if m.State != nil {
-			if m.State != nil {
-				destPath := m.State.DestPath
-				if destPath == "" {
-					// Fallback to DB entry's path (already resolved during enqueue)
-					if existing, _ := state.GetDownload(m.DownloadID); existing != nil {
-						destPath = existing.DestPath
+				if m.State != nil {
+					destPath := m.State.DestPath
+					if destPath == "" {
+						// Fallback to DB entry's path (already resolved during enqueue)
+						if existing, _ := state.GetDownload(m.DownloadID); existing != nil {
+							destPath = existing.DestPath
+						}
 					}
-				}
 				}
 
 				// Full upsert with downloaded progress
