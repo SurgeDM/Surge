@@ -2,6 +2,7 @@ package processing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -32,13 +33,19 @@ type LifecycleManager struct {
 	IsNameActive  IsNameActiveFunc // Optional; set by wiring layer
 }
 
+const maxWorkingFileReservationAttempts = 100
+
+var reserveWorkingFile = precreateWorkingFile
+
 func precreateWorkingFile(destPath, filename string) error {
 	if err := os.MkdirAll(destPath, 0o755); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
 	surgePath := filepath.Join(destPath, filename) + types.IncompleteSuffix
-	file, err := os.Create(surgePath)
+	// Exclusive create turns the .surge file into the reservation itself, so two
+	// concurrent enqueues cannot silently target the same working path.
+	file, err := os.OpenFile(surgePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("failed to pre-create working file: %w", err)
 	}
@@ -150,30 +157,41 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 		return "", fmt.Errorf("probe failed: %w", err)
 	}
 
-	finalPath, finalFilename, err := ResolveDestination(
-		req.URL,
-		req.Filename,
-		req.Path,
-		!req.IsExplicitCategory,
-		mgr.GetSettings(),
-		probe,
-		mgr.buildIsNameActive(),
-	)
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve destination: %w", err)
+	settings := mgr.GetSettings()
+	isNameActive := mgr.buildIsNameActive()
+
+	for attempt := 0; attempt < maxWorkingFileReservationAttempts; attempt++ {
+		finalPath, finalFilename, err := ResolveDestination(
+			req.URL,
+			req.Filename,
+			req.Path,
+			!req.IsExplicitCategory,
+			settings,
+			probe,
+			isNameActive,
+		)
+		if err != nil {
+			return "", fmt.Errorf("failed to resolve destination: %w", err)
+		}
+
+		// Reserve the working path before dispatch so a concurrent enqueue has to
+		// pick a different name instead of truncating this in-flight download.
+		if err := reserveWorkingFile(finalPath, finalFilename); err != nil {
+			if errors.Is(err, os.ErrExist) {
+				continue
+			}
+			return "", err
+		}
+
+		surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
+		newID, err := dispatch(finalPath, finalFilename, probe)
+		if err != nil {
+			_ = os.Remove(surgePath)
+			return "", err
+		}
+
+		return newID, nil
 	}
 
-	// Pre-create the working file so the downloader can open it immediately after queueing.
-	if err := precreateWorkingFile(finalPath, finalFilename); err != nil {
-		return "", err
-	}
-
-	surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
-	newID, err := dispatch(finalPath, finalFilename, probe)
-	if err != nil {
-		_ = os.Remove(surgePath)
-		return "", err
-	}
-
-	return newID, nil
+	return "", fmt.Errorf("failed to reserve unique working file for %q after %d attempts", req.URL, maxWorkingFileReservationAttempts)
 }

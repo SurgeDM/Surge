@@ -180,6 +180,78 @@ func TestLifecycleManager_Enqueue_RemovesWorkingFileOnDispatchError(t *testing.T
 	}
 }
 
+func TestLifecycleManager_Enqueue_RetriesWhenWorkingFileReservationCollides(t *testing.T) {
+	server := newProbeTestServer(t, 1024)
+	defer server.Close()
+
+	tempDir := t.TempDir()
+
+	origReserve := reserveWorkingFile
+	t.Cleanup(func() {
+		reserveWorkingFile = origReserve
+	})
+
+	var reserveCalls int
+	reserveWorkingFile = func(destPath, filename string) error {
+		reserveCalls++
+		if reserveCalls == 1 {
+			surgePath := filepath.Join(destPath, filename) + types.IncompleteSuffix
+			if err := os.MkdirAll(destPath, 0o755); err != nil {
+				t.Fatalf("failed to create temp dir for collision: %v", err)
+			}
+			if err := os.WriteFile(surgePath, []byte("occupied"), 0o644); err != nil {
+				t.Fatalf("failed to seed colliding working file: %v", err)
+			}
+			return fmt.Errorf("collision: %w", os.ErrExist)
+		}
+		return precreateWorkingFile(destPath, filename)
+	}
+
+	mgr := newLifecycleManagerForTest()
+	var dispatchedFilename string
+	mgr.addFunc = func(url, path, filename string, _ []string, _ map[string]string, explicit bool, totalSize int64, supportsRange bool) (string, error) {
+		dispatchedFilename = filename
+		if path != tempDir {
+			t.Fatalf("path = %q, want %q", path, tempDir)
+		}
+		if explicit != true {
+			t.Fatal("expected explicit category flag to be preserved")
+		}
+		if totalSize != 1024 || !supportsRange {
+			t.Fatalf("unexpected probe metadata: total=%d range=%v", totalSize, supportsRange)
+		}
+		return "retry-id", nil
+	}
+
+	id, err := mgr.Enqueue(context.Background(), &DownloadRequest{
+		URL:                server.URL,
+		Filename:           "archive.zip",
+		Path:               tempDir,
+		IsExplicitCategory: true,
+	})
+	if err != nil {
+		t.Fatalf("Enqueue failed: %v", err)
+	}
+	if id != "retry-id" {
+		t.Fatalf("id = %q, want retry-id", id)
+	}
+	if dispatchedFilename != "archive(1).zip" {
+		t.Fatalf("filename = %q, want archive(1).zip", dispatchedFilename)
+	}
+	if reserveCalls < 2 {
+		t.Fatalf("reserve calls = %d, want at least 2", reserveCalls)
+	}
+
+	firstSurgePath := filepath.Join(tempDir, "archive.zip") + types.IncompleteSuffix
+	if _, err := os.Stat(firstSurgePath); err != nil {
+		t.Fatalf("expected first reservation to remain in place: %v", err)
+	}
+	retriedSurgePath := filepath.Join(tempDir, "archive(1).zip") + types.IncompleteSuffix
+	if _, err := os.Stat(retriedSurgePath); err != nil {
+		t.Fatalf("expected retried reservation to exist: %v", err)
+	}
+}
+
 func TestLifecycleManager_EnqueueWithID_RemovesWorkingFileOnDispatchError(t *testing.T) {
 	server := newProbeTestServer(t, 2048)
 	defer server.Close()
