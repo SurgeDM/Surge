@@ -25,11 +25,25 @@ type AddDownloadWithIDFunc func(string, string, string, []string, map[string]str
 type IsNameActiveFunc func(name string) bool
 
 type LifecycleManager struct {
-	settings        *config.Settings
-	settingsMu      sync.RWMutex
-	addFunc         AddDownloadFunc
-	addWithIDFunc   AddDownloadWithIDFunc
-	IsNameActive    IsNameActiveFunc // Optional; set by wiring layer
+	settings      *config.Settings
+	settingsMu    sync.RWMutex
+	addFunc       AddDownloadFunc
+	addWithIDFunc AddDownloadWithIDFunc
+	IsNameActive  IsNameActiveFunc // Optional; set by wiring layer
+}
+
+func precreateWorkingFile(destPath, filename string) error {
+	if err := os.MkdirAll(destPath, 0o755); err != nil {
+		return fmt.Errorf("failed to create destination directory: %w", err)
+	}
+
+	surgePath := filepath.Join(destPath, filename) + types.IncompleteSuffix
+	file, err := os.Create(surgePath)
+	if err != nil {
+		return fmt.Errorf("failed to pre-create working file: %w", err)
+	}
+	_ = file.Close()
+	return nil
 }
 
 // buildIsNameActive returns the configured callback or a safe no-op.
@@ -122,6 +136,10 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 		return "", fmt.Errorf("failed to resolve destination: %w", err)
 	}
 
+	if err := precreateWorkingFile(finalPath, finalFilename); err != nil {
+		return "", err
+	}
+
 	// 3. Dispatch to Engine
 	// The Engine no longer probes or thinks. It just downloads what it's told.
 	newID, err := mgr.addFunc(
@@ -169,16 +187,9 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve destination: %w", err)
 	}
-	if err := os.MkdirAll(finalPath, 0o755); err != nil {
-		return "", fmt.Errorf("failed to create destination directory: %w", err)
+	if err := precreateWorkingFile(finalPath, finalFilename); err != nil {
+		return "", err
 	}
-
-	surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
-	file, err := os.Create(surgePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to pre-create working file: %w", err)
-	}
-	_ = file.Close()
 
 	newID, err := mgr.addWithIDFunc(
 		req.URL,

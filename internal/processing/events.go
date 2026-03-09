@@ -78,7 +78,10 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			// Skip if destPath is empty — SaveState with a bare filename
 			// corrupts the state DB key and breaks resume.
 			if destPath != "" && url != "" {
-				if err := state.SaveState(url, destPath, m.State); err != nil {
+				// Keep pause persistence fast so lifecycle events don't back up and get dropped.
+				if err := state.SaveStateWithOptions(url, destPath, m.State, state.SaveStateOptions{
+					SkipFileHash: true,
+				}); err != nil {
 					utils.Debug("Lifecycle: Failed to save pause state: %v", err)
 				}
 			} else {
