@@ -80,3 +80,18 @@ func TestDefaultGlobalShutdown_ServiceBeforeCleanup(t *testing.T) {
 		t.Fatalf("shutdown order = %v, want [shutdown cleanup]", order)
 	}
 }
+
+func TestDefaultGlobalShutdown_CancelsEnqueueContext(t *testing.T) {
+	resetGlobalEnqueueContext()
+	ctx := currentEnqueueContext()
+
+	if err := defaultGlobalShutdown(); err != nil {
+		t.Fatalf("defaultGlobalShutdown failed: %v", err)
+	}
+
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatal("expected shutdown to cancel the shared enqueue context")
+	}
+}

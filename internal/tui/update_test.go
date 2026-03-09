@@ -510,6 +510,41 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 	}
 }
 
+func TestWithEnqueueContext_OverridesStartDownloadContext(t *testing.T) {
+	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
+	t.Cleanup(func() {
+		_ = svc.Shutdown()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	orchestrator := processing.NewLifecycleManager(
+		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+			t.Fatal("enqueue dispatch should not run after shared context cancellation")
+			return "", nil
+		},
+		nil,
+	)
+
+	m := InitialRootModel(1700, "test-version", svc, orchestrator, false)
+	m = m.WithEnqueueContext(ctx, func() {})
+
+	_, cmd := m.startDownload("https://example.com/file.bin", nil, nil, t.TempDir(), false, "file.bin", "")
+	if cmd == nil {
+		t.Fatal("expected enqueue command")
+	}
+
+	msg := cmd()
+	errMsg, ok := msg.(enqueueErrorMsg)
+	if !ok {
+		t.Fatalf("msg = %T, want enqueueErrorMsg", msg)
+	}
+	if !errors.Is(errMsg.err, context.Canceled) {
+		t.Fatalf("err = %v, want context canceled", errMsg.err)
+	}
+}
+
 func TestUpdate_RefreshShortcut(t *testing.T) {
 	dm := NewDownloadModel("id-1", "http://example.com/file", "file", 100)
 	dm.paused = true

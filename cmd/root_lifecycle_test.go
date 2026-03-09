@@ -14,6 +14,7 @@ import (
 
 	"github.com/surge-downloader/surge/internal/core"
 	"github.com/surge-downloader/surge/internal/download"
+	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/processing"
@@ -25,6 +26,7 @@ type countingLifecycleService struct {
 	streamCh    chan interface{}
 	cleanupMu   sync.Mutex
 	cleaned     bool
+	logs        []string
 }
 
 var _ core.DownloadService = (*countingLifecycleService)(nil)
@@ -37,12 +39,19 @@ func (s *countingLifecycleService) Add(string, string, string, []string, map[str
 func (s *countingLifecycleService) AddWithID(string, string, string, []string, map[string]string, string, int64, bool) (string, error) {
 	return "", nil
 }
-func (s *countingLifecycleService) Pause(string) error                              { return nil }
-func (s *countingLifecycleService) Resume(string) error                             { return nil }
-func (s *countingLifecycleService) ResumeBatch([]string) []error                    { return nil }
-func (s *countingLifecycleService) UpdateURL(string, string) error                  { return nil }
-func (s *countingLifecycleService) Delete(string) error                             { return nil }
-func (s *countingLifecycleService) Publish(interface{}) error                       { return nil }
+func (s *countingLifecycleService) Pause(string) error             { return nil }
+func (s *countingLifecycleService) Resume(string) error            { return nil }
+func (s *countingLifecycleService) ResumeBatch([]string) []error   { return nil }
+func (s *countingLifecycleService) UpdateURL(string, string) error { return nil }
+func (s *countingLifecycleService) Delete(string) error            { return nil }
+func (s *countingLifecycleService) Publish(msg interface{}) error {
+	if log, ok := msg.(events.SystemLogMsg); ok {
+		s.cleanupMu.Lock()
+		s.logs = append(s.logs, log.Message)
+		s.cleanupMu.Unlock()
+	}
+	return nil
+}
 func (s *countingLifecycleService) GetStatus(string) (*types.DownloadStatus, error) { return nil, nil }
 func (s *countingLifecycleService) Shutdown() error                                 { return nil }
 
@@ -220,6 +229,49 @@ func TestEnsureLocalLifecycle_ConcurrentInitializationStartsOneStream(t *testing
 		cleanup()
 	}
 	GlobalLifecycle = nil
+}
+
+func TestProcessDownloads_UsesSharedEnqueueContext(t *testing.T) {
+	setupIsolatedCmdState(t)
+	service := &countingLifecycleService{}
+	GlobalService = service
+	GlobalPool = download.NewWorkerPool(nil, 1)
+	GlobalLifecycleCleanup = nil
+	t.Cleanup(func() {
+		GlobalService = nil
+		GlobalPool = nil
+		GlobalLifecycle = nil
+		if cleanup := takeLifecycleCleanup(); cleanup != nil {
+			cleanup()
+		}
+	})
+
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "5")
+		_, _ = w.Write([]byte("hello"))
+	}))
+	defer server.Close()
+
+	dispatchCalled := false
+	GlobalLifecycle = processing.NewLifecycleManager(
+		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+			dispatchCalled = true
+			return "", nil
+		},
+		nil,
+	)
+
+	cancelGlobalEnqueue()
+	count := processDownloads([]string{server.URL + "/shared-context.bin"}, t.TempDir(), 0)
+	if count != 0 {
+		t.Fatalf("count = %d, want 0 after canceled enqueue context", count)
+	}
+	if dispatchCalled {
+		t.Fatal("expected canceled enqueue context to stop before dispatch")
+	}
+	if len(service.logs) == 0 {
+		t.Fatal("expected enqueue failure to be published as a system log")
+	}
 }
 
 func TestIsExplicitOutputPath(t *testing.T) {

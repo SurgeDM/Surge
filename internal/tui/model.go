@@ -386,6 +386,20 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	return m
 }
 
+// WithEnqueueContext lets callers bind model-initiated probes to a process-level
+// shutdown context instead of the model's default standalone context.
+func (m RootModel) WithEnqueueContext(ctx context.Context, cancel context.CancelFunc) RootModel {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if cancel == nil {
+		cancel = func() {}
+	}
+	m.enqueueCtx = ctx
+	m.cancelEnqueue = cancel
+	return m
+}
+
 type ViewStats struct {
 	ActiveCount     int
 	QueuedCount     int

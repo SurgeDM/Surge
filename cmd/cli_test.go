@@ -783,6 +783,7 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 func setupIsolatedCmdState(t *testing.T) {
 	t.Helper()
 	setupXDGEnvIsolation(t)
+	resetGlobalEnqueueContext()
 
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("EnsureDirs failed: %v", err)

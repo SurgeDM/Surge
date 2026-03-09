@@ -57,6 +57,9 @@ var (
 	globalSettings          *config.Settings
 	GlobalLifecycle         *processing.LifecycleManager
 	globalLifecycleMu       sync.Mutex
+	globalEnqueueCtx        context.Context
+	globalEnqueueCancel     context.CancelFunc
+	globalEnqueueMu         sync.Mutex
 )
 
 func buildPoolIsNameActive(getAll func() []types.DownloadConfig) processing.IsNameActiveFunc {
@@ -136,6 +139,42 @@ func currentLifecycle() *processing.LifecycleManager {
 	globalLifecycleMu.Lock()
 	defer globalLifecycleMu.Unlock()
 	return GlobalLifecycle
+}
+
+func resetGlobalEnqueueContext() {
+	globalEnqueueMu.Lock()
+	defer globalEnqueueMu.Unlock()
+	if globalEnqueueCancel != nil {
+		globalEnqueueCancel()
+	}
+	globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background())
+}
+
+func currentEnqueueContext() context.Context {
+	globalEnqueueMu.Lock()
+	defer globalEnqueueMu.Unlock()
+	if globalEnqueueCtx == nil || globalEnqueueCancel == nil {
+		globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background())
+	}
+	return globalEnqueueCtx
+}
+
+func currentEnqueueCancel() context.CancelFunc {
+	globalEnqueueMu.Lock()
+	defer globalEnqueueMu.Unlock()
+	if globalEnqueueCtx == nil || globalEnqueueCancel == nil {
+		globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background())
+	}
+	return globalEnqueueCancel
+}
+
+func cancelGlobalEnqueue() {
+	globalEnqueueMu.Lock()
+	cancel := globalEnqueueCancel
+	globalEnqueueMu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
 }
 
 func takeLifecycleCleanup() func() {
@@ -237,6 +276,7 @@ var rootCmd = &cobra.Command{
 		}()
 
 		mustInitializeGlobalState()
+		resetGlobalEnqueueContext()
 
 		startupIntegrityMessage = runStartupIntegrityCheck()
 
@@ -315,6 +355,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
 	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), noResume)
+	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())
 	m.ServerHost = serverBindHost
 	if m.ServerHost == "" {
 		m.ServerHost = "127.0.0.1"
@@ -845,7 +886,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 			continue
 		}
 
-		_, err := lifecycle.Enqueue(context.Background(), &processing.DownloadRequest{
+		_, err := lifecycle.Enqueue(currentEnqueueContext(), &processing.DownloadRequest{
 			URL:                url,
 			Path:               outPath,
 			Mirrors:            mirrors,

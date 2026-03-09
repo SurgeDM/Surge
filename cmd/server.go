@@ -172,6 +172,7 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
 		os.Exit(1)
 	}
+	resetGlobalEnqueueContext()
 
 	// Initialize Service
 	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
