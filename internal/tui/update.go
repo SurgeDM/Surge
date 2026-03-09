@@ -427,8 +427,22 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case enqueueSuccessMsg:
 		if msg.tempID != "" && msg.tempID != msg.id {
-			if d := m.FindDownloadByID(msg.tempID); d != nil {
-				d.ID = msg.id
+			temp := m.FindDownloadByID(msg.tempID)
+			real := m.FindDownloadByID(msg.id)
+			if temp != nil && real != nil && temp != real {
+				if real.URL == "" {
+					real.URL = temp.URL
+				}
+				if real.Filename == "" {
+					real.Filename = temp.Filename
+					real.FilenameLower = temp.FilenameLower
+				}
+				if real.Destination == "" {
+					real.Destination = temp.Destination
+				}
+				_ = m.removeDownloadByID(msg.tempID)
+			} else if temp != nil {
+				temp.ID = msg.id
 			}
 			if m.SelectedDownloadID == msg.tempID {
 				m.SelectedDownloadID = msg.id

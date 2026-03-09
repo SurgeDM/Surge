@@ -89,6 +89,51 @@ func TestUpdate_DownloadStartedKeepsResuming(t *testing.T) {
 	}
 }
 
+func TestUpdate_EnqueueSuccessMergesOptimisticEntryAfterStart(t *testing.T) {
+	optimistic := NewDownloadModel("pending-1", "http://example.com/file", "file.bin", 0)
+	optimistic.Destination = "/tmp/file.bin"
+
+	m := RootModel{
+		downloads:          []*DownloadModel{optimistic},
+		SelectedDownloadID: "pending-1",
+		list:               NewDownloadList(80, 20),
+		logViewport:        viewport.New(40, 5),
+	}
+
+	updated, _ := m.Update(events.DownloadStartedMsg{
+		DownloadID: "real-1",
+		URL:        "http://example.com/file",
+		Filename:   "file.bin",
+		Total:      100,
+		DestPath:   "/tmp/file.bin",
+		State:      types.NewProgressState("real-1", 100),
+	})
+	m2 := updated.(RootModel)
+	if len(m2.downloads) != 2 {
+		t.Fatalf("expected optimistic and real entries before enqueue success, got %d", len(m2.downloads))
+	}
+
+	updated, _ = m2.Update(enqueueSuccessMsg{
+		tempID:   "pending-1",
+		id:       "real-1",
+		url:      "http://example.com/file",
+		path:     "/tmp",
+		filename: "file.bin",
+	})
+	m3 := updated.(RootModel)
+
+	if len(m3.downloads) != 1 {
+		t.Fatalf("expected optimistic duplicate to be removed, got %d entries", len(m3.downloads))
+	}
+	if m3.downloads[0].ID != "real-1" {
+		t.Fatalf("remaining download ID = %q, want real-1", m3.downloads[0].ID)
+	}
+	selected := m3.GetSelectedDownload()
+	if selected == nil || selected.ID != "real-1" {
+		t.Fatalf("selected download = %#v, want real-1", selected)
+	}
+}
+
 func TestUpdate_PauseResumeEventsNormalizeFlags(t *testing.T) {
 	m := RootModel{
 		downloads: []*DownloadModel{
