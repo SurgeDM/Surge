@@ -390,6 +390,9 @@ func TestLocalDownloadService_BatchProgress(t *testing.T) {
 	ch := make(chan interface{}, 20)
 	// Create temporary directory for downloads
 	tempDir := t.TempDir()
+	state.CloseDB()
+	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	defer state.CloseDB()
 
 	pool := download.NewWorkerPool(ch, 1)
 	svc := NewLocalDownloadServiceWithInput(pool, ch)
