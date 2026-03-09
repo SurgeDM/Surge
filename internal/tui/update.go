@@ -203,22 +203,24 @@ func (m *RootModel) resetFilepickerToDirMode() {
 }
 
 // checkForDuplicate checks if a compatible download already exists
-func (m RootModel) checkForDuplicate(url string) *DownloadModel {
-	if !m.Settings.General.WarnOnDuplicate {
-		return nil
-	}
-	normalizedInputURL := strings.TrimRight(url, "/")
-	for _, d := range m.downloads {
-		// Ignore completed downloads
-		if d.done {
-			continue
+func (m RootModel) checkForDuplicate(url string) *processing.DuplicateResult {
+	activeDownloads := func() map[string]*types.DownloadConfig {
+		active := make(map[string]*types.DownloadConfig)
+		for _, d := range m.downloads {
+			if !d.done {
+				state := &types.ProgressState{}
+				state.Done.Store(d.done)
+				// Create dummy config to pass into processing duplicate check
+				active[d.ID] = &types.DownloadConfig{
+					URL:      d.URL,
+					Filename: d.Filename,
+					State:    state,
+				}
+			}
 		}
-		normalizedExistingURL := strings.TrimRight(d.URL, "/")
-		if normalizedExistingURL == normalizedInputURL {
-			return d
-		}
+		return active
 	}
-	return nil
+	return processing.CheckForDuplicate(url, m.Settings, activeDownloads)
 }
 
 // startDownload initiates a new download

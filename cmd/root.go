@@ -19,6 +19,8 @@ import (
 	"github.com/surge-downloader/surge/internal/download"
 	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/state"
+	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/tui"
 	"github.com/surge-downloader/surge/internal/utils"
 
@@ -534,18 +536,18 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		urlForAdd, mirrorsForAdd = ParseURLArg(req.URL)
 	}
 
-	if GlobalPool.HasDownload(urlForAdd) {
-		isDuplicate = true
-		// Check if specifically active\
-		allActive := GlobalPool.GetAll()
-		for _, c := range allActive {
-			if c.URL == urlForAdd {
-				if c.State != nil && !c.State.Done.Load() {
-					isActive = true
-				}
-				break
-			}
+	activeDownloadsFunc := func() map[string]*types.DownloadConfig {
+		active := make(map[string]*types.DownloadConfig)
+		for _, cfg := range GlobalPool.GetAll() {
+			c := cfg // create copy
+			active[c.ID] = &c
 		}
+		return active
+	}
+	dupResult := processing.CheckForDuplicate(urlForAdd, settings, activeDownloadsFunc)
+	if dupResult != nil {
+		isDuplicate = dupResult.Exists
+		isActive = dupResult.IsActive
 	}
 
 	utils.Debug("Download request: URL=%s, SkipApproval=%v, isDuplicate=%v, isActive=%v", urlForAdd, req.SkipApproval, isDuplicate, isActive)
