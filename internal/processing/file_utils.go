@@ -123,7 +123,7 @@ func GetCategoryPath(filename, defaultDir string, settings *config.Settings) (st
 			return path, nil
 		}
 	}
-	
+
 	return defaultDir, nil
 }
 

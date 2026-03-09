@@ -88,7 +88,7 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 		probe,
 		isNameActive,
 	)
-	
+
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve destination: %w", err)
 	}
@@ -103,10 +103,10 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 		req.Headers,
 		req.IsExplicitCategory,
 	)
-	
+
 	if err != nil {
 		return "", err
 	}
-	
+
 	return newID, nil
 }

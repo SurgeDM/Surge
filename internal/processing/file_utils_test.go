@@ -1,12 +1,12 @@
 package processing_test
 
 import (
+	"github.com/surge-downloader/surge/internal/config"
+	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/processing"
 	"os"
 	"path/filepath"
 	"testing"
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/processing"
-	"github.com/surge-downloader/surge/internal/engine/types"
 )
 
 func TestInferFilenameFromURL(t *testing.T) {
@@ -61,14 +61,14 @@ func TestGetUniqueFilename(t *testing.T) {
 
 func TestGetCategoryPath(t *testing.T) {
 	tmpDir := t.TempDir()
-	
+
 	settings := config.DefaultSettings()
 	settings.General.CategoryEnabled = true
 	settings.General.Categories = []config.Category{
 		{
-			Name: "Images",
+			Name:    "Images",
 			Pattern: "\\.(jpg|png)$",
-			Path: filepath.Join(tmpDir, "Images"),
+			Path:    filepath.Join(tmpDir, "Images"),
 		},
 	}
 
@@ -106,7 +106,7 @@ func TestResolveDestination_Priority(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.General.CategoryEnabled = false
 	defaultDir := "/downloads"
-	
+
 	// 1. User defined beats all
 	_, name, _ := processing.ResolveDestination("http://example.com/file.zip", "user.txt", defaultDir, false, settings, &processing.ProbeResult{Filename: "probe.zip"}, nil)
 	if name != "user.txt" {

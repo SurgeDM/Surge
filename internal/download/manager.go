@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/engine/concurrent"
 	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/single"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
@@ -136,7 +136,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		finalFilename = filepath.Base(finalDestPath)
 		destPath = filepath.Dir(finalDestPath)
 		utils.Debug("Resuming download, using saved destPath: %s", finalDestPath)
-	} 
+	}
 	utils.Debug("Destination path: %s", finalDestPath)
 
 	if cfg.State != nil {

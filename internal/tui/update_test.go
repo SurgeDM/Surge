@@ -18,7 +18,6 @@ import (
 
 var errTest = errors.New("test error")
 
-
 func TestUpdate_ResumeResultSetsResuming(t *testing.T) {
 	m := RootModel{
 		downloads: []*DownloadModel{
@@ -287,8 +286,6 @@ func TestProcessProgressMsg_UpdatesElapsed(t *testing.T) {
 	}
 }
 
-
-
 func TestGenerateUniqueFilename_IncompleteSuffixConstant(t *testing.T) {
 	// Verify the constant we're using is correct
 	if types.IncompleteSuffix != ".surge" {
@@ -371,7 +368,6 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 		t.Errorf("Expected no prompt state, got %v", newRoot.state)
 	}
 }
-
 
 func TestStartDownload_UsesProvidedIDWhenServiceSupportsIt(t *testing.T) {
 	ch := make(chan any, 16)

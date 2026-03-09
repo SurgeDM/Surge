@@ -33,7 +33,7 @@ func CheckForDuplicate(url string, settings *config.Settings, activeDownloads fu
 				if d.State != nil && !d.State.Done.Load() {
 					isActive = true
 				}
-				
+
 				return &DuplicateResult{
 					Exists:   true,
 					IsActive: isActive,

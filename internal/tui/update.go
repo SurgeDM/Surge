@@ -302,8 +302,6 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	return m, nil
 }
 
-
-
 func (m RootModel) defaultDownloadPath() string {
 	if m.Settings != nil {
 		if path := strings.TrimSpace(m.Settings.General.DefaultDownloadDir); path != "" {
@@ -1706,5 +1704,3 @@ func (m *RootModel) updateListTitle() {
 		m.list.Title = "✅ Completed"
 	}
 }
-
-

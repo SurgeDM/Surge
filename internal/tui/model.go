@@ -17,8 +17,8 @@ import (
 
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/tui/colors"
 	"github.com/surge-downloader/surge/internal/version"
 )
