@@ -38,7 +38,8 @@ func TestDBLifecycle(t *testing.T) {
 		t.Error("db variable should be nil after CloseDB")
 	}
 
-	// Verify we can re-open (GetDB should re-init)
+	// Verify we can re-open after re-configuring path
+	Configure(filepath.Join(tempDir, "surge.db"))
 	d3, err := GetDB()
 	if err != nil {
 		t.Fatalf("Re-opening GetDB failed: %v", err)
