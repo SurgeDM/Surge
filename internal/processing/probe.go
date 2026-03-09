@@ -191,9 +191,9 @@ func applyProbeHeaders(req *http.Request, headers map[string]string, includeRang
 
 func getProbeClient() *http.Client {
 	probeClientOnce.Do(func() {
-		// Reuse a single client to share connection pools across probe calls.
+		// Keep one shared client for connection reuse; individual probe contexts own
+		// the deadline so shutdown cancellation is not masked by client-wide timeouts.
 		probeClient = &http.Client{
-			Timeout: types.ProbeTimeout,
 			CheckRedirect: func(req *http.Request, via []*http.Request) error {
 				if len(via) >= 10 {
 					return fmt.Errorf("stopped after 10 redirects")
