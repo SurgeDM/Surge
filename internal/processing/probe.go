@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	neturl "net/url"
 	"strconv"
 	"strings"
 	"sync"
@@ -196,11 +197,8 @@ func getProbeClient() *http.Client {
 				if len(via) >= 10 {
 					return fmt.Errorf("stopped after 10 redirects")
 				}
-				// Preserve headers for authenticated redirect probes.
 				if len(via) > 0 {
-					for key, vals := range via[0].Header {
-						req.Header[key] = vals
-					}
+					copyProbeRedirectHeaders(req, via[0])
 				}
 				return nil
 			},
@@ -208,6 +206,36 @@ func getProbeClient() *http.Client {
 	})
 
 	return probeClient
+}
+
+func copyProbeRedirectHeaders(dst, src *http.Request) {
+	if dst == nil || src == nil {
+		return
+	}
+
+	if sameProbeRedirectOrigin(dst.URL, src.URL) {
+		for key, vals := range src.Header {
+			dst.Header[key] = append([]string(nil), vals...)
+		}
+		return
+	}
+
+	for key := range dst.Header {
+		delete(dst.Header, key)
+	}
+
+	for _, key := range []string{"Range", "User-Agent"} {
+		if vals := src.Header.Values(key); len(vals) > 0 {
+			dst.Header[key] = append([]string(nil), vals...)
+		}
+	}
+}
+
+func sameProbeRedirectOrigin(a, b *neturl.URL) bool {
+	if a == nil || b == nil {
+		return false
+	}
+	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host)
 }
 
 // ProbeMirrors concurrently checks a list of mirrors and returns valid ones and errors
