@@ -32,15 +32,43 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 
 		case events.DownloadPausedMsg:
-			// Save the detailed pause state for resuming later
+			// Update master list with paused status and progress
 			if m.State != nil {
-				// Re-derive destPath if missing
 				destPath := m.State.DestPath
 				if destPath == "" {
 					destPath = filepath.Join(m.State.DestPath, m.Filename)
 				}
+
+				// Full upsert with downloaded progress
+				existing, _ := state.GetDownload(m.DownloadID)
+				entry := types.DownloadEntry{
+					ID:         m.DownloadID,
+					Status:     "paused",
+					Downloaded: m.State.Downloaded,
+					DestPath:   destPath,
+					Filename:   m.Filename,
+					TotalSize:  m.State.TotalSize,
+					TimeTaken:  m.State.Elapsed / int64(time.Millisecond),
+				}
+				if existing != nil {
+					entry.URL = existing.URL
+					entry.URLHash = existing.URLHash
+					if entry.DestPath == "" {
+						entry.DestPath = existing.DestPath
+					}
+				}
+				if err := state.AddToMasterList(entry); err != nil {
+					utils.Debug("Lifecycle: Failed to persist paused state: %v", err)
+				}
+
+				// Save detailed pause state for resuming later
 				if err := state.SaveState(m.State.URL, destPath, m.State); err != nil {
 					utils.Debug("Lifecycle: Failed to save pause state: %v", err)
+				}
+			} else {
+				// No state available — just update status
+				if err := state.UpdateStatus(m.DownloadID, "paused"); err != nil {
+					utils.Debug("Lifecycle: Failed to update pause status: %v", err)
 				}
 			}
 
@@ -100,6 +128,19 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			// NOTE: File deletion for .surge and final files upon UI demand
 			// will be handled explicitly via a LifecycleManager.Remove function later.
 			// This event just means the engine discarded it.
+
+		case events.DownloadQueuedMsg:
+			// Persist queued download so it survives shutdown
+			if err := state.AddToMasterList(types.DownloadEntry{
+				ID:       m.DownloadID,
+				URL:      m.URL,
+				URLHash:  state.URLHash(m.URL),
+				DestPath: m.DestPath,
+				Filename: m.Filename,
+				Status:   "queued",
+			}); err != nil {
+				utils.Debug("Lifecycle: Failed to persist queued download: %v", err)
+			}
 
 		case events.BatchProgressMsg:
 			// No-op for persistence, handled by TUI

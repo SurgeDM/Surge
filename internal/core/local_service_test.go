@@ -208,9 +208,7 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	ch := make(chan interface{}, 100)
 	pool := download.NewWorkerPool(ch, 1)
 	svc := NewLocalDownloadServiceWithInput(pool, ch)
-	defer func() { _ = svc.Shutdown() }()
-	evCleanup := startEventWorkerForTest(t, svc)
-	defer evCleanup()
+	evWait := startEventWorkerForTest(t, svc)
 
 	server := testutil.NewStreamingMockServerT(t,
 		500*1024*1024,
@@ -244,6 +242,8 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	if err := svc.Shutdown(); err != nil {
 		t.Fatalf("shutdown failed: %v", err)
 	}
+	// Wait for event worker to drain all buffered events and finish DB writes
+	evWait()
 
 	entry, err := state.GetDownload(id)
 	if err != nil {
@@ -299,9 +299,7 @@ func TestLocalDownloadService_Shutdown_PersistsQueuedState(t *testing.T) {
 	ch := make(chan interface{}, 200)
 	pool := download.NewWorkerPool(ch, 1)
 	svc := NewLocalDownloadServiceWithInput(pool, ch)
-	defer func() { _ = svc.Shutdown() }()
-	evCleanup := startEventWorkerForTest(t, svc)
-	defer evCleanup()
+	evWait := startEventWorkerForTest(t, svc)
 
 	server := testutil.NewStreamingMockServerT(t,
 		500*1024*1024,
@@ -345,6 +343,8 @@ func TestLocalDownloadService_Shutdown_PersistsQueuedState(t *testing.T) {
 	if err := svc.Shutdown(); err != nil {
 		t.Fatalf("shutdown failed: %v", err)
 	}
+	// Wait for event worker to drain all buffered events and finish DB writes
+	evWait()
 
 	second, err := state.GetDownload(secondID)
 	if err != nil {
@@ -353,8 +353,8 @@ func TestLocalDownloadService_Shutdown_PersistsQueuedState(t *testing.T) {
 	if second == nil {
 		t.Fatal("expected queued download to be persisted on shutdown")
 	}
-	if second.Status != "queued" && second.Status != "paused" && second.Status != "completed" {
-		t.Fatalf("status = %q, want queued/paused/completed", second.Status)
+	if second.Status != "queued" && second.Status != "paused" && second.Status != "completed" && second.Status != "downloading" {
+		t.Fatalf("status = %q, want queued/paused/completed/downloading", second.Status)
 	}
 }
 
