@@ -2,6 +2,7 @@ package download
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/testutil"
@@ -135,6 +137,67 @@ func TestUniqueFilePath_MultipleExtensions(t *testing.T) {
 
 	if result != expected {
 		t.Errorf("uniqueFilePath() = %v, want %v", result, expected)
+	}
+}
+
+func TestTUIDownload_StartedEventUsesFullDestPath(t *testing.T) {
+	tmpDir := t.TempDir()
+	fileSize := int64(2 * 1024 * 1024)
+	server := testutil.NewStreamingMockServerT(t,
+		fileSize,
+		testutil.WithRangeSupport(false),
+		testutil.WithByteLatency(50*time.Microsecond),
+	)
+	defer server.Close()
+
+	finalPath := filepath.Join(tmpDir, "file.bin")
+	surgePath := finalPath + types.IncompleteSuffix
+	f, err := os.Create(surgePath)
+	if err != nil {
+		t.Fatalf("failed to pre-create incomplete file: %v", err)
+	}
+	_ = f.Close()
+
+	progressCh := make(chan any, 16)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	cfg := types.DownloadConfig{
+		URL:           server.URL(),
+		OutputPath:    tmpDir,
+		Filename:      "file.bin",
+		ID:            "started-event-test",
+		ProgressCh:    progressCh,
+		State:         types.NewProgressState("started-event-test", fileSize),
+		Runtime:       &types.RuntimeConfig{},
+		TotalSize:     fileSize,
+		SupportsRange: false,
+	}
+
+	errCh := make(chan error, 1)
+	go func() {
+		errCh <- TUIDownload(ctx, &cfg)
+	}()
+
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case msg := <-progressCh:
+			started, ok := msg.(events.DownloadStartedMsg)
+			if !ok {
+				continue
+			}
+			if started.DestPath != finalPath {
+				t.Fatalf("started dest path = %q, want %q", started.DestPath, finalPath)
+			}
+			cancel()
+			if err := <-errCh; err != nil && !errors.Is(err, context.Canceled) {
+				t.Fatalf("download returned unexpected error after cancel: %v", err)
+			}
+			return
+		case <-deadline:
+			t.Fatal("timed out waiting for started event")
+		}
 	}
 }
 
