@@ -34,48 +34,55 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 
 		case events.DownloadPausedMsg:
 			// Update master list with paused status and progress
-			if m.State != nil {
-				if m.State != nil {
-					destPath := m.State.DestPath
-					if destPath == "" {
-						// Fallback to DB entry's path (already resolved during enqueue)
-						if existing, _ := state.GetDownload(m.DownloadID); existing != nil {
-							destPath = existing.DestPath
-						}
-					}
-				}
-
-				// Full upsert with downloaded progress
-				existing, _ := state.GetDownload(m.DownloadID)
-				entry := types.DownloadEntry{
-					ID:         m.DownloadID,
-					Status:     "paused",
-					Downloaded: m.State.Downloaded,
-					DestPath:   destPath,
-					Filename:   m.Filename,
-					TotalSize:  m.State.TotalSize,
-					TimeTaken:  m.State.Elapsed / int64(time.Millisecond),
-				}
-				if existing != nil {
-					entry.URL = existing.URL
-					entry.URLHash = existing.URLHash
-					if entry.DestPath == "" {
-						entry.DestPath = existing.DestPath
-					}
-				}
-				if err := state.AddToMasterList(entry); err != nil {
-					utils.Debug("Lifecycle: Failed to persist paused state: %v", err)
-				}
-
-				// Save detailed pause state for resuming later
-				if err := state.SaveState(m.State.URL, destPath, m.State); err != nil {
-					utils.Debug("Lifecycle: Failed to save pause state: %v", err)
-				}
-			} else {
+			if m.State == nil {
 				// No state available — just update status
 				if err := state.UpdateStatus(m.DownloadID, "paused"); err != nil {
 					utils.Debug("Lifecycle: Failed to update pause status: %v", err)
 				}
+				break
+			}
+
+			// Resolve destPath: prefer state, fallback to DB entry
+			destPath := m.State.DestPath
+			url := m.State.URL
+
+			existing, _ := state.GetDownload(m.DownloadID)
+			if existing != nil {
+				if destPath == "" {
+					destPath = existing.DestPath
+				}
+				if url == "" {
+					url = existing.URL
+				}
+			}
+
+			// Full upsert with downloaded progress
+			entry := types.DownloadEntry{
+				ID:         m.DownloadID,
+				Status:     "paused",
+				Downloaded: m.State.Downloaded,
+				DestPath:   destPath,
+				Filename:   m.Filename,
+				TotalSize:  m.State.TotalSize,
+				TimeTaken:  m.State.Elapsed / int64(time.Millisecond),
+			}
+			if existing != nil {
+				entry.URL = existing.URL
+				entry.URLHash = existing.URLHash
+			}
+			if err := state.AddToMasterList(entry); err != nil {
+				utils.Debug("Lifecycle: Failed to persist paused state: %v", err)
+			}
+
+			// Save detailed pause state for resuming later.
+			// Skip if destPath is empty — SaveState with a bare filename
+			// corrupts the state DB key and breaks resume.
+			if destPath != "" && url != "" {
+				if err := state.SaveState(url, destPath, m.State); err != nil {
+					utils.Debug("Lifecycle: Failed to save pause state: %v", err)
+				}
+			} else {
+				utils.Debug("Lifecycle: Skipping SaveState for %s: destPath=%q url=%q", m.DownloadID, destPath, url)
 			}
 
 		case events.DownloadCompleteMsg:
