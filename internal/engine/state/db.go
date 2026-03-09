@@ -46,6 +46,15 @@ func initDB() error {
 		return fmt.Errorf("failed to open database: %w", err)
 	}
 
+	// Enable WAL mode and busy_timeout for concurrent reader-writer access
+	// (required now that the processing layer's event worker writes from a goroutine)
+	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+		return fmt.Errorf("failed to set WAL mode: %w", err)
+	}
+	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+		return fmt.Errorf("failed to set busy_timeout: %w", err)
+	}
+
 	// Create tables
 	query := `
 	CREATE TABLE IF NOT EXISTS downloads (

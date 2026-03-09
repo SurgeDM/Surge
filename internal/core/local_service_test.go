@@ -244,6 +244,7 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	}
 	// Wait for event worker to drain all buffered events and finish DB writes
 	evWait()
+	time.Sleep(50 * time.Millisecond) // let SQLite locks release
 
 	entry, err := state.GetDownload(id)
 	if err != nil {
