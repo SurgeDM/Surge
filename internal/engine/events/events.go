@@ -105,6 +105,7 @@ type DownloadPausedMsg struct {
 	DownloadID string
 	Filename   string
 	Downloaded int64
+	State      *types.DownloadState `json:"-"`
 }
 
 type DownloadResumedMsg struct {

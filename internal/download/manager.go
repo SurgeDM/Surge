@@ -13,7 +13,6 @@ import (
 	"github.com/surge-downloader/surge/internal/engine/concurrent"
 	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/single"
-	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/utils"
@@ -105,9 +104,6 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	if cfg.IsResume && cfg.DestPath != "" {
 		if cfg.SavedState != nil {
 			savedState = cfg.SavedState
-		} else {
-			// Resume: use the provided destination path for state lookup
-			savedState, _ = state.LoadState(cfg.URL, cfg.DestPath)
 		}
 
 		// Restore mirrors from state if found
@@ -223,22 +219,6 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			avgSpeed = float64(cfg.TotalSize) / elapsed.Seconds()
 		}
 
-		if err := state.AddToMasterList(types.DownloadEntry{
-			ID:          cfg.ID,
-			URL:         cfg.URL,
-			URLHash:     state.URLHash(cfg.URL),
-			DestPath:    finalDestPath,
-			Filename:    finalFilename,
-			Status:      "completed",
-			TotalSize:   cfg.TotalSize,
-			Downloaded:  cfg.TotalSize,
-			CompletedAt: time.Now().Unix(),
-			TimeTaken:   elapsed.Milliseconds(),
-			AvgSpeed:    avgSpeed,
-		}); err != nil {
-			utils.Debug("Failed to persist completed download: %v", err)
-		}
-
 		if cfg.ProgressCh != nil {
 			safeSendProgress(cfg.ProgressCh, events.DownloadCompleteMsg{
 				DownloadID: cfg.ID,
@@ -255,23 +235,13 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			return nil
 		}
 
-		downloaded := int64(0)
-		if cfg.State != nil {
-			downloaded = cfg.State.Downloaded.Load()
-		}
-
-		// Persist error state
-		if err := state.AddToMasterList(types.DownloadEntry{
-			ID:         cfg.ID,
-			URL:        cfg.URL,
-			URLHash:    state.URLHash(cfg.URL),
-			DestPath:   destPath,
-			Filename:   finalFilename,
-			Status:     "error",
-			TotalSize:  cfg.TotalSize,
-			Downloaded: downloaded,
-		}); err != nil {
-			utils.Debug("Failed to persist error state: %v", err)
+		// Send error event
+		if cfg.ProgressCh != nil {
+			safeSendProgress(cfg.ProgressCh, events.DownloadErrorMsg{
+				DownloadID: cfg.ID,
+				Filename:   finalFilename,
+				Err:        downloadErr,
+			})
 		}
 	}
 

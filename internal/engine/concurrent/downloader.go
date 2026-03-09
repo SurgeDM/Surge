@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/utils"
@@ -585,8 +586,13 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			ChunkBitmap:     chunkBitmap,
 			ActualChunkSize: actualChunkSize,
 		}
-		if err := state.SaveState(d.URL, destPath, s); err != nil {
-			utils.Debug("Failed to save pause state: %v", err)
+		if d.ProgressChan != nil {
+			d.ProgressChan <- events.DownloadPausedMsg{
+				DownloadID: d.ID,
+				Filename:   filepath.Base(destPath),
+				Downloaded: computedDownloaded,
+				State:      s,
+			}
 		}
 
 		utils.Debug("Download paused, state saved (Downloaded=%d, RemainingTasks=%d, RemainingBytes=%d)",

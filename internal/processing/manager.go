@@ -13,7 +13,7 @@ import (
 type AddDownloadFunc func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error)
 
 // AddDownloadWithIDFunc adds a download with a predefined UUID (used by daemon/TUI for syncing)
-type AddDownloadWithIDFunc func(string, string, string, []string, map[string]string, string) (string, error)
+type AddDownloadWithIDFunc func(string, string, string, []string, map[string]string, string, int64, bool) (string, error)
 
 // LifecycleManager orchestrates the life of a download outside of the core HTTP engine.
 // It handles probing, category routing, file conflict resolution, and settings management.
@@ -149,6 +149,8 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 		req.Mirrors,
 		req.Headers,
 		requestID,
+		probe.FileSize,
+		probe.SupportsRange,
 	)
 
 	if err != nil {

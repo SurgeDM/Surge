@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/utils"
 )
@@ -136,9 +135,9 @@ func (p *WorkerPool) HasDownload(url string) bool {
 	}
 	p.mu.RUnlock()
 
-	// Check persistent store
-	exists, err := state.CheckDownloadExists(url)
-	return err == nil && exists
+	// Check persistent store is no longer WorkerPool's responsibility.
+	// Processing layer handles full duplicate detection.
+	return false
 }
 
 // ActiveCount returns the number of currently active (downloading/pausing) downloads
@@ -349,11 +348,8 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 		ad.config.URL = newURL
 	}
 
-	// Update persistent state and master list
-	if err := state.UpdateURL(downloadID, newURL); err != nil {
-		return err
-	}
-
+	// Update persistent state and master list are now handled by Processing layer
+	// via events or dedicated RPCs. The WorkerPool only maintains active state.
 	return nil
 }
 
@@ -588,32 +584,6 @@ func (p *WorkerPool) GracefulShutdown() {
 }
 
 func (p *WorkerPool) persistQueuedForShutdown() {
-	p.mu.RLock()
-	queued := make([]types.DownloadConfig, 0, len(p.queued))
-	for _, cfg := range p.queued {
-		queued = append(queued, cfg)
-	}
-	p.mu.RUnlock()
-
-	for _, cfg := range queued {
-		if cfg.ID == "" || cfg.URL == "" {
-			continue
-		}
-
-		syncConfigFromState(&cfg)
-
-		if err := state.AddToMasterList(types.DownloadEntry{
-			ID:         cfg.ID,
-			URL:        cfg.URL,
-			URLHash:    state.URLHash(cfg.URL),
-			DestPath:   resolveDestPath(&cfg),
-			Filename:   cfg.Filename,
-			Status:     "queued",
-			TotalSize:  0,
-			Downloaded: 0,
-			Mirrors:    cfg.Mirrors,
-		}); err != nil {
-			utils.Debug("GracefulShutdown: failed to persist queued download %s: %v", cfg.ID, err)
-		}
-	}
+	// No-op: The Processing layer or the state manager is now responsible
+	// for persisting queued items outside of the pool's execution lifecycle.
 }

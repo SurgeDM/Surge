@@ -209,6 +209,8 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	pool := download.NewWorkerPool(ch, 1)
 	svc := NewLocalDownloadServiceWithInput(pool, ch)
 	defer func() { _ = svc.Shutdown() }()
+	evCleanup := startEventWorkerForTest(t, svc)
+	defer evCleanup()
 
 	server := testutil.NewStreamingMockServerT(t,
 		500*1024*1024,
@@ -298,6 +300,8 @@ func TestLocalDownloadService_Shutdown_PersistsQueuedState(t *testing.T) {
 	pool := download.NewWorkerPool(ch, 1)
 	svc := NewLocalDownloadServiceWithInput(pool, ch)
 	defer func() { _ = svc.Shutdown() }()
+	evCleanup := startEventWorkerForTest(t, svc)
+	defer evCleanup()
 
 	server := testutil.NewStreamingMockServerT(t,
 		500*1024*1024,

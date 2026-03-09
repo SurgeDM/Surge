@@ -53,6 +53,7 @@ var (
 	serverProgram           *tea.Program
 	startupIntegrityMessage string
 	globalSettings          *config.Settings
+	GlobalLifecycle         *processing.LifecycleManager
 )
 
 // rootCmd represents the base command when called without any subcommands
@@ -107,6 +108,25 @@ var rootCmd = &cobra.Command{
 
 		// Initialize Service
 		GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
+
+		// Create Processing orchestration layer and link to service
+		addFunc := func(url string, destPath string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+			return GlobalService.Add(url, destPath, filename, mirrors, headers, isExplicitCategory, totalSize, supportsRange)
+		}
+		addWithIDFunc := func(url string, destPath string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
+			return GlobalService.AddWithID(url, destPath, filename, mirrors, headers, id, totalSize, supportsRange)
+		}
+		GlobalLifecycle = processing.NewLifecycleManager(addFunc, addWithIDFunc)
+
+		// Create event listener for LifecycleManager to handle DB updates.
+		// We use StreamEvents to get a dedicated channel.
+		managerStream, managerCleanup, err := GlobalService.StreamEvents(context.Background())
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error creating lifecycle event stream: %v\n", err)
+			os.Exit(1)
+		}
+		_ = managerCleanup // Cleaned up on shutdown
+		go GlobalLifecycle.StartEventWorker(managerStream)
 
 		portFlag, _ := cmd.Flags().GetInt("port")
 		batchFile, _ := cmd.Flags().GetString("batch")
@@ -172,7 +192,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
-	m := tui.InitialRootModel(port, Version, GlobalService, processing.NewLifecycleManager(nil, nil), noResume)
+	m := tui.InitialRootModel(port, Version, GlobalService, GlobalLifecycle, noResume)
 	m.ServerHost = serverBindHost
 	if m.ServerHost == "" {
 		m.ServerHost = "127.0.0.1"

@@ -162,6 +162,8 @@ func TestIntegration_PauseResume_HotPath_Aggregates(t *testing.T) {
 	svc := NewLocalDownloadServiceWithInput(pool, progressCh)
 	forceSingleConnectionRuntime(svc)
 	defer func() { _ = svc.Shutdown() }()
+	evCleanup := startEventWorkerForTest(t, svc)
+	defer evCleanup()
 
 	const fileSize = int64(96 * 1024 * 1024)
 	server := newDeterministicStreamingServer(t, fileSize)
@@ -329,6 +331,7 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	pool1 := download.NewWorkerPool(ch1, 1)
 	svc1 := NewLocalDownloadServiceWithInput(pool1, ch1)
 	forceSingleConnectionRuntime(svc1)
+	evCleanup1 := startEventWorkerForTest(t, svc1)
 
 	id, err := svc1.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
@@ -354,6 +357,7 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 		return s.Downloaded == paused1.Downloaded && s.Elapsed > 0
 	})
 
+	evCleanup1()
 	if err := svc1.Shutdown(); err != nil {
 		t.Fatalf("svc1 shutdown failed: %v", err)
 	}
@@ -364,6 +368,8 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	svc2 := NewLocalDownloadServiceWithInput(pool2, ch2)
 	forceSingleConnectionRuntime(svc2)
 	defer func() { _ = svc2.Shutdown() }()
+	evCleanup2 := startEventWorkerForTest(t, svc2)
+	defer evCleanup2()
 
 	if err := svc2.Resume(id); err != nil {
 		t.Fatalf("cold resume failed: %v", err)
@@ -453,6 +459,8 @@ func TestIntegration_PauseResume_ResumeBatchRejectsPausing(t *testing.T) {
 	pool := download.NewWorkerPool(progressCh, 1)
 	svc := NewLocalDownloadServiceWithInput(pool, progressCh)
 	defer func() { _ = svc.Shutdown() }()
+	evCleanup := startEventWorkerForTest(t, svc)
+	defer evCleanup()
 
 	id := "resume-batch-pausing-id"
 	ps := types.NewProgressState(id, 1024)
@@ -526,6 +534,8 @@ func TestIntegration_PauseResume_StatusFormulaInvariants(t *testing.T) {
 	svc := NewLocalDownloadServiceWithInput(pool, progressCh)
 	forceSingleConnectionRuntime(svc)
 	defer func() { _ = svc.Shutdown() }()
+	evCleanup := startEventWorkerForTest(t, svc)
+	defer evCleanup()
 
 	const fileSize = int64(64 * 1024 * 1024)
 	server := newDeterministicStreamingServer(t, fileSize)
@@ -617,6 +627,8 @@ func TestIntegration_PauseResume_ConcreteSnapshotDebugString(t *testing.T) {
 	svc := NewLocalDownloadServiceWithInput(pool, progressCh)
 	forceSingleConnectionRuntime(svc)
 	defer func() { _ = svc.Shutdown() }()
+	evCleanup := startEventWorkerForTest(t, svc)
+	defer evCleanup()
 
 	const fileSize = int64(32 * 1024 * 1024)
 	server := newDeterministicStreamingServer(t, fileSize)
