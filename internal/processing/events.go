@@ -57,7 +57,6 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 
 		case events.DownloadPausedMsg:
-			// Update master list with paused status and progress
 			if m.State == nil {
 				existing, _ := state.GetDownload(m.DownloadID)
 				if existing == nil {
@@ -105,7 +104,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				break
 			}
 
-			// Resolve destPath: prefer state, fallback to DB entry
+			// Pause snapshots can race slightly behind the master entry, so fall back to
+			// the DB values to keep the resume key stable when the in-memory state is sparse.
 			destPath := m.State.DestPath
 			url := m.State.URL
 
@@ -119,7 +119,6 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				}
 			}
 
-			// Full upsert with downloaded progress
 			entry := types.DownloadEntry{
 				ID:         m.DownloadID,
 				Status:     "paused",
@@ -137,9 +136,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				utils.Debug("Lifecycle: Failed to persist paused state: %v", err)
 			}
 
-			// Save detailed pause state for resuming later.
-			// Skip if destPath is empty — SaveState with a bare filename
-			// corrupts the state DB key and breaks resume.
+			// Persist enough chunk metadata for resume, but only once we have the same
+			// destPath/url pair used everywhere else as the state DB key.
 			if destPath != "" && url != "" {
 				// Keep pause persistence fast so lifecycle events don't back up and get dropped.
 				if err := state.SaveStateWithOptions(url, destPath, m.State, state.SaveStateOptions{
@@ -152,13 +150,11 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 
 		case events.DownloadCompleteMsg:
-			// Calculate avg speed if possible (we don't have exact elapsed in processing layer unless msg has it)
 			var avgSpeed float64
 			if m.Elapsed.Seconds() > 0 {
 				avgSpeed = float64(m.Total) / m.Elapsed.Seconds()
 			}
 
-			// Add/Update to master list as completed
 			destPath := ""
 			// DownloadCompleteMsg does not carry destPath, so we recover the stable final
 			// location from the DB entry written earlier on this same serialized event stream.
@@ -174,7 +170,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				}
 			}
 
-			// Rename from .surge to final destination
+			// Finalization happens here instead of inside the engine so that both normal
+			// completion and DB persistence stay serialized through one lifecycle path.
 			if destPath != "" {
 				finalPath := destPath
 				surgePath := finalPath + types.IncompleteSuffix
@@ -203,7 +200,6 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 
 		case events.DownloadErrorMsg:
-			// Update master list as errored
 			existing, _ := state.GetDownload(m.DownloadID)
 			if existing != nil {
 				existing.Status = "error"
@@ -218,7 +214,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 
 		case events.DownloadRemovedMsg:
-			// Delete the state from SQLite
+			// Remove resume metadata before touching files so a deleted download does not
+			// come back during startup recovery.
 			if err := state.DeleteState(m.DownloadID); err != nil {
 				utils.Debug("Lifecycle: Failed to delete state: %v", err)
 			}
@@ -226,7 +223,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				utils.Debug("Lifecycle: Failed to remove from master list: %v", err)
 			}
 
-			// Delete the incomplete .surge file if present
+			// Only incomplete working files should be removed here; completed files have
+			// already been promoted to their final name by the completion path.
 			if m.DestPath != "" && !m.Completed {
 				if err := RemoveIncompleteFile(m.DestPath); err != nil {
 					utils.Debug("Lifecycle: Failed to remove incomplete file: %v", err)
@@ -234,7 +232,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 
 		case events.DownloadQueuedMsg:
-			// Persist queued download so it survives shutdown
+			// Queue persistence is what lets downloads survive shutdown before any worker
+			// has emitted a started event.
 			if err := state.AddToMasterList(types.DownloadEntry{
 				ID:       m.DownloadID,
 				URL:      m.URL,
