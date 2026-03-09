@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +14,7 @@ import (
 	"github.com/surge-downloader/surge/internal/download"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/processing"
 )
 
 func startAuthedTestServer(t *testing.T, service core.DownloadService, token string) string {
@@ -40,6 +42,23 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 
 	// Start server
 	svc := core.NewLocalDownloadService(GlobalPool)
+	t.Cleanup(func() { _ = svc.Shutdown() })
+
+	lifecycle := processing.NewLifecycleManager(nil, nil)
+	stream, streamCleanup, err := svc.StreamEvents(context.Background())
+	if err != nil {
+		t.Fatalf("failed to open event stream: %v", err)
+	}
+	workerDone := make(chan struct{})
+	go func() {
+		defer close(workerDone)
+		lifecycle.StartEventWorker(stream)
+	}()
+	t.Cleanup(func() {
+		streamCleanup()
+		<-workerDone
+	})
+
 	const authToken = "test-token-delete-endpoint"
 	baseURL := startAuthedTestServer(t, svc, authToken)
 	client := &http.Client{Timeout: 3 * time.Second}
@@ -98,10 +117,22 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 		t.Fatalf("Expected status 'deleted', got %v", result["status"])
 	}
 
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		_, statErr := os.Stat(incompletePath)
+		entry, dbErr := state.GetDownload(id)
+		if dbErr != nil {
+			t.Fatalf("failed to query entry after delete: %v", dbErr)
+		}
+		if os.IsNotExist(statErr) && entry == nil {
+			break
+		}
+		time.Sleep(20 * time.Millisecond)
+	}
+
 	if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
 		t.Fatalf("expected partial file to be deleted, stat err: %v", err)
 	}
-
 	entry, err := state.GetDownload(id)
 	if err != nil {
 		t.Fatalf("failed to query entry after delete: %v", err)

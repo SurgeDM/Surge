@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/surge-downloader/surge/internal/config"
+	"github.com/surge-downloader/surge/internal/core"
 	"github.com/surge-downloader/surge/internal/download"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
@@ -74,16 +75,18 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 5. Initialize GlobalPool
+	// 5. Initialize GlobalPool + GlobalService
 	GlobalProgressCh = make(chan any, 10)
 	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 4)
+	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
+	defer func() { _ = GlobalService.Shutdown() }()
 
 	// 6. Call the function
 	resumePausedDownloads()
 
 	// 7. Verify
-	// Check if GlobalPool has the download active
-	if !GlobalPool.HasDownload(testURL) {
+	// Check if GlobalPool has the resumed download by ID.
+	if GlobalPool.GetStatus(testID) == nil {
 		t.Error("Download was not added to GlobalPool by resumePausedDownloads")
 	}
 }
