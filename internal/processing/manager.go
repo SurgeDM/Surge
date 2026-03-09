@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/engine/types"
@@ -20,10 +21,23 @@ type AddDownloadWithIDFunc func(string, string, string, []string, map[string]str
 
 // LifecycleManager orchestrates the life of a download outside of the core HTTP engine.
 // It handles probing, category routing, file conflict resolution, and settings management.
+// IsNameActiveFunc checks whether a given filename is already being downloaded.
+type IsNameActiveFunc func(name string) bool
+
 type LifecycleManager struct {
-	settings      *config.Settings
-	addFunc       AddDownloadFunc
-	addWithIDFunc AddDownloadWithIDFunc
+	settings        *config.Settings
+	settingsMu      sync.RWMutex
+	addFunc         AddDownloadFunc
+	addWithIDFunc   AddDownloadWithIDFunc
+	IsNameActive    IsNameActiveFunc // Optional; set by wiring layer
+}
+
+// buildIsNameActive returns the configured callback or a safe no-op.
+func (mgr *LifecycleManager) buildIsNameActive() func(string) bool {
+	if mgr.IsNameActive != nil {
+		return mgr.IsNameActive
+	}
+	return func(string) bool { return false }
 }
 
 func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithIDFunc) *LifecycleManager {
@@ -43,6 +57,8 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 
 // GetSettings allows the UI to read the current settings (e.g. for the Settings view).
 func (m *LifecycleManager) GetSettings() *config.Settings {
+	m.settingsMu.RLock()
+	defer m.settingsMu.RUnlock()
 	return m.settings
 }
 
@@ -51,7 +67,9 @@ func (m *LifecycleManager) SaveSettings(s *config.Settings) error {
 	if err := config.SaveSettings(s); err != nil {
 		return err
 	}
+	m.settingsMu.Lock()
 	m.settings = s
+	m.settingsMu.Unlock()
 	return nil
 }
 
@@ -84,15 +102,18 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 	}
 
 	// 2. Routing and Filename Resolution
-	// For now we just assume uniqueness is mostly handled by TUI/API duplicate checker first
-	isNameActive := func(name string) bool { return false } // TODO: connect to global pool
+	isNameActive := mgr.buildIsNameActive()
+
+	mgr.settingsMu.RLock()
+	settings := mgr.settings
+	mgr.settingsMu.RUnlock()
 
 	finalPath, finalFilename, err := ResolveDestination(
 		req.URL,
 		req.Filename,
 		req.Path,
 		!req.IsExplicitCategory, // if it's explicitly set by user, we skip routing
-		mgr.settings,
+		settings,
 		probe,
 		isNameActive,
 	)
@@ -134,12 +155,16 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 		return "", fmt.Errorf("probe failed: %w", err)
 	}
 
-	isNameActive := func(name string) bool { return false }
+	isNameActive := mgr.buildIsNameActive()
+
+	mgr.settingsMu.RLock()
+	settings := mgr.settings
+	mgr.settingsMu.RUnlock()
 
 	finalPath, finalFilename, err := ResolveDestination(
 		req.URL, req.Filename, req.Path,
 		!req.IsExplicitCategory,
-		mgr.settings, probe, isNameActive,
+		settings, probe, isNameActive,
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve destination: %w", err)
