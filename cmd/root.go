@@ -144,6 +144,10 @@ func ensureLocalLifecycle(service core.DownloadService, getAll func() []types.Do
 	return GlobalLifecycle, nil
 }
 
+func isExplicitOutputPath(outPath, defaultDir string) bool {
+	return utils.EnsureAbsPath(strings.TrimSpace(outPath)) != utils.EnsureAbsPath(strings.TrimSpace(defaultDir))
+}
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:     "surge [url]...",
@@ -785,7 +789,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		// If CLI args provided, user probably wants them added immediately.
 
 		// CLI explicit arg means we do not auto-route when user provided an explicit output path.
-		isExplicit := (outPath != settings.General.DefaultDownloadDir)
+		isExplicit := isExplicitOutputPath(outPath, settings.General.DefaultDownloadDir)
 		if lifecycle == nil {
 			_ = GlobalService.Publish(events.SystemLogMsg{
 				Message: fmt.Sprintf("Error adding %s: lifecycle manager unavailable", url),

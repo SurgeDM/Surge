@@ -3,6 +3,7 @@ package cmd
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -118,4 +119,47 @@ func TestEnsureLocalLifecycle_StartsEventWorker(t *testing.T) {
 		t.Fatalf("failed to list downloads: %v", err)
 	}
 	t.Fatalf("expected persisted download entry, got %+v", entries)
+}
+
+func TestIsExplicitOutputPath(t *testing.T) {
+	cwd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("failed to get cwd: %v", err)
+	}
+
+	tempDir := t.TempDir()
+
+	tests := []struct {
+		name       string
+		outPath    string
+		defaultDir string
+		want       bool
+	}{
+		{
+			name:       "relative and absolute current dir are equal",
+			outPath:    ".",
+			defaultDir: cwd,
+			want:       false,
+		},
+		{
+			name:       "trailing slash is ignored",
+			outPath:    tempDir + string(filepath.Separator),
+			defaultDir: tempDir,
+			want:       false,
+		},
+		{
+			name:       "different directories stay explicit",
+			outPath:    filepath.Join(tempDir, "other"),
+			defaultDir: tempDir,
+			want:       true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := isExplicitOutputPath(tt.outPath, tt.defaultDir); got != tt.want {
+				t.Fatalf("isExplicitOutputPath(%q, %q) = %v, want %v", tt.outPath, tt.defaultDir, got, tt.want)
+			}
+		})
+	}
 }
