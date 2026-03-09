@@ -12,7 +12,7 @@ require (
 	github.com/gofrs/flock v0.13.0
 	github.com/google/uuid v1.6.0
 	github.com/h2non/filetype v1.1.3
-	github.com/kennygrant/sanitize v1.2.3
+	github.com/kennygrant/sanitize v1.2.4
 	github.com/muesli/termenv v0.16.0
 	github.com/spf13/cobra v1.10.1
 	github.com/stretchr/testify v1.11.1
