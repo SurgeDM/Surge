@@ -126,8 +126,8 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	defer d.Client.CloseIdleConnections()
 
 	if d.State != nil {
-		d.State.URL = rawurl
-		d.State.DestPath = destPath
+		d.State.SetURL(rawurl)
+		d.State.SetDestPath(destPath)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
