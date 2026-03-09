@@ -40,6 +40,19 @@ type shutdownCompleteMsg struct {
 	err error
 }
 
+type enqueueSuccessMsg struct {
+	tempID   string
+	id       string
+	url      string
+	path     string
+	filename string
+}
+
+type enqueueErrorMsg struct {
+	tempID string
+	err    error
+}
+
 // checkForUpdateCmd performs an async update check
 func checkForUpdateCmd(currentVersion string) tea.Cmd {
 	return func() tea.Msg {
@@ -248,36 +261,92 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		SkipApproval:       true,
 	}
 
-	var newID string
-	var err error
-	requestID := strings.TrimSpace(id)
+	optimisticFilename := candidateFilename
+	if optimisticFilename == "" {
+		base := url
+		if idx := strings.Index(base, "?"); idx >= 0 {
+			base = base[:idx]
+		}
+		base = strings.TrimRight(base, "/")
+		optimisticFilename = filepath.Base(base)
+		if optimisticFilename == "." || optimisticFilename == "/" {
+			optimisticFilename = ""
+		}
+	}
 
-	if requestID != "" {
-		newID, err = m.Orchestrator.EnqueueWithID(context.Background(), req, requestID)
+	optimisticID := strings.TrimSpace(id)
+	if optimisticID == "" {
+		optimisticID = fmt.Sprintf("pending-%d", time.Now().UnixNano())
+	}
+	displayName := optimisticFilename
+	if displayName == "" {
+		displayName = "Queued"
+	}
+
+	newDownload := NewDownloadModel(optimisticID, url, displayName, 0)
+	if optimisticFilename != "" {
+		newDownload.Destination = filepath.Join(path, optimisticFilename)
 	} else {
-		newID, err = m.Orchestrator.Enqueue(context.Background(), req)
+		newDownload.Destination = path
 	}
-
-	if err != nil {
-		m.addLogEntry(LogStyleError.Render("✖ Failed to enqueue download: " + err.Error()))
-		return m, nil
-	}
-
-	// Create optimistic model
-	newDownload := NewDownloadModel(newID, url, "Queued", 0)
-
-	// Since routing is now asynchronous/delegated, the true path comes through events.
-	// For optimistic UI, we assign a placeholder if needed, though events will correct it soon.
-	newDownload.Destination = filepath.Join(path, candidateFilename)
 	m.downloads = append(m.downloads, newDownload)
-
-	m.SelectedDownloadID = newID
+	m.SelectedDownloadID = optimisticID
 	m.activeTab = TabQueued
 	m.UpdateListItems()
 
-	utils.Debug("Added to Queue (via Orchestrator): %s -> %s", url, candidateFilename)
+	requestID := strings.TrimSpace(id)
 
-	return m, nil
+	// Legacy path for tests or startup wiring where processing is not injected yet.
+	if m.Orchestrator == nil {
+		newID, err := m.Service.Add(
+			url,
+			path,
+			candidateFilename,
+			mirrors,
+			headers,
+			!isDefaultPath,
+			0,
+			false,
+		)
+		if err != nil {
+			m.removeDownloadByID(optimisticID)
+			m.UpdateListItems()
+			m.addLogEntry(LogStyleError.Render("✖ Failed to add download: " + err.Error()))
+			return m, nil
+		}
+
+		if d := m.FindDownloadByID(optimisticID); d != nil {
+			d.ID = newID
+		}
+		if m.SelectedDownloadID == optimisticID {
+			m.SelectedDownloadID = newID
+		}
+		m.UpdateListItems()
+		return m, nil
+	}
+
+	cmd := func() tea.Msg {
+		var newID string
+		var err error
+		if requestID != "" {
+			newID, err = m.Orchestrator.EnqueueWithID(context.Background(), req, requestID)
+		} else {
+			newID, err = m.Orchestrator.Enqueue(context.Background(), req)
+		}
+		if err != nil {
+			return enqueueErrorMsg{tempID: optimisticID, err: err}
+		}
+		return enqueueSuccessMsg{
+			tempID:   optimisticID,
+			id:       newID,
+			url:      url,
+			path:     path,
+			filename: optimisticFilename,
+		}
+	}
+
+	utils.Debug("Queued enqueue command (via Orchestrator): %s -> %s", url, optimisticFilename)
+	return m, cmd
 }
 
 func (m RootModel) defaultDownloadPath() string {
@@ -328,6 +397,29 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.pausing = false
 			d.resuming = true
 		}
+		return m, nil
+
+	case enqueueSuccessMsg:
+		if msg.tempID != "" && msg.tempID != msg.id {
+			if d := m.FindDownloadByID(msg.tempID); d != nil {
+				d.ID = msg.id
+			}
+			if m.SelectedDownloadID == msg.tempID {
+				m.SelectedDownloadID = msg.id
+			}
+		}
+		m.UpdateListItems()
+		return m, nil
+
+	case enqueueErrorMsg:
+		if msg.tempID != "" {
+			_ = m.removeDownloadByID(msg.tempID)
+			if m.SelectedDownloadID == msg.tempID {
+				m.SelectedDownloadID = ""
+			}
+			m.UpdateListItems()
+		}
+		m.addLogEntry(LogStyleError.Render("✖ Failed to enqueue download: " + msg.err.Error()))
 		return m, nil
 
 	case events.DownloadRequestMsg:
@@ -1234,13 +1326,18 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				added := 0
 				skipped := 0
+				var batchCmds []tea.Cmd
 				for _, url := range m.pendingBatchURLs {
 					// Skip duplicate URLs
 					if m.checkForDuplicate(url) != nil {
 						skipped++
 						continue
 					}
-					m, _ = m.startDownload(url, nil, nil, path, true, "", "")
+					var cmd tea.Cmd
+					m, cmd = m.startDownload(url, nil, nil, path, true, "", "")
+					if cmd != nil {
+						batchCmds = append(batchCmds, cmd)
+					}
 					added++
 				}
 
@@ -1252,7 +1349,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.pendingBatchURLs = nil
 				m.batchFilePath = ""
 				m.state = DashboardState
-				return m, nil
+				return m, tea.Batch(batchCmds...)
 			}
 			if key.Matches(msg, m.keys.BatchConfirm.Cancel) {
 				m.pendingBatchURLs = nil
