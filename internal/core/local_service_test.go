@@ -104,6 +104,8 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 	pool := download.NewWorkerPool(ch, 1)
 	svc := NewLocalDownloadServiceWithInput(pool, ch)
 	defer func() { _ = svc.Shutdown() }()
+	evCleanup := startEventWorkerForTest(t, svc)
+	defer evCleanup()
 
 	server := testutil.NewStreamingMockServerT(t,
 		200*1024*1024,
@@ -155,6 +157,17 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 		t.Fatalf("delete failed: %v", err)
 	}
 
+	deadline = time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(incompletePath); os.IsNotExist(err) {
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
+		t.Fatalf("expected partial file to be deleted, stat err: %v", err)
+	}
 }
 
 func TestLocalDownloadService_Shutdown_Idempotent(t *testing.T) {
