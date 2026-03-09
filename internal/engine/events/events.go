@@ -118,6 +118,7 @@ type DownloadQueuedMsg struct {
 	Filename   string
 	URL        string
 	DestPath   string
+	Mirrors    []string
 }
 
 type DownloadRemovedMsg struct {

@@ -10,23 +10,11 @@ import (
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/processing"
+	"github.com/surge-downloader/surge/internal/testutil"
 )
 
-func setupProcessingTestDB(t *testing.T) string {
-	t.Helper()
-
-	tempDir := t.TempDir()
-	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, "surge.db"))
-	if _, err := state.GetDB(); err != nil {
-		t.Fatalf("failed to initialize db: %v", err)
-	}
-	t.Cleanup(state.CloseDB)
-	return tempDir
-}
-
 func TestStartEventWorker_FinalizesCompletedFileUsingDestPath(t *testing.T) {
-	tempDir := setupProcessingTestDB(t)
+	tempDir := testutil.SetupStateDB(t)
 
 	finalPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := finalPath + types.IncompleteSuffix
@@ -100,5 +88,37 @@ func TestStartEventWorker_FinalizesCompletedFileUsingDestPath(t *testing.T) {
 	}
 	if taskCount != 0 {
 		t.Fatalf("task_count = %d, want 0", taskCount)
+	}
+}
+
+func TestStartEventWorker_PersistsQueuedMirrorsForResume(t *testing.T) {
+	tempDir := testutil.SetupStateDB(t)
+	finalPath := filepath.Join(tempDir, "video.mp4")
+
+	mgr := processing.NewLifecycleManager(nil, nil)
+	ch := make(chan interface{}, 1)
+	ch <- events.DownloadQueuedMsg{
+		DownloadID: "download-queued",
+		URL:        "https://example.com/video.mp4",
+		Filename:   "video.mp4",
+		DestPath:   finalPath,
+		Mirrors:    []string{"https://mirror-1.example/video.mp4", "https://mirror-2.example/video.mp4"},
+	}
+	close(ch)
+
+	mgr.StartEventWorker(ch)
+
+	queuedState, err := state.LoadState("https://example.com/video.mp4", finalPath)
+	if err != nil {
+		t.Fatalf("failed to reload queued state: %v", err)
+	}
+	if queuedState == nil {
+		t.Fatal("expected queued state entry to exist")
+	}
+	if len(queuedState.Mirrors) != 2 {
+		t.Fatalf("mirrors = %v, want 2 queued mirrors", queuedState.Mirrors)
+	}
+	if queuedState.Mirrors[0] != "https://mirror-1.example/video.mp4" || queuedState.Mirrors[1] != "https://mirror-2.example/video.mp4" {
+		t.Fatalf("mirrors = %v, want queued mirrors to round-trip", queuedState.Mirrors)
 	}
 }

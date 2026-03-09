@@ -11,20 +11,8 @@ import (
 	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/testutil"
 )
-
-func setupProcessingInternalTestDB(t *testing.T) string {
-	t.Helper()
-
-	tempDir := t.TempDir()
-	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, "surge.db"))
-	if _, err := state.GetDB(); err != nil {
-		t.Fatalf("failed to initialize db: %v", err)
-	}
-	t.Cleanup(state.CloseDB)
-	return tempDir
-}
 
 func TestFinalizeCompletedFile_CopiesAcrossDevicesOnEXDEV(t *testing.T) {
 	tempDir := t.TempDir()
@@ -74,7 +62,7 @@ func TestFinalizeCompletedFile_CopiesAcrossDevicesOnEXDEV(t *testing.T) {
 }
 
 func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing.T) {
-	tempDir := setupProcessingInternalTestDB(t)
+	tempDir := testutil.SetupStateDB(t)
 
 	finalPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := finalPath + types.IncompleteSuffix

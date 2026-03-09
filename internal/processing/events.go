@@ -97,7 +97,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 		switch m := msg.(type) {
 
 		case events.DownloadStartedMsg:
-			// Persist the active download state to trigger initial UI rendering via DB loader
+			// Persist the started record immediately so crash recovery and later lifecycle
+			// events have a stable destination record even before the first pause snapshot.
 			if err := state.AddToMasterList(types.DownloadEntry{
 				ID:         m.DownloadID,
 				URL:        m.URL,
@@ -306,6 +307,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				URLHash:  state.URLHash(m.URL),
 				DestPath: m.DestPath,
 				Filename: m.Filename,
+				Mirrors:  append([]string(nil), m.Mirrors...),
 				Status:   "queued",
 			}); err != nil {
 				utils.Debug("Lifecycle: Failed to persist queued download: %v", err)

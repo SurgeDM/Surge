@@ -113,6 +113,7 @@ func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 			Filename:   cfg.Filename,
 			URL:        cfg.URL,
 			DestPath:   resolveDestPath(&cfg),
+			Mirrors:    append([]string(nil), cfg.Mirrors...),
 		})
 	}
 
