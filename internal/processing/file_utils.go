@@ -14,8 +14,8 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
-// InferFilenameFromURL guesses the filename from a URL string, checking
-// query parameters first, then the URL path.
+// InferFilenameFromURL is the final naming fallback when neither the user nor
+// the probe produced a trustworthy filename.
 func InferFilenameFromURL(rawURL string) string {
 	parsed, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil {
@@ -27,7 +27,7 @@ func InferFilenameFromURL(rawURL string) string {
 		if name == "" {
 			return false
 		}
-		// Reject obvious traversal or multi-component paths
+		// Keep URL-derived names inside the chosen destination directory.
 		if strings.Contains(name, "/") || strings.Contains(name, "\\") {
 			return false
 		}
@@ -60,26 +60,23 @@ func InferFilenameFromURL(rawURL string) string {
 	return base
 }
 
-// GetUniqueFilename creates a unique filename by appending (1), (2), etc.
-// It checks both the actual filesystem and an optional active downloads checker.
+// GetUniqueFilename keeps final files and .surge working files in the same
+// collision namespace so concurrent or resumed downloads do not share a path.
 func GetUniqueFilename(dir, filename string, isNameActive func(string, string) bool) string {
 	if filename == "" {
 		return filename
 	}
 
-	// Ensure filename is a single path component to avoid directory traversal.
+	// Treat every candidate as a single file name so routing cannot escape dir.
 	filename = strings.TrimSpace(filename)
 	if filename == "" {
 		return filename
 	}
-	// Normalize to base name and verify that no directory components were present.
-	base := filepath.Base(filename)
-	if base != filename {
-		filename = base
+	baseName := filepath.Base(filename)
+	if baseName != filename {
+		filename = baseName
 	}
-	// Reject any remaining obvious traversal or separator usage.
 	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || filename == "." || filename == ".." {
-		// Unsafe filename; refuse to guess and let caller handle empty result.
 		return ""
 	}
 
@@ -106,19 +103,16 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string, string) b
 		return filename
 	}
 
-	// File exists, generate unique name
+	// Keep suffixing from the same base so repeated retries stay deterministic.
 	ext := filepath.Ext(filename)
 	name := strings.TrimSuffix(filename, ext)
 
-	// Check if name already has a counter like "file(1)"
 	base := name
 	counter := 1
 
-	// Clean name to ensure parsing works even with trailing spaces
 	cleanName := strings.TrimSpace(name)
 	if len(cleanName) > 3 && cleanName[len(cleanName)-1] == ')' {
 		if openParen := strings.LastIndexByte(cleanName, '('); openParen != -1 {
-			// Try to parse number between parens
 			numStr := cleanName[openParen+1 : len(cleanName)-1]
 			if num, err := strconv.Atoi(numStr); err == nil && num > 0 {
 				base = cleanName[:openParen]
@@ -137,8 +131,8 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string, string) b
 	return fmt.Sprintf("%s(%d)%s", base, counter+100, ext)
 }
 
-// GetCategoryPath resolves the destination path based on the filename and configured categories.
-// If category routing is disabled or no category matches, it returns the provided default dir.
+// GetCategoryPath applies category routing only while the caller is still using
+// the default destination, so explicit user paths are left untouched.
 func GetCategoryPath(filename, defaultDir string, settings *config.Settings) (string, error) {
 	if settings == nil || !settings.General.CategoryEnabled || filename == "" {
 		return defaultDir, nil
@@ -162,10 +156,8 @@ func GetCategoryPath(filename, defaultDir string, settings *config.Settings) (st
 	return defaultDir, nil
 }
 
-// getBaseFilename returns the filename according to the strict priority:
-// 1. User defined filename (candidateFilename)
-// 2. Probe result (handles Content-Disposition, Query Parameters, ZIP Headers, etc.)
-// 3. Inference from URL
+// getBaseFilename keeps naming deterministic across retries by preferring the
+// most authoritative source available before uniqueness is applied.
 func getBaseFilename(url, candidate string, probe *ProbeResult) string {
 	if candidate != "" {
 		return candidate
@@ -176,9 +168,8 @@ func getBaseFilename(url, candidate string, probe *ProbeResult) string {
 	return InferFilenameFromURL(url)
 }
 
-// ResolveDestination determines the final, unique destination path and filename for a download.
-// It combines URL inference, category routing, and unique filename generation.
-// It returns (final_destination_path, final_filename, error)
+// ResolveDestination centralizes routing and naming so CLI, TUI, and API
+// requests all land on the same final path before the engine starts downloading.
 func ResolveDestination(url, candidateFilename, defaultDir string, routeToCategory bool, settings *config.Settings, probe *ProbeResult, isNameActive func(string, string) bool) (string, string, error) {
 	filename := getBaseFilename(url, candidateFilename, probe)
 
@@ -196,7 +187,8 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 	return destPath, finalFilename, nil
 }
 
-// RemoveIncompleteFile removes the partial .surge file for a given destination path.
+// RemoveIncompleteFile drops only the reserved working file, leaving any
+// promoted final file untouched.
 func RemoveIncompleteFile(destPath string) error {
 	if destPath == "" {
 		return nil

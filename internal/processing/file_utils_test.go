@@ -76,7 +76,7 @@ func TestGetUniqueFilename(t *testing.T) {
 		t.Errorf("Expected video.mp4, got %s", name)
 	}
 
-	// 5. After exhausting 100 numbered candidates, return the next fresh guess
+	// 6. After exhausting 100 numbered candidates, return the next fresh guess
 	overflowActive := func(dir, name string) bool {
 		if dir != tmpDir {
 			return false

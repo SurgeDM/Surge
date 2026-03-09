@@ -10,7 +10,8 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
-// advanceRemainingTasks consumes bytes from the front of remaining tasks.
+// advanceRemainingTasks keeps saved chunk boundaries aligned when pause
+// recovery only knows aggregate downloaded bytes, not per-task progress.
 func advanceRemainingTasks(tasks []types.Task, consumed int64) []types.Task {
 	if consumed <= 0 || len(tasks) == 0 {
 		return tasks
@@ -245,11 +246,9 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				utils.Debug("Lifecycle: Failed to persist queued download: %v", err)
 			}
 
-		case events.BatchProgressMsg:
-			// No-op for persistence, handled by TUI
-
-		case events.ProgressMsg:
-			// No-op for persistence
+		case events.BatchProgressMsg, events.ProgressMsg:
+			// Progress ticks are intentionally transient; persisting them would add
+			// SQLite churn without improving resume or history recovery.
 		}
 	}
 }
