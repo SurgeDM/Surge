@@ -123,6 +123,8 @@ type DownloadQueuedMsg struct {
 type DownloadRemovedMsg struct {
 	DownloadID string
 	Filename   string
+	DestPath   string
+	Completed  bool
 }
 
 // SystemLogMsg carries informational system-level log messages for clients/UI.

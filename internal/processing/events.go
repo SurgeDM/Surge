@@ -1,6 +1,7 @@
 package processing
 
 import (
+	"os"
 	"path/filepath"
 	"time"
 
@@ -90,6 +91,18 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				urlHash = existing.URLHash
 			}
 
+			// Rename from .surge to final destination
+			if destPath != "" && m.Filename != "" {
+				surgePath := filepath.Join(destPath, m.Filename) + types.IncompleteSuffix
+				finalPath := filepath.Join(destPath, m.Filename)
+				if err := os.Rename(surgePath, finalPath); err != nil {
+					// Might have already been renamed, or cross-device link error
+					if _, statErr := os.Stat(finalPath); statErr != nil {
+						utils.Debug("Lifecycle: Failed to rename completed file from %s to %s: %v", surgePath, finalPath, err)
+					}
+				}
+			}
+
 			if err := state.AddToMasterList(types.DownloadEntry{
 				ID:          m.DownloadID,
 				URL:         url,
@@ -125,9 +138,12 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				utils.Debug("Lifecycle: Failed to remove from master list: %v", err)
 			}
 
-			// NOTE: File deletion for .surge and final files upon UI demand
-			// will be handled explicitly via a LifecycleManager.Remove function later.
-			// This event just means the engine discarded it.
+			// Delete the incomplete .surge file if present
+			if m.DestPath != "" && !m.Completed {
+				if err := RemoveIncompleteFile(m.DestPath); err != nil {
+					utils.Debug("Lifecycle: Failed to remove incomplete file: %v", err)
+				}
+			}
 
 		case events.DownloadQueuedMsg:
 			// Persist queued download so it survives shutdown
