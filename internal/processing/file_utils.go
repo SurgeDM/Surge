@@ -160,3 +160,15 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 
 	return destPath, finalFilename, nil
 }
+
+// RemoveIncompleteFile removes the partial .surge file for a given destination path.
+func RemoveIncompleteFile(destPath string) error {
+	if destPath == "" {
+		return nil
+	}
+	surgePath := destPath + types.IncompleteSuffix
+	if err := os.Remove(surgePath); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	return nil
+}

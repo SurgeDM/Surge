@@ -752,24 +752,6 @@ func computeFileHash(path string) (string, error) {
 	return hex.EncodeToString(h.Sum(nil)), nil
 }
 
-func removeIncompleteFilePath(surgePath string) error {
-	if surgePath == "" {
-		return nil
-	}
-	if err := os.Remove(surgePath); err != nil && !os.IsNotExist(err) {
-		return err
-	}
-	return nil
-}
-
-// RemoveIncompleteFile removes the partial .surge file for a destination path.
-func RemoveIncompleteFile(destPath string) error {
-	if destPath == "" {
-		return nil
-	}
-	return removeIncompleteFilePath(destPath + types.IncompleteSuffix)
-}
-
 func removeDownloadAndTasks(id string) error {
 	return withTx(func(tx *sql.Tx) error {
 		if _, err := tx.Exec("DELETE FROM tasks WHERE download_id = ?", id); err != nil {
@@ -902,7 +884,7 @@ func ValidateIntegrity() (int, error) {
 			if !matches {
 				// File has been tampered with — remove entry and corrupted file
 				utils.Debug("Integrity: hash mismatch for %s (expected %s), removing", surgePath, e.fileHash)
-				if err := removeIncompleteFilePath(surgePath); err != nil {
+				if err := os.Remove(surgePath); err != nil && !os.IsNotExist(err) {
 					return removed, fmt.Errorf("failed to remove tampered file %s: %w", surgePath, err)
 				}
 				if err := removeDownloadAndTasks(e.id); err != nil {
@@ -934,7 +916,7 @@ func ValidateIntegrity() (int, error) {
 			if _, ok := expectedSurgePaths[surgePath]; ok {
 				continue
 			}
-			if err := removeIncompleteFilePath(surgePath); err != nil {
+			if err := os.Remove(surgePath); err != nil && !os.IsNotExist(err) {
 				return removed, fmt.Errorf("failed to remove orphan file %s: %w", surgePath, err)
 			}
 			utils.Debug("Integrity: removed orphan .surge file %s", surgePath)
