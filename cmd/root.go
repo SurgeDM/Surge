@@ -125,7 +125,7 @@ var rootCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error creating lifecycle event stream: %v\n", err)
 			os.Exit(1)
 		}
-		_ = managerCleanup // Cleaned up on shutdown
+		defer managerCleanup()
 		go GlobalLifecycle.StartEventWorker(managerStream)
 
 		portFlag, _ := cmd.Flags().GetInt("port")
