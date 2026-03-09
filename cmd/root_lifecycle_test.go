@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -13,8 +16,51 @@ import (
 	"github.com/surge-downloader/surge/internal/download"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/testutil"
 )
+
+type countingLifecycleService struct {
+	streamCalls atomic.Int32
+	streamCh    chan interface{}
+	cleanupMu   sync.Mutex
+	cleaned     bool
+}
+
+var _ core.DownloadService = (*countingLifecycleService)(nil)
+
+func (s *countingLifecycleService) List() ([]types.DownloadStatus, error)   { return nil, nil }
+func (s *countingLifecycleService) History() ([]types.DownloadEntry, error) { return nil, nil }
+func (s *countingLifecycleService) Add(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+	return "", nil
+}
+func (s *countingLifecycleService) AddWithID(string, string, string, []string, map[string]string, string, int64, bool) (string, error) {
+	return "", nil
+}
+func (s *countingLifecycleService) Pause(string) error                              { return nil }
+func (s *countingLifecycleService) Resume(string) error                             { return nil }
+func (s *countingLifecycleService) ResumeBatch([]string) []error                    { return nil }
+func (s *countingLifecycleService) UpdateURL(string, string) error                  { return nil }
+func (s *countingLifecycleService) Delete(string) error                             { return nil }
+func (s *countingLifecycleService) Publish(interface{}) error                       { return nil }
+func (s *countingLifecycleService) GetStatus(string) (*types.DownloadStatus, error) { return nil, nil }
+func (s *countingLifecycleService) Shutdown() error                                 { return nil }
+
+func (s *countingLifecycleService) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
+	s.streamCalls.Add(1)
+	ch := make(chan interface{})
+	s.streamCh = ch
+	cleanup := func() {
+		s.cleanupMu.Lock()
+		defer s.cleanupMu.Unlock()
+		if s.cleaned {
+			return
+		}
+		close(ch)
+		s.cleaned = true
+	}
+	return ch, cleanup, nil
+}
 
 func TestBuildPoolIsNameActive(t *testing.T) {
 	getAll := func() []types.DownloadConfig {
@@ -119,6 +165,61 @@ func TestEnsureLocalLifecycle_StartsEventWorker(t *testing.T) {
 		t.Fatalf("failed to list downloads: %v", err)
 	}
 	t.Fatalf("expected persisted download entry, got %+v", entries)
+}
+
+func TestEnsureLocalLifecycle_ConcurrentInitializationStartsOneStream(t *testing.T) {
+	setupIsolatedCmdState(t)
+	GlobalLifecycle = nil
+	GlobalLifecycleCleanup = nil
+
+	service := &countingLifecycleService{}
+
+	const callers = 12
+	results := make(chan *processing.LifecycleManager, callers)
+	errs := make(chan error, callers)
+
+	var wg sync.WaitGroup
+	for range callers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			mgr, err := ensureLocalLifecycle(service, nil)
+			if err != nil {
+				errs <- err
+				return
+			}
+			results <- mgr
+		}()
+	}
+	wg.Wait()
+	close(results)
+	close(errs)
+
+	for err := range errs {
+		t.Fatalf("ensureLocalLifecycle returned error: %v", err)
+	}
+
+	var first *processing.LifecycleManager
+	for mgr := range results {
+		if first == nil {
+			first = mgr
+			continue
+		}
+		if mgr != first {
+			t.Fatal("expected all callers to receive the same lifecycle manager")
+		}
+	}
+	if first == nil {
+		t.Fatal("expected lifecycle manager to be created")
+	}
+	if got := service.streamCalls.Load(); got != 1 {
+		t.Fatalf("StreamEvents calls = %d, want 1", got)
+	}
+
+	if cleanup := takeLifecycleCleanup(); cleanup != nil {
+		cleanup()
+	}
+	GlobalLifecycle = nil
 }
 
 func TestIsExplicitOutputPath(t *testing.T) {

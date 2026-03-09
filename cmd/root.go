@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
@@ -55,6 +56,7 @@ var (
 	startupIntegrityMessage string
 	globalSettings          *config.Settings
 	GlobalLifecycle         *processing.LifecycleManager
+	globalLifecycleMu       sync.Mutex
 )
 
 func buildPoolIsNameActive(getAll func() []types.DownloadConfig) processing.IsNameActiveFunc {
@@ -130,7 +132,24 @@ func startLifecycleEventWorker(service core.DownloadService, mgr *processing.Lif
 	return managerCleanup, nil
 }
 
+func currentLifecycle() *processing.LifecycleManager {
+	globalLifecycleMu.Lock()
+	defer globalLifecycleMu.Unlock()
+	return GlobalLifecycle
+}
+
+func takeLifecycleCleanup() func() {
+	globalLifecycleMu.Lock()
+	defer globalLifecycleMu.Unlock()
+	cleanup := GlobalLifecycleCleanup
+	GlobalLifecycleCleanup = nil
+	return cleanup
+}
+
 func ensureLocalLifecycle(service core.DownloadService, getAll func() []types.DownloadConfig) (*processing.LifecycleManager, error) {
+	globalLifecycleMu.Lock()
+	defer globalLifecycleMu.Unlock()
+
 	if GlobalLifecycle == nil {
 		GlobalLifecycle = newLocalLifecycleManager(service, getAll)
 	}
@@ -202,7 +221,7 @@ var rootCmd = &cobra.Command{
 		GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 
 		// Create Processing orchestration layer and link to service
-		GlobalLifecycle, err = ensureLocalLifecycle(GlobalService, GlobalPool.GetAll)
+		_, err = ensureLocalLifecycle(GlobalService, GlobalPool.GetAll)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating lifecycle event stream: %v\n", err)
 			os.Exit(1)
@@ -272,7 +291,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
-	m := tui.InitialRootModel(port, Version, GlobalService, GlobalLifecycle, noResume)
+	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), noResume)
 	m.ServerHost = serverBindHost
 	if m.ServerHost == "" {
 		m.ServerHost = "127.0.0.1"
@@ -700,7 +719,7 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		}
 	}
 
-	lifecycle := GlobalLifecycle
+	lifecycle := currentLifecycle()
 	if lifecycle == nil && service != nil && GlobalService != nil && service == GlobalService {
 		getAll := func() []types.DownloadConfig {
 			if GlobalPool == nil {
@@ -780,7 +799,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 
 	settings := getSettings()
 
-	lifecycle := GlobalLifecycle
+	lifecycle := currentLifecycle()
 	if GlobalService != nil {
 		getAll := func() []types.DownloadConfig {
 			if GlobalPool == nil {

@@ -289,12 +289,11 @@ func (s *LocalDownloadService) StreamEvents(ctx context.Context) (<-chan interfa
 		})
 	}
 
-	// Cleanup listener on context cancellation or service shutdown
+	// Callers own listener lifetime; service shutdown closes listeners after the
+	// broadcaster drains InputCh so lifecycle persistence can observe final events.
 	go func() {
 		select {
 		case <-ctx.Done():
-			cleanup()
-		case <-s.ctx.Done():
 			cleanup()
 		}
 	}()
@@ -459,7 +458,6 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 	settings := s.settings
 	s.settingsMu.RUnlock()
 
-	// Prepare output path
 	outPath := path
 	if outPath == "" {
 		if settings.General.DefaultDownloadDir != "" {
@@ -483,7 +481,6 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 		return "", fmt.Errorf("download id already exists")
 	}
 
-	// Create configuration
 	state := types.NewProgressState(id, 0)
 	state.DestPath = filepath.Join(outPath, filename) // Best guess until download starts
 
@@ -544,12 +541,10 @@ func (s *LocalDownloadService) Resume(id string) error {
 		return fmt.Errorf("download is still pausing, try again in a moment")
 	}
 
-	// Try pool resume first
 	if s.Pool.Resume(id) {
 		return nil
 	}
 
-	// Cold Resume Logic
 	entry, err := state.GetDownload(id)
 	if err != nil || entry == nil {
 		return fmt.Errorf("download not found")
@@ -563,13 +558,11 @@ func (s *LocalDownloadService) Resume(id string) error {
 	settings := s.settings
 	s.settingsMu.RUnlock()
 
-	// Reconstruct configuration
 	outputPath := settings.General.DefaultDownloadDir
 	if outputPath == "" {
 		outputPath = "."
 	}
 
-	// Load saved state
 	savedState, stateErr := state.LoadState(entry.URL, entry.DestPath)
 
 	var mirrorURLs []string
@@ -638,7 +631,6 @@ func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
 		return errs
 	}
 
-	// 1. Try pool resume first for all
 	toLoad := []string{}
 	idMap := make(map[string]int)
 
@@ -649,9 +641,8 @@ func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
 		}
 
 		if s.Pool.Resume(id) {
-			errs[i] = nil // Success
+			errs[i] = nil
 		} else {
-			// Need cold resume
 			toLoad = append(toLoad, id)
 			idMap[id] = i
 		}
@@ -665,16 +656,13 @@ func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
 	settings := s.settings
 	s.settingsMu.RUnlock()
 
-	// Default output path
 	outputPath := settings.General.DefaultDownloadDir
 	if outputPath == "" {
 		outputPath = "."
 	}
 
-	// 2. Load states in batch
 	states, err := state.LoadStates(toLoad)
 	if err != nil {
-		// If batch load fails, mark all remaining as failed
 		for _, id := range toLoad {
 			idx := idMap[id]
 			errs[idx] = fmt.Errorf("failed to load state: %w", err)
@@ -682,17 +670,14 @@ func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
 		return errs
 	}
 
-	// 3. Process loaded states
 	for _, id := range toLoad {
 		idx := idMap[id]
 		savedState, ok := states[id]
 		if !ok {
-			// Not found or completed (since LoadStates filters out completed)
 			errs[idx] = fmt.Errorf("download not found or completed")
 			continue
 		}
 
-		// Create Config
 		var dmState *types.ProgressState
 		var mirrorURLs []string
 

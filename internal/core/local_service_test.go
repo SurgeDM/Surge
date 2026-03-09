@@ -192,6 +192,39 @@ func TestLocalDownloadService_Shutdown_Idempotent(t *testing.T) {
 	}
 }
 
+func TestLocalDownloadService_StreamEvents_DrainAfterCancel(t *testing.T) {
+	ch := make(chan interface{}, 4)
+	svc := NewLocalDownloadServiceWithInput(nil, ch)
+
+	streamCh, cleanup, err := svc.StreamEvents(context.Background())
+	if err != nil {
+		t.Fatalf("failed to stream events: %v", err)
+	}
+	defer cleanup()
+
+	svc.cancel()
+
+	select {
+	case _, ok := <-streamCh:
+		if !ok {
+			t.Fatal("listener closed before input drain completed")
+		}
+		t.Fatal("unexpected event while verifying listener lifetime")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	close(ch)
+
+	select {
+	case _, ok := <-streamCh:
+		if ok {
+			t.Fatal("expected listener to close after input drain")
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for listener to close after input drain")
+	}
+}
+
 func TestLocalDownloadService_AddWithID_UsesProvidedID(t *testing.T) {
 	ch := make(chan interface{}, 8)
 	pool := download.NewWorkerPool(ch, 1)

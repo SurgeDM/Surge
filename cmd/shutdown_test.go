@@ -1,9 +1,12 @@
 package cmd
 
 import (
+	"context"
 	"sync"
 	"sync/atomic"
 	"testing"
+
+	"github.com/surge-downloader/surge/internal/engine/types"
 )
 
 func TestExecuteGlobalShutdown_Once(t *testing.T) {
@@ -28,5 +31,52 @@ func TestExecuteGlobalShutdown_Once(t *testing.T) {
 
 	if got := atomic.LoadInt32(&calls); got != 1 {
 		t.Fatalf("shutdown function calls = %d, want 1", got)
+	}
+}
+
+type fakeShutdownService struct {
+	fakeRemoteDownloadService
+	onShutdown func()
+}
+
+func (f *fakeShutdownService) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
+	ch := make(chan interface{})
+	return ch, func() { close(ch) }, nil
+}
+
+func (f *fakeShutdownService) GetStatus(string) (*types.DownloadStatus, error) {
+	return nil, nil
+}
+
+func (f *fakeShutdownService) Shutdown() error {
+	if f.onShutdown != nil {
+		f.onShutdown()
+	}
+	return nil
+}
+
+func TestDefaultGlobalShutdown_ServiceBeforeCleanup(t *testing.T) {
+	var order []string
+	GlobalService = &fakeShutdownService{
+		onShutdown: func() {
+			order = append(order, "shutdown")
+		},
+	}
+	GlobalLifecycleCleanup = func() {
+		order = append(order, "cleanup")
+	}
+	t.Cleanup(func() {
+		GlobalService = nil
+		GlobalLifecycle = nil
+		_ = takeLifecycleCleanup()
+		resetGlobalShutdownCoordinatorForTest(nil)
+	})
+
+	if err := defaultGlobalShutdown(); err != nil {
+		t.Fatalf("defaultGlobalShutdown failed: %v", err)
+	}
+
+	if len(order) != 2 || order[0] != "shutdown" || order[1] != "cleanup" {
+		t.Fatalf("shutdown order = %v, want [shutdown cleanup]", order)
 	}
 }
