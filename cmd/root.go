@@ -146,6 +146,29 @@ func takeLifecycleCleanup() func() {
 	return cleanup
 }
 
+func currentPoolConfigs() []types.DownloadConfig {
+	if GlobalPool == nil {
+		return nil
+	}
+	return GlobalPool.GetAll()
+}
+
+func lifecycleForLocalService(service core.DownloadService) (*processing.LifecycleManager, error) {
+	lifecycle := currentLifecycle()
+	if service == nil || GlobalService == nil || service != GlobalService {
+		return lifecycle, nil
+	}
+	return ensureLocalLifecycle(GlobalService, currentPoolConfigs)
+}
+
+func publishSystemLog(message string) {
+	if GlobalService != nil {
+		_ = GlobalService.Publish(events.SystemLogMsg{Message: message})
+		return
+	}
+	fmt.Fprintln(os.Stderr, message)
+}
+
 func ensureLocalLifecycle(service core.DownloadService, getAll func() []types.DownloadConfig) (*processing.LifecycleManager, error) {
 	globalLifecycleMu.Lock()
 	defer globalLifecycleMu.Unlock()
@@ -719,26 +742,13 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		}
 	}
 
-	lifecycle := currentLifecycle()
-	if lifecycle == nil && service != nil && GlobalService != nil && service == GlobalService {
-		getAll := func() []types.DownloadConfig {
-			if GlobalPool == nil {
-				return nil
-			}
-			return GlobalPool.GetAll()
-		}
-		var err error
-		lifecycle, err = ensureLocalLifecycle(GlobalService, getAll)
-		if err != nil {
-			http.Error(w, "Failed to initialize lifecycle manager: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
+	lifecycle, err := lifecycleForLocalService(service)
+	if err != nil {
+		http.Error(w, "Failed to initialize lifecycle manager: "+err.Error(), http.StatusInternalServerError)
+		return
 	}
 
-	var (
-		newID string
-		err   error
-	)
+	var newID string
 	if lifecycle != nil {
 		newID, err = lifecycle.Enqueue(r.Context(), &processing.DownloadRequest{
 			URL:                urlForAdd,
@@ -799,20 +809,10 @@ func processDownloads(urls []string, outputDir string, port int) int {
 
 	settings := getSettings()
 
-	lifecycle := currentLifecycle()
-	if GlobalService != nil {
-		getAll := func() []types.DownloadConfig {
-			if GlobalPool == nil {
-				return nil
-			}
-			return GlobalPool.GetAll()
-		}
-		var err error
-		lifecycle, err = ensureLocalLifecycle(GlobalService, getAll)
-		if err != nil {
-			fmt.Fprintln(os.Stderr, "Error: unable to initialize lifecycle manager:", err)
-			return 0
-		}
+	lifecycle, err := lifecycleForLocalService(GlobalService)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "Error: unable to initialize lifecycle manager:", err)
+		return 0
 	}
 
 	for _, arg := range urls {
@@ -841,9 +841,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		// CLI explicit arg means we do not auto-route when user provided an explicit output path.
 		isExplicit := isExplicitOutputPath(outPath, settings.General.DefaultDownloadDir)
 		if lifecycle == nil {
-			_ = GlobalService.Publish(events.SystemLogMsg{
-				Message: fmt.Sprintf("Error adding %s: lifecycle manager unavailable", url),
-			})
+			publishSystemLog(fmt.Sprintf("Error adding %s: lifecycle manager unavailable", url))
 			continue
 		}
 
@@ -854,9 +852,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 			IsExplicitCategory: isExplicit,
 		})
 		if err != nil {
-			_ = GlobalService.Publish(events.SystemLogMsg{
-				Message: fmt.Sprintf("Error adding %s: %v", url, err),
-			})
+			publishSystemLog(fmt.Sprintf("Error adding %s: %v", url, err))
 			continue
 		}
 		atomic.AddInt32(&activeDownloads, 1)
