@@ -3,6 +3,7 @@ package concurrent
 import (
 	"context"
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -45,12 +46,17 @@ func TestMirrors_HappyPath(t *testing.T) {
 	mirrors := []string{server1.URL(), server2.URL()}
 	// Primary URL is server1.URL()
 
+	// Pre-create incomplete file (simulating processing layer)
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		f.Close()
+	}
+
 	err := downloader.Download(ctx, server1.URL(), mirrors, mirrors, destPath, fileSize)
 	if err != nil {
 		t.Fatalf("Download failed: %v", err)
 	}
 
-	if err := testutil.VerifyFileSize(destPath, fileSize); err != nil {
+	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
 		t.Error(err)
 	}
 
@@ -101,12 +107,17 @@ func TestMirrors_Failover(t *testing.T) {
 	// Put BAD server FIRST to ensure we try it
 	mirrors := []string{badServer.URL, goodServer.URL()}
 
+	// Pre-create incomplete file (simulating processing layer)
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		f.Close()
+	}
+
 	err := downloader.Download(ctx, badServer.URL, mirrors, mirrors, destPath, fileSize)
 	if err != nil {
 		t.Fatalf("Download failed: %v", err)
 	}
 
-	if err := testutil.VerifyFileSize(destPath, fileSize); err != nil {
+	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
 		t.Error(err)
 	}
 

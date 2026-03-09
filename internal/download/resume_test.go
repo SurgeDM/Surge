@@ -71,6 +71,14 @@ func TestIntegration_PauseResume(t *testing.T) {
 		IsResume:   false,
 	}
 
+	// Pre-create incomplete file (simulating processing layer)
+	incompletePath := destPath + types.IncompleteSuffix
+	f, err := os.Create(incompletePath)
+	if err != nil {
+		t.Fatalf("Failed to pre-create partial file: %v", err)
+	}
+	f.Close()
+
 	// Start download
 	errCh := make(chan error)
 	go func() {
@@ -121,7 +129,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	}
 
 	// Verify .surge file exists
-	incompletePath := destPath + types.IncompleteSuffix
+	incompletePath = destPath + types.IncompleteSuffix
 	info, err := os.Stat(incompletePath)
 	if err != nil {
 		t.Fatalf("Incomplete file not found: %v", err)

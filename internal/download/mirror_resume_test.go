@@ -80,6 +80,14 @@ func TestIntegration_MirrorResume(t *testing.T) {
 		Mirrors:    []string{mirror.URL()}, // Pass mirror
 	}
 
+	// Pre-create incomplete file (simulating processing layer)
+	incompletePath := destPath + types.IncompleteSuffix
+	f, err := os.Create(incompletePath)
+	if err != nil {
+		t.Fatalf("Failed to pre-create partial file: %v", err)
+	}
+	f.Close()
+
 	// Start download and interrupt
 	errCh := make(chan error)
 	go func() {

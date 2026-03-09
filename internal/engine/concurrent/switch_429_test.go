@@ -3,6 +3,7 @@ package concurrent
 import (
 	"context"
 	"net/http"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -56,12 +57,17 @@ func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
 	defer cancel()
 
 	// Pass server1 as primary, but provide both in mirrors list
+	// Pre-create incomplete file (simulating processing layer)
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		f.Close()
+	}
+
 	err := downloader.Download(ctx, server1.URL(), mirrors, mirrors, destPath, fileSize)
 	if err != nil {
 		t.Fatalf("Download failed: %v", err)
 	}
 
-	if err := testutil.VerifyFileSize(destPath, fileSize); err != nil {
+	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
 		t.Error(err)
 	}
 
@@ -120,6 +126,11 @@ func TestConcurrentDownloader_BackoffOnSingleMirror(t *testing.T) {
 	defer cancel()
 
 	// Only 1 URL (server.URL) is valid
+	// Pre-create incomplete file (simulating processing layer)
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		f.Close()
+	}
+
 	err := downloader.Download(ctx, server.URL(), mirrors, nil, destPath, fileSize)
 	elapsed := time.Since(start)
 

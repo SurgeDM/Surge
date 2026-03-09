@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -81,6 +82,11 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
+	// Pre-create incomplete file (simulating processing layer)
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		f.Close()
+	}
+
 	err = downloader.Download(ctx, targetServer.URL(), nil, nil, destPath, 1024)
 	if err != nil {
 		t.Fatalf("Download failed: %v", err)
@@ -92,7 +98,7 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 	}
 
 	// 6. Verify File Content
-	if err := testutil.VerifyFileSize(destPath, 1024); err != nil {
+	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, 1024); err != nil {
 		t.Errorf("File verification failed: %v", err)
 	}
 }
@@ -122,6 +128,11 @@ func TestConcurrentDownloader_InvalidProxy(t *testing.T) {
 	// This should hopefully succeed by ignoring the invalid proxy, or fail with a network error
 	// The key is that it shouldn't panic.
 	// Since we log error and fallback, it should succeed if direct connection works.
+	// Pre-create incomplete file (simulating processing layer)
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		f.Close()
+	}
+
 	err := downloader.Download(ctx, targetServer.URL(), nil, nil, destPath, 1024)
 	if err != nil {
 		t.Logf("Download failed as expected or unexpected: %v", err)

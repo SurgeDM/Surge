@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -173,6 +174,9 @@ func TestIntegration_PauseResume_HotPath_Aggregates(t *testing.T) {
 	const filename = "hot-aggregate.bin"
 	destPath := filepath.Join(outputDir, filename)
 
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		f.Close()
+	}
 	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
@@ -467,9 +471,14 @@ func TestIntegration_PauseResume_ResumeBatchRejectsPausing(t *testing.T) {
 	ps.Pause()
 	ps.SetPausing(true)
 
+	destPath := filepath.Join(t.TempDir(), "file.bin")
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		f.Close()
+	}
 	pool.Add(types.DownloadConfig{
 		ID:       id,
 		URL:      "http://example.com/file.bin",
+		DestPath: destPath,
 		Filename: "file.bin",
 		State:    ps,
 	})
