@@ -92,7 +92,7 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string) bool) str
 		}
 	}
 
-	for i := 0; i < 100; i++ { // Try next 100 numbers
+	for i := range 100 { // Try next 100 numbers
 		candidate := fmt.Sprintf("%s(%d)%s", base, counter+i, ext)
 		if !existsAnywhere(candidate) {
 			return candidate
