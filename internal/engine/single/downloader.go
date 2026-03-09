@@ -125,6 +125,11 @@ func newSingleTransport(runtime *types.RuntimeConfig) *http.Transport {
 func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string, fileSize int64, filename string) error {
 	defer d.Client.CloseIdleConnections()
 
+	if d.State != nil {
+		d.State.URL = rawurl
+		d.State.DestPath = destPath
+	}
+
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
 	if err != nil {
 		return err
@@ -149,9 +154,9 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	// Use .surge extension for incomplete file
+	// Use .surge extension for incomplete file (must be pre-created by processing layer)
 	workingPath := destPath + types.IncompleteSuffix
-	outFile, err := os.Create(workingPath)
+	outFile, err := os.OpenFile(workingPath, os.O_RDWR, 0)
 	if err != nil {
 		return err
 	}
@@ -164,13 +169,8 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		preallocated = true
 	}
 
-	// Track whether we completed successfully for cleanup
-	success := false
 	defer func() {
 		_ = outFile.Close()
-		if !success {
-			_ = os.Remove(workingPath)
-		}
 	}()
 
 	start := time.Now()
@@ -211,17 +211,6 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		d.State.Downloaded.Store(written)
 		d.State.VerifiedProgress.Store(written)
 	}
-
-	// Rename .surge file to final destination
-	if err := os.Rename(workingPath, destPath); err != nil {
-		// Fallback: copy if rename fails (cross-device)
-		if copyErr := copyFile(workingPath, destPath); copyErr != nil {
-			return fmt.Errorf("failed to finalize file: %w", copyErr)
-		}
-		_ = os.Remove(workingPath)
-	}
-
-	success = true // Mark successful so defer doesn't clean up
 
 	elapsed := time.Since(start)
 	speed := 0.0

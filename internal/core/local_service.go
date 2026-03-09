@@ -760,20 +760,15 @@ func (s *LocalDownloadService) Delete(id string) error {
 
 	s.Pool.Cancel(id)
 
-	// Cleanup persisted state and partials if available
+	// Cleanup persisted state if available
 	if entry, err := state.GetDownload(id); err == nil && entry != nil {
 		removedFilename = entry.Filename
-		_ = state.DeleteState(entry.ID)
-		if entry.DestPath != "" && entry.Status != "completed" {
-			_ = state.RemoveIncompleteFile(entry.DestPath)
+		if removedDestPath == "" {
+			removedDestPath = entry.DestPath
 		}
-	} else if removedDestPath != "" && !removedCompleted {
-		// DB row may not exist yet for active downloads; still remove partial file.
-		_ = state.RemoveIncompleteFile(removedDestPath)
-	}
-
-	if err := state.RemoveFromMasterList(id); err != nil {
-		return err
+		if entry.Status == "completed" {
+			removedCompleted = true
+		}
 	}
 
 	// Broadcast removal for multi-client UIs (including remote SSE clients).
@@ -782,6 +777,8 @@ func (s *LocalDownloadService) Delete(id string) error {
 		s.InputCh <- events.DownloadRemovedMsg{
 			DownloadID: id,
 			Filename:   removedFilename,
+			DestPath:   removedDestPath,
+			Completed:  removedCompleted,
 		}
 	}
 	return nil
