@@ -39,13 +39,17 @@ func TestGetUniqueFilename(t *testing.T) {
 	}
 
 	// 2. Exists on disk
-	os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("data"), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("data"), 0o644); err != nil {
+		t.Fatalf("failed to create test file: %v", err)
+	}
 	if name := processing.GetUniqueFilename(tmpDir, "test.txt", nil); name != "test(1).txt" {
 		t.Errorf("Expected test(1).txt, got %s", name)
 	}
 
 	// 3. Exists on disk with .surge
-	os.WriteFile(filepath.Join(tmpDir, "partial.zip"+types.IncompleteSuffix), []byte("data"), 0644)
+	if err := os.WriteFile(filepath.Join(tmpDir, "partial.zip"+types.IncompleteSuffix), []byte("data"), 0o644); err != nil {
+		t.Fatalf("failed to create partial file: %v", err)
+	}
 	if name := processing.GetUniqueFilename(tmpDir, "partial.zip", nil); name != "partial(1).zip" {
 		t.Errorf("Expected partial(1).zip, got %s", name)
 	}
