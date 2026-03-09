@@ -50,6 +50,7 @@ var (
 	GlobalPool              *download.WorkerPool
 	GlobalProgressCh        chan any
 	GlobalService           core.DownloadService
+	GlobalLifecycleCleanup  func()
 	serverProgram           *tea.Program
 	startupIntegrityMessage string
 	globalSettings          *config.Settings
@@ -125,7 +126,7 @@ var rootCmd = &cobra.Command{
 			fmt.Fprintf(os.Stderr, "Error creating lifecycle event stream: %v\n", err)
 			os.Exit(1)
 		}
-		defer managerCleanup()
+		GlobalLifecycleCleanup = managerCleanup
 		go GlobalLifecycle.StartEventWorker(managerStream)
 
 		portFlag, _ := cmd.Flags().GetInt("port")

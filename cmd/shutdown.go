@@ -14,6 +14,13 @@ var (
 )
 
 func defaultGlobalShutdown() error {
+	defer func() {
+		if GlobalLifecycleCleanup != nil {
+			GlobalLifecycleCleanup()
+			GlobalLifecycleCleanup = nil
+		}
+	}()
+
 	if GlobalService != nil {
 		return GlobalService.Shutdown()
 	}
@@ -37,6 +44,7 @@ func executeGlobalShutdown(reason string) error {
 func resetGlobalShutdownCoordinatorForTest(fn func() error) {
 	globalShutdownOnce = sync.Once{}
 	globalShutdownErr = nil
+	GlobalLifecycleCleanup = nil
 	if fn != nil {
 		globalShutdownFn = fn
 		return
