@@ -100,6 +100,33 @@ func newLocalLifecycleManager(service core.DownloadService, getAll func() []type
 	return mgr
 }
 
+func startLifecycleEventWorker(service core.DownloadService, mgr *processing.LifecycleManager) (func(), error) {
+	if service == nil || mgr == nil {
+		return nil, nil
+	}
+
+	managerStream, managerCleanup, err := service.StreamEvents(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	go mgr.StartEventWorker(managerStream)
+	return managerCleanup, nil
+}
+
+func ensureLocalLifecycle(service core.DownloadService, getAll func() []types.DownloadConfig) (*processing.LifecycleManager, error) {
+	if GlobalLifecycle == nil {
+		GlobalLifecycle = newLocalLifecycleManager(service, getAll)
+	}
+	if GlobalLifecycleCleanup == nil {
+		cleanup, err := startLifecycleEventWorker(service, GlobalLifecycle)
+		if err != nil {
+			return nil, err
+		}
+		GlobalLifecycleCleanup = cleanup
+	}
+	return GlobalLifecycle, nil
+}
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:     "surge [url]...",
@@ -154,17 +181,11 @@ var rootCmd = &cobra.Command{
 		GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 
 		// Create Processing orchestration layer and link to service
-		GlobalLifecycle = newLocalLifecycleManager(GlobalService, GlobalPool.GetAll)
-
-		// Create event listener for LifecycleManager to handle DB updates.
-		// We use StreamEvents to get a dedicated channel.
-		managerStream, managerCleanup, err := GlobalService.StreamEvents(context.Background())
+		GlobalLifecycle, err = ensureLocalLifecycle(GlobalService, GlobalPool.GetAll)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating lifecycle event stream: %v\n", err)
 			os.Exit(1)
 		}
-		GlobalLifecycleCleanup = managerCleanup
-		go GlobalLifecycle.StartEventWorker(managerStream)
 
 		portFlag, _ := cmd.Flags().GetInt("port")
 		batchFile, _ := cmd.Flags().GetString("batch")
@@ -708,8 +729,19 @@ func processDownloads(urls []string, outputDir string, port int) int {
 	settings := getSettings()
 
 	lifecycle := GlobalLifecycle
-	if lifecycle == nil && GlobalService != nil {
-		lifecycle = newLocalLifecycleManager(GlobalService, GlobalPool.GetAll)
+	if GlobalService != nil {
+		getAll := func() []types.DownloadConfig {
+			if GlobalPool == nil {
+				return nil
+			}
+			return GlobalPool.GetAll()
+		}
+		var err error
+		lifecycle, err = ensureLocalLifecycle(GlobalService, getAll)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "Error: unable to initialize lifecycle manager:", err)
+			return 0
+		}
 	}
 
 	for _, arg := range urls {
