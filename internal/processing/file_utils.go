@@ -22,20 +22,39 @@ func InferFilenameFromURL(rawURL string) string {
 		return ""
 	}
 
+	isSafeComponent := func(name string) bool {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return false
+		}
+		// Reject obvious traversal or multi-component paths
+		if strings.Contains(name, "/") || strings.Contains(name, "\\") {
+			return false
+		}
+		if name == "." || name == ".." || name == "/" {
+			return false
+		}
+		// Reject simple Windows absolute paths like C:foo or C:\foo
+		if len(name) >= 2 && (name[1] == ':' && ((name[0] >= 'A' && name[0] <= 'Z') || (name[0] >= 'a' && name[0] <= 'z'))) {
+			return false
+		}
+		return true
+	}
+
 	query := parsed.Query()
 	if name := strings.TrimSpace(query.Get("filename")); name != "" {
-		if base := strings.TrimSpace(path.Base(name)); base != "" && base != "." && base != ".." && base != "/" {
+		if base := strings.TrimSpace(path.Base(name)); isSafeComponent(base) {
 			return base
 		}
 	}
 	if name := strings.TrimSpace(query.Get("file")); name != "" {
-		if base := strings.TrimSpace(path.Base(name)); base != "" && base != "." && base != ".." && base != "/" {
+		if base := strings.TrimSpace(path.Base(name)); isSafeComponent(base) {
 			return base
 		}
 	}
 
 	base := strings.TrimSpace(path.Base(parsed.Path))
-	if base == "" || base == "." || base == ".." || base == "/" {
+	if !isSafeComponent(base) {
 		return ""
 	}
 	return base
@@ -46,6 +65,22 @@ func InferFilenameFromURL(rawURL string) string {
 func GetUniqueFilename(dir, filename string, isNameActive func(string, string) bool) string {
 	if filename == "" {
 		return filename
+	}
+
+	// Ensure filename is a single path component to avoid directory traversal.
+	filename = strings.TrimSpace(filename)
+	if filename == "" {
+		return filename
+	}
+	// Normalize to base name and verify that no directory components were present.
+	base := filepath.Base(filename)
+	if base != filename {
+		filename = base
+	}
+	// Reject any remaining obvious traversal or separator usage.
+	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || filename == "." || filename == ".." {
+		// Unsafe filename; refuse to guess and let caller handle empty result.
+		return ""
 	}
 
 	existsOnDisk := func(name string) bool {
