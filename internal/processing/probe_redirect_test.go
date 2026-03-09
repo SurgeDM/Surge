@@ -118,3 +118,50 @@ func TestProbeRedirect_CrossOriginDropsSensitiveHeaders(t *testing.T) {
 		t.Fatalf("range = %q, want bytes=0-0", gotRange)
 	}
 }
+
+func TestProbeServer_RetryWithoutRangeReusesHeaderSetup(t *testing.T) {
+	var sawRangedRequest bool
+	var gotAuth, gotUserAgent, gotRange string
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Range") == "bytes=0-0" {
+			sawRangedRequest = true
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+
+		gotAuth = r.Header.Get("Authorization")
+		gotUserAgent = r.Header.Get("User-Agent")
+		gotRange = r.Header.Get("Range")
+		w.Header().Set("Content-Length", "5")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("hello"))
+	}))
+	defer server.Close()
+
+	res, err := processing.ProbeServer(context.Background(), server.URL, "", map[string]string{
+		"Authorization": "Bearer retry-test",
+	})
+	if err != nil {
+		t.Fatalf("ProbeServer failed: %v", err)
+	}
+
+	if !sawRangedRequest {
+		t.Fatal("expected initial ranged probe request")
+	}
+	if gotAuth != "Bearer retry-test" {
+		t.Fatalf("authorization = %q, want preserved on retry", gotAuth)
+	}
+	if gotUserAgent == "" {
+		t.Fatal("expected retry request to keep a user-agent")
+	}
+	if gotRange != "" {
+		t.Fatalf("range = %q, want empty on retry without range", gotRange)
+	}
+	if res.SupportsRange {
+		t.Fatal("expected retry-without-range probe to report unsupported range")
+	}
+	if res.FileSize != 5 {
+		t.Fatalf("fileSize = %d, want 5", res.FileSize)
+	}
+}
