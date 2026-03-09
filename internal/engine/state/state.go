@@ -337,6 +337,25 @@ func DeleteState(id string) error {
 	return nil
 }
 
+// DeleteTasks removes chunk task rows while preserving the download entry itself.
+func DeleteTasks(id string) error {
+	db := getDBHelper()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	if id == "" {
+		return fmt.Errorf("id cannot be empty")
+	}
+
+	_, err := db.Exec("DELETE FROM tasks WHERE download_id = ?", id)
+	if err != nil {
+		return fmt.Errorf("failed to delete tasks: %w", err)
+	}
+
+	return nil
+}
+
 // ================== Master List Functions ==================
 
 // LoadMasterList loads ALL downloads (paused and completed)

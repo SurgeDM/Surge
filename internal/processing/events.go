@@ -1,13 +1,22 @@
 package processing
 
 import (
+	"errors"
+	"fmt"
+	"io"
 	"os"
+	"syscall"
 	"time"
 
 	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/utils"
+)
+
+var (
+	renameCompletedFile = os.Rename
+	copyCompletedFile   = copyFile
 )
 
 // advanceRemainingTasks keeps saved chunk boundaries aligned when pause
@@ -34,6 +43,50 @@ func advanceRemainingTasks(tasks []types.Task, consumed int64) []types.Task {
 		out = append(out, task)
 	}
 	return out
+}
+
+func finalizeCompletedFile(finalPath string) error {
+	if finalPath == "" {
+		return nil
+	}
+
+	surgePath := finalPath + types.IncompleteSuffix
+	if err := renameCompletedFile(surgePath, finalPath); err != nil {
+		if errors.Is(err, syscall.EXDEV) {
+			if err := copyCompletedFile(surgePath, finalPath); err != nil {
+				return fmt.Errorf("copy completed file: %w", err)
+			}
+			if err := os.Remove(surgePath); err != nil {
+				return fmt.Errorf("remove copied working file: %w", err)
+			}
+			return nil
+		}
+		if _, statErr := os.Stat(finalPath); statErr == nil {
+			return nil
+		}
+		return err
+	}
+	return nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = in.Close() }()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = out.Close() }()
+
+	buf := make([]byte, types.MB)
+	if _, err := io.CopyBuffer(out, in, buf); err != nil {
+		return err
+	}
+	return out.Sync()
 }
 
 // StartEventWorker listens to engine events and handles database persistence
@@ -174,13 +227,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			// Finalization happens here instead of inside the engine so that both normal
 			// completion and DB persistence stay serialized through one lifecycle path.
 			if destPath != "" {
-				finalPath := destPath
-				surgePath := finalPath + types.IncompleteSuffix
-				if err := os.Rename(surgePath, finalPath); err != nil {
-					// Might have already been renamed, or cross-device link error
-					if _, statErr := os.Stat(finalPath); statErr != nil {
-						utils.Debug("Lifecycle: Failed to rename completed file from %s to %s: %v", surgePath, finalPath, err)
-					}
+				if err := finalizeCompletedFile(destPath); err != nil {
+					utils.Debug("Lifecycle: Failed to finalize completed file at %s: %v", destPath, err)
 				}
 			}
 
@@ -198,6 +246,9 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				AvgSpeed:    avgSpeed,
 			}); err != nil {
 				utils.Debug("Lifecycle: Failed to persist completed download: %v", err)
+			}
+			if err := state.DeleteTasks(m.DownloadID); err != nil {
+				utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)
 			}
 
 		case events.DownloadErrorMsg:

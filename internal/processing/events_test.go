@@ -44,6 +44,18 @@ func TestStartEventWorker_FinalizesCompletedFileUsingDestPath(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("failed to seed download entry: %v", err)
 	}
+	if err := state.SaveStateWithOptions("https://example.com/video.mp4", finalPath, &types.DownloadState{
+		ID:        "download-1",
+		URL:       "https://example.com/video.mp4",
+		Filename:  "video.mp4",
+		DestPath:  finalPath,
+		TotalSize: 7,
+		Tasks: []types.Task{
+			{Offset: 0, Length: 7},
+		},
+	}, state.SaveStateOptions{SkipFileHash: true}); err != nil {
+		t.Fatalf("failed to seed download state: %v", err)
+	}
 
 	mgr := processing.NewLifecycleManager(nil, nil)
 	ch := make(chan interface{}, 1)
@@ -76,5 +88,17 @@ func TestStartEventWorker_FinalizesCompletedFileUsingDestPath(t *testing.T) {
 	}
 	if entry.DestPath != finalPath {
 		t.Fatalf("dest_path = %q, want %q", entry.DestPath, finalPath)
+	}
+
+	db, err := state.GetDB()
+	if err != nil {
+		t.Fatalf("failed to open db: %v", err)
+	}
+	var taskCount int
+	if err := db.QueryRow("SELECT COUNT(*) FROM tasks WHERE download_id = ?", "download-1").Scan(&taskCount); err != nil {
+		t.Fatalf("failed to count tasks: %v", err)
+	}
+	if taskCount != 0 {
+		t.Fatalf("task_count = %d, want 0", taskCount)
 	}
 }
