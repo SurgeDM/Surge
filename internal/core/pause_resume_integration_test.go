@@ -171,7 +171,7 @@ func TestIntegration_PauseResume_HotPath_Aggregates(t *testing.T) {
 	const filename = "hot-aggregate.bin"
 	destPath := filepath.Join(outputDir, filename)
 
-	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false)
+	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
@@ -330,7 +330,7 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	svc1 := NewLocalDownloadServiceWithInput(pool1, ch1)
 	forceSingleConnectionRuntime(svc1)
 
-	id, err := svc1.Add(server.URL(), outputDir, filename, nil, nil, false)
+	id, err := svc1.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
@@ -533,7 +533,7 @@ func TestIntegration_PauseResume_StatusFormulaInvariants(t *testing.T) {
 
 	outputDir := t.TempDir()
 	const filename = "formula.bin"
-	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false)
+	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
@@ -625,7 +625,7 @@ func TestIntegration_PauseResume_ConcreteSnapshotDebugString(t *testing.T) {
 	outputDir := t.TempDir()
 	const filename = "snapshot-debug.bin"
 
-	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false)
+	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
 	}

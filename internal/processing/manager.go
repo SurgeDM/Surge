@@ -1,16 +1,25 @@
 package processing
 
 import (
+	"context"
+	"fmt"
+
 	"github.com/surge-downloader/surge/internal/config"
+	"github.com/surge-downloader/surge/internal/utils"
 )
+
+// AddDownloadFunc represents a function capable of adding a download to the engine or queue
+// url, path, filename, mirrors, headers, isExplicitCategory
+type AddDownloadFunc func(string, string, string, []string, map[string]string, bool) (string, error)
 
 // LifecycleManager orchestrates the life of a download outside of the core HTTP engine.
 // It handles probing, category routing, file conflict resolution, and settings management.
 type LifecycleManager struct {
 	settings *config.Settings
+	addFunc  AddDownloadFunc
 }
 
-func NewLifecycleManager() *LifecycleManager {
+func NewLifecycleManager(addFunc AddDownloadFunc) *LifecycleManager {
 	// 1. Load Settings immediately on startup as part of the processing layer's responsibility
 	settings, err := config.LoadSettings()
 	if err != nil {
@@ -20,6 +29,7 @@ func NewLifecycleManager() *LifecycleManager {
 
 	return &LifecycleManager{
 		settings: settings,
+		addFunc:  addFunc,
 	}
 }
 
@@ -35,4 +45,68 @@ func (m *LifecycleManager) SaveSettings(s *config.Settings) error {
 	}
 	m.settings = s
 	return nil
+}
+
+// DownloadRequest represents a verified request coming from the UI or API.
+type DownloadRequest struct {
+	URL                string
+	Filename           string
+	Path               string
+	IsDefaultPath      bool
+	Mirrors            []string
+	Headers            map[string]string
+	IsExplicitCategory bool
+	SkipApproval       bool
+}
+
+// Enqueue processes a download request and adds it to the engine.
+func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) (string, error) {
+	if mgr.addFunc == nil {
+		return "", fmt.Errorf("add function unavailable")
+	}
+
+	utils.Debug("Lifecycle: Enqueue %s", req.URL)
+
+	// 1. Probe the Server
+	// We extract probing entirely into the processing layer before adding to the engine pool.
+	probe, err := ProbeServer(ctx, req.URL, req.Filename, req.Headers)
+	if err != nil {
+		utils.Debug("Lifecycle: Probe failed: %v\n", err)
+		return "", fmt.Errorf("probe failed: %w", err)
+	}
+
+	// 2. Routing and Filename Resolution
+	// For now we just assume uniqueness is mostly handled by TUI/API duplicate checker first
+	isNameActive := func(name string) bool { return false } // TODO: connect to global pool
+
+	finalPath, finalFilename, err := ResolveDestination(
+		req.URL,
+		req.Filename,
+		req.Path,
+		!req.IsExplicitCategory, // if it's explicitly set by user, we skip routing
+		mgr.settings,
+		probe,
+		isNameActive,
+	)
+	
+	if err != nil {
+		return "", fmt.Errorf("failed to resolve destination: %w", err)
+	}
+
+	// 3. Dispatch to Engine
+	// The Engine no longer probes or thinks. It just downloads what it's told.
+	newID, err := mgr.addFunc(
+		req.URL,
+		finalPath,
+		finalFilename,
+		req.Mirrors,
+		req.Headers,
+		req.IsExplicitCategory,
+	)
+	
+	if err != nil {
+		return "", err
+	}
+	
+	return newID, nil
 }

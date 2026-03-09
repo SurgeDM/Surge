@@ -271,16 +271,16 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 			newID, err = svcWithID.AddWithID(url, path, finalFilename, mirrors, headers, requestID)
 		} else {
 			if isDefaultPath {
-				newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, false)
+				newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, false, 0, false)
 			} else {
-				newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, true)
+				newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, true, 0, false)
 			}
 		}
 	} else {
 		if isDefaultPath {
-			newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, false)
+			newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, false, 0, false)
 		} else {
-			newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, true)
+			newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, true, 0, false)
 		}
 	}
 	if err != nil {

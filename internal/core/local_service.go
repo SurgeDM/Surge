@@ -439,16 +439,16 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 }
 
 // Add queues a new download on the local pool without TUI confirmation.
-func (s *LocalDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool) (string, error) {
-	return s.add(url, path, filename, mirrors, headers, "", isExplicitCategory)
+func (s *LocalDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+	return s.add(url, path, filename, mirrors, headers, "", isExplicitCategory, totalSize, supportsRange)
 }
 
 // AddWithID queues a new download using a caller-provided id when non-empty.
-func (s *LocalDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string) (string, error) {
-	return s.add(url, path, filename, mirrors, headers, id, false) // AddWithID does not explicitly set category
+func (s *LocalDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
+	return s.add(url, path, filename, mirrors, headers, id, false, totalSize, supportsRange) // AddWithID does not explicitly set category
 }
 
-func (s *LocalDownloadService) add(url string, path string, filename string, mirrors []string, headers map[string]string, requestedID string, isExplicitCategory bool) (string, error) {
+func (s *LocalDownloadService) add(url string, path string, filename string, mirrors []string, headers map[string]string, requestedID string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
 	if s.Pool == nil {
 		return "", fmt.Errorf("worker pool not initialized")
 	}
@@ -496,6 +496,8 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 		Runtime:            types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
 		Headers:            headers,
 		IsExplicitCategory: isExplicitCategory,
+		TotalSize:          totalSize,
+		SupportsRange:      supportsRange,
 	}
 
 	s.Pool.Add(cfg)

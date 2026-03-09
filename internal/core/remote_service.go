@@ -121,7 +121,7 @@ func (s *RemoteDownloadService) GetStatus(id string) (*types.DownloadStatus, err
 }
 
 // Add queues a new download.
-func (s *RemoteDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool) (string, error) {
+func (s *RemoteDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
 	req := map[string]interface{}{
 		"url":                  url,
 		"path":                 path,
@@ -130,6 +130,8 @@ func (s *RemoteDownloadService) Add(url string, path string, filename string, mi
 		"headers":              headers,
 		"skip_approval":        true,
 		"is_explicit_category": isExplicitCategory,
+		"total_size":           totalSize,
+		"supports_range":       supportsRange,
 	}
 
 	resp, err := s.doRequest("POST", "/download", req)

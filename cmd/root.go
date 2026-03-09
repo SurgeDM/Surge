@@ -601,7 +601,7 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 	}
 
 	// Add via service
-	newID, err := service.Add(urlForAdd, outPath, req.Filename, mirrorsForAdd, req.Headers, req.IsExplicitCategory)
+	newID, err := service.Add(urlForAdd, outPath, req.Filename, mirrorsForAdd, req.Headers, req.IsExplicitCategory, 0, false)
 	if err != nil {
 		http.Error(w, "Failed to add download: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -674,7 +674,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 
 		// CLI explicit arg means we don't do automatic re-categorization unless it was left default
 		isExplicit := (outPath != settings.General.DefaultDownloadDir)
-		_, err := GlobalService.Add(url, outPath, "", mirrors, nil, isExplicit)
+		_, err := GlobalService.Add(url, outPath, "", mirrors, nil, isExplicit, 0, false)
 		if err != nil {
 			_ = GlobalService.Publish(events.SystemLogMsg{
 				Message: fmt.Sprintf("Error adding %s: %v", url, err),

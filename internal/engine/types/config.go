@@ -55,13 +55,15 @@ type DownloadConfig struct {
 	ID         string
 	Filename   string
 	IsResume   bool // True if this is explicitly a resume, not a fresh download
-	IsExplicitCategory bool // True if the user manually modified the destination path, overriding automatic category logic
 	ProgressCh chan<- any
 	State      *ProgressState
 	SavedState *DownloadState    // Pre-loaded state for resume optimization
 	Runtime    *RuntimeConfig    // Dynamic settings from user config
 	Mirrors    []string          // List of mirror URLs (including primary)
-	Headers    map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
+	Headers            map[string]string // Custom HTTP headers to include in download requests
+	IsExplicitCategory bool              // Used to override category routing from TUI
+	TotalSize          int64             // Total size in bytes of the required download
+	SupportsRange      bool              // Indicates whether the server supports range requests for concurrency
 }
 
 // RuntimeConfig holds dynamic settings that can override defaults
