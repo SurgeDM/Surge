@@ -99,7 +99,7 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string) bool) str
 		}
 	}
 
-	return filename
+	return fmt.Sprintf("%s(%d)%s", base, counter+100, ext)
 }
 
 // GetCategoryPath resolves the destination path based on the filename and configured categories.

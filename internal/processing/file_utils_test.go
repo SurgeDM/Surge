@@ -1,12 +1,14 @@
 package processing_test
 
 import (
+	"os"
+	"path/filepath"
+	"strconv"
+	"testing"
+
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/processing"
-	"os"
-	"path/filepath"
-	"testing"
 )
 
 func TestInferFilenameFromURL(t *testing.T) {
@@ -60,6 +62,22 @@ func TestGetUniqueFilename(t *testing.T) {
 	}
 	if name := processing.GetUniqueFilename(tmpDir, "memory.bin", activeDownloads); name != "memory(1).bin" {
 		t.Errorf("Expected memory(1).bin, got %s", name)
+	}
+
+	// 5. After exhausting 100 numbered candidates, return the next fresh guess
+	overflowActive := func(name string) bool {
+		if name == "overflow.bin" {
+			return true
+		}
+		for i := 1; i <= 100; i++ {
+			if name == "overflow("+strconv.Itoa(i)+").bin" {
+				return true
+			}
+		}
+		return false
+	}
+	if name := processing.GetUniqueFilename(tmpDir, "overflow.bin", overflowActive); name != "overflow(101).bin" {
+		t.Errorf("Expected overflow(101).bin, got %s", name)
 	}
 }
 
