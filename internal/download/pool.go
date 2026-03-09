@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/surge-downloader/surge/internal/engine/events"
+	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/utils"
 )
@@ -310,6 +311,19 @@ func (p *WorkerPool) Resume(downloadID string) bool {
 		ad.config.State.Resume()
 		ad.config.State.SyncSessionStart()
 		syncConfigFromState(&ad.config)
+	}
+
+	// Hydrate resume config from persisted pause snapshot when available.
+	if ad.config.URL != "" && ad.config.DestPath != "" {
+		if saved, err := state.LoadState(ad.config.URL, ad.config.DestPath); err == nil && saved != nil {
+			ad.config.SavedState = saved
+			if saved.TotalSize > 0 {
+				ad.config.TotalSize = saved.TotalSize
+			}
+			if len(saved.Tasks) > 0 {
+				ad.config.SupportsRange = true
+			}
+		}
 	}
 
 	// Re-queue the download

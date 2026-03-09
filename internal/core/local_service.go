@@ -123,6 +123,8 @@ func (s *LocalDownloadService) broadcastLoop() {
 			switch msg.(type) {
 			case events.ProgressMsg:
 				isProgress = true
+			case events.BatchProgressMsg:
+				isProgress = true
 			}
 
 			if isProgress {

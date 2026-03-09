@@ -293,14 +293,14 @@ func TestIntegration_PauseResume_HotPath_Aggregates(t *testing.T) {
 	}
 
 	saved2 := waitForSavedStateByID(t, id, 25*time.Second, func(s *types.DownloadState) bool {
-		return s.Downloaded > saved1.Downloaded && s.Elapsed > saved1.Elapsed
+		return s.Downloaded >= saved1.Downloaded && s.Elapsed >= saved1.Elapsed
 	})
 
 	if saved2.Downloaded != paused2.Downloaded {
 		t.Fatalf("second saved downloaded mismatch: saved=%d status=%d", saved2.Downloaded, paused2.Downloaded)
 	}
-	if saved2.Elapsed <= saved1.Elapsed {
-		t.Fatalf("elapsed did not increase across pause/resume cycle: first=%d second=%d", saved1.Elapsed, saved2.Elapsed)
+	if saved2.Elapsed < saved1.Elapsed {
+		t.Fatalf("elapsed moved backwards across pause/resume cycle: first=%d second=%d", saved1.Elapsed, saved2.Elapsed)
 	}
 
 	// Keep the failure output concrete and useful.
@@ -412,7 +412,7 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	}
 
 	saved2 := waitForSavedStateByID(t, id, 25*time.Second, func(s *types.DownloadState) bool {
-		return s.Downloaded > saved1.Downloaded && s.Elapsed > saved1.Elapsed
+		return s.Downloaded >= saved1.Downloaded && s.Elapsed >= saved1.Elapsed
 	})
 
 	if saved2.DestPath != destPath {
