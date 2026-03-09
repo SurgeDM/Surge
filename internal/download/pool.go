@@ -119,7 +119,7 @@ func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 	p.taskChan <- cfg
 }
 
-// HasDownload checks if a download with the given URL already exists
+// HasDownload reports whether a download with the given URL is currently active or queued in the pool.
 func (p *WorkerPool) HasDownload(url string) bool {
 	p.mu.RLock()
 	for _, ad := range p.downloads {
@@ -136,8 +136,6 @@ func (p *WorkerPool) HasDownload(url string) bool {
 	}
 	p.mu.RUnlock()
 
-	// Check persistent store is no longer WorkerPool's responsibility.
-	// Processing layer handles full duplicate detection.
 	return false
 }
 
