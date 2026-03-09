@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -294,20 +295,29 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	}
 	// Wait for event worker to drain all buffered events and finish DB writes
 	evWait()
-	time.Sleep(50 * time.Millisecond) // let SQLite locks release
 
-	entry, err := state.GetDownload(id)
-	if err != nil {
-		t.Fatalf("failed to fetch persisted download: %v", err)
-	}
-	if entry == nil {
-		t.Fatal("expected persisted download entry after shutdown")
-	}
-	if entry.Status != "paused" {
-		t.Fatalf("status = %q, want paused", entry.Status)
-	}
-	if entry.Downloaded == 0 {
-		t.Fatal("expected persisted paused download to have non-zero progress")
+	deadline = time.Now().Add(500 * time.Millisecond)
+	for {
+		entry, err := state.GetDownload(id)
+		if err == nil || !strings.Contains(err.Error(), "locked") {
+			if err != nil {
+				t.Fatalf("failed to fetch persisted download: %v", err)
+			}
+			if entry == nil {
+				t.Fatal("expected persisted download entry after shutdown")
+			}
+			if entry.Status != "paused" {
+				t.Fatalf("status = %q, want paused", entry.Status)
+			}
+			if entry.Downloaded == 0 {
+				t.Fatal("expected persisted paused download to have non-zero progress")
+			}
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("failed to fetch persisted download before timeout: %v", err)
+		}
+		time.Sleep(10 * time.Millisecond)
 	}
 
 	statuses, err := svc.List()
