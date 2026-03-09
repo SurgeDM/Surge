@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/surge-downloader/surge/internal/processing"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -81,7 +82,7 @@ func TestAutoResume_Enabled(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := download.NewWorkerPool(ch, 1)
 
-	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, ch), false)
+	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, ch), processing.NewLifecycleManager(nil, nil), false)
 
 	// 6. Verify Download is Resumed
 	found := false
@@ -164,7 +165,7 @@ func TestAutoResume_Disabled(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := download.NewWorkerPool(ch, 1)
 
-	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, ch), false)
+	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, ch), processing.NewLifecycleManager(nil, nil), false)
 
 	// 6. Verify Download is Resumed
 	found := false

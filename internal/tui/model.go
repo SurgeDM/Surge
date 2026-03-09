@@ -84,8 +84,10 @@ type RootModel struct {
 	activeTab    int // 0=Queued, 1=Active, 2=Done
 	inputs       []textinput.Model
 	focusedInput int
-	// Service Interface (replaces Pool)
-	Service core.DownloadService
+	// Service Interface
+	// Core
+	Service      core.DownloadService
+	Orchestrator *processing.LifecycleManager
 
 	// File picker for directory selection
 	filepicker filepicker.Model
@@ -189,7 +191,7 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 	}
 }
 
-func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, noResume bool) RootModel {
+func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, orchestrator *processing.LifecycleManager, noResume bool) RootModel {
 	// Initialize inputs
 	urlInput := textinput.New()
 	urlInput.Placeholder = "https://example.com/file.zip"
@@ -348,11 +350,12 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		help:                  helpModel,
 		list:                  downloadList,
 		Service:               service,
+		Orchestrator:          orchestrator,
 		PWD:                   pwd,
+		Settings:              settings,
 		SpeedHistory:          make([]float64, GraphHistoryPoints), // 60 points of history (30s at 0.5s interval)
 		logViewport:           viewport.New(40, 5),                 // Default size, will be resized
 		logEntries:            make([]string, 0),
-		Settings:              settings,
 		SettingsInput:         settingsInput,
 		searchInput:           searchInput,
 		urlUpdateInput:        urlUpdateInput,

@@ -172,7 +172,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
-	m := tui.InitialRootModel(port, Version, GlobalService, noResume)
+	m := tui.InitialRootModel(port, Version, GlobalService, processing.NewLifecycleManager(nil, nil), noResume)
 	m.ServerHost = serverBindHost
 	if m.ServerHost == "" {
 		m.ServerHost = "127.0.0.1"

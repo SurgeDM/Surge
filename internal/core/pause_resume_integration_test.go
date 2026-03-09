@@ -153,7 +153,7 @@ func TestIntegration_PauseResume_HotPath_Aggregates(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", rootDir)
 
 	state.CloseDB()
-	dbPath := filepath.Join(rootDir, "surge.db")
+	dbPath := filepath.Join(rootDir, fmt.Sprintf("%s-surge.db", t.Name()))
 	state.Configure(dbPath)
 	defer state.CloseDB()
 
@@ -312,7 +312,7 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", rootDir)
 
 	state.CloseDB()
-	dbPath := filepath.Join(rootDir, "surge.db")
+	dbPath := filepath.Join(rootDir, fmt.Sprintf("%s-surge.db", t.Name()))
 	state.Configure(dbPath)
 	defer state.CloseDB()
 
@@ -445,7 +445,7 @@ func TestIntegration_PauseResume_ResumeBatchRejectsPausing(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", rootDir)
 
 	state.CloseDB()
-	dbPath := filepath.Join(rootDir, "surge.db")
+	dbPath := filepath.Join(rootDir, fmt.Sprintf("%s-surge.db", t.Name()))
 	state.Configure(dbPath)
 	defer state.CloseDB()
 
@@ -517,7 +517,7 @@ func TestIntegration_PauseResume_StatusFormulaInvariants(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", rootDir)
 
 	state.CloseDB()
-	dbPath := filepath.Join(rootDir, "surge.db")
+	dbPath := filepath.Join(rootDir, fmt.Sprintf("%s-surge.db", t.Name()))
 	state.Configure(dbPath)
 	defer state.CloseDB()
 
@@ -608,7 +608,7 @@ func TestIntegration_PauseResume_ConcreteSnapshotDebugString(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", rootDir)
 
 	state.CloseDB()
-	dbPath := filepath.Join(rootDir, "surge.db")
+	dbPath := filepath.Join(rootDir, fmt.Sprintf("%s-surge.db", t.Name()))
 	state.Configure(dbPath)
 	defer state.CloseDB()
 

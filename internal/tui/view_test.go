@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/surge-downloader/surge/internal/processing"
 	"regexp"
 	"strings"
 	"testing"
@@ -42,7 +43,7 @@ func TestFormatDurationForUI(t *testing.T) {
 }
 
 func TestView_DashboardFitsViewportWithoutTopCutoff(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, false)
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
 
 	cases := []struct {
 		width  int
@@ -80,7 +81,7 @@ func TestView_DashboardFitsViewportWithoutTopCutoff(t *testing.T) {
 }
 
 func TestView_SettingsTinyTerminalDoesNotPanic(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, false)
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
 	m.state = SettingsState
 	m.width = 20
 	m.height = 8
@@ -92,7 +93,7 @@ func TestView_SettingsTinyTerminalDoesNotPanic(t *testing.T) {
 }
 
 func TestView_NetworkActivityShowsFiveAxisLabelsWhenTall(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, false)
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
 	m.width = 140
 	m.height = 40
 
@@ -129,7 +130,7 @@ func BenchmarkCachedLogo(b *testing.B) {
 /____/\__,_/_/   \__, /\___/ 
                 /____/       `
 
-	m := InitialRootModel(1701, "test-version", nil, false)
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
 	// Pre-warm cache
 	gradientLogo := ApplyGradient(logoText, colors.NeonPink, colors.NeonPurple)
 	m.logoCache = lipgloss.NewStyle().Render(gradientLogo)

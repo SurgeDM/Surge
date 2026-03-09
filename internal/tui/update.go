@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bufio"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -235,69 +236,46 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 
 	candidateFilename := strings.TrimSpace(filename)
 
-	activeDownloads := func(name string) bool {
-		for _, d := range m.downloads {
-			if !d.done {
-				if d.Filename == name {
-					return true
-				}
-				if d.Destination != "" && filepath.Base(d.Destination) == name {
-					return true
-				}
-			}
-		}
-		return false
+	// Call Orchestrator Enqueue
+	req := &processing.DownloadRequest{
+		URL:                url,
+		Filename:           candidateFilename,
+		Path:               path,
+		IsDefaultPath:      isDefaultPath,
+		Mirrors:            mirrors,
+		Headers:            headers,
+		IsExplicitCategory: !isDefaultPath,
+		SkipApproval:       true,
 	}
-
-	finalPath, finalFilename, err := processing.ResolveDestination(url, candidateFilename, path, isDefaultPath, m.Settings, nil, activeDownloads)
-	if err != nil {
-		m.addLogEntry(LogStyleError.Render("✖ " + err.Error()))
-		return m, nil
-	}
-	path = finalPath
-
-	// Call Service Add
-	// Note: We don't construct DownloadConfig/DownloadModel manually here for the queue
-	// We rely on the event stream to update the UI, OR we add it optimistically.
-	// Optimistic addition gives better UX.
 
 	var newID string
+	var err error
 	requestID := strings.TrimSpace(id)
+	
 	if requestID != "" {
-		type idAwareAdder interface {
-			AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string) (string, error)
-		}
-		if svcWithID, ok := m.Service.(idAwareAdder); ok {
-			newID, err = svcWithID.AddWithID(url, path, finalFilename, mirrors, headers, requestID)
-		} else {
-			if isDefaultPath {
-				newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, false, 0, false)
-			} else {
-				newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, true, 0, false)
-			}
-		}
+		newID, err = m.Orchestrator.EnqueueWithID(context.Background(), req, requestID)
 	} else {
-		if isDefaultPath {
-			newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, false, 0, false)
-		} else {
-			newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, true, 0, false)
-		}
+		newID, err = m.Orchestrator.Enqueue(context.Background(), req)
 	}
+
 	if err != nil {
-		m.addLogEntry(LogStyleError.Render("✖ Failed to add download: " + err.Error()))
+		m.addLogEntry(LogStyleError.Render("✖ Failed to enqueue download: " + err.Error()))
 		return m, nil
 	}
 
 	// Create optimistic model
 	newDownload := NewDownloadModel(newID, url, "Queued", 0)
-	newDownload.Destination = filepath.Join(path, finalFilename)
+	
+	// Since routing is now asynchronous/delegated, the true path comes through events.
+	// For optimistic UI, we assign a placeholder if needed, though events will correct it soon.
+	newDownload.Destination = filepath.Join(path, candidateFilename)
 	m.downloads = append(m.downloads, newDownload)
 
 	m.SelectedDownloadID = newID
 	m.activeTab = TabQueued
 	m.UpdateListItems()
 
-	utils.Debug("Added to Queue (via Service): %s -> %s", url, finalFilename)
+	utils.Debug("Added to Queue (via Orchestrator): %s -> %s", url, candidateFilename)
 
 	return m, nil
 }

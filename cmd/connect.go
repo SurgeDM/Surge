@@ -12,6 +12,8 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"github.com/surge-downloader/surge/internal/core"
+	
+	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/tui"
 )
 
@@ -83,7 +85,7 @@ func connectAndRunTUI(cmd *cobra.Command, target string) {
 		}
 	}
 
-	m := tui.InitialRootModel(port, Version, service, false)
+	m := tui.InitialRootModel(port, Version, service, processing.NewLifecycleManager(nil, nil), false)
 	m.ServerHost = serverHost
 	m.IsRemote = true
 

@@ -134,7 +134,6 @@ func ensureDownloadsSchema() error {
 	return nil
 }
 
-// CloseDB closes the database connection
 func CloseDB() {
 	dbMu.Lock()
 	defer dbMu.Unlock()
@@ -142,6 +141,8 @@ func CloseDB() {
 		_ = db.Close()
 		db = nil
 	}
+	dbPath = ""
+	configured = false
 }
 
 // GetDB returns the database instance, initializing it if necessary
