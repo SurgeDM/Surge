@@ -148,21 +148,23 @@ func resetGlobalEnqueueContext() {
 	globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background())
 }
 
-func currentEnqueueContext() context.Context {
-	globalEnqueueMu.Lock()
-	defer globalEnqueueMu.Unlock()
+func ensureEnqueueContextLocked() {
 	if globalEnqueueCtx == nil || globalEnqueueCancel == nil {
 		globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background())
 	}
+}
+
+func currentEnqueueContext() context.Context {
+	globalEnqueueMu.Lock()
+	defer globalEnqueueMu.Unlock()
+	ensureEnqueueContextLocked()
 	return globalEnqueueCtx
 }
 
 func currentEnqueueCancel() context.CancelFunc {
 	globalEnqueueMu.Lock()
 	defer globalEnqueueMu.Unlock()
-	if globalEnqueueCtx == nil || globalEnqueueCancel == nil {
-		globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background())
-	}
+	ensureEnqueueContextLocked()
 	return globalEnqueueCancel
 }
 
