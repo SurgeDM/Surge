@@ -114,7 +114,7 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 	if err != nil {
 		return "", err
 	}
-	
+
 	return newID, nil
 }
 
@@ -150,10 +150,10 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 		req.Headers,
 		requestID,
 	)
-	
+
 	if err != nil {
 		return "", err
 	}
-	
+
 	return newID, nil
 }

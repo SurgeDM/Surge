@@ -251,7 +251,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	var newID string
 	var err error
 	requestID := strings.TrimSpace(id)
-	
+
 	if requestID != "" {
 		newID, err = m.Orchestrator.EnqueueWithID(context.Background(), req, requestID)
 	} else {
@@ -265,7 +265,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 
 	// Create optimistic model
 	newDownload := NewDownloadModel(newID, url, "Queued", 0)
-	
+
 	// Since routing is now asynchronous/delegated, the true path comes through events.
 	// For optimistic UI, we assign a placeholder if needed, though events will correct it soon.
 	newDownload.Destination = filepath.Join(path, candidateFilename)

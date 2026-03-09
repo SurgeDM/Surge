@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/surge-downloader/surge/internal/processing"
 	"encoding/json"
+	"github.com/surge-downloader/surge/internal/processing"
 	"os"
 	"path/filepath"
 	"testing"
