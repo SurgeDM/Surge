@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine"
+	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/engine/concurrent"
 	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/single"
@@ -85,7 +85,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	// Probe server once to get all metadata
 	utils.Debug("TUIDownload: Probing server... %s", cfg.URL)
 
-	probe, err := engine.ProbeServer(ctx, cfg.URL, cfg.Filename, cfg.Headers)
+	probe, err := processing.ProbeServer(ctx, cfg.URL, cfg.Filename, cfg.Headers)
 	if err != nil {
 		utils.Debug("TUIDownload: Probe failed: %v\n", err)
 		return err
@@ -196,7 +196,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			utils.Debug("Probing %d mirrors", len(mirrors))
 			// Always check primary + mirrors to ensure we are using the best set
 			allToCheck := append([]string{cfg.URL}, mirrors...)
-			valid, errs := engine.ProbeMirrors(ctx, allToCheck)
+			valid, errs := processing.ProbeMirrors(ctx, allToCheck)
 
 			// Log errors
 			for u, e := range errs {

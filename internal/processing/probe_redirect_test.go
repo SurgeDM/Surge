@@ -1,8 +1,8 @@
-package engine_test
+package processing_test
 
 import (
 	"context"
-	"github.com/surge-downloader/surge/internal/engine"
+	"github.com/surge-downloader/surge/internal/processing"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -25,7 +25,7 @@ func TestProbeRedirectRange(t *testing.T) {
 	}))
 	defer redirect.Close()
 
-	res, err := engine.ProbeServer(context.Background(), redirect.URL, "", nil)
+	res, err := processing.ProbeServer(context.Background(), redirect.URL, "", nil)
 	if err != nil {
 		t.Fatalf("ProbeServer failed: %v", err)
 	}
