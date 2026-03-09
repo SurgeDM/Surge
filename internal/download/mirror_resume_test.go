@@ -2,8 +2,10 @@ package download_test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -11,6 +13,7 @@ import (
 	"github.com/surge-downloader/surge/internal/download"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/testutil"
 	"github.com/surge-downloader/surge/internal/utils"
 )
@@ -57,11 +60,24 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	defer mirror.Close()
 
 	// 3. Start Download with Mirror
-	ctx := context.Background()
+	ctx1 := context.Background()
 	progressCh := make(chan any, 100)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerHost: 4,
 	}
+	// Wire event persistence worker because pause state is persisted in processing layer.
+	mgr := processing.NewLifecycleManager(nil, nil)
+	var eventWG sync.WaitGroup
+	eventWG.Add(1)
+	go func() {
+		defer eventWG.Done()
+		mgr.StartEventWorker(progressCh)
+	}()
+	defer func() {
+		close(progressCh)
+		eventWG.Wait()
+	}()
+
 	progState := types.NewProgressState(uuid.New().String(), fileSize)
 
 	filename := "mirrorfile.bin"
@@ -69,15 +85,17 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	destPath := filepath.Join(outputPath, filename)
 
 	cfg := types.DownloadConfig{
-		URL:        primary.URL(),
-		OutputPath: outputPath,
-		Filename:   filename,
-		ID:         progState.ID,
-		ProgressCh: progressCh,
-		State:      progState,
-		Runtime:    runtime,
-		IsResume:   false,
-		Mirrors:    []string{mirror.URL()}, // Pass mirror
+		URL:           primary.URL(),
+		OutputPath:    outputPath,
+		Filename:      filename,
+		ID:            progState.ID,
+		ProgressCh:    progressCh,
+		State:         progState,
+		Runtime:       runtime,
+		TotalSize:     fileSize,
+		SupportsRange: true,
+		IsResume:      false,
+		Mirrors:       []string{mirror.URL()}, // Pass mirror
 	}
 
 	// Pre-create incomplete file (simulating processing layer)
@@ -91,42 +109,62 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	// Start download and interrupt
 	errCh := make(chan error)
 	go func() {
-		errCh <- download.TUIDownload(ctx, &cfg)
+		errCh <- download.TUIDownload(ctx1, &cfg)
 	}()
 
-	// Wait for some progress
-	time.Sleep(200 * time.Millisecond) // Give it time to start and probe
+	// Wait until download really started so Pause() has an attached cancel func.
+	deadline := time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if progState.Downloaded.Load() > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if progState.Downloaded.Load() == 0 {
+		t.Fatal("download did not make initial progress before pause")
+	}
 
 	// Interrupt!
 	progState.Pause()
 
 	// Wait for return
 	select {
-	case <-errCh:
-	case <-time.After(5 * time.Second):
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, types.ErrPaused) {
+			t.Fatalf("unexpected pause result: %v", err)
+		}
+	case <-time.After(15 * time.Second):
 		t.Fatal("Download did not return")
 	}
 
-	// 4. Verify Mirrors Saved
-	savedState, err := state.LoadState(primary.URL(), destPath)
-	if err != nil || len(savedState.Mirrors) == 0 {
-		// Print debug logs
+	// 4. Verify Mirrors Saved (event worker persists state asynchronously)
+	var savedState *types.DownloadState
+	deadline = time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		savedState, err = state.LoadState(primary.URL(), destPath)
+		if err == nil && savedState != nil && len(savedState.Mirrors) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if err != nil || savedState == nil || len(savedState.Mirrors) == 0 {
+		// Print debug metadata
 		entries, _ := os.ReadDir(tmpDir)
 		for _, e := range entries {
 			if !e.IsDir() {
-				if e.Name() == filename {
-					t.Logf("File %s exists (size: %s)", e.Name(), "200MB")
-					continue
+				info, statErr := os.Stat(filepath.Join(tmpDir, e.Name()))
+				if statErr == nil {
+					t.Logf("File %s exists (size=%d)", e.Name(), info.Size())
+				} else {
+					t.Logf("File %s exists", e.Name())
 				}
-				content, _ := os.ReadFile(filepath.Join(tmpDir, e.Name()))
-				t.Logf("File %s:\n%s", e.Name(), string(content))
 			}
 		}
 	}
 	if err != nil {
 		t.Fatalf("Failed to load state: %v", err)
 	}
-	if len(savedState.Mirrors) == 0 {
+	if savedState == nil || len(savedState.Mirrors) == 0 {
 		t.Fatal("Mirrors not saved in state!")
 	}
 	if savedState.Mirrors[0] != mirror.URL() {
@@ -134,38 +172,53 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	}
 
 	// 5. Resume without explicit mirrors
-	// Create new config simulating a resumption where we don't know the mirrors initially
+	// Create new config simulating a resumption where we don't know the mirrors initially.
+	// Resume now receives preloaded state from the caller.
+	resumeState := types.NewProgressState(savedState.ID, fileSize)
 	resumeCfg := types.DownloadConfig{
-		URL:        primary.URL(),
-		OutputPath: outputPath,
-		Filename:   filename,
-		ID:         progState.ID,
-		ProgressCh: progressCh,
-		State:      progState,
-		Runtime:    runtime,
-		IsResume:   true,
-		DestPath:   destPath,
-		Mirrors:    []string{}, // Empty mirrors!
+		URL:           primary.URL(),
+		OutputPath:    outputPath,
+		Filename:      filename,
+		ID:            savedState.ID,
+		ProgressCh:    progressCh,
+		State:         resumeState,
+		Runtime:       runtime,
+		TotalSize:     fileSize,
+		SupportsRange: true,
+		IsResume:      true,
+		DestPath:      destPath,
+		SavedState:    savedState,
+		Mirrors:       []string{}, // Empty mirrors!
 	}
 
-	progState.Resume() // Reset pause flag
-
 	// We can't easily hook into TUIDownload to verify it loaded mirrors without running it.
+	ctx2 := context.Background()
 	go func() {
-		errCh <- download.TUIDownload(ctx, &resumeCfg)
+		errCh <- download.TUIDownload(ctx2, &resumeCfg)
 	}()
 
-	// Give it a moment to load state
-	time.Sleep(200 * time.Millisecond)
-	progState.Pause()
-	<-errCh
+	// Give it enough time to start and restore mirrors from saved state.
+	deadline = time.Now().Add(15 * time.Second)
+	for time.Now().Before(deadline) {
+		if len(resumeState.GetMirrors()) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	resumeState.Pause()
+	select {
+	case err := <-errCh:
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, types.ErrPaused) {
+			t.Fatalf("unexpected resume pause result: %v", err)
+		}
+	case <-time.After(15 * time.Second):
+		t.Fatal("resumed download did not return after pause")
+	}
 
-	// Check if resumeCfg.Mirrors was updated
-	// Since resumeCfg is passed by pointer, it should be updated if TUIDownload modifies it.
-	// Check if progState has mirrors
-	stateMirrors := progState.GetMirrors()
+	// Check if resume state has mirrors
+	stateMirrors := resumeState.GetMirrors()
 	if len(stateMirrors) == 0 {
-		t.Fatal("progState mirrors were not updated from saved state")
+		t.Fatal("resume state mirrors were not updated from saved state")
 	}
 
 	found := false

@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -12,6 +13,7 @@ import (
 	"github.com/surge-downloader/surge/internal/download"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/testutil"
 )
 
@@ -58,17 +60,32 @@ func TestIntegration_PauseResume(t *testing.T) {
 	ctx := context.Background()
 	progressCh := make(chan any, 100)
 	runtime := &types.RuntimeConfig{}
+	// DB/state persistence now lives in processing event worker.
+	mgr := processing.NewLifecycleManager(nil, nil)
+	var eventWG sync.WaitGroup
+	eventWG.Add(1)
+	go func() {
+		defer eventWG.Done()
+		mgr.StartEventWorker(progressCh)
+	}()
+	defer func() {
+		close(progressCh)
+		eventWG.Wait()
+	}()
+
 	progState := types.NewProgressState(uuid.New().String(), fileSize)
 
 	cfg := types.DownloadConfig{
-		URL:        url,
-		OutputPath: outputPath,
-		Filename:   filename,
-		ID:         progState.ID,
-		ProgressCh: progressCh,
-		State:      progState,
-		Runtime:    runtime,
-		IsResume:   false,
+		URL:           url,
+		OutputPath:    outputPath,
+		Filename:      filename,
+		ID:            progState.ID,
+		ProgressCh:    progressCh,
+		State:         progState,
+		Runtime:       runtime,
+		TotalSize:     fileSize,
+		SupportsRange: true,
+		IsResume:      false,
 	}
 
 	// Pre-create incomplete file (simulating processing layer)
@@ -112,8 +129,16 @@ func TestIntegration_PauseResume(t *testing.T) {
 		t.Fatal("Download did not return after cancellation")
 	}
 
-	// 4. Verify State is Saved
-	savedState, err := state.LoadState(url, destPath)
+	// 4. Verify State is Saved (event worker persists asynchronously)
+	var savedState *types.DownloadState
+	deadline = time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		savedState, err = state.LoadState(url, destPath)
+		if err == nil && savedState != nil && savedState.Downloaded > 0 && len(savedState.Tasks) > 0 {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 	if err != nil {
 		t.Fatalf("Failed to load saved state: %v", err)
 	}
@@ -143,18 +168,15 @@ func TestIntegration_PauseResume(t *testing.T) {
 
 	// 5. Resume Download
 	// Create new context
-	resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	resumeCtx, resumeCancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer resumeCancel()
 
 	// Update config for resume
 	cfg.IsResume = true
 	cfg.DestPath = destPath // Important for resume lookup
+	cfg.SavedState = savedState
 
-	// Re-initialize state to clean values but keep ID if needed
-	// But TUIDownload re-creates concurrent downloader which relies on LoadState
-	// We should probably reset existing state or use a fresh one to simulate app restart?
-	// But `cfg.State` is passed in. TUIDownload updates it.
-	// Let's reset the Pause flag in the state at least.
+	// Reset pause flag before resume
 	progState.Resume()
 
 	err = download.TUIDownload(resumeCtx, &cfg)
@@ -162,13 +184,21 @@ func TestIntegration_PauseResume(t *testing.T) {
 		t.Fatalf("Resume failed: %v", err)
 	}
 
-	// 6. Verify Completion
-	// .surge file should be gone
+	// 6. Verify Completion (event worker finalizes rename/status asynchronously)
+	deadline = time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		_, surgeErr := os.Stat(incompletePath)
+		finalInfo, finalErr := os.Stat(destPath)
+		entry, _ := state.GetDownload(cfg.ID)
+		if os.IsNotExist(surgeErr) && finalErr == nil && finalInfo.Size() == fileSize && entry != nil && entry.Status == "completed" {
+			return
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+
 	if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
 		t.Error("Incomplete file still exists after resume completion")
 	}
-
-	// Final file should exist
 	finalInfo, err := os.Stat(destPath)
 	if err != nil {
 		t.Fatalf("Final file not found: %v", err)
@@ -176,10 +206,8 @@ func TestIntegration_PauseResume(t *testing.T) {
 	if finalInfo.Size() != fileSize {
 		t.Errorf("Final file size = %d, want %d", finalInfo.Size(), fileSize)
 	}
-
-	// State should be deleted
-	_, err = state.LoadState(url, destPath)
-	if err == nil {
-		t.Error("State should be deleted after completion")
+	entry, _ := state.GetDownload(cfg.ID)
+	if entry == nil || entry.Status != "completed" {
+		t.Fatalf("download entry not marked completed, got %+v", entry)
 	}
 }
