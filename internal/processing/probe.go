@@ -32,8 +32,8 @@ type ProbeResult struct {
 	ContentType   string
 }
 
-// ProbeServer sends GET with Range: bytes=0-0 to determine server capabilities
-// headers is optional - pass nil for non-authenticated probes
+// ProbeServer uses a tiny ranged GET so callers can decide filename handling
+// and resumability before handing work to the downloader.
 func ProbeServer(ctx context.Context, rawurl string, filenameHint string, headers map[string]string) (*ProbeResult, error) {
 	utils.Debug("Probing server: %s", rawurl)
 
@@ -42,9 +42,7 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 
 	client := getProbeClient()
 
-	// Retry logic for probe request
-	for i := 0; i < 3; i++ {
-		// Stop if parent context is already done
+	for attempt := range 3 {
 		if ctx.Err() != nil {
 			if err == nil {
 				err = fmt.Errorf("probe request aborted: %w", ctx.Err())
@@ -52,7 +50,7 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 			break
 		}
 
-		if i > 0 {
+		if attempt > 0 {
 			select {
 			case <-ctx.Done():
 				err = fmt.Errorf("probe request aborted during retry: %w", ctx.Err())
@@ -61,7 +59,7 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 			if ctx.Err() != nil {
 				break
 			}
-			utils.Debug("Retrying probe... attempt %d", i+1)
+			utils.Debug("Retrying probe... attempt %d", attempt+1)
 		}
 
 		probeCtx, cancel := context.WithTimeout(ctx, types.ProbeTimeout)
@@ -70,14 +68,13 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 		if reqErr != nil {
 			cancel()
 			err = fmt.Errorf("failed to create probe request: %w", reqErr)
-			break // Fatal error, don't retry
+			break
 		}
 
 		resp, err = client.Do(req)
 
-		// If we get a 403 Forbidden or 405 Method Not Allowed, it might be due to the Range header.
-		// Some servers (like NotebookLLM streaming) reject Range requests entirely.
-		// We retry once without the Range header.
+		// Some origins reject ranged probes outright; a second request without Range
+		// lets us still discover filename and size for sequential downloads.
 		if err == nil && (resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusMethodNotAllowed) {
 			utils.Debug("Probe got %d, retrying without Range header", resp.StatusCode)
 			_ = resp.Body.Close() // Close previous response
@@ -95,7 +92,7 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 		cancel()
 
 		if err == nil {
-			break // Success
+			break
 		}
 	}
 
@@ -114,15 +111,14 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 
 	result := &ProbeResult{}
 
-	// Determine range support and file size based on status code
+	// Only a 206 response proves resume-safe range support; a 200 means the
+	// downloader must fall back to a single sequential stream.
 	switch resp.StatusCode {
 	case http.StatusPartialContent: // 206
 		result.SupportsRange = true
-		// Parse Content-Range: bytes 0-0/TOTAL
 		contentRange := resp.Header.Get("Content-Range")
 		utils.Debug("Content-Range header: %s", contentRange)
 		if contentRange != "" {
-			// Format: "bytes 0-0/12345" or "bytes 0-0/*"
 			if idx := strings.LastIndex(contentRange, "/"); idx != -1 {
 				sizeStr := contentRange[idx+1:]
 				if sizeStr != "*" {
@@ -144,7 +140,6 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	// Determine filename using strengthened logic
 	name, _, err := utils.DetermineFilename(rawurl, resp, false)
 	if err != nil {
 		utils.Debug("Error determining filename: %v", err)
