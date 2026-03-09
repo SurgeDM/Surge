@@ -12,8 +12,6 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/spf13/cobra"
 	"github.com/surge-downloader/surge/internal/core"
-
-	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/tui"
 )
 
@@ -85,9 +83,7 @@ func connectAndRunTUI(cmd *cobra.Command, target string) {
 		}
 	}
 
-	m := tui.InitialRootModel(port, Version, service, processing.NewLifecycleManager(nil, nil), false)
-	m.ServerHost = serverHost
-	m.IsRemote = true
+	m := newRemoteRootModel(port, service, serverHost)
 
 	p := tea.NewProgram(m, tea.WithAltScreen())
 	go func() {
@@ -100,6 +96,13 @@ func connectAndRunTUI(cmd *cobra.Command, target string) {
 		fmt.Printf("Error running TUI: %v\n", err)
 		os.Exit(1)
 	}
+}
+
+func newRemoteRootModel(port int, service core.DownloadService, serverHost string) tui.RootModel {
+	m := tui.InitialRootModel(port, Version, service, nil, false)
+	m.ServerHost = serverHost
+	m.IsRemote = true
+	return m
 }
 
 func resolveTokenForTarget(target string) (string, error) {
