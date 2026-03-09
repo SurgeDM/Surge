@@ -106,60 +106,18 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 	}
 
 	utils.Debug("Lifecycle: Enqueue %s", req.URL)
-
-	// 1. Probe the Server
-	// We extract probing entirely into the processing layer before adding to the engine pool.
-	probe, err := ProbeServer(ctx, req.URL, req.Filename, req.Headers)
-	if err != nil {
-		utils.Debug("Lifecycle: Probe failed: %v\n", err)
-		return "", fmt.Errorf("probe failed: %w", err)
-	}
-
-	// 2. Routing and Filename Resolution
-	isNameActive := mgr.buildIsNameActive()
-
-	mgr.settingsMu.RLock()
-	settings := mgr.settings
-	mgr.settingsMu.RUnlock()
-
-	finalPath, finalFilename, err := ResolveDestination(
-		req.URL,
-		req.Filename,
-		req.Path,
-		!req.IsExplicitCategory, // if it's explicitly set by user, we skip routing
-		settings,
-		probe,
-		isNameActive,
-	)
-
-	if err != nil {
-		return "", fmt.Errorf("failed to resolve destination: %w", err)
-	}
-
-	surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
-	if err := precreateWorkingFile(finalPath, finalFilename); err != nil {
-		return "", err
-	}
-
-	// 3. Dispatch to Engine
-	// The Engine no longer probes or thinks. It just downloads what it's told.
-	newID, err := mgr.addFunc(
-		req.URL,
-		finalPath,
-		finalFilename,
-		req.Mirrors,
-		req.Headers,
-		req.IsExplicitCategory,
-		probe.FileSize,
-		probe.SupportsRange,
-	)
-
-	if err != nil {
-		_ = os.Remove(surgePath)
-		return "", err
-	}
-
-	return newID, nil
+	return mgr.enqueueResolved(ctx, req, func(finalPath, finalFilename string, probe *ProbeResult) (string, error) {
+		return mgr.addFunc(
+			req.URL,
+			finalPath,
+			finalFilename,
+			req.Mirrors,
+			req.Headers,
+			req.IsExplicitCategory,
+			probe.FileSize,
+			probe.SupportsRange,
+		)
+	})
 }
 
 // EnqueueWithID works identical to Enqueue but passes an explicit requestID to the engine
@@ -169,42 +127,49 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 	}
 
 	utils.Debug("Lifecycle: EnqueueWithID %s (%s)", req.URL, requestID)
+	return mgr.enqueueResolved(ctx, req, func(finalPath, finalFilename string, probe *ProbeResult) (string, error) {
+		return mgr.addWithIDFunc(
+			req.URL,
+			finalPath,
+			finalFilename,
+			req.Mirrors,
+			req.Headers,
+			requestID,
+			probe.FileSize,
+			probe.SupportsRange,
+		)
+	})
+}
 
+// enqueueResolved prepares the final path and working file before handing the
+// download to the engine, so workers and lifecycle events agree on one stable destination.
+func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadRequest, dispatch func(string, string, *ProbeResult) (string, error)) (string, error) {
 	probe, err := ProbeServer(ctx, req.URL, req.Filename, req.Headers)
 	if err != nil {
+		utils.Debug("Lifecycle: Probe failed: %v\n", err)
 		return "", fmt.Errorf("probe failed: %w", err)
 	}
 
-	isNameActive := mgr.buildIsNameActive()
-
-	mgr.settingsMu.RLock()
-	settings := mgr.settings
-	mgr.settingsMu.RUnlock()
-
 	finalPath, finalFilename, err := ResolveDestination(
-		req.URL, req.Filename, req.Path,
+		req.URL,
+		req.Filename,
+		req.Path,
 		!req.IsExplicitCategory,
-		settings, probe, isNameActive,
+		mgr.GetSettings(),
+		probe,
+		mgr.buildIsNameActive(),
 	)
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve destination: %w", err)
 	}
-	surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
+
+	// Pre-create the working file so the downloader can open it immediately after queueing.
 	if err := precreateWorkingFile(finalPath, finalFilename); err != nil {
 		return "", err
 	}
 
-	newID, err := mgr.addWithIDFunc(
-		req.URL,
-		finalPath,
-		finalFilename,
-		req.Mirrors,
-		req.Headers,
-		requestID,
-		probe.FileSize,
-		probe.SupportsRange,
-	)
-
+	surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
+	newID, err := dispatch(finalPath, finalFilename, probe)
 	if err != nil {
 		_ = os.Remove(surgePath)
 		return "", err
