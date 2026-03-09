@@ -597,6 +597,6 @@ func (p *WorkerPool) GracefulShutdown() {
 }
 
 func (p *WorkerPool) persistQueuedForShutdown() {
-	// No-op: The Processing layer or the state manager is now responsible
-	// for persisting queued items outside of the pool's execution lifecycle.
+	// No-op: queued items are persisted when Add emits DownloadQueuedMsg,
+	// so shutdown only needs to drain active workers.
 }

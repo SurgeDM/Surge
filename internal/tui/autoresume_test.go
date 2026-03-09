@@ -2,7 +2,6 @@ package tui
 
 import (
 	"encoding/json"
-	"github.com/surge-downloader/surge/internal/processing"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,6 +12,7 @@ import (
 	"github.com/surge-downloader/surge/internal/download"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/processing"
 )
 
 func TestAutoResume_Enabled(t *testing.T) {

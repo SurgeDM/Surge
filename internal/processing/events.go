@@ -159,8 +159,9 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 
 			// Add/Update to master list as completed
-			destPath := "" // Best guess, engine should ideally provide it or we look it up
-			// We can look it up from the DB quickly
+			destPath := ""
+			// DownloadCompleteMsg does not carry destPath, so we recover the stable final
+			// location from the DB entry written earlier on this same serialized event stream.
 			existing, _ := state.GetDownload(m.DownloadID)
 			var url, urlHash string
 			filename := m.Filename

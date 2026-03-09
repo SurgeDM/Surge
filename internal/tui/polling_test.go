@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"github.com/surge-downloader/surge/internal/processing"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,6 +12,7 @@ import (
 	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/processing"
 )
 
 // TestStateSync verifies that the TUI uses the shared state object
