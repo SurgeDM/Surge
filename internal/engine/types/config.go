@@ -55,6 +55,7 @@ type DownloadConfig struct {
 	ID         string
 	Filename   string
 	IsResume   bool // True if this is explicitly a resume, not a fresh download
+	IsExplicitCategory bool // True if the user manually modified the destination path, overriding automatic category logic
 	ProgressCh chan<- any
 	State      *ProgressState
 	SavedState *DownloadState    // Pre-loaded state for resume optimization

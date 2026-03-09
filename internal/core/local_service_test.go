@@ -105,7 +105,7 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 
 	outputDir := t.TempDir()
 	const filename = "active-delete.bin"
-	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil)
+	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)
 	}
@@ -218,7 +218,7 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 
 	outputDir := t.TempDir()
 	const filename = "persist.bin"
-	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil)
+	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)
 	}
@@ -305,11 +305,11 @@ func TestLocalDownloadService_Shutdown_PersistsQueuedState(t *testing.T) {
 	defer server.Close()
 
 	outputDir := t.TempDir()
-	firstID, err := svc.Add(server.URL()+"?id=1", outputDir, "first.bin", nil, nil)
+	firstID, err := svc.Add(server.URL()+"?id=1", outputDir, "first.bin", nil, nil, false)
 	if err != nil {
 		t.Fatalf("failed to add first download: %v", err)
 	}
-	secondID, err := svc.Add(server.URL()+"?id=2", outputDir, "second.bin", nil, nil)
+	secondID, err := svc.Add(server.URL()+"?id=2", outputDir, "second.bin", nil, nil, false)
 	if err != nil {
 		t.Fatalf("failed to add second download: %v", err)
 	}
@@ -395,7 +395,7 @@ func TestLocalDownloadService_BatchProgress(t *testing.T) {
 	defer cleanup()
 
 	// Add download using test server URL
-	_, err = svc.Add(ts.URL, tempDir, "test-file", nil, nil)
+	_, err = svc.Add(ts.URL, tempDir, "test-file", nil, nil, false)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)
 	}
@@ -436,7 +436,7 @@ func TestLocalDownloadService_ResumeRejectedWhilePausing(t *testing.T) {
 	defer server.Close()
 
 	outputDir := t.TempDir()
-	id, err := svc.Add(server.URL(), outputDir, "resume-race.bin", nil, nil)
+	id, err := svc.Add(server.URL(), outputDir, "resume-race.bin", nil, nil, false)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)
 	}

@@ -1,16 +1,24 @@
+# binary
 surge
-debug.log
+
+# python + uv stuff
 .python-version
 pyproject.toml
 uv.lock
+*.pyc
+
+# analysis files
 speed_graph.png
 worker_speeds.png
 logs/
-downloads/
-*.pyc
-grab_bench*
+
 # Added by goreleaser init:
 dist/
 build/
+
+# secrets
 .github_token
 .env
+
+# temp markdowns
+implementation_plan.md

@@ -455,6 +455,7 @@ type DownloadRequest struct {
 	Mirrors              []string          `json:"mirrors,omitempty"`
 	SkipApproval         bool              `json:"skip_approval,omitempty"` // Extension validated request, skip TUI prompt
 	Headers              map[string]string `json:"headers,omitempty"`       // Custom HTTP headers from browser (cookies, auth, etc.)
+	IsExplicitCategory   bool              `json:"is_explicit_category,omitempty"`
 }
 
 func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir string, service core.DownloadService) {
@@ -598,7 +599,7 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 	}
 
 	// Add via service
-	newID, err := service.Add(urlForAdd, outPath, req.Filename, mirrorsForAdd, req.Headers)
+	newID, err := service.Add(urlForAdd, outPath, req.Filename, mirrorsForAdd, req.Headers, req.IsExplicitCategory)
 	if err != nil {
 		http.Error(w, "Failed to add download: "+err.Error(), http.StatusInternalServerError)
 		return
@@ -669,7 +670,9 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		// But processDownloads is called from QUEUE init routine, primarily for CLI args.
 		// If CLI args provided, user probably wants them added immediately.
 
-		_, err := GlobalService.Add(url, outPath, "", mirrors, nil)
+		// CLI explicit arg means we don't do automatic re-categorization unless it was left default
+		isExplicit := (outPath != settings.General.DefaultDownloadDir)
+		_, err := GlobalService.Add(url, outPath, "", mirrors, nil, isExplicit)
 		if err != nil {
 			_ = GlobalService.Publish(events.SystemLogMsg{
 				Message: fmt.Sprintf("Error adding %s: %v", url, err),

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/processing"
 	"github.com/surge-downloader/surge/internal/engine/concurrent"
 	"github.com/surge-downloader/surge/internal/engine/events"
@@ -108,14 +109,26 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		}
 	}
 
-	if info, err := os.Stat(cfg.OutputPath); err == nil && info.IsDir() {
-		// Use cfg.Filename if TUI provided one, otherwise use probe.Filename
-		filename := probe.Filename
-		if cfg.Filename != "" {
-			filename = cfg.Filename
-		}
-		destPath = filepath.Join(cfg.OutputPath, filename)
+	// Load settings for routing (the engine should ideally get this via LifecycleManager later, but for now we load it)
+	settings, _ := config.LoadSettings()
+
+	// isDefaultPath simulates whether the path was unmodified by the TUI.
+	// We'll assume the TUI handled category routing if it wanted to, but we still pass it through ResolveDestination to ensure uniqueness.
+	isDefaultPath := false
+	if settings != nil {
+		isDefaultPath = (utils.EnsureAbsPath(cfg.OutputPath) == utils.EnsureAbsPath(settings.General.DefaultDownloadDir))
 	}
+
+	// Determine final filename, path, and handle routing using the probe metadata
+	// Active downloads func is nil here because the worker pool handles deduplication before this point
+	finalPath, finalFilename, err := processing.ResolveDestination(cfg.URL, cfg.Filename, cfg.OutputPath, isDefaultPath, settings, probe, nil)
+	if err != nil {
+		utils.Debug("Failed to get filename: %v", err)
+		return err
+	}
+	
+	destPath = finalPath
+	finalDestPath := filepath.Join(destPath, finalFilename)
 
 	// Local mirrors slice to avoid modifying config (race condition)
 	mirrors := make([]string, len(cfg.Mirrors))
@@ -154,18 +167,16 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 
 	if isResume {
 		// Resume: use saved destination path directly (don't generate new unique name)
-		destPath = savedState.DestPath
-		utils.Debug("Resuming download, using saved destPath: %s", destPath)
-	} else {
-		// Fresh download without TUI-provided filename: generate unique filename if file already exists
-		destPath = uniqueFilePath(destPath)
-	}
-	finalFilename := filepath.Base(destPath)
-	utils.Debug("Destination path: %s", destPath)
+		finalDestPath = savedState.DestPath
+		finalFilename = filepath.Base(finalDestPath)
+		destPath = filepath.Dir(finalDestPath)
+		utils.Debug("Resuming download, using saved destPath: %s", finalDestPath)
+	} 
+	utils.Debug("Destination path: %s", finalDestPath)
 
 	if cfg.State != nil {
 		cfg.State.SetFilename(finalFilename)
-		cfg.State.SetDestPath(destPath)
+		cfg.State.SetDestPath(finalDestPath)
 	}
 
 	// Send download started message
@@ -215,13 +226,13 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		d := concurrent.NewConcurrentDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		utils.Debug("Calling Download with mirrors: %v", mirrors)
-		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, destPath, probe.FileSize)
+		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, probe.FileSize)
 	} else {
 		// Fallback to single-threaded downloader
 		utils.Debug("Using single-threaded downloader")
 		d := single.NewSingleDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
-		downloadErr = d.Download(ctx, cfg.URL, destPath, probe.FileSize, probe.Filename)
+		downloadErr = d.Download(ctx, cfg.URL, finalDestPath, probe.FileSize, probe.Filename)
 	}
 
 	// Only send completion if NO error AND not paused
@@ -251,7 +262,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			ID:          cfg.ID,
 			URL:         cfg.URL,
 			URLHash:     state.URLHash(cfg.URL),
-			DestPath:    destPath,
+			DestPath:    finalDestPath,
 			Filename:    finalFilename,
 			Status:      "completed",
 			TotalSize:   probe.FileSize,

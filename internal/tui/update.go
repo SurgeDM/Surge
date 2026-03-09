@@ -3,15 +3,15 @@ package tui
 import (
 	"bufio"
 	"fmt"
-	"net/url"
 	"os"
 	"os/exec"
-	"path"
 	"path/filepath"
 	"regexp"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/surge-downloader/surge/internal/processing"
 
 	"github.com/surge-downloader/surge/internal/clipboard"
 	"github.com/surge-downloader/surge/internal/config"
@@ -232,46 +232,34 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	path = utils.EnsureAbsPath(path)
 
 	candidateFilename := strings.TrimSpace(filename)
-	categoryFilename := candidateFilename
-	if categoryFilename == "" {
-		categoryFilename = inferFilenameFromURL(url)
-	}
 
-	// Auto-route to category folder when enabled
-	if m.Settings.General.CategoryEnabled && categoryFilename != "" && isDefaultPath {
-		cat, err := config.GetCategoryForFile(categoryFilename, m.Settings.General.Categories)
-		if err != nil {
-			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Category match error for %s: %v", categoryFilename, err)))
-			return m, nil
-		}
-		if cat != nil {
-			if catPath := config.ResolveCategoryPath(cat, m.Settings.General.DefaultDownloadDir); catPath != "" {
-				path = utils.EnsureAbsPath(catPath)
-				if err := os.MkdirAll(path, 0o755); err != nil {
-					m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to create category path %s: %v", path, err)))
-					return m, nil
+	activeDownloads := func(name string) bool {
+		for _, d := range m.downloads {
+			if !d.done {
+				if d.Filename == name {
+					return true
+				}
+				if d.Destination != "" && filepath.Base(d.Destination) == name {
+					return true
 				}
 			}
 		}
+		return false
 	}
 
-	// Generate unique filename after the final destination path is known.
-	// For Local Service, we can generate it here. For Remote, the server might do it,
-	// but sending a unique filename is safer.
-	finalFilename := m.generateUniqueFilename(path, candidateFilename)
-	if finalFilename == "" {
-		finalFilename = m.generateUniqueFilename(path, categoryFilename)
+	finalPath, finalFilename, err := processing.ResolveDestination(url, candidateFilename, path, isDefaultPath, m.Settings, nil, activeDownloads)
+	if err != nil {
+		m.addLogEntry(LogStyleError.Render("✖ " + err.Error()))
+		return m, nil
 	}
+	path = finalPath
 
 	// Call Service Add
 	// Note: We don't construct DownloadConfig/DownloadModel manually here for the queue
 	// We rely on the event stream to update the UI, OR we add it optimistically.
 	// Optimistic addition gives better UX.
 
-	var (
-		newID string
-		err   error
-	)
+	var newID string
 	requestID := strings.TrimSpace(id)
 	if requestID != "" {
 		type idAwareAdder interface {
@@ -280,10 +268,18 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		if svcWithID, ok := m.Service.(idAwareAdder); ok {
 			newID, err = svcWithID.AddWithID(url, path, finalFilename, mirrors, headers, requestID)
 		} else {
-			newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers)
+			if isDefaultPath {
+				newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, false)
+			} else {
+				newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, true)
+			}
 		}
 	} else {
-		newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers)
+		if isDefaultPath {
+			newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, false)
+		} else {
+			newID, err = m.Service.Add(url, path, finalFilename, mirrors, headers, true)
+		}
 	}
 	if err != nil {
 		m.addLogEntry(LogStyleError.Render("✖ Failed to add download: " + err.Error()))
@@ -304,30 +300,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	return m, nil
 }
 
-func inferFilenameFromURL(rawURL string) string {
-	parsed, err := url.Parse(strings.TrimSpace(rawURL))
-	if err != nil {
-		return ""
-	}
 
-	query := parsed.Query()
-	if name := strings.TrimSpace(query.Get("filename")); name != "" {
-		if base := strings.TrimSpace(path.Base(name)); base != "" && base != "." && base != ".." && base != "/" {
-			return base
-		}
-	}
-	if name := strings.TrimSpace(query.Get("file")); name != "" {
-		if base := strings.TrimSpace(path.Base(name)); base != "" && base != "." && base != ".." && base != "/" {
-			return base
-		}
-	}
-
-	base := strings.TrimSpace(path.Base(parsed.Path))
-	if base == "" || base == "." || base == ".." || base == "/" {
-		return ""
-	}
-	return base
-}
 
 func (m RootModel) defaultDownloadPath() string {
 	if m.Settings != nil {
@@ -1732,62 +1705,4 @@ func (m *RootModel) updateListTitle() {
 	}
 }
 
-// generateUniqueFilename creates a unique filename by appending (1), (2), etc.
-// if the filename already exists in the destination folder OR in the current downloads list
-func (m *RootModel) generateUniqueFilename(dir, filename string) string {
-	if filename == "" {
-		return filename // Let the downloader auto-detect
-	}
 
-	// Check if any download already has this filename
-	existsInDownloads := func(name string) bool {
-		for _, d := range m.downloads {
-			// Don't check against completed downloads in the list,
-			// as we rely on filesystem check for those.
-			// But do check active/queued ones to avoid collision before file is created.
-			if !d.done {
-				// Check by Filename (set via DownloadStartedMsg)
-				if d.Filename == name {
-					return true
-				}
-				// Also check by Destination path basename (set earlier, more reliable)
-				if d.Destination != "" && filepath.Base(d.Destination) == name {
-					return true
-				}
-			}
-		}
-		return false
-	}
-
-	// Check if file exists on disk (including incomplete .surge files)
-	existsOnDisk := func(name string) bool {
-		path := filepath.Join(dir, name)
-		if _, err := os.Stat(path); !os.IsNotExist(err) {
-			return true
-		}
-		// Also check for incomplete download file (.surge extension)
-		if _, err := os.Stat(path + types.IncompleteSuffix); !os.IsNotExist(err) {
-			return true
-		}
-		return false
-	}
-
-	if !existsInDownloads(filename) && !existsOnDisk(filename) {
-		return filename
-	}
-
-	// Split filename into base and extension
-	ext := filepath.Ext(filename)
-	base := strings.TrimSuffix(filename, ext)
-
-	// Try (1), (2), etc. until we find a unique one
-	for i := 1; i <= 100; i++ {
-		candidate := fmt.Sprintf("%s(%d)%s", base, i, ext)
-		if !existsInDownloads(candidate) && !existsOnDisk(candidate) {
-			return candidate
-		}
-	}
-
-	// Fallback: just return original (shouldn't happen)
-	return filename
-}

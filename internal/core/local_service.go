@@ -438,17 +438,17 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 	return statuses, nil
 }
 
-// Add queues a new download.
-func (s *LocalDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string) (string, error) {
-	return s.add(url, path, filename, mirrors, headers, "")
+// Add queues a new download on the local pool without TUI confirmation.
+func (s *LocalDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool) (string, error) {
+	return s.add(url, path, filename, mirrors, headers, "", isExplicitCategory)
 }
 
 // AddWithID queues a new download using a caller-provided id when non-empty.
 func (s *LocalDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string) (string, error) {
-	return s.add(url, path, filename, mirrors, headers, id)
+	return s.add(url, path, filename, mirrors, headers, id, false) // AddWithID does not explicitly set category
 }
 
-func (s *LocalDownloadService) add(url string, path string, filename string, mirrors []string, headers map[string]string, requestedID string) (string, error) {
+func (s *LocalDownloadService) add(url string, path string, filename string, mirrors []string, headers map[string]string, requestedID string, isExplicitCategory bool) (string, error) {
 	if s.Pool == nil {
 		return "", fmt.Errorf("worker pool not initialized")
 	}
@@ -486,15 +486,16 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 	state.DestPath = filepath.Join(outPath, filename) // Best guess until download starts
 
 	cfg := types.DownloadConfig{
-		URL:        url,
-		Mirrors:    mirrors,
-		OutputPath: outPath,
-		ID:         id,
-		Filename:   filename, // If empty, will be auto-detected
-		ProgressCh: s.InputCh,
-		State:      state,
-		Runtime:    types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
-		Headers:    headers,
+		URL:                url,
+		Mirrors:            mirrors,
+		OutputPath:         outPath,
+		ID:                 id,
+		Filename:           filename, // If empty, will be auto-detected
+		ProgressCh:         s.InputCh,
+		State:              state,
+		Runtime:            types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
+		Headers:            headers,
+		IsExplicitCategory: isExplicitCategory,
 	}
 
 	s.Pool.Add(cfg)
