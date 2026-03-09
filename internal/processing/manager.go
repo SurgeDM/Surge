@@ -136,6 +136,7 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 		return "", fmt.Errorf("failed to resolve destination: %w", err)
 	}
 
+	surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
 	if err := precreateWorkingFile(finalPath, finalFilename); err != nil {
 		return "", err
 	}
@@ -154,6 +155,7 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 	)
 
 	if err != nil {
+		_ = os.Remove(surgePath)
 		return "", err
 	}
 
@@ -187,6 +189,7 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 	if err != nil {
 		return "", fmt.Errorf("failed to resolve destination: %w", err)
 	}
+	surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
 	if err := precreateWorkingFile(finalPath, finalFilename); err != nil {
 		return "", err
 	}
@@ -203,6 +206,7 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 	)
 
 	if err != nil {
+		_ = os.Remove(surgePath)
 		return "", err
 	}
 

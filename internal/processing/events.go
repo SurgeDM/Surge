@@ -11,6 +11,31 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
+// advanceRemainingTasks consumes bytes from the front of remaining tasks.
+func advanceRemainingTasks(tasks []types.Task, consumed int64) []types.Task {
+	if consumed <= 0 || len(tasks) == 0 {
+		return tasks
+	}
+
+	out := make([]types.Task, 0, len(tasks))
+	left := consumed
+	for _, task := range tasks {
+		if left <= 0 {
+			out = append(out, task)
+			continue
+		}
+		if task.Length <= left {
+			left -= task.Length
+			continue
+		}
+		task.Offset += left
+		task.Length -= left
+		left = 0
+		out = append(out, task)
+	}
+	return out
+}
+
 // StartEventWorker listens to engine events and handles database persistence
 // and file cleanup, ensuring the core engine remains stateless.
 func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
@@ -35,9 +60,48 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 		case events.DownloadPausedMsg:
 			// Update master list with paused status and progress
 			if m.State == nil {
-				// No state available — just update status
-				if err := state.UpdateStatus(m.DownloadID, "paused"); err != nil {
-					utils.Debug("Lifecycle: Failed to update pause status: %v", err)
+				existing, _ := state.GetDownload(m.DownloadID)
+				if existing == nil {
+					if err := state.UpdateStatus(m.DownloadID, "paused"); err != nil {
+						utils.Debug("Lifecycle: Failed to update pause status: %v", err)
+					}
+					break
+				}
+
+				entry := *existing
+				entry.Status = "paused"
+				if m.Downloaded > 0 {
+					entry.Downloaded = m.Downloaded
+				}
+				if err := state.AddToMasterList(entry); err != nil {
+					utils.Debug("Lifecycle: Failed to persist paused fallback entry: %v", err)
+				}
+
+				if existing.URL != "" && existing.DestPath != "" {
+					saved, err := state.LoadState(existing.URL, existing.DestPath)
+					if err == nil && saved != nil {
+						prevDownloaded := saved.Downloaded
+						prevElapsed := saved.Elapsed
+
+						if m.Downloaded > saved.Downloaded {
+							delta := m.Downloaded - saved.Downloaded
+							saved.Tasks = advanceRemainingTasks(saved.Tasks, delta)
+							saved.Downloaded = m.Downloaded
+						}
+						if existing.TimeTaken > 0 {
+							candidateElapsed := existing.TimeTaken * int64(time.Millisecond)
+							if candidateElapsed > saved.Elapsed {
+								saved.Elapsed = candidateElapsed
+							}
+						}
+						if saved.Downloaded > prevDownloaded && saved.Elapsed <= prevElapsed {
+							saved.Elapsed = prevElapsed + int64(time.Millisecond)
+						}
+
+						if err := state.SaveStateWithOptions(existing.URL, existing.DestPath, saved, state.SaveStateOptions{SkipFileHash: true}); err != nil {
+							utils.Debug("Lifecycle: Failed to persist paused fallback state: %v", err)
+						}
+					}
 				}
 				break
 			}
@@ -141,6 +205,11 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				existing.Status = "error"
 				if err := state.AddToMasterList(*existing); err != nil {
 					utils.Debug("Lifecycle: Failed to persist error state: %v", err)
+				}
+				if existing.DestPath != "" {
+					if err := RemoveIncompleteFile(existing.DestPath); err != nil {
+						utils.Debug("Lifecycle: Failed to remove incomplete file after error: %v", err)
+					}
 				}
 			}
 

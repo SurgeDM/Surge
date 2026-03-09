@@ -4,6 +4,7 @@ import (
 	"strings"
 
 	"github.com/surge-downloader/surge/internal/config"
+	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
 )
 
@@ -15,7 +16,7 @@ type DuplicateResult struct {
 	URL      string
 }
 
-// CheckForDuplicate inspects the active downloads to see if a compatible download already exists
+// CheckForDuplicate inspects active and persisted downloads for duplicate URLs.
 func CheckForDuplicate(url string, settings *config.Settings, activeDownloads func() map[string]*types.DownloadConfig) *DuplicateResult {
 	if !settings.General.WarnOnDuplicate {
 		return nil
@@ -41,6 +42,15 @@ func CheckForDuplicate(url string, settings *config.Settings, activeDownloads fu
 					URL:      d.URL,
 				}
 			}
+		}
+	}
+
+	// Check persisted completed/paused/queued entries in DB.
+	if exists, err := state.CheckDownloadExists(normalizedInputURL); err == nil && exists {
+		return &DuplicateResult{
+			Exists:   true,
+			IsActive: false,
+			URL:      normalizedInputURL,
 		}
 	}
 
