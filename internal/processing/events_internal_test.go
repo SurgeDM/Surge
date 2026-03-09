@@ -118,3 +118,28 @@ func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing
 		t.Fatalf("expected no finalized file after failure, stat err: %v", err)
 	}
 }
+
+func TestStartEventWorker_RemovesIncompleteFileOnErrorWithoutDBEntry(t *testing.T) {
+	tempDir := t.TempDir()
+	destPath := filepath.Join(tempDir, "video.mp4")
+	surgePath := destPath + types.IncompleteSuffix
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+		t.Fatalf("failed to create working file: %v", err)
+	}
+
+	mgr := NewLifecycleManager(nil, nil)
+	ch := make(chan interface{}, 1)
+	ch <- events.DownloadErrorMsg{
+		DownloadID: "download-no-db",
+		Filename:   "video.mp4",
+		DestPath:   destPath,
+		Err:        errors.New("boom"),
+	}
+	close(ch)
+
+	mgr.StartEventWorker(ch)
+
+	if _, err := os.Stat(surgePath); !os.IsNotExist(err) {
+		t.Fatalf("expected working file to be removed even without DB entry, stat err: %v", err)
+	}
+}

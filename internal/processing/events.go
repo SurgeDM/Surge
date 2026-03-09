@@ -116,9 +116,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			if m.State == nil {
 				existing, _ := state.GetDownload(m.DownloadID)
 				if existing == nil {
-					if err := state.UpdateStatus(m.DownloadID, "paused"); err != nil {
-						utils.Debug("Lifecycle: Failed to update pause status: %v", err)
-					}
+					utils.Debug("Lifecycle: Skipping paused fallback for %s: no persisted entry yet", m.DownloadID)
 					break
 				}
 
@@ -268,15 +266,19 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 
 		case events.DownloadErrorMsg:
 			existing, _ := state.GetDownload(m.DownloadID)
+			destPath := m.DestPath
 			if existing != nil {
 				existing.Status = "error"
 				if err := state.AddToMasterList(*existing); err != nil {
 					utils.Debug("Lifecycle: Failed to persist error state: %v", err)
 				}
 				if existing.DestPath != "" {
-					if err := RemoveIncompleteFile(existing.DestPath); err != nil {
-						utils.Debug("Lifecycle: Failed to remove incomplete file after error: %v", err)
-					}
+					destPath = existing.DestPath
+				}
+			}
+			if destPath != "" {
+				if err := RemoveIncompleteFile(destPath); err != nil {
+					utils.Debug("Lifecycle: Failed to remove incomplete file after error: %v", err)
 				}
 			}
 

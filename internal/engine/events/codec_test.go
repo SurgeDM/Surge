@@ -68,6 +68,7 @@ func TestEncodeDecodeSSEMessage_RoundTrip(t *testing.T) {
 	original := DownloadErrorMsg{
 		DownloadID: "dl-1",
 		Filename:   "file.bin",
+		DestPath:   "/tmp/file.bin",
 		Err:        errors.New("boom"),
 	}
 
@@ -91,7 +92,7 @@ func TestEncodeDecodeSSEMessage_RoundTrip(t *testing.T) {
 	if !castOK {
 		t.Fatalf("decoded message type = %T, want DownloadErrorMsg", decoded)
 	}
-	if msg.DownloadID != original.DownloadID || msg.Filename != original.Filename {
+	if msg.DownloadID != original.DownloadID || msg.Filename != original.Filename || msg.DestPath != original.DestPath {
 		t.Fatalf("decoded message mismatch: got %+v want %+v", msg, original)
 	}
 	if msg.Err == nil || msg.Err.Error() != "boom" {

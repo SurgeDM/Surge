@@ -419,6 +419,7 @@ func (p *WorkerPool) worker() {
 			p.trySendProgress(events.DownloadErrorMsg{
 				DownloadID: cfg.ID,
 				Filename:   cfg.Filename,
+				DestPath:   resolveDestPath(&cfg),
 				Err:        err,
 			})
 			// Clean up errored download from tracking (don't save to .surge)

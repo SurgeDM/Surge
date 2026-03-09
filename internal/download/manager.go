@@ -232,6 +232,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			safeSendProgress(cfg.ProgressCh, events.DownloadErrorMsg{
 				DownloadID: cfg.ID,
 				Filename:   finalFilename,
+				DestPath:   finalDestPath,
 				Err:        downloadErr,
 			})
 		}
