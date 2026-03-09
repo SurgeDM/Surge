@@ -43,7 +43,7 @@ func InferFilenameFromURL(rawURL string) string {
 
 // GetUniqueFilename creates a unique filename by appending (1), (2), etc.
 // It checks both the actual filesystem and an optional active downloads checker.
-func GetUniqueFilename(dir, filename string, isNameActive func(string) bool) string {
+func GetUniqueFilename(dir, filename string, isNameActive func(string, string) bool) string {
 	if filename == "" {
 		return filename
 	}
@@ -61,7 +61,7 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string) bool) str
 	}
 
 	existsAnywhere := func(name string) bool {
-		if isNameActive != nil && isNameActive(name) {
+		if isNameActive != nil && isNameActive(dir, name) {
 			return true
 		}
 		return existsOnDisk(name)
@@ -144,7 +144,7 @@ func getBaseFilename(url, candidate string, probe *ProbeResult) string {
 // ResolveDestination determines the final, unique destination path and filename for a download.
 // It combines URL inference, category routing, and unique filename generation.
 // It returns (final_destination_path, final_filename, error)
-func ResolveDestination(url, candidateFilename, defaultDir string, routeToCategory bool, settings *config.Settings, probe *ProbeResult, isNameActive func(string) bool) (string, string, error) {
+func ResolveDestination(url, candidateFilename, defaultDir string, routeToCategory bool, settings *config.Settings, probe *ProbeResult, isNameActive func(string, string) bool) (string, string, error) {
 	filename := getBaseFilename(url, candidateFilename, probe)
 
 	destPath := defaultDir

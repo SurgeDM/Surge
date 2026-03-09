@@ -21,8 +21,8 @@ type AddDownloadWithIDFunc func(string, string, string, []string, map[string]str
 
 // LifecycleManager orchestrates the life of a download outside of the core HTTP engine.
 // It handles probing, category routing, file conflict resolution, and settings management.
-// IsNameActiveFunc checks whether a given filename is already being downloaded.
-type IsNameActiveFunc func(name string) bool
+// IsNameActiveFunc checks whether a given filename is already being downloaded in a directory.
+type IsNameActiveFunc func(dir, name string) bool
 
 type LifecycleManager struct {
 	settings      *config.Settings
@@ -47,11 +47,11 @@ func precreateWorkingFile(destPath, filename string) error {
 }
 
 // buildIsNameActive returns the configured callback or a safe no-op.
-func (mgr *LifecycleManager) buildIsNameActive() func(string) bool {
+func (mgr *LifecycleManager) buildIsNameActive() func(string, string) bool {
 	if mgr.IsNameActive != nil {
 		return mgr.IsNameActive
 	}
-	return func(string) bool { return false }
+	return func(string, string) bool { return false }
 }
 
 func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithIDFunc) *LifecycleManager {

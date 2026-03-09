@@ -57,15 +57,30 @@ func TestGetUniqueFilename(t *testing.T) {
 	}
 
 	// 4. Exists in active downloads function
-	activeDownloads := func(name string) bool {
-		return name == "memory.bin"
+	activeDownloads := func(dir, name string) bool {
+		return dir == tmpDir && name == "memory.bin"
 	}
 	if name := processing.GetUniqueFilename(tmpDir, "memory.bin", activeDownloads); name != "memory(1).bin" {
 		t.Errorf("Expected memory(1).bin, got %s", name)
 	}
 
+	// 5. Same filename in a different directory should not conflict
+	otherDir := filepath.Join(tmpDir, "other")
+	if err := os.MkdirAll(otherDir, 0o755); err != nil {
+		t.Fatalf("failed to create other dir: %v", err)
+	}
+	dirAwareActive := func(dir, name string) bool {
+		return dir == otherDir && name == "video.mp4"
+	}
+	if name := processing.GetUniqueFilename(tmpDir, "video.mp4", dirAwareActive); name != "video.mp4" {
+		t.Errorf("Expected video.mp4, got %s", name)
+	}
+
 	// 5. After exhausting 100 numbered candidates, return the next fresh guess
-	overflowActive := func(name string) bool {
+	overflowActive := func(dir, name string) bool {
+		if dir != tmpDir {
+			return false
+		}
 		if name == "overflow.bin" {
 			return true
 		}

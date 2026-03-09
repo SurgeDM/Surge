@@ -62,20 +62,37 @@ func buildPoolIsNameActive(getAll func() []types.DownloadConfig) processing.IsNa
 		return nil
 	}
 
-	return func(name string) bool {
+	return func(dir, name string) bool {
+		dir = utils.EnsureAbsPath(strings.TrimSpace(dir))
 		name = strings.TrimSpace(name)
-		if name == "" {
+		if dir == "" || name == "" {
 			return false
 		}
 
 		for _, cfg := range getAll() {
-			if cfg.Filename == name {
-				return true
+			existingName := strings.TrimSpace(cfg.Filename)
+			existingDir := strings.TrimSpace(cfg.OutputPath)
+			if cfg.DestPath != "" {
+				existingDir = filepath.Dir(cfg.DestPath)
+				if existingName == "" {
+					existingName = filepath.Base(cfg.DestPath)
+				}
 			}
-			if cfg.State != nil && cfg.State.GetFilename() == name {
-				return true
+			if cfg.State != nil {
+				if stateName := strings.TrimSpace(cfg.State.GetFilename()); stateName != "" {
+					existingName = stateName
+				}
+				if stateDestPath := strings.TrimSpace(cfg.State.GetDestPath()); stateDestPath != "" {
+					existingDir = filepath.Dir(stateDestPath)
+					if existingName == "" {
+						existingName = filepath.Base(stateDestPath)
+					}
+				}
 			}
-			if cfg.DestPath != "" && filepath.Base(cfg.DestPath) == name {
+			if existingDir == "" || existingName == "" {
+				continue
+			}
+			if utils.EnsureAbsPath(existingDir) == dir && existingName == name {
 				return true
 			}
 		}

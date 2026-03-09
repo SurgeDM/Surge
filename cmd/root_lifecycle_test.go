@@ -19,9 +19,10 @@ func TestBuildPoolIsNameActive(t *testing.T) {
 	getAll := func() []types.DownloadConfig {
 		state := types.NewProgressState("dl-2", 0)
 		state.SetFilename("from-state.iso")
+		state.SetDestPath("/downloads/from-state.iso")
 
 		return []types.DownloadConfig{
-			{Filename: "queued.zip"},
+			{Filename: "queued.zip", OutputPath: "/downloads"},
 			{DestPath: "/downloads/from-path.mp4"},
 			{State: state},
 		}
@@ -33,26 +34,29 @@ func TestBuildPoolIsNameActive(t *testing.T) {
 	}
 
 	for _, name := range []string{"queued.zip", "from-path.mp4", "from-state.iso"} {
-		if !isNameActive(name) {
+		if !isNameActive("/downloads", name) {
 			t.Fatalf("expected %q to be active", name)
 		}
 	}
 
-	if isNameActive("missing.bin") {
+	if isNameActive("/downloads", "missing.bin") {
 		t.Fatal("did not expect unrelated filename to be active")
+	}
+	if isNameActive("/other", "queued.zip") {
+		t.Fatal("did not expect same filename in different directory to conflict")
 	}
 }
 
 func TestNewLocalLifecycleManager_WiresNameActivityCheck(t *testing.T) {
 	getAll := func() []types.DownloadConfig {
-		return []types.DownloadConfig{{Filename: "active.bin"}}
+		return []types.DownloadConfig{{Filename: "active.bin", OutputPath: "."}}
 	}
 
 	mgr := newLocalLifecycleManager(nil, getAll)
 	if mgr.IsNameActive == nil {
 		t.Fatal("expected IsNameActive to be wired")
 	}
-	if !mgr.IsNameActive("active.bin") {
+	if !mgr.IsNameActive(".", "active.bin") {
 		t.Fatal("expected wired IsNameActive callback to inspect active downloads")
 	}
 }
