@@ -57,6 +57,49 @@ var (
 	GlobalLifecycle         *processing.LifecycleManager
 )
 
+func buildPoolIsNameActive(getAll func() []types.DownloadConfig) processing.IsNameActiveFunc {
+	if getAll == nil {
+		return nil
+	}
+
+	return func(name string) bool {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return false
+		}
+
+		for _, cfg := range getAll() {
+			if cfg.Filename == name {
+				return true
+			}
+			if cfg.State != nil && cfg.State.GetFilename() == name {
+				return true
+			}
+			if cfg.DestPath != "" && filepath.Base(cfg.DestPath) == name {
+				return true
+			}
+		}
+		return false
+	}
+}
+
+func newLocalLifecycleManager(service core.DownloadService, getAll func() []types.DownloadConfig) *processing.LifecycleManager {
+	var addFunc processing.AddDownloadFunc
+	var addWithIDFunc processing.AddDownloadWithIDFunc
+	if service != nil {
+		addFunc = func(url string, destPath string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+			return service.Add(url, destPath, filename, mirrors, headers, isExplicitCategory, totalSize, supportsRange)
+		}
+		addWithIDFunc = func(url string, destPath string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
+			return service.AddWithID(url, destPath, filename, mirrors, headers, id, totalSize, supportsRange)
+		}
+	}
+
+	mgr := processing.NewLifecycleManager(addFunc, addWithIDFunc)
+	mgr.IsNameActive = buildPoolIsNameActive(getAll)
+	return mgr
+}
+
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:     "surge [url]...",
@@ -111,13 +154,7 @@ var rootCmd = &cobra.Command{
 		GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 
 		// Create Processing orchestration layer and link to service
-		addFunc := func(url string, destPath string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
-			return GlobalService.Add(url, destPath, filename, mirrors, headers, isExplicitCategory, totalSize, supportsRange)
-		}
-		addWithIDFunc := func(url string, destPath string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
-			return GlobalService.AddWithID(url, destPath, filename, mirrors, headers, id, totalSize, supportsRange)
-		}
-		GlobalLifecycle = processing.NewLifecycleManager(addFunc, addWithIDFunc)
+		GlobalLifecycle = newLocalLifecycleManager(GlobalService, GlobalPool.GetAll)
 
 		// Create event listener for LifecycleManager to handle DB updates.
 		// We use StreamEvents to get a dedicated channel.
@@ -672,13 +709,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 
 	lifecycle := GlobalLifecycle
 	if lifecycle == nil && GlobalService != nil {
-		addFunc := func(url string, destPath string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
-			return GlobalService.Add(url, destPath, filename, mirrors, headers, isExplicitCategory, totalSize, supportsRange)
-		}
-		addWithIDFunc := func(url string, destPath string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
-			return GlobalService.AddWithID(url, destPath, filename, mirrors, headers, id, totalSize, supportsRange)
-		}
-		lifecycle = processing.NewLifecycleManager(addFunc, addWithIDFunc)
+		lifecycle = newLocalLifecycleManager(GlobalService, GlobalPool.GetAll)
 	}
 
 	for _, arg := range urls {
