@@ -360,11 +360,12 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 
 		// Update the active download's config
 		ad.config.URL = newURL
+		if ad.config.State != nil {
+			ad.config.State.SetURL(newURL)
+		}
 	}
 
-	// Update persistent state and master list are now handled by Processing layer
-	// via events or dedicated RPCs. The WorkerPool only maintains active state.
-	return nil
+	return state.UpdateURL(downloadID, newURL)
 }
 
 func (p *WorkerPool) worker() {

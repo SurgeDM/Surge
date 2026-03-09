@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/surge-downloader/surge/internal/engine/events"
+	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
 )
 
@@ -1097,5 +1098,88 @@ func TestWorkerPool_UpdateURL(t *testing.T) {
 	err = pool.UpdateURL("queued-id", "http://example.com/new.zip")
 	if err == nil || err.Error() != "cannot update URL for a queued download, please cancel or wait for it to start" {
 		t.Errorf("Expected queued error, got %v", err)
+	}
+}
+
+func TestWorkerPool_UpdateURL_PersistsToDB(t *testing.T) {
+	tempDir := t.TempDir()
+	state.CloseDB()
+	state.Configure(filepath.Join(tempDir, "surge.db"))
+	if _, err := state.GetDB(); err != nil {
+		t.Fatalf("failed to initialize db: %v", err)
+	}
+	defer state.CloseDB()
+
+	oldURL := "http://example.com/old.zip"
+	newURL := "http://example.com/new.zip"
+
+	if err := state.AddToMasterList(types.DownloadEntry{
+		ID:       "paused-id",
+		URL:      oldURL,
+		URLHash:  state.URLHash(oldURL),
+		DestPath: filepath.Join(tempDir, "paused.zip"),
+		Filename: "paused.zip",
+		Status:   "paused",
+	}); err != nil {
+		t.Fatalf("failed to seed paused entry: %v", err)
+	}
+	if err := state.AddToMasterList(types.DownloadEntry{
+		ID:       "db-only-id",
+		URL:      oldURL,
+		URLHash:  state.URLHash(oldURL),
+		DestPath: filepath.Join(tempDir, "db-only.zip"),
+		Filename: "db-only.zip",
+		Status:   "paused",
+	}); err != nil {
+		t.Fatalf("failed to seed db-only entry: %v", err)
+	}
+
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 3)
+
+	pausedState := types.NewProgressState("paused-id", 1000)
+	pausedState.Paused.Store(true)
+	pausedState.SetURL(oldURL)
+
+	pool.mu.Lock()
+	pool.downloads["paused-id"] = &activeDownload{
+		config: types.DownloadConfig{
+			ID:    "paused-id",
+			URL:   oldURL,
+			State: pausedState,
+		},
+	}
+	pool.mu.Unlock()
+
+	if err := pool.UpdateURL("paused-id", newURL); err != nil {
+		t.Fatalf("UpdateURL(paused-id) failed: %v", err)
+	}
+	pool.mu.RLock()
+	gotURL := pool.downloads["paused-id"].config.URL
+	pool.mu.RUnlock()
+	if gotURL != newURL {
+		t.Fatalf("config URL = %q, want %q", gotURL, newURL)
+	}
+	if got := pausedState.GetURL(); got != newURL {
+		t.Fatalf("state URL = %q, want %q", got, newURL)
+	}
+
+	entry, err := state.GetDownload("paused-id")
+	if err != nil {
+		t.Fatalf("failed to load paused entry: %v", err)
+	}
+	if entry == nil || entry.URL != newURL || entry.URLHash != state.URLHash(newURL) {
+		t.Fatalf("paused entry not updated in db: %#v", entry)
+	}
+
+	if err := pool.UpdateURL("db-only-id", newURL); err != nil {
+		t.Fatalf("UpdateURL(db-only-id) failed: %v", err)
+	}
+	entry, err = state.GetDownload("db-only-id")
+	if err != nil {
+		t.Fatalf("failed to load db-only entry: %v", err)
+	}
+	if entry == nil || entry.URL != newURL || entry.URLHash != state.URLHash(newURL) {
+		t.Fatalf("db-only entry not updated in db: %#v", entry)
 	}
 }
