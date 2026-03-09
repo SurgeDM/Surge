@@ -186,14 +186,19 @@ func TestIntegration_PauseResume(t *testing.T) {
 
 	// 6. Verify Completion (event worker finalizes rename/status asynchronously)
 	deadline = time.Now().Add(5 * time.Second)
+	completed := false
 	for time.Now().Before(deadline) {
 		_, surgeErr := os.Stat(incompletePath)
 		finalInfo, finalErr := os.Stat(destPath)
 		entry, _ := state.GetDownload(cfg.ID)
 		if os.IsNotExist(surgeErr) && finalErr == nil && finalInfo.Size() == fileSize && entry != nil && entry.Status == "completed" {
-			return
+			completed = true
+			break
 		}
 		time.Sleep(50 * time.Millisecond)
+	}
+	if !completed {
+		t.Fatal("resume did not reach finalized completed state before timeout")
 	}
 
 	if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
