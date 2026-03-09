@@ -47,13 +47,14 @@ func advanceRemainingTasks(tasks []types.Task, consumed int64) []types.Task {
 
 func finalizeCompletedFile(finalPath string) error {
 	if finalPath == "" {
-		return nil
+		return fmt.Errorf("missing destination path for completed download")
 	}
 
 	surgePath := finalPath + types.IncompleteSuffix
 	if err := renameCompletedFile(surgePath, finalPath); err != nil {
 		if errors.Is(err, syscall.EXDEV) {
 			if err := copyCompletedFile(surgePath, finalPath); err != nil {
+				_ = os.Remove(finalPath)
 				return fmt.Errorf("copy completed file: %w", err)
 			}
 			if err := os.Remove(surgePath); err != nil {
@@ -224,12 +225,25 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				}
 			}
 
-			// Finalization happens here instead of inside the engine so that both normal
-			// completion and DB persistence stay serialized through one lifecycle path.
-			if destPath != "" {
-				if err := finalizeCompletedFile(destPath); err != nil {
-					utils.Debug("Lifecycle: Failed to finalize completed file at %s: %v", destPath, err)
+			// Completion only becomes durable once the working file is promoted, so a
+			// finalization failure must stay retryable instead of being recorded as done.
+			if err := finalizeCompletedFile(destPath); err != nil {
+				utils.Debug("Lifecycle: Failed to finalize completed file at %s: %v", destPath, err)
+				if err := state.AddToMasterList(types.DownloadEntry{
+					ID:         m.DownloadID,
+					URL:        url,
+					URLHash:    urlHash,
+					DestPath:   destPath,
+					Filename:   filename,
+					Status:     "error",
+					TotalSize:  m.Total,
+					Downloaded: m.Total,
+					TimeTaken:  m.Elapsed.Milliseconds(),
+					AvgSpeed:   avgSpeed,
+				}); err != nil {
+					utils.Debug("Lifecycle: Failed to persist finalization error state: %v", err)
 				}
+				break
 			}
 
 			if err := state.AddToMasterList(types.DownloadEntry{
