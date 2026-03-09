@@ -27,6 +27,8 @@ func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 	pool := download.NewWorkerPool(ch, 1)
 	svc := NewLocalDownloadServiceWithInput(pool, ch)
 	defer func() { _ = svc.Shutdown() }()
+	evCleanup := startEventWorkerForTest(t, svc)
+	defer evCleanup()
 	streamCh, cleanup, err := svc.StreamEvents(context.Background())
 	if err != nil {
 		t.Fatalf("failed to stream events: %v", err)
@@ -302,9 +304,15 @@ func TestLocalDownloadService_Shutdown_PersistsQueuedState(t *testing.T) {
 	defer server.Close()
 
 	outputDir := t.TempDir()
+	if f, err := os.Create(filepath.Join(outputDir, "first.bin") + ".surge"); err == nil {
+		f.Close()
+	}
 	firstID, err := svc.Add(server.URL()+"?id=1", outputDir, "first.bin", nil, nil, false, 0, false)
 	if err != nil {
 		t.Fatalf("failed to add first download: %v", err)
+	}
+	if f, err := os.Create(filepath.Join(outputDir, "second.bin") + ".surge"); err == nil {
+		f.Close()
 	}
 	secondID, err := svc.Add(server.URL()+"?id=2", outputDir, "second.bin", nil, nil, false, 0, false)
 	if err != nil {
@@ -439,6 +447,9 @@ func TestLocalDownloadService_ResumeRejectedWhilePausing(t *testing.T) {
 	defer server.Close()
 
 	outputDir := t.TempDir()
+	if f, err := os.Create(filepath.Join(outputDir, "resume-race.bin") + ".surge"); err == nil {
+		f.Close()
+	}
 	id, err := svc.Add(server.URL(), outputDir, "resume-race.bin", nil, nil, false, 0, false)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)

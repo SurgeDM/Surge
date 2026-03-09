@@ -337,6 +337,9 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	forceSingleConnectionRuntime(svc1)
 	evCleanup1 := startEventWorkerForTest(t, svc1)
 
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		f.Close()
+	}
 	id, err := svc1.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
@@ -552,6 +555,10 @@ func TestIntegration_PauseResume_StatusFormulaInvariants(t *testing.T) {
 
 	outputDir := t.TempDir()
 	const filename = "formula.bin"
+	destPath := filepath.Join(outputDir, filename)
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		f.Close()
+	}
 	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
@@ -645,7 +652,11 @@ func TestIntegration_PauseResume_ConcreteSnapshotDebugString(t *testing.T) {
 
 	outputDir := t.TempDir()
 	const filename = "snapshot-debug.bin"
+	destPath := filepath.Join(outputDir, filename)
 
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		f.Close()
+	}
 	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
