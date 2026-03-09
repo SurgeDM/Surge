@@ -62,10 +62,10 @@ func (mgr *LifecycleManager) buildIsNameActive() func(string, string) bool {
 }
 
 func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithIDFunc) *LifecycleManager {
-	// 1. Load Settings immediately on startup as part of the processing layer's responsibility
+	// Snapshot settings once so enqueue can still make routing decisions even if
+	// a later disk read fails or the caller never opens the settings UI.
 	settings, err := config.LoadSettings()
 	if err != nil {
-		// If settings fail to load, fallback to defaults
 		settings = config.DefaultSettings()
 	}
 
@@ -76,7 +76,7 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 	}
 }
 
-// GetSettings allows the UI to read the current settings (e.g. for the Settings view).
+// GetSettings returns the current routing/settings snapshot used by the lifecycle layer.
 func (m *LifecycleManager) GetSettings() *config.Settings {
 	m.settingsMu.RLock()
 	defer m.settingsMu.RUnlock()

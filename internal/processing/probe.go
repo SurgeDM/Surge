@@ -239,8 +239,8 @@ func sameProbeRedirectOrigin(a, b *neturl.URL) bool {
 	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host)
 }
 
-// ProbeMirrors concurrently checks a list of mirrors and returns valid ones and errors
-func ProbeMirrors(ctx context.Context, mirrors []string) (valid []string, errors map[string]error) {
+// ProbeMirrors concurrently checks a list of mirrors and returns valid ones and per-mirror failures.
+func ProbeMirrors(ctx context.Context, mirrors []string) (valid []string, errs map[string]error) {
 	// Deduplicate
 	unique := make(map[string]bool)
 	for _, m := range mirrors {
@@ -255,7 +255,7 @@ func ProbeMirrors(ctx context.Context, mirrors []string) (valid []string, errors
 	utils.Debug("Probing %d mirrors...", len(candidates))
 
 	valid = make([]string, 0, len(candidates))
-	errors = make(map[string]error)
+	errs = make(map[string]error)
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
@@ -274,19 +274,19 @@ func ProbeMirrors(ctx context.Context, mirrors []string) (valid []string, errors
 			defer mu.Unlock()
 
 			if err != nil {
-				errors[target] = err
+				errs[target] = err
 				return
 			}
 
 			if result.SupportsRange {
 				valid = append(valid, target)
 			} else {
-				errors[target] = fmt.Errorf("does not support ranges")
+				errs[target] = fmt.Errorf("does not support ranges")
 			}
 		}(url)
 	}
 
 	wg.Wait()
-	utils.Debug("Mirror probing complete: %d valid, %d failed", len(valid), len(errors))
-	return valid, errors
+	utils.Debug("Mirror probing complete: %d valid, %d failed", len(valid), len(errs))
+	return valid, errs
 }
