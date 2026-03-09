@@ -2,7 +2,6 @@ package processing
 
 import (
 	"os"
-	"path/filepath"
 	"time"
 
 	"github.com/surge-downloader/surge/internal/engine/events"
@@ -164,16 +163,20 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			// We can look it up from the DB quickly
 			existing, _ := state.GetDownload(m.DownloadID)
 			var url, urlHash string
+			filename := m.Filename
 			if existing != nil {
 				destPath = existing.DestPath
 				url = existing.URL
 				urlHash = existing.URLHash
+				if filename == "" {
+					filename = existing.Filename
+				}
 			}
 
 			// Rename from .surge to final destination
-			if destPath != "" && m.Filename != "" {
-				surgePath := filepath.Join(destPath, m.Filename) + types.IncompleteSuffix
-				finalPath := filepath.Join(destPath, m.Filename)
+			if destPath != "" {
+				finalPath := destPath
+				surgePath := finalPath + types.IncompleteSuffix
 				if err := os.Rename(surgePath, finalPath); err != nil {
 					// Might have already been renamed, or cross-device link error
 					if _, statErr := os.Stat(finalPath); statErr != nil {
@@ -187,7 +190,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				URL:         url,
 				URLHash:     urlHash,
 				DestPath:    destPath,
-				Filename:    m.Filename,
+				Filename:    filename,
 				Status:      "completed",
 				TotalSize:   m.Total,
 				Downloaded:  m.Total,
