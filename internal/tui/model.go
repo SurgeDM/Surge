@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -172,7 +173,9 @@ type RootModel struct {
 
 	logoCache string // Cached logo with gradient applied
 
-	shuttingDown bool
+	enqueueCtx    context.Context
+	cancelEnqueue context.CancelFunc
+	shuttingDown  bool
 }
 
 // NewDownloadModel creates a new download model
@@ -342,6 +345,8 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	catPathInput.Width = 50
 	catPathInput.Prompt = ""
 
+	enqueueCtx, cancelEnqueue := context.WithCancel(context.Background())
+
 	m := RootModel{
 		downloads:             downloads,
 		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
@@ -364,6 +369,8 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		ServerPort:            serverPort,
 		CurrentVersion:        currentVersion,
 		InitialDarkBackground: lipgloss.HasDarkBackground(),
+		enqueueCtx:            enqueueCtx,
+		cancelEnqueue:         cancelEnqueue,
 	}
 
 	// Apply configured theme

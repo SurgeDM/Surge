@@ -1,8 +1,8 @@
 package tui
 
 import (
+	"context"
 	"errors"
-
 	"testing"
 	"time"
 
@@ -14,6 +14,7 @@ import (
 	"github.com/surge-downloader/surge/internal/download"
 	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/surge-downloader/surge/internal/processing"
 )
 
 var errTest = errors.New("test error")
@@ -438,6 +439,74 @@ func TestStartDownload_UsesProvidedIDWhenServiceSupportsIt(t *testing.T) {
 	}
 	if got := updated.downloads[0].ID; got != requestID {
 		t.Fatalf("queued download ID = %q, want %q", got, requestID)
+	}
+}
+
+func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
+	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
+	t.Cleanup(func() {
+		_ = svc.Shutdown()
+	})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	orchestrator := processing.NewLifecycleManager(
+		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+			t.Fatal("enqueue dispatch should not run after context cancellation")
+			return "", nil
+		},
+		nil,
+	)
+
+	m := RootModel{
+		Settings:      config.DefaultSettings(),
+		Service:       svc,
+		Orchestrator:  orchestrator,
+		enqueueCtx:    ctx,
+		cancelEnqueue: func() {},
+		list:          NewDownloadList(80, 20),
+		logViewport:   viewport.New(40, 5),
+	}
+
+	updated, cmd := m.startDownload("https://example.com/file.bin", nil, nil, t.TempDir(), false, "file.bin", "")
+	if cmd == nil {
+		t.Fatal("expected enqueue command")
+	}
+	if len(updated.downloads) != 1 {
+		t.Fatalf("expected optimistic queued download, got %d", len(updated.downloads))
+	}
+
+	msg := cmd()
+	errMsg, ok := msg.(enqueueErrorMsg)
+	if !ok {
+		t.Fatalf("msg = %T, want enqueueErrorMsg", msg)
+	}
+	if !errors.Is(errMsg.err, context.Canceled) {
+		t.Fatalf("err = %v, want context canceled", errMsg.err)
+	}
+}
+
+func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	m := RootModel{
+		state:         DashboardState,
+		keys:          Keys,
+		enqueueCtx:    ctx,
+		cancelEnqueue: cancel,
+	}
+
+	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	m2 := updated.(RootModel)
+
+	if !m2.shuttingDown {
+		t.Fatal("expected model to enter shutdown state")
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatal("expected quit to cancel enqueue context")
 	}
 }
 

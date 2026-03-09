@@ -352,12 +352,13 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	}
 
 	cmd := func() tea.Msg {
+		ctx := m.downloadEnqueueContext()
 		var newID string
 		var err error
 		if requestID != "" {
-			newID, err = m.Orchestrator.EnqueueWithID(context.Background(), req, requestID)
+			newID, err = m.Orchestrator.EnqueueWithID(ctx, req, requestID)
 		} else {
-			newID, err = m.Orchestrator.Enqueue(context.Background(), req)
+			newID, err = m.Orchestrator.Enqueue(ctx, req)
 		}
 		if err != nil {
 			return enqueueErrorMsg{tempID: optimisticID, err: err}
@@ -382,6 +383,13 @@ func (m RootModel) defaultDownloadPath() string {
 		}
 	}
 	return "."
+}
+
+func (m RootModel) downloadEnqueueContext() context.Context {
+	if m.enqueueCtx != nil {
+		return m.enqueueCtx
+	}
+	return context.Background()
 }
 
 func (m RootModel) isDefaultDownloadPath(path string) bool {
@@ -793,6 +801,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Quit
 			if key.Matches(msg, m.keys.Dashboard.Quit, m.keys.Dashboard.ForceQuit) {
+				if m.cancelEnqueue != nil {
+					m.cancelEnqueue()
+				}
 				m.shuttingDown = true
 				return m, shutdownCmd(m.Service)
 			}
