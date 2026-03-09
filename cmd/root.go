@@ -670,6 +670,17 @@ func processDownloads(urls []string, outputDir string, port int) int {
 
 	settings := getSettings()
 
+	lifecycle := GlobalLifecycle
+	if lifecycle == nil && GlobalService != nil {
+		addFunc := func(url string, destPath string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+			return GlobalService.Add(url, destPath, filename, mirrors, headers, isExplicitCategory, totalSize, supportsRange)
+		}
+		addWithIDFunc := func(url string, destPath string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
+			return GlobalService.AddWithID(url, destPath, filename, mirrors, headers, id, totalSize, supportsRange)
+		}
+		lifecycle = processing.NewLifecycleManager(addFunc, addWithIDFunc)
+	}
+
 	for _, arg := range urls {
 		// Validation
 		if arg == "" {
@@ -693,9 +704,21 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		// But processDownloads is called from QUEUE init routine, primarily for CLI args.
 		// If CLI args provided, user probably wants them added immediately.
 
-		// CLI explicit arg means we don't do automatic re-categorization unless it was left default
+		// CLI explicit arg means we do not auto-route when user provided an explicit output path.
 		isExplicit := (outPath != settings.General.DefaultDownloadDir)
-		_, err := GlobalService.Add(url, outPath, "", mirrors, nil, isExplicit, 0, false)
+		if lifecycle == nil {
+			_ = GlobalService.Publish(events.SystemLogMsg{
+				Message: fmt.Sprintf("Error adding %s: lifecycle manager unavailable", url),
+			})
+			continue
+		}
+
+		_, err := lifecycle.Enqueue(context.Background(), &processing.DownloadRequest{
+			URL:                url,
+			Path:               outPath,
+			Mirrors:            mirrors,
+			IsExplicitCategory: isExplicit,
+		})
 		if err != nil {
 			_ = GlobalService.Publish(events.SystemLogMsg{
 				Message: fmt.Sprintf("Error adding %s: %v", url, err),

@@ -756,8 +756,18 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 		GlobalPool = download.NewWorkerPool(GlobalProgressCh, 2)
 		GlobalService = core.NewLocalDownloadService(GlobalPool)
 
+		probeServer := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Length", "5")
+			if r.Method == http.MethodGet {
+				_, _ = w.Write([]byte("hello"))
+				return
+			}
+			w.WriteHeader(http.StatusMethodNotAllowed)
+		}))
+		defer probeServer.Close()
+
 		count := processDownloads([]string{
-			"https://example.com/local.zip",
+			probeServer.URL + "/local.zip",
 			"",
 		}, t.TempDir(), 0)
 
