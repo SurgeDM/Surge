@@ -613,7 +613,6 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 
 	utils.Debug("Received download request: URL=%s, Path=%s", req.URL, req.Path)
 
-	downloadID := uuid.New().String()
 	if service == nil {
 		http.Error(w, "Service unavailable", http.StatusInternalServerError)
 		return
@@ -670,6 +669,7 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 				utils.Debug("Requesting TUI confirmation for: %s (Duplicate: %v)", req.URL, isDuplicate)
 
 				// Send request to TUI
+				downloadID := uuid.New().String()
 				if err := service.Publish(events.DownloadRequestMsg{
 					ID:       downloadID,
 					URL:      urlForAdd,
@@ -700,8 +700,39 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		}
 	}
 
-	// Add via service
-	newID, err := service.Add(urlForAdd, outPath, req.Filename, mirrorsForAdd, req.Headers, req.IsExplicitCategory, 0, false)
+	lifecycle := GlobalLifecycle
+	if lifecycle == nil && service != nil && GlobalService != nil && service == GlobalService {
+		getAll := func() []types.DownloadConfig {
+			if GlobalPool == nil {
+				return nil
+			}
+			return GlobalPool.GetAll()
+		}
+		var err error
+		lifecycle, err = ensureLocalLifecycle(GlobalService, getAll)
+		if err != nil {
+			http.Error(w, "Failed to initialize lifecycle manager: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+	}
+
+	var (
+		newID string
+		err   error
+	)
+	if lifecycle != nil {
+		newID, err = lifecycle.Enqueue(r.Context(), &processing.DownloadRequest{
+			URL:                urlForAdd,
+			Filename:           req.Filename,
+			Path:               outPath,
+			Mirrors:            mirrorsForAdd,
+			Headers:            req.Headers,
+			IsExplicitCategory: req.IsExplicitCategory,
+			SkipApproval:       req.SkipApproval,
+		})
+	} else {
+		newID, err = service.Add(urlForAdd, outPath, req.Filename, mirrorsForAdd, req.Headers, req.IsExplicitCategory, 0, false)
+	}
 	if err != nil {
 		http.Error(w, "Failed to add download: "+err.Error(), http.StatusInternalServerError)
 		return
