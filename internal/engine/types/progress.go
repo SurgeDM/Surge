@@ -15,6 +15,7 @@ type ProgressState struct {
 	TotalSize     int64
 	DestPath      string // Initial destination path
 	Filename      string // Initial filename
+	URL           string // Source URL
 	StartTime     time.Time
 	ActiveWorkers atomic.Int32
 	Done          atomic.Bool
@@ -67,6 +68,18 @@ func (ps *ProgressState) GetFilename() string {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	return ps.Filename
+}
+
+func (ps *ProgressState) SetURL(url string) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	ps.URL = url
+}
+
+func (ps *ProgressState) GetURL() string {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	return ps.URL
 }
 
 func NewProgressState(id string, totalSize int64) *ProgressState {
