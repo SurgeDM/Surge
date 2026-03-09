@@ -193,6 +193,49 @@ func TestLocalDownloadService_Shutdown_Idempotent(t *testing.T) {
 	}
 }
 
+func TestLocalDownloadService_Shutdown_WaitsForBroadcastDrain(t *testing.T) {
+	ch := make(chan interface{}, 200)
+	svc := NewLocalDownloadServiceWithInput(nil, ch)
+
+	streamCh, cleanup, err := svc.StreamEvents(context.Background())
+	if err != nil {
+		t.Fatalf("failed to stream events: %v", err)
+	}
+	defer cleanup()
+
+	for range 101 {
+		if err := svc.Publish(events.SystemLogMsg{Message: "queued"}); err != nil {
+			t.Fatalf("failed to publish event: %v", err)
+		}
+	}
+
+	done := make(chan error, 1)
+	go func() {
+		done <- svc.Shutdown()
+	}()
+
+	select {
+	case err := <-done:
+		t.Fatalf("shutdown returned before broadcaster drained listener backlog: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	select {
+	case <-streamCh:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out draining listener backlog")
+	}
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("shutdown failed: %v", err)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("shutdown did not finish after broadcaster unblocked")
+	}
+}
+
 func TestLocalDownloadService_StreamEvents_DrainAfterCancel(t *testing.T) {
 	ch := make(chan interface{}, 4)
 	svc := NewLocalDownloadServiceWithInput(nil, ch)

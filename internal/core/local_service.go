@@ -51,6 +51,7 @@ type LocalDownloadService struct {
 	listeners  []chan interface{}
 	listenerMu sync.Mutex
 
+	broadcastWG  sync.WaitGroup
 	reportTicker *time.Ticker
 	reportWG     sync.WaitGroup
 
@@ -99,7 +100,11 @@ func NewLocalDownloadServiceWithInput(pool *download.WorkerPool, inputCh chan in
 	s.cancel = cancel
 
 	// Start broadcaster
-	go s.broadcastLoop()
+	s.broadcastWG.Add(1)
+	go func() {
+		defer s.broadcastWG.Done()
+		s.broadcastLoop()
+	}()
 
 	// Start progress reporter
 	if pool != nil {
@@ -332,6 +337,7 @@ func (s *LocalDownloadService) Shutdown() error {
 		if s.InputCh != nil {
 			close(s.InputCh)
 		}
+		s.broadcastWG.Wait()
 	})
 	return s.shutdownErr
 }
