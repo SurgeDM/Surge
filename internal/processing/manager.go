@@ -97,13 +97,20 @@ func (m *LifecycleManager) GetSettings() *config.Settings {
 		return settings
 	}
 
+	m.settingsMu.Lock()
+	defer m.settingsMu.Unlock()
+
+	// Double-check condition to prevent redundant disk reads under concurrent load
+	if m.settings != nil && time.Since(m.settingsRefreshedAt) < settingsRefreshTTL {
+		return m.settings
+	}
+
 	if loaded, err := config.LoadSettings(); err == nil && loaded != nil {
-		m.ApplySettings(loaded)
+		m.settings = loaded
+		m.settingsRefreshedAt = time.Now()
 		return loaded
 	}
 
-	m.settingsMu.RLock()
-	defer m.settingsMu.RUnlock()
 	if m.settings == nil {
 		return config.DefaultSettings()
 	}
