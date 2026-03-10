@@ -31,7 +31,6 @@ func (mgr *LifecycleManager) Pause(id string) error {
 	// Downloads paused in a prior session are not tracked by the in-memory pool;
 	// synthesize a paused event so the UI can clear any transient "pausing" spinner.
 	entry, err := state.GetDownload(id)
-	entry, err := state.GetDownload(id)
 	if err == nil && entry != nil {
 		// Emit paused event so UI clears "pausing" state
 		if mgr.engineHooks.PublishEvent != nil {
