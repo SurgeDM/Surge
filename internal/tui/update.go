@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"os"
@@ -88,63 +87,6 @@ func openWithSystem(path string) error {
 		}()
 	}
 	return err
-}
-
-// readURLsFromFile reads URLs from a file, accepting one-per-line or whitespace-separated URLs.
-// It skips comments and duplicate URLs.
-func readURLsFromFile(filepath string) ([]string, error) {
-	file, err := os.Open(filepath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to open file: %w", err)
-	}
-	defer func() {
-		if err := file.Close(); err != nil {
-			utils.Debug("Error closing file: %v", err)
-		}
-	}()
-
-	var urls []string
-	seen := make(map[string]bool)
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 64*config.KB), config.MB)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" || strings.HasPrefix(line, "#") {
-			continue
-		}
-		idx := -1
-		for i := 0; i < len(line); i++ {
-			if line[i] == '#' && i > 0 && (line[i-1] == ' ' || line[i-1] == '\t') {
-				idx = i
-				break
-			}
-		}
-		if idx > 0 {
-			line = strings.TrimSpace(line[:idx])
-		}
-		if line == "" {
-			continue
-		}
-
-		for _, token := range strings.Fields(line) {
-			// Normalize URL for duplicate detection
-			normalized := strings.TrimRight(token, "/")
-			if !seen[normalized] {
-				seen[normalized] = true
-				urls = append(urls, token)
-			}
-		}
-	}
-
-	if err := scanner.Err(); err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
-	}
-
-	if len(urls) == 0 {
-		return nil, fmt.Errorf("no URLs found in file")
-	}
-
-	return urls, nil
 }
 
 // addLogEntry adds a log entry to the log viewport
@@ -727,7 +669,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Check if a file was selected
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
 				// Read URLs from file
-				urls, err := readURLsFromFile(path)
+				urls, err := utils.ReadURLsFromFile(path)
 				if err != nil {
 					m.addLogEntry(LogStyleError.Render("✖ Failed to read batch file: " + err.Error()))
 					m.resetFilepickerToDirMode()
@@ -1357,7 +1299,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Check if a file was selected
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
 				// Read URLs from file
-				urls, err := readURLsFromFile(path)
+				urls, err := utils.ReadURLsFromFile(path)
 				if err != nil {
 					m.addLogEntry(LogStyleError.Render("✖ Failed to read batch file: " + err.Error()))
 					// Reset filepicker and return

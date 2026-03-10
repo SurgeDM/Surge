@@ -9,6 +9,8 @@ import (
 
 // ReadURLsFromFile reads URLs from a file.
 // Accepts one URL per line or whitespace-separated URLs, and ignores comments.
+// Trailing-slash-only variants are treated as the same URL so batch imports
+// behave consistently across CLI and TUI entry points.
 func ReadURLsFromFile(filepath string) ([]string, error) {
 	file, err := os.Open(filepath)
 	if err != nil {
@@ -41,8 +43,9 @@ func ReadURLsFromFile(filepath string) ([]string, error) {
 			continue
 		}
 		for _, u := range strings.Fields(line) {
-			if !seen[u] {
-				seen[u] = true
+			normalized := strings.TrimRight(u, "/")
+			if !seen[normalized] {
+				seen[normalized] = true
 				urls = append(urls, u)
 			}
 		}

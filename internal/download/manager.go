@@ -160,7 +160,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			utils.Debug("Probing %d mirrors", len(mirrors))
 			// Always check primary + mirrors to ensure we are using the best set
 			allToCheck := append([]string{cfg.URL}, mirrors...)
-			valid, errs := processing.ProbeMirrors(ctx, allToCheck)
+			valid, errs := processing.ProbeMirrorsWithProxy(ctx, allToCheck, cfg.Runtime.ProxyURL)
 
 			// Log errors
 			for u, e := range errs {

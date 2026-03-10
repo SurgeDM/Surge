@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	neturl "net/url"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/utils"
 )
@@ -20,8 +22,8 @@ var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
 	"Chrome/120.0.0.0 Safari/537.36"
 
 var (
-	probeClientOnce sync.Once
-	probeClient     *http.Client
+	probeClientsMu sync.Mutex
+	probeClients   = make(map[string]*http.Client)
 )
 
 // ProbeResult contains all metadata from server probe
@@ -35,12 +37,28 @@ type ProbeResult struct {
 // ProbeServer uses a tiny ranged GET so callers can decide filename handling
 // and resumability before handing work to the downloader.
 func ProbeServer(ctx context.Context, rawurl string, filenameHint string, headers map[string]string) (*ProbeResult, error) {
+	settings, err := config.LoadSettings()
+	if err != nil {
+		settings = config.DefaultSettings()
+	}
+
+	proxyURL := ""
+	if settings != nil {
+		proxyURL = settings.Network.ProxyURL
+	}
+
+	return ProbeServerWithProxy(ctx, rawurl, filenameHint, headers, proxyURL)
+}
+
+// ProbeServerWithProxy uses the caller's proxy setting so probe and download
+// traffic take the same network path.
+func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint string, headers map[string]string, proxyURL string) (*ProbeResult, error) {
 	utils.Debug("Probing server: %s", rawurl)
 
 	var resp *http.Response
-	var err error
 
-	client := getProbeClient()
+	client := getProbeClient(proxyURL)
+	var err error
 
 	for attempt := range 3 {
 		if ctx.Err() != nil {
@@ -189,24 +207,53 @@ func applyProbeHeaders(req *http.Request, headers map[string]string, includeRang
 	}
 }
 
-func getProbeClient() *http.Client {
-	probeClientOnce.Do(func() {
-		// Keep one shared client for connection reuse; individual probe contexts own
-		// the deadline so shutdown cancellation is not masked by client-wide timeouts.
-		probeClient = &http.Client{
-			CheckRedirect: func(req *http.Request, via []*http.Request) error {
-				if len(via) >= 10 {
-					return fmt.Errorf("stopped after 10 redirects")
-				}
-				if len(via) > 0 {
-					copyProbeRedirectHeaders(req, via[0])
-				}
-				return nil
-			},
-		}
-	})
+func getProbeClient(proxyURL string) *http.Client {
+	probeClientsMu.Lock()
+	defer probeClientsMu.Unlock()
 
-	return probeClient
+	if cached, ok := probeClients[proxyURL]; ok {
+		return cached
+	}
+
+	client := &http.Client{
+		Transport: newProbeTransport(proxyURL),
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			if len(via) > 0 {
+				copyProbeRedirectHeaders(req, via[0])
+			}
+			return nil
+		},
+	}
+	probeClients[proxyURL] = client
+	return client
+}
+
+func newProbeTransport(proxyURL string) *http.Transport {
+	proxyFunc := http.ProxyFromEnvironment
+	if strings.TrimSpace(proxyURL) != "" {
+		if parsedURL, err := neturl.Parse(proxyURL); err == nil {
+			proxyFunc = http.ProxyURL(parsedURL)
+		} else {
+			utils.Debug("Invalid probe proxy URL %s: %v", proxyURL, err)
+		}
+	}
+
+	return &http.Transport{
+		Proxy:                 proxyFunc,
+		MaxIdleConns:          types.DefaultMaxIdleConns,
+		MaxIdleConnsPerHost:   types.PerHostMax,
+		IdleConnTimeout:       types.DefaultIdleConnTimeout,
+		TLSHandshakeTimeout:   types.DefaultTLSHandshakeTimeout,
+		ResponseHeaderTimeout: types.DefaultResponseHeaderTimeout,
+		ExpectContinueTimeout: types.DefaultExpectContinueTimeout,
+		DialContext: (&net.Dialer{
+			Timeout:   types.DialTimeout,
+			KeepAlive: types.KeepAliveDuration,
+		}).DialContext,
+	}
 }
 
 func copyProbeRedirectHeaders(dst, src *http.Request) {
@@ -241,52 +288,88 @@ func sameProbeRedirectOrigin(a, b *neturl.URL) bool {
 
 // ProbeMirrors concurrently checks a list of mirrors and returns valid ones and per-mirror failures.
 func ProbeMirrors(ctx context.Context, mirrors []string) (valid []string, errs map[string]error) {
-	// Deduplicate
-	unique := make(map[string]bool)
-	for _, m := range mirrors {
-		unique[m] = true
+	settings, err := config.LoadSettings()
+	if err != nil {
+		settings = config.DefaultSettings()
 	}
 
-	var candidates []string
-	for m := range unique {
-		candidates = append(candidates, m)
+	proxyURL := ""
+	if settings != nil {
+		proxyURL = settings.Network.ProxyURL
 	}
 
+	return ProbeMirrorsWithProxy(ctx, mirrors, proxyURL)
+}
+
+// ProbeMirrorsWithProxy preserves caller order so mirror priority remains stable.
+func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, proxyURL string) (valid []string, errs map[string]error) {
+	candidates := orderedUniqueMirrors(mirrors)
 	utils.Debug("Probing %d mirrors...", len(candidates))
 
 	valid = make([]string, 0, len(candidates))
 	errs = make(map[string]error)
+
+	type mirrorProbeResult struct {
+		valid bool
+		err   error
+	}
+
+	results := make([]mirrorProbeResult, len(candidates))
 	var mu sync.Mutex
 	var wg sync.WaitGroup
 
-	for _, url := range candidates {
+	for i, url := range candidates {
 		wg.Add(1)
-		go func(target string) {
+		go func(idx int, target string) {
 			defer wg.Done()
 
 			// Short timeout for bulk probing
 			probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 
-			result, err := ProbeServer(probeCtx, target, "", nil)
+			result, err := ProbeServerWithProxy(probeCtx, target, "", nil, proxyURL)
+
+			outcome := mirrorProbeResult{}
+			if err != nil {
+				outcome.err = err
+			} else {
+				outcome.valid = result.SupportsRange
+				if !result.SupportsRange {
+					outcome.err = fmt.Errorf("does not support ranges")
+				}
+			}
 
 			mu.Lock()
-			defer mu.Unlock()
-
-			if err != nil {
-				errs[target] = err
-				return
-			}
-
-			if result.SupportsRange {
-				valid = append(valid, target)
-			} else {
-				errs[target] = fmt.Errorf("does not support ranges")
-			}
-		}(url)
+			results[idx] = outcome
+			mu.Unlock()
+		}(i, url)
 	}
 
 	wg.Wait()
+
+	for i, target := range candidates {
+		if results[i].valid {
+			valid = append(valid, target)
+			continue
+		}
+		if results[i].err != nil {
+			errs[target] = results[i].err
+		}
+	}
+
 	utils.Debug("Mirror probing complete: %d valid, %d failed", len(valid), len(errs))
 	return valid, errs
+}
+
+func orderedUniqueMirrors(mirrors []string) []string {
+	seen := make(map[string]struct{}, len(mirrors))
+	ordered := make([]string, 0, len(mirrors))
+	for _, mirror := range mirrors {
+		if _, ok := seen[mirror]; ok {
+			continue
+		}
+		seen[mirror] = struct{}{}
+		ordered = append(ordered, mirror)
+	}
+	return ordered
 }
