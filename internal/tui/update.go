@@ -165,7 +165,6 @@ func (m RootModel) checkForDuplicate(url string) *processing.DuplicateResult {
 		for _, d := range m.downloads {
 			if !d.done {
 				state := &types.ProgressState{}
-				state.Done.Store(d.done)
 				// Create dummy config to pass into processing duplicate check
 				active[d.ID] = &types.DownloadConfig{
 					URL:      d.URL,
