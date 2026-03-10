@@ -223,7 +223,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		optimisticID = fmt.Sprintf("pending-%d", time.Now().UnixNano())
 	}
 	displayName := optimisticFilename
-	if displayName == "" {
+	if m.Orchestrator != nil || displayName == "" {
 		displayName = "Queued"
 	}
 

@@ -54,7 +54,8 @@ func precreateWorkingFile(destPath, filename string) error {
 	return nil
 }
 
-// buildIsNameActive returns the configured callback or a safe no-op.
+// Falls back to a no-op so enqueue callers can always consult the active-name
+// hook safely, even in tests or remote contexts that do not have pool access.
 func (mgr *LifecycleManager) buildIsNameActive() func(string, string) bool {
 	if mgr.isNameActive != nil {
 		return mgr.isNameActive
