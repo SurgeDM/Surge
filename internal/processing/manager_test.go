@@ -523,3 +523,61 @@ func TestLifecycleManager_EnqueueWithID_FailsAfterReservationAttemptLimit(t *tes
 		t.Fatalf("reserve calls = %d, want %d", reserveCalls, maxWorkingFileReservationAttempts)
 	}
 }
+
+func TestLifecycleManager_Enqueue_EmptyURL(t *testing.T) {
+	mgr := newLifecycleManagerForTest()
+	_, err := mgr.Enqueue(context.Background(), &DownloadRequest{
+		URL:  "",
+		Path: t.TempDir(),
+	})
+	if err == nil {
+		t.Fatal("expected error with empty URL")
+	}
+}
+
+func TestLifecycleManager_Enqueue_EmptyPath(t *testing.T) {
+	server := newProbeTestServer(t, 2048)
+	defer server.Close()
+	mgr := newLifecycleManagerForTest()
+	_, err := mgr.Enqueue(context.Background(), &DownloadRequest{
+		URL:  server.URL,
+		Path: "",
+	})
+	if err == nil {
+		t.Fatal("expected error with empty path")
+	}
+}
+
+func TestLifecycleManager_Enqueue_ContextCancellationBeforeReservation(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Range", "bytes 0-0/2048")
+		w.Header().Set("Content-Length", "1")
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("x"))
+		// Cancel context so it takes effect right after probe returns
+		cancel()
+	}))
+	defer server.Close()
+
+	mgr := newLifecycleManagerForTest()
+	mgr.addFunc = func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		t.Fatal("dispatch should not run when context is canceled before reservation")
+		return "", nil
+	}
+
+	_, err := mgr.Enqueue(ctx, &DownloadRequest{
+		URL:      server.URL,
+		Filename: "test.zip",
+		Path:     t.TempDir(),
+	})
+
+	if err == nil {
+		t.Fatal("expected error due to context cancellation, got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+}
