@@ -59,7 +59,7 @@ func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
 	// Pass server1 as primary, but provide both in mirrors list
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server1.URL(), mirrors, mirrors, destPath, fileSize)
@@ -128,7 +128,7 @@ func TestConcurrentDownloader_BackoffOnSingleMirror(t *testing.T) {
 	// Only 1 URL (server.URL) is valid
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), mirrors, nil, destPath, fileSize)

@@ -2,8 +2,8 @@ package config
 
 import (
 	"errors"
-	"os"
 	"log"
+	"os"
 	"regexp"
 	"strings"
 	"sync"
