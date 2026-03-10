@@ -222,7 +222,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		optimisticID = fmt.Sprintf("pending-%d", time.Now().UnixNano())
 	}
 	displayName := optimisticFilename
-	if m.Orchestrator != nil || displayName == "" {
+	if displayName == "" {
 		displayName = "Queued"
 	}
 
@@ -374,8 +374,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					real.URL = temp.URL
 				}
 				if real.Filename == "" {
-					real.Filename = temp.Filename
-					real.FilenameLower = temp.FilenameLower
+					real.Filename = msg.filename
+					if real.Filename == "" {
+						real.Filename = temp.Filename
+					}
+					real.FilenameLower = strings.ToLower(real.Filename)
 				}
 				if real.Destination == "" {
 					real.Destination = temp.Destination

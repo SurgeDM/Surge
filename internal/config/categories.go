@@ -3,6 +3,7 @@ package config
 import (
 	"errors"
 	"os"
+	"log"
 	"regexp"
 	"strings"
 	"sync"
@@ -145,6 +146,9 @@ func GetCategoryForFile(filename string, categories []Category) (*Category, erro
 
 		re := getCompiledPattern(cat.Pattern)
 		if re != nil && re.MatchString(filename) {
+			if matched != nil {
+				log.Printf("Config: Category pattern %q matched %q, overriding earlier match %q", cat.Pattern, filename, matched.Pattern)
+			}
 			matched = cat
 		}
 	}

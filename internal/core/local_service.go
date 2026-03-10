@@ -452,7 +452,8 @@ func (s *LocalDownloadService) Add(url string, path string, filename string, mir
 
 // AddWithID queues a new download using a caller-provided id when non-empty.
 func (s *LocalDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
-	return s.add(url, path, filename, mirrors, headers, id, false, totalSize, supportsRange) // AddWithID does not explicitly set category
+	// Remote or RPC-driven calls use preset IDs and should bypass interactive category routing.
+	return s.add(url, path, filename, mirrors, headers, id, false, totalSize, supportsRange)
 }
 
 func (s *LocalDownloadService) add(url string, path string, filename string, mirrors []string, headers map[string]string, requestedID string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
