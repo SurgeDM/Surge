@@ -143,7 +143,7 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 		return errs
 	}
 
-	toLoad := []string{}
+	var toLoad []string
 	idMap := make(map[string]int)
 
 	for i, id := range ids {
