@@ -192,12 +192,17 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	candidateFilename := strings.TrimSpace(filename)
 	requestID := strings.TrimSpace(id)
 
-	// Build an optimistic destination using the same routing rules as processing layer.
 	resolvedPath := path
 	resolvedFilename := candidateFilename
+	optimisticFilename := candidateFilename
 	if p, f, err := processing.ResolveDestination(url, candidateFilename, path, isDefaultPath, m.Settings, nil, nil); err == nil {
 		resolvedPath = p
 		resolvedFilename = f
+		if candidateFilename != "" {
+			// Only mirror the resolved filename into the optimistic row when the
+			// user already chose it; probe-derived names can legitimately change.
+			optimisticFilename = f
+		}
 	} else {
 		utils.Debug("Optimistic destination resolve failed for %s: %v", url, err)
 	}
@@ -213,19 +218,6 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		SkipApproval:       true,
 	}
 
-	optimisticFilename := resolvedFilename
-	if optimisticFilename == "" {
-		base := url
-		if idx := strings.Index(base, "?"); idx >= 0 {
-			base = base[:idx]
-		}
-		base = strings.TrimRight(base, "/")
-		optimisticFilename = filepath.Base(base)
-		if optimisticFilename == "." || optimisticFilename == "/" {
-			optimisticFilename = ""
-		}
-	}
-
 	optimisticID := requestID
 	if optimisticID == "" {
 		optimisticID = fmt.Sprintf("pending-%d", time.Now().UnixNano())
@@ -236,8 +228,8 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	}
 
 	newDownload := NewDownloadModel(optimisticID, url, displayName, 0)
-	if optimisticFilename != "" {
-		newDownload.Destination = filepath.Join(resolvedPath, optimisticFilename)
+	if resolvedFilename != "" {
+		newDownload.Destination = filepath.Join(resolvedPath, resolvedFilename)
 	} else {
 		newDownload.Destination = resolvedPath
 	}

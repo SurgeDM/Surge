@@ -22,9 +22,9 @@ var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
 	"Chrome/120.0.0.0 Safari/537.36"
 
 var (
-	probeClientsMu sync.Mutex
-	probeClients   = make(map[string]*http.Client)
-	probeClientLRU []string
+	probeClientsMu   sync.Mutex
+	probeClients     = make(map[string]*http.Client)
+	probeClientOrder []string
 )
 
 const maxProbeClients = 8
@@ -37,8 +37,9 @@ type ProbeResult struct {
 	ContentType   string
 }
 
-// ProbeServer uses a tiny ranged GET so callers can decide filename handling
-// and resumability before handing work to the downloader.
+// ProbeServer is the convenience entry point for callers that do not already
+// hold a settings snapshot; it reloads persisted settings so probe traffic can
+// honor the saved proxy configuration.
 func ProbeServer(ctx context.Context, rawurl string, filenameHint string, headers map[string]string) (*ProbeResult, error) {
 	settings, err := config.LoadSettings()
 	if err != nil {
@@ -53,8 +54,9 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 	return ProbeServerWithProxy(ctx, rawurl, filenameHint, headers, proxyURL)
 }
 
-// ProbeServerWithProxy uses the caller's proxy setting so probe and download
-// traffic take the same network path.
+// ProbeServerWithProxy is the hot-path variant for callers that already know
+// the effective proxy and want probe traffic to match the eventual download path
+// without re-reading settings from disk.
 func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint string, headers map[string]string, proxyURL string) (*ProbeResult, error) {
 	utils.Debug("Probing server: %s", rawurl)
 
@@ -231,9 +233,9 @@ func getProbeClient(proxyURL string) *http.Client {
 		},
 	}
 
-	if len(probeClients) >= maxProbeClients && len(probeClientLRU) > 0 {
-		evictedKey := probeClientLRU[0]
-		probeClientLRU = probeClientLRU[1:]
+	if len(probeClients) >= maxProbeClients && len(probeClientOrder) > 0 {
+		evictedKey := probeClientOrder[0]
+		probeClientOrder = probeClientOrder[1:]
 		if evictedClient, ok := probeClients[evictedKey]; ok {
 			evictedClient.CloseIdleConnections()
 			delete(probeClients, evictedKey)
@@ -241,7 +243,7 @@ func getProbeClient(proxyURL string) *http.Client {
 	}
 
 	probeClients[proxyURL] = client
-	probeClientLRU = append(probeClientLRU, proxyURL)
+	probeClientOrder = append(probeClientOrder, proxyURL)
 	return client
 }
 
@@ -300,7 +302,8 @@ func sameProbeRedirectOrigin(a, b *neturl.URL) bool {
 	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host)
 }
 
-// ProbeMirrors concurrently checks a list of mirrors and returns valid ones and per-mirror failures.
+// ProbeMirrors is the convenience wrapper for callers that need mirror probing
+// to honor the saved proxy setting but do not already hold a live settings snapshot.
 func ProbeMirrors(ctx context.Context, mirrors []string) (valid []string, errs map[string]error) {
 	settings, err := config.LoadSettings()
 	if err != nil {
@@ -329,7 +332,6 @@ func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, proxyURL strin
 	}
 
 	results := make([]mirrorProbeResult, len(candidates))
-	var mu sync.Mutex
 	var wg sync.WaitGroup
 
 	for i, url := range candidates {
@@ -337,7 +339,8 @@ func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, proxyURL strin
 		go func(idx int, target string) {
 			defer wg.Done()
 
-			// Short timeout for bulk probing
+			// Mirror checks stay short so a dead backup does not delay the primary
+			// download from starting with the best candidates we can confirm quickly.
 			probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 
@@ -352,10 +355,7 @@ func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, proxyURL strin
 					outcome.err = fmt.Errorf("does not support ranges")
 				}
 			}
-
-			mu.Lock()
 			results[idx] = outcome
-			mu.Unlock()
 		}(i, url)
 	}
 

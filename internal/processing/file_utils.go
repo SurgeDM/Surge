@@ -129,7 +129,7 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string, string) b
 		}
 	}
 
-	return fmt.Sprintf("%s(%d)%s", base, counter+100, ext)
+	return ""
 }
 
 // GetCategoryPath applies category routing only while the caller is still using
@@ -180,6 +180,9 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 	}
 
 	finalFilename := GetUniqueFilename(destPath, filename, isNameActive)
+	if finalFilename == "" {
+		return "", "", fmt.Errorf("could not determine a unique filename for %s", url)
+	}
 
 	return destPath, finalFilename, nil
 }

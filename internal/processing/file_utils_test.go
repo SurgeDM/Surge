@@ -76,7 +76,7 @@ func TestGetUniqueFilename(t *testing.T) {
 		t.Errorf("Expected video.mp4, got %s", name)
 	}
 
-	// 6. After exhausting 100 numbered candidates, return the next fresh guess
+	// 6. After exhausting 100 numbered candidates, return empty so the caller can fail cleanly
 	overflowActive := func(dir, name string) bool {
 		if dir != tmpDir {
 			return false
@@ -91,8 +91,8 @@ func TestGetUniqueFilename(t *testing.T) {
 		}
 		return false
 	}
-	if name := processing.GetUniqueFilename(tmpDir, "overflow.bin", overflowActive); name != "overflow(101).bin" {
-		t.Errorf("Expected overflow(101).bin, got %s", name)
+	if name := processing.GetUniqueFilename(tmpDir, "overflow.bin", overflowActive); name != "" {
+		t.Errorf("Expected empty result after exhaustion, got %s", name)
 	}
 }
 
@@ -187,5 +187,35 @@ func TestResolveDestination_Priority(t *testing.T) {
 	_, name, _ = processing.ResolveDestination("http://example.com/some.rar", "", defaultDir, false, settings, &processing.ProbeResult{Filename: ""}, nil)
 	if name != "some.rar" {
 		t.Errorf("Expected some.rar, got %s", name)
+	}
+}
+
+func TestResolveDestination_ErrorsWhenUniqueNameExhausted(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.General.CategoryEnabled = false
+
+	overflowActive := func(dir, name string) bool {
+		if name == "overflow.bin" {
+			return true
+		}
+		for i := 1; i <= 100; i++ {
+			if name == "overflow("+strconv.Itoa(i)+").bin" {
+				return true
+			}
+		}
+		return false
+	}
+
+	_, _, err := processing.ResolveDestination(
+		"http://example.com/overflow.bin",
+		"overflow.bin",
+		"/downloads",
+		false,
+		settings,
+		nil,
+		overflowActive,
+	)
+	if err == nil {
+		t.Fatal("expected unique-name exhaustion error")
 	}
 }

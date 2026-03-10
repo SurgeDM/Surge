@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"errors"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -484,6 +485,42 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 	}
 	if !errors.Is(errMsg.err, context.Canceled) {
 		t.Fatalf("err = %v, want context canceled", errMsg.err)
+	}
+}
+
+func TestStartDownload_DoesNotGuessProbeDerivedFilenameOptimistically(t *testing.T) {
+	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
+	t.Cleanup(func() {
+		_ = svc.Shutdown()
+	})
+
+	orchestrator := processing.NewLifecycleManager(
+		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+			return "real-id", nil
+		},
+		nil,
+	)
+
+	targetDir := t.TempDir()
+	m := RootModel{
+		Settings:     config.DefaultSettings(),
+		Service:      svc,
+		Orchestrator: orchestrator,
+		list:         NewDownloadList(80, 20),
+		logViewport:  viewport.New(40, 5),
+	}
+
+	updated, _ := m.startDownload("https://example.com/100MB.bin", nil, nil, targetDir, true, "", "")
+
+	if len(updated.downloads) != 1 {
+		t.Fatalf("expected 1 optimistic queued download, got %d", len(updated.downloads))
+	}
+	d := updated.downloads[0]
+	if d.Filename != "Queued" {
+		t.Fatalf("optimistic filename = %q, want generic queued placeholder", d.Filename)
+	}
+	if d.Destination != filepath.Join(targetDir, "100MB.bin") {
+		t.Fatalf("optimistic destination = %q, want %q", d.Destination, filepath.Join(targetDir, "100MB.bin"))
 	}
 }
 
