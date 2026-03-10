@@ -79,21 +79,35 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 	}
 }
 
-// GetSettings exposes the snapshot currently driving enqueue decisions.
+// GetSettings reloads disk-backed routing rules opportunistically so a long-lived
+// lifecycle manager picks up saved settings changes without a restart.
 func (m *LifecycleManager) GetSettings() *config.Settings {
+	if settings, err := config.LoadSettings(); err == nil && settings != nil {
+		m.ApplySettings(settings)
+		return settings
+	}
+
 	m.settingsMu.RLock()
 	defer m.settingsMu.RUnlock()
+	if m.settings == nil {
+		return config.DefaultSettings()
+	}
 	return m.settings
 }
 
-// SaveSettings swaps in a new routing snapshot for future enqueue calls.
+// ApplySettings swaps in a new routing snapshot for future enqueue calls.
+func (m *LifecycleManager) ApplySettings(s *config.Settings) {
+	m.settingsMu.Lock()
+	m.settings = s
+	m.settingsMu.Unlock()
+}
+
+// SaveSettings persists and applies a new routing snapshot for future enqueue calls.
 func (m *LifecycleManager) SaveSettings(s *config.Settings) error {
 	if err := config.SaveSettings(s); err != nil {
 		return err
 	}
-	m.settingsMu.Lock()
-	m.settings = s
-	m.settingsMu.Unlock()
+	m.ApplySettings(s)
 	return nil
 }
 

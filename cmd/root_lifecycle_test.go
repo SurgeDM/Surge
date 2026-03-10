@@ -174,6 +174,44 @@ func TestEnsureLocalLifecycle_StartsEventWorker(t *testing.T) {
 	t.Fatalf("expected persisted download entry, got %+v", entries)
 }
 
+func TestEnsureGlobalLocalServiceAndLifecycle_ReusesExistingService(t *testing.T) {
+	setupIsolatedCmdState(t)
+	GlobalLifecycle = nil
+	GlobalLifecycleCleanup = nil
+	service := &countingLifecycleService{}
+	GlobalService = service
+	t.Cleanup(func() {
+		GlobalService = nil
+		GlobalLifecycle = nil
+		if cleanup := takeLifecycleCleanup(); cleanup != nil {
+			cleanup()
+		}
+	})
+
+	if err := ensureGlobalLocalServiceAndLifecycle(); err != nil {
+		t.Fatalf("ensureGlobalLocalServiceAndLifecycle failed: %v", err)
+	}
+	if GlobalService != service {
+		t.Fatal("expected existing service instance to be preserved")
+	}
+	if GlobalLifecycle == nil {
+		t.Fatal("expected lifecycle manager to be initialized")
+	}
+	if GlobalLifecycleCleanup == nil {
+		t.Fatal("expected lifecycle cleanup to be initialized")
+	}
+	if got := service.streamCalls.Load(); got != 1 {
+		t.Fatalf("StreamEvents calls = %d, want 1", got)
+	}
+
+	if err := ensureGlobalLocalServiceAndLifecycle(); err != nil {
+		t.Fatalf("second ensureGlobalLocalServiceAndLifecycle failed: %v", err)
+	}
+	if got := service.streamCalls.Load(); got != 1 {
+		t.Fatalf("StreamEvents calls after second init = %d, want 1", got)
+	}
+}
+
 func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 	setupIsolatedCmdState(t)
 	GlobalLifecycle = nil
@@ -261,6 +299,92 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 		t.Fatalf("failed to list downloads: %v", err)
 	}
 	t.Fatalf("expected persisted entry with custom category path, got %+v", entries)
+}
+
+func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
+	setupIsolatedCmdState(t)
+	GlobalLifecycle = nil
+	GlobalLifecycleCleanup = nil
+	GlobalProgressCh = make(chan any, 32)
+	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 1)
+	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
+	t.Cleanup(func() {
+		if GlobalLifecycleCleanup != nil {
+			GlobalLifecycleCleanup()
+			GlobalLifecycleCleanup = nil
+		}
+		if GlobalService != nil {
+			_ = GlobalService.Shutdown()
+			GlobalService = nil
+		}
+		GlobalLifecycle = nil
+		GlobalPool = nil
+		GlobalProgressCh = nil
+	})
+
+	defaultDir := t.TempDir()
+	initial := config.DefaultSettings()
+	initial.General.DefaultDownloadDir = defaultDir
+	initial.General.CategoryEnabled = false
+	if err := config.SaveSettings(initial); err != nil {
+		t.Fatalf("SaveSettings(initial) failed: %v", err)
+	}
+
+	if err := ensureGlobalLocalServiceAndLifecycle(); err != nil {
+		t.Fatalf("ensureGlobalLocalServiceAndLifecycle failed: %v", err)
+	}
+	if GlobalLifecycle == nil {
+		t.Fatal("expected lifecycle manager to be created before settings update")
+	}
+
+	customDir := filepath.Join(t.TempDir(), "bin-updated")
+	updated := config.DefaultSettings()
+	updated.General.DefaultDownloadDir = defaultDir
+	updated.General.CategoryEnabled = true
+	updated.General.Categories = []config.Category{
+		{
+			Name:    "Binary",
+			Pattern: `(?i)\.bin$`,
+			Path:    customDir,
+		},
+	}
+	if err := config.SaveSettings(updated); err != nil {
+		t.Fatalf("SaveSettings(updated) failed: %v", err)
+	}
+
+	const filename = "after-save.bin"
+	const fileSize = int64(32 * 1024)
+	server := testutil.NewStreamingMockServerT(
+		t,
+		fileSize,
+		testutil.WithFilename(filename),
+		testutil.WithRangeSupport(true),
+	)
+	defer server.Close()
+
+	count := processDownloads([]string{server.URL() + "/" + filename}, defaultDir, 0)
+	if count != 1 {
+		t.Fatalf("expected 1 successful add, got %d", count)
+	}
+
+	expectedPath := filepath.Join(customDir, filename)
+	unexpectedPath := filepath.Join(defaultDir, filename)
+
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		info, err := os.Stat(expectedPath)
+		if err == nil && info.Size() == fileSize {
+			if _, err := os.Stat(unexpectedPath); !os.IsNotExist(err) {
+				t.Fatalf("expected no file in default dir, stat err: %v", err)
+			}
+			return
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	if _, err := os.Stat(expectedPath); err != nil {
+		t.Fatalf("expected categorized file at %s: %v", expectedPath, err)
+	}
 }
 
 func TestEnsureLocalLifecycle_ConcurrentInitializationStartsOneStream(t *testing.T) {

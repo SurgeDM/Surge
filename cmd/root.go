@@ -200,6 +200,14 @@ func lifecycleForLocalService(service core.DownloadService) (*processing.Lifecyc
 	return ensureLocalLifecycle(GlobalService, currentPoolConfigs)
 }
 
+func ensureGlobalLocalServiceAndLifecycle() error {
+	if GlobalService == nil {
+		GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
+	}
+	_, err := ensureLocalLifecycle(GlobalService, currentPoolConfigs)
+	return err
+}
+
 func publishSystemLog(message string) {
 	if GlobalService != nil {
 		_ = GlobalService.Publish(events.SystemLogMsg{Message: message})
@@ -280,12 +288,7 @@ var rootCmd = &cobra.Command{
 
 		startupIntegrityMessage = runStartupIntegrityCheck()
 
-		// Initialize Service
-		GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
-
-		// Create Processing orchestration layer and link to service
-		_, err = ensureLocalLifecycle(GlobalService, GlobalPool.GetAll)
-		if err != nil {
+		if err := ensureGlobalLocalServiceAndLifecycle(); err != nil {
 			fmt.Fprintf(os.Stderr, "Error creating lifecycle event stream: %v\n", err)
 			os.Exit(1)
 		}

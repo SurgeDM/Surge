@@ -309,6 +309,21 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 	return nil
 }
 
+func (m *RootModel) persistSettings() error {
+	if err := config.SaveSettings(m.Settings); err != nil {
+		return err
+	}
+	if reloader, ok := m.Service.(interface{ ReloadSettings() error }); ok {
+		if err := reloader.ReloadSettings(); err != nil {
+			return err
+		}
+	}
+	if m.Orchestrator != nil {
+		m.Orchestrator.ApplySettings(m.Settings)
+	}
+	return nil
+}
+
 func (m *RootModel) setGeneralSetting(key, value, typ string) error {
 	switch key {
 	case "default_download_dir":

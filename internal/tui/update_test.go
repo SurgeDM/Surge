@@ -487,6 +487,41 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 	}
 }
 
+func TestUpdate_EnqueueErrorKeepsFailedDownloadVisibleInDoneTab(t *testing.T) {
+	optimistic := NewDownloadModel("pending-1", "http://example.com/file", "file.bin", 0)
+	optimistic.Destination = "/tmp/file.bin"
+
+	m := RootModel{
+		activeTab:      TabDone,
+		downloads:      []*DownloadModel{optimistic},
+		list:           NewDownloadList(80, 20),
+		logViewport:    viewport.New(40, 5),
+		Settings:       config.DefaultSettings(),
+		searchQuery:    "",
+		categoryFilter: "",
+	}
+
+	updated, _ := m.Update(enqueueErrorMsg{tempID: "pending-1", err: errTest})
+	m2 := updated.(RootModel)
+
+	if len(m2.downloads) != 1 {
+		t.Fatalf("expected failed optimistic entry to remain, got %d entries", len(m2.downloads))
+	}
+	d := m2.downloads[0]
+	if d.ID != "pending-1" {
+		t.Fatalf("download ID = %q, want pending-1", d.ID)
+	}
+	if !d.done {
+		t.Fatal("expected enqueue failure to mark the entry done")
+	}
+	if !errors.Is(d.err, errTest) {
+		t.Fatalf("download err = %v, want %v", d.err, errTest)
+	}
+	if got := len(m2.getFilteredDownloads()); got != 1 {
+		t.Fatalf("done tab entries = %d, want 1 failed enqueue entry", got)
+	}
+}
+
 func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 

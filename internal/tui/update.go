@@ -461,9 +461,22 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case enqueueErrorMsg:
 		if msg.tempID != "" {
-			_ = m.removeDownloadByID(msg.tempID)
-			if m.SelectedDownloadID == msg.tempID {
-				m.SelectedDownloadID = ""
+			if d := m.FindDownloadByID(msg.tempID); d != nil {
+				d.err = msg.err
+				d.done = true
+				d.paused = false
+				d.pausing = false
+				d.resuming = false
+				d.Speed = 0
+				d.Connections = 0
+				if d.FilenameLower == "" {
+					d.FilenameLower = strings.ToLower(d.Filename)
+				}
+			} else {
+				failed := NewDownloadModel(msg.tempID, "", "", 0)
+				failed.err = msg.err
+				failed.done = true
+				m.downloads = append(m.downloads, failed)
 			}
 			m.UpdateListItems()
 		}
@@ -1444,7 +1457,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Not editing - handle navigation
 			if key.Matches(msg, m.keys.Settings.Close) {
 				// Save settings and exit
-				_ = config.SaveSettings(m.Settings)
+				_ = m.persistSettings()
 				m.state = DashboardState
 				return m, nil
 			}
@@ -1585,7 +1598,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key.Matches(msg, m.keys.Update.NeverRemind) {
 				// Persist the setting and dismiss
 				m.Settings.General.SkipUpdateCheck = true
-				_ = config.SaveSettings(m.Settings)
+				_ = m.persistSettings()
 				m.state = DashboardState
 				m.UpdateInfo = nil
 				return m, nil
@@ -1718,7 +1731,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Not editing - handle navigation
 			if key.Matches(msg, m.keys.CategoryMgr.Close) {
-				_ = config.SaveSettings(m.Settings)
+				_ = m.persistSettings()
 				m.state = DashboardState
 				return m, nil
 			}
