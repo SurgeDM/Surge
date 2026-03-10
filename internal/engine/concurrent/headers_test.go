@@ -78,7 +78,7 @@ func TestConcurrentDownloader_CustomHeaders(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize)
@@ -156,7 +156,7 @@ func TestConcurrentDownloader_DefaultUserAgent(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize)
@@ -217,7 +217,7 @@ func TestConcurrentDownloader_RangeHeaderNotOverridden(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize)
@@ -298,7 +298,7 @@ func TestConcurrentDownloader_HeadersForwardedOnRedirect(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, redirectServer.URL, nil, nil, destPath, fileSize)

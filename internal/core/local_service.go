@@ -297,10 +297,8 @@ func (s *LocalDownloadService) StreamEvents(ctx context.Context) (<-chan interfa
 	// Callers own listener lifetime; service shutdown closes listeners after the
 	// broadcaster drains InputCh so lifecycle persistence can observe final events.
 	go func() {
-		select {
-		case <-ctx.Done():
-			cleanup()
-		}
+		<-ctx.Done()
+		cleanup()
 	}()
 
 	return ch, cleanup, nil

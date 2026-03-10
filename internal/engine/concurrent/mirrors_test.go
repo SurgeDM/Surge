@@ -48,7 +48,7 @@ func TestMirrors_HappyPath(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server1.URL(), mirrors, mirrors, destPath, fileSize)
@@ -109,7 +109,7 @@ func TestMirrors_Failover(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, badServer.URL, mirrors, mirrors, destPath, fileSize)

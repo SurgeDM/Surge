@@ -54,7 +54,7 @@ func TestConcurrentDownloader_Download(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
@@ -95,7 +95,7 @@ func TestConcurrentDownloader_WithLatency(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
@@ -139,7 +139,7 @@ func TestConcurrentDownloader_SlowDownload(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
@@ -184,7 +184,7 @@ func TestConcurrentDownloader_RespectServerConnectionLimit(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
@@ -231,7 +231,7 @@ func TestConcurrentDownloader_ContentIntegrity(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
@@ -306,7 +306,7 @@ func TestConcurrentDownloader_SmallFile(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
@@ -347,7 +347,7 @@ func TestConcurrentDownloader_MediumFile(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
@@ -389,7 +389,7 @@ func TestConcurrentDownloader_Cancellation(t *testing.T) {
 	go func() {
 		// Pre-create incomplete file (simulating processing layer)
 		if f, err := os.Create(destPath + ".surge"); err == nil {
-			f.Close()
+			_ = f.Close()
 		}
 
 		done <- downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
@@ -433,7 +433,7 @@ func TestConcurrentDownloader_PauseAtCompletionFinalizesAsCompleted(t *testing.T
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
@@ -475,7 +475,7 @@ func TestConcurrentDownloader_ProgressTracking(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
@@ -518,7 +518,7 @@ func TestConcurrentDownloader_RetryOnFailure(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
@@ -564,7 +564,7 @@ func TestConcurrentDownloader_FailOnNthRequest(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
@@ -632,7 +632,7 @@ func TestConcurrentDownloader_ResumePartialDownload(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err = downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)

@@ -84,7 +84,7 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err = downloader.Download(ctx, targetServer.URL(), nil, nil, destPath, 1024)
@@ -130,7 +130,7 @@ func TestConcurrentDownloader_InvalidProxy(t *testing.T) {
 	// Since we log error and fallback, it should succeed if direct connection works.
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, targetServer.URL(), nil, nil, destPath, 1024)

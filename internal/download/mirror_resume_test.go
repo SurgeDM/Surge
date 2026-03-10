@@ -104,7 +104,7 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to pre-create partial file: %v", err)
 	}
-	f.Close()
+	_ = f.Close()
 
 	// Start download and interrupt
 	errCh := make(chan error)

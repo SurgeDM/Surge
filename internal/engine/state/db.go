@@ -105,7 +105,7 @@ func ensureDownloadsSchema() error {
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	existingColumns := make(map[string]bool)
 	for rows.Next() {

@@ -118,7 +118,7 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 	outputDir := t.TempDir()
 	const filename = "active-delete.bin"
 	if f, err := os.Create(filepath.Join(outputDir, filename) + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, 0, false)
 	if err != nil {
@@ -312,7 +312,7 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	const filename = "persist.bin"
 	const fileSize = 500 * 1024 * 1024
 	if f, err := os.Create(filepath.Join(outputDir, filename) + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
@@ -414,14 +414,14 @@ func TestLocalDownloadService_Shutdown_PersistsQueuedState(t *testing.T) {
 
 	outputDir := t.TempDir()
 	if f, err := os.Create(filepath.Join(outputDir, "first.bin") + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 	firstID, err := svc.Add(server.URL()+"?id=1", outputDir, "first.bin", nil, nil, false, 0, false)
 	if err != nil {
 		t.Fatalf("failed to add first download: %v", err)
 	}
 	if f, err := os.Create(filepath.Join(outputDir, "second.bin") + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 	secondID, err := svc.Add(server.URL()+"?id=2", outputDir, "second.bin", nil, nil, false, 0, false)
 	if err != nil {
@@ -516,7 +516,7 @@ func TestLocalDownloadService_BatchProgress(t *testing.T) {
 	// Add download using test server URL
 
 	if f, err := os.Create(filepath.Join(tempDir, "test-file") + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 	_, err = svc.Add(ts.URL, tempDir, "test-file", nil, nil, false, 0, false)
 	if err != nil {
@@ -560,7 +560,7 @@ func TestLocalDownloadService_ResumeRejectedWhilePausing(t *testing.T) {
 
 	outputDir := t.TempDir()
 	if f, err := os.Create(filepath.Join(outputDir, "resume-race.bin") + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 	id, err := svc.Add(server.URL(), outputDir, "resume-race.bin", nil, nil, false, 0, false)
 	if err != nil {

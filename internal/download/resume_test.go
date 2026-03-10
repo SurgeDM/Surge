@@ -94,7 +94,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to pre-create partial file: %v", err)
 	}
-	f.Close()
+	_ = f.Close()
 
 	// Start download
 	errCh := make(chan error)

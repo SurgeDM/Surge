@@ -188,7 +188,7 @@ func TestSingleDownloader_StreamingServer(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), destPath, fileSize, "stream.bin")
@@ -229,7 +229,7 @@ func TestSingleDownloader_FailAfterBytes(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), destPath, fileSize, "failafter.bin")
@@ -271,7 +271,7 @@ func TestSingleDownloader_NilState(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), destPath, fileSize, "nilstate.bin")
@@ -366,7 +366,7 @@ func TestSingleDownloader_Download_Success(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err = downloader.Download(ctx, server.URL(), destPath, fileSize, "single_test.bin")
@@ -410,7 +410,7 @@ func TestSingleDownloader_Download_Cancellation(t *testing.T) {
 	go func() {
 		// Pre-create incomplete file (simulating processing layer)
 		if f, err := os.Create(destPath + ".surge"); err == nil {
-			f.Close()
+			_ = f.Close()
 		}
 
 		done <- downloader.Download(ctx, server.URL(), destPath, fileSize, "cancel.bin")
@@ -454,7 +454,7 @@ func TestSingleDownloader_Download_ProgressTracking(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), destPath, fileSize, "progress.bin")
@@ -494,7 +494,7 @@ func TestSingleDownloader_Download_ServerError(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), destPath, 1024, "error.bin")
@@ -527,7 +527,7 @@ func TestSingleDownloader_Download_WithLatency(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), destPath, fileSize, "latency.bin")
@@ -569,7 +569,7 @@ func TestSingleDownloader_Download_ContentIntegrity(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	err := downloader.Download(ctx, server.URL(), destPath, fileSize, "content.bin")
@@ -627,7 +627,7 @@ func BenchmarkSingleDownloader(b *testing.B) {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		// Pre-create incomplete file (simulating processing layer)
 		if f, err := os.Create(destPath + ".surge"); err == nil {
-			f.Close()
+			_ = f.Close()
 		}
 
 		err := downloader.Download(ctx, server.URL(), destPath, fileSize, "bench.bin")

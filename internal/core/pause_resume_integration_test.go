@@ -175,7 +175,7 @@ func TestIntegration_PauseResume_HotPath_Aggregates(t *testing.T) {
 	destPath := filepath.Join(outputDir, filename)
 
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
@@ -335,7 +335,7 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	evCleanup1 := startEventWorkerForTest(t, svc1)
 
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 	id, err := svc1.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
@@ -473,7 +473,7 @@ func TestIntegration_PauseResume_ResumeBatchRejectsPausing(t *testing.T) {
 
 	destPath := filepath.Join(t.TempDir(), "file.bin")
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 	pool.Add(types.DownloadConfig{
 		ID:       id,
@@ -554,7 +554,7 @@ func TestIntegration_PauseResume_StatusFormulaInvariants(t *testing.T) {
 	const filename = "formula.bin"
 	destPath := filepath.Join(outputDir, filename)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
@@ -652,7 +652,7 @@ func TestIntegration_PauseResume_ConcreteSnapshotDebugString(t *testing.T) {
 	destPath := filepath.Join(outputDir, filename)
 
 	if f, err := os.Create(destPath + ".surge"); err == nil {
-		f.Close()
+		_ = f.Close()
 	}
 	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
