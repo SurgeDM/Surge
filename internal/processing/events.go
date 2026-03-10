@@ -90,6 +90,9 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 			if existing, _ := state.GetDownload(m.DownloadID); existing != nil {
 				entry.Mirrors = append([]string(nil), existing.Mirrors...)
+				if existing.Downloaded > 0 {
+					entry.Downloaded = existing.Downloaded
+				}
 			}
 			if err := state.AddToMasterList(entry); err != nil {
 				utils.Debug("Lifecycle: Failed to save initial download state: %v", err)

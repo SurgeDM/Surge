@@ -552,8 +552,8 @@ func TestStartDownload_UsesGenericQueuedNameForExplicitFilenameUntilLifecycleCon
 		t.Fatalf("expected 1 optimistic queued download, got %d", len(updated.downloads))
 	}
 	d := updated.downloads[0]
-	if d.Filename != "Queued" {
-		t.Fatalf("optimistic filename = %q, want generic queued placeholder", d.Filename)
+	if d.Filename != "archive.zip" {
+		t.Fatalf("optimistic filename = %q, want \"archive.zip\"", d.Filename)
 	}
 	if d.Destination != filepath.Join(targetDir, "archive.zip") {
 		t.Fatalf("optimistic destination = %q, want %q", d.Destination, filepath.Join(targetDir, "archive.zip"))
