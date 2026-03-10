@@ -12,6 +12,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/core"
 	"github.com/surge-downloader/surge/internal/download"
 	"github.com/surge-downloader/surge/internal/engine/events"
@@ -171,6 +172,95 @@ func TestEnsureLocalLifecycle_StartsEventWorker(t *testing.T) {
 		t.Fatalf("failed to list downloads: %v", err)
 	}
 	t.Fatalf("expected persisted download entry, got %+v", entries)
+}
+
+func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
+	setupIsolatedCmdState(t)
+	GlobalLifecycle = nil
+	GlobalLifecycleCleanup = nil
+	GlobalProgressCh = make(chan any, 32)
+	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 1)
+	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
+	t.Cleanup(func() {
+		if GlobalLifecycleCleanup != nil {
+			GlobalLifecycleCleanup()
+			GlobalLifecycleCleanup = nil
+		}
+		if GlobalService != nil {
+			_ = GlobalService.Shutdown()
+			GlobalService = nil
+		}
+		GlobalLifecycle = nil
+		GlobalPool = nil
+		GlobalProgressCh = nil
+	})
+
+	defaultDir := t.TempDir()
+	customDir := filepath.Join(t.TempDir(), "bin-artifacts")
+	settings := config.DefaultSettings()
+	settings.General.DefaultDownloadDir = defaultDir
+	settings.General.CategoryEnabled = true
+	settings.General.Categories = []config.Category{
+		{
+			Name:    "Binary",
+			Pattern: `(?i)\.bin$`,
+			Path:    customDir,
+		},
+	}
+	if err := config.SaveSettings(settings); err != nil {
+		t.Fatalf("SaveSettings failed: %v", err)
+	}
+
+	const filename = "artifact.bin"
+	const fileSize = int64(64 * 1024)
+	server := testutil.NewStreamingMockServerT(
+		t,
+		fileSize,
+		testutil.WithFilename(filename),
+		testutil.WithRangeSupport(true),
+	)
+	defer server.Close()
+
+	count := processDownloads([]string{server.URL() + "/" + filename}, defaultDir, 0)
+	if count != 1 {
+		t.Fatalf("expected 1 successful add, got %d", count)
+	}
+
+	expectedPath := filepath.Join(customDir, filename)
+	unexpectedPath := filepath.Join(defaultDir, filename)
+
+	deadline := time.Now().Add(10 * time.Second)
+	for time.Now().Before(deadline) {
+		info, err := os.Stat(expectedPath)
+		if err == nil && info.Size() == fileSize {
+			if _, err := os.Stat(unexpectedPath); !os.IsNotExist(err) {
+				t.Fatalf("expected no file in default dir, stat err: %v", err)
+			}
+
+			entries, err := state.ListAllDownloads()
+			if err != nil {
+				t.Fatalf("failed to list downloads: %v", err)
+			}
+			for _, entry := range entries {
+				if entry.DestPath == expectedPath {
+					return
+				}
+			}
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+
+	if _, err := os.Stat(expectedPath); err != nil {
+		t.Fatalf("expected downloaded file at %s: %v", expectedPath, err)
+	}
+	if _, err := os.Stat(unexpectedPath); !os.IsNotExist(err) {
+		t.Fatalf("expected no file in default dir, stat err: %v", err)
+	}
+	entries, err := state.ListAllDownloads()
+	if err != nil {
+		t.Fatalf("failed to list downloads: %v", err)
+	}
+	t.Fatalf("expected persisted entry with custom category path, got %+v", entries)
 }
 
 func TestEnsureLocalLifecycle_ConcurrentInitializationStartsOneStream(t *testing.T) {
