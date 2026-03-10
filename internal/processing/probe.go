@@ -37,21 +37,22 @@ type ProbeResult struct {
 	ContentType   string
 }
 
-// ProbeServer is the convenience entry point for callers that do not already
-// hold a settings snapshot; it reloads persisted settings so probe traffic can
-// honor the saved proxy configuration.
-func ProbeServer(ctx context.Context, rawurl string, filenameHint string, headers map[string]string) (*ProbeResult, error) {
+func resolveProxyURL() string {
 	settings, err := config.LoadSettings()
 	if err != nil {
 		settings = config.DefaultSettings()
 	}
-
-	proxyURL := ""
 	if settings != nil {
-		proxyURL = settings.Network.ProxyURL
+		return settings.Network.ProxyURL
 	}
+	return ""
+}
 
-	return ProbeServerWithProxy(ctx, rawurl, filenameHint, headers, proxyURL)
+// ProbeServer is the convenience entry point for callers that do not already
+// hold a settings snapshot; it reloads persisted settings so probe traffic can
+// honor the saved proxy configuration.
+func ProbeServer(ctx context.Context, rawurl string, filenameHint string, headers map[string]string) (*ProbeResult, error) {
+	return ProbeServerWithProxy(ctx, rawurl, filenameHint, headers, resolveProxyURL())
 }
 
 // ProbeServerWithProxy is the hot-path variant for callers that already know
@@ -305,17 +306,7 @@ func sameProbeRedirectOrigin(a, b *neturl.URL) bool {
 // ProbeMirrors is the convenience wrapper for callers that need mirror probing
 // to honor the saved proxy setting but do not already hold a live settings snapshot.
 func ProbeMirrors(ctx context.Context, mirrors []string) (valid []string, errs map[string]error) {
-	settings, err := config.LoadSettings()
-	if err != nil {
-		settings = config.DefaultSettings()
-	}
-
-	proxyURL := ""
-	if settings != nil {
-		proxyURL = settings.Network.ProxyURL
-	}
-
-	return ProbeMirrorsWithProxy(ctx, mirrors, proxyURL)
+	return ProbeMirrorsWithProxy(ctx, mirrors, resolveProxyURL())
 }
 
 // ProbeMirrorsWithProxy preserves caller order so mirror priority remains stable.
