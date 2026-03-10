@@ -301,8 +301,3 @@ func (w *progressReader) flushWithTime(now time.Time) {
 	w.lastFlush = now
 	w.readChecks = 0
 }
-
-// copyFile copies a file from src to dst (fallback when rename fails)
-func copyFile(src, dst string) error {
-	return utils.CopyFile(src, dst)
-}

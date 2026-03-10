@@ -85,7 +85,8 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string, string) b
 		if _, err := os.Stat(targetPath); !os.IsNotExist(err) {
 			return true
 		}
-		// Also check for incomplete download file (.surge extension)
+		// A .surge sibling means another active or recoverable download already
+		// claimed this filename, so we must not hand it out again.
 		if _, err := os.Stat(targetPath + types.IncompleteSuffix); !os.IsNotExist(err) {
 			return true
 		}

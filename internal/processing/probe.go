@@ -24,7 +24,10 @@ var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
 var (
 	probeClientsMu sync.Mutex
 	probeClients   = make(map[string]*http.Client)
+	probeClientLRU []string
 )
+
+const maxProbeClients = 8
 
 // ProbeResult contains all metadata from server probe
 type ProbeResult struct {
@@ -227,7 +230,18 @@ func getProbeClient(proxyURL string) *http.Client {
 			return nil
 		},
 	}
+
+	if len(probeClients) >= maxProbeClients && len(probeClientLRU) > 0 {
+		evictedKey := probeClientLRU[0]
+		probeClientLRU = probeClientLRU[1:]
+		if evictedClient, ok := probeClients[evictedKey]; ok {
+			evictedClient.CloseIdleConnections()
+			delete(probeClients, evictedKey)
+		}
+	}
+
 	probeClients[proxyURL] = client
+	probeClientLRU = append(probeClientLRU, proxyURL)
 	return client
 }
 

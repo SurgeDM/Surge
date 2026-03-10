@@ -10,6 +10,7 @@ import (
 
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/testutil"
+	"github.com/surge-downloader/surge/internal/utils"
 )
 
 func TestCopyFile(t *testing.T) {
@@ -27,7 +28,7 @@ func TestCopyFile(t *testing.T) {
 
 	dstPath := filepath.Join(tmpDir, "dst.bin")
 
-	err = copyFile(srcPath, dstPath)
+	err = utils.CopyFile(srcPath, dstPath)
 	if err != nil {
 		t.Fatalf("copyFile failed: %v", err)
 	}
@@ -58,7 +59,7 @@ func TestCopyFile_SourceNotExists(t *testing.T) {
 	tmpDir, cleanup, _ := testutil.TempDir("surge-copy-test")
 	defer cleanup()
 
-	err := copyFile(filepath.Join(tmpDir, "nonexistent.bin"), filepath.Join(tmpDir, "dst.bin"))
+	err := utils.CopyFile(filepath.Join(tmpDir, "nonexistent.bin"), filepath.Join(tmpDir, "dst.bin"))
 	if err == nil {
 		t.Error("Expected error for nonexistent source")
 	}
@@ -71,7 +72,7 @@ func TestCopyFile_InvalidDestination(t *testing.T) {
 	srcPath, _ := testutil.CreateTestFile(tmpDir, "src.bin", 100, false)
 
 	// Try to copy to an invalid path (non-existent directory)
-	err := copyFile(srcPath, filepath.Join(tmpDir, "nonexistent", "subdir", "dst.bin"))
+	err := utils.CopyFile(srcPath, filepath.Join(tmpDir, "nonexistent", "subdir", "dst.bin"))
 	if err == nil {
 		t.Error("Expected error for invalid destination")
 	}
@@ -84,7 +85,7 @@ func TestCopyFile_EmptyFile(t *testing.T) {
 	srcPath, _ := testutil.CreateTestFile(tmpDir, "empty.bin", 0, false)
 	dstPath := filepath.Join(tmpDir, "empty_copy.bin")
 
-	err := copyFile(srcPath, dstPath)
+	err := utils.CopyFile(srcPath, dstPath)
 	if err != nil {
 		t.Fatalf("copyFile failed for empty file: %v", err)
 	}
@@ -102,7 +103,7 @@ func TestCopyFile_LargeFile(t *testing.T) {
 	srcPath, _ := testutil.CreateTestFile(tmpDir, "large.bin", size, false)
 	dstPath := filepath.Join(tmpDir, "large_copy.bin")
 
-	err := copyFile(srcPath, dstPath)
+	err := utils.CopyFile(srcPath, dstPath)
 	if err != nil {
 		t.Fatalf("copyFile failed for large file: %v", err)
 	}
@@ -120,7 +121,7 @@ func TestCopyFile_ContentVerification(t *testing.T) {
 	srcPath, _ := testutil.CreateTestFile(tmpDir, "random.bin", size, true) // Random data
 	dstPath := filepath.Join(tmpDir, "random_copy.bin")
 
-	err := copyFile(srcPath, dstPath)
+	err := utils.CopyFile(srcPath, dstPath)
 	if err != nil {
 		t.Fatalf("copyFile failed: %v", err)
 	}

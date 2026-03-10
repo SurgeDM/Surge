@@ -351,3 +351,33 @@ func TestLifecycleManager_GetSettings_RefreshesFromDiskAfterTTL(t *testing.T) {
 		t.Fatal("expected GetSettings to pick up saved settings after TTL expiry")
 	}
 }
+
+func TestLifecycleManager_GetSettings_KeepsCachedSnapshotWhenReloadFails(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	initial := config.DefaultSettings()
+	initial.General.WarnOnDuplicate = false
+	if err := config.SaveSettings(initial); err != nil {
+		t.Fatalf("SaveSettings(initial) failed: %v", err)
+	}
+
+	mgr := NewLifecycleManager(nil, nil)
+
+	badConfigHome := filepath.Join(tmpDir, "bad-config-home")
+	if err := os.WriteFile(badConfigHome, []byte("not a directory"), 0o644); err != nil {
+		t.Fatalf("WriteFile(badConfigHome) failed: %v", err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", badConfigHome)
+
+	origTTL := settingsRefreshTTL
+	t.Cleanup(func() {
+		settingsRefreshTTL = origTTL
+	})
+	settingsRefreshTTL = 0
+
+	settings := mgr.GetSettings()
+	if settings.General.WarnOnDuplicate {
+		t.Fatal("expected GetSettings to keep the cached snapshot when disk reload fails")
+	}
+}
