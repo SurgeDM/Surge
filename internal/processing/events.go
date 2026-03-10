@@ -3,7 +3,6 @@ package processing
 import (
 	"errors"
 	"fmt"
-	"io"
 	"os"
 	"syscall"
 	"time"
@@ -16,7 +15,7 @@ import (
 
 var (
 	renameCompletedFile = os.Rename
-	copyCompletedFile   = copyFile
+	copyCompletedFile   = utils.CopyFile
 )
 
 // advanceRemainingTasks keeps saved chunk boundaries aligned when pause
@@ -70,26 +69,6 @@ func finalizeCompletedFile(finalPath string) error {
 	return nil
 }
 
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = in.Close() }()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer func() { _ = out.Close() }()
-
-	buf := make([]byte, types.MB)
-	if _, err := io.CopyBuffer(out, in, buf); err != nil {
-		return err
-	}
-	return out.Sync()
-}
-
 // StartEventWorker listens to engine events and handles database persistence
 // and file cleanup, ensuring the core engine remains stateless.
 func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
@@ -99,7 +78,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 		case events.DownloadStartedMsg:
 			// Persist the started record immediately so crash recovery and later lifecycle
 			// events have a stable destination record even before the first pause snapshot.
-			if err := state.AddToMasterList(types.DownloadEntry{
+			entry := types.DownloadEntry{
 				ID:         m.DownloadID,
 				URL:        m.URL,
 				URLHash:    state.URLHash(m.URL),
@@ -108,7 +87,11 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				Status:     "downloading",
 				TotalSize:  m.Total,
 				Downloaded: 0,
-			}); err != nil {
+			}
+			if existing, _ := state.GetDownload(m.DownloadID); existing != nil {
+				entry.Mirrors = append([]string(nil), existing.Mirrors...)
+			}
+			if err := state.AddToMasterList(entry); err != nil {
 				utils.Debug("Lifecycle: Failed to save initial download state: %v", err)
 			}
 

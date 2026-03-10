@@ -122,3 +122,51 @@ func TestStartEventWorker_PersistsQueuedMirrorsForResume(t *testing.T) {
 		t.Fatalf("mirrors = %v, want queued mirrors to round-trip", queuedState.Mirrors)
 	}
 }
+
+func TestStartEventWorker_PreservesQueuedMirrorsAcrossStartedThenError(t *testing.T) {
+	tempDir := testutil.SetupStateDB(t)
+	finalPath := filepath.Join(tempDir, "video.mp4")
+
+	mgr := processing.NewLifecycleManager(nil, nil)
+	ch := make(chan interface{}, 3)
+	ch <- events.DownloadQueuedMsg{
+		DownloadID: "download-queued",
+		URL:        "https://example.com/video.mp4",
+		Filename:   "video.mp4",
+		DestPath:   finalPath,
+		Mirrors:    []string{"https://mirror-1.example/video.mp4", "https://mirror-2.example/video.mp4"},
+	}
+	ch <- events.DownloadStartedMsg{
+		DownloadID: "download-queued",
+		URL:        "https://example.com/video.mp4",
+		Filename:   "video.mp4",
+		Total:      1024,
+		DestPath:   finalPath,
+	}
+	ch <- events.DownloadErrorMsg{
+		DownloadID: "download-queued",
+		Filename:   "video.mp4",
+		DestPath:   finalPath,
+		Err:        os.ErrDeadlineExceeded,
+	}
+	close(ch)
+
+	mgr.StartEventWorker(ch)
+
+	entry, err := state.GetDownload("download-queued")
+	if err != nil {
+		t.Fatalf("failed to reload errored entry: %v", err)
+	}
+	if entry == nil {
+		t.Fatal("expected errored entry to exist")
+	}
+	if entry.Status != "error" {
+		t.Fatalf("status = %q, want error", entry.Status)
+	}
+	if len(entry.Mirrors) != 2 {
+		t.Fatalf("mirrors = %v, want queued mirrors to survive started/error", entry.Mirrors)
+	}
+	if entry.Mirrors[0] != "https://mirror-1.example/video.mp4" || entry.Mirrors[1] != "https://mirror-2.example/video.mp4" {
+		t.Fatalf("mirrors = %v, want queued mirrors to round-trip", entry.Mirrors)
+	}
+}
