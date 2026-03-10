@@ -122,6 +122,48 @@ func TestTUI_Startup_LoadsCompletedTiming(t *testing.T) {
 	}
 }
 
+func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "surge-tui-error-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	setupTestEnv(t, tmpDir)
+
+	testID := "tui-error-id"
+	testURL := "http://example.com/error.bin"
+	testDest := filepath.Join(tmpDir, "error.bin")
+	if err := state.AddToMasterList(types.DownloadEntry{
+		ID:       testID,
+		URL:      testURL,
+		URLHash:  state.URLHash(testURL),
+		DestPath: testDest,
+		Filename: filepath.Base(testDest),
+		Status:   "error",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	progressChan := make(chan any, 10)
+	pool := download.NewWorkerPool(progressChan, 3)
+	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
+
+	var found *DownloadModel
+	for _, d := range m.downloads {
+		if d.ID == testID {
+			found = d
+			break
+		}
+	}
+	if found == nil {
+		t.Fatal("TUI Model failed to load errored download")
+	}
+	if !found.done {
+		t.Fatal("expected errored download to appear in done tab")
+	}
+}
+
 // Helper functions (duplicated from cmd/startup_test.go because packages differ)
 func setupTestEnv(t *testing.T, tmpDir string) {
 	originalXDG := os.Getenv("XDG_CONFIG_HOME")

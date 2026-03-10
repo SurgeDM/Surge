@@ -90,14 +90,11 @@ func TestGetCategoryForFile_MultipleMatches(t *testing.T) {
 	}
 
 	cat, err := GetCategoryForFile("test.txt", cats)
-	if err == nil {
-		t.Fatalf("Expected error for multiple matches, got nil")
+	if err != nil {
+		t.Fatalf("GetCategoryForFile returned unexpected error: %v", err)
 	}
-	if cat != nil {
-		t.Fatalf("Expected nil category for multiple matches, got %v", cat)
-	}
-	if err.Error() != "filename matches multiple categories" {
-		t.Errorf("Unexpected error message: %v", err)
+	if cat == nil || cat.Name != "Cat2" {
+		t.Fatalf("expected later category to override earlier match, got %#v", cat)
 	}
 }
 

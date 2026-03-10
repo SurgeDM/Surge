@@ -238,13 +238,11 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.General.DefaultDownloadDir = defaultDir
 	settings.General.CategoryEnabled = true
-	settings.General.Categories = []config.Category{
-		{
-			Name:    "Binary",
-			Pattern: `(?i)\.bin$`,
-			Path:    customDir,
-		},
-	}
+	settings.General.Categories = append(settings.General.Categories, config.Category{
+		Name:    "Binary",
+		Pattern: `(?i)\.bin$`,
+		Path:    customDir,
+	})
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)
 	}
@@ -351,6 +349,7 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 	if err := config.SaveSettings(updated); err != nil {
 		t.Fatalf("SaveSettings(updated) failed: %v", err)
 	}
+	GlobalLifecycle.ApplySettings(updated)
 
 	const filename = "after-save.bin"
 	const fileSize = int64(32 * 1024)

@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/engine/types"
@@ -23,14 +24,17 @@ type AddDownloadWithIDFunc func(string, string, string, []string, map[string]str
 type IsNameActiveFunc func(dir, name string) bool
 
 type LifecycleManager struct {
-	settings      *config.Settings
-	settingsMu    sync.RWMutex
-	addFunc       AddDownloadFunc
-	addWithIDFunc AddDownloadWithIDFunc
-	isNameActive  IsNameActiveFunc
+	settings            *config.Settings
+	settingsMu          sync.RWMutex
+	settingsRefreshedAt time.Time
+	addFunc             AddDownloadFunc
+	addWithIDFunc       AddDownloadWithIDFunc
+	isNameActive        IsNameActiveFunc
 }
 
 const maxWorkingFileReservationAttempts = 100
+
+var settingsRefreshTTL = time.Second
 
 var reserveWorkingFile = precreateWorkingFile
 
@@ -72,19 +76,29 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 	}
 
 	return &LifecycleManager{
-		settings:      settings,
-		addFunc:       addFunc,
-		addWithIDFunc: addWithIDFunc,
-		isNameActive:  activeCheck,
+		settings:            settings,
+		settingsRefreshedAt: time.Now(),
+		addFunc:             addFunc,
+		addWithIDFunc:       addWithIDFunc,
+		isNameActive:        activeCheck,
 	}
 }
 
 // GetSettings reloads disk-backed routing rules opportunistically so a long-lived
 // lifecycle manager picks up saved settings changes without a restart.
 func (m *LifecycleManager) GetSettings() *config.Settings {
-	if settings, err := config.LoadSettings(); err == nil && settings != nil {
-		m.ApplySettings(settings)
+	m.settingsMu.RLock()
+	settings := m.settings
+	refreshedAt := m.settingsRefreshedAt
+	m.settingsMu.RUnlock()
+
+	if settings != nil && time.Since(refreshedAt) < settingsRefreshTTL {
 		return settings
+	}
+
+	if loaded, err := config.LoadSettings(); err == nil && loaded != nil {
+		m.ApplySettings(loaded)
+		return loaded
 	}
 
 	m.settingsMu.RLock()
@@ -97,8 +111,12 @@ func (m *LifecycleManager) GetSettings() *config.Settings {
 
 // ApplySettings swaps in a new routing snapshot for future enqueue calls.
 func (m *LifecycleManager) ApplySettings(s *config.Settings) {
+	if s == nil {
+		s = config.DefaultSettings()
+	}
 	m.settingsMu.Lock()
 	m.settings = s
+	m.settingsRefreshedAt = time.Now()
 	m.settingsMu.Unlock()
 }
 
@@ -116,7 +134,6 @@ type DownloadRequest struct {
 	URL                string
 	Filename           string
 	Path               string
-	IsDefaultPath      bool
 	Mirrors            []string
 	Headers            map[string]string
 	IsExplicitCategory bool

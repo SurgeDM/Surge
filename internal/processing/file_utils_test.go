@@ -137,6 +137,27 @@ func TestGetCategoryPath(t *testing.T) {
 	if path != tmpDir {
 		t.Errorf("Expected %s, got %s", tmpDir, path)
 	}
+
+	// No side effects: routing should not create the directory before reservation.
+	missingDir := filepath.Join(tmpDir, "missing")
+	settings.General.CategoryEnabled = true
+	settings.General.Categories = []config.Category{
+		{
+			Name:    "Programs",
+			Pattern: `(?i)\.bin$`,
+			Path:    missingDir,
+		},
+	}
+	path, err = processing.GetCategoryPath("tool.bin", tmpDir, settings)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if path != missingDir {
+		t.Fatalf("Expected %s, got %s", missingDir, path)
+	}
+	if _, err := os.Stat(missingDir); !os.IsNotExist(err) {
+		t.Fatalf("expected routing to avoid creating %s, stat err: %v", missingDir, err)
+	}
 }
 
 func TestResolveDestination_Priority(t *testing.T) {

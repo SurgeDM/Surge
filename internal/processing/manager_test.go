@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/engine/types"
@@ -32,7 +33,7 @@ func newProbeTestServer(t *testing.T, size int64) *httptest.Server {
 func newLifecycleManagerForTest() *LifecycleManager {
 	settings := config.DefaultSettings()
 	settings.General.CategoryEnabled = false
-	return &LifecycleManager{settings: settings}
+	return &LifecycleManager{settings: settings, settingsRefreshedAt: time.Now()}
 }
 
 func TestLifecycleManager_Enqueue_PrecreatesWorkingFileBeforeDispatch(t *testing.T) {
@@ -278,5 +279,75 @@ func TestLifecycleManager_EnqueueWithID_RemovesWorkingFileOnDispatchError(t *tes
 	surgePath := filepath.Join(tempDir, expectedFile) + types.IncompleteSuffix
 	if _, statErr := os.Stat(surgePath); !os.IsNotExist(statErr) {
 		t.Fatalf("expected working file cleanup after dispatch failure, stat err: %v", statErr)
+	}
+}
+
+func TestLifecycleManager_Enqueue_FailsAfterReservationAttemptLimit(t *testing.T) {
+	server := newProbeTestServer(t, 2048)
+	defer server.Close()
+
+	tempDir := t.TempDir()
+
+	origReserve := reserveWorkingFile
+	origTTL := settingsRefreshTTL
+	t.Cleanup(func() {
+		reserveWorkingFile = origReserve
+		settingsRefreshTTL = origTTL
+	})
+	settingsRefreshTTL = time.Hour
+
+	var reserveCalls int
+	reserveWorkingFile = func(string, string) error {
+		reserveCalls++
+		return fmt.Errorf("collision: %w", os.ErrExist)
+	}
+
+	mgr := newLifecycleManagerForTest()
+	mgr.addFunc = func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		t.Fatal("dispatch should not run when reservation never succeeds")
+		return "", nil
+	}
+
+	_, err := mgr.Enqueue(context.Background(), &DownloadRequest{
+		URL:                server.URL,
+		Filename:           "archive.zip",
+		Path:               tempDir,
+		IsExplicitCategory: true,
+	})
+	if err == nil {
+		t.Fatal("expected reservation exhaustion error")
+	}
+	if reserveCalls != maxWorkingFileReservationAttempts {
+		t.Fatalf("reserve calls = %d, want %d", reserveCalls, maxWorkingFileReservationAttempts)
+	}
+}
+
+func TestLifecycleManager_GetSettings_RefreshesFromDiskAfterTTL(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	initial := config.DefaultSettings()
+	initial.General.CategoryEnabled = false
+	if err := config.SaveSettings(initial); err != nil {
+		t.Fatalf("SaveSettings(initial) failed: %v", err)
+	}
+
+	mgr := NewLifecycleManager(nil, nil)
+
+	updated := config.DefaultSettings()
+	updated.General.CategoryEnabled = true
+	if err := config.SaveSettings(updated); err != nil {
+		t.Fatalf("SaveSettings(updated) failed: %v", err)
+	}
+
+	origTTL := settingsRefreshTTL
+	t.Cleanup(func() {
+		settingsRefreshTTL = origTTL
+	})
+	settingsRefreshTTL = 0
+
+	settings := mgr.GetSettings()
+	if !settings.General.CategoryEnabled {
+		t.Fatal("expected GetSettings to pick up saved settings after TTL expiry")
 	}
 }

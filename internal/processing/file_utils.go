@@ -145,11 +145,7 @@ func GetCategoryPath(filename, defaultDir string, settings *config.Settings) (st
 
 	if cat != nil {
 		if catPath := config.ResolveCategoryPath(cat, defaultDir); catPath != "" {
-			path := utils.EnsureAbsPath(catPath)
-			if err := os.MkdirAll(path, 0o755); err != nil {
-				return defaultDir, fmt.Errorf("failed to create category path %s: %w", path, err)
-			}
-			return path, nil
+			return utils.EnsureAbsPath(catPath), nil
 		}
 	}
 

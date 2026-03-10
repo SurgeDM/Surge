@@ -109,12 +109,8 @@ func newLocalLifecycleManager(service core.DownloadService, getAll func() []type
 	var addFunc processing.AddDownloadFunc
 	var addWithIDFunc processing.AddDownloadWithIDFunc
 	if service != nil {
-		addFunc = func(url string, destPath string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
-			return service.Add(url, destPath, filename, mirrors, headers, isExplicitCategory, totalSize, supportsRange)
-		}
-		addWithIDFunc = func(url string, destPath string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
-			return service.AddWithID(url, destPath, filename, mirrors, headers, id, totalSize, supportsRange)
-		}
+		addFunc = service.Add
+		addWithIDFunc = service.AddWithID
 	}
 
 	return processing.NewLifecycleManager(addFunc, addWithIDFunc, buildPoolIsNameActive(getAll))
@@ -214,6 +210,38 @@ func publishSystemLog(message string) {
 		return
 	}
 	fmt.Fprintln(os.Stderr, message)
+}
+
+func recordPreflightDownloadError(url, outPath string, err error) {
+	if err == nil || strings.TrimSpace(url) == "" {
+		return
+	}
+
+	filename := strings.TrimSpace(processing.InferFilenameFromURL(url))
+	destPath := ""
+	if filename != "" && strings.TrimSpace(outPath) != "" {
+		destPath = filepath.Join(outPath, filename)
+	}
+
+	entry := types.DownloadEntry{
+		ID:       uuid.New().String(),
+		URL:      url,
+		URLHash:  state.URLHash(url),
+		DestPath: destPath,
+		Filename: filename,
+		Status:   "error",
+	}
+	if addErr := state.AddToMasterList(entry); addErr != nil {
+		utils.Debug("Failed to persist preflight download error for %s: %v", url, addErr)
+	}
+	if GlobalService != nil {
+		_ = GlobalService.Publish(events.DownloadErrorMsg{
+			DownloadID: entry.ID,
+			Filename:   filename,
+			DestPath:   destPath,
+			Err:        err,
+		})
+	}
 }
 
 func ensureLocalLifecycle(service core.DownloadService, getAll func() []types.DownloadConfig) (*processing.LifecycleManager, error) {
@@ -885,7 +913,9 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		// CLI explicit arg means we do not auto-route when user provided an explicit output path.
 		isExplicit := isExplicitOutputPath(outPath, settings.General.DefaultDownloadDir)
 		if lifecycle == nil {
-			publishSystemLog(fmt.Sprintf("Error adding %s: lifecycle manager unavailable", url))
+			err := fmt.Errorf("lifecycle manager unavailable")
+			recordPreflightDownloadError(url, outPath, err)
+			publishSystemLog(fmt.Sprintf("Error adding %s: %v", url, err))
 			continue
 		}
 
@@ -896,6 +926,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 			IsExplicitCategory: isExplicit,
 		})
 		if err != nil {
+			recordPreflightDownloadError(url, outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", url, err))
 			continue
 		}

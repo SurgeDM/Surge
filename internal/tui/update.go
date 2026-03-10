@@ -265,7 +265,6 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		URL:                url,
 		Filename:           candidateFilename,
 		Path:               path,
-		IsDefaultPath:      isDefaultPath,
 		Mirrors:            mirrors,
 		Headers:            headers,
 		IsExplicitCategory: !isDefaultPath,

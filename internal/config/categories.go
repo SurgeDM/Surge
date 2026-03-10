@@ -128,8 +128,8 @@ func getCompiledPattern(pattern string) *regexp.Regexp {
 	return re
 }
 
-// GetCategoryForFile returns the matched category for a given filename.
-// Returns an error if the filename matches multiple categories.
+// GetCategoryForFile returns the last matching category so user-added rules can
+// override broader defaults that appear earlier in the list.
 func GetCategoryForFile(filename string, categories []Category) (*Category, error) {
 	if filename == "" || len(categories) == 0 {
 		return nil, nil
@@ -145,9 +145,6 @@ func GetCategoryForFile(filename string, categories []Category) (*Category, erro
 
 		re := getCompiledPattern(cat.Pattern)
 		if re != nil && re.MatchString(filename) {
-			if matched != nil {
-				return nil, errors.New("filename matches multiple categories")
-			}
 			matched = cat
 		}
 	}
