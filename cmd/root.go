@@ -39,6 +39,9 @@ var (
 // activeDownloads tracks the number of currently running downloads in headless mode
 var activeDownloads int32
 
+// pendingEnqueue tracks the number of pending batch enqueues to avoid premature exit
+var pendingEnqueue int32
+
 // Command line flags
 var (
 	verbose     bool
@@ -341,7 +344,9 @@ var rootCmd = &cobra.Command{
 		go startHTTPServer(listener, port, outputDir, GlobalService, "")
 
 		// Queue initial downloads if any
+		atomic.AddInt32(&pendingEnqueue, 1)
 		go func() {
+			defer atomic.AddInt32(&pendingEnqueue, -1)
 			var urls []string
 			urls = append(urls, args...)
 
@@ -427,7 +432,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
 			for range ticker.C {
-				if GlobalPool != nil && GlobalPool.ActiveCount() == 0 {
+				if atomic.LoadInt32(&pendingEnqueue) == 0 && GlobalPool != nil && GlobalPool.ActiveCount() == 0 {
 					// Send quit message to TUI
 					p.Send(tea.Quit())
 					return
