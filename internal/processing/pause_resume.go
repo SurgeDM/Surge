@@ -28,7 +28,9 @@ func (mgr *LifecycleManager) Pause(id string) error {
 		return nil
 	}
 
-	// If not in pool, check if it's already paused/stopped in DB
+	// Downloads paused in a prior session are not tracked by the in-memory pool;
+	// synthesize a paused event so the UI can clear any transient "pausing" spinner.
+	entry, err := state.GetDownload(id)
 	entry, err := state.GetDownload(id)
 	if err == nil && entry != nil {
 		// Emit paused event so UI clears "pausing" state
