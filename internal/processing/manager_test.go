@@ -454,3 +454,72 @@ func TestLifecycleManager_GetSettings_KeepsCachedSnapshotWhenReloadFails(t *test
 		t.Fatal("expected GetSettings to keep the cached snapshot when disk reload fails")
 	}
 }
+
+func TestLifecycleManager_Enqueue_ContextCancellationDuringProbe(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+
+	mgr := newLifecycleManagerForTest()
+	mgr.addFunc = func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		t.Fatal("dispatch should not run when probe fails")
+		return "", nil
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := mgr.Enqueue(ctx, &DownloadRequest{
+		URL:      server.URL,
+		Filename: "test.zip",
+		Path:     t.TempDir(),
+	})
+
+	if err == nil {
+		t.Fatal("expected error due to context cancellation, got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+}
+
+func TestLifecycleManager_EnqueueWithID_FailsAfterReservationAttemptLimit(t *testing.T) {
+	server := newProbeTestServer(t, 2048)
+	defer server.Close()
+
+	tempDir := t.TempDir()
+
+	origReserve := reserveWorkingFile
+	origTTL := settingsRefreshTTL
+	t.Cleanup(func() {
+		reserveWorkingFile = origReserve
+		settingsRefreshTTL = origTTL
+	})
+	settingsRefreshTTL = time.Hour
+
+	var reserveCalls int
+	reserveWorkingFile = func(string, string) error {
+		reserveCalls++
+		return fmt.Errorf("collision: %w", os.ErrExist)
+	}
+
+	mgr := newLifecycleManagerForTest()
+	mgr.addWithIDFunc = func(string, string, string, []string, map[string]string, string, int64, bool) (string, error) {
+		t.Fatal("dispatch should not run when reservation never succeeds")
+		return "", nil
+	}
+
+	_, err := mgr.EnqueueWithID(context.Background(), &DownloadRequest{
+		URL:                server.URL,
+		Filename:           "archive.zip",
+		Path:               tempDir,
+		IsExplicitCategory: true,
+	}, "test-id")
+
+	if err == nil {
+		t.Fatal("expected reservation exhaustion error")
+	}
+	if reserveCalls != maxWorkingFileReservationAttempts {
+		t.Fatalf("reserve calls = %d, want %d", reserveCalls, maxWorkingFileReservationAttempts)
+	}
+}
