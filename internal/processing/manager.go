@@ -193,6 +193,13 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 // enqueueResolved prepares the final path and working file before handing the
 // download to the engine, so workers and lifecycle events agree on one stable destination.
 func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadRequest, dispatch func(string, string, *ProbeResult) (string, error)) (string, error) {
+	if req.URL == "" {
+		return "", fmt.Errorf("URL is required")
+	}
+	if req.Path == "" {
+		return "", fmt.Errorf("destination path is required")
+	}
+
 	settings := mgr.GetSettings()
 
 	probe, err := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.Network.ProxyURL)
@@ -204,6 +211,10 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 	isNameActive := mgr.buildIsNameActive()
 
 	for attempt := 0; attempt < maxWorkingFileReservationAttempts; attempt++ {
+		if ctx.Err() != nil {
+			return "", fmt.Errorf("enqueue aborted: %w", ctx.Err())
+		}
+
 		finalPath, finalFilename, err := ResolveDestination(
 			req.URL,
 			req.Filename,
