@@ -49,6 +49,16 @@ func currentApp() *runtimeapp.App {
 		previous = globalApp.Components()
 	}
 	executionChanged := executionComponentsOutOfSync()
+	if executionChanged && globalApp != nil {
+		if previous.Service != nil && previous.Service != GlobalService {
+			_ = globalApp.Shutdown()
+		} else {
+			globalApp.CancelEnqueue()
+			if cleanup := globalApp.TakeLifecycleCleanup(); cleanup != nil {
+				cleanup()
+			}
+		}
+	}
 	if globalApp == nil || executionChanged {
 		globalApp = runtimeapp.NewEmpty()
 	}
@@ -58,9 +68,11 @@ func currentApp() *runtimeapp.App {
 	if executionChanged && previous.Lifecycle != nil && lifecycle == previous.Lifecycle {
 		// A lifecycle manager captures service Add/AddWithID callbacks. If the
 		// service or pool changes but callers forgot to clear the legacy lifecycle
-		// mirror, it becomes unsafe to reuse.
+		// mirror, it becomes unsafe to reuse or keep its cleanup attached.
 		lifecycle = nil
+		lifecycleCleanup = nil
 		GlobalLifecycle = nil
+		GlobalLifecycleCleanup = nil
 	}
 
 	globalApp.ApplyComponents(runtimeapp.Components{
@@ -133,7 +145,8 @@ func ensureGlobalLocalServiceAndLifecycle() error {
 	return err
 }
 
-// Transitional compatibility helpers retained for cmd tests during Phase 1.
+// These duplicate the runtime package's unexported helpers so cmd tests can
+// keep their existing call sites until later phases export or delete them.
 func buildPoolIsNameActive(getAll func() []types.DownloadConfig) processing.IsNameActiveFunc {
 	if getAll == nil {
 		return nil

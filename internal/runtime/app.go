@@ -30,9 +30,10 @@ type Components struct {
 type App struct {
 	settings *config.Settings
 
-	pool       *download.WorkerPool
-	progressCh chan any
-	service    core.DownloadService
+	componentsMu sync.RWMutex
+	pool         *download.WorkerPool
+	progressCh   chan any
+	service      core.DownloadService
 
 	lifecycle        *processing.LifecycleManager
 	lifecycleCleanup func()
@@ -68,9 +69,11 @@ func NewLocal(settings *config.Settings) *App {
 }
 
 func (a *App) ApplyComponents(c Components) {
+	a.componentsMu.Lock()
 	a.pool = c.Pool
 	a.progressCh = c.ProgressCh
 	a.service = c.Service
+	a.componentsMu.Unlock()
 
 	a.lifecycleMu.Lock()
 	a.lifecycle = c.Lifecycle
@@ -79,27 +82,41 @@ func (a *App) ApplyComponents(c Components) {
 }
 
 func (a *App) Components() Components {
+	a.componentsMu.RLock()
+	pool := a.pool
+	progressCh := a.progressCh
+	service := a.service
+	a.componentsMu.RUnlock()
+
 	a.lifecycleMu.Lock()
+	lifecycle := a.lifecycle
+	lifecycleCleanup := a.lifecycleCleanup
 	defer a.lifecycleMu.Unlock()
 
 	return Components{
-		Pool:             a.pool,
-		ProgressCh:       a.progressCh,
-		Service:          a.service,
-		Lifecycle:        a.lifecycle,
-		LifecycleCleanup: a.lifecycleCleanup,
+		Pool:             pool,
+		ProgressCh:       progressCh,
+		Service:          service,
+		Lifecycle:        lifecycle,
+		LifecycleCleanup: lifecycleCleanup,
 	}
 }
 
 func (a *App) Pool() *download.WorkerPool {
+	a.componentsMu.RLock()
+	defer a.componentsMu.RUnlock()
 	return a.pool
 }
 
 func (a *App) ProgressCh() chan any {
+	a.componentsMu.RLock()
+	defer a.componentsMu.RUnlock()
 	return a.progressCh
 }
 
 func (a *App) Service() core.DownloadService {
+	a.componentsMu.RLock()
+	defer a.componentsMu.RUnlock()
 	return a.service
 }
 
@@ -160,21 +177,24 @@ func (a *App) CancelEnqueue() {
 }
 
 func (a *App) CurrentPoolConfigs() []types.DownloadConfig {
-	if a.pool == nil {
+	pool := a.Pool()
+	if pool == nil {
 		return nil
 	}
-	return a.pool.GetAll()
+	return pool.GetAll()
 }
 
 func (a *App) LifecycleForService(service core.DownloadService) (*processing.LifecycleManager, error) {
 	lifecycle := a.CurrentLifecycle()
-	if service == nil || a.service == nil || service != a.service {
+	currentService := a.Service()
+	if service == nil || currentService == nil || service != currentService {
 		return lifecycle, nil
 	}
-	return a.ensureLocalLifecycle(a.service, a.CurrentPoolConfigs)
+	return a.ensureLocalLifecycle(currentService, a.CurrentPoolConfigs)
 }
 
 func (a *App) EnsureLocalServiceAndLifecycle() error {
+	a.componentsMu.Lock()
 	if a.service == nil {
 		localService := core.NewLocalDownloadServiceWithInput(a.pool, a.progressCh)
 		a.service = localService
@@ -182,22 +202,28 @@ func (a *App) EnsureLocalServiceAndLifecycle() error {
 			a.progressCh = localService.InputCh
 		}
 	}
+	service := a.service
+	a.componentsMu.Unlock()
 
-	lifecycle, err := a.ensureLocalLifecycle(a.service, a.CurrentPoolConfigs)
+	lifecycle, err := a.ensureLocalLifecycle(service, a.CurrentPoolConfigs)
 	if err != nil {
 		return err
 	}
 
-	if localService, ok := a.service.(*core.LocalDownloadService); ok {
+	if localService, ok := service.(*core.LocalDownloadService); ok {
+		a.componentsMu.Lock()
 		if a.progressCh == nil {
 			a.progressCh = localService.InputCh
 		}
-		if a.pool != nil {
+		pool := a.pool
+		a.componentsMu.Unlock()
+
+		if pool != nil {
 			lifecycle.SetEngineHooks(processing.EngineHooks{
-				Pause:        a.pool.Pause,
-				Resume:       a.pool.Resume,
-				GetStatus:    a.pool.GetStatus,
-				AddConfig:    a.pool.Add,
+				Pause:        pool.Pause,
+				Resume:       pool.Resume,
+				GetStatus:    pool.GetStatus,
+				AddConfig:    pool.Add,
 				PublishEvent: localService.Publish,
 			})
 		}
@@ -214,10 +240,12 @@ func (a *App) Shutdown() error {
 	a.shutdownOnce.Do(func() {
 		a.CancelEnqueue()
 
-		if a.service != nil {
-			a.shutdownErr = a.service.Shutdown()
-		} else if a.pool != nil {
-			a.pool.GracefulShutdown()
+		service := a.Service()
+		pool := a.Pool()
+		if service != nil {
+			a.shutdownErr = service.Shutdown()
+		} else if pool != nil {
+			pool.GracefulShutdown()
 		}
 
 		if cleanup := a.TakeLifecycleCleanup(); cleanup != nil {
