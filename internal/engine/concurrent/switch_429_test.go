@@ -56,7 +56,6 @@ func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Pass server1 as primary, but provide both in mirrors list
 	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
 		_ = f.Close()
@@ -119,7 +118,7 @@ func TestConcurrentDownloader_BackoffOnSingleMirror(t *testing.T) {
 	downloader := NewConcurrentDownloader("backoff-id", nil, state, runtime)
 
 	// Single mirror
-	mirrors := []string{} // No other mirrors
+	mirrors := []string{server.URL()} // Provide the server URL as a mirror
 
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -131,7 +130,7 @@ func TestConcurrentDownloader_BackoffOnSingleMirror(t *testing.T) {
 		_ = f.Close()
 	}
 
-	err := downloader.Download(ctx, server.URL(), mirrors, nil, destPath, fileSize)
+	err := downloader.Download(ctx, server.URL(), mirrors, mirrors, destPath, fileSize)
 	elapsed := time.Since(start)
 
 	if err != nil {

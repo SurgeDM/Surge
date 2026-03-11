@@ -53,6 +53,7 @@ func (s *countingLifecycleService) Publish(msg interface{}) error {
 	}
 	return nil
 }
+func (s *countingLifecycleService) SetWorkerCount(id string, workers int) error { return nil }
 func (s *countingLifecycleService) GetStatus(string) (*types.DownloadStatus, error) { return nil, nil }
 func (s *countingLifecycleService) Shutdown() error                                 { return nil }
 

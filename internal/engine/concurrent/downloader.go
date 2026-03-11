@@ -564,10 +564,15 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		// Initial launch
 		scaleLoop()
 
+		// Monitor loop
 		for {
 			select {
 			case <-downloadCtx.Done():
-				return // Parent canceled, supervisor exits safely, workers will follow
+				// Parent canceled. We break the loop and wait for workers to finish.
+				wg.Wait()
+				close(workerErrors)
+				queue.Close()
+				return 
 			case <-d.workerScaleCh:
 				// Adjust worker count dynamically
 				scaleLoop()
@@ -575,14 +580,9 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		}
 	}()
 
-	// Wait for all workers to complete
-	go func() {
-		wg.Wait()
-		close(workerErrors)
-		queue.Close()
-	}()
-
-	// Check for errors or pause
+	// Wait for helpers (balancer, health monitor, supervisor) to finish.
+	// We do NOT wait for `wg` (the worker WaitGroup) here, because the supervisor handles that.
+	// Wait for the errors or completion.
 	var downloadErr error
 	for err := range workerErrors {
 		if err != nil {

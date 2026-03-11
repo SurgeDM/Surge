@@ -645,6 +645,14 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 	return nil, fmt.Errorf("download not found")
 }
 
+// SetWorkerCount adjusts the number of concurrent workers for an active download.
+func (s *LocalDownloadService) SetWorkerCount(id string, workers int) error {
+	if s.Pool == nil {
+		return fmt.Errorf("worker pool not initialized")
+	}
+	return s.Pool.SetWorkerCount(id, workers)
+}
+
 // History returns completed downloads
 func (s *LocalDownloadService) History() ([]types.DownloadEntry, error) {
 	// For local service, we can directly access the state DB

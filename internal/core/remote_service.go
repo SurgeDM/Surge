@@ -216,6 +216,19 @@ func (s *RemoteDownloadService) UpdateURL(id string, newURL string) error {
 	return nil
 }
 
+// SetWorkerCount adjusts the number of concurrent workers for an active download.
+func (s *RemoteDownloadService) SetWorkerCount(id string, workers int) error {
+	req := map[string]interface{}{
+		"workers": workers,
+	}
+	resp, err := s.doRequest("POST", "/worker-count?id="+url.QueryEscape(id), req)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return nil
+}
+
 // Delete cancels and removes a download.
 func (s *RemoteDownloadService) Delete(id string) error {
 	resp, err := s.doRequest("POST", "/delete?id="+url.QueryEscape(id), nil)

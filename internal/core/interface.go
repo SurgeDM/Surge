@@ -48,6 +48,9 @@ type DownloadService interface {
 	// GetStatus returns a status for a single download by id.
 	GetStatus(id string) (*types.DownloadStatus, error)
 
+	// SetWorkerCount dynamically adjusts the number of workers for an active download.
+	SetWorkerCount(id string, workers int) error
+
 	// Shutdown handles graceful shutdown of the service
 	Shutdown() error
 }

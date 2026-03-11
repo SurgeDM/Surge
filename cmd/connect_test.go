@@ -58,6 +58,8 @@ func (f *fakeRemoteDownloadService) StreamEvents(ctx context.Context) (<-chan in
 
 func (f *fakeRemoteDownloadService) Publish(msg interface{}) error { return nil }
 
+func (f *fakeRemoteDownloadService) SetWorkerCount(id string, workers int) error { return nil }
+
 func (f *fakeRemoteDownloadService) GetStatus(id string) (*types.DownloadStatus, error) {
 	return nil, nil
 }

@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -13,6 +14,9 @@ import (
 )
 
 func TestConcurrentDownloader_ProxySupport(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
 	// 1. Setup Mock Target Server
 	targetServer := testutil.NewMockServerT(t,
 		testutil.WithFileSize(1024),
@@ -67,14 +71,7 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 		ProxyURL:              proxyServer.URL,
 	}
 
-	// Create temp dir for output
-	tmpDir, cleanup, err := testutil.TempDir("proxy-test")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
-	}
-	defer cleanup()
-
-	destPath := tmpDir + "/proxy-download.bin"
+	destPath := filepath.Join(tmpDir, "proxy-download.bin")
 
 	downloader := NewConcurrentDownloader("test-id", nil, nil, runtime)
 
@@ -87,7 +84,7 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 		_ = f.Close()
 	}
 
-	err = downloader.Download(ctx, targetServer.URL(), nil, nil, destPath, 1024)
+	err := downloader.Download(ctx, targetServer.URL(), nil, nil, destPath, 1024)
 	if err != nil {
 		t.Fatalf("Download failed: %v", err)
 	}
@@ -104,6 +101,9 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 }
 
 func TestConcurrentDownloader_InvalidProxy(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
 	// Should fallback to direct connection or fail gracefully?
 	// Implementation currently falls back to environment/direct on invalid URL parse,
 	// but let's test that it doesn't panic.
@@ -116,9 +116,7 @@ func TestConcurrentDownloader_InvalidProxy(t *testing.T) {
 		ProxyURL:              "://invalid-url",
 	}
 
-	tmpDir, cleanup, _ := testutil.TempDir("proxy-fail-test")
-	defer cleanup()
-	destPath := tmpDir + "/output.bin"
+	destPath := filepath.Join(tmpDir, "output.bin")
 
 	downloader := NewConcurrentDownloader("test-id-2", nil, nil, runtime)
 
