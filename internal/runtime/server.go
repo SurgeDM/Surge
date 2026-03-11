@@ -43,7 +43,7 @@ func BindServerListener(bindHost string, portFlag int) (int, net.Listener, error
 
 func SaveActivePort(port int) {
 	portFile := filepath.Join(config.GetRuntimeDir(), "port")
-	if err := os.WriteFile(portFile, []byte(fmt.Sprintf("%d", port)), 0o644); err != nil {
+	if err := os.WriteFile(portFile, []byte(strconv.Itoa(port)), 0o644); err != nil {
 		utils.Debug("Error writing port file: %v", err)
 	}
 	utils.Debug("HTTP server listening on port %d", port)
