@@ -30,14 +30,17 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	origLifecycle := GlobalLifecycle
 	origLifecycleCleanup := GlobalLifecycleCleanup
 	origService := GlobalService
+	origSettings := globalSettings
 	t.Cleanup(func() {
 		GlobalLifecycle = origLifecycle
 		GlobalLifecycleCleanup = origLifecycleCleanup
 		GlobalService = origService
+		globalSettings = origSettings
 	})
 	GlobalLifecycle = nil
 	GlobalLifecycleCleanup = nil
 	GlobalService = nil
+	globalSettings = nil
 
 	// Ensure a clean state DB for the test scope.
 	state.CloseDB()

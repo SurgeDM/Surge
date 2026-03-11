@@ -15,6 +15,8 @@ func setupXDGEnvIsolation(t *testing.T) string {
 	xdgEnvMu.Lock()
 
 	tempDir := t.TempDir()
+	oldGlobalSettings := globalSettings
+	globalSettings = nil
 
 	oldConfigHome := xdg.ConfigHome
 	oldDataHome := xdg.DataHome
@@ -34,6 +36,7 @@ func setupXDGEnvIsolation(t *testing.T) string {
 		xdg.StateHome = oldStateHome
 		xdg.CacheHome = oldCacheHome
 		xdg.RuntimeDir = oldRuntimeDir
+		globalSettings = oldGlobalSettings
 		state.CloseDB()
 		xdgEnvMu.Unlock()
 	})

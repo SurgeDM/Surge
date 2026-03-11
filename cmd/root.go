@@ -722,10 +722,9 @@ func initializeGlobalState() error {
 
 func getSettings() *config.Settings {
 	if globalSettings != nil {
-		currentApp().ApplySettings(globalSettings)
 		return globalSettings
 	}
-	return currentApp().ReloadSettings()
+	return runtimeapp.LoadSettingsOrDefault()
 }
 
 func resumePausedDownloads() {
