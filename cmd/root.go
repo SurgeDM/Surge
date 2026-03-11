@@ -10,14 +10,12 @@ import (
 	"os/signal"
 	"path/filepath"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/download"
 	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
@@ -49,183 +47,14 @@ var (
 	globalToken string
 )
 
-// Globals for Unified Backend
+// Remaining cmd-owned globals. Backend lifecycle state now lives under the
+// runtime-owned App in cmd/runtime_state.go, with temporary legacy mirrors kept
+// for compatibility during Phase 1.
 var (
-	GlobalPool              *download.WorkerPool
-	GlobalProgressCh        chan any
-	GlobalService           core.DownloadService
-	GlobalLifecycleCleanup  func()
 	serverProgram           *tea.Program
 	startupIntegrityMessage string
 	globalSettings          *config.Settings
-	GlobalLifecycle         *processing.LifecycleManager
-	globalLifecycleMu       sync.Mutex
-	globalEnqueueCtx        context.Context
-	globalEnqueueCancel     context.CancelFunc
-	globalEnqueueMu         sync.Mutex
 )
-
-func buildPoolIsNameActive(getAll func() []types.DownloadConfig) processing.IsNameActiveFunc {
-	if getAll == nil {
-		return nil
-	}
-
-	return func(dir, name string) bool {
-		dir = utils.EnsureAbsPath(strings.TrimSpace(dir))
-		name = strings.TrimSpace(name)
-		if dir == "" || name == "" {
-			return false
-		}
-
-		for _, cfg := range getAll() {
-			existingName := strings.TrimSpace(cfg.Filename)
-			existingDir := strings.TrimSpace(cfg.OutputPath)
-			if cfg.DestPath != "" {
-				existingDir = filepath.Dir(cfg.DestPath)
-				if existingName == "" {
-					existingName = filepath.Base(cfg.DestPath)
-				}
-			}
-			if cfg.State != nil {
-				if stateName := strings.TrimSpace(cfg.State.GetFilename()); stateName != "" {
-					existingName = stateName
-				}
-				if stateDestPath := strings.TrimSpace(cfg.State.GetDestPath()); stateDestPath != "" {
-					existingDir = filepath.Dir(stateDestPath)
-					if existingName == "" {
-						existingName = filepath.Base(stateDestPath)
-					}
-				}
-			}
-			if existingDir == "" || existingName == "" {
-				continue
-			}
-			if utils.EnsureAbsPath(existingDir) == dir && existingName == name {
-				return true
-			}
-		}
-		return false
-	}
-}
-
-func newLocalLifecycleManager(service core.DownloadService, getAll func() []types.DownloadConfig) *processing.LifecycleManager {
-	var addFunc processing.AddDownloadFunc
-	var addWithIDFunc processing.AddDownloadWithIDFunc
-	if service != nil {
-		addFunc = service.Add
-		addWithIDFunc = service.AddWithID
-	}
-
-	return processing.NewLifecycleManager(addFunc, addWithIDFunc, buildPoolIsNameActive(getAll))
-}
-
-func startLifecycleEventWorker(service core.DownloadService, mgr *processing.LifecycleManager) (func(), error) {
-	if service == nil || mgr == nil {
-		return nil, nil
-	}
-
-	managerStream, managerCleanup, err := service.StreamEvents(context.Background())
-	if err != nil {
-		return nil, err
-	}
-	go mgr.StartEventWorker(managerStream)
-	return managerCleanup, nil
-}
-
-func currentLifecycle() *processing.LifecycleManager {
-	globalLifecycleMu.Lock()
-	defer globalLifecycleMu.Unlock()
-	return GlobalLifecycle
-}
-
-func resetGlobalEnqueueContext() {
-	globalEnqueueMu.Lock()
-	defer globalEnqueueMu.Unlock()
-	if globalEnqueueCancel != nil {
-		globalEnqueueCancel()
-	}
-	globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background())
-}
-
-func ensureEnqueueContextLocked() {
-	if globalEnqueueCtx == nil || globalEnqueueCancel == nil {
-		globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background())
-	}
-}
-
-func currentEnqueueContext() context.Context {
-	globalEnqueueMu.Lock()
-	defer globalEnqueueMu.Unlock()
-	ensureEnqueueContextLocked()
-	return globalEnqueueCtx
-}
-
-func currentEnqueueCancel() context.CancelFunc {
-	globalEnqueueMu.Lock()
-	defer globalEnqueueMu.Unlock()
-	ensureEnqueueContextLocked()
-	return globalEnqueueCancel
-}
-
-func cancelGlobalEnqueue() {
-	globalEnqueueMu.Lock()
-	cancel := globalEnqueueCancel
-	globalEnqueueMu.Unlock()
-	if cancel != nil {
-		cancel()
-	}
-}
-
-func takeLifecycleCleanup() func() {
-	globalLifecycleMu.Lock()
-	defer globalLifecycleMu.Unlock()
-	cleanup := GlobalLifecycleCleanup
-	GlobalLifecycleCleanup = nil
-	return cleanup
-}
-
-func currentPoolConfigs() []types.DownloadConfig {
-	if GlobalPool == nil {
-		return nil
-	}
-	return GlobalPool.GetAll()
-}
-
-func lifecycleForLocalService(service core.DownloadService) (*processing.LifecycleManager, error) {
-	lifecycle := currentLifecycle()
-	if service == nil || GlobalService == nil || service != GlobalService {
-		return lifecycle, nil
-	}
-	return ensureLocalLifecycle(GlobalService, currentPoolConfigs)
-}
-
-func ensureGlobalLocalServiceAndLifecycle() error {
-	if GlobalService == nil {
-		localService := core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
-		GlobalService = localService
-
-		lifecycle, err := ensureLocalLifecycle(localService, currentPoolConfigs)
-		if err != nil {
-			return err
-		}
-
-		lifecycle.SetEngineHooks(processing.EngineHooks{
-			Pause:        GlobalPool.Pause,
-			Resume:       GlobalPool.Resume,
-			GetStatus:    GlobalPool.GetStatus,
-			AddConfig:    GlobalPool.Add,
-			PublishEvent: localService.Publish,
-		})
-
-		localService.PauseFunc = lifecycle.Pause
-		localService.ResumeFunc = lifecycle.Resume
-		localService.ResumeBatchFunc = lifecycle.ResumeBatch
-	} else {
-		_, err := ensureLocalLifecycle(GlobalService, currentPoolConfigs)
-		return err
-	}
-	return nil
-}
 
 func publishSystemLog(message string) {
 	if GlobalService != nil {
@@ -267,23 +96,6 @@ func recordPreflightDownloadError(url, outPath string, err error) {
 	}
 }
 
-func ensureLocalLifecycle(service core.DownloadService, getAll func() []types.DownloadConfig) (*processing.LifecycleManager, error) {
-	globalLifecycleMu.Lock()
-	defer globalLifecycleMu.Unlock()
-
-	if GlobalLifecycle == nil {
-		GlobalLifecycle = newLocalLifecycleManager(service, getAll)
-	}
-	if GlobalLifecycleCleanup == nil {
-		cleanup, err := startLifecycleEventWorker(service, GlobalLifecycle)
-		if err != nil {
-			return nil, err
-		}
-		GlobalLifecycleCleanup = cleanup
-	}
-	return GlobalLifecycle, nil
-}
-
 func isExplicitOutputPath(outPath, defaultDir string) bool {
 	return utils.EnsureAbsPath(strings.TrimSpace(outPath)) != utils.EnsureAbsPath(strings.TrimSpace(defaultDir))
 }
@@ -299,12 +111,8 @@ var rootCmd = &cobra.Command{
 		// Set global verbose mode
 		utils.SetVerbose(verbose)
 
-		// Initialize Global Progress Channel
-		GlobalProgressCh = make(chan any, 100)
-
-		// Initialize Global Worker Pool
 		globalSettings = getSettings()
-		GlobalPool = download.NewWorkerPool(GlobalProgressCh, globalSettings.Network.MaxConcurrentDownloads)
+		initLocalRuntime(globalSettings)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		if hostTarget := resolveHostTarget(); hostTarget != "" {
@@ -1052,6 +860,11 @@ func resumePausedDownloads() {
 
 	pausedEntries, err := state.LoadPausedDownloads()
 	if err != nil {
+		return
+	}
+
+	if err := ensureGlobalLocalServiceAndLifecycle(); err != nil {
+		utils.Debug("Failed to initialize local runtime for auto-resume: %v", err)
 		return
 	}
 
