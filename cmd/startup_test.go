@@ -42,8 +42,8 @@ func TestServer_Startup_HandlesResume(t *testing.T) {
 		Pause:        GlobalPool.Pause,
 		Resume:       GlobalPool.Resume,
 		AddConfig:    GlobalPool.Add,
-		GetStatus:      GlobalPool.GetStatus,
-		PublishEvent:   GlobalService.Publish,
+		GetStatus:    GlobalPool.GetStatus,
+		PublishEvent: GlobalService.Publish,
 	})
 	if svc, ok := GlobalService.(*core.LocalDownloadService); ok {
 		svc.PauseFunc = GlobalLifecycle.Pause

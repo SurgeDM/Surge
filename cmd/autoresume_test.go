@@ -80,14 +80,14 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 	GlobalProgressCh = make(chan any, 10)
 	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 4)
 	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
-	
+
 	GlobalLifecycle = processing.NewLifecycleManager(nil, nil, nil)
 	GlobalLifecycle.SetEngineHooks(processing.EngineHooks{
 		Pause:        GlobalPool.Pause,
 		Resume:       GlobalPool.Resume,
 		AddConfig:    GlobalPool.Add,
 		GetStatus:    GlobalPool.GetStatus,
-		PublishEvent:   GlobalService.Publish,
+		PublishEvent: GlobalService.Publish,
 	})
 	if svc, ok := GlobalService.(*core.LocalDownloadService); ok {
 		svc.PauseFunc = GlobalLifecycle.Pause

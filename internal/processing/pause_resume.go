@@ -148,15 +148,9 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 	idMap := make(map[string]int)
 
 	for i, id := range ids {
-		if mgr.engineHooks.GetStatus != nil {
-			if st := mgr.engineHooks.GetStatus(id); st != nil && st.Status == "pausing" {
-				errs[i] = fmt.Errorf("download is still pausing, try again in a moment")
-				continue
-		if mgr.engineHooks.GetStatus != nil {
-			if st := mgr.engineHooks.GetStatus(id); st != nil && st.Status == "pausing" {
-				errs[i] = fmt.Errorf("download is still pausing, try again in a moment")
-				continue
-			}
+		if st := mgr.engineHooks.GetStatus(id); st != nil && st.Status == "pausing" {
+			errs[i] = fmt.Errorf("download is still pausing, try again in a moment")
+			continue
 		}
 
 		if mgr.engineHooks.Resume(id) {
