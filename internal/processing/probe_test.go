@@ -95,3 +95,29 @@ func TestProbeMirrors_PreservesCallerOrderAfterDedupe(t *testing.T) {
 		t.Fatalf("expected invalid mirror failure for %s, got %v", invalid.URL, errs)
 	}
 }
+
+func TestProbeServer_ReadsBodyBeforeContextCancel(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Disposition", `attachment; filename="delayed.txt"`)
+		w.Header().Set("Content-Range", "bytes 0-0/1000")
+		w.WriteHeader(http.StatusPartialContent)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		// Delay body to ensure DetermineFilename blocking on io.ReadFull is not interrupted by premature context cancellation
+		time.Sleep(100 * time.Millisecond)
+		w.Write([]byte("x"))
+	}))
+	defer server.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	result, err := processing.ProbeServer(ctx, server.URL, "", nil)
+	if err != nil {
+		t.Fatalf("ProbeServer() failed: %v", err)
+	}
+	if result.Filename != "delayed.txt" {
+		t.Errorf("Expected filename 'delayed.txt', got %q. The context might have been prematurely canceled.", result.Filename)
+	}
+}

@@ -152,9 +152,9 @@ func sanitizeFilename(name string) string {
 		name = strings.ReplaceAll(name, char, "_")
 	}
 
-	// Trim leading/trailing spaces and periods (problematic on Windows)
+	// Trim leading/trailing spaces and trailing periods (problematic on Windows)
 	name = strings.TrimSpace(name)
-	name = strings.Trim(name, ".")
+	name = strings.TrimRight(name, ".")
 
 	// Remove unprintable control characters
 	var b strings.Builder

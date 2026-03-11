@@ -95,6 +95,7 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 	defer hostLock.Unlock()
 
 	var err error
+	var finalCancel context.CancelFunc
 
 	for attempt := range 3 {
 		if ctx.Err() != nil {
@@ -143,15 +144,20 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 			resp, err = client.Do(reqNoRange)
 		}
 
-		cancel()
-
 		if err == nil {
+			finalCancel = cancel
 			break
 		}
+
+		cancel()
 	}
 
 	if err != nil {
 		return nil, fmt.Errorf("probe request failed after retries: %w", err)
+	}
+
+	if finalCancel != nil {
+		defer finalCancel()
 	}
 
 	defer func() {
