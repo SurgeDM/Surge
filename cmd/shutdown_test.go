@@ -55,7 +55,7 @@ func (f *fakeShutdownService) Shutdown() error {
 	return nil
 }
 
-func TestDefaultGlobalShutdown_ServiceBeforeCleanup(t *testing.T) {
+func TestDefaultGlobalShutdown_CleanupBeforeService(t *testing.T) {
 	var order []string
 	GlobalService = &fakeShutdownService{
 		onShutdown: func() {

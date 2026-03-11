@@ -89,7 +89,9 @@ func (mgr *LifecycleManager) Resume(id string) error {
 
 	cfg := buildResumeConfig(id, outputPath, entry, savedState, settings)
 
-	hooks.AddConfig(cfg)
+	if hooks.AddConfig != nil {
+		hooks.AddConfig(cfg)
+	}
 	if hooks.PublishEvent != nil {
 		_ = hooks.PublishEvent(events.DownloadResumedMsg{
 			DownloadID: id,
@@ -159,7 +161,15 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 		}
 
 		cfg := buildResumeConfig(id, outputPath, nil, savedState, settings)
-		hooks.AddConfig(cfg)
+		if hooks.AddConfig != nil {
+			hooks.AddConfig(cfg)
+		}
+		if hooks.PublishEvent != nil {
+			_ = hooks.PublishEvent(events.DownloadResumedMsg{
+				DownloadID: id,
+				Filename:   savedState.Filename,
+			})
+		}
 		errs[idx] = nil
 	}
 
