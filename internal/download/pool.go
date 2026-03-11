@@ -369,6 +369,28 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 	return state.UpdateURL(downloadID, newURL)
 }
 
+// SetWorkerCount dynamically adjusts the number of concurrent workers for an active download.
+// It fails if the download is not currently active or if the underlying engine doesn't support it.
+func (p *WorkerPool) SetWorkerCount(downloadID string, workers int) error {
+	if workers <= 0 {
+		return fmt.Errorf("worker count must be > 0 (got %d)", workers)
+	}
+
+	p.mu.RLock()
+	ad, exists := p.downloads[downloadID]
+	p.mu.RUnlock()
+
+	if !exists || ad == nil {
+		return fmt.Errorf("download %q is not currently active", downloadID)
+	}
+
+	if ad.config.WorkerControl == nil {
+		return fmt.Errorf("download %q does not support dynamic worker scaling", downloadID)
+	}
+
+	return ad.config.WorkerControl(workers)
+}
+
 func (p *WorkerPool) worker() {
 	for cfg := range p.taskChan {
 		p.mu.RLock()

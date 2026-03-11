@@ -64,6 +64,9 @@ type DownloadConfig struct {
 	IsExplicitCategory bool              // Used to override category routing from TUI
 	TotalSize          int64             // Total size in bytes of the required download
 	SupportsRange      bool              // Indicates whether the server supports range requests for concurrency
+
+	// Dynamic Control Hooks
+	WorkerControl func(workers int) error // Optional hook to adjust worker count at runtime
 }
 
 // RuntimeConfig holds dynamic settings that can override defaults
