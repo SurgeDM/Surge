@@ -159,7 +159,7 @@ func sanitizeFilename(name string) string {
 	// Remove unprintable control characters
 	var b strings.Builder
 	for _, c := range name {
-		if c >= 32 && c < 127 || c > 127 { // Keep printable ASCII and valid UTF-8
+		if (c >= 32 && c < 127) || c > 159 { // Keep printable ASCII and non-control Unicode (skip C1 control chars U+0080–U+009F)
 			b.WriteRune(c)
 		}
 	}
