@@ -55,8 +55,9 @@ func syncLegacyGlobalsFromAppLocked() {
 }
 
 func currentApp() *runtimeapp.App {
+	var appToShutdown *runtimeapp.App
+
 	legacyLifecycleMu.Lock()
-	defer legacyLifecycleMu.Unlock()
 
 	var previous runtimeapp.Components
 	if globalApp != nil {
@@ -65,7 +66,7 @@ func currentApp() *runtimeapp.App {
 	executionChanged := executionComponentsOutOfSyncLocked()
 	if executionChanged && globalApp != nil {
 		if previous.Service != nil && previous.Service != GlobalService {
-			_ = globalApp.Shutdown()
+			appToShutdown = globalApp
 		} else {
 			globalApp.CancelEnqueue()
 			if cleanup := globalApp.TakeLifecycleCleanup(); cleanup != nil {
@@ -96,7 +97,14 @@ func currentApp() *runtimeapp.App {
 		Lifecycle:        lifecycle,
 		LifecycleCleanup: lifecycleCleanup,
 	})
-	return globalApp
+	app := globalApp
+	legacyLifecycleMu.Unlock()
+
+	if appToShutdown != nil {
+		_ = appToShutdown.Shutdown()
+	}
+
+	return app
 }
 
 func executionComponentsOutOfSync() bool {
