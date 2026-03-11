@@ -22,7 +22,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        os: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -56,6 +56,33 @@ jobs:
         if: matrix.os == 'ubuntu-latest' && success() && hashFiles('coverage.out') != ''
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  test-windows:
+    name: Test and Check (windows-latest)
+    runs-on: windows-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.0"
+          check-latest: false
+      - name: Install gotestsum
+        run: go install gotest.tools/gotestsum@latest
+      - name: Build
+        shell: bash
+        run: go build -v ./...
+      - name: Test
+        shell: bash
+        run: gotestsum --junitfile test-results.xml --format testdox ./...
+      - name: Test Report
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: Test Results (windows-latest)
+          path: test-results.xml
+          reporter: java-junit
 
   release:
     name: Release
