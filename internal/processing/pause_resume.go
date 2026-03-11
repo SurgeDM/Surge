@@ -33,7 +33,6 @@ func (mgr *LifecycleManager) Pause(id string) error {
 	entry, err := state.GetDownload(id)
 	if err == nil && entry != nil {
 		if mgr.engineHooks.PublishEvent != nil {
-		if mgr.engineHooks.PublishEvent != nil {
 			_ = mgr.engineHooks.PublishEvent(events.DownloadPausedMsg{
 				DownloadID: id,
 				Filename:   entry.Filename,
