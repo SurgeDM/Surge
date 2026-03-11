@@ -8,25 +8,17 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
 	"strings"
 
-	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
+	runtimeapp "github.com/surge-downloader/surge/internal/runtime"
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
 // readActivePort reads the port from the port file
 func readActivePort() int {
-	portFile := filepath.Join(config.GetRuntimeDir(), "port")
-	data, err := os.ReadFile(portFile)
-	if err != nil {
-		return 0
-	}
-	var port int
-	_, _ = fmt.Sscanf(string(data), "%d", &port)
-	return port
+	return runtimeapp.ReadActivePort()
 }
 
 // ParseURLArg parses a command line argument that might contain comma-separated mirrors

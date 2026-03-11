@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"context"
-	"crypto/subtle"
 	"fmt"
 	"net"
 	"net/http"
@@ -20,6 +19,7 @@ import (
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/processing"
+	runtimeapp "github.com/surge-downloader/surge/internal/runtime"
 	"github.com/surge-downloader/surge/internal/tui"
 	"github.com/surge-downloader/surge/internal/utils"
 
@@ -57,8 +57,7 @@ var (
 )
 
 func publishSystemLog(message string) {
-	if GlobalService != nil {
-		_ = GlobalService.Publish(events.SystemLogMsg{Message: message})
+	if err := currentApp().Publish(events.SystemLogMsg{Message: message}); err == nil {
 		return
 	}
 	fmt.Fprintln(os.Stderr, message)
@@ -86,13 +85,13 @@ func recordPreflightDownloadError(url, outPath string, err error) {
 	if addErr := state.AddToMasterList(entry); addErr != nil {
 		utils.Debug("Failed to persist preflight download error for %s: %v", url, addErr)
 	}
-	if GlobalService != nil {
-		_ = GlobalService.Publish(events.DownloadErrorMsg{
-			DownloadID: entry.ID,
-			Filename:   filename,
-			DestPath:   destPath,
-			Err:        err,
-		})
+	if err := currentApp().Publish(events.DownloadErrorMsg{
+		DownloadID: entry.ID,
+		Filename:   filename,
+		DestPath:   destPath,
+		Err:        err,
+	}); err != nil {
+		utils.Debug("Failed to publish preflight download error for %s: %v", url, err)
 	}
 }
 
@@ -230,7 +229,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 	serverProgram = p // Save reference for HTTP handler
 
 	// Get event stream from service
-	stream, cleanup, err := GlobalService.StreamEvents(context.Background())
+	stream, cleanup, err := currentApp().Subscribe(context.Background())
 	if err != nil {
 		_ = executeGlobalShutdown("tui: stream init failed")
 		fmt.Printf("Error getting event stream: %v\n", err)
@@ -245,8 +244,8 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 		}
 	}()
 
-	if startupIntegrityMessage != "" && GlobalService != nil {
-		_ = GlobalService.Publish(events.SystemLogMsg{
+	if startupIntegrityMessage != "" {
+		_ = currentApp().Publish(events.SystemLogMsg{
 			Message: startupIntegrityMessage,
 		})
 		startupIntegrityMessage = ""
@@ -300,10 +299,7 @@ const serverBindHost = "0.0.0.0"
 // StartHeadlessConsumer starts a goroutine to consume progress messages and log to stdout
 func StartHeadlessConsumer() {
 	go func() {
-		if GlobalService == nil {
-			return
-		}
-		stream, cleanup, err := GlobalService.StreamEvents(context.Background())
+		stream, cleanup, err := currentApp().Subscribe(context.Background())
 		if err != nil {
 			utils.Debug("Failed to start event stream: %v", err)
 			return
@@ -343,156 +339,54 @@ func truncateID(id string) string {
 
 // findAvailablePort tries ports starting from 'start' until one is available
 func findAvailablePort(start int) (int, net.Listener) {
-	bindHost := serverBindHost
-	for port := start; port < start+100; port++ {
-		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindHost, port))
-		if err == nil {
-			return port, ln
-		}
-	}
-	return 0, nil
+	return runtimeapp.FindAvailablePort(serverBindHost, start)
 }
 
 func bindServerListener(portFlag int) (int, net.Listener, error) {
-	bindHost := serverBindHost
-	if portFlag > 0 {
-		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindHost, portFlag))
-		if err != nil {
-			return 0, nil, fmt.Errorf("could not bind to port %d: %w", portFlag, err)
-		}
-		return portFlag, ln, nil
-	}
-	port, ln := findAvailablePort(1700)
-	if ln == nil {
-		return 0, nil, fmt.Errorf("could not find available port")
-	}
-	return port, ln, nil
+	return runtimeapp.BindServerListener(serverBindHost, portFlag)
 }
 
 // saveActivePort writes the active port to ~/.surge/port for extension discovery
 func saveActivePort(port int) {
-	portFile := filepath.Join(config.GetRuntimeDir(), "port")
-	if err := os.WriteFile(portFile, []byte(fmt.Sprintf("%d", port)), 0o644); err != nil {
-		utils.Debug("Error writing port file: %v", err)
-	}
-	utils.Debug("HTTP server listening on port %d", port)
+	runtimeapp.SaveActivePort(port)
 }
 
 // removeActivePort cleans up the port file on exit
 func removeActivePort() {
-	portFile := filepath.Join(config.GetRuntimeDir(), "port")
-	if err := os.Remove(portFile); err != nil && !os.IsNotExist(err) {
-		utils.Debug("Error removing port file: %v", err)
-	}
+	runtimeapp.RemoveActivePort()
 }
 
 // startHTTPServer starts the HTTP server using an existing listener
 func startHTTPServer(ln net.Listener, port int, defaultOutputDir string, service core.DownloadService, tokenOverride string) {
-	authToken := strings.TrimSpace(tokenOverride)
-	if authToken == "" {
-		authToken = ensureAuthToken()
-	} else {
-		persistAuthToken(authToken)
-	}
-
-	mux := http.NewServeMux()
-	registerHTTPRoutes(mux, port, defaultOutputDir, service)
-
-	// Wrap mux with Auth and CORS (CORS outermost to ensure 401/403 include headers)
-	handler := corsMiddleware(authMiddleware(authToken, mux))
-
-	server := &http.Server{Handler: handler}
-	if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
-		utils.Debug("HTTP server error: %v", err)
-	}
+	runtimeapp.StartHTTPServer(ln, tokenOverride, func(authToken string) http.Handler {
+		mux := http.NewServeMux()
+		registerHTTPRoutes(mux, port, defaultOutputDir, service)
+		return corsMiddleware(authMiddleware(authToken, mux))
+	})
 }
 
 func corsMiddleware(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Set CORS headers
-		w.Header().Set("Access-Control-Allow-Origin", "*")
-		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS, PUT, PATCH")
-		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, Access-Control-Allow-Private-Network")
-		w.Header().Set("Access-Control-Allow-Private-Network", "true")
-
-		// Handle preflight requests
-		if r.Method == "OPTIONS" {
-			w.WriteHeader(http.StatusOK)
-			return
-		}
-
-		next.ServeHTTP(w, r)
-	})
+	return runtimeapp.CORSMiddleware(next)
 }
 
 func authMiddleware(token string, next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Allow health check without auth
-		if r.URL.Path == "/health" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Allow OPTIONS for CORS preflight
-		if r.Method == "OPTIONS" {
-			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Check for Authorization header
-		authHeader := r.Header.Get("Authorization")
-		if authHeader != "" {
-			if strings.HasPrefix(authHeader, "Bearer ") {
-				providedToken := strings.TrimPrefix(authHeader, "Bearer ")
-				if len(providedToken) == len(token) && subtle.ConstantTimeCompare([]byte(providedToken), []byte(token)) == 1 {
-					next.ServeHTTP(w, r)
-					return
-				}
-			}
-		}
-
-		http.Error(w, "Unauthorized", http.StatusUnauthorized)
-	})
+	return runtimeapp.AuthMiddleware(token, next)
 }
 
 func ensureAuthToken() string {
-	stateTokenFile := filepath.Join(config.GetStateDir(), "token")
-	if token, err := readTokenFromFile(stateTokenFile); err == nil {
-		return token
-	}
-
-	token := uuid.New().String()
-	if err := writeTokenToFile(stateTokenFile, token); err != nil {
-		utils.Debug("Failed to write token file in state dir: %v", err)
-	}
-	return token
+	return runtimeapp.EnsureAuthToken()
 }
 
 func persistAuthToken(token string) {
-	stateTokenFile := filepath.Join(config.GetStateDir(), "token")
-
-	if err := writeTokenToFile(stateTokenFile, token); err != nil {
-		utils.Debug("Failed to write token file in state dir: %v", err)
-	}
+	runtimeapp.PersistAuthToken(token)
 }
 
 func readTokenFromFile(path string) (string, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	token := strings.TrimSpace(string(data))
-	if token == "" {
-		return "", fmt.Errorf("empty token file: %s", path)
-	}
-	return token, nil
+	return runtimeapp.ReadTokenFromFile(path)
 }
 
 func writeTokenToFile(path string, token string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-	return os.WriteFile(path, []byte(token), 0o600)
+	return runtimeapp.WriteTokenToFile(path, token)
 }
 
 // DownloadRequest represents a download request from the browser extension
@@ -823,36 +717,15 @@ func mustInitializeGlobalState() {
 
 // initializeGlobalState sets up the environment and configures the engine state and logging
 func initializeGlobalState() error {
-
-	stateDir := config.GetStateDir()
-	logsDir := config.GetLogsDir()
-	stateDBPath := filepath.Join(stateDir, "surge.db")
-
-	// Ensure directories exist
-	_ = os.MkdirAll(stateDir, 0o755)
-	_ = os.MkdirAll(logsDir, 0o755)
-
-	// Config engine state
-	state.Configure(stateDBPath)
-
-	// Config logging
-	utils.ConfigureDebug(logsDir)
-
-	// Clean up old logs
-	retention := getSettings().General.LogRetentionCount
-	utils.CleanupLogs(retention)
-	return nil
+	return runtimeapp.InitializeState(getSettings())
 }
 
 func getSettings() *config.Settings {
 	if globalSettings != nil {
+		currentApp().ApplySettings(globalSettings)
 		return globalSettings
 	}
-	settings, err := config.LoadSettings()
-	if err != nil {
-		return config.DefaultSettings()
-	}
-	return settings
+	return currentApp().ReloadSettings()
 }
 
 func resumePausedDownloads() {
