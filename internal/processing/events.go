@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	renameCompletedFile = os.Rename
+	renameCompletedFile = retryRename
 	copyCompletedFile   = utils.CopyFile
 )
 
@@ -56,7 +56,7 @@ func finalizeCompletedFile(finalPath string) error {
 				_ = os.Remove(finalPath)
 				return fmt.Errorf("copy completed file: %w", err)
 			}
-			if err := os.Remove(surgePath); err != nil {
+			if err := retryRemove(surgePath); err != nil {
 				return fmt.Errorf("remove copied working file: %w", err)
 			}
 			return nil

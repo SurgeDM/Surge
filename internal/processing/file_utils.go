@@ -194,7 +194,7 @@ func RemoveIncompleteFile(destPath string) error {
 		return nil
 	}
 	surgePath := destPath + types.IncompleteSuffix
-	if err := os.Remove(surgePath); err != nil && !os.IsNotExist(err) {
+	if err := retryRemove(surgePath); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
