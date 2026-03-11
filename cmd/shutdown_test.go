@@ -55,7 +55,7 @@ func (f *fakeShutdownService) Shutdown() error {
 	return nil
 }
 
-func TestDefaultGlobalShutdown_CleanupBeforeService(t *testing.T) {
+func TestDefaultGlobalShutdown_ShutdownBeforeCleanup(t *testing.T) {
 	var order []string
 	GlobalService = &fakeShutdownService{
 		onShutdown: func() {
@@ -76,8 +76,10 @@ func TestDefaultGlobalShutdown_CleanupBeforeService(t *testing.T) {
 		t.Fatalf("defaultGlobalShutdown failed: %v", err)
 	}
 
-	if len(order) != 2 || order[0] != "cleanup" || order[1] != "shutdown" {
-		t.Fatalf("shutdown order = %v, want [cleanup shutdown]", order)
+	// Service shutdown must run before lifecycle cleanup so that PauseAll()
+	// can emit DownloadPausedMsg while the event worker is still alive.
+	if len(order) != 2 || order[0] != "shutdown" || order[1] != "cleanup" {
+		t.Fatalf("shutdown order = %v, want [shutdown cleanup]", order)
 	}
 }
 

@@ -783,6 +783,27 @@ func removeDownloadAndTasks(id string) error {
 	})
 }
 
+// NormalizeStaleDownloads converts any downloads stuck in "downloading" status
+// to "paused". This handles crash recovery: if the process was killed (SIGKILL,
+// power loss, terminal close without graceful shutdown) while a download was
+// active, the entry remains in "downloading" status with no worker attached.
+// Without normalization these entries are invisible to resumePausedDownloads()
+// and appear as dead/frozen items in the TUI.
+func NormalizeStaleDownloads() (int, error) {
+	db := getDBHelper()
+	if db == nil {
+		return 0, fmt.Errorf("database not initialized")
+	}
+
+	result, err := db.Exec(`UPDATE downloads SET status = 'paused' WHERE status = 'downloading'`)
+	if err != nil {
+		return 0, fmt.Errorf("failed to normalize stale downloads: %w", err)
+	}
+
+	count, _ := result.RowsAffected()
+	return int(count), nil
+}
+
 // ValidateIntegrity checks that paused .surge files still exist and haven't been tampered with.
 // Removes orphaned or corrupted entries from the database.
 // Returns the number of entries removed.

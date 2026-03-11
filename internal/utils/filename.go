@@ -147,7 +147,9 @@ func sanitizeFilename(name string) string {
 	}
 
 	// Remove invalid characters for Windows/Linux/macOS
-	invalidChars := []string{"<", ">", ":", "\"", "|", "?", "*"}
+	for _, ch := range []string{"<", ">", ":", "\"", "|", "?", "*"} {
+		name = strings.ReplaceAll(name, ch, "_")
+	}
 
 	// Trim leading/trailing spaces and trailing periods (problematic on Windows)
 	name = strings.TrimSpace(name)

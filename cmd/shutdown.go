@@ -16,16 +16,21 @@ var (
 func defaultGlobalShutdown() error {
 	cancelGlobalEnqueue()
 
-	if cleanup := takeLifecycleCleanup(); cleanup != nil {
-		cleanup()
-	}
-
+	// Shutdown the service FIRST so that PauseAll() can emit DownloadPausedMsg
+	// events while the lifecycle event worker is still alive to persist them.
+	// If we close the lifecycle stream before shutdown, pause state is lost
+	// and downloads vanish from the list on terminal close.
 	var err error
 	if GlobalService != nil {
 		err = GlobalService.Shutdown()
 	} else if GlobalPool != nil {
 		GlobalPool.GracefulShutdown()
 	}
+
+	if cleanup := takeLifecycleCleanup(); cleanup != nil {
+		cleanup()
+	}
+
 	return err
 }
 

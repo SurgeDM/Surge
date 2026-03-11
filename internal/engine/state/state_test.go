@@ -1080,3 +1080,51 @@ func TestAvgSpeedPersistence(t *testing.T) {
 		t.Error("Entry not found in master list")
 	}
 }
+
+func TestNormalizeStaleDownloads(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	entries := []types.DownloadEntry{
+		{ID: "stale-1", URL: "https://a.com/1", DestPath: "/tmp/1", Status: "downloading"},
+		{ID: "stale-2", URL: "https://a.com/2", DestPath: "/tmp/2", Status: "downloading"},
+		{ID: "ok-3", URL: "https://a.com/3", DestPath: "/tmp/3", Status: "paused"},
+		{ID: "ok-4", URL: "https://a.com/4", DestPath: "/tmp/4", Status: "completed"},
+		{ID: "ok-5", URL: "https://a.com/5", DestPath: "/tmp/5", Status: "queued"},
+	}
+	for _, e := range entries {
+		if err := AddToMasterList(e); err != nil {
+			t.Fatalf("AddToMasterList failed: %v", err)
+		}
+	}
+
+	normalized, err := NormalizeStaleDownloads()
+	if err != nil {
+		t.Fatalf("NormalizeStaleDownloads failed: %v", err)
+	}
+	if normalized != 2 {
+		t.Fatalf("normalized = %d, want 2", normalized)
+	}
+
+	// Verify downloading entries became paused
+	for _, id := range []string{"stale-1", "stale-2"} {
+		dl, _ := GetDownload(id)
+		if dl.Status != "paused" {
+			t.Errorf("%s status = %q, want paused", id, dl.Status)
+		}
+	}
+	// Verify other statuses untouched
+	dl3, _ := GetDownload("ok-3")
+	if dl3.Status != "paused" {
+		t.Errorf("ok-3 status = %q, want paused", dl3.Status)
+	}
+	dl4, _ := GetDownload("ok-4")
+	if dl4.Status != "completed" {
+		t.Errorf("ok-4 status = %q, want completed", dl4.Status)
+	}
+	dl5, _ := GetDownload("ok-5")
+	if dl5.Status != "queued" {
+		t.Errorf("ok-5 status = %q, want queued", dl5.Status)
+	}
+}

@@ -388,6 +388,16 @@ var rootCmd = &cobra.Command{
 }
 
 func runStartupIntegrityCheck() string {
+	// Normalize downloads stuck in "downloading" status from a prior crash/kill.
+	// This must happen before ValidateIntegrity so the newly-paused entries
+	// are included in the integrity check and eligible for auto-resume.
+	if normalized, err := state.NormalizeStaleDownloads(); err != nil {
+		msg := fmt.Sprintf("Startup: failed to normalize stale downloads: %v", err)
+		utils.Debug("%s", msg)
+	} else if normalized > 0 {
+		utils.Debug("Startup: normalized %d stale downloading entries to paused", normalized)
+	}
+
 	// Validate integrity of paused/queued downloads before auto-resume.
 	// This removes entries whose .surge files are missing/tampered and
 	// also cleans orphan .surge files that no longer have DB entries.
