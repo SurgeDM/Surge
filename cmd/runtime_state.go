@@ -27,10 +27,18 @@ var (
 
 	globalApp *runtimeapp.App
 
+	// Serializes the Phase 1 compatibility mirrors while cmd still keeps
+	// runtime-owned state in package globals.
 	legacyLifecycleMu sync.Mutex
 )
 
 func syncLegacyGlobalsFromApp() {
+	legacyLifecycleMu.Lock()
+	defer legacyLifecycleMu.Unlock()
+	syncLegacyGlobalsFromAppLocked()
+}
+
+func syncLegacyGlobalsFromAppLocked() {
 	if globalApp == nil {
 		return
 	}
@@ -44,11 +52,14 @@ func syncLegacyGlobalsFromApp() {
 }
 
 func currentApp() *runtimeapp.App {
+	legacyLifecycleMu.Lock()
+	defer legacyLifecycleMu.Unlock()
+
 	var previous runtimeapp.Components
 	if globalApp != nil {
 		previous = globalApp.Components()
 	}
-	executionChanged := executionComponentsOutOfSync()
+	executionChanged := executionComponentsOutOfSyncLocked()
 	if executionChanged && globalApp != nil {
 		if previous.Service != nil && previous.Service != GlobalService {
 			_ = globalApp.Shutdown()
@@ -86,6 +97,12 @@ func currentApp() *runtimeapp.App {
 }
 
 func executionComponentsOutOfSync() bool {
+	legacyLifecycleMu.Lock()
+	defer legacyLifecycleMu.Unlock()
+	return executionComponentsOutOfSyncLocked()
+}
+
+func executionComponentsOutOfSyncLocked() bool {
 	if globalApp == nil {
 		return false
 	}
@@ -97,8 +114,11 @@ func executionComponentsOutOfSync() bool {
 }
 
 func initLocalRuntime(settings *config.Settings) {
+	legacyLifecycleMu.Lock()
+	defer legacyLifecycleMu.Unlock()
+
 	globalApp = runtimeapp.NewLocal(settings)
-	syncLegacyGlobalsFromApp()
+	syncLegacyGlobalsFromAppLocked()
 }
 
 func currentLifecycle() *processing.LifecycleManager {
