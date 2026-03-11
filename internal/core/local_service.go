@@ -65,10 +65,6 @@ type LocalDownloadService struct {
 	// Settings Cache
 	settings   *config.Settings
 	settingsMu sync.RWMutex
-
-	PauseFunc       func(id string) error
-	ResumeFunc      func(id string) error
-	ResumeBatchFunc func(ids []string) []error
 }
 
 const (
@@ -515,29 +511,218 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 
 // Pause pauses an active download.
 func (s *LocalDownloadService) Pause(id string) error {
-	if s.PauseFunc != nil {
-		return s.PauseFunc(id)
+	if s.Pool == nil {
+		return fmt.Errorf("worker pool not initialized")
 	}
-	return fmt.Errorf("PauseFunc not initialized")
+
+	if s.Pool.Pause(id) {
+		return nil
+	}
+
+	// If not in pool, check if it's already paused/stopped in DB
+	entry, err := state.GetDownload(id)
+	if err == nil && entry != nil {
+		// Emit paused event so UI clears "pausing" state
+		if s.InputCh != nil {
+			s.InputCh <- events.DownloadPausedMsg{
+				DownloadID: id,
+				Filename:   entry.Filename,
+				Downloaded: entry.Downloaded,
+			}
+		}
+		return nil // Already stopped
+	}
+
+	return fmt.Errorf("download not found")
 }
 
 // Resume resumes a paused download.
 func (s *LocalDownloadService) Resume(id string) error {
-	if s.ResumeFunc != nil {
-		return s.ResumeFunc(id)
+	if s.Pool == nil {
+		return fmt.Errorf("worker pool not initialized")
 	}
-	return fmt.Errorf("ResumeFunc not initialized")
+
+	if st := s.Pool.GetStatus(id); st != nil && st.Status == "pausing" {
+		return fmt.Errorf("download is still pausing, try again in a moment")
+	}
+
+	if s.Pool.Resume(id) {
+		return nil
+	}
+
+	entry, err := state.GetDownload(id)
+	if err != nil || entry == nil {
+		return fmt.Errorf("download not found")
+	}
+
+	if entry.Status == "completed" {
+		return fmt.Errorf("download already completed")
+	}
+
+	s.settingsMu.RLock()
+	settings := s.settings
+	s.settingsMu.RUnlock()
+
+	outputPath := settings.General.DefaultDownloadDir
+	if outputPath == "" {
+		outputPath = "."
+	}
+
+	savedState, stateErr := state.LoadState(entry.URL, entry.DestPath)
+
+	var mirrorURLs []string
+	var dmState *types.ProgressState
+
+	if stateErr == nil && savedState != nil {
+		dmState = types.NewProgressState(id, savedState.TotalSize)
+		dmState.Downloaded.Store(savedState.Downloaded)
+		dmState.VerifiedProgress.Store(savedState.Downloaded)
+		if savedState.Elapsed > 0 {
+			dmState.SetSavedElapsed(time.Duration(savedState.Elapsed))
+		}
+		if len(savedState.Mirrors) > 0 {
+			var mirrors []types.MirrorStatus
+			for _, u := range savedState.Mirrors {
+				mirrors = append(mirrors, types.MirrorStatus{URL: u, Active: true})
+				mirrorURLs = append(mirrorURLs, u)
+			}
+			dmState.SetMirrors(mirrors)
+		}
+		dmState.DestPath = entry.DestPath
+		dmState.SyncSessionStart()
+	} else {
+		dmState = types.NewProgressState(id, entry.TotalSize)
+		dmState.Downloaded.Store(entry.Downloaded)
+		dmState.VerifiedProgress.Store(entry.Downloaded)
+		dmState.DestPath = entry.DestPath
+		dmState.SyncSessionStart()
+		mirrorURLs = []string{entry.URL}
+	}
+
+	cfg := types.DownloadConfig{
+		URL:           entry.URL,
+		OutputPath:    outputPath,
+		DestPath:      entry.DestPath,
+		ID:            id,
+		Filename:      entry.Filename,
+		TotalSize:     entry.TotalSize,
+		SupportsRange: savedState != nil && len(savedState.Tasks) > 0,
+		IsResume:      true,
+		ProgressCh:    s.InputCh,
+		State:         dmState,
+		SavedState:    savedState, // Pass loaded state to avoid re-query
+		Runtime:       types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
+		Mirrors:       mirrorURLs,
+	}
+
+	s.Pool.Add(cfg)
+	if s.InputCh != nil {
+		s.InputCh <- events.DownloadResumedMsg{
+			DownloadID: id,
+			Filename:   entry.Filename,
+		}
+	}
+	return nil
 }
 
 // ResumeBatch resumes multiple paused downloads efficiently.
 func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
-	if s.ResumeBatchFunc != nil {
-		return s.ResumeBatchFunc(ids)
-	}
 	errs := make([]error, len(ids))
-	for i := range errs {
-		errs[i] = fmt.Errorf("ResumeBatchFunc not initialized")
+
+	if s.Pool == nil {
+		for i := range errs {
+			errs[i] = fmt.Errorf("worker pool not initialized")
+		}
+		return errs
 	}
+
+	toLoad := []string{}
+	idMap := make(map[string]int)
+
+	for i, id := range ids {
+		if st := s.Pool.GetStatus(id); st != nil && st.Status == "pausing" {
+			errs[i] = fmt.Errorf("download is still pausing, try again in a moment")
+			continue
+		}
+
+		if s.Pool.Resume(id) {
+			errs[i] = nil
+		} else {
+			toLoad = append(toLoad, id)
+			idMap[id] = i
+		}
+	}
+
+	if len(toLoad) == 0 {
+		return errs
+	}
+
+	s.settingsMu.RLock()
+	settings := s.settings
+	s.settingsMu.RUnlock()
+
+	outputPath := settings.General.DefaultDownloadDir
+	if outputPath == "" {
+		outputPath = "."
+	}
+
+	states, err := state.LoadStates(toLoad)
+	if err != nil {
+		for _, id := range toLoad {
+			idx := idMap[id]
+			errs[idx] = fmt.Errorf("failed to load state: %w", err)
+		}
+		return errs
+	}
+
+	for _, id := range toLoad {
+		idx := idMap[id]
+		savedState, ok := states[id]
+		if !ok {
+			errs[idx] = fmt.Errorf("download not found or completed")
+			continue
+		}
+
+		var dmState *types.ProgressState
+		var mirrorURLs []string
+
+		dmState = types.NewProgressState(id, savedState.TotalSize)
+		dmState.Downloaded.Store(savedState.Downloaded)
+		dmState.VerifiedProgress.Store(savedState.Downloaded)
+		if savedState.Elapsed > 0 {
+			dmState.SetSavedElapsed(time.Duration(savedState.Elapsed))
+		}
+		if len(savedState.Mirrors) > 0 {
+			var mirrors []types.MirrorStatus
+			for _, u := range savedState.Mirrors {
+				mirrors = append(mirrors, types.MirrorStatus{URL: u, Active: true})
+				mirrorURLs = append(mirrorURLs, u)
+			}
+			dmState.SetMirrors(mirrors)
+		}
+		dmState.DestPath = savedState.DestPath
+		dmState.SyncSessionStart()
+
+		cfg := types.DownloadConfig{
+			URL:           savedState.URL,
+			OutputPath:    outputPath,
+			DestPath:      savedState.DestPath,
+			ID:            id,
+			Filename:      savedState.Filename,
+			TotalSize:     savedState.TotalSize,
+			SupportsRange: len(savedState.Tasks) > 0,
+			IsResume:      true,
+			ProgressCh:    s.InputCh,
+			State:         dmState,
+			SavedState:    savedState, // Pass loaded state to avoid re-query
+			Runtime:       types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
+			Mirrors:       mirrorURLs,
+		}
+
+		s.Pool.Add(cfg)
+		errs[idx] = nil
+	}
+
 	return errs
 }
 

@@ -293,7 +293,7 @@ func TestIntegration_PauseResume_HotPath_Aggregates(t *testing.T) {
 	}
 
 	saved2 := waitForSavedStateByID(t, id, 25*time.Second, func(s *types.DownloadState) bool {
-		return s.TotalSize == fileSize && len(s.Tasks) > 0 && s.Downloaded == paused2.Downloaded
+		return s.TotalSize == fileSize && len(s.Tasks) > 0
 	})
 
 	if saved2.Downloaded != paused2.Downloaded {
@@ -409,23 +409,14 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	}
 
 	saved2 := waitForSavedStateByID(t, id, 25*time.Second, func(s *types.DownloadState) bool {
-		return s.Downloaded == paused2.Downloaded && s.Elapsed >= saved1.Elapsed
+		return s.Downloaded >= saved1.Downloaded && s.Elapsed >= saved1.Elapsed
 	})
 
 	if saved2.DestPath != destPath {
 		t.Fatalf("dest path changed across cold resume: got=%q want=%q", saved2.DestPath, destPath)
 	}
-
-	// We can remove the sleep since waitForSavedStateByID now waits for the exact condition.
-	finalSaved, _ := state.LoadStates([]string{id})
-	savedFinal := finalSaved[id]
-
-	if savedFinal == nil {
-		t.Fatalf("missing final saved state")
-	}
-
-	if savedFinal.Downloaded != paused2.Downloaded {
-		t.Fatalf("saved downloaded mismatch after cold resume: saved=%d status=%d", savedFinal.Downloaded, paused2.Downloaded)
+	if saved2.Downloaded != paused2.Downloaded {
+		t.Fatalf("saved downloaded mismatch after cold resume: saved=%d status=%d", saved2.Downloaded, paused2.Downloaded)
 	}
 
 	entry2, err := state.GetDownload(id)
@@ -438,13 +429,13 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	if entry2.Status != "paused" {
 		t.Fatalf("entry status mismatch after cold resume: got=%q", entry2.Status)
 	}
-	if entry2.Downloaded != savedFinal.Downloaded {
-		t.Fatalf("entry downloaded mismatch after cold resume: entry=%d saved=%d", entry2.Downloaded, savedFinal.Downloaded)
+	if entry2.Downloaded != saved2.Downloaded {
+		t.Fatalf("entry downloaded mismatch after cold resume: entry=%d saved=%d", entry2.Downloaded, saved2.Downloaded)
 	}
-	if savedFinal.Elapsed != entry2.TimeTaken*int64(time.Millisecond) {
+	if saved2.Elapsed != entry2.TimeTaken*int64(time.Millisecond) {
 		t.Fatalf(
 			"elapsed mismatch after cold resume: saved_ns=%d entry_ms=%d expected_saved_ns=%d",
-			savedFinal.Elapsed,
+			saved2.Elapsed,
 			entry2.TimeTaken,
 			entry2.TimeTaken*int64(time.Millisecond),
 		)
