@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -240,9 +241,7 @@ func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 			}
 			// Copy headers from original request to redirect request
 			if len(via) > 0 {
-				for key, vals := range via[0].Header {
-					req.Header[key] = vals
-				}
+				copyDownloadRedirectHeaders(req, via[0])
 			}
 			return nil
 		},
@@ -599,4 +598,31 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
 	return finalizeCompletedDownload()
+}
+
+// copyDownloadRedirectHeaders preserves all headers for same-origin redirects
+// but strips sensitive headers (cookies, auth) for cross-domain redirects.
+func copyDownloadRedirectHeaders(dst, src *http.Request) {
+	if dst == nil || src == nil {
+		return
+	}
+	sameOrigin := dst.URL != nil && src.URL != nil &&
+		strings.EqualFold(dst.URL.Scheme, src.URL.Scheme) &&
+		strings.EqualFold(dst.URL.Hostname(), src.URL.Hostname())
+
+	if sameOrigin {
+		for key, vals := range src.Header {
+			dst.Header[key] = append([]string(nil), vals...)
+		}
+		return
+	}
+	// Cross-origin: only forward safe headers
+	for key := range dst.Header {
+		delete(dst.Header, key)
+	}
+	for _, key := range []string{"Range", "User-Agent"} {
+		if vals := src.Header.Values(key); len(vals) > 0 {
+			dst.Header[key] = append([]string(nil), vals...)
+		}
+	}
 }

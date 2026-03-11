@@ -1,4 +1,4 @@
-package utils
+package utils_test
 
 import (
 	"fmt"
@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/surge-downloader/surge/internal/config"
+	"github.com/surge-downloader/surge/internal/utils"
 )
 
 func TestDebug_CreatesLogFile(t *testing.T) {
@@ -22,7 +23,7 @@ func TestDebug_CreatesLogFile(t *testing.T) {
 	}
 
 	// Call Debug
-	Debug("Test message from unit test")
+	utils.Debug("Test message from unit test")
 
 	// Wait a moment for file to be created
 	time.Sleep(100 * time.Millisecond)
@@ -49,21 +50,21 @@ func TestDebug_CreatesLogFile(t *testing.T) {
 func TestDebug_FormatsMessage(t *testing.T) {
 	// Test that Debug can handle format strings with arguments
 	// This shouldn't panic
-	Debug("Test message with %s and %d", "string", 42)
-	Debug("Simple message without formatting")
-	Debug("Message with special chars: %% \\n \\t")
+	utils.Debug("Test message with %s and %d", "string", 42)
+	utils.Debug("Simple message without formatting")
+	utils.Debug("Message with special chars: %% \\n \\t")
 }
 
 func TestDebug_HandlesEmptyMessage(t *testing.T) {
 	// Debug should handle empty messages gracefully
-	Debug("")
-	Debug("   ")
+	utils.Debug("")
+	utils.Debug("   ")
 }
 
 func TestDebug_MultipleArguments(t *testing.T) {
 	// Test with various argument types
-	Debug("int: %d, float: %f, string: %s, bool: %t", 42, 3.14, "hello", true)
-	Debug("Multiple strings: %s %s %s", "one", "two", "three")
+	utils.Debug("int: %d, float: %f, string: %s, bool: %t", 42, 3.14, "hello", true)
+	utils.Debug("Multiple strings: %s %s %s", "one", "two", "three")
 }
 
 func TestLogFilePath(t *testing.T) {
@@ -98,11 +99,11 @@ func TestCleanupLogs(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tempDir) }()
 
 	// Configure debug to use this temp dir
-	ConfigureDebug(tempDir)
+	utils.ConfigureDebug(tempDir)
 
 	// Reset configuration after test (though this changes global state, so might affect other tests potentially)
 	// But in these unit tests, parallelism isn't enabled by default.
-	defer ConfigureDebug(config.GetLogsDir())
+	defer utils.ConfigureDebug(config.GetLogsDir())
 
 	// Create 10 dummy log files
 	baseTime := time.Now()
@@ -129,7 +130,7 @@ func TestCleanupLogs(t *testing.T) {
 	}
 
 	// Test cleanup: Keep 5
-	CleanupLogs(5)
+	utils.CleanupLogs(5)
 
 	// Verify we have 5 left
 	entries, err = os.ReadDir(tempDir)

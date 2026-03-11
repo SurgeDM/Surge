@@ -76,8 +76,8 @@ func TestDefaultGlobalShutdown_ServiceBeforeCleanup(t *testing.T) {
 		t.Fatalf("defaultGlobalShutdown failed: %v", err)
 	}
 
-	if len(order) != 2 || order[0] != "shutdown" || order[1] != "cleanup" {
-		t.Fatalf("shutdown order = %v, want [shutdown cleanup]", order)
+	if len(order) != 2 || order[0] != "cleanup" || order[1] != "shutdown" {
+		t.Fatalf("shutdown order = %v, want [cleanup shutdown]", order)
 	}
 }
 

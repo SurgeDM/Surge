@@ -16,14 +16,15 @@ var (
 func defaultGlobalShutdown() error {
 	cancelGlobalEnqueue()
 
+	if cleanup := takeLifecycleCleanup(); cleanup != nil {
+		cleanup()
+	}
+
 	var err error
 	if GlobalService != nil {
 		err = GlobalService.Shutdown()
 	} else if GlobalPool != nil {
 		GlobalPool.GracefulShutdown()
-	}
-	if cleanup := takeLifecycleCleanup(); cleanup != nil {
-		cleanup()
 	}
 	return err
 }

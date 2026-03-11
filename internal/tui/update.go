@@ -223,6 +223,9 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	}
 	displayName := optimisticFilename
 	if displayName == "" {
+		displayName = processing.InferFilenameFromURL(url)
+	}
+	if displayName == "" {
 		displayName = "Queued"
 	}
 

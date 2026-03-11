@@ -248,8 +248,12 @@ func (p *WorkerPool) Cancel(downloadID string) {
 	}
 
 	removedFilename := ""
+	removedDestPath := ""
+	removedCompleted := false
 	if activeExists && ad != nil {
 		removedFilename = ad.config.Filename
+		removedDestPath = resolveDestPath(&ad.config)
+		removedCompleted = ad.config.State != nil && ad.config.State.Done.Load()
 
 		// Cancel the context to stop workers
 		if ad.cancel != nil {
@@ -269,12 +273,15 @@ func (p *WorkerPool) Cancel(downloadID string) {
 		}
 	} else if queuedExists {
 		removedFilename = qCfg.Filename
+		removedDestPath = resolveDestPath(&qCfg)
 	}
 
 	// Send removal message
 	p.trySendProgress(events.DownloadRemovedMsg{
 		DownloadID: downloadID,
 		Filename:   removedFilename,
+		DestPath:   removedDestPath,
+		Completed:  removedCompleted,
 	})
 }
 

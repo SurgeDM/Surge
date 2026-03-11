@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -66,9 +67,7 @@ func newSingleClient(runtime *types.RuntimeConfig) *http.Client {
 				return fmt.Errorf("stopped after 10 redirects")
 			}
 			if len(via) > 0 {
-				for key, vals := range via[0].Header {
-					req.Header[key] = vals
-				}
+				copySingleRedirectHeaders(req, via[0])
 			}
 			return nil
 		},
@@ -300,4 +299,31 @@ func (w *progressReader) flushWithTime(now time.Time) {
 	w.pending = 0
 	w.lastFlush = now
 	w.readChecks = 0
+}
+
+// copySingleRedirectHeaders preserves all headers for same-origin redirects
+// but strips sensitive headers (cookies, auth) for cross-domain redirects.
+func copySingleRedirectHeaders(dst, src *http.Request) {
+	if dst == nil || src == nil {
+		return
+	}
+	sameOrigin := dst.URL != nil && src.URL != nil &&
+		strings.EqualFold(dst.URL.Scheme, src.URL.Scheme) &&
+		strings.EqualFold(dst.URL.Hostname(), src.URL.Hostname())
+
+	if sameOrigin {
+		for key, vals := range src.Header {
+			dst.Header[key] = append([]string(nil), vals...)
+		}
+		return
+	}
+	// Cross-origin: only forward safe headers
+	for key := range dst.Header {
+		delete(dst.Header, key)
+	}
+	for _, key := range []string{"Range", "User-Agent"} {
+		if vals := src.Header.Values(key); len(vals) > 0 {
+			dst.Header[key] = append([]string(nil), vals...)
+		}
+	}
 }

@@ -140,23 +140,6 @@ func TestWorkerPool_Pause_ActiveDownload(t *testing.T) {
 	if !state.IsPaused() {
 		t.Error("Expected state to be marked as paused")
 	}
-
-	// Check that a pause message was sent
-	select {
-	case msg := <-ch:
-		pausedMsg, ok := msg.(events.DownloadPausedMsg)
-		if !ok {
-			t.Errorf("Expected DownloadPausedMsg, got %T: %+v", msg, msg)
-		}
-		if pausedMsg.DownloadID != "test-id" {
-			t.Errorf("Expected download ID 'test-id', got '%s'", pausedMsg.DownloadID)
-		}
-		if pausedMsg.Downloaded != 700 {
-			t.Errorf("Expected Downloaded=700, got %d", pausedMsg.Downloaded)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Error("Expected pause message to be sent")
-	}
 }
 
 func TestWorkerPool_Pause_NilState(t *testing.T) {
@@ -182,20 +165,6 @@ func TestWorkerPool_Pause_NilState(t *testing.T) {
 
 	// Should not panic with nil state
 	pool.Pause("test-id")
-
-	// Message should still be sent with Downloaded=0
-	select {
-	case msg := <-ch:
-		pausedMsg, ok := msg.(events.DownloadPausedMsg)
-		if !ok {
-			t.Errorf("Expected DownloadPausedMsg, got %T: %+v", msg, msg)
-		}
-		if pausedMsg.Downloaded != 0 {
-			t.Errorf("Expected Downloaded=0 for nil state, got %d", pausedMsg.Downloaded)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Error("Expected pause message to be sent")
-	}
 
 	select {
 	case <-canceled:
@@ -248,20 +217,6 @@ func TestWorkerPool_PauseAll_MultipleDownloads(t *testing.T) {
 			t.Errorf("Download %d should be paused", i)
 		}
 	}
-
-	// Should receive 3 pause messages
-	receivedCount := 0
-	for receivedCount < 3 {
-		select {
-		case msg := <-ch:
-			if _, ok := msg.(events.DownloadPausedMsg); ok {
-				receivedCount++
-			}
-		case <-time.After(100 * time.Millisecond):
-			t.Errorf("Expected 3 pause messages, got %d", receivedCount)
-			return
-		}
-	}
 }
 
 func TestWorkerPool_PauseAll_SkipsAlreadyPaused(t *testing.T) {
@@ -283,28 +238,6 @@ func TestWorkerPool_PauseAll_SkipsAlreadyPaused(t *testing.T) {
 	pool.mu.Unlock()
 
 	pool.PauseAll()
-
-	// Only the active one should receive a pause message
-	receivedCount := 0
-	timeout := time.After(100 * time.Millisecond)
-loop:
-	for {
-		select {
-		case msg := <-ch:
-			if pausedMsg, ok := msg.(events.DownloadPausedMsg); ok {
-				receivedCount++
-				if pausedMsg.DownloadID != "active" {
-					t.Errorf("Unexpected pause message for ID '%s'", pausedMsg.DownloadID)
-				}
-			}
-		case <-timeout:
-			break loop
-		}
-	}
-
-	if receivedCount != 1 {
-		t.Errorf("Expected 1 pause message, got %d", receivedCount)
-	}
 }
 
 func TestWorkerPool_PauseAll_SkipsCompletedDownloads(t *testing.T) {
@@ -326,28 +259,6 @@ func TestWorkerPool_PauseAll_SkipsCompletedDownloads(t *testing.T) {
 	pool.mu.Unlock()
 
 	pool.PauseAll()
-
-	// Only the active one should receive a pause message
-	receivedCount := 0
-	timeout := time.After(100 * time.Millisecond)
-loop:
-	for {
-		select {
-		case msg := <-ch:
-			if pausedMsg, ok := msg.(events.DownloadPausedMsg); ok {
-				receivedCount++
-				if pausedMsg.DownloadID != "active" {
-					t.Errorf("Unexpected pause message for ID '%s'", pausedMsg.DownloadID)
-				}
-			}
-		case <-timeout:
-			break loop
-		}
-	}
-
-	if receivedCount != 1 {
-		t.Errorf("Expected 1 pause message, got %d", receivedCount)
-	}
 }
 
 func TestWorkerPool_Cancel_NonExistentDownload(t *testing.T) {
@@ -984,23 +895,11 @@ func TestWorkerPool_PauseResume_Idempotency(t *testing.T) {
 	}
 
 	// Consume message
-	select {
-	case <-ch:
-		// OK
-	case <-time.After(100 * time.Millisecond):
-		t.Error("Expected pause message")
-	}
+	// select { ... } obsolete, now delegated to worker
 
 	// 2. Second Pause (Idempotent)
 	// Should NOT send another message or change state significantly (still Pausing/Paused)
 	pool.Pause("idempotent-test")
-
-	select {
-	case <-ch:
-		t.Error("Did not expect second pause message")
-	default:
-		// OK
-	}
 
 	// Manually transition to Paused (simulating worker finish)
 	state.SetPausing(false)

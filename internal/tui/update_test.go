@@ -488,7 +488,7 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 	}
 }
 
-func TestStartDownload_DoesNotGuessProbeDerivedFilenameOptimistically(t *testing.T) {
+func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *testing.T) {
 	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
 	t.Cleanup(func() {
 		_ = svc.Shutdown()
@@ -516,8 +516,8 @@ func TestStartDownload_DoesNotGuessProbeDerivedFilenameOptimistically(t *testing
 		t.Fatalf("expected 1 optimistic queued download, got %d", len(updated.downloads))
 	}
 	d := updated.downloads[0]
-	if d.Filename != "Queued" {
-		t.Fatalf("optimistic filename = %q, want generic queued placeholder", d.Filename)
+	if d.Filename != "100MB.bin" {
+		t.Fatalf("optimistic filename = %q, want inferred filename", d.Filename)
 	}
 	if d.Destination != filepath.Join(targetDir, "100MB.bin") {
 		t.Fatalf("optimistic destination = %q, want %q", d.Destination, filepath.Join(targetDir, "100MB.bin"))
