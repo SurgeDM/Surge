@@ -52,8 +52,10 @@ func (mgr *LifecycleManager) Resume(id string) error {
 		return fmt.Errorf("engine not initialized")
 	}
 
-	if st := mgr.engineHooks.GetStatus(id); st != nil && st.Status == "pausing" {
-		return fmt.Errorf("download is still pausing, try again in a moment")
+	if mgr.engineHooks.GetStatus != nil {
+		if st := mgr.engineHooks.GetStatus(id); st != nil && st.Status == "pausing" {
+			return fmt.Errorf("download is still pausing, try again in a moment")
+		}
 	}
 
 	if mgr.engineHooks.Resume(id) {
