@@ -106,7 +106,9 @@ func TestProbeServer_ReadsBodyBeforeContextCancel(t *testing.T) {
 		}
 		// Delay body to ensure DetermineFilename blocking on io.ReadFull is not interrupted by premature context cancellation
 		time.Sleep(100 * time.Millisecond)
-		w.Write([]byte("x"))
+		if _, err := w.Write([]byte("x")); err != nil {
+			t.Errorf("ProbeServer() failed to write body: %v", err)
+		}
 	}))
 	defer server.Close()
 
