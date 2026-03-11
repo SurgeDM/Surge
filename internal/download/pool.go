@@ -103,6 +103,9 @@ func resolveDestPath(cfg *types.DownloadConfig) string {
 
 // Add adds a new download task to the pool
 func (p *WorkerPool) Add(cfg types.DownloadConfig) {
+	if cfg.ProgressCh == nil {
+		cfg.ProgressCh = p.progressCh
+	}
 	p.mu.Lock()
 	p.queued[cfg.ID] = cfg
 	p.mu.Unlock()
@@ -205,16 +208,8 @@ func (p *WorkerPool) Pause(downloadID string) bool {
 		ad.cancel()
 	}
 
-	// Send pause message
-	downloaded := int64(0)
-	if ad.config.State != nil {
-		downloaded = ad.config.State.VerifiedProgress.Load()
-	}
-	p.trySendProgress(events.DownloadPausedMsg{
-		DownloadID: downloadID,
-		Filename:   ad.config.Filename,
-		Downloaded: downloaded,
-	})
+	// Send pause message is now exclusively handled by worker return paths
+	// to ensure fully synchronized byte counts.
 	return true
 }
 
