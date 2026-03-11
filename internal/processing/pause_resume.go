@@ -177,7 +177,7 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 }
 
 // buildResumeConfig constructs a DownloadConfig for a cold-path resume from saved state.
-// buildResumeConfig constructs a DownloadConfig for a cold-path resume from saved state.
+// When entry is non-nil it provides identity fields (URL, filename, destPath); savedState
 // When entry is non-nil it provides identity fields (URL, filename, destPath); savedState
 // takes precedence for progress, elapsed time, and mirror topology. If savedState is nil,
 // SupportsRange is false and the download restarts from the entry's Downloaded offset.
