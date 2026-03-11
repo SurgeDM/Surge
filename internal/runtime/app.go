@@ -37,7 +37,7 @@ type App struct {
 
 	lifecycle        *processing.LifecycleManager
 	lifecycleCleanup func()
-	lifecycleMu      sync.Mutex
+	lifecycleMu      sync.RWMutex
 
 	enqueueCtx    context.Context
 	enqueueCancel context.CancelFunc
@@ -88,10 +88,10 @@ func (a *App) Components() Components {
 	service := a.service
 	a.componentsMu.RUnlock()
 
-	a.lifecycleMu.Lock()
+	a.lifecycleMu.RLock()
 	lifecycle := a.lifecycle
 	lifecycleCleanup := a.lifecycleCleanup
-	defer a.lifecycleMu.Unlock()
+	a.lifecycleMu.RUnlock()
 
 	return Components{
 		Pool:             pool,
@@ -121,8 +121,8 @@ func (a *App) Service() core.DownloadService {
 }
 
 func (a *App) CurrentLifecycle() *processing.LifecycleManager {
-	a.lifecycleMu.Lock()
-	defer a.lifecycleMu.Unlock()
+	a.lifecycleMu.RLock()
+	defer a.lifecycleMu.RUnlock()
 	return a.lifecycle
 }
 
