@@ -31,6 +31,11 @@ type ConcurrentDownloader struct {
 	Runtime      *types.RuntimeConfig
 	bufPool      sync.Pool
 	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
+
+	// Dynamic Worker Control
+	targetWorkers int                 // Desired number of workers
+	workerScaleCh chan int            // Channel to signal scaling events
+
 }
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
@@ -57,6 +62,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 				return &buf
 			},
 		},
+		workerScaleCh: make(chan int, 1),
 	}
 }
 
@@ -473,10 +479,10 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		}
 	}()
 
-	// Start workers
+	// Start workers dynamically
 	var wg sync.WaitGroup
-	workerErrors := make(chan error, numConns)
-
+	workerErrors := make(chan error, d.Runtime.GetMaxConnectionsPerHost()*2) // Generous buffer for dynamic scaling
+	
 	// Combine primary + secondary for workers
 	// We want to ensure the primary is included if it was valid (it should be, otherwise TUIDownload would have failed)
 	var workerMirrors []string
@@ -498,16 +504,76 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		workerMirrors = []string{rawurl}
 	}
 
-	for i := 0; i < numConns; i++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			err := d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
-			if err != nil && err != context.Canceled {
-				workerErrors <- err
+	// Initial target workers
+	d.activeMu.Lock()
+	d.targetWorkers = numConns
+	d.activeMu.Unlock()
+
+	// Supervisor Manager for Dynamic Workers
+	wgHelpers.Add(1)
+	go func() {
+		defer wgHelpers.Done()
+		
+		activeWorkerCancellations := make(map[int]context.CancelFunc)
+		nextWorkerID := 0
+		
+		scaleLoop := func() {
+			d.activeMu.Lock()
+			target := d.targetWorkers
+			d.activeMu.Unlock()
+			
+			currentActive := len(activeWorkerCancellations)
+			
+			if currentActive < target {
+				// Scale UP
+				for i := currentActive; i < target; i++ {
+					wID := nextWorkerID
+					nextWorkerID++
+					
+					workerCtx, workerCancel := context.WithCancel(downloadCtx)
+					activeWorkerCancellations[wID] = workerCancel
+					
+					wg.Add(1)
+					go func(workerID int, wCtx context.Context) {
+						defer wg.Done()
+						err := d.worker(wCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
+						if err != nil && err != context.Canceled {
+							workerErrors <- err
+						}
+					}(wID, workerCtx)
+				}
+				utils.Debug("Supervisor: Scaled UP to %d workers", target)
+			} else if currentActive > target {
+				// Scale DOWN
+				excess := currentActive - target
+				canceledCount := 0
+				
+				// Cancel the most recently added workers first
+				for id, cancelFn := range activeWorkerCancellations {
+					if canceledCount >= excess {
+						break
+					}
+					cancelFn() // Cancel this specific worker
+					delete(activeWorkerCancellations, id)
+					canceledCount++
+				}
+				utils.Debug("Supervisor: Scaled DOWN to %d workers (canceled %d)", target, canceledCount)
 			}
-		}(i)
-	}
+		}
+
+		// Initial launch
+		scaleLoop()
+
+		for {
+			select {
+			case <-downloadCtx.Done():
+				return // Parent canceled, supervisor exits safely, workers will follow
+			case <-d.workerScaleCh:
+				// Adjust worker count dynamically
+				scaleLoop()
+			}
+		}
+	}()
 
 	// Wait for all workers to complete
 	go func() {
@@ -603,4 +669,33 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
 	return finalizeCompletedDownload()
+}
+
+// SetWorkerCount dynamically adjusts the number of concurrent workers for the active download
+func (d *ConcurrentDownloader) SetWorkerCount(workers int) error {
+	if workers <= 0 {
+		return fmt.Errorf("worker count must be > 0 (got %d)", workers)
+	}
+	
+	maxWorkers := d.Runtime.GetMaxConnectionsPerHost()
+	if workers > maxWorkers {
+		workers = maxWorkers
+	}
+
+	d.activeMu.Lock()
+	if d.targetWorkers == workers {
+		d.activeMu.Unlock()
+		return nil // No change
+	}
+	d.targetWorkers = workers
+	d.activeMu.Unlock()
+
+	// Notify supervisor
+	select {
+	case d.workerScaleCh <- 1:
+	default: // If already a pending scale, ignore
+	}
+
+	utils.Debug("SetWorkerCount requested scaling to %d workers", workers)
+	return nil
 }
