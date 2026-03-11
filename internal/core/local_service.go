@@ -66,9 +66,9 @@ type LocalDownloadService struct {
 	settings   *config.Settings
 	settingsMu sync.RWMutex
 
-	PauseFunc       func(id string) error
-	ResumeFunc      func(id string) error
-	ResumeBatchFunc func(ids []string) []error
+	pauseFunc       func(id string) error
+	resumeFunc      func(id string) error
+	resumeBatchFunc func(ids []string) []error
 }
 
 const (
@@ -515,30 +515,38 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 
 // Pause pauses an active download.
 func (s *LocalDownloadService) Pause(id string) error {
-	if s.PauseFunc != nil {
-		return s.PauseFunc(id)
+	if s.pauseFunc != nil {
+		return s.pauseFunc(id)
 	}
 	return fmt.Errorf("PauseFunc not initialized")
 }
 
 // Resume resumes a paused download.
 func (s *LocalDownloadService) Resume(id string) error {
-	if s.ResumeFunc != nil {
-		return s.ResumeFunc(id)
+	if s.resumeFunc != nil {
+		return s.resumeFunc(id)
 	}
 	return fmt.Errorf("ResumeFunc not initialized")
 }
 
 // ResumeBatch resumes multiple paused downloads efficiently.
 func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
-	if s.ResumeBatchFunc != nil {
-		return s.ResumeBatchFunc(ids)
+	if s.resumeBatchFunc != nil {
+		return s.resumeBatchFunc(ids)
 	}
 	errs := make([]error, len(ids))
 	for i := range errs {
 		errs[i] = fmt.Errorf("ResumeBatchFunc not initialized")
 	}
 	return errs
+}
+
+// SetLifecycleHooks wires the processing layer into the service so
+// pause/resume calls are routed through the event-worker lifecycle.
+func (s *LocalDownloadService) SetLifecycleHooks(pause func(string) error, resume func(string) error, resumeBatch func([]string) []error) {
+	s.pauseFunc = pause
+	s.resumeFunc = resume
+	s.resumeBatchFunc = resumeBatch
 }
 
 // UpdateURL updates the URL of a paused or errored download

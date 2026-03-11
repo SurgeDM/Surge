@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
@@ -11,20 +12,23 @@ import (
 
 // EngineHooks defines the minimal callbacks Processing needs to orchestrate the worker pool.
 type EngineHooks struct {
-	Pause        func(id string) bool
-	Resume       func(id string) bool
-	GetStatus    func(id string) *types.DownloadStatus
+	Pause     func(id string) bool
+	Resume    func(id string) bool
+	GetStatus func(id string) *types.DownloadStatus
+	// AddConfig enqueues a download config. Implementations must ensure cfg.ProgressCh
+	// is set; pool.Add fills it from p.progressCh when nil.
 	AddConfig    func(cfg types.DownloadConfig)
 	PublishEvent func(msg interface{}) error
 }
 
 // Pause pauses an active download.
 func (mgr *LifecycleManager) Pause(id string) error {
-	if mgr.engineHooks.Pause == nil {
+	hooks := mgr.getEngineHooks()
+	if hooks.Pause == nil {
 		return fmt.Errorf("engine not initialized")
 	}
 
-	if mgr.engineHooks.Pause(id) {
+	if hooks.Pause(id) {
 		return nil
 	}
 
@@ -32,8 +36,8 @@ func (mgr *LifecycleManager) Pause(id string) error {
 	// synthesize a paused event so the UI can clear any transient "pausing" spinner.
 	entry, err := state.GetDownload(id)
 	if err == nil && entry != nil {
-		if mgr.engineHooks.PublishEvent != nil {
-			_ = mgr.engineHooks.PublishEvent(events.DownloadPausedMsg{
+		if hooks.PublishEvent != nil {
+			_ = hooks.PublishEvent(events.DownloadPausedMsg{
 				DownloadID: id,
 				Filename:   entry.Filename,
 				Downloaded: entry.Downloaded,
@@ -47,17 +51,18 @@ func (mgr *LifecycleManager) Pause(id string) error {
 
 // Resume resumes a paused download.
 func (mgr *LifecycleManager) Resume(id string) error {
-	if mgr.engineHooks.Resume == nil {
+	hooks := mgr.getEngineHooks()
+	if hooks.Resume == nil {
 		return fmt.Errorf("engine not initialized")
 	}
 
-	if mgr.engineHooks.GetStatus != nil {
-		if st := mgr.engineHooks.GetStatus(id); st != nil && st.Status == "pausing" {
+	if hooks.GetStatus != nil {
+		if st := hooks.GetStatus(id); st != nil && st.Status == "pausing" {
 			return fmt.Errorf("download is still pausing, try again in a moment")
 		}
 	}
 
-	if mgr.engineHooks.Resume(id) {
+	if hooks.Resume(id) {
 		return nil
 	}
 
@@ -78,54 +83,15 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	}
 
 	savedState, stateErr := state.LoadState(entry.URL, entry.DestPath)
-
-	var mirrorURLs []string
-	var dmState *types.ProgressState
-
-	if stateErr == nil && savedState != nil {
-		dmState = types.NewProgressState(id, savedState.TotalSize)
-		dmState.Downloaded.Store(savedState.Downloaded)
-		dmState.VerifiedProgress.Store(savedState.Downloaded)
-		if savedState.Elapsed > 0 {
-			dmState.SetSavedElapsed(time.Duration(savedState.Elapsed))
-		}
-		if len(savedState.Mirrors) > 0 {
-			var mirrors []types.MirrorStatus
-			for _, u := range savedState.Mirrors {
-				mirrors = append(mirrors, types.MirrorStatus{URL: u, Active: true})
-				mirrorURLs = append(mirrorURLs, u)
-			}
-			dmState.SetMirrors(mirrors)
-		}
-		dmState.DestPath = entry.DestPath
-		dmState.SyncSessionStart()
-	} else {
-		dmState = types.NewProgressState(id, entry.TotalSize)
-		dmState.Downloaded.Store(entry.Downloaded)
-		dmState.VerifiedProgress.Store(entry.Downloaded)
-		dmState.DestPath = entry.DestPath
-		dmState.SyncSessionStart()
-		mirrorURLs = []string{entry.URL}
+	if stateErr != nil {
+		savedState = nil
 	}
 
-	cfg := types.DownloadConfig{
-		URL:           entry.URL,
-		OutputPath:    outputPath,
-		DestPath:      entry.DestPath,
-		ID:            id,
-		Filename:      entry.Filename,
-		TotalSize:     entry.TotalSize,
-		SupportsRange: savedState != nil && len(savedState.Tasks) > 0,
-		IsResume:      true,
-		State:         dmState,
-		SavedState:    savedState, // Pass loaded state to avoid re-query
-		Runtime:       types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
-		Mirrors:       mirrorURLs,
-	}
+	cfg := buildResumeConfig(id, outputPath, entry, savedState, settings)
 
-	mgr.engineHooks.AddConfig(cfg)
-	if mgr.engineHooks.PublishEvent != nil {
-		_ = mgr.engineHooks.PublishEvent(events.DownloadResumedMsg{
+	hooks.AddConfig(cfg)
+	if hooks.PublishEvent != nil {
+		_ = hooks.PublishEvent(events.DownloadResumedMsg{
 			DownloadID: id,
 			Filename:   entry.Filename,
 		})
@@ -137,7 +103,8 @@ func (mgr *LifecycleManager) Resume(id string) error {
 func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 	errs := make([]error, len(ids))
 
-	if mgr.engineHooks.Resume == nil {
+	hooks := mgr.getEngineHooks()
+	if hooks.Resume == nil {
 		for i := range errs {
 			errs[i] = fmt.Errorf("engine not initialized")
 		}
@@ -148,12 +115,14 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 	idMap := make(map[string]int)
 
 	for i, id := range ids {
-		if st := mgr.engineHooks.GetStatus(id); st != nil && st.Status == "pausing" {
-			errs[i] = fmt.Errorf("download is still pausing, try again in a moment")
-			continue
+		if hooks.GetStatus != nil {
+			if st := hooks.GetStatus(id); st != nil && st.Status == "pausing" {
+				errs[i] = fmt.Errorf("download is still pausing, try again in a moment")
+				continue
+			}
 		}
 
-		if mgr.engineHooks.Resume(id) {
+		if hooks.Resume(id) {
 			errs[i] = nil
 		} else {
 			toLoad = append(toLoad, id)
@@ -189,9 +158,38 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 			continue
 		}
 
-		var dmState *types.ProgressState
-		var mirrorURLs []string
+		cfg := buildResumeConfig(id, outputPath, nil, savedState, settings)
+		hooks.AddConfig(cfg)
+		errs[idx] = nil
+	}
 
+	return errs
+}
+
+// buildResumeConfig constructs a DownloadConfig for a cold-path resume from saved state.
+// It returns the config explicitly built.
+func buildResumeConfig(id, outputPath string, entry *types.DownloadEntry, savedState *types.DownloadState, settings *config.Settings) types.DownloadConfig {
+	var destPath, url, filename string
+	var totalSize, downloaded int64
+
+	if entry != nil {
+		destPath = entry.DestPath
+		url = entry.URL
+		filename = entry.Filename
+		totalSize = entry.TotalSize
+		downloaded = entry.Downloaded
+	} else if savedState != nil {
+		destPath = savedState.DestPath
+		url = savedState.URL
+		filename = savedState.Filename
+		totalSize = savedState.TotalSize
+		downloaded = savedState.Downloaded
+	}
+
+	var mirrorURLs []string
+	var dmState *types.ProgressState
+
+	if savedState != nil {
 		dmState = types.NewProgressState(id, savedState.TotalSize)
 		dmState.Downloaded.Store(savedState.Downloaded)
 		dmState.VerifiedProgress.Store(savedState.Downloaded)
@@ -206,27 +204,29 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 			}
 			dmState.SetMirrors(mirrors)
 		}
-		dmState.DestPath = savedState.DestPath
+		dmState.DestPath = destPath
 		dmState.SyncSessionStart()
-
-		cfg := types.DownloadConfig{
-			URL:           savedState.URL,
-			OutputPath:    outputPath,
-			DestPath:      savedState.DestPath,
-			ID:            id,
-			Filename:      savedState.Filename,
-			TotalSize:     savedState.TotalSize,
-			SupportsRange: len(savedState.Tasks) > 0,
-			IsResume:      true,
-			State:         dmState,
-			SavedState:    savedState, // Pass loaded state to avoid re-query
-			Runtime:       types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
-			Mirrors:       mirrorURLs,
-		}
-
-		mgr.engineHooks.AddConfig(cfg)
-		errs[idx] = nil
+	} else {
+		dmState = types.NewProgressState(id, totalSize)
+		dmState.Downloaded.Store(downloaded)
+		dmState.VerifiedProgress.Store(downloaded)
+		dmState.DestPath = destPath
+		dmState.SyncSessionStart()
+		mirrorURLs = []string{url}
 	}
 
-	return errs
+	return types.DownloadConfig{
+		URL:           url,
+		OutputPath:    outputPath,
+		DestPath:      destPath,
+		ID:            id,
+		Filename:      filename,
+		TotalSize:     totalSize,
+		SupportsRange: savedState != nil && len(savedState.Tasks) > 0,
+		IsResume:      true,
+		State:         dmState,
+		SavedState:    savedState,
+		Runtime:       types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
+		Mirrors:       mirrorURLs,
+	}
 }

@@ -31,9 +31,7 @@ func startEventWorkerForTest(t *testing.T, svc *LocalDownloadService) func() {
 		mgr.StartEventWorker(stream)
 	}()
 
-	svc.PauseFunc = mgr.Pause
-	svc.ResumeFunc = mgr.Resume
-	svc.ResumeBatchFunc = mgr.ResumeBatch
+	svc.SetLifecycleHooks(mgr.Pause, mgr.Resume, mgr.ResumeBatch)
 	mgr.SetEngineHooks(processing.EngineHooks{
 		Pause:        svc.Pool.Pause,
 		Resume:       svc.Pool.Resume,

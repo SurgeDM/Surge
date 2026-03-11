@@ -90,9 +90,7 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 		PublishEvent: GlobalService.Publish,
 	})
 	if svc, ok := GlobalService.(*core.LocalDownloadService); ok {
-		svc.PauseFunc = GlobalLifecycle.Pause
-		svc.ResumeFunc = GlobalLifecycle.Resume
-		svc.ResumeBatchFunc = GlobalLifecycle.ResumeBatch
+		svc.SetLifecycleHooks(GlobalLifecycle.Pause, GlobalLifecycle.Resume, GlobalLifecycle.ResumeBatch)
 	}
 	defer func() {
 		_ = GlobalService.Shutdown()

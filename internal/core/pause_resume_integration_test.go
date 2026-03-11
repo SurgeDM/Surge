@@ -711,3 +711,138 @@ func TestIntegration_PauseResume_ConcreteSnapshotDebugString(t *testing.T) {
 	}
 	t.Log(snapshot)
 }
+
+func TestIntegration_PauseResumeBatch_ColdPath(t *testing.T) {
+	rootDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", rootDir)
+
+	state.CloseDB()
+	dbPath := filepath.Join(rootDir, fmt.Sprintf("%s-surge.db", t.Name()))
+	state.Configure(dbPath)
+	defer state.CloseDB()
+
+	const fileSize = int64(16 * 1024 * 1024)
+	server := newDeterministicStreamingServer(t, fileSize)
+	defer server.Close()
+
+	outputDir := t.TempDir()
+
+	// 1. Setup downloads in service instance #1
+	ch1 := make(chan any, 256)
+	pool1 := download.NewWorkerPool(ch1, 2)
+	svc1 := NewLocalDownloadServiceWithInput(pool1, ch1)
+	forceSingleConnectionRuntime(svc1)
+	evCleanup1 := startEventWorkerForTest(t, svc1)
+
+	destPath1 := filepath.Join(outputDir, "cold1.bin")
+	if f, err := os.Create(destPath1 + ".surge"); err == nil {
+		_ = f.Close()
+	}
+	id1, err := svc1.Add(server.URL(), outputDir, "cold1.bin", nil, nil, false, fileSize, true)
+	if err != nil {
+		t.Fatalf("add 1 failed: %v", err)
+	}
+
+	destPath2 := filepath.Join(outputDir, "cold2.bin")
+	if f, err := os.Create(destPath2 + ".surge"); err == nil {
+		_ = f.Close()
+	}
+	id2, err := svc1.Add(server.URL(), outputDir, "cold2.bin", nil, nil, false, fileSize, true)
+	if err != nil {
+		t.Fatalf("add 2 failed: %v", err)
+	}
+
+	waitForDownloadStatus(t, svc1, id1, 15*time.Second, func(st *types.DownloadStatus) bool {
+		return st.Status == "downloading" && st.Downloaded > 1024*512
+	})
+	waitForDownloadStatus(t, svc1, id2, 15*time.Second, func(st *types.DownloadStatus) bool {
+		return st.Status == "downloading" && st.Downloaded > 1024*512
+	})
+
+	if err := svc1.Pause(id1); err != nil {
+		t.Fatalf("pause 1 failed: %v", err)
+	}
+	if err := svc1.Pause(id2); err != nil {
+		t.Fatalf("pause 2 failed: %v", err)
+	}
+
+	saved1 := waitForSavedStateByID(t, id1, 15*time.Second, func(s *types.DownloadState) bool { return s.Elapsed > 0 })
+	saved2 := waitForSavedStateByID(t, id2, 15*time.Second, func(s *types.DownloadState) bool { return s.Elapsed > 0 })
+
+	evCleanup1()
+	if err := svc1.Shutdown(); err != nil {
+		t.Fatalf("svc1 shutdown failed: %v", err)
+	}
+
+	// 2. Setup service instance #2 (Cold start)
+	ch2 := make(chan any, 256)
+	pool2 := download.NewWorkerPool(ch2, 3)
+	svc2 := NewLocalDownloadServiceWithInput(pool2, ch2)
+	forceSingleConnectionRuntime(svc2)
+	defer func() { _ = svc2.Shutdown() }()
+	evCleanup2 := startEventWorkerForTest(t, svc2)
+	defer evCleanup2()
+
+	// Hot path ID for mix test
+	destPathHot := filepath.Join(outputDir, "hot1.bin")
+	if f, err := os.Create(destPathHot + ".surge"); err == nil {
+		_ = f.Close()
+	}
+	idHot, err := svc2.Add(server.URL(), outputDir, "hot1.bin", nil, nil, false, fileSize, true)
+	if err != nil {
+		t.Fatalf("add hot failed: %v", err)
+	}
+	waitForDownloadStatus(t, svc2, idHot, 15*time.Second, func(st *types.DownloadStatus) bool {
+		return st.Status == "downloading" && st.Downloaded > 1024*512
+	})
+	if err := svc2.Pause(idHot); err != nil {
+		t.Fatalf("pause hot failed: %v", err)
+	}
+	waitForDownloadStatus(t, svc2, idHot, 15*time.Second, func(st *types.DownloadStatus) bool { return st.Status == "paused" })
+
+	// 3. Batch resume including hot, cold, and a missing ID
+	missingID := "non-existent-id"
+	batch := []string{id1, id2, idHot, missingID}
+
+	errs := svc2.ResumeBatch(batch)
+
+	// Validate errors
+	if len(errs) != 4 {
+		t.Fatalf("expected 4 errors, got %d", len(errs))
+	}
+	if errs[0] != nil {
+		t.Errorf("unexpected error for id1: %v", errs[0])
+	}
+	if errs[1] != nil {
+		t.Errorf("unexpected error for id2: %v", errs[1])
+	}
+	if errs[2] != nil {
+		t.Errorf("unexpected error for idHot: %v", errs[2])
+	}
+	if errs[3] == nil {
+		t.Error("expected error for missingID")
+	} else if errs[3].Error() != "download not found or completed" {
+		t.Errorf("unexpected error message for missingID: %v", errs[3])
+	}
+
+	// Wait for resumes
+	resumed1 := waitForDownloadStatus(t, svc2, id1, 15*time.Second, func(st *types.DownloadStatus) bool {
+		return st.Status == "downloading" && st.Downloaded >= saved1.Downloaded && st.Speed > 0
+	})
+	resumed2 := waitForDownloadStatus(t, svc2, id2, 15*time.Second, func(st *types.DownloadStatus) bool {
+		return st.Status == "downloading" && st.Downloaded >= saved2.Downloaded && st.Speed > 0
+	})
+	resumedHot := waitForDownloadStatus(t, svc2, idHot, 15*time.Second, func(st *types.DownloadStatus) bool {
+		return st.Status == "downloading" && st.Speed > 0
+	})
+
+	if resumed1.Downloaded < saved1.Downloaded {
+		t.Errorf("cold1 downloaded = %d < saved = %d", resumed1.Downloaded, saved1.Downloaded)
+	}
+	if resumed2.Downloaded < saved2.Downloaded {
+		t.Errorf("cold2 downloaded = %d < saved = %d", resumed2.Downloaded, saved2.Downloaded)
+	}
+	if resumedHot.Downloaded == 0 {
+		t.Error("hot downloaded = 0")
+	}
+}
