@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/utils"
 )
@@ -38,9 +37,9 @@ type ProbeResult struct {
 }
 
 func resolveProxyURL() string {
-	settings, err := config.LoadSettings()
+	settings, err := newDefaultSettingsStore().Load()
 	if err != nil {
-		settings = config.DefaultSettings()
+		settings = defaultSettings()
 	}
 	if settings != nil {
 		return settings.Network.ProxyURL

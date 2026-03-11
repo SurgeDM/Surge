@@ -27,6 +27,8 @@ type LifecycleManager struct {
 	settings            *config.Settings
 	settingsMu          sync.RWMutex
 	settingsRefreshedAt time.Time
+	settingsStore       SettingsStore
+	downloadStore       DownloadStore
 	addFunc             AddDownloadFunc
 	addWithIDFunc       AddDownloadWithIDFunc
 	isNameActive        IsNameActiveFunc
@@ -65,11 +67,22 @@ func (mgr *LifecycleManager) buildIsNameActive() func(string, string) bool {
 }
 
 func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithIDFunc, isNameActive ...IsNameActiveFunc) *LifecycleManager {
+	return NewLifecycleManagerWithStores(addFunc, addWithIDFunc, nil, nil, isNameActive...)
+}
+
+func NewLifecycleManagerWithStores(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithIDFunc, settingsStore SettingsStore, downloadStore DownloadStore, isNameActive ...IsNameActiveFunc) *LifecycleManager {
+	if settingsStore == nil {
+		settingsStore = newDefaultSettingsStore()
+	}
+	if downloadStore == nil {
+		downloadStore = newDefaultDownloadStore()
+	}
+
 	// Snapshot settings once so enqueue can still make routing decisions even if
 	// a later disk read fails or the caller never opens the settings UI.
-	settings, err := config.LoadSettings()
+	settings, err := settingsStore.Load()
 	if err != nil {
-		settings = config.DefaultSettings()
+		settings = defaultSettings()
 	}
 
 	var activeCheck IsNameActiveFunc
@@ -80,6 +93,8 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 	return &LifecycleManager{
 		settings:            settings,
 		settingsRefreshedAt: time.Now(),
+		settingsStore:       settingsStore,
+		downloadStore:       downloadStore,
 		addFunc:             addFunc,
 		addWithIDFunc:       addWithIDFunc,
 		isNameActive:        activeCheck,
@@ -112,14 +127,14 @@ func (m *LifecycleManager) GetSettings() *config.Settings {
 		return m.settings
 	}
 
-	if loaded, err := config.LoadSettings(); err == nil && loaded != nil {
+	if loaded, err := m.settingsStore.Load(); err == nil && loaded != nil {
 		m.settings = loaded
 		m.settingsRefreshedAt = time.Now()
 		return loaded
 	}
 
 	if m.settings == nil {
-		return config.DefaultSettings()
+		return defaultSettings()
 	}
 	return m.settings
 }
@@ -127,7 +142,7 @@ func (m *LifecycleManager) GetSettings() *config.Settings {
 // ApplySettings swaps in a new routing snapshot for future enqueue calls.
 func (m *LifecycleManager) ApplySettings(s *config.Settings) {
 	if s == nil {
-		s = config.DefaultSettings()
+		s = defaultSettings()
 	}
 	m.settingsMu.Lock()
 	m.settings = s
@@ -137,7 +152,7 @@ func (m *LifecycleManager) ApplySettings(s *config.Settings) {
 
 // SaveSettings persists and applies a new routing snapshot for future enqueue calls.
 func (m *LifecycleManager) SaveSettings(s *config.Settings) error {
-	if err := config.SaveSettings(s); err != nil {
+	if err := m.settingsStore.Save(s); err != nil {
 		return err
 	}
 	m.ApplySettings(s)

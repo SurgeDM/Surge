@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
 )
 
@@ -30,7 +29,12 @@ func (mgr *LifecycleManager) Pause(id string) error {
 
 	// Downloads paused in a prior session are not tracked by the in-memory pool;
 	// synthesize a paused event so the UI can clear any transient "pausing" spinner.
-	entry, err := state.GetDownload(id)
+	store := mgr.downloadStore
+	if store == nil {
+		store = newDefaultDownloadStore()
+	}
+
+	entry, err := store.Get(id)
 	if err == nil && entry != nil {
 		// Emit paused event so UI clears "pausing" state
 		if mgr.engineHooks.PublishEvent != nil {
@@ -60,7 +64,12 @@ func (mgr *LifecycleManager) Resume(id string) error {
 		return nil
 	}
 
-	entry, err := state.GetDownload(id)
+	store := mgr.downloadStore
+	if store == nil {
+		store = newDefaultDownloadStore()
+	}
+
+	entry, err := store.Get(id)
 	if err != nil || entry == nil {
 		return fmt.Errorf("download not found")
 	}
@@ -76,7 +85,7 @@ func (mgr *LifecycleManager) Resume(id string) error {
 		outputPath = "."
 	}
 
-	savedState, stateErr := state.LoadState(entry.URL, entry.DestPath)
+	savedState, stateErr := store.LoadState(entry.URL, entry.DestPath)
 
 	var mirrorURLs []string
 	var dmState *types.ProgressState
@@ -171,7 +180,12 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 		outputPath = "."
 	}
 
-	states, err := state.LoadStates(toLoad)
+	store := mgr.downloadStore
+	if store == nil {
+		store = newDefaultDownloadStore()
+	}
+
+	states, err := store.LoadStates(toLoad)
 	if err != nil {
 		for _, id := range toLoad {
 			idx := idMap[id]

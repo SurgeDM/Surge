@@ -304,7 +304,13 @@ func newLocalLifecycleManager(service core.DownloadService, getAll func() []type
 		addWithIDFunc = service.AddWithID
 	}
 
-	return processing.NewLifecycleManager(addFunc, addWithIDFunc, buildPoolIsNameActive(getAll))
+	return processing.NewLifecycleManagerWithStores(
+		addFunc,
+		addWithIDFunc,
+		NewSettingsStore(),
+		NewDownloadStore(),
+		buildPoolIsNameActive(getAll),
+	)
 }
 
 func startLifecycleEventWorker(service core.DownloadService, mgr *processing.LifecycleManager) (func(), error) {

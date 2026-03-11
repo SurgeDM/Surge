@@ -15,6 +15,25 @@ import (
 	"github.com/surge-downloader/surge/internal/engine/types"
 )
 
+type stubSettingsStore struct {
+	load func() (*config.Settings, error)
+	save func(*config.Settings) error
+}
+
+func (s stubSettingsStore) Load() (*config.Settings, error) {
+	if s.load == nil {
+		return config.DefaultSettings(), nil
+	}
+	return s.load()
+}
+
+func (s stubSettingsStore) Save(settings *config.Settings) error {
+	if s.save == nil {
+		return nil
+	}
+	return s.save(settings)
+}
+
 func newProbeTestServer(t *testing.T, size int64) *httptest.Server {
 	t.Helper()
 
@@ -452,6 +471,39 @@ func TestLifecycleManager_GetSettings_KeepsCachedSnapshotWhenReloadFails(t *test
 	settings := mgr.GetSettings()
 	if settings.General.WarnOnDuplicate {
 		t.Fatal("expected GetSettings to keep the cached snapshot when disk reload fails")
+	}
+}
+
+func TestLifecycleManager_SaveSettings_UsesInjectedSettingsStore(t *testing.T) {
+	loaded := config.DefaultSettings()
+	var saved *config.Settings
+
+	mgr := NewLifecycleManagerWithStores(
+		nil,
+		nil,
+		stubSettingsStore{
+			load: func() (*config.Settings, error) {
+				return loaded, nil
+			},
+			save: func(settings *config.Settings) error {
+				saved = settings
+				return nil
+			},
+		},
+		nil,
+	)
+
+	updated := config.DefaultSettings()
+	updated.General.WarnOnDuplicate = false
+
+	if err := mgr.SaveSettings(updated); err != nil {
+		t.Fatalf("SaveSettings failed: %v", err)
+	}
+	if saved != updated {
+		t.Fatal("expected SaveSettings to call the injected settings store")
+	}
+	if mgr.GetSettings() != updated {
+		t.Fatal("expected SaveSettings to refresh the in-memory snapshot")
 	}
 }
 
