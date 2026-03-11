@@ -13,7 +13,7 @@ func CopyRedirectHeaders(dst, src *http.Request) {
 	}
 	sameOrigin := dst.URL != nil && src.URL != nil &&
 		strings.EqualFold(dst.URL.Scheme, src.URL.Scheme) &&
-		strings.EqualFold(dst.URL.Hostname(), src.URL.Hostname())
+		strings.EqualFold(dst.URL.Host, src.URL.Host)
 
 	if sameOrigin {
 		for key, vals := range src.Header {
