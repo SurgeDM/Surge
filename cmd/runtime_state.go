@@ -27,8 +27,11 @@ var (
 
 	globalApp *runtimeapp.App
 
-	// Serializes the Phase 1 compatibility mirrors while cmd still keeps
-	// runtime-owned state in package globals.
+	// Ensures that reads and writes to globalApp and the Global* mirror
+	// variables are treated as a single atomic unit. Without this guard,
+	// concurrent callers could observe a partially-updated set of globals
+	// (e.g. globalApp replaced but GlobalService not yet synced) and make
+	// incorrect decisions in currentApp().
 	legacyLifecycleMu sync.Mutex
 )
 
