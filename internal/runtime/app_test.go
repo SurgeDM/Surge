@@ -1,10 +1,14 @@
 package runtime
 
 import (
+	"errors"
+	"reflect"
 	"sync"
 	"testing"
 
 	"github.com/surge-downloader/surge/internal/config"
+	"github.com/surge-downloader/surge/internal/core"
+	"github.com/surge-downloader/surge/internal/processing"
 )
 
 func TestAppResetEnqueueContextReplacesCanceledContext(t *testing.T) {
@@ -69,5 +73,67 @@ func TestEnsureLocalServiceAndLifecycle_ConcurrentInitializationUsesOneService(t
 	}
 	if app.CurrentLifecycle() == nil {
 		t.Fatal("expected lifecycle manager to be initialized")
+	}
+}
+
+func TestLifecycleForService_ReturnsNilForStaleService(t *testing.T) {
+	currentService := core.NewLocalDownloadServiceWithInput(nil, nil)
+	staleService := core.NewLocalDownloadServiceWithInput(nil, nil)
+	t.Cleanup(func() {
+		_ = currentService.Shutdown()
+		_ = staleService.Shutdown()
+	})
+
+	app := NewEmpty()
+	app.ApplyComponents(Components{
+		Service:   currentService,
+		Lifecycle: processing.NewLifecycleManager(nil, nil),
+	})
+
+	lifecycle, err := app.LifecycleForService(staleService)
+	if err != nil {
+		t.Fatalf("LifecycleForService() error = %v", err)
+	}
+	if lifecycle != nil {
+		t.Fatal("expected stale service lookup to fall back with nil lifecycle")
+	}
+}
+
+func TestEnsureLocalServiceAndLifecycle_DoesNotRewireExistingHooks(t *testing.T) {
+	settings := config.DefaultSettings()
+	app := NewLocal(settings)
+	t.Cleanup(func() {
+		_ = app.Shutdown()
+	})
+
+	if err := app.EnsureLocalServiceAndLifecycle(); err != nil {
+		t.Fatalf("EnsureLocalServiceAndLifecycle() error = %v", err)
+	}
+
+	localService, ok := app.Service().(*core.LocalDownloadService)
+	if !ok {
+		t.Fatal("expected local download service")
+	}
+
+	pauseSentinel := func(string) error { return errors.New("pause sentinel") }
+	resumeSentinel := func(string) error { return errors.New("resume sentinel") }
+	resumeBatchSentinel := func([]string) []error { return []error{errors.New("resume batch sentinel")} }
+
+	localService.PauseFunc = pauseSentinel
+	localService.ResumeFunc = resumeSentinel
+	localService.ResumeBatchFunc = resumeBatchSentinel
+
+	if err := app.EnsureLocalServiceAndLifecycle(); err != nil {
+		t.Fatalf("EnsureLocalServiceAndLifecycle() second call error = %v", err)
+	}
+
+	if got := reflect.ValueOf(localService.PauseFunc).Pointer(); got != reflect.ValueOf(pauseSentinel).Pointer() {
+		t.Fatal("expected PauseFunc wiring to remain unchanged")
+	}
+	if got := reflect.ValueOf(localService.ResumeFunc).Pointer(); got != reflect.ValueOf(resumeSentinel).Pointer() {
+		t.Fatal("expected ResumeFunc wiring to remain unchanged")
+	}
+	if got := reflect.ValueOf(localService.ResumeBatchFunc).Pointer(); got != reflect.ValueOf(resumeBatchSentinel).Pointer() {
+		t.Fatal("expected ResumeBatchFunc wiring to remain unchanged")
 	}
 }

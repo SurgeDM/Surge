@@ -185,10 +185,9 @@ func (a *App) CurrentPoolConfigs() []types.DownloadConfig {
 }
 
 func (a *App) LifecycleForService(service core.DownloadService) (*processing.LifecycleManager, error) {
-	lifecycle := a.CurrentLifecycle()
 	currentService := a.Service()
 	if service == nil || currentService == nil || service != currentService {
-		return lifecycle, nil
+		return nil, nil
 	}
 	return a.ensureLocalLifecycle(currentService, a.CurrentPoolConfigs)
 }
@@ -216,9 +215,8 @@ func (a *App) EnsureLocalServiceAndLifecycle() error {
 			a.progressCh = localService.InputCh
 		}
 		pool := a.pool
-		a.componentsMu.Unlock()
-
-		if pool != nil {
+		shouldWireLifecycle := pool != nil && localService.PauseFunc == nil
+		if shouldWireLifecycle {
 			lifecycle.SetEngineHooks(processing.EngineHooks{
 				Pause:        pool.Pause,
 				Resume:       pool.Resume,
@@ -226,11 +224,11 @@ func (a *App) EnsureLocalServiceAndLifecycle() error {
 				AddConfig:    pool.Add,
 				PublishEvent: localService.Publish,
 			})
+			localService.PauseFunc = lifecycle.Pause
+			localService.ResumeFunc = lifecycle.Resume
+			localService.ResumeBatchFunc = lifecycle.ResumeBatch
 		}
-
-		localService.PauseFunc = lifecycle.Pause
-		localService.ResumeFunc = lifecycle.Resume
-		localService.ResumeBatchFunc = lifecycle.ResumeBatch
+		a.componentsMu.Unlock()
 	}
 
 	return nil
