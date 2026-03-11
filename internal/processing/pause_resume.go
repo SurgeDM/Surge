@@ -32,7 +32,7 @@ func (mgr *LifecycleManager) Pause(id string) error {
 	// synthesize a paused event so the UI can clear any transient "pausing" spinner.
 	entry, err := state.GetDownload(id)
 	if err == nil && entry != nil {
-		// Emit paused event so UI clears "pausing" state
+		if mgr.engineHooks.PublishEvent != nil {
 		if mgr.engineHooks.PublishEvent != nil {
 			_ = mgr.engineHooks.PublishEvent(events.DownloadPausedMsg{
 				DownloadID: id,
