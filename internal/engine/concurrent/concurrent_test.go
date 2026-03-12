@@ -32,6 +32,33 @@ func initTestState(t *testing.T) (string, func()) {
 	}
 }
 
+func TestConcurrentDownloader_WaitForWorkerStart_Staggers(t *testing.T) {
+	downloader := NewConcurrentDownloader("test-id", nil, nil, &types.RuntimeConfig{})
+
+	start := time.Now()
+	if err := downloader.waitForWorkerStart(context.Background(), 2); err != nil {
+		t.Fatalf("waitForWorkerStart returned error: %v", err)
+	}
+
+	elapsed := time.Since(start)
+	minDelay := 2*types.WorkerStartStagger - 40*time.Millisecond
+	if elapsed < minDelay {
+		t.Fatalf("worker start delay too short: got %v, want at least %v", elapsed, minDelay)
+	}
+}
+
+func TestConcurrentDownloader_WaitForWorkerStart_RespectsCancel(t *testing.T) {
+	downloader := NewConcurrentDownloader("test-id", nil, nil, &types.RuntimeConfig{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	err := downloader.waitForWorkerStart(ctx, 3)
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("waitForWorkerStart error = %v, want %v", err, context.Canceled)
+	}
+}
+
 func TestConcurrentDownloader_Download(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()

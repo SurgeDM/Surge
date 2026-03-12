@@ -333,6 +333,52 @@ func TestProcessProgressMsg_UpdatesElapsed(t *testing.T) {
 	}
 }
 
+func TestProcessProgressMsg_UsesLiveSpeedForGraphHistory(t *testing.T) {
+	dm := NewDownloadModel("id-1", "http://example.com/file", "file", config.MB)
+	m := RootModel{
+		downloads:              []*DownloadModel{dm},
+		list:                   NewDownloadList(80, 20),
+		SpeedHistory:           make([]float64, GraphHistoryPoints),
+		lastSpeedHistoryUpdate: time.Now().Add(-GraphUpdateInterval),
+	}
+
+	m.processProgressMsg(events.ProgressMsg{
+		DownloadID: "id-1",
+		Downloaded: config.MB / 2,
+		Total:      config.MB,
+		Speed:      float64(config.MB),
+		Elapsed:    250 * time.Millisecond,
+	})
+
+	if dm.Speed != float64(config.MB) {
+		t.Fatalf("smoothed speed = %f, want %f", dm.Speed, float64(config.MB))
+	}
+
+	if dm.LiveSpeed != 2*float64(config.MB) {
+		t.Fatalf("live speed = %f, want %f", dm.LiveSpeed, 2*float64(config.MB))
+	}
+
+	got := m.SpeedHistory[len(m.SpeedHistory)-1]
+	if got != 2 {
+		t.Fatalf("graph speed = %f MB/s, want 2 MB/s", got)
+	}
+}
+
+func TestCalcTotalSpeed_UsesActiveLiveSpeedOnly(t *testing.T) {
+	m := RootModel{
+		downloads: []*DownloadModel{
+			{ID: "active", LiveSpeed: 2 * float64(config.MB)},
+			{ID: "paused", LiveSpeed: 5 * float64(config.MB), paused: true},
+			{ID: "pausing", LiveSpeed: 7 * float64(config.MB), pausing: true},
+			{ID: "done", LiveSpeed: 11 * float64(config.MB), done: true},
+		},
+	}
+
+	if got := m.calcTotalSpeed(); got != 2 {
+		t.Fatalf("calcTotalSpeed() = %f, want 2", got)
+	}
+}
+
 func TestGenerateUniqueFilename_IncompleteSuffixConstant(t *testing.T) {
 	// Verify the constant we're using is correct
 	if types.IncompleteSuffix != ".surge" {

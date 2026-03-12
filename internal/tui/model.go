@@ -58,6 +58,7 @@ type DownloadModel struct {
 	Total         int64
 	Downloaded    int64
 	Speed         float64
+	LiveSpeed     float64
 	Connections   int
 
 	StartTime time.Time

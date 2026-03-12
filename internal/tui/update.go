@@ -520,6 +520,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				d.Downloaded = d.Total
 				d.Elapsed = msg.Elapsed
 				d.Speed = msg.AvgSpeed
+				d.LiveSpeed = 0
 				d.done = true
 				cmds = append(cmds, d.progress.SetPercent(1.0))
 
@@ -538,6 +539,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case events.DownloadErrorMsg:
 		found := false
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.LiveSpeed = 0
 			d.err = msg.Err
 			d.done = true
 			m.addLogEntry(LogStyleError.Render("✖ Error: " + d.Filename))
@@ -560,6 +562,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.resuming = false
 			d.Downloaded = msg.Downloaded
 			d.Speed = 0
+			d.LiveSpeed = 0
 			m.addLogEntry(LogStylePaused.Render("⏸ Paused: " + d.Filename))
 		}
 		m.UpdateListItems()
@@ -570,6 +573,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.paused = false
 			d.pausing = false
 			d.resuming = true
+			d.LiveSpeed = 0
 			m.addLogEntry(LogStyleStarted.Render("▶ Resumed: " + d.Filename))
 		}
 		m.UpdateListItems()

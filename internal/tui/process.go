@@ -13,6 +13,19 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) {
 	}
 
 	prevDownloaded := d.Downloaded
+	prevElapsed := d.Elapsed
+
+	if deltaElapsed := msg.Elapsed - prevElapsed; deltaElapsed > 0 {
+		deltaDownloaded := msg.Downloaded - prevDownloaded
+		if deltaDownloaded > 0 {
+			d.LiveSpeed = float64(deltaDownloaded) / deltaElapsed.Seconds()
+		} else {
+			d.LiveSpeed = 0
+		}
+	} else if msg.Downloaded < prevDownloaded || msg.Elapsed < prevElapsed {
+		d.LiveSpeed = 0
+	}
+
 	d.Downloaded = msg.Downloaded
 	d.Total = msg.Total
 	d.Speed = msg.Speed
@@ -44,20 +57,11 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) {
 		d.progress.SetPercent(percentage)
 	}
 
-	// Update speed graph history with EMA smoothing for smooth transitions
+	// Sample graph history from live per-interval transfer rate.
 	if time.Since(m.lastSpeedHistoryUpdate) >= GraphUpdateInterval {
 		totalSpeed := m.calcTotalSpeed()
-		// EMA smooth against previous graph point for visual continuity
-		var smoothed float64
 		if len(m.SpeedHistory) > 0 {
-			prev := m.SpeedHistory[len(m.SpeedHistory)-1]
-			const graphAlpha = 0.3 // Graph smoothing factor
-			smoothed = graphAlpha*totalSpeed + (1-graphAlpha)*prev
-		} else {
-			smoothed = totalSpeed
-		}
-		if len(m.SpeedHistory) > 0 {
-			m.SpeedHistory = append(m.SpeedHistory[1:], smoothed)
+			m.SpeedHistory = append(m.SpeedHistory[1:], totalSpeed)
 		}
 		m.lastSpeedHistoryUpdate = time.Now()
 	}

@@ -23,6 +23,7 @@ const (
 	// Batching constants for worker updates
 	WorkerBatchSize     = 1 * MB                 // Batch updates until 1MB is downloaded
 	WorkerBatchInterval = 200 * time.Millisecond // Or until 200ms passes
+	WorkerStartStagger  = 150 * time.Millisecond // Delay between starting each worker
 )
 
 // Connection limits

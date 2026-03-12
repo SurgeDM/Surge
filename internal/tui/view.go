@@ -986,11 +986,10 @@ func getDownloadStatus(d *DownloadModel) string {
 func (m RootModel) calcTotalSpeed() float64 {
 	total := 0.0
 	for _, d := range m.downloads {
-		// Skip completed downloads
-		if d.done {
+		if d.done || d.paused || d.pausing {
 			continue
 		}
-		total += d.Speed
+		total += d.LiveSpeed
 	}
 	return total / float64(config.MB)
 }

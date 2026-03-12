@@ -502,6 +502,12 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
+			if err := d.waitForWorkerStart(downloadCtx, workerID); err != nil {
+				if err != context.Canceled {
+					workerErrors <- err
+				}
+				return
+			}
 			err := d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
 			if err != nil && err != context.Canceled {
 				workerErrors <- err
@@ -603,4 +609,21 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
 	return finalizeCompletedDownload()
+}
+
+func (d *ConcurrentDownloader) waitForWorkerStart(ctx context.Context, workerID int) error {
+	startDelay := time.Duration(workerID) * types.WorkerStartStagger
+	if startDelay <= 0 {
+		return nil
+	}
+
+	timer := time.NewTimer(startDelay)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
 }
