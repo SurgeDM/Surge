@@ -519,7 +519,11 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	go func() {
 		defer wgHelpers.Done()
 		
-		activeWorkerCancellations := make(map[int]context.CancelFunc)
+		type workerEntry struct {
+			id     int
+			cancel context.CancelFunc
+		}
+		var activeWorkers []workerEntry
 		nextWorkerID := 0
 		
 		scaleLoop := func() {
@@ -527,7 +531,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			target := d.targetWorkers
 			d.activeMu.Unlock()
 			
-			currentActive := len(activeWorkerCancellations)
+			currentActive := len(activeWorkers)
 			
 			if currentActive < target {
 				// Scale UP
@@ -536,7 +540,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 					nextWorkerID++
 					
 					workerCtx, workerCancel := context.WithCancel(downloadCtx)
-					activeWorkerCancellations[wID] = workerCancel
+					activeWorkers = append(activeWorkers, workerEntry{id: wID, cancel: workerCancel})
 					d.aliveWorkers.Add(1)
 					
 					wg.Add(1)
@@ -551,20 +555,14 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 				}
 				utils.Debug("Supervisor: Scaled UP to %d workers", target)
 			} else if currentActive > target {
-				// Scale DOWN
+				// Scale DOWN — cancel the most recently added workers (tail of slice)
 				excess := currentActive - target
-				canceledCount := 0
-				
-				// Cancel the most recently added workers first
-				for id, cancelFn := range activeWorkerCancellations {
-					if canceledCount >= excess {
-						break
-					}
-					cancelFn() // Cancel this specific worker
-					delete(activeWorkerCancellations, id)
-					canceledCount++
+				for i := 0; i < excess; i++ {
+					last := activeWorkers[len(activeWorkers)-1]
+					last.cancel()
+					activeWorkers = activeWorkers[:len(activeWorkers)-1]
 				}
-				utils.Debug("Supervisor: Scaled DOWN to %d workers (canceled %d)", target, canceledCount)
+				utils.Debug("Supervisor: Scaled DOWN to %d workers (canceled %d)", target, excess)
 			}
 		}
 
