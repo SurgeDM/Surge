@@ -2,6 +2,7 @@ package concurrent
 
 import (
 	"context"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
@@ -240,6 +241,54 @@ func TestDynamicScaling_ScaleUpThenDown(t *testing.T) {
 		}
 	case <-time.After(30 * time.Second):
 		t.Fatal("Download timed out")
+	}
+
+	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
+		t.Error(err)
+	}
+}
+
+func TestDynamicScaling_AdaptiveOn429(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(256 * types.KB)
+
+	// Server returns 429 on first 2 requests, then works normally.
+	// With 4 initial workers, the first burst will trigger 429s,
+	// causing the supervisor to halve workers.
+	server := testutil.NewMockServerT(t,
+		testutil.WithFileSize(fileSize),
+		testutil.WithRangeSupport(true),
+		testutil.WithHandler(func(w http.ResponseWriter, r *http.Request) {
+			// Default handler serves the file normally
+		}),
+		testutil.WithFailOnNthRequest(1), // First request returns 429
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "adaptive429_test.bin")
+	state := types.NewProgressState("adaptive429-test", fileSize)
+	runtime := &types.RuntimeConfig{
+		MaxConnectionsPerHost: 4,
+		MaxTaskRetries:        5,
+		MinChunkSize:          32 * types.KB,
+	}
+
+	downloader := NewConcurrentDownloader("adaptive429-id", nil, state, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// Pre-create incomplete file
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	mirrors := []string{server.URL()}
+	err := downloader.Download(ctx, server.URL(), mirrors, mirrors, destPath, fileSize)
+	if err != nil {
+		t.Fatalf("Download should complete despite 429: %v", err)
 	}
 
 	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {

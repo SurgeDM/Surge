@@ -37,6 +37,7 @@ type ConcurrentDownloader struct {
 	targetWorkers int                 // Desired number of workers
 	workerScaleCh chan int            // Channel to signal scaling events
 	aliveWorkers  atomic.Int32        // Current number of alive workers (managed by supervisor)
+	rateLimitCh   chan struct{}       // Channel for workers to signal 429 rate-limiting
 
 }
 
@@ -65,6 +66,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 			},
 		},
 		workerScaleCh: make(chan int, 1),
+		rateLimitCh:   make(chan struct{}, 1),
 	}
 }
 
@@ -526,6 +528,11 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		var activeWorkers []workerEntry
 		nextWorkerID := 0
 		
+		// Rate-limit recovery state
+		desiredWorkers := numConns             // User/heuristic target ceiling
+		last429 := time.Time{}                 // Last time a 429 was received
+		const recoveryInterval = 10 * time.Second // Cooldown before trying to scale back up
+		
 		scaleLoop := func() {
 			d.activeMu.Lock()
 			target := d.targetWorkers
@@ -569,6 +576,10 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		// Initial launch
 		scaleLoop()
 
+		// Recovery ticker: periodically try to scale back up after 429 cooldown
+		recoveryTicker := time.NewTicker(recoveryInterval)
+		defer recoveryTicker.Stop()
+
 		// Monitor loop
 		for {
 			select {
@@ -579,7 +590,37 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 				queue.Close()
 				return 
 			case <-d.workerScaleCh:
-				// Adjust worker count dynamically
+				// Manual/external worker count adjustment
+				d.activeMu.Lock()
+				desiredWorkers = d.targetWorkers // Update ceiling for recovery
+				d.activeMu.Unlock()
+				scaleLoop()
+			case <-d.rateLimitCh:
+				// 429 received — halve workers (congestion-control style)
+				last429 = time.Now()
+				d.activeMu.Lock()
+				current := d.targetWorkers
+				reduced := current / 2
+				if reduced < 1 {
+					reduced = 1
+				}
+				if reduced < current {
+					d.targetWorkers = reduced
+					utils.Debug("Supervisor: 429 rate-limit, scaling %d -> %d workers", current, reduced)
+				}
+				d.activeMu.Unlock()
+				scaleLoop()
+			case <-recoveryTicker.C:
+				// Gradually recover: if no 429 for recoveryInterval, scale up by 1
+				if last429.IsZero() || time.Since(last429) < recoveryInterval {
+					continue
+				}
+				d.activeMu.Lock()
+				if d.targetWorkers < desiredWorkers {
+					d.targetWorkers++
+					utils.Debug("Supervisor: 429 recovery, scaling up to %d workers (ceiling %d)", d.targetWorkers, desiredWorkers)
+				}
+				d.activeMu.Unlock()
 				scaleLoop()
 			}
 		}
