@@ -181,6 +181,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		
 		// Bind dynamic worker control hook if supported
 		cfg.WorkerControl = d.SetWorkerCount
+		defer func() { cfg.WorkerControl = nil }() // Release reference to allow GC of downloader
 		
 		utils.Debug("Calling Download with mirrors: %v", mirrors)
 		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, cfg.TotalSize)
