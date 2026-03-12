@@ -86,6 +86,28 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "updated", "id": id, "url": newURL})
 	})))
+
+	mux.HandleFunc("/worker-count", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, r *http.Request, id string) {
+		var req struct {
+			Workers int `json:"workers"`
+		}
+		if err := decodeJSONBody(r, &req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		if req.Workers <= 0 {
+			http.Error(w, "workers must be > 0", http.StatusBadRequest)
+			return
+		}
+
+		if err := service.SetWorkerCount(id, req.Workers); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+
+		writeJSONResponse(w, http.StatusOK, map[string]interface{}{"status": "updated", "id": id, "workers": req.Workers})
+	})))
 }
 
 func eventsHandler(service core.DownloadService) http.HandlerFunc {
