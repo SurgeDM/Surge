@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/surge-downloader/surge/internal/engine/events"
@@ -35,6 +36,7 @@ type ConcurrentDownloader struct {
 	// Dynamic Worker Control
 	targetWorkers int                 // Desired number of workers
 	workerScaleCh chan int            // Channel to signal scaling events
+	aliveWorkers  atomic.Int32        // Current number of alive workers (managed by supervisor)
 
 }
 
@@ -454,7 +456,10 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			case <-ticker.C:
 				// Ensure queue is empty (no pending retries) before considering byte count.
 				// This protects against cutting off active retries even if byte count seems high (due to overlaps etc).
-				if queue.Len() == 0 && (int(queue.IdleWorkers()) == numConns || d.State.Downloaded.Load() >= fileSize) {
+				// Use aliveWorkers (managed by supervisor) instead of the initial numConns,
+				// because dynamic scaling can change the worker count at runtime.
+				currentWorkers := int(d.aliveWorkers.Load())
+				if queue.Len() == 0 && (int(queue.IdleWorkers()) == currentWorkers || d.State.Downloaded.Load() >= fileSize) {
 					queue.Close()
 					return
 				}
@@ -532,10 +537,12 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 					
 					workerCtx, workerCancel := context.WithCancel(downloadCtx)
 					activeWorkerCancellations[wID] = workerCancel
+					d.aliveWorkers.Add(1)
 					
 					wg.Add(1)
 					go func(workerID int, wCtx context.Context) {
 						defer wg.Done()
+						defer d.aliveWorkers.Add(-1)
 						err := d.worker(wCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
 						if err != nil && err != context.Canceled {
 							workerErrors <- err
