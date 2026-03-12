@@ -33,11 +33,13 @@ type ConcurrentDownloader struct {
 	bufPool      sync.Pool
 	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
 
-	// Dynamic Worker Control
+	// Dynamic Worker Control — uses a supervisor goroutine pattern so workers
+	// can be added/removed at runtime without restarting the download pipeline.
 	targetWorkers int                 // Desired number of workers
 	workerScaleCh chan int            // Channel to signal scaling events
-	aliveWorkers  atomic.Int32        // Current number of alive workers (managed by supervisor)
-	rateLimitCh   chan struct{}       // Channel for workers to signal 429 rate-limiting
+	aliveWorkers  atomic.Int32        // Live count of running worker goroutines
+	rateLimitCh   chan struct{}       // Workers signal here on 429 to trigger adaptive scale-down
+	workerDoneCh  chan int            // Workers send their ID here on exit so supervisor can prune its tracking slice
 
 }
 
@@ -67,6 +69,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 		},
 		workerScaleCh: make(chan int, 1),
 		rateLimitCh:   make(chan struct{}, 1),
+		workerDoneCh:  make(chan int, runtime.GetMaxConnectionsPerHost()),
 	}
 }
 
@@ -486,9 +489,10 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		}
 	}()
 
-	// Start workers dynamically
+	// Worker lifecycle: wg tracks goroutine exits, workerErrors collects non-nil errors.
+	// A separate goroutine closes workerErrors after all workers finish to avoid deadlock.
 	var wg sync.WaitGroup
-	workerErrors := make(chan error, d.Runtime.GetMaxConnectionsPerHost()*2) // Generous buffer for dynamic scaling
+	workerErrors := make(chan error, d.Runtime.GetMaxConnectionsPerHost()*2)
 	
 	// Combine primary + secondary for workers
 	// We want to ensure the primary is included if it was valid (it should be, otherwise TUIDownload would have failed)
@@ -511,12 +515,22 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		workerMirrors = []string{rawurl}
 	}
 
-	// Initial target workers
+	// Set initial target matching the heuristic connection count; this value
+	// can diverge later via SetWorkerCount or 429 adaptive scaling.
 	d.activeMu.Lock()
 	d.targetWorkers = numConns
 	d.activeMu.Unlock()
 
-	// Supervisor Manager for Dynamic Workers
+	// Close workerErrors after all workers finish. This MUST be a separate goroutine
+	// (not inside the supervisor) so the channel is closed in the happy path too —
+	// otherwise the main goroutine deadlocks on `for err := range workerErrors`.
+	go func() {
+		wg.Wait()
+		close(workerErrors)
+	}()
+
+	// Supervisor goroutine: owns the activeWorkers slice, handles scale-up/down,
+	// 429 adaptive scaling, and recovery. Exits when downloadCtx is cancelled.
 	wgHelpers.Add(1)
 	go func() {
 		defer wgHelpers.Done()
@@ -528,10 +542,21 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		var activeWorkers []workerEntry
 		nextWorkerID := 0
 		
-		// Rate-limit recovery state
-		desiredWorkers := numConns             // User/heuristic target ceiling
-		last429 := time.Time{}                 // Last time a 429 was received
-		const recoveryInterval = 10 * time.Second // Cooldown before trying to scale back up
+		// 429 recovery: track the user/heuristic ceiling and cooldown timestamp
+		desiredWorkers := numConns
+		last429 := time.Time{}
+		const recoveryInterval = 10 * time.Second
+
+		// removeWorker prunes a worker ID from the tracking slice.
+		// Called when a worker exits naturally (queue drained).
+		removeWorker := func(wID int) {
+			for i, w := range activeWorkers {
+				if w.id == wID {
+					activeWorkers = append(activeWorkers[:i], activeWorkers[i+1:]...)
+					return
+				}
+			}
+		}
 		
 		scaleLoop := func() {
 			d.activeMu.Lock()
@@ -541,7 +566,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			currentActive := len(activeWorkers)
 			
 			if currentActive < target {
-				// Scale UP
 				for i := currentActive; i < target; i++ {
 					wID := nextWorkerID
 					nextWorkerID++
@@ -554,6 +578,13 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 					go func(workerID int, wCtx context.Context) {
 						defer wg.Done()
 						defer d.aliveWorkers.Add(-1)
+						defer func() {
+							// Notify supervisor this worker exited so it can prune the tracking slice
+							select {
+							case d.workerDoneCh <- workerID:
+							default:
+							}
+						}()
 						err := d.worker(wCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
 						if err != nil && err != context.Canceled {
 							workerErrors <- err
@@ -562,7 +593,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 				}
 				utils.Debug("Supervisor: Scaled UP to %d workers", target)
 			} else if currentActive > target {
-				// Scale DOWN — cancel the most recently added workers (tail of slice)
+				// LIFO: cancel the most recently added workers (least progress)
 				excess := currentActive - target
 				for i := 0; i < excess; i++ {
 					last := activeWorkers[len(activeWorkers)-1]
@@ -573,30 +604,25 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			}
 		}
 
-		// Initial launch
 		scaleLoop()
 
-		// Recovery ticker: periodically try to scale back up after 429 cooldown
 		recoveryTicker := time.NewTicker(recoveryInterval)
 		defer recoveryTicker.Stop()
 
-		// Monitor loop
 		for {
 			select {
 			case <-downloadCtx.Done():
-				// Parent canceled. We break the loop and wait for workers to finish.
-				wg.Wait()
-				close(workerErrors)
 				queue.Close()
-				return 
+				return
+			case doneID := <-d.workerDoneCh:
+				// Worker exited naturally (queue drained) — prune from tracking slice
+				removeWorker(doneID)
 			case <-d.workerScaleCh:
-				// Manual/external worker count adjustment
 				d.activeMu.Lock()
-				desiredWorkers = d.targetWorkers // Update ceiling for recovery
+				desiredWorkers = d.targetWorkers
 				d.activeMu.Unlock()
 				scaleLoop()
 			case <-d.rateLimitCh:
-				// 429 received — halve workers (congestion-control style)
 				last429 = time.Now()
 				d.activeMu.Lock()
 				current := d.targetWorkers
@@ -611,7 +637,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 				d.activeMu.Unlock()
 				scaleLoop()
 			case <-recoveryTicker.C:
-				// Gradually recover: if no 429 for recoveryInterval, scale up by 1
 				if last429.IsZero() || time.Since(last429) < recoveryInterval {
 					continue
 				}
@@ -626,9 +651,8 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		}
 	}()
 
-	// Wait for helpers (balancer, health monitor, supervisor) to finish.
-	// We do NOT wait for `wg` (the worker WaitGroup) here, because the supervisor handles that.
-	// Wait for the errors or completion.
+	// Drain worker errors. The channel is closed by the dedicated goroutine
+	// above after wg.Wait() — this works in both happy path and cancellation.
 	var downloadErr error
 	for err := range workerErrors {
 		if err != nil {

@@ -86,6 +86,20 @@ func TestSetWorkerCount_NoopOnSameValue(t *testing.T) {
 	}
 }
 
+// waitForWorkers spin-polls until at least minWorkers are alive, avoiding
+// the racy time.Sleep approach that fails on slow CI runners.
+func waitForWorkers(t *testing.T, d *ConcurrentDownloader, minWorkers int32, timeout time.Duration) {
+	t.Helper()
+	deadline := time.Now().Add(timeout)
+	for time.Now().Before(deadline) {
+		if d.aliveWorkers.Load() >= minWorkers {
+			return
+		}
+		time.Sleep(5 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for %d workers (have %d)", minWorkers, d.aliveWorkers.Load())
+}
+
 func TestDynamicScaling_ScaleUpDuringDownload(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
@@ -94,7 +108,7 @@ func TestDynamicScaling_ScaleUpDuringDownload(t *testing.T) {
 	server := testutil.NewMockServerT(t,
 		testutil.WithFileSize(fileSize),
 		testutil.WithRangeSupport(true),
-		testutil.WithLatency(50*time.Millisecond), // Latency per request to allow scaling mid-download
+		testutil.WithLatency(50*time.Millisecond),
 	)
 	defer server.Close()
 
@@ -120,8 +134,7 @@ func TestDynamicScaling_ScaleUpDuringDownload(t *testing.T) {
 		done <- downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
 	}()
 
-	// Wait for download to start, then scale up
-	time.Sleep(100 * time.Millisecond)
+	waitForWorkers(t, downloader, 1, 5*time.Second)
 	if err := downloader.SetWorkerCount(6); err != nil {
 		t.Errorf("SetWorkerCount failed: %v", err)
 	}
@@ -174,8 +187,7 @@ func TestDynamicScaling_ScaleDownDuringDownload(t *testing.T) {
 		done <- downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
 	}()
 
-	// Wait for download to start, then scale down
-	time.Sleep(100 * time.Millisecond)
+	waitForWorkers(t, downloader, 1, 5*time.Second)
 	if err := downloader.SetWorkerCount(1); err != nil {
 		t.Errorf("SetWorkerCount failed: %v", err)
 	}
@@ -228,10 +240,9 @@ func TestDynamicScaling_ScaleUpThenDown(t *testing.T) {
 		done <- downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
 	}()
 
-	// Scale up then down
-	time.Sleep(80 * time.Millisecond)
+	waitForWorkers(t, downloader, 1, 5*time.Second)
 	_ = downloader.SetWorkerCount(6)
-	time.Sleep(80 * time.Millisecond)
+	waitForWorkers(t, downloader, 3, 5*time.Second)
 	_ = downloader.SetWorkerCount(2)
 
 	select {
@@ -254,7 +265,7 @@ func TestDynamicScaling_AdaptiveOn429(t *testing.T) {
 
 	fileSize := int64(256 * types.KB)
 
-	// Server returns 429 on first 2 requests, then works normally.
+	// Server returns 429 on first request, then works normally.
 	// With 4 initial workers, the first burst will trigger 429s,
 	// causing the supervisor to halve workers.
 	server := testutil.NewMockServerT(t,

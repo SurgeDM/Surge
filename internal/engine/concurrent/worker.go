@@ -99,24 +99,24 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			taskCancel() // Clean up context resources
 			utils.Debug("Worker %d: Task offset=%d length=%d took %v", id, task.Offset, task.Length, time.Since(taskStart))
 
-			// Check for PARENT context cancellation (pause/shutdown/scale-down)
-			// This preserves active task info for pause handler to collect
+			// Check for PARENT context cancellation (pause/shutdown/scale-down).
+			// Preserves active task info for the pause handler to collect.
 			if ctx.Err() != nil {
-				// Differentiate between global shutdown/pause and a specific worker being retired
-				// For dynamic scaling: if this worker was canceled individually but we aren't pausing globally,
-				// we must requeue our remaining work before exiting.
-				if d.State != nil && !d.State.IsPausing() && !d.State.IsPaused() {
+				// Differentiate global pause from individual worker retirement (scale-down).
+				// Requeue MUST happen unconditionally to avoid losing byte ranges.
+				isGlobalPause := d.State != nil && (d.State.IsPausing() || d.State.IsPaused())
+				if !isGlobalPause {
+					// Scale-down path: requeue remaining work so another worker picks it up
 					if remaining := activeTask.RemainingTask(); remaining != nil && remaining.Length > 0 {
 						queue.Push(*remaining)
 						utils.Debug("Worker %d: retired via scale-down, requeued %d bytes", id, remaining.Length)
 					}
-					// Remove ourselves from activeTasks so pause handler doesn't see us
 					d.activeMu.Lock()
 					delete(d.activeTasks, id)
 					d.activeMu.Unlock()
 				}
-
 				// DON'T delete from activeTasks if it's a global pause - pause handler needs it
+
 				if d.State != nil {
 					d.State.ActiveWorkers.Add(-1)
 				}
