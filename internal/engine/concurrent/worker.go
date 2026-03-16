@@ -170,7 +170,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 		}
 
 		if lastErr != nil {
-			utils.Debug("DEBUG: task at offset %d length %d failed after %d retries: %v", task.Offset, task.Length, maxRetries, lastErr)
+			utils.Debug("task at offset %d length %d failed after %d retries: %v", task.Offset, task.Length, maxRetries, lastErr)
 			return fmt.Errorf("task at offset %d length %d failed after %d retries: %w", task.Offset, task.Length, maxRetries, lastErr)
 		}
 	}
