@@ -6,7 +6,7 @@ on:
       url:
         description: "URL to download for benchmarking"
         required: true
-        default: "https://ash-speed.hetzner.com/100MB.bin"
+        default: "https://ash-speed.hetzner.com/1GB.bin"
       iterations:
         description: "Number of iterations"
         required: true
