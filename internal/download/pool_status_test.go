@@ -87,7 +87,7 @@ func TestWorkerPool_GetStatus_Paused(t *testing.T) {
 	}
 }
 
-func TestWorkerPool_GetStatus_Completed(t *testing.T) {
+func TestWorkerPool_GetStatus_DoneStillReportsDownloadingUntilLifecycleFinalizes(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 3)
 
@@ -106,7 +106,7 @@ func TestWorkerPool_GetStatus_Completed(t *testing.T) {
 		t.Fatal("Expected status to be returned")
 	}
 
-	if status.Status != "completed" {
-		t.Errorf("Expected status 'completed', got '%s'", status.Status)
+	if status.Status != "downloading" {
+		t.Errorf("Expected status 'downloading', got '%s'", status.Status)
 	}
 }

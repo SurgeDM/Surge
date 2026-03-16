@@ -489,20 +489,12 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 		Filename:   filename,
 		TotalSize:  totalSize,
 		Downloaded: downloaded,
-		Status:     "downloading",
+		Status:     state.RuntimeStatus(),
 	}
 	if dp := state.GetDestPath(); dp != "" {
 		status.DestPath = dp
 	} else {
 		status.DestPath = ad.config.DestPath
-	}
-
-	if ad.config.State.IsPausing() {
-		status.Status = "pausing"
-	} else if ad.config.State.IsPaused() {
-		status.Status = "paused"
-	} else if state.Done.Load() {
-		status.Status = "completed"
 	}
 
 	if err := state.GetError(); err != nil {

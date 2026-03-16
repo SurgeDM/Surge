@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -242,6 +243,40 @@ func TestSingleDownloader_FailAfterBytes(t *testing.T) {
 	stats := server.Stats()
 	if stats.BytesServed < 50*types.KB {
 		t.Errorf("Expected at least 50KB served before failure, got %d", stats.BytesServed)
+	}
+}
+
+func TestSingleDownloader_RejectsShortSuccessfulResponse(t *testing.T) {
+	tmpDir, cleanup, _ := testutil.TempDir("surge-short-success-single")
+	defer cleanup()
+
+	fileSize := int64(64 * types.KB)
+	servedSize := fileSize / 2
+	server := testutil.NewMockServerT(t,
+		testutil.WithHandler(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Length", strconv.FormatInt(servedSize, 10))
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(make([]byte, servedSize))
+		}),
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "short_success_single.bin")
+	state := types.NewProgressState("short-success-single", fileSize)
+	runtime := &types.RuntimeConfig{}
+
+	downloader := NewSingleDownloader("short-success-id", nil, state, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	err := downloader.Download(ctx, server.URL(), destPath, fileSize, "short_success.bin")
+	if err == nil {
+		t.Fatal("expected short successful response to be rejected")
 	}
 }
 

@@ -365,6 +365,7 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 
 				status.TotalSize = totalSize
 				status.Downloaded = downloaded
+				status.Status = cfg.State.RuntimeStatus()
 				if dp := cfg.State.GetDestPath(); dp != "" {
 					status.DestPath = dp
 				}
@@ -375,15 +376,6 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 
 				// Get active connections count
 				status.Connections = int(connections)
-
-				// Update status based on state
-				if cfg.State.IsPausing() {
-					status.Status = "pausing"
-				} else if cfg.State.IsPaused() {
-					status.Status = "paused"
-				} else if cfg.State.Done.Load() {
-					status.Status = "completed"
-				}
 
 				// Calculate speed from progress only while actively downloading.
 				if status.Status == "downloading" {

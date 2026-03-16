@@ -3,8 +3,12 @@ package concurrent
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -64,6 +68,65 @@ func TestConcurrentDownloader_Download(t *testing.T) {
 
 	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
 		t.Error(err)
+	}
+}
+
+func TestConcurrentDownloader_RejectsShortRangeResponse(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(64 * types.KB)
+	server := testutil.NewMockServerT(t,
+		testutil.WithHandler(func(w http.ResponseWriter, r *http.Request) {
+			rangeHeader := strings.TrimPrefix(r.Header.Get("Range"), "bytes=")
+			parts := strings.SplitN(rangeHeader, "-", 2)
+			if len(parts) != 2 {
+				http.Error(w, "missing range", http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+
+			start, err := strconv.ParseInt(parts[0], 10, 64)
+			if err != nil {
+				http.Error(w, "invalid range start", http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+			end, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil {
+				http.Error(w, "invalid range end", http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+
+			requested := end - start + 1
+			served := requested / 2
+			if served == 0 {
+				served = 1
+			}
+
+			w.Header().Set("Accept-Ranges", "bytes")
+			w.Header().Set("Content-Length", strconv.FormatInt(served, 10))
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, start+served-1, fileSize))
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write(make([]byte, served))
+		}),
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "short_range.bin")
+	state := types.NewProgressState("short-range-test", fileSize)
+	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 1}
+
+	downloader := NewConcurrentDownloader("short-range-id", nil, state, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
+	if err == nil {
+		t.Fatal("expected short range response to be rejected")
 	}
 }
 

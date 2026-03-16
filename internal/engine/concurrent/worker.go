@@ -170,11 +170,8 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 		}
 
 		if lastErr != nil {
-			// Log failed task but continue with next task
-			// If we modified StopAt we should probably reset it or push the remaining part?
-			// TODO: Could optimize by pushing only remaining part if we track that.
-			queue.Push(task)
-			utils.Debug("task at offset %d failed after %d retries: %v", task.Offset, maxRetries, lastErr)
+			utils.Debug("DEBUG: task at offset %d length %d failed after %d retries: %v", task.Offset, task.Length, maxRetries, lastErr)
+			return fmt.Errorf("task at offset %d length %d failed after %d retries: %w", task.Offset, task.Length, maxRetries, lastErr)
 		}
 	}
 }
@@ -392,6 +389,12 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 		if readErr != nil {
 			return fmt.Errorf("read error: %w", readErr)
 		}
+	}
+
+	stopAt := activeTask.StopAt.Load()
+	if offset < stopAt {
+		utils.Debug("DEBUG: concurrent range ended short: start=%d stop=%d got=%d url=%s", task.Offset, stopAt, offset, rawurl)
+		return fmt.Errorf("incomplete range download: got %d of %d bytes for range %d-%d", offset-task.Offset, stopAt-task.Offset, task.Offset, stopAt-1)
 	}
 
 	return nil

@@ -204,6 +204,8 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		if err := outFile.Truncate(written); err != nil {
 			return fmt.Errorf("truncate error: %w", err)
 		}
+		utils.Debug("DEBUG: single download ended short: got=%d expected=%d url=%s", written, fileSize, rawurl)
+		return fmt.Errorf("incomplete download: got %d of %d bytes", written, fileSize)
 	}
 
 	if err := outFile.Sync(); err != nil {

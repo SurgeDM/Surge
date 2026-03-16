@@ -99,6 +99,26 @@ func TestProgressState_PauseResume(t *testing.T) {
 	}
 }
 
+func TestProgressState_RuntimeStatus_IgnoresDoneUntilLifecycleFinalizes(t *testing.T) {
+	ps := NewProgressState("test", 100)
+	ps.Done.Store(true)
+
+	if got := ps.RuntimeStatus(); got != "downloading" {
+		t.Fatalf("RuntimeStatus = %q, want downloading", got)
+	}
+
+	ps.SetPausing(true)
+	if got := ps.RuntimeStatus(); got != "pausing" {
+		t.Fatalf("RuntimeStatus with pausing = %q, want pausing", got)
+	}
+
+	ps.SetPausing(false)
+	ps.Pause()
+	if got := ps.RuntimeStatus(); got != "paused" {
+		t.Fatalf("RuntimeStatus with paused = %q, want paused", got)
+	}
+}
+
 func TestProgressState_PauseWithCancelFunc(t *testing.T) {
 	ps := NewProgressState("test", 100)
 

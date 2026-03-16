@@ -61,6 +61,42 @@ func TestFinalizeCompletedFile_CopiesAcrossDevicesOnEXDEV(t *testing.T) {
 	}
 }
 
+func TestFinalizeCompletedFile_ReturnsErrorWhenRenameFailsAndTargetAlreadyExists(t *testing.T) {
+	tempDir := t.TempDir()
+	finalPath := filepath.Join(tempDir, "video.mp4")
+	surgePath := finalPath + types.IncompleteSuffix
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+		t.Fatalf("failed to create working file: %v", err)
+	}
+	if err := os.WriteFile(finalPath, []byte("existing"), 0o644); err != nil {
+		t.Fatalf("failed to create pre-existing destination: %v", err)
+	}
+
+	origRename := renameCompletedFile
+	t.Cleanup(func() {
+		renameCompletedFile = origRename
+	})
+	renameCompletedFile = func(string, string) error {
+		return &os.LinkError{Op: "rename", Old: surgePath, New: finalPath, Err: syscall.EEXIST}
+	}
+
+	err := finalizeCompletedFile(finalPath)
+	if err == nil {
+		t.Fatal("expected rename failure with existing target to be rejected")
+	}
+
+	data, readErr := os.ReadFile(finalPath)
+	if readErr != nil {
+		t.Fatalf("failed to read destination: %v", readErr)
+	}
+	if string(data) != "existing" {
+		t.Fatalf("final data = %q, want existing", string(data))
+	}
+	if _, statErr := os.Stat(surgePath); statErr != nil {
+		t.Fatalf("expected working file to remain for retry, stat err: %v", statErr)
+	}
+}
+
 func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing.T) {
 	tempDir := testutil.SetupStateDB(t)
 

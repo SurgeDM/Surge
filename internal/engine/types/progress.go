@@ -177,6 +177,22 @@ func (ps *ProgressState) IsPausing() bool {
 	return ps.Pausing.Load()
 }
 
+// RuntimeStatus reports the in-memory lifecycle status for an active download.
+// Completion remains a persistence concern and is only exposed once lifecycle
+// finalization has promoted the file and recorded the DB entry.
+func (ps *ProgressState) RuntimeStatus() string {
+	if ps == nil {
+		return "downloading"
+	}
+	if ps.IsPausing() {
+		return "pausing"
+	}
+	if ps.IsPaused() {
+		return "paused"
+	}
+	return "downloading"
+}
+
 func (ps *ProgressState) SetSavedElapsed(d time.Duration) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()

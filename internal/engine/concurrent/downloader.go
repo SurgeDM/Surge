@@ -505,6 +505,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			err := d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
 			if err != nil && err != context.Canceled {
 				workerErrors <- err
+				cancel()
 			}
 		}(i)
 	}
@@ -593,12 +594,20 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Handle cancel: context was cancelled but not via Pause()
 	// Propagate cancellation so callers don't treat this as a successful completion.
+	if downloadErr != nil {
+		return downloadErr
+	}
+
 	if downloadCtx.Err() == context.Canceled {
 		return context.Canceled
 	}
 
-	if downloadErr != nil {
-		return downloadErr
+	if d.State != nil && fileSize > 0 {
+		verified := d.State.VerifiedProgress.Load()
+		if verified != fileSize {
+			utils.Debug("DEBUG: concurrent download finalized short: verified=%d expected=%d url=%s", verified, fileSize, rawurl)
+			return fmt.Errorf("incomplete download: got %d of %d bytes", verified, fileSize)
+		}
 	}
 
 	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg

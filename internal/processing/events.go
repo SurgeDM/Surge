@@ -61,8 +61,18 @@ func finalizeCompletedFile(finalPath string) error {
 			}
 			return nil
 		}
+
+		// Treat a pre-existing destination as success only if the working file is
+		// already gone, which indicates another finalize path already promoted it.
+		if _, statErr := os.Stat(surgePath); statErr == nil {
+			return err
+		} else if !os.IsNotExist(statErr) {
+			return fmt.Errorf("stat working file after rename failure: %w", statErr)
+		}
 		if _, statErr := os.Stat(finalPath); statErr == nil {
 			return nil
+		} else if !os.IsNotExist(statErr) {
+			return fmt.Errorf("stat finalized file after rename failure: %w", statErr)
 		}
 		return err
 	}
