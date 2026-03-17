@@ -47,7 +47,8 @@ var addCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
-		// Resolve client output path (handles local vs remote and relative vs absolute)
+		// Resolve once before the loop so all downloads in this batch share
+		// the same absolute output path, avoiding per-URL CWD drift.
 		resolvedOutput := resolveClientOutputPath(output)
 
 		// Send downloads to server

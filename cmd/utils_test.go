@@ -79,12 +79,15 @@ func TestResolveClientOutputPath(t *testing.T) {
 			tt.setupHost()
 			got := resolveClientOutputPath(tt.outputDir)
 
-			if tt.wantExact != "" && got != tt.wantExact {
-				t.Errorf("resolveClientOutputPath(%q) = %q, want exactly %q", tt.outputDir, got, tt.wantExact)
-			}
-			if tt.wantPrefix != "" && !filepath.HasPrefix(got, tt.wantPrefix) {
+		if got != tt.wantExact {
+			t.Errorf("resolveClientOutputPath(%q) = %q, want exactly %q", tt.outputDir, got, tt.wantExact)
+		}
+		if tt.wantPrefix != "" {
+			rel, err := filepath.Rel(tt.wantPrefix, got)
+			if err != nil || strings.HasPrefix(rel, "..") {
 				t.Errorf("resolveClientOutputPath(%q) = %q, want prefix %q", tt.outputDir, got, tt.wantPrefix)
 			}
+		}
 		})
 	}
 }
