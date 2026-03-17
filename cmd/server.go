@@ -134,7 +134,7 @@ func init() {
 
 	serverCmd.PersistentFlags().StringP("batch", "b", "", "File containing URLs to download")
 	serverCmd.PersistentFlags().IntP("port", "p", 0, "Port to listen on")
-	serverCmd.PersistentFlags().StringP("output", "o", "", "Default output directory")
+	serverCmd.PersistentFlags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
 	serverCmd.PersistentFlags().Bool("exit-when-done", false, "Exit when all downloads complete")
 	serverCmd.PersistentFlags().Bool("no-resume", false, "Do not auto-resume paused downloads on startup")
 	serverCmd.PersistentFlags().String("token", "", "Auth token for API clients (or set SURGE_TOKEN)")

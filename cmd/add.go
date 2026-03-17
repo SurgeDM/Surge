@@ -73,5 +73,5 @@ var addCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(addCmd)
 	addCmd.Flags().StringP("batch", "b", "", "File containing URLs to download (one per line)")
-	addCmd.Flags().StringP("output", "o", "", "Output directory")
+	addCmd.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
 }
