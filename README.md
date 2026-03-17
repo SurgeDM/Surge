@@ -11,7 +11,7 @@
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-violet.svg)](https://www.buymeacoffee.com/surge.downloader)
 [![Stars](https://img.shields.io/github/stars/surge-downloader/surge?style=social)](https://github.com/surge-downloader/surge/stargazers)
 
-[Installation](#installation) • [Usage](#usage) • [Benchmarks](#benchmarks) • [Extension](#browser-extension) • [Settings](docs/SETTINGS.md) • [CLI Reference](docs/USAGE.md)
+[Installation](#installation) • [Usage](#usage) • [Fonts](docs/FONTS.md) • [Benchmarks](#benchmarks) • [Extension](#browser-extension) • [Settings](docs/SETTINGS.md) • [CLI Reference](docs/USAGE.md)
 
 </div>
 
@@ -175,6 +175,14 @@ View logs:
 ```bash
 docker compose logs -f surge
 ```
+
+---
+
+## Fonts
+
+Surge ships a bundled Nerd Font for the TUI, but your terminal controls the
+actual font selection. See [docs/FONTS.md](docs/FONTS.md) for install steps and
+licensing details.
 
 ---
 

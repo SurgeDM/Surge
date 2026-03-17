@@ -41,3 +41,11 @@ These are persistent flags and can be used with all commands.
 | :------------ | :-------------------------------------------- |
 | `SURGE_HOST`  | Default host when `--host` is not provided.   |
 | `SURGE_TOKEN` | Default token when `--token` is not provided. |
+
+## Fonts
+
+Surge bundles a Nerd Font, but terminal fonts are controlled by your terminal
+emulator. Install the bundled font and set your terminal to
+`JetBrainsMono Nerd Font Mono`.
+
+See [FONTS.md](FONTS.md) for install steps and licensing details.
