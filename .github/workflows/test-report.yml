@@ -19,8 +19,6 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
-
       - name: Download Test Results
         uses: actions/download-artifact@v4
         with:
