@@ -47,6 +47,9 @@ var addCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		// Resolve client output path (handles local vs remote and relative vs absolute)
+		resolvedOutput := resolveClientOutputPath(output)
+
 		// Send downloads to server
 		count := 0
 		for _, arg := range urls {
@@ -54,7 +57,7 @@ var addCmd = &cobra.Command{
 			if url == "" {
 				continue
 			}
-			if err := sendToServer(url, mirrors, output, baseURL, token); err != nil {
+			if err := sendToServer(url, mirrors, resolvedOutput, baseURL, token); err != nil {
 				fmt.Printf("Error adding %s: %v\n", url, err)
 				continue
 			}
