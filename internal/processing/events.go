@@ -16,6 +16,7 @@ import (
 var (
 	renameCompletedFile = retryRename
 	copyCompletedFile   = utils.CopyFile
+	notify              = utils.Notify
 )
 
 // advanceRemainingTasks keeps saved chunk boundaries aligned when pause
@@ -236,7 +237,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 					msg = err.Error()
 				}
 				if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
-					utils.Notify(fmt.Sprintf("Download failed: %s", filename), msg)
+					notify(fmt.Sprintf("Download failed: %s", filename), msg)
 				}
 				break
 			}
@@ -271,9 +272,9 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				title := fmt.Sprintf("Download Complete: %s", filename)
 
 				if m.Elapsed.Seconds() <= 0 {
-					utils.Notify(title, "Download complete!")
+					notify(title, "Download complete!")
 				} else {
-					utils.Notify(title, fmt.Sprintf("Download complete in %s (%.2f MB/s)", m.Elapsed.Truncate(time.Second), avgSpeed/float64(types.MB)))
+					notify(title, fmt.Sprintf("Download complete in %s (%.2f MB/s)", m.Elapsed.Truncate(time.Second), avgSpeed/float64(types.MB)))
 				}
 			}
 
@@ -309,7 +310,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 					msg = m.Err.Error()
 				}
 
-				utils.Notify(fmt.Sprintf("Download failed: %s", filename), msg)
+				notify(fmt.Sprintf("Download failed: %s", filename), msg)
 			}
 
 		case events.DownloadRemovedMsg:
