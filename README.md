@@ -209,19 +209,21 @@ The Surge extension intercepts browser downloads and sends them straight to your
 
 ### Chrome / Edge / Brave
 
-1.  Clone or download this repository.
-2.  Open your browser and navigate to `chrome://extensions`.
-3.  Enable **"Developer mode"** in the top right corner.
-4.  Click **"Load unpacked"**.
-5.  Select the `extension-chrome` folder from the `surge` directory.
+1.  Download `extension-chrome.zip` from the latest GitHub release.
+2.  Unzip it somewhere on disk.
+3.  Open your browser and navigate to `chrome://extensions`.
+4.  Enable **"Developer mode"** in the top right corner.
+5.  Click **"Load unpacked"**.
+6.  Select the unzipped `extension-chrome` folder.
 
 ### Firefox
 
 1.  **Stable:** [Get the Add-on](https://addons.mozilla.org/en-US/firefox/addon/surge/)
 2.  **Development:**
+    - Download `extension-firefox.zip` from the latest GitHub release.
     - Navigate to `about:debugging#/runtime/this-firefox`.
     - Click **"Load Temporary Add-on..."**.
-    - Select the `manifest.json` file inside the `extension-firefox` folder.
+    - Select the zip file (or unzip and select `manifest.json`).
 
 ---
 
