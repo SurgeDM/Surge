@@ -38,8 +38,16 @@ cleanup() {
 }
 trap cleanup EXIT
 
+NERD_FONTS_VERSION="v3.4.0"
+NERD_FONTS_SHA256="ef552a3e638f25125c6ad4c51176a6adcdce295ab1d2ffacf0db060caf8c1582"
 FONT_ARCHIVE="${TMP_DIR}/JetBrainsMono.tar.xz"
-curl -L -o "${FONT_ARCHIVE}" "https://github.com/ryanoasis/nerd-fonts/releases/latest/download/JetBrainsMono.tar.xz"
+curl -L -o "${FONT_ARCHIVE}" \
+  "https://github.com/ryanoasis/nerd-fonts/releases/download/${NERD_FONTS_VERSION}/JetBrainsMono.tar.xz"
+if command -v sha256sum >/dev/null 2>&1; then
+  echo "${NERD_FONTS_SHA256}  ${FONT_ARCHIVE}" | sha256sum -c -
+else
+  echo "${NERD_FONTS_SHA256}  ${FONT_ARCHIVE}" | shasum -a 256 -c -
+fi
 tar -xf "${FONT_ARCHIVE}" -C "${TMP_DIR}"
 
 FONT_DIR="${TMP_DIR}/JetBrainsMonoNerdFont"
