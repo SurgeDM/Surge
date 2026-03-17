@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/surge-downloader/surge/internal/engine/events"
@@ -31,6 +32,7 @@ type ConcurrentDownloader struct {
 	Runtime      *types.RuntimeConfig
 	bufPool      sync.Pool
 	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
+	lineageSeq   atomic.Uint64
 }
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
@@ -58,6 +60,29 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 			},
 		},
 	}
+}
+
+func (d *ConcurrentDownloader) nextLineageID() uint64 {
+	return d.lineageSeq.Add(1)
+}
+
+func (d *ConcurrentDownloader) wrapTask(task types.Task) queuedTask {
+	return queuedTask{
+		task:      task,
+		lineageID: d.nextLineageID(),
+	}
+}
+
+func (d *ConcurrentDownloader) wrapTasks(tasks []types.Task) []queuedTask {
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	wrapped := make([]queuedTask, 0, len(tasks))
+	for _, task := range tasks {
+		wrapped = append(wrapped, d.wrapTask(task))
+	}
+	return wrapped
 }
 
 // getInitialConnections returns the starting number of connections based on file size
@@ -384,8 +409,13 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			d.State.SyncSessionStart()
 		}
 	}
+
 	queue := NewTaskQueue()
-	queue.PushMultiple(tasks)
+	queue.PushMultiple(d.wrapTasks(tasks))
+
+	retryTracker := NewRetryTracker(maxLineageStalls)
+	workerResults := make(chan workerResult, numConns)
+	var pendingResults pendingResultCounter
 
 	// Start balancer goroutine for dynamic chunk splitting
 	balancerCtx, cancelBalancer := context.WithCancel(downloadCtx)
@@ -448,7 +478,10 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			case <-ticker.C:
 				// Ensure queue is empty (no pending retries) before considering byte count.
 				// This protects against cutting off active retries even if byte count seems high (due to overlaps etc).
-				if queue.Len() == 0 && (int(queue.IdleWorkers()) == numConns || d.State.Downloaded.Load() >= fileSize) {
+				allWorkersIdle := int(queue.IdleWorkers()) == numConns
+				downloadedEnough := d.State != nil && d.State.Downloaded.Load() >= fileSize
+				if queue.Len() == 0 && pendingResults.Load() == 0 &&
+					(allWorkersIdle || downloadedEnough) {
 					queue.Close()
 					return
 				}
@@ -475,7 +508,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Start workers
 	var wg sync.WaitGroup
-	workerErrors := make(chan error, numConns)
 
 	// Combine primary + secondary for workers
 	// We want to ensure the primary is included if it was valid (it should be, otherwise TUIDownload would have failed)
@@ -502,26 +534,56 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			err := d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
-			if err != nil && err != context.Canceled {
-				workerErrors <- err
-				cancel()
-			}
+			d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, workerResults, &pendingResults, fileSize, client)
 		}(i)
 	}
 
 	// Wait for all workers to complete
 	go func() {
 		wg.Wait()
-		close(workerErrors)
+		close(workerResults)
 		queue.Close()
 	}()
 
 	// Check for errors or pause
 	var downloadErr error
-	for err := range workerErrors {
-		if err != nil {
-			downloadErr = err
+	for result := range workerResults {
+		if result.err == nil {
+			pendingResults.Complete()
+			continue
+		}
+
+		switch result.disposition {
+		case DispositionAbort:
+			if downloadErr == nil {
+				downloadErr = result.err
+			}
+			cancel()
+
+		case DispositionRequeue:
+			if downloadCtx.Err() != nil {
+				pendingResults.Complete()
+				continue
+			}
+
+			if retryTracker.Evaluate(result.qTask) == DispositionAbort {
+				if downloadErr == nil {
+					downloadErr = fmt.Errorf(
+						"task lineage %d stalled after %d no-progress failures: %w",
+						result.qTask.lineageID,
+						retryTracker.maxStalls,
+						result.err,
+					)
+				}
+				pendingResults.Complete()
+				cancel()
+				continue
+			}
+
+			pendingResults.Requeue(queue, result.qTask)
+		case DispositionDrop:
+			pendingResults.Complete()
+			continue
 		}
 	}
 
@@ -538,7 +600,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		d.activeMu.Unlock()
 
 		// 2. Collect remaining tasks from queue
-		remainingTasks := queue.DrainRemaining()
+		remainingTasks := unwrapQueuedTasks(queue.DrainRemaining())
 		remainingTasks = append(remainingTasks, activeRemaining...)
 
 		// Calculate Downloaded from remaining tasks (ensures consistency)
@@ -605,7 +667,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	if d.State != nil && fileSize > 0 {
 		verified := d.State.VerifiedProgress.Load()
 		if verified != fileSize {
-			utils.Debug("DEBUG: concurrent download finalized short: verified=%d expected=%d url=%s", verified, fileSize, rawurl)
+			utils.Debug("concurrent download finalized short: verified=%d expected=%d url=%s", verified, fileSize, rawurl)
 			return fmt.Errorf("incomplete download: got %d of %d bytes", verified, fileSize)
 		}
 	}

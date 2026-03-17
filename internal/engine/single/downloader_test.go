@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -277,6 +278,9 @@ func TestSingleDownloader_RejectsShortSuccessfulResponse(t *testing.T) {
 	err := downloader.Download(ctx, server.URL(), destPath, fileSize, "short_success.bin")
 	if err == nil {
 		t.Fatal("expected short successful response to be rejected")
+	}
+	if !strings.Contains(err.Error(), "incomplete download") {
+		t.Fatalf("expected incomplete download error, got: %v", err)
 	}
 }
 

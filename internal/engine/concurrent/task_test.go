@@ -10,7 +10,7 @@ import (
 
 func TestActiveTask_RemainingBytes(t *testing.T) {
 	at := &ActiveTask{
-		Task: types.Task{Offset: 0, Length: 1000},
+		QTask: queuedTask{task: types.Task{Offset: 0, Length: 1000}, lineageID: 1},
 	}
 	at.CurrentOffset.Store(0)
 	at.StopAt.Store(1000)
@@ -35,7 +35,7 @@ func TestActiveTask_RemainingBytes(t *testing.T) {
 
 func TestActiveTask_RemainingTask(t *testing.T) {
 	at := &ActiveTask{
-		Task: types.Task{Offset: 0, Length: 1000},
+		QTask: queuedTask{task: types.Task{Offset: 0, Length: 1000}, lineageID: 7},
 	}
 	at.CurrentOffset.Store(0)
 	at.StopAt.Store(1000)
@@ -63,6 +63,25 @@ func TestActiveTask_RemainingTask(t *testing.T) {
 	}
 }
 
+func TestActiveTask_RemainingQueuedTask_PreservesLineage(t *testing.T) {
+	at := &ActiveTask{
+		QTask: queuedTask{task: types.Task{Offset: 0, Length: 1000}, lineageID: 42},
+	}
+	at.CurrentOffset.Store(250)
+	at.StopAt.Store(1000)
+
+	remaining := at.RemainingQueuedTask()
+	if remaining == nil {
+		t.Fatal("RemainingQueuedTask returned nil")
+	}
+	if remaining.lineageID != 42 {
+		t.Fatalf("RemainingQueuedTask lineage = %d, want 42", remaining.lineageID)
+	}
+	if remaining.task.Offset != 250 || remaining.task.Length != 750 {
+		t.Fatalf("RemainingQueuedTask task = %+v, want offset=250 length=750", remaining.task)
+	}
+}
+
 func TestActiveTask_GetSpeed(t *testing.T) {
 	at := &ActiveTask{
 		Speed: 1024.0 * 1024.0, // 1 MB/s
@@ -75,7 +94,7 @@ func TestActiveTask_GetSpeed(t *testing.T) {
 
 func TestActiveTask_RemainingBytesWithStolenWork(t *testing.T) {
 	at := &ActiveTask{
-		Task: types.Task{Offset: 0, Length: 1000},
+		QTask: queuedTask{task: types.Task{Offset: 0, Length: 1000}, lineageID: 1},
 	}
 	at.CurrentOffset.Store(200)
 	at.StopAt.Store(500) // Work was stolen, stop early
@@ -95,7 +114,7 @@ func TestActiveTask_RemainingBytesWithStolenWork(t *testing.T) {
 func TestActiveTask_Cancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	at := &ActiveTask{
-		Task:   types.Task{Offset: 0, Length: 1000},
+		QTask:  queuedTask{task: types.Task{Offset: 0, Length: 1000}, lineageID: 1},
 		Cancel: cancel,
 	}
 
@@ -120,7 +139,7 @@ func TestActiveTask_Cancel(t *testing.T) {
 func TestActiveTask_WindowTracking(t *testing.T) {
 	now := time.Now()
 	at := &ActiveTask{
-		Task:        types.Task{Offset: 0, Length: 1000},
+		QTask:       queuedTask{task: types.Task{Offset: 0, Length: 1000}, lineageID: 1},
 		WindowStart: now,
 		// WindowBytes: 0, // Initialized by default to zero value of atomic.Int64
 	}

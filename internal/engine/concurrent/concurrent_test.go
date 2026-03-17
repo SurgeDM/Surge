@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -113,7 +114,10 @@ func TestConcurrentDownloader_RejectsShortRangeResponse(t *testing.T) {
 
 	destPath := filepath.Join(tmpDir, "short_range.bin")
 	state := types.NewProgressState("short-range-test", fileSize)
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 1}
+	runtime := &types.RuntimeConfig{
+		MaxConnectionsPerHost: 1,
+		MaxTaskRetries:        1,
+	}
 
 	downloader := NewConcurrentDownloader("short-range-id", nil, state, runtime)
 
@@ -127,6 +131,250 @@ func TestConcurrentDownloader_RejectsShortRangeResponse(t *testing.T) {
 	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
 	if err == nil {
 		t.Fatal("expected short range response to be rejected")
+	}
+	if !strings.Contains(err.Error(), "incomplete range download") {
+		t.Fatalf("expected incomplete range error, got: %v", err)
+	}
+}
+
+func TestConcurrentDownloader_RequeuesAfterTransientTaskFailure(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(128 * types.KB)
+	var (
+		mu       sync.Mutex
+		attempts = make(map[string]int)
+	)
+
+	server := testutil.NewMockServerT(t,
+		testutil.WithHandler(func(w http.ResponseWriter, r *http.Request) {
+			rangeHeader := r.Header.Get("Range")
+			mu.Lock()
+			attempts[rangeHeader]++
+			attempt := attempts[rangeHeader]
+			mu.Unlock()
+
+			if attempt == 1 {
+				http.Error(w, "transient failure", http.StatusInternalServerError)
+				return
+			}
+
+			rangeHeader = strings.TrimPrefix(rangeHeader, "bytes=")
+			parts := strings.SplitN(rangeHeader, "-", 2)
+			if len(parts) != 2 {
+				http.Error(w, "missing range", http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+
+			start, err := strconv.ParseInt(parts[0], 10, 64)
+			if err != nil {
+				http.Error(w, "invalid range start", http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+			end, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil {
+				http.Error(w, "invalid range end", http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+
+			length := end - start + 1
+			w.Header().Set("Accept-Ranges", "bytes")
+			w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fileSize))
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write(make([]byte, length))
+		}),
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "requeue_recovery.bin")
+	state := types.NewProgressState("requeue-recovery", fileSize)
+	runtime := &types.RuntimeConfig{
+		MaxConnectionsPerHost: 1,
+		MaxTaskRetries:        1,
+		MinChunkSize:          64 * types.KB,
+	}
+
+	downloader := NewConcurrentDownloader("requeue-recovery-id", nil, state, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	if err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize); err != nil {
+		t.Fatalf("expected download to recover after requeue, got: %v", err)
+	}
+
+	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	for rangeHeader, attempt := range attempts {
+		if attempt < 2 {
+			t.Fatalf("range %s was not retried via requeue, attempts=%d", rangeHeader, attempt)
+		}
+	}
+}
+
+func TestConcurrentDownloader_AbortsAfterRepeatedNoProgressFailures(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(32 * types.KB)
+	server := testutil.NewMockServerT(t,
+		testutil.WithHandler(func(w http.ResponseWriter, r *http.Request) {
+			http.Error(w, "stuck", http.StatusInternalServerError)
+		}),
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "no_progress_abort.bin")
+	state := types.NewProgressState("no-progress-abort", fileSize)
+	runtime := &types.RuntimeConfig{
+		MaxConnectionsPerHost: 1,
+		MaxTaskRetries:        1,
+		MinChunkSize:          64 * types.KB,
+	}
+
+	downloader := NewConcurrentDownloader("no-progress-abort-id", nil, state, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
+	if err == nil {
+		t.Fatal("expected repeated no-progress failures to abort download")
+	}
+	if !strings.Contains(err.Error(), "stalled") {
+		t.Fatalf("expected stall budget abort, got: %v", err)
+	}
+}
+
+func TestConcurrentDownloader_RequeueAtCompletionBoundaryDoesNotLoseTask(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(32 * types.KB)
+	var (
+		mu       sync.Mutex
+		attempts = make(map[string]int)
+	)
+
+	server := testutil.NewMockServerT(t,
+		testutil.WithHandler(func(w http.ResponseWriter, r *http.Request) {
+			rangeHeader := r.Header.Get("Range")
+			mu.Lock()
+			attempts[rangeHeader]++
+			attempt := attempts[rangeHeader]
+			mu.Unlock()
+
+			if attempt == 1 {
+				http.Error(w, "first try fails", http.StatusInternalServerError)
+				return
+			}
+
+			rangeHeader = strings.TrimPrefix(rangeHeader, "bytes=")
+			parts := strings.SplitN(rangeHeader, "-", 2)
+			if len(parts) != 2 {
+				http.Error(w, "missing range", http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+
+			start, err := strconv.ParseInt(parts[0], 10, 64)
+			if err != nil {
+				http.Error(w, "invalid range start", http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+			end, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil {
+				http.Error(w, "invalid range end", http.StatusRequestedRangeNotSatisfiable)
+				return
+			}
+
+			length := end - start + 1
+			w.Header().Set("Accept-Ranges", "bytes")
+			w.Header().Set("Content-Length", strconv.FormatInt(length, 10))
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, fileSize))
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write(make([]byte, length))
+		}),
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "requeue_boundary.bin")
+	state := types.NewProgressState("requeue-boundary", fileSize)
+	runtime := &types.RuntimeConfig{
+		MaxConnectionsPerHost: 1,
+		MaxTaskRetries:        1,
+		MinChunkSize:          64 * types.KB,
+	}
+
+	downloader := NewConcurrentDownloader("requeue-boundary-id", nil, state, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	if err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize); err != nil {
+		t.Fatalf("expected completion-boundary requeue to succeed, got: %v", err)
+	}
+
+	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
+		t.Fatal(err)
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	if attempts["bytes=0-32767"] < 2 {
+		t.Fatalf("expected full-range task to be retried after initial failure, attempts=%d", attempts["bytes=0-32767"])
+	}
+}
+
+func TestConcurrentDownloader_NilState(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(64 * types.KB)
+	server := testutil.NewMockServerT(t,
+		testutil.WithFileSize(fileSize),
+		testutil.WithRangeSupport(true),
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "nil_state_concurrent.bin")
+	runtime := &types.RuntimeConfig{
+		MaxConnectionsPerHost: 2,
+		MinChunkSize:          32 * types.KB,
+	}
+
+	downloader := NewConcurrentDownloader("nil-state-id", nil, nil, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	if err := downloader.Download(ctx, server.URL(), nil, nil, destPath, fileSize); err != nil {
+		t.Fatalf("download with nil state failed: %v", err)
+	}
+
+	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
+		t.Fatal(err)
 	}
 }
 

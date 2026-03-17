@@ -3,13 +3,11 @@ package concurrent
 import (
 	"sync"
 	"sync/atomic"
-
-	"github.com/surge-downloader/surge/internal/engine/types"
 )
 
 // TaskQueue is a thread-safe work-stealing queue
 type TaskQueue struct {
-	tasks       []types.Task
+	tasks       []queuedTask
 	head        int
 	mu          sync.Mutex
 	cond        *sync.Cond
@@ -25,7 +23,7 @@ func NewTaskQueue() *TaskQueue {
 	return tq
 }
 
-func (q *TaskQueue) Push(t types.Task) {
+func (q *TaskQueue) Push(t queuedTask) {
 	q.mu.Lock()
 	q.tasks = append(q.tasks, t)
 	q.size.Add(1)
@@ -33,7 +31,7 @@ func (q *TaskQueue) Push(t types.Task) {
 	q.mu.Unlock()
 }
 
-func (q *TaskQueue) PushMultiple(tasks []types.Task) {
+func (q *TaskQueue) PushMultiple(tasks []queuedTask) {
 	if len(tasks) == 0 {
 		return
 	}
@@ -45,7 +43,7 @@ func (q *TaskQueue) PushMultiple(tasks []types.Task) {
 	q.mu.Unlock()
 }
 
-func (q *TaskQueue) Pop() (types.Task, bool) {
+func (q *TaskQueue) Pop() (queuedTask, bool) {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -58,7 +56,7 @@ func (q *TaskQueue) Pop() (types.Task, bool) {
 	}
 
 	if len(q.tasks) == q.head {
-		return types.Task{}, false
+		return queuedTask{}, false
 	}
 
 	t := q.tasks[q.head]
@@ -89,7 +87,7 @@ func (q *TaskQueue) IdleWorkers() int64 {
 }
 
 // DrainRemaining returns all remaining tasks in the queue (used for pause/resume)
-func (q *TaskQueue) DrainRemaining() []types.Task {
+func (q *TaskQueue) DrainRemaining() []queuedTask {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
@@ -97,7 +95,7 @@ func (q *TaskQueue) DrainRemaining() []types.Task {
 		return nil
 	}
 
-	remaining := make([]types.Task, len(q.tasks)-q.head)
+	remaining := make([]queuedTask, len(q.tasks)-q.head)
 	copy(remaining, q.tasks[q.head:])
 	q.tasks = nil
 	q.head = 0

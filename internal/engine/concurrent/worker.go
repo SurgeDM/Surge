@@ -2,6 +2,7 @@ package concurrent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -14,7 +15,17 @@ import (
 )
 
 // worker downloads tasks from the queue
-func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []string, file *os.File, queue *TaskQueue, totalSize int64, client *http.Client) error {
+func (d *ConcurrentDownloader) worker(
+	ctx context.Context,
+	id int,
+	mirrors []string,
+	file *os.File,
+	queue *TaskQueue,
+	workerResults chan<- workerResult,
+	pendingResults *pendingResultCounter,
+	totalSize int64,
+	client *http.Client,
+) {
 	// Get pooled buffer
 	bufPtr := d.bufPool.Get().(*[]byte)
 	defer d.bufPool.Put(bufPtr)
@@ -28,10 +39,10 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 	for {
 		// Get next task
-		task, ok := queue.Pop()
+		qTask, ok := queue.Pop()
 
 		if !ok {
-			return nil // Queue closed, no more work
+			return // Queue closed, no more work
 		}
 
 		// Update active workers
@@ -63,18 +74,18 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			taskCtx, taskCancel := context.WithCancel(ctx)
 			now := time.Now()
 			activeTask := &ActiveTask{
-				Task:            task,
+				QTask:           qTask,
 				StartTime:       now,
 				Cancel:          taskCancel,
 				WindowStart:     now, // Initialize sliding window
-				SharedMaxOffset: task.SharedMaxOffset,
+				SharedMaxOffset: qTask.task.SharedMaxOffset,
 			}
-			if task.SharedMaxOffset != nil {
+			if qTask.task.SharedMaxOffset != nil {
 				// Prevent infinite hedging of hedged tasks.
 				activeTask.Hedged.Store(1)
 			}
-			activeTask.CurrentOffset.Store(task.Offset)
-			activeTask.StopAt.Store(task.Offset + task.Length)
+			activeTask.CurrentOffset.Store(qTask.task.Offset)
+			activeTask.StopAt.Store(qTask.task.Offset + qTask.task.Length)
 			activeTask.LastActivity.Store(now.UnixNano())
 
 			d.activeMu.Lock()
@@ -83,8 +94,8 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 			// Update chunk status to Downloading
 			if d.State != nil {
-				utils.Debug("Worker %d: Setting range %d-%d to Downloading", id, task.Offset, task.Offset+task.Length)
-				d.State.UpdateChunkStatus(task.Offset, task.Length, types.ChunkDownloading)
+				utils.Debug("Worker %d: Setting range %d-%d to Downloading", id, qTask.task.Offset, qTask.task.Offset+qTask.task.Length)
+				d.State.UpdateChunkStatus(qTask.task.Offset, qTask.task.Length, types.ChunkDownloading)
 			} else {
 				utils.Debug("Worker %d: d.State is nil, cannot update chunk status", id)
 			}
@@ -97,7 +108,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			wasExternallyCancelled := taskCtx.Err() != nil
 
 			taskCancel() // Clean up context resources
-			utils.Debug("Worker %d: Task offset=%d length=%d took %v", id, task.Offset, task.Length, time.Since(taskStart))
+			utils.Debug("Worker %d: Task offset=%d length=%d took %v", id, qTask.task.Offset, qTask.task.Length, time.Since(taskStart))
 
 			// Check for PARENT context cancellation (pause/shutdown)
 			// This preserves active task info for pause handler to collect
@@ -106,7 +117,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				if d.State != nil {
 					d.State.ActiveWorkers.Add(-1)
 				}
-				return ctx.Err()
+				return
 			}
 
 			// Check if TASK context was cancelled by Health Monitor (not by us calling taskCancel)
@@ -118,16 +129,16 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
 				utils.Debug("Worker %d: Health check cancelled task, rotating from mirror %s to %s", id, mirrors[(currentMirrorIdx+len(mirrors)-1)%len(mirrors)], mirrors[currentMirrorIdx])
 
-				if remaining := activeTask.RemainingTask(); remaining != nil {
+				if remaining := activeTask.RemainingQueuedTask(); remaining != nil {
 					// Clamp to original task end (don't go past original boundary)
-					originalEnd := task.Offset + task.Length
-					if remaining.Offset+remaining.Length > originalEnd {
-						remaining.Length = originalEnd - remaining.Offset
+					originalEnd := qTask.task.Offset + qTask.task.Length
+					if remaining.task.Offset+remaining.task.Length > originalEnd {
+						remaining.task.Length = originalEnd - remaining.task.Offset
 					}
-					if remaining.Length > 0 {
+					if remaining.task.Length > 0 {
 						queue.Push(*remaining)
 						utils.Debug("Worker %d: health-cancelled task requeued (remaining: %d bytes from offset %d)",
-							id, remaining.Length, remaining.Offset)
+							id, remaining.task.Length, remaining.task.Offset)
 					}
 				}
 				// Delete from active tasks and move to next task (don't retry from scratch)
@@ -148,7 +159,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				// Check if we stopped early due to stealing
 				stopAt := activeTask.StopAt.Load()
 				current := activeTask.CurrentOffset.Load()
-				if current < task.Offset+task.Length && current >= stopAt {
+				if current < qTask.task.Offset+qTask.task.Length && current >= stopAt {
 					// We were stopped early this is expected success for the partial work
 					// The stolen part is already in the queue
 					utils.Debug("Worker stopped early due to stealing")
@@ -156,11 +167,19 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				break
 			}
 
+			if isFatalTaskError(lastErr) {
+				break
+			}
+
 			// Resume-on-retry: update task to reflect remaining work
 			// This prevents double-counting bytes on retry
 			current := activeTask.CurrentOffset.Load()
-			if current > task.Offset {
-				task = types.Task{Offset: current, Length: task.Offset + task.Length - current}
+			if current > qTask.task.Offset {
+				qTask = qTask.withTask(types.Task{
+					Offset:          current,
+					Length:          qTask.task.Offset + qTask.task.Length - current,
+					SharedMaxOffset: qTask.task.SharedMaxOffset,
+				})
 			}
 		}
 
@@ -170,8 +189,28 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 		}
 
 		if lastErr != nil {
-			utils.Debug("task at offset %d length %d failed after %d retries: %v", task.Offset, task.Length, maxRetries, lastErr)
-			return fmt.Errorf("task at offset %d length %d failed after %d retries: %w", task.Offset, task.Length, maxRetries, lastErr)
+			disposition := DispositionRequeue
+			if isFatalTaskError(lastErr) {
+				disposition = DispositionAbort
+			}
+
+			err := fmt.Errorf(
+				"task at offset %d length %d failed after %d retries: %w",
+				qTask.task.Offset,
+				qTask.task.Length,
+				maxRetries,
+				lastErr,
+			)
+			if !reportWorkerResult(ctx, workerResults, pendingResults, workerResult{
+				qTask:       qTask,
+				err:         err,
+				disposition: disposition,
+			}) {
+				return
+			}
+			if disposition == DispositionAbort {
+				return
+			}
 		}
 	}
 }
@@ -183,7 +222,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 		return err
 	}
 
-	task := activeTask.Task
+	task := activeTask.QTask.task
 
 	// Apply custom headers first (from browser extension: cookies, auth, referer, etc.)
 	for key, val := range d.Headers {
@@ -220,7 +259,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 		// Valid only if we requested the full file
 		// If we wanted a partial range but got the whole file (200), that's an error because we can't handle the full stream at a non-zero offset
 		if task.Offset != 0 || task.Length != totalSize {
-			return fmt.Errorf("server indicated success (200) but ignored range request (expected 206)")
+			return fmt.Errorf("%w: server indicated success (200) but ignored range request (expected 206)", errRangeProtocol)
 		}
 	} else if resp.StatusCode != http.StatusPartialContent {
 		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
@@ -393,8 +432,15 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 
 	stopAt := activeTask.StopAt.Load()
 	if offset < stopAt {
-		utils.Debug("DEBUG: concurrent range ended short: start=%d stop=%d got=%d url=%s", task.Offset, stopAt, offset, rawurl)
-		return fmt.Errorf("incomplete range download: got %d of %d bytes for range %d-%d", offset-task.Offset, stopAt-task.Offset, task.Offset, stopAt-1)
+		utils.Debug("concurrent range ended short: start=%d stop=%d got=%d url=%s", task.Offset, stopAt, offset, rawurl)
+		return fmt.Errorf(
+			"%w: got %d of %d bytes for range %d-%d",
+			errIncompleteRange,
+			offset-task.Offset,
+			stopAt-task.Offset,
+			task.Offset,
+			stopAt-1,
+		)
 	}
 
 	return nil
@@ -465,7 +511,7 @@ func (d *ConcurrentDownloader) StealWork(queue *TaskQueue) bool {
 		Length: originalEnd - stolenStart,
 	}
 
-	queue.Push(stolenTask)
+	queue.Push(d.wrapTask(stolenTask))
 	utils.Debug("Balancer: stole %s from worker %d (new range: %d-%d)",
 		utils.ConvertBytesToHumanReadable(stolenTask.Length), bestID, stolenTask.Offset, stolenTask.Offset+stolenTask.Length)
 
@@ -531,9 +577,33 @@ func (d *ConcurrentDownloader) HedgeWork(queue *TaskQueue) bool {
 		SharedMaxOffset: bestActive.SharedMaxOffset,
 	}
 
-	queue.Push(hedgedTask)
+	queue.Push(queuedTask{
+		task:      hedgedTask,
+		lineageID: bestActive.QTask.lineageID,
+	})
 	utils.Debug("Balancer: hedged %s (range: %d-%d) — idle worker will race on fresh connection",
 		utils.ConvertBytesToHumanReadable(hedgedTask.Length), hedgedTask.Offset, hedgedTask.Offset+hedgedTask.Length)
 
 	return true
+}
+
+func isFatalTaskError(err error) bool {
+	return errors.Is(err, errIncompleteRange) || errors.Is(err, errRangeProtocol)
+}
+
+func reportWorkerResult(
+	ctx context.Context,
+	workerResults chan<- workerResult,
+	pendingResults *pendingResultCounter,
+	result workerResult,
+) bool {
+	pendingResults.Begin()
+
+	select {
+	case workerResults <- result:
+		return true
+	case <-ctx.Done():
+		pendingResults.Complete()
+		return false
+	}
 }

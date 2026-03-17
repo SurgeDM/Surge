@@ -9,7 +9,10 @@ import (
 func TestTaskQueue_PushPop(t *testing.T) {
 	q := NewTaskQueue()
 
-	task := types.Task{Offset: 0, Length: 1000}
+	task := queuedTask{
+		task:      types.Task{Offset: 0, Length: 1000},
+		lineageID: 1,
+	}
 	q.Push(task)
 
 	if q.Len() != 1 {
@@ -20,7 +23,7 @@ func TestTaskQueue_PushPop(t *testing.T) {
 	if !ok {
 		t.Error("Pop returned false, expected true")
 	}
-	if got.Offset != task.Offset || got.Length != task.Length {
+	if got.task.Offset != task.task.Offset || got.task.Length != task.task.Length || got.lineageID != task.lineageID {
 		t.Errorf("Pop = %+v, want %+v", got, task)
 	}
 }
@@ -28,10 +31,10 @@ func TestTaskQueue_PushPop(t *testing.T) {
 func TestTaskQueue_PushMultiple(t *testing.T) {
 	q := NewTaskQueue()
 
-	tasks := []types.Task{
-		{Offset: 0, Length: 100},
-		{Offset: 100, Length: 100},
-		{Offset: 200, Length: 100},
+	tasks := []queuedTask{
+		{task: types.Task{Offset: 0, Length: 100}, lineageID: 1},
+		{task: types.Task{Offset: 100, Length: 100}, lineageID: 2},
+		{task: types.Task{Offset: 200, Length: 100}, lineageID: 3},
 	}
 	q.PushMultiple(tasks)
 
@@ -51,7 +54,7 @@ func TestTaskQueue_IdleWorkers(t *testing.T) {
 
 func TestTaskQueue_Close(t *testing.T) {
 	q := NewTaskQueue()
-	q.Push(types.Task{Offset: 0, Length: 100})
+	q.Push(queuedTask{task: types.Task{Offset: 0, Length: 100}, lineageID: 1})
 	q.Close()
 
 	// After close, Pop should still return existing tasks
@@ -68,10 +71,10 @@ func TestTaskQueue_Close(t *testing.T) {
 func TestTaskQueue_DrainRemaining(t *testing.T) {
 	q := NewTaskQueue()
 
-	tasks := []types.Task{
-		{Offset: 0, Length: 100},
-		{Offset: 100, Length: 100},
-		{Offset: 200, Length: 100},
+	tasks := []queuedTask{
+		{task: types.Task{Offset: 0, Length: 100}, lineageID: 1},
+		{task: types.Task{Offset: 100, Length: 100}, lineageID: 2},
+		{task: types.Task{Offset: 200, Length: 100}, lineageID: 3},
 	}
 	q.PushMultiple(tasks)
 
@@ -79,6 +82,9 @@ func TestTaskQueue_DrainRemaining(t *testing.T) {
 
 	if len(remaining) != 3 {
 		t.Errorf("DrainRemaining returned %d tasks, want 3", len(remaining))
+	}
+	if remaining[0].lineageID != 1 || remaining[1].lineageID != 2 || remaining[2].lineageID != 3 {
+		t.Errorf("DrainRemaining lineage order = %+v", remaining)
 	}
 	if q.Len() != 0 {
 		t.Errorf("Queue should be empty after drain, Len = %d", q.Len())

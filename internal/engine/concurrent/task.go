@@ -11,7 +11,7 @@ import (
 
 // ActiveTask tracks a task currently being processed by a worker
 type ActiveTask struct {
-	Task          types.Task
+	QTask         queuedTask
 	CurrentOffset atomic.Int64
 	StopAt        atomic.Int64
 
@@ -41,14 +41,31 @@ func (at *ActiveTask) RemainingBytes() int64 {
 	return stopAt - current
 }
 
-// RemainingTask returns a Task representing the remaining work, or nil if complete
-func (at *ActiveTask) RemainingTask() *types.Task {
+// RemainingQueuedTask returns the remaining work while preserving runtime lineage.
+func (at *ActiveTask) RemainingQueuedTask() *queuedTask {
 	current := at.CurrentOffset.Load()
 	stopAt := at.StopAt.Load()
 	if current >= stopAt {
 		return nil
 	}
-	return &types.Task{Offset: current, Length: stopAt - current}
+
+	remaining := at.QTask.withTask(types.Task{
+		Offset:          current,
+		Length:          stopAt - current,
+		SharedMaxOffset: at.SharedMaxOffset,
+	})
+	return &remaining
+}
+
+// RemainingTask returns a plain task representing the remaining work, or nil if complete.
+func (at *ActiveTask) RemainingTask() *types.Task {
+	remaining := at.RemainingQueuedTask()
+	if remaining == nil {
+		return nil
+	}
+
+	task := remaining.task
+	return &task
 }
 
 // GetSpeed returns the current EMA-smoothed speed, decaying if stalled
