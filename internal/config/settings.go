@@ -16,13 +16,14 @@ type Settings struct {
 
 // GeneralSettings contains application behavior settings.
 type GeneralSettings struct {
-	DefaultDownloadDir string     `json:"default_download_dir"`
-	WarnOnDuplicate    bool       `json:"warn_on_duplicate"`
-	ExtensionPrompt    bool       `json:"extension_prompt"`
-	AutoResume         bool       `json:"auto_resume"`
-	SkipUpdateCheck    bool       `json:"skip_update_check"`
-	CategoryEnabled    bool       `json:"category_enabled"`
-	Categories         []Category `json:"categories"`
+	DefaultDownloadDir           string     `json:"default_download_dir"`
+	WarnOnDuplicate              bool       `json:"warn_on_duplicate"`
+	DownloadCompleteNotification bool       `json:"download_complete_notification"`
+	ExtensionPrompt              bool       `json:"extension_prompt"`
+	AutoResume                   bool       `json:"auto_resume"`
+	SkipUpdateCheck              bool       `json:"skip_update_check"`
+	CategoryEnabled              bool       `json:"category_enabled"`
+	Categories                   []Category `json:"categories"`
 
 	ClipboardMonitor  bool `json:"clipboard_monitor"`
 	Theme             int  `json:"theme"`
@@ -68,6 +69,7 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 	return map[string][]SettingMeta{
 		"General": {
 			{Key: "default_download_dir", Label: "Default Download Dir", Description: "Default directory for new downloads. Leave empty to use current directory.", Type: "string"},
+			{Key: "download_complete_notification", Label: "Download Complete Notification", Description: "Show system notification when a download finishes.", Type: "bool"},
 			{Key: "warn_on_duplicate", Label: "Warn on Duplicate", Description: "Show warning when adding a download that already exists.", Type: "bool"},
 			{Key: "extension_prompt", Label: "Extension Prompt", Description: "Prompt for confirmation when adding downloads via browser extension.", Type: "bool"},
 			{Key: "auto_resume", Label: "Auto Resume", Description: "Automatically resume paused downloads on startup.", Type: "bool"},
@@ -116,12 +118,13 @@ func DefaultSettings() *Settings {
 
 	return &Settings{
 		General: GeneralSettings{
-			DefaultDownloadDir: defaultDir,
-			WarnOnDuplicate:    true,
-			ExtensionPrompt:    false,
-			AutoResume:         false,
-			CategoryEnabled:    false,
-			Categories:         DefaultCategories(),
+			DefaultDownloadDir:           defaultDir,
+			WarnOnDuplicate:              true,
+			DownloadCompleteNotification: true,
+			ExtensionPrompt:              false,
+			AutoResume:                   false,
+			CategoryEnabled:              false,
+			Categories:                   DefaultCategories(),
 
 			ClipboardMonitor:  true,
 			Theme:             ThemeAdaptive,
