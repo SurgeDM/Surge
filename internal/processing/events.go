@@ -234,7 +234,11 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				if filename == "" {
 					filename = m.DownloadID
 				}
-				utils.Notify(fmt.Sprintf("Download failed: %s", filename))
+				msg := "Download failed"
+				if err != nil {
+					msg = err.Error()
+				}
+				utils.Notify(fmt.Sprintf("Download failed: %s", filename), msg)
 				break
 			}
 
@@ -263,7 +267,12 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				if filename == "" {
 					filename = m.DownloadID
 				}
-				utils.Notify(fmt.Sprintf("Download complete: %s", filename))
+				title := fmt.Sprintf("Download Complete: %s", filename)
+				if m.Elapsed.Seconds() <= 0 {
+					utils.Notify(title, "Download complete!")
+				} else {
+					utils.Notify(title, fmt.Sprintf("Download complete in %s (%.2f MB/s)", m.Elapsed.Truncate(time.Second), avgSpeed/float64(types.MB)))
+				}
 			}
 
 		case events.DownloadErrorMsg:
@@ -290,7 +299,11 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			if filename == "" {
 				filename = m.DownloadID
 			}
-			utils.Notify(fmt.Sprintf("Download failed: %s", filename))
+			msg := "Download failed"
+			if m.Err != nil {
+				msg = m.Err.Error()
+			}
+			utils.Notify(fmt.Sprintf("download failed: %s", filename), msg)
 
 		case events.DownloadRemovedMsg:
 			// Remove resume metadata before touching files so a deleted download does not

@@ -13,6 +13,7 @@ const NotificationAppName = "Surge"
 var iconPath string
 
 func init() {
+	beeep.AppName = NotificationAppName
 
 	iconPath = filepath.Join(os.TempDir(), "surge_logo.png")
 
@@ -23,9 +24,9 @@ func init() {
 	}
 }
 
-func Notify(message string) {
+func Notify(title, message string) {
 
-	err := beeep.Notify(NotificationAppName, message, iconPath)
+	err := beeep.Notify(title, message, iconPath)
 	if err != nil {
 		Debug("Failed to send notification: %v", err)
 	}
