@@ -238,9 +238,6 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
 					utils.Notify(fmt.Sprintf("Download failed: %s", filename), msg)
 				}
-
-					utils.Notify(fmt.Sprintf("Download failed: %s", filename), msg)
-				}
 				break
 			}
 
