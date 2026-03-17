@@ -47,3 +47,17 @@ func TestRetryTracker_ProgressResetsStallBudget(t *testing.T) {
 		t.Fatalf("Evaluate() after progress reset = %v, want requeue", got)
 	}
 }
+
+func TestPendingResultCounter_BalancesAbortPath(t *testing.T) {
+	var pending pendingResultCounter
+
+	pending.Begin()
+	if got := pending.Load(); got != 1 {
+		t.Fatalf("Load() after Begin = %d, want 1", got)
+	}
+
+	pending.Complete()
+	if got := pending.Load(); got != 0 {
+		t.Fatalf("Load() after Complete = %d, want 0", got)
+	}
+}

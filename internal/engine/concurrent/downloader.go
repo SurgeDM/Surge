@@ -558,6 +558,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			if downloadErr == nil {
 				downloadErr = result.err
 			}
+			pendingResults.Complete()
 			cancel()
 
 		case DispositionRequeue:
