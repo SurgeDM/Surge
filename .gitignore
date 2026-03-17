@@ -15,6 +15,7 @@ logs/
 # Added by goreleaser init:
 dist/
 build/
+.goreleaser-extra/
 
 # secrets
 .github_token

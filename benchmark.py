@@ -27,7 +27,7 @@ IS_WINDOWS = platform.system() == "Windows"
 EXE_SUFFIX = ".exe" if IS_WINDOWS else ""
 KB = 1 << 10
 MB = 1 << 20
-DEFAULT_TEST_URL = "https://sin-speed.hetzner.com/1GB.bin"
+DEFAULT_TEST_URL = "https://ash-speed.hetzner.com/1GB.bin"
 
 # =============================================================================
 # DATA CLASSES

@@ -62,6 +62,25 @@ func resolveHostTarget() string {
 	return strings.TrimSpace(os.Getenv("SURGE_HOST"))
 }
 
+// resolveClientOutputPath resolves the output path for CLI client commands.
+// If connecting to a remote host, it passes the path through.
+// If running locally, it defaults to the CWD or resolves relative paths to absolute paths.
+func resolveClientOutputPath(outputDir string) string {
+	if resolveHostTarget() != "" {
+		// Pass-through for remote connections so the daemon uses its own default/CWD.
+		return outputDir
+	}
+
+	if strings.TrimSpace(outputDir) == "" {
+		pwd, err := os.Getwd()
+		if err == nil {
+			return pwd
+		}
+		return "."
+	}
+	return utils.EnsureAbsPath(outputDir)
+}
+
 func resolveAPIConnection(requireServer bool) (string, string, error) {
 	target := resolveHostTarget()
 	if target == "" {

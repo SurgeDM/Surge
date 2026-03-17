@@ -14,11 +14,19 @@ builds:
       - -X github.com/surge-downloader/surge/cmd.Version={{.Version}}
       - -X github.com/surge-downloader/surge/cmd.BuildTime={{.Date}}
 
+before:
+  hooks:
+    - ./scripts/package-release-assets.sh
+
 release:
   footer: |
     ---
     **Enjoying Surge?** Consider supporting the project to keep it blazing fast!
     - [Buy Me a Coffee](https://buymeacoffee.com/surge.downloader)
+  extra_files:
+    - glob: .goreleaser-extra/extension-chrome.zip
+    - glob: .goreleaser-extra/extension-firefox.zip
+    - glob: .goreleaser-extra/fonts.zip
 
 changelog:
   sort: asc

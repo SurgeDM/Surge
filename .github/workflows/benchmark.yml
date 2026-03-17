@@ -1,26 +1,20 @@
 name: Benchmark
 
 on:
-  push:
-    branches:
-      - main
-  pull_request:
-    branches:
-      - main
   workflow_dispatch:
     inputs:
       url:
         description: "URL to download for benchmarking"
         required: true
-        default: "https://sin-speed.hetzner.com/1GB.bin"
+        default: "https://ash-speed.hetzner.com/1GB.bin"
       iterations:
         description: "Number of iterations"
         required: true
-        default: "5"
+        default: "3"
       baseline:
         description: "Compare against baseline (main branch)? [y/n]"
         required: true
-        default: "n"
+        default: "y"
 
 permissions:
   contents: read
@@ -72,11 +66,9 @@ jobs:
         id: benchmark
         env:
           # Use 'github.event.inputs' for manual triggers, default for others
-          BENCH_URL: ${{ github.event.inputs.url || 'https://sin-speed.hetzner.com/1GB.bin' }}
-          # On push/PR, we usually want 1 iteration to save time, 5 for manual
-          BENCH_ITERATIONS: ${{ github.event.inputs.iterations || '10' }}
-          # Default to 'y' for PRs to see regressions, 'n' for simple pushes
-          BASELINE_COMPARE: ${{ github.event.inputs.baseline || 'y' }}
+          BENCH_URL: ${{ github.event.inputs.url }}
+          BENCH_ITERATIONS: ${{ github.event.inputs.iterations }}
+          BASELINE_COMPARE: ${{ github.event.inputs.baseline }}
 
         run: |
           cd current
@@ -136,15 +128,4 @@ jobs:
           name: surge-benchmark-logs
           path: current/surge_logs/
 
-      - name: Comment PR
-        if: github.event_name == 'pull_request'
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          header: benchmark
-          message: |
-            ## 🚀 Benchmark Results
-            **Target:** ${{ env.BENCH_URL }}
-            **Iterations:** ${{ env.BENCH_ITERATIONS }}
-            ```
-            ${{ env.BENCHMARK_RESULTS }}
-            ```
+

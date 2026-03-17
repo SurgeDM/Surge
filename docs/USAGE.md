@@ -6,12 +6,12 @@ Surge provides a robust Command Line Interface for automation and scripting. For
 
 | Command                     | What it does                                                                           | Key flags                                                                                           | Notes                                             |
 | :-------------------------- | :------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------------------------- | :------------------------------------------------ |
-| `surge [url]...`            | Launches local TUI. Queues optional URLs.                                              | `--batch, -b`<br>`--port, -p`<br>`--output, -o`<br>`--no-resume`<br>`--exit-when-done`              | If `--host` is set, this becomes remote TUI mode. |
-| `surge server [url]...`     | Launches headless server. Queues optional URLs.                                        | `--batch, -b`<br>`--port, -p`<br>`--output, -o`<br>`--exit-when-done`<br>`--no-resume`<br>`--token` | Primary headless mode command.                    |
-| `surge connect [host:port]` | Launches TUI connected to a server. Auto-detects local server when no target is given. | `--insecure-http`                                                                                   | Convenience alias for remote TUI usage.           |
-| `surge add <url>...`        | Queues downloads via CLI/API.                                                          | `--batch, -b`<br>`--output, -o`                                                                     | Alias: `get`.                                     |
-| `surge ls [id]`             | Lists downloads, or shows one download detail.                                         | `--json`<br>`--watch`                                                                               | Alias: `l`.                                       |
-| `surge pause <id>`          | Pauses a download by ID/prefix.                                                        | `--all`                                                                                             |                                                   |
+| `surge [url]...`            | Launches local TUI. Queues optional URLs.                                              | `--batch, -b`<br>`--port, -p`<br>`--output, -o`<br>`--no-resume`<br>`--exit-when-done`              | `-o` defaults to CWD. If `--host` is set, this becomes remote TUI mode. |
+| `surge server [url]...`     | Launches headless server. Queues optional URLs.                                        | `--batch, -b`<br>`--port, -p`<br>`--output, -o`<br>`--exit-when-done`<br>`--no-resume`<br>`--token` | `-o` defaults to CWD. Primary headless mode command.                    |
+| `surge connect [host:port]` | Launches TUI connected to a server. Auto-detects local server when no target is given. | `--insecure-http`                                                                                   | Convenience alias for remote TUI usage.                                 |
+| `surge add <url>...`        | Queues downloads via CLI/API.                                                          | `--batch, -b`<br>`--output, -o`                                                                     | `-o` defaults to CWD. Alias: `get`.                                     |
+| `surge ls [id]`             | Lists downloads, or shows one download detail.                                         | `--json`<br>`--watch`                                                                               | Alias: `l`.                                                             |
+| `surge pause <id>`          | Pauses a download by ID/prefix.                                                        | `--all`                                                                                             |                                                                         |
 | `surge resume <id>`         | Resumes a paused download by ID/prefix.                                                | `--all`                                                                                             |                                                   |
 | `surge refresh <id> <url>`  | Updates the source URL of a paused or errored download.                                | None                                                                                                | Reconnects using the new link.                    |
 | `surge rm <id>`             | Removes a download by ID/prefix.                                                       | `--clean`                                                                                           | Alias: `kill`.                                    |
@@ -41,3 +41,11 @@ These are persistent flags and can be used with all commands.
 | :------------ | :-------------------------------------------- |
 | `SURGE_HOST`  | Default host when `--host` is not provided.   |
 | `SURGE_TOKEN` | Default token when `--token` is not provided. |
+
+## Fonts
+
+Surge bundles a Nerd Font, but terminal fonts are controlled by your terminal
+emulator. Install the bundled font and set your terminal to
+`JetBrainsMono Nerd Font Mono`.
+
+See [FONTS.md](FONTS.md) for install steps and licensing details.
