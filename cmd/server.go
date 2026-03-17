@@ -198,7 +198,8 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 		}
 
 		if len(urls) > 0 {
-			processDownloads(urls, outputDir, 0)
+			resolvedOutputDir := resolveClientOutputPath(outputDir)
+			processDownloads(urls, resolvedOutputDir, 0)
 		}
 	}()
 

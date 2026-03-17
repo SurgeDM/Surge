@@ -378,7 +378,8 @@ var rootCmd = &cobra.Command{
 			}
 
 			if len(urls) > 0 {
-				processDownloads(urls, outputDir, 0) // 0 port = internal direct add
+				resolvedOutputDir := resolveClientOutputPath(outputDir)
+				processDownloads(urls, resolvedOutputDir, 0) // 0 port = internal direct add
 			}
 		}()
 
