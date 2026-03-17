@@ -1,6 +1,7 @@
 package concurrent
 
 import (
+	"sync/atomic"
 	"testing"
 
 	"github.com/surge-downloader/surge/internal/engine/types"
@@ -59,5 +60,22 @@ func TestPendingResultCounter_BalancesAbortPath(t *testing.T) {
 	pending.Complete()
 	if got := pending.Load(); got != 0 {
 		t.Fatalf("Load() after Complete = %d, want 0", got)
+	}
+}
+
+func TestLoadVerifiedBytes_UsesFallbackWhenStateNil(t *testing.T) {
+	var fallback atomic.Int64
+	fallback.Store(123)
+
+	if got := loadVerifiedBytes(nil, &fallback); got != 123 {
+		t.Fatalf("loadVerifiedBytes(nil, fallback) = %d, want 123", got)
+	}
+
+	state := types.NewProgressState("verified", 456)
+	state.VerifiedProgress.Store(456)
+	fallback.Store(999)
+
+	if got := loadVerifiedBytes(state, &fallback); got != 456 {
+		t.Fatalf("loadVerifiedBytes(state, fallback) = %d, want 456", got)
 	}
 }

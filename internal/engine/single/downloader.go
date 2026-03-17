@@ -167,12 +167,10 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		return err
 	}
 
-	preallocated := false
 	if fileSize > 0 {
 		if err := preallocateFile(outFile, fileSize); err != nil {
 			return fmt.Errorf("failed to preallocate file: %w", err)
 		}
-		preallocated = true
 	}
 
 	defer func() {
@@ -200,7 +198,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		return fmt.Errorf("copy error: %w", err)
 	}
 
-	if preallocated && written != fileSize {
+	if fileSize > 0 && written != fileSize {
 		utils.Debug("single download ended short: got=%d expected=%d url=%s", written, fileSize, rawurl)
 		return fmt.Errorf("incomplete download: got %d of %d bytes", written, fileSize)
 	}

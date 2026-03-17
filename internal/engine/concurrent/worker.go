@@ -23,6 +23,7 @@ func (d *ConcurrentDownloader) worker(
 	queue *TaskQueue,
 	workerResults chan<- workerResult,
 	pendingResults *pendingResultCounter,
+	verifiedBytes *atomic.Int64,
 	totalSize int64,
 	client *http.Client,
 ) {
@@ -101,7 +102,7 @@ func (d *ConcurrentDownloader) worker(
 			}
 
 			taskStart := time.Now()
-			lastErr = d.downloadTask(taskCtx, currentURL, file, activeTask, buf, client, totalSize)
+			lastErr = d.downloadTask(taskCtx, currentURL, file, activeTask, buf, client, verifiedBytes, totalSize)
 
 			// CRITICAL: Capture external cancellation state BEFORE calling taskCancel()
 			// If we call taskCancel() first, taskCtx.Err() will always be non-nil
@@ -216,7 +217,16 @@ func (d *ConcurrentDownloader) worker(
 }
 
 // downloadTask downloads a single byte range and writes to file at offset
-func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, file *os.File, activeTask *ActiveTask, buf []byte, client *http.Client, totalSize int64) error {
+func (d *ConcurrentDownloader) downloadTask(
+	ctx context.Context,
+	rawurl string,
+	file *os.File,
+	activeTask *ActiveTask,
+	buf []byte,
+	client *http.Client,
+	verifiedBytes *atomic.Int64,
+	totalSize int64,
+) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
 	if err != nil {
 		return err
@@ -274,12 +284,17 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 
 	// Helper to flush pending updates to global state
 	flushUpdates := func() {
-		if pendingBytes > 0 && d.State != nil {
-			// Update Chunk Map (Global Lock)
-			d.State.UpdateChunkStatus(pendingStart, pendingBytes, types.ChunkCompleted)
+		if pendingBytes > 0 {
+			if verifiedBytes != nil {
+				verifiedBytes.Add(pendingBytes)
+			}
+			if d.State != nil {
+				// Update Chunk Map (Global Lock)
+				d.State.UpdateChunkStatus(pendingStart, pendingBytes, types.ChunkCompleted)
 
-			// Update Downloaded Counter (Atomic)
-			d.State.Downloaded.Add(pendingBytes)
+				// Update Downloaded Counter (Atomic)
+				d.State.Downloaded.Add(pendingBytes)
+			}
 
 			pendingBytes = 0
 			pendingStart = -1

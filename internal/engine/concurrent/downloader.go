@@ -368,6 +368,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	}
 
 	tasks := createTasks(fileSize, chunkSize)
+	var verifiedBytes atomic.Int64
 
 	// Check for saved state BEFORE truncating (resume case)
 	savedState, err := state.LoadState(rawurl, destPath)
@@ -376,6 +377,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	if isResume {
 		// Resume: use saved tasks and restore downloaded counter
 		tasks = savedState.Tasks
+		verifiedBytes.Store(savedState.Downloaded)
 		if d.State != nil {
 			d.State.Downloaded.Store(savedState.Downloaded)
 			d.State.VerifiedProgress.Store(savedState.Downloaded)
@@ -403,6 +405,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		if err := outFile.Truncate(fileSize); err != nil {
 			return fmt.Errorf("failed to preallocate file: %w", err)
 		}
+		verifiedBytes.Store(0)
 		// Robustness: ensure state counter starts at 0 for fresh download
 		if d.State != nil {
 			d.State.Downloaded.Store(0)
@@ -534,7 +537,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, workerResults, &pendingResults, fileSize, client)
+			d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, workerResults, &pendingResults, &verifiedBytes, fileSize, client)
 		}(i)
 	}
 
@@ -665,8 +668,8 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		return context.Canceled
 	}
 
-	if d.State != nil && fileSize > 0 {
-		verified := d.State.VerifiedProgress.Load()
+	if fileSize > 0 {
+		verified := loadVerifiedBytes(d.State, &verifiedBytes)
 		if verified != fileSize {
 			utils.Debug("concurrent download finalized short: verified=%d expected=%d url=%s", verified, fileSize, rawurl)
 			return fmt.Errorf("incomplete download: got %d of %d bytes", verified, fileSize)

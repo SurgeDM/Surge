@@ -134,3 +134,13 @@ func unwrapQueuedTasks(tasks []queuedTask) []types.Task {
 	}
 	return plain
 }
+
+func loadVerifiedBytes(state *types.ProgressState, fallback *atomic.Int64) int64 {
+	if state != nil {
+		return state.VerifiedProgress.Load()
+	}
+	if fallback != nil {
+		return fallback.Load()
+	}
+	return 0
+}
