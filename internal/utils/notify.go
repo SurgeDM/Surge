@@ -17,10 +17,11 @@ func init() {
 
 	iconPath = filepath.Join(os.TempDir(), "surge_logo.png")
 
-	err := os.WriteFile(iconPath, assets.LogoData, 0644)
-	if err != nil {
-		iconPath = ""
-		Debug("Failed to write notification icon: %v", err)
+	if _, err := os.Stat(iconPath); os.IsNotExist(err) {
+		if writeErr := os.WriteFile(iconPath, assets.LogoData, 0644); writeErr != nil {
+			iconPath = ""
+			Debug("Failed to write notification icon: %v", writeErr)
+		}
 	}
 }
 

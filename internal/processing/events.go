@@ -228,17 +228,16 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				}); err != nil {
 					utils.Debug("Lifecycle: Failed to persist finalization error state: %v", err)
 				}
-				if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
-
-					if filename == "" {
-						filename = m.Filename
-					}
-					if filename == "" {
-						filename = m.DownloadID
-					}
-
-					msg := "Download failed"
+				if filename == "" {
+					filename = m.DownloadID
+				}
+				msg := "Download failed"
+				if err != nil {
 					msg = err.Error()
+				}
+				if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
+					utils.Notify(fmt.Sprintf("Download failed: %s", filename), msg)
+				}
 
 					utils.Notify(fmt.Sprintf("Download failed: %s", filename), msg)
 				}
