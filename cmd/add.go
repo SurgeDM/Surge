@@ -47,6 +47,10 @@ var addCmd = &cobra.Command{
 			os.Exit(1)
 		}
 
+		// Resolve once before the loop so all downloads in this batch share
+		// the same absolute output path, avoiding per-URL CWD drift.
+		resolvedOutput := resolveClientOutputPath(output)
+
 		// Send downloads to server
 		count := 0
 		for _, arg := range urls {
@@ -54,7 +58,7 @@ var addCmd = &cobra.Command{
 			if url == "" {
 				continue
 			}
-			if err := sendToServer(url, mirrors, output, baseURL, token); err != nil {
+			if err := sendToServer(url, mirrors, resolvedOutput, baseURL, token); err != nil {
 				fmt.Printf("Error adding %s: %v\n", url, err)
 				continue
 			}
@@ -70,5 +74,5 @@ var addCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(addCmd)
 	addCmd.Flags().StringP("batch", "b", "", "File containing URLs to download (one per line)")
-	addCmd.Flags().StringP("output", "o", "", "Output directory")
+	addCmd.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
 }
