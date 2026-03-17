@@ -23,9 +23,9 @@ func init() {
 	}
 }
 
-func Notify(title, message string) {
+func Notify(message string) {
 
-	err := beeep.Notify(title, message, iconPath)
+	err := beeep.Notify(NotificationAppName, message, iconPath)
 	if err != nil {
 		Debug("Failed to send notification: %v", err)
 	}

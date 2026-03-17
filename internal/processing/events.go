@@ -228,6 +228,13 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				}); err != nil {
 					utils.Debug("Lifecycle: Failed to persist finalization error state: %v", err)
 				}
+				if filename == "" {
+					filename = m.Filename
+				}
+				if filename == "" {
+					filename = m.DownloadID
+				}
+				utils.Notify(fmt.Sprintf("Download failed: %s", filename))
 				break
 			}
 
@@ -249,6 +256,15 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			if err := state.DeleteTasks(m.DownloadID); err != nil {
 				utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)
 			}
+			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
+				if filename == "" {
+					filename = m.Filename
+				}
+				if filename == "" {
+					filename = m.DownloadID
+				}
+				utils.Notify(fmt.Sprintf("Download complete: %s", filename))
+			}
 
 		case events.DownloadErrorMsg:
 			existing, _ := state.GetDownload(m.DownloadID)
@@ -267,6 +283,14 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 					utils.Debug("Lifecycle: Failed to remove incomplete file after error: %v", err)
 				}
 			}
+			filename := m.Filename
+			if filename == "" && existing != nil {
+				filename = existing.Filename
+			}
+			if filename == "" {
+				filename = m.DownloadID
+			}
+			utils.Notify(fmt.Sprintf("Download failed: %s", filename))
 
 		case events.DownloadRemovedMsg:
 			// Remove resume metadata before touching files so a deleted download does not
