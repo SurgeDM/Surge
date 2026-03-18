@@ -8,10 +8,17 @@ import (
 	"net/http"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/surge-downloader/surge/internal/core"
 	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/utils"
+)
+
+var (
+	ErrServiceUnavailable = errors.New("service unavailable")
+	ErrDownloadNotFound   = errors.New("download not found")
+	ErrNoDestinationPath  = errors.New("download has no destination path")
 )
 
 func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service core.DownloadService) {
@@ -228,7 +235,7 @@ func writeJSONResponse(w http.ResponseWriter, status int, payload interface{}) {
 
 func resolveDownloadDestPath(service core.DownloadService, id string) (string, error) {
 	if service == nil {
-		return "", errors.New("service unavailable")
+		return "", ErrServiceUnavailable
 	}
 
 	status, err := service.GetStatus(id)
@@ -240,7 +247,7 @@ func resolveDownloadDestPath(service core.DownloadService, id string) (string, e
 
 	history, err := service.History()
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("failed to read history: %w", err)
 	}
 
 	for _, entry := range history {
@@ -249,12 +256,23 @@ func resolveDownloadDestPath(service core.DownloadService, id string) (string, e
 		}
 		destPath := filepath.Clean(entry.DestPath)
 		if destPath == "" || destPath == "." {
-			return "", fmt.Errorf("download %s has no destination path", id)
+			return "", fmt.Errorf("%w: %s", ErrNoDestinationPath, id)
 		}
 		return destPath, nil
 	}
 
-	return "", fmt.Errorf("download %s not found", id)
+	return "", fmt.Errorf("%w: %s", ErrDownloadNotFound, id)
+}
+
+func statusCodeForResolveDownloadError(err error) int {
+	switch {
+	case errors.Is(err, ErrDownloadNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, ErrServiceUnavailable):
+		return http.StatusServiceUnavailable
+	default:
+		return http.StatusInternalServerError
+	}
 }
 
 func ensureOpenActionRequestAllowed(r *http.Request) error {
@@ -265,7 +283,11 @@ func ensureOpenActionRequestAllowed(r *http.Request) error {
 
 	ip := net.ParseIP(host)
 	if ip != nil && ip.IsLoopback() {
-		return nil
+		xff := strings.TrimSpace(r.Header.Get("X-Forwarded-For"))
+		xri := strings.TrimSpace(r.Header.Get("X-Real-IP"))
+		if xff == "" && xri == "" {
+			return nil
+		}
 	}
 
 	settings := getSettings()

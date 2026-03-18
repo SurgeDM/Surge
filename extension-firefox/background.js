@@ -348,7 +348,6 @@ async function fetchHistoryList() {
         return { list: [], authError: false };
       }
 
-      list.sort((left, right) => (right.completed_at || 0) - (left.completed_at || 0));
       return { list: list.slice(0, 100), authError: false };
     }
 

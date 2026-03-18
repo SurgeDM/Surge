@@ -6,6 +6,7 @@ const SURGE_API_BASE = 'http://127.0.0.1:1700';
 const KB = 1 << 10;
 const MB = 1 << 20;
 const HISTORY_LIMIT = 100;
+const HISTORY_REFRESH_INTERVAL_MS = 15000;
 
 // === State ===
 let activeDownloads = new Map();
@@ -16,6 +17,8 @@ let pollInterval = null;
 let healthInterval = null;
 let authEditPendingSave = false;
 let authValidationInProgress = false;
+let historyLastFetchedAt = 0;
+let historyLoading = false;
 
 // Detect if running in extension context
 const isExtensionContext = typeof browser !== 'undefined' && browser.runtime && browser.runtime.sendMessage;
@@ -364,7 +367,7 @@ function updateDownloadItem(item, dl) {
 
 function normalizeHistoryEntry(entry) {
   const totalSize = Number(entry.total_size || 0);
-  const downloaded = Number(entry.downloaded || totalSize);
+  const downloaded = entry.downloaded != null ? Number(entry.downloaded) : totalSize;
   const speed = Number(entry.avg_speed || 0) / MB;
 
   return {
@@ -382,6 +385,34 @@ function normalizeHistoryEntry(entry) {
     completedAt: Number(entry.completed_at || 0) * 1000,
     addedAt: Number(entry.completed_at || 0) * 1000,
   };
+}
+
+function shouldRefreshHistory(force = false) {
+  if (force || historyDownloads.size === 0) {
+    return true;
+  }
+  return Date.now() - historyLastFetchedAt >= HISTORY_REFRESH_INTERVAL_MS;
+}
+
+async function fetchHistoryDownloads(force = false) {
+  if (historyLoading || !shouldRefreshHistory(force)) {
+    return;
+  }
+
+  historyLoading = true;
+  try {
+    const historyResponse = await apiCall('getHistory');
+    if (historyResponse && Array.isArray(historyResponse.history)) {
+      historyDownloads.clear();
+      historyResponse.history
+        .slice(0, HISTORY_LIMIT)
+        .map(normalizeHistoryEntry)
+        .forEach((entry) => historyDownloads.set(entry.id, entry));
+      historyLastFetchedAt = Date.now();
+    }
+  } finally {
+    historyLoading = false;
+  }
 }
 
 // === Utility Functions ===
@@ -479,13 +510,8 @@ async function fetchDownloads() {
         response.downloads.forEach(dl => activeDownloads.set(dl.id, dl));
       }
 
-      historyDownloads.clear();
-      const historyResponse = await apiCall('getHistory');
-      if (historyResponse && Array.isArray(historyResponse.history)) {
-        historyResponse.history
-          .slice(0, HISTORY_LIMIT)
-          .map(normalizeHistoryEntry)
-          .forEach((entry) => historyDownloads.set(entry.id, entry));
+      if (currentView === 'history') {
+        await fetchHistoryDownloads();
       }
 
       renderDownloads();
@@ -656,7 +682,11 @@ if (viewTabActive) {
 }
 
 if (viewTabHistory) {
-  viewTabHistory.addEventListener('click', () => setCurrentView('history'));
+  viewTabHistory.addEventListener('click', async () => {
+    setCurrentView('history');
+    await fetchHistoryDownloads(true);
+    renderDownloads();
+  });
 }
 
 // === Initialization ===
