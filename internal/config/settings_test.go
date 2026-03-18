@@ -31,6 +31,9 @@ func TestDefaultSettings(t *testing.T) {
 		if settings.General.ExtensionPrompt {
 			t.Error("ExtensionPrompt should be false by default")
 		}
+		if settings.General.AllowRemoteOpenActions {
+			t.Error("AllowRemoteOpenActions should be false by default")
+		}
 		if settings.General.AutoResume {
 			t.Error("AutoResume should be false by default")
 		}

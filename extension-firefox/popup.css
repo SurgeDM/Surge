@@ -144,11 +144,52 @@ body {
 
 .downloads-header {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
   padding: 14px 16px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-surface);
+}
+
+.downloads-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.view-switch {
+  display: flex;
+  gap: 6px;
+  padding: 4px;
+  background: var(--bg-base);
+  border-radius: 10px;
+  border: 1px solid var(--border-subtle);
+}
+
+.view-tab {
+  flex: 1;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  border-radius: 8px;
+  padding: 6px 0;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.view-tab:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.view-tab.active {
+  color: var(--text-primary);
+  background: linear-gradient(135deg, rgba(255, 121, 198, 0.2), rgba(189, 147, 249, 0.2));
+  border-color: var(--border-default);
 }
 
 .section-title {

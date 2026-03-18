@@ -5,9 +5,12 @@
 const SURGE_API_BASE = 'http://127.0.0.1:1700';
 const KB = 1 << 10;
 const MB = 1 << 20;
+const HISTORY_LIMIT = 100;
 
 // === State ===
-let downloads = new Map();
+let activeDownloads = new Map();
+let historyDownloads = new Map();
+let currentView = 'active';
 let serverConnected = false;
 let pollInterval = null;
 let healthInterval = null;
@@ -24,6 +27,8 @@ const downloadCount = document.getElementById('downloadCount');
 const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
 const serverStatus = document.getElementById('serverStatus');
+const viewTabActive = document.getElementById('viewTabActive');
+const viewTabHistory = document.getElementById('viewTabHistory');
 const interceptToggle = document.getElementById('interceptToggle');
 const authTokenInput = document.getElementById('authToken');
 const saveTokenButton = document.getElementById('saveToken');
@@ -91,6 +96,14 @@ async function apiCall(action, params = {}) {
           }
           return { connected: false, downloads: [] };
         }
+        case 'getHistory': {
+          const response = await fetch(`${SURGE_API_BASE}/history`);
+          if (response.ok) {
+            const history = await response.json();
+            return { connected: true, history };
+          }
+          return { connected: false, history: [] };
+        }
         case 'getStatus':
           return { enabled: true }; // Always enabled in standalone
         case 'getServerUrl':
@@ -107,6 +120,14 @@ async function apiCall(action, params = {}) {
         }
         case 'cancelDownload': {
           const response = await fetch(`${SURGE_API_BASE}/delete?id=${params.id}`, { method: 'DELETE' });
+          return { success: response.ok };
+        }
+        case 'openFile': {
+          const response = await fetch(`${SURGE_API_BASE}/open-file?id=${encodeURIComponent(params.id)}`, { method: 'POST' });
+          return { success: response.ok };
+        }
+        case 'openFolder': {
+          const response = await fetch(`${SURGE_API_BASE}/open-folder?id=${encodeURIComponent(params.id)}`, { method: 'POST' });
           return { success: response.ok };
         }
         default:
@@ -131,13 +152,12 @@ function setAuthValid(isValid) {
 }
 
 function renderDownloads() {
-  const activeDownloads = [...downloads.values()].filter(
-    d => d.status !== 'completed' || Date.now() - (d.completedAt || 0) < 30000
-  );
+  const visibleDownloads = getVisibleDownloads();
 
-  if (activeDownloads.length === 0) {
+  if (visibleDownloads.length === 0) {
     emptyState.classList.remove('hidden');
     downloadCount.textContent = '0';
+    updateEmptyStateForView();
     // Clear any existing download items
     const items = downloadsList.querySelectorAll('.download-item');
     items.forEach(item => item.remove());
@@ -145,16 +165,9 @@ function renderDownloads() {
   }
 
   emptyState.classList.add('hidden');
-  downloadCount.textContent = activeDownloads.length;
+  downloadCount.textContent = visibleDownloads.length;
 
-  // Sort: downloading first, then paused, then queued, then completed
-  const statusOrder = { downloading: 0, paused: 1, queued: 2, completed: 3, error: 4 };
-  const sorted = activeDownloads.sort((a, b) => {
-    const orderA = statusOrder[a.status] ?? 5;
-    const orderB = statusOrder[b.status] ?? 5;
-    if (orderA !== orderB) return orderA - orderB;
-    return (b.addedAt || 0) - (a.addedAt || 0);
-  });
+  const sorted = sortDownloadsForView(visibleDownloads);
 
   // Update or create items
   const existingIds = new Set();
@@ -183,6 +196,60 @@ function renderDownloads() {
       item.remove();
     }
   });
+}
+
+function getVisibleDownloads() {
+  if (currentView === 'history') {
+    return [...historyDownloads.values()];
+  }
+  return [...activeDownloads.values()].filter((download) => download.status !== 'completed');
+}
+
+function sortDownloadsForView(items) {
+  if (currentView === 'history') {
+    return items.sort((left, right) => {
+      const completedLeft = left.completedAt || left.addedAt || 0;
+      const completedRight = right.completedAt || right.addedAt || 0;
+      return completedRight - completedLeft;
+    });
+  }
+
+  const statusOrder = { downloading: 0, paused: 1, queued: 2, completed: 3, error: 4 };
+  return items.sort((left, right) => {
+    const orderLeft = statusOrder[left.status] ?? 5;
+    const orderRight = statusOrder[right.status] ?? 5;
+    if (orderLeft !== orderRight) return orderLeft - orderRight;
+    return (right.addedAt || 0) - (left.addedAt || 0);
+  });
+}
+
+function updateEmptyStateForView() {
+  const title = emptyState.querySelector('p');
+  const hint = emptyState.querySelector('.empty-hint');
+  if (!title || !hint) return;
+
+  if (currentView === 'history') {
+    title.textContent = 'No history downloads';
+    hint.textContent = 'Completed downloads will appear here';
+    return;
+  }
+
+  title.textContent = 'No active downloads';
+  hint.textContent = 'Downloads will appear here automatically';
+}
+
+function setCurrentView(view) {
+  if (view !== 'active' && view !== 'history') return;
+  currentView = view;
+
+  if (viewTabActive) {
+    viewTabActive.classList.toggle('active', currentView === 'active');
+  }
+  if (viewTabHistory) {
+    viewTabHistory.classList.toggle('active', currentView === 'history');
+  }
+
+  renderDownloads();
 }
 
 function createDownloadItem(dl) {
@@ -276,43 +343,45 @@ function updateDownloadItem(item, dl) {
   els.progPercent.textContent = progress.toFixed(1) + '%';
 
   // Actions - Only update if status implies different buttons
-  // To avoid replacing active buttons (which loses 'disabled' state), we check if the current buttons match the desired state.
-  // A simple heuristic: check the first button's class.
   let desiredButtons = '';
   if (status === 'downloading') {
     desiredButtons = '<button class="action-btn pause" title="Pause">⏸</button>';
   } else if (status === 'paused' || status === 'queued') {
     desiredButtons = '<button class="action-btn resume" title="Resume">▶</button>';
   }
-  
-  if (status !== 'completed') {
+
+  if (status === 'completed') {
+    desiredButtons += '<button class="action-btn open-folder" title="Open folder">📁</button>';
+    desiredButtons += '<button class="action-btn open-file" title="Open file">📄</button>';
+  } else {
     desiredButtons += '<button class="action-btn cancel" title="Cancel">✕</button>';
   }
 
-  // Compare simple string content (ignoring dynamic props like disabled) is tricky.
-  // Instead: check context. 
-  // If we have a pause button and need a pause button, DO NOTHING.
-  // If we have a resume button and need a resume button, DO NOTHING.
-  
-  const currentFirstBtn = els.actions.querySelector('.action-btn:first-child');
-  let currentType = 'none';
-  if (currentFirstBtn) {
-    if (currentFirstBtn.classList.contains('pause')) currentType = 'pause';
-    else if (currentFirstBtn.classList.contains('resume')) currentType = 'resume';
+  if (els.actions.innerHTML !== desiredButtons) {
+    els.actions.innerHTML = desiredButtons;
   }
+}
 
-  let desiredType = 'none';
-  if (status === 'downloading') desiredType = 'pause';
-  else if (status === 'paused' || status === 'queued') desiredType = 'resume';
+function normalizeHistoryEntry(entry) {
+  const totalSize = Number(entry.total_size || 0);
+  const downloaded = Number(entry.downloaded || totalSize);
+  const speed = Number(entry.avg_speed || 0) / MB;
 
-  // If type mismatch, OR if we track completion (cancel button availability), we rebuild.
-  // Completion removes cancel button.
-  const hasCancel = !!els.actions.querySelector('.cancel');
-  const needsCancel = status !== 'completed';
-
-  if (currentType !== desiredType || hasCancel !== needsCancel) {
-     els.actions.innerHTML = desiredButtons;
-  }
+  return {
+    id: entry.id,
+    url: entry.url || '',
+    filename: entry.filename || 'Unknown',
+    dest_path: entry.dest_path || '',
+    status: entry.status || 'completed',
+    total_size: totalSize,
+    downloaded,
+    progress: totalSize > 0 ? (downloaded * 100) / totalSize : 100,
+    speed,
+    eta: 0,
+    fromHistory: true,
+    completedAt: Number(entry.completed_at || 0) * 1000,
+    addedAt: Number(entry.completed_at || 0) * 1000,
+  };
 }
 
 // === Utility Functions ===
@@ -406,9 +475,19 @@ async function fetchDownloads() {
         authStatus.textContent = '';
       }
       if (response.downloads) {
-        downloads.clear();
-        response.downloads.forEach(dl => downloads.set(dl.id, dl));
+        activeDownloads.clear();
+        response.downloads.forEach(dl => activeDownloads.set(dl.id, dl));
       }
+
+      historyDownloads.clear();
+      const historyResponse = await apiCall('getHistory');
+      if (historyResponse && Array.isArray(historyResponse.history)) {
+        historyResponse.history
+          .slice(0, HISTORY_LIMIT)
+          .map(normalizeHistoryEntry)
+          .forEach((entry) => historyDownloads.set(entry.id, entry));
+      }
+
       renderDownloads();
     }
   } catch (error) {
@@ -453,6 +532,10 @@ downloadsList.addEventListener('click', async (e) => {
       await apiCall('resumeDownload', { id });
     } else if (btn.classList.contains('cancel')) {
       await apiCall('cancelDownload', { id });
+    } else if (btn.classList.contains('open-file')) {
+      await apiCall('openFile', { id });
+    } else if (btn.classList.contains('open-folder')) {
+      await apiCall('openFolder', { id });
     }
     // Refresh immediately after action
     await fetchDownloads();
@@ -555,8 +638,8 @@ document.addEventListener('keydown', (e) => {
 if (isExtensionContext) {
   chrome.runtime.onMessage.addListener((message) => {
     if (message.type === 'downloadsUpdate') {
-      downloads.clear();
-      message.downloads.forEach(dl => downloads.set(dl.id, dl));
+      activeDownloads.clear();
+      message.downloads.forEach(dl => activeDownloads.set(dl.id, dl));
       renderDownloads();
     }
     if (message.type === 'serverStatus') {
@@ -568,10 +651,19 @@ if (isExtensionContext) {
   });
 }
 
+if (viewTabActive) {
+  viewTabActive.addEventListener('click', () => setCurrentView('active'));
+}
+
+if (viewTabHistory) {
+  viewTabHistory.addEventListener('click', () => setCurrentView('history'));
+}
+
 // === Initialization ===
 
 async function init() {
   console.log('[Surge Popup] Initializing...', isExtensionContext ? '(extension mode)' : '(standalone mode)');
+  setCurrentView('active');
   
   // Load auth token (extension mode only)
   if (isExtensionContext && authTokenInput) {

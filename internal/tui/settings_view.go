@@ -252,6 +252,7 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 		values["default_download_dir"] = m.Settings.General.DefaultDownloadDir
 		values["warn_on_duplicate"] = m.Settings.General.WarnOnDuplicate
 		values["download_complete_notification"] = m.Settings.General.DownloadCompleteNotification
+		values["allow_remote_open_actions"] = m.Settings.General.AllowRemoteOpenActions
 		values["extension_prompt"] = m.Settings.General.ExtensionPrompt
 		values["auto_resume"] = m.Settings.General.AutoResume
 		values["skip_update_check"] = m.Settings.General.SkipUpdateCheck
@@ -331,6 +332,8 @@ func (m *RootModel) setGeneralSetting(key, value, typ string) error {
 		m.Settings.General.DefaultDownloadDir = value
 	case "warn_on_duplicate":
 		m.Settings.General.WarnOnDuplicate = !m.Settings.General.WarnOnDuplicate
+	case "allow_remote_open_actions":
+		m.Settings.General.AllowRemoteOpenActions = !m.Settings.General.AllowRemoteOpenActions
 	case "extension_prompt":
 		m.Settings.General.ExtensionPrompt = !m.Settings.General.ExtensionPrompt
 	case "auto_resume":

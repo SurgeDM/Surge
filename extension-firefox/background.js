@@ -318,6 +318,98 @@ async function fetchDownloadList() {
   return { list: [], authError: false };
 }
 
+async function fetchHistoryList() {
+  const baseUrl = await findSurgeUrl();
+  if (!baseUrl) {
+    isConnected = false;
+    return { list: [], authError: false };
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const headers = await authHeaders();
+    const response = await fetch(`${baseUrl}/history`, {
+      method: 'GET',
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      isConnected = true;
+      const contentType = response.headers.get('content-type') || '';
+      if (!contentType.includes('application/json')) {
+        return { list: [], authError: false };
+      }
+
+      const list = await response.json().catch(() => []);
+      if (!Array.isArray(list)) {
+        return { list: [], authError: false };
+      }
+
+      list.sort((left, right) => (right.completed_at || 0) - (left.completed_at || 0));
+      return { list: list.slice(0, 100), authError: false };
+    }
+
+    if (response.status === 401 || response.status === 403) {
+      isConnected = true;
+      return { list: [], authError: true };
+    }
+
+    return { list: [], authError: false };
+  } catch (error) {
+    console.error('[Surge] Error fetching history:', error);
+    return { list: [], authError: false };
+  }
+}
+
+async function openDownloadFile(id) {
+  const baseUrl = await findSurgeUrl();
+  if (!baseUrl) return { success: false, error: 'Server not running' };
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const headers = await authHeaders();
+    const response = await fetch(`${baseUrl}/open-file?id=${encodeURIComponent(id)}`, {
+      method: 'POST',
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (response.ok) return { success: true };
+    const message = await response.text().catch(() => 'Failed to open file');
+    return { success: false, error: message };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
+async function openDownloadFolder(id) {
+  const baseUrl = await findSurgeUrl();
+  if (!baseUrl) return { success: false, error: 'Server not running' };
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const headers = await authHeaders();
+    const response = await fetch(`${baseUrl}/open-folder?id=${encodeURIComponent(id)}`, {
+      method: 'POST',
+      headers,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    if (response.ok) return { success: true };
+    const message = await response.text().catch(() => 'Failed to open folder');
+    return { success: false, error: message };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+}
+
 async function validateAuthToken() {
   const baseUrl = await findSurgeUrl();
   if (!baseUrl) {
@@ -771,6 +863,11 @@ browser.runtime.onMessage.addListener((message, sender) => {
             connected: isConnected 
           };
         }
+
+        case 'getHistory': {
+          const { list, authError } = await fetchHistoryList();
+          return { history: list, authError, connected: isConnected };
+        }
         
         case 'pauseDownload': {
           const success = await pauseDownload(message.id);
@@ -785,6 +882,14 @@ browser.runtime.onMessage.addListener((message, sender) => {
         case 'cancelDownload': {
           const success = await cancelDownload(message.id);
           return { success };
+        }
+
+        case 'openFile': {
+          return await openDownloadFile(message.id);
+        }
+
+        case 'openFolder': {
+          return await openDownloadFolder(message.id);
         }
         
         case 'confirmDuplicate': {
