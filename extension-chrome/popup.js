@@ -364,7 +364,7 @@ function updateDownloadItem(item, dl) {
 
 function normalizeHistoryEntry(entry) {
   const totalSize = Number(entry.total_size || 0);
-  const downloaded = Number(entry.downloaded || totalSize);
+  const downloaded = entry.downloaded != null ? Number(entry.downloaded) : totalSize;
   const speed = Number(entry.avg_speed || 0) / MB;
 
   return {

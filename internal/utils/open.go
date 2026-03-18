@@ -13,8 +13,12 @@ func OpenFile(path string) error {
 		return fmt.Errorf("path is empty")
 	}
 
-	if _, err := os.Stat(path); err != nil {
+	info, err := os.Stat(path)
+	if err != nil {
 		return err
+	}
+	if info.IsDir() {
+		return fmt.Errorf("path %q is a directory, not a file", path)
 	}
 
 	return openWithSystem(path)
@@ -61,7 +65,7 @@ func buildOpenCommand(path string) *exec.Cmd {
 	case "darwin":
 		return exec.Command("open", path)
 	case "windows":
-		return exec.Command("cmd", "/c", "start", "", path)
+		return exec.Command("explorer", path)
 	default:
 		return exec.Command("xdg-open", path)
 	}

@@ -84,7 +84,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 		destPath, err := resolveDownloadDestPath(service, id)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 
@@ -104,7 +104,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 		destPath, err := resolveDownloadDestPath(service, id)
 		if err != nil {
-			http.Error(w, err.Error(), http.StatusNotFound)
+			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 

@@ -334,7 +334,7 @@ async function fetchHistoryList() {
         return { list: [], authError: false };
       }
 
-      list.sort((left, right) => (right.completed_at || 0) - (left.completed_at || 0));
+      // backend already returns history newest-first
       return { list: list.slice(0, 100), authError: false };
     }
 
