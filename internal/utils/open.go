@@ -13,8 +13,13 @@ func OpenFile(path string) error {
 		return fmt.Errorf("path is empty")
 	}
 
-	if _, err := os.Stat(path); err != nil {
+	info, err := os.Stat(path)
+	if err != nil {
 		return err
+	}
+
+	if info.IsDir() {
+		return fmt.Errorf("%q is a directory", path)
 	}
 
 	return openWithSystem(path)
