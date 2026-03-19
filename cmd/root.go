@@ -1040,9 +1040,14 @@ func initializeGlobalState() error {
 	logsDir := config.GetLogsDir()
 	stateDBPath := filepath.Join(stateDir, "surge.db")
 
-	// Ensure directories exist
-	_ = os.MkdirAll(stateDir, 0o755)
-	_ = os.MkdirAll(logsDir, 0o755)
+	err := os.MkdirAll(stateDir, 0o755)
+	if err != nil {
+		return fmt.Errorf("failed to create state directory: %w", err)
+	}
+	err = os.MkdirAll(logsDir, 0o755)
+	if err != nil {
+		return fmt.Errorf("failed to create logs directory: %w", err)
+	}
 
 	// Config engine state
 	state.Configure(stateDBPath)
