@@ -118,7 +118,7 @@ func TestProbeServer_ReadsBodyBeforeContextCancel(t *testing.T) {
 
 	result, err := processing.ProbeServerWithProxy(ctx, server.URL, "", nil, "")
 	if err != nil {
-		t.Fatalf("ProbeServer() failed: %v", err)
+		t.Fatalf("ProbeServerWithProxy() failed: %v", err)
 	}
 	if result.Filename != "delayed.txt" {
 		t.Errorf("Expected filename 'delayed.txt', got %q. The context might have been prematurely canceled.", result.Filename)
