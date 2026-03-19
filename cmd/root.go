@@ -1023,6 +1023,7 @@ func init() {
 	rootCmd.Flags().Bool("no-resume", false, "Do not auto-resume paused downloads on startup")
 	rootCmd.Flags().Bool("exit-when-done", false, "Exit when all downloads complete")
 	rootCmd.SetVersionTemplate("Surge v{{.Version}}\n")
+	rootCmd.Version = Version
 }
 
 func mustInitializeGlobalState() {
