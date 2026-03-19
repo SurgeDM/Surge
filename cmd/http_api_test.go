@@ -163,7 +163,7 @@ func TestResolveDownloadDestPath(t *testing.T) {
 			name: "status path present",
 			service: &httpAPITestService{
 				statusByID: map[string]*types.DownloadStatus{
-					"hit": {ID: "hit", DestPath: `C:\\tmp\\a.bin`},
+					"hit": {ID: "hit", DestPath: "C:\\tmp\\a.bin"},
 				},
 			},
 			id:       "hit",
@@ -175,7 +175,7 @@ func TestResolveDownloadDestPath(t *testing.T) {
 				statusByID: map[string]*types.DownloadStatus{
 					"fallback": {ID: "fallback", DestPath: ""},
 				},
-				history: []types.DownloadEntry{{ID: "fallback", DestPath: `C:\\tmp\\b.bin`}},
+				history: []types.DownloadEntry{{ID: "fallback", DestPath: "C:\\tmp\\b.bin"}},
 			},
 			id:       "fallback",
 			wantPath: `C:\tmp\b.bin`,
@@ -191,7 +191,7 @@ func TestResolveDownloadDestPath(t *testing.T) {
 		{
 			name: "id absent returns not found",
 			service: &httpAPITestService{
-				history: []types.DownloadEntry{{ID: "other", DestPath: `C:\\tmp\\c.bin`}},
+				history: []types.DownloadEntry{{ID: "other", DestPath: "C:\\tmp\\c.bin"}},
 			},
 			id:        "missing",
 			wantErrIs: ErrDownloadNotFound,
