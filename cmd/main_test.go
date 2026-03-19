@@ -10,6 +10,15 @@ import (
 	"github.com/surge-downloader/surge/internal/engine/state"
 )
 
+func resetSharedStateDB() error {
+	// Reset any pre-existing global DB state (e.g. left by an init or an
+	// isolated test cleanup) before pointing the package at the shared suite DB.
+	state.CloseDB()
+	err := config.EnsureDirs()
+	state.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
+	return err
+}
+
 func TestMain(m *testing.M) {
 	tmpDir, err := os.MkdirTemp("", "surge-cmd-test-*")
 	if err == nil {
@@ -22,15 +31,10 @@ func TestMain(m *testing.M) {
 		_ = os.Setenv("APPDATA", tmpDir)
 		_ = os.Setenv("USERPROFILE", tmpDir)
 
-		if ensureErr := config.EnsureDirs(); ensureErr != nil {
+		if ensureErr := resetSharedStateDB(); ensureErr != nil {
 			fmt.Fprintf(os.Stderr, "TestMain: failed to create isolated Surge test directories: %v\n", ensureErr)
 			os.Exit(1)
 		}
-
-		// Reset any previously configured/shared DB handle before pointing the
-		// package at the suite-wide isolated state path for cmd tests.
-		state.CloseDB()
-		state.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
 	}
 
 	code := m.Run()

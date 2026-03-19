@@ -1,13 +1,10 @@
 package cmd
 
 import (
-	"path/filepath"
 	"sync"
 	"testing"
 
 	"github.com/adrg/xdg"
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/engine/state"
 )
 
 var xdgEnvMu sync.Mutex
@@ -36,11 +33,8 @@ func setupXDGEnvIsolation(t *testing.T) string {
 		xdg.StateHome = oldStateHome
 		xdg.CacheHome = oldCacheHome
 		xdg.RuntimeDir = oldRuntimeDir
-		state.CloseDB()
-		if err := config.EnsureDirs(); err != nil {
+		if err := resetSharedStateDB(); err != nil {
 			t.Errorf("failed to restore shared Surge test directories: %v", err)
-		} else {
-			state.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
 		}
 		xdgEnvMu.Unlock()
 	})
