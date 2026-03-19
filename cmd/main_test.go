@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -21,10 +22,15 @@ func TestMain(m *testing.M) {
 		_ = os.Setenv("APPDATA", tmpDir)
 		_ = os.Setenv("USERPROFILE", tmpDir)
 
-		if ensureErr := config.EnsureDirs(); ensureErr == nil {
-			state.CloseDB()
-			state.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
+		if ensureErr := config.EnsureDirs(); ensureErr != nil {
+			fmt.Fprintf(os.Stderr, "TestMain: failed to create isolated Surge test directories: %v\n", ensureErr)
+			os.Exit(1)
 		}
+
+		// Reset any previously configured/shared DB handle before pointing the
+		// package at the suite-wide isolated state path for cmd tests.
+		state.CloseDB()
+		state.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
 	}
 
 	code := m.Run()
