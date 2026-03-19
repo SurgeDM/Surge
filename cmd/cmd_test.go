@@ -569,8 +569,13 @@ func TestRootCmd_Use(t *testing.T) {
 
 func TestRootCmd_Version(t *testing.T) {
 	if rootCmd.Version == "" {
-		// Version might not be set in tests
-		t.Log("Version not set (expected during development)")
+		t.Error("rootCmd.Version should not be empty")
+	}
+}
+
+func TestRootCmd_VersionMatchesPackageVar(t *testing.T) {
+	if rootCmd.Version != Version {
+		t.Errorf("rootCmd.Version %q does not match Version %q — init() must sync them", rootCmd.Version, Version)
 	}
 }
 
