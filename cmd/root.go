@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -35,6 +36,15 @@ var (
 	Version   = "dev"
 	BuildTime = "unknown"
 )
+
+func init() {
+	// Override with build info if ldflags didn't inject a version
+	if Version == "dev" || Version == "" {
+		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+			Version = strings.TrimPrefix(info.Main.Version, "v")
+		}
+	}
+}
 
 // activeDownloads tracks the number of currently running downloads in headless mode
 var activeDownloads int32
