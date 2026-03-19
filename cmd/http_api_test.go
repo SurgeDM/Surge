@@ -176,7 +176,7 @@ func TestResolveDownloadDestPath(t *testing.T) {
 					"fallback": {ID: "fallback", DestPath: ""},
 				},
 				history: []types.DownloadEntry{{ID: "fallback", DestPath: "C:\\tmp\\b.bin"}},
-			},
+			}, 
 			id:       "fallback",
 			wantPath: `C:\tmp\b.bin`,
 		},
