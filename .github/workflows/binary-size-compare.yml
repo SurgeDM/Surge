@@ -47,72 +47,25 @@ jobs:
 
           diff=$((size_pr - size_main))
           
-          echo "size_pr=$size_pr" >> "$GITHUB_OUTPUT"
-          echo "size_main=$size_main" >> "$GITHUB_OUTPUT"
-          echo "diff=$diff" >> "$GITHUB_OUTPUT"
+          echo "$size_pr" > size_pr.txt
+          echo "$size_main" > size_main.txt
+          echo "$diff" > diff.txt
           
           if [ "$size_pr" -gt "$size_main" ]; then
-            echo "exceeds=true" >> "$GITHUB_OUTPUT"
+            echo "true" > exceeds.txt
           else
-            echo "exceeds=false" >> "$GITHUB_OUTPUT"
+            echo "false" > exceeds.txt
           fi
+          
+          echo "${{ github.event.pull_request.number }}" > pr_number.txt
 
-      - name: Comment on PR (Create or Update)
-        uses: actions/github-script@v7
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
         with:
-          script: |
-            const pr = Number('${{ steps.compare.outputs.size_pr }}');
-            const main = Number('${{ steps.compare.outputs.size_main }}');
-            const diff = Number('${{ steps.compare.outputs.diff }}');
-            const exceeds = '${{ steps.compare.outputs.exceeds }}' === 'true';
-
-            // Better formatter handling negative numbers correctly
-            const fmt = (n) => {
-              const units = ['B','KB','MB','GB'];
-              let i = 0; let v = Math.abs(n);
-              while (v >= 1024 && i < 3) { v /= 1024; i++; }
-              return `${(n < 0 ? '-' : '')}${v.toFixed(2)} ${units[i]}`;
-            };
-
-            const statusLabel = exceeds ? "⚠️ **Size Increased**" : "✅ **Size Decreased or Stable**";
-            
-            // Hidden signature so the bot knows which comment is its own
-            const signature = "";
-            
-            const body = `${signature}
-            ### Binary Size Analysis
-            ${statusLabel}
-            
-            | Version | Human Readable | Raw Bytes |
-            | :--- | :--- | :--- |
-            | **Main** | ${fmt(main)} | \`${main}\` |
-            | **PR** | ${fmt(pr)} | \`${pr}\` |
-            | **Difference** | **${fmt(diff)}** | \`${diff}\` |
-            `;
-
-            // Look for existing comment
-            const comments = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number
-            });
-            
-            const existingComment = comments.data.find(c => c.body.includes(signature));
-
-            if (existingComment) {
-              // Update the existing comment
-              await github.rest.issues.updateComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                comment_id: existingComment.id,
-                body: body
-              });
-            } else if (exceeds) {
-              // Only create a NEW comment if the size increased
-              await github.rest.issues.createComment({
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                issue_number: context.issue.number,
-                body: body
-              });
-            }
+          name: binary-size-data
+          path: |
+            size_pr.txt
+            size_main.txt
+            diff.txt
+            exceeds.txt
+            pr_number.txt
