@@ -14,6 +14,7 @@ import (
 
 func TestProbeServer_UsesConfiguredProxy(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
 
 	var directHits atomic.Int32
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -115,7 +116,7 @@ func TestProbeServer_ReadsBodyBeforeContextCancel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	result, err := processing.ProbeServer(ctx, server.URL, "", nil)
+	result, err := processing.ProbeServerWithProxy(ctx, server.URL, "", nil, "")
 	if err != nil {
 		t.Fatalf("ProbeServer() failed: %v", err)
 	}
