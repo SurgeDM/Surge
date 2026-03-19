@@ -879,6 +879,7 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		newID, err = service.Add(urlForAdd, outPath, req.Filename, mirrorsForAdd, req.Headers, req.IsExplicitCategory, 0, false)
 	}
 	if err != nil {
+		recordPreflightDownloadError(urlForAdd, outPath, err)
 		http.Error(w, "Failed to add download: "+err.Error(), http.StatusInternalServerError)
 		return
 	}
