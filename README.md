@@ -59,14 +59,14 @@ _Totally optional—your stars, issues, and contributions already mean the world
 
 Surge is available on multiple platforms. Choose the method that works best for you.
 
-| Platform / Method            | Command / Instructions                                                              | Notes                                        |
-| :--------------------------- | :---------------------------------------------------------------------------------- | :------------------------------------------- |
+| Platform / Method                  | Command / Instructions                                                           | Notes                                        |
+| :--------------------------------- | :------------------------------------------------------------------------------- | :------------------------------------------- |
 | **Prebuilt Binary**          | [Download from Releases](https://github.com/surge-downloader/surge/releases/latest) | Easiest method. Just download and run.       |
-| **Arch Linux (AUR)**         | `yay -S surge`                                                                      | Managed via AUR.                             |
-| **macOS / Linux (Homebrew)** | `brew install surge-downloader/tap/surge`                                           | Recommended for Mac/Linux users.             |
-| **Windows (Winget)**         | `winget install surge-downloader.surge`                                             | Recommended for Windows users.               |
+| **Arch Linux (AUR)**         | `yay -S surge`                                                                 | Managed via AUR.                             |
+| **macOS / Linux (Homebrew)** | `brew install surge-downloader/tap/surge`                                      | Recommended for Mac/Linux users.             |
+| **Windows (Winget)**         | `winget install surge-downloader.surge`<br />or<br />`scoop install surge` | Recommended for Windows users.               |
 | **Dockerfile**               | [See instructions](#4-server-mode-with-docker-compose)                              | Run Surge in server mode with Docker Compose |
-| **Go Install**               | `go install github.com/surge-downloader/surge@latest`                               | Requires Go 1.21+.                           |
+| **Go Install**               | `go install github.com/surge-downloader/surge@latest`                          | Requires Go 1.21+.                           |
 
 ---
 
@@ -74,7 +74,7 @@ Surge is available on multiple platforms. Choose the method that works best for 
 
 Surge has two main modes: **TUI (Interactive)** and **Server (Headless)**.
 
-For a full reference, see the **[Settings & Configuration Guide](docs/SETTINGS.md)** and the **[CLI Usage Guide](docs/USAGE.md)**.
+For a full reference, see the **[Settings &amp; Configuration Guide](docs/SETTINGS.md)** and the **[CLI Usage Guide](docs/USAGE.md)**.
 
 ### 1. Interactive TUI Mode
 
@@ -190,12 +190,12 @@ licensing details.
 
 We tested Surge against standard tools. Because of our connection optimization logic, Surge significantly outperforms single-connection tools.
 
-| Tool      | Time       | Speed          | Comparison   |
-| --------- | ---------- | -------------- | ------------ |
-| **Surge** | **28.93s** | **35.40 MB/s** | **—**        |
-| aria2c    | 40.04s     | 25.57 MB/s     | 1.38× slower |
-| curl      | 57.57s     | 17.79 MB/s     | 1.99× slower |
-| wget      | 61.81s     | 16.57 MB/s     | 2.14× slower |
+| Tool            | Time             | Speed                | Comparison    |
+| --------------- | ---------------- | -------------------- | ------------- |
+| **Surge** | **28.93s** | **35.40 MB/s** | **—**  |
+| aria2c          | 40.04s           | 25.57 MB/s           | 1.38× slower |
+| curl            | 57.57s           | 17.79 MB/s           | 1.99× slower |
+| wget            | 61.81s           | 16.57 MB/s           | 2.14× slower |
 
 > _Test details: 1GB file, Windows 11, Ryzen 5 5600X, 360 Mbps Network. Results averaged over 5 runs._
 
@@ -209,21 +209,21 @@ The Surge extension intercepts browser downloads and sends them straight to your
 
 ### Chrome / Edge / Brave
 
-1.  Download `extension-chrome.zip` from the latest GitHub release.
-2.  Unzip it somewhere on disk.
-3.  Open your browser and navigate to `chrome://extensions`.
-4.  Enable **"Developer mode"** in the top right corner.
-5.  Click **"Load unpacked"**.
-6.  Select the unzipped `extension-chrome` folder.
+1. Download `extension-chrome.zip` from the latest GitHub release.
+2. Unzip it somewhere on disk.
+3. Open your browser and navigate to `chrome://extensions`.
+4. Enable **"Developer mode"** in the top right corner.
+5. Click **"Load unpacked"**.
+6. Select the unzipped `extension-chrome` folder.
 
 ### Firefox
 
-1.  **Stable:** [Get the Add-on](https://addons.mozilla.org/en-US/firefox/addon/surge/)
-2.  **Development:**
-    - Download `extension-firefox.zip` from the latest GitHub release.
-    - Navigate to `about:debugging#/runtime/this-firefox`.
-    - Click **"Load Temporary Add-on..."**.
-    - Select the zip file (or unzip and select `manifest.json`).
+1. **Stable:** [Get the Add-on](https://addons.mozilla.org/en-US/firefox/addon/surge/)
+2. **Development:**
+   - Download `extension-firefox.zip` from the latest GitHub release.
+   - Navigate to `about:debugging#/runtime/this-firefox`.
+   - Click **"Load Temporary Add-on..."**.
+   - Select the zip file (or unzip and select `manifest.json`).
 
 ---
 
@@ -248,7 +248,7 @@ Distributed under the MIT License. See [LICENSE](https://github.com/surge-downlo
    <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=surge-downloader/surge&type=Date" />
  </picture>
 </a>
-  
+
 <br />
 If Surge saved you some time, consider giving it a ⭐ to help others find it!
 </div>
