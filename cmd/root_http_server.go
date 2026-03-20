@@ -45,8 +45,13 @@ func bindServerListener(portFlag int) (int, net.Listener, error) {
 	return port, ln, nil
 }
 
-// saveActivePort writes the active port for extension discovery
+// saveActivePort writes the active port for local CLI and extension discovery.
 func saveActivePort(port int) {
+	if err := os.MkdirAll(config.GetRuntimeDir(), 0o755); err != nil {
+		utils.Debug("Error creating runtime directory for port file: %v", err)
+		return
+	}
+
 	portFile := filepath.Join(config.GetRuntimeDir(), "port")
 	if err := os.WriteFile(portFile, []byte(fmt.Sprintf("%d", port)), 0o644); err != nil {
 		utils.Debug("Error writing port file: %v", err)

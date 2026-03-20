@@ -43,7 +43,7 @@ func init() {
 	}
 }
 
-// activeDownloads tracks the number of currently running downloads in headless mode
+// activeDownloads tracks in-flight downloads for headless/server exit logic.
 var activeDownloads int32
 
 // pendingEnqueue tracks the number of pending batch enqueues to avoid premature exit
@@ -335,7 +335,7 @@ func maybeRunRemoteTUI(cmd *cobra.Command, args []string) bool {
 func acquireRootInstanceLock() func() {
 	isMaster, err := AcquireLock()
 	if err != nil {
-		fmt.Printf("Error acquiring lock: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error acquiring lock: %v\n", err)
 		os.Exit(1)
 	}
 
@@ -456,7 +456,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 	stream, cleanup, err := GlobalService.StreamEvents(context.Background())
 	if err != nil {
 		_ = executeGlobalShutdown("tui: stream init failed")
-		fmt.Printf("Error getting event stream: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error getting event stream: %v\n", err)
 		os.Exit(1)
 	}
 	defer cleanup()
@@ -512,12 +512,11 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 	// Run TUI
 	if _, err := p.Run(); err != nil {
 		_ = executeGlobalShutdown("tui: p.Run failed")
-		fmt.Printf("Error running program: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Error running program: %v\n", err)
 		os.Exit(1)
 	}
 	_ = executeGlobalShutdown("tui: program exited")
 }
-
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 func Execute() {

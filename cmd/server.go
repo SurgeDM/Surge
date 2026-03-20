@@ -33,7 +33,7 @@ var serverStartCmd = &cobra.Command{
 		// Attempt to acquire lock before any global state initialization
 		isMaster, err := AcquireLock()
 		if err != nil {
-			fmt.Printf("Error acquiring lock: %v\n", err)
+			fmt.Fprintf(os.Stderr, "Error acquiring lock: %v\n", err)
 			os.Exit(1)
 		}
 
@@ -142,6 +142,10 @@ func init() {
 
 func savePID() {
 	pid := os.Getpid()
+	if err := os.MkdirAll(config.GetRuntimeDir(), 0o755); err != nil {
+		utils.Debug("Error creating runtime directory for PID file: %v", err)
+		return
+	}
 	pidFile := filepath.Join(config.GetRuntimeDir(), "pid")
 	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", pid)), 0o644); err != nil {
 		utils.Debug("Error writing PID file: %v", err)
