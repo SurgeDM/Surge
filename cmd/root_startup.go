@@ -32,9 +32,8 @@ func runStartupIntegrityCheck() string {
 		msg := fmt.Sprintf("Startup integrity check: removed %d corrupted/orphaned downloads", removed)
 		return msg
 	}
-	msg := "Startup integrity check: no issues found"
-	utils.Debug("%s", msg)
-	return msg
+	utils.Debug("%s", "Startup integrity check: no issues found")
+	return ""
 }
 
 func mustInitializeGlobalState() {
