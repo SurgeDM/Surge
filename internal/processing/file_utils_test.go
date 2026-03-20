@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/surge-downloader/surge/internal/config"
@@ -217,5 +218,87 @@ func TestResolveDestination_ErrorsWhenUniqueNameExhausted(t *testing.T) {
 	)
 	if err == nil {
 		t.Fatal("expected unique-name exhaustion error")
+	}
+}
+
+func TestResolveDestination_OverwriteReusesOriginalFilename(t *testing.T) {
+	tmpDir := t.TempDir()
+	settings := config.DefaultSettings()
+	settings.General.CategoryEnabled = false
+	settings.General.FileExistsAction = config.FileExistsOverwrite
+
+	// Create an existing file at the destination
+	existingFile := filepath.Join(tmpDir, "data.zip")
+	if err := os.WriteFile(existingFile, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, name, err := processing.ResolveDestination(
+		"http://example.com/data.zip", "data.zip", tmpDir,
+		false, settings, nil, nil,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name != "data.zip" {
+		t.Errorf("overwrite mode should reuse original name, got %s", name)
+	}
+}
+
+func TestResolveDestination_OverwriteEmptyFilenameReturnsError(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.General.CategoryEnabled = false
+	settings.General.FileExistsAction = config.FileExistsOverwrite
+
+	// URL with no path component yields empty filename
+	_, _, err := processing.ResolveDestination(
+		"http://example.com/", "", "/downloads",
+		false, settings, &processing.ProbeResult{Filename: ""}, nil,
+	)
+	if err == nil {
+		t.Fatal("expected error for empty filename in overwrite mode")
+	}
+}
+
+func TestResolveDestination_OverwriteRejectsActiveDownload(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.General.CategoryEnabled = false
+	settings.General.FileExistsAction = config.FileExistsOverwrite
+
+	alwaysActive := func(dir, name string) bool { return true }
+
+	_, _, err := processing.ResolveDestination(
+		"http://example.com/active.bin", "active.bin", "/downloads",
+		false, settings, nil, alwaysActive,
+	)
+	if err == nil {
+		t.Fatal("expected error when file is already being downloaded")
+	}
+	if !strings.Contains(err.Error(), "already being downloaded") {
+		t.Errorf("expected 'already being downloaded' in error, got: %v", err)
+	}
+}
+
+func TestResolveDestination_RenameStillGeneratesSuffix(t *testing.T) {
+	tmpDir := t.TempDir()
+	settings := config.DefaultSettings()
+	settings.General.CategoryEnabled = false
+	// FileExistsAction defaults to "rename"
+
+	// Create existing file
+	existingFile := filepath.Join(tmpDir, "report.pdf")
+	if err := os.WriteFile(existingFile, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, name, err := processing.ResolveDestination(
+		"http://example.com/report.pdf", "report.pdf", tmpDir,
+		false, settings, nil, nil,
+	)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if name == "report.pdf" {
+		t.Error("rename mode should generate a suffixed name when file exists")
 	}
 }
