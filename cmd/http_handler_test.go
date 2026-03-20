@@ -293,3 +293,61 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 		t.Fatalf("response id = %q, want queued-id", resp["id"])
 	}
 }
+
+func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
+	setupIsolatedCmdState(t)
+
+	progressCh := make(chan any, 10)
+	GlobalProgressCh = progressCh
+	GlobalPool = download.NewWorkerPool(progressCh, 1)
+
+	origLifecycle := GlobalLifecycle
+	origService := GlobalService
+	t.Cleanup(func() {
+		GlobalLifecycle = origLifecycle
+		GlobalService = origService
+		GlobalPool = nil
+		GlobalProgressCh = nil
+	})
+
+	// Create a lifecycle manager whose addFunc should never be reached
+	// because the probe will fail first (invalid URL scheme).
+	GlobalLifecycle = processing.NewLifecycleManager(func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		t.Fatal("addFunc should not be called when probe fails")
+		return "", nil
+	}, nil)
+
+	svc := core.NewLocalDownloadService(nil)
+	GlobalService = svc
+	t.Cleanup(func() {
+		_ = svc.Shutdown()
+	})
+
+	// Use a URL with an invalid scheme so ProbeServer fails immediately.
+	body := `{"url": "badscheme://example.com/file.bin", "path": "/tmp", "skip_approval": true}`
+	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handleDownload(rec, req, "", svc)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	// Verify that the error was persisted in the master list.
+	list, err := state.LoadMasterList()
+	if err != nil {
+		t.Fatalf("LoadMasterList failed: %v", err)
+	}
+
+	found := false
+	for _, entry := range list.Downloads {
+		if strings.Contains(entry.URL, "badscheme://example.com/file.bin") && entry.Status == "error" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected errored download entry in master list after probe failure via HTTP API")
+	}
+}
