@@ -1533,7 +1533,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.Settings = defaults
 				m.ApplyTheme(m.Settings.General.Theme)
 				if reloader, ok := m.Service.(interface{ ReloadSettings() error }); ok {
-					_ = reloader.ReloadSettings()
+					if err := reloader.ReloadSettings(); err != nil {
+						m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to reload settings after reset: %s", err.Error())))
+					}
 				}
 				if m.Orchestrator != nil {
 					m.Orchestrator.ApplySettings(m.Settings)
