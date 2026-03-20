@@ -52,6 +52,9 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | Key                    | Type   | Description                                                                                        | Default |
 | :--------------------- | :----- | :------------------------------------------------------------------------------------------------- | :------ |
 | `default_download_dir` | string | Directory where new downloads are saved. If empty, defaults to `~/Downloads` or current directory. | `""`    |
+| `download_complete_notification` | bool | Show a system notification when a download finishes successfully. | `true` |
+| `download_failed_notification` | bool | Show a system notification when a download fails or errors. | `true` |
+| `file_exists_action` | string | Action when a downloaded file already exists: `"rename"` (append counter suffix) or `"overwrite"` (replace existing file). | `"rename"` |
 | `allow_remote_open_actions` | bool | Allow `/open-file` and `/open-folder` API requests from remote clients. Keep disabled unless you trust your network and auth setup. | `false` |
 | `warn_on_duplicate`    | bool   | Show a warning when adding a download that already exists in the list.                             | `true`  |
 | `extension_prompt`     | bool   | Prompt for confirmation in the TUI when adding downloads via the browser extension.                | `false` |
