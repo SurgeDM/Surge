@@ -697,6 +697,7 @@ if (viewTabHistory) {
 // === Settings View Toggle ===
 
 function toggleSettingsView() {
+  if (!settingsSection || !downloadsSection || !settingsBtn) return;
   const isSettingsVisible = !settingsSection.classList.contains('hidden');
   if (isSettingsVisible) {
     settingsSection.classList.add('hidden');
