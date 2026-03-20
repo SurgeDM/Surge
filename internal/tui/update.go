@@ -1526,13 +1526,19 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Reset All
 			if key.Matches(msg, m.keys.Settings.ResetAll) {
 				defaults := config.DefaultSettings()
+				if err := config.SaveSettings(defaults); err != nil {
+					m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to persist reset: %s", err.Error())))
+					return m, nil
+				}
 				m.Settings = defaults
 				m.ApplyTheme(m.Settings.General.Theme)
-				if err := m.persistSettings(); err != nil {
-					m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to reset settings: %s", err.Error())))
-				} else {
-					m.addLogEntry(LogStyleComplete.Render("✔ All settings reset to defaults"))
+				if reloader, ok := m.Service.(interface{ ReloadSettings() error }); ok {
+					_ = reloader.ReloadSettings()
 				}
+				if m.Orchestrator != nil {
+					m.Orchestrator.ApplySettings(m.Settings)
+				}
+				m.addLogEntry(LogStyleComplete.Render("✔ All settings reset to defaults"))
 				return m, nil
 			}
 

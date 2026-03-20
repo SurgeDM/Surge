@@ -189,6 +189,8 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 			finalFilename = ""
 		} else if isNameActive != nil && isNameActive(destPath, base) {
 			return "", "", fmt.Errorf("file %q is already being downloaded", base)
+		} else if _, err := os.Stat(filepath.Join(destPath, base) + types.IncompleteSuffix); !os.IsNotExist(err) {
+			return "", "", fmt.Errorf("file %q has a pending .surge working file; remove it or switch to Rename mode", base)
 		} else {
 			finalFilename = base
 		}

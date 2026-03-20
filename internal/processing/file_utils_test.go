@@ -302,3 +302,27 @@ func TestResolveDestination_RenameStillGeneratesSuffix(t *testing.T) {
 		t.Error("rename mode should generate a suffixed name when file exists")
 	}
 }
+
+func TestResolveDestination_OverwriteRejectsStaleSurgeFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	settings := config.DefaultSettings()
+	settings.General.CategoryEnabled = false
+	settings.General.FileExistsAction = config.FileExistsOverwrite
+
+	// Simulate a stale working file left by a crashed session
+	surgeFile := filepath.Join(tmpDir, "data.zip") + types.IncompleteSuffix
+	if err := os.WriteFile(surgeFile, []byte("partial"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, _, err := processing.ResolveDestination(
+		"http://example.com/data.zip", "data.zip", tmpDir,
+		false, settings, nil, nil,
+	)
+	if err == nil {
+		t.Fatal("expected error when stale .surge file exists in overwrite mode")
+	}
+	if !strings.Contains(err.Error(), ".surge working file") {
+		t.Errorf("expected '.surge working file' in error, got: %v", err)
+	}
+}
