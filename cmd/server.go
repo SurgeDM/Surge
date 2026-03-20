@@ -188,7 +188,9 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 	go startHTTPServer(listener, port, outputDir, GlobalService, strings.TrimSpace(tokenOverride))
 
 	// Queue initial downloads
+	atomic.AddInt32(&pendingEnqueue, 1)
 	go func() {
+		defer atomic.AddInt32(&pendingEnqueue, -1)
 		var urls []string
 		urls = append(urls, args...)
 
@@ -226,7 +228,7 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
 			for range ticker.C {
-				if atomic.LoadInt32(&activeDownloads) == 0 {
+				if atomic.LoadInt32(&pendingEnqueue) == 0 && atomic.LoadInt32(&activeDownloads) == 0 {
 					if GlobalPool != nil && GlobalPool.ActiveCount() == 0 {
 						select {
 						case exitWhenDoneCh <- struct{}{}:
