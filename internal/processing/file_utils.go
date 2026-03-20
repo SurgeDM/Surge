@@ -181,10 +181,18 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 
 	var finalFilename string
 	if settings != nil && settings.General.FileExistsAction == config.FileExistsOverwrite {
-		// Overwrite mode: use original filename without uniqueness check
-		finalFilename = filepath.Base(strings.TrimSpace(filename))
+		// Overwrite mode: reuse the original filename so os.Rename atomically
+		// replaces the existing file at finalization instead of producing a
+		// numbered duplicate (e.g. file(1).zip).
+		base := filepath.Base(strings.TrimSpace(filename))
+		if base == "" || base == "." || base == ".." {
+			finalFilename = ""
+		} else {
+			finalFilename = base
+		}
 	} else {
-		// Rename (default) or Ask: generate unique filename
+		// Rename (default): append a counter suffix to avoid clobbering an
+		// existing file or another in-progress download with the same name.
 		finalFilename = GetUniqueFilename(destPath, filename, isNameActive)
 	}
 	if finalFilename == "" {
