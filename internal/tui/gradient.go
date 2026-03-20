@@ -10,7 +10,6 @@ import (
 )
 
 // ApplyGradient applies a vertical gradient to a multi-line string
-// ApplyGradient applies a vertical gradient to a multi-line string
 func ApplyGradient(text string, startColor, endColor color.Color) string {
 	lines := strings.Split(text, "\n")
 	height := len(lines)
