@@ -67,7 +67,7 @@ func TestUpdate_InputSubmit_BlankPathUsesDefaultPathRouting(t *testing.T) {
 	m.inputs[2].SetValue("")
 	m.inputs[3].SetValue("song.mp3")
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m2 := updated.(RootModel)
 
 	if len(m2.downloads) != 1 {
@@ -96,7 +96,7 @@ func TestUpdate_DuplicateContinuePreservesDefaultPathRouting(t *testing.T) {
 	m.pendingIsDefaultPath = true
 	m.pendingFilename = "movie.mp4"
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'c'}})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'c', Text: "c"})
 	m2 := updated.(RootModel)
 
 	if len(m2.downloads) != 1 {
@@ -125,7 +125,7 @@ func TestUpdate_ExtensionConfirmBlankPathUsesDefaultPathRouting(t *testing.T) {
 	m.inputs[2].SetValue("")
 	m.inputs[3].SetValue("report.pdf")
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m2 := updated.(RootModel)
 
 	if len(m2.downloads) != 1 {
@@ -155,7 +155,7 @@ func TestUpdate_CategoryManagerEscRemovesNewPlaceholder(t *testing.T) {
 		m.catMgrInputs[i] = textinput.New()
 	}
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyEsc})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
 	m2 := updated.(RootModel)
 
 	if m2.catMgrEditing {

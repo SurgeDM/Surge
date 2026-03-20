@@ -62,7 +62,7 @@ func TestUpdate_DownloadStartedKeepsResuming(t *testing.T) {
 	m := RootModel{
 		downloads:   []*DownloadModel{dm},
 		list:        NewDownloadList(80, 20),
-		logViewport: viewport.New(40, 5),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	msg := events.DownloadStartedMsg{
@@ -99,7 +99,7 @@ func TestUpdate_EnqueueSuccessMergesOptimisticEntryAfterStart(t *testing.T) {
 		downloads:          []*DownloadModel{optimistic},
 		SelectedDownloadID: "pending-1",
 		list:               NewDownloadList(80, 20),
-		logViewport:        viewport.New(40, 5),
+		logViewport:        viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	updated, _ := m.Update(events.DownloadStartedMsg{
@@ -142,7 +142,7 @@ func TestUpdate_PauseResumeEventsNormalizeFlags(t *testing.T) {
 			{ID: "id-1", paused: false, pausing: true, resuming: true},
 		},
 		list:        NewDownloadList(80, 20),
-		logViewport: viewport.New(40, 5),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	updated, _ := m.Update(events.DownloadPausedMsg{
@@ -205,7 +205,7 @@ func TestUpdate_DownloadComplete_UsesAverageSpeed(t *testing.T) {
 	m := RootModel{
 		downloads:   []*DownloadModel{dm},
 		list:        NewDownloadList(80, 20),
-		logViewport: viewport.New(40, 5),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	elapsed := 4 * time.Second
@@ -240,7 +240,7 @@ func TestUpdate_SettingsIgnoresMissingFourthTab(t *testing.T) {
 		Settings: config.DefaultSettings(),
 	}
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'4'}})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: '4', Text: "4"})
 	m2 := updated.(RootModel)
 
 	if m2.SettingsActiveTab >= len(config.CategoryOrder()) {
@@ -248,7 +248,7 @@ func TestUpdate_SettingsIgnoresMissingFourthTab(t *testing.T) {
 	}
 
 	// Ensure subsequent navigation does not panic with this state.
-	updated, _ = m2.Update(tea.KeyMsg{Type: tea.KeyDown})
+	updated, _ = m2.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	m3 := updated.(RootModel)
 	if m3.SettingsActiveTab >= len(config.CategoryOrder()) {
 		t.Fatalf("invalid settings tab index after down: %d", m3.SettingsActiveTab)
@@ -261,7 +261,7 @@ func TestUpdate_DashboardWithNilSettingsDoesNotPanic(t *testing.T) {
 		list:  NewDownloadList(80, 20),
 	}
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
 	m2 := updated.(RootModel)
 	if m2.Settings == nil {
 		t.Fatal("expected default settings to be initialized")
@@ -273,7 +273,7 @@ func TestUpdate_DownloadRemovedRemovesFromModelAndList(t *testing.T) {
 	m := RootModel{
 		downloads:   []*DownloadModel{dm},
 		list:        NewDownloadList(80, 20),
-		logViewport: viewport.New(40, 5),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 	m.UpdateListItems()
 
@@ -297,7 +297,7 @@ func TestUpdate_DownloadRemoved_NoOpWhenUnknownID(t *testing.T) {
 	m := RootModel{
 		downloads:   []*DownloadModel{dm},
 		list:        NewDownloadList(80, 20),
-		logViewport: viewport.New(40, 5),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 	m.UpdateListItems()
 
@@ -350,7 +350,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	m := RootModel{
 		Settings:    config.DefaultSettings(),
 		Service:     svc,
-		logViewport: viewport.New(40, 5),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 		list:        NewDownloadList(40, 10),
 		inputs:      []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
 	}
@@ -467,7 +467,7 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 		enqueueCtx:    ctx,
 		cancelEnqueue: func() {},
 		list:          NewDownloadList(80, 20),
-		logViewport:   viewport.New(40, 5),
+		logViewport:   viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	updated, cmd := m.startDownload("https://example.com/file.bin", nil, nil, t.TempDir(), false, "file.bin", "")
@@ -507,7 +507,7 @@ func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *te
 		Service:      svc,
 		Orchestrator: orchestrator,
 		list:         NewDownloadList(80, 20),
-		logViewport:  viewport.New(40, 5),
+		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	updated, _ := m.startDownload("https://example.com/100MB.bin", nil, nil, targetDir, true, "", "")
@@ -543,7 +543,7 @@ func TestStartDownload_UsesGenericQueuedNameForExplicitFilenameUntilLifecycleCon
 		Service:      svc,
 		Orchestrator: orchestrator,
 		list:         NewDownloadList(80, 20),
-		logViewport:  viewport.New(40, 5),
+		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	updated, _ := m.startDownload("https://example.com/archive.zip", nil, nil, targetDir, false, "archive.zip", "")
@@ -568,7 +568,7 @@ func TestUpdate_EnqueueErrorKeepsFailedDownloadVisibleInDoneTab(t *testing.T) {
 		activeTab:      TabDone,
 		downloads:      []*DownloadModel{optimistic},
 		list:           NewDownloadList(80, 20),
-		logViewport:    viewport.New(40, 5),
+		logViewport:    viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 		Settings:       config.DefaultSettings(),
 		searchQuery:    "",
 		categoryFilter: "",
@@ -605,7 +605,7 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 		cancelEnqueue: cancel,
 	}
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	m2 := updated.(RootModel)
 
 	if !m2.shuttingDown {
@@ -669,7 +669,7 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 	m.list.Select(0) // Select the paused download
 
 	// Simulate pressing 'r' (Refresh)
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+	msg := tea.KeyPressMsg{Code: 'r', Text: "r"}
 
 	updated, _ := m.Update(msg)
 	newRoot := updated.(RootModel)
