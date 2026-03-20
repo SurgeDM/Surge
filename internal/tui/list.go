@@ -183,8 +183,6 @@ func NewDownloadList(width, height int) list.Model {
 
 	applyListTheme(&l)
 
-	l.SetStatusBarItemName("download", "downloads")
-
 	return l
 }
 
@@ -194,6 +192,7 @@ func applyListTheme(l *list.Model) {
 	}
 
 	l.SetDelegate(newDownloadDelegate())
+	l.SetStatusBarItemName("download", "downloads")
 
 	l.Styles.Title = lipgloss.NewStyle().
 		Foreground(colors.NeonPink).
