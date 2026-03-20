@@ -836,6 +836,7 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 					Mirrors:  mirrorsForAdd,
 					Headers:  req.Headers,
 				}); err != nil {
+					recordPreflightDownloadError(urlForAdd, outPath, err)
 					http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
 					return
 				}
