@@ -1,0 +1,85 @@
+name: Binary Size Comment
+
+on:
+  workflow_run:
+    workflows: ["Binary Size Compare"]
+    types:
+      - completed
+
+permissions:
+  pull-requests: write
+
+jobs:
+  comment:
+    if: >
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh run download ${{ github.event.workflow_run.id }} -n binary-size-data -R ${{ github.repository }} --dir .
+
+      - name: Comment on PR (Create or Update)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const prNumber = Number(fs.readFileSync('./pr_number.txt', 'utf8').trim());
+            const pr = Number(fs.readFileSync('./size_pr.txt', 'utf8').trim());
+            const main = Number(fs.readFileSync('./size_main.txt', 'utf8').trim());
+            const diff = Number(fs.readFileSync('./diff.txt', 'utf8').trim());
+            const exceeds = fs.readFileSync('./exceeds.txt', 'utf8').trim() === 'true';
+
+            // Better formatter handling negative numbers correctly
+            const fmt = (n) => {
+              const units = ['B','KB','MB','GB'];
+              let i = 0; let v = Math.abs(n);
+              while (v >= 1024 && i < 3) { v /= 1024; i++; }
+              return `${(n < 0 ? '-' : '')}${v.toFixed(2)} ${units[i]}`;
+            };
+
+            const statusLabel = exceeds ? "⚠️ **Size Increased**" : "✅ **Size Decreased or Stable**";
+            
+            // Hidden signature so the bot knows which comment is its own
+            const signature = "<!-- binary-size-signature -->";
+            
+            const body = `${signature}
+            ### Binary Size Analysis
+            ${statusLabel}
+            
+            | Version | Human Readable | Raw Bytes |
+            | :--- | :--- | :--- |
+            | **Main** | ${fmt(main)} | \`${main}\` |
+            | **PR** | ${fmt(pr)} | \`${pr}\` |
+            | **Difference** | **${fmt(diff)}** | \`${diff}\` |
+            `;
+
+            // Look for existing comment
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: prNumber
+            });
+            
+            const existingComment = comments.data.find(c => c.body.includes(signature));
+
+            if (existingComment) {
+              // Update the existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existingComment.id,
+                body: body
+              });
+            } else if (exceeds) {
+              // Only create a NEW comment if the size increased
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: prNumber,
+                body: body
+              });
+            }

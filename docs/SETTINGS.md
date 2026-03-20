@@ -11,6 +11,25 @@ from the `settings.json` file located in the application data directory:
 - **macOS:** `~/Library/Application Support/surge/settings.json`
 - **Linux:** `~/.config/surge/settings.json`
 
+The `settings.json` file expects a nested structure divided into `general`, `network`, and `performance` categories. For example:
+
+```json
+{
+  "general": {
+    "default_download_dir": "/path/to/downloads",
+    "theme": 2
+  },
+  "network": {
+    "max_connections_per_host": 16
+  },
+  "performance": {
+    "max_task_retries": 5
+  }
+}
+```
+
+*Note: You do not need to specify all keys. Surge will automatically infer missing keys and use their internal default values.*
+
 ## Directory Structure
 
 Surge follows OS conventions for storing its files. Below is a breakdown of every directory it uses and where to find it on each platform.
