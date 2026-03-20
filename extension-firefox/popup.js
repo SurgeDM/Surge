@@ -773,11 +773,15 @@ async function init() {
           settingsSection.classList.remove('hidden');
           settingsBtn.classList.add('active');
         }
-        if (authStatus) {
-          authStatus.className = 'auth-status err';
-          authStatus.textContent = 'Token missing or invalid';
+        // Only surface the error if the token is not already verified
+        const alreadyValid = authStatus && authStatus.classList.contains('ok');
+        if (!alreadyValid) {
+          if (authStatus) {
+            authStatus.className = 'auth-status err';
+            authStatus.textContent = 'Token missing or invalid';
+          }
+          setAuthValid(false);
         }
-        setAuthValid(false);
       }
     } catch (error) {
       console.error('[Surge Popup] Error checking pending auth error:', error);
