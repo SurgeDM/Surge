@@ -40,7 +40,6 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 
 	// Styles
 	gridStyle := lipgloss.NewStyle().Foreground(colors.Gray)
-	// barStyle := lipgloss.NewStyle().Foreground(color)
 
 	// 1. Prepare the canvas with a Grid
 	rows := make([][]string, height)
@@ -74,16 +73,6 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 		}
 		style := lipgloss.NewStyle().Foreground(gradient[colorIdx])
 
-		// Pre-render the 8 block characters + space
-		rowChars[y] = make([]string, 9)
-		rowChars[y][0] = " " // Empty
-		for k := 1; k <= 8; k++ {
-			rowChars[y][k] = style.Render(blocks[k-1]) // blocks is 0-indexed (space is 0) but we use 1-8 for blocks
-		}
-		// rowChars[y][0] = " " (unstyled or styled space)
-		// rowChars[y][1..8] = styled blocks
-
-		// blocks := []string{" ", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
 		rowChars[y] = make([]string, len(blocks))
 		for k, b := range blocks {
 			rowChars[y][k] = style.Render(b)

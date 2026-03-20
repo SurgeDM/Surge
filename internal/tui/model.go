@@ -246,7 +246,6 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	}
 
 	applyColorModeForTheme(settings.General.Theme, initialDarkBackground)
-	rebuildStyles()
 
 	// Load paused downloads from master list (now uses global config directory)
 	var downloads []*DownloadModel
