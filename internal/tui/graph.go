@@ -32,9 +32,8 @@ func graphGradient() []color.Color {
 // data: speed history data points
 // width, height: dimensions of the graph
 // maxVal: maximum value for scaling
-// color: color for the data bars
 // stats: stats to display in overlay box (pass nil to skip)
-func renderMultiLineGraph(data []float64, width, height int, maxVal float64, _ color.Color, stats *GraphStats) string {
+func renderMultiLineGraph(data []float64, width, height int, maxVal float64, stats *GraphStats) string {
 	if width < 1 || height < 1 {
 		return ""
 	}

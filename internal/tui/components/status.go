@@ -21,32 +21,17 @@ const (
 
 // statusInfo holds the display properties for each status
 type statusInfo struct {
-	icon         string
-	label        string
-	color        color.Color
-	renderedFull string
-	renderedIcon string
+	icon  string
+	label string
 }
 
-func initStatusMap() map[DownloadStatus]statusInfo {
-	m := map[DownloadStatus]statusInfo{
-		StatusQueued:      {"⋯", "Queued", colors.StatePaused, "", ""},
-		StatusDownloading: {"⬇", "Downloading", colors.StateDownloading, "", ""},
-		StatusPaused:      {"⏸", "Paused", colors.StatePaused, "", ""},
-		StatusComplete:    {"✔", "Completed", colors.StateDone, "", ""},
-		StatusError:       {"✖", "Error", colors.StateError, "", ""},
-	}
-
-	// Pre-render the styled strings so we don't allocate per-frame
-	for status, info := range m {
-		info.renderedFull = lipgloss.NewStyle().Foreground(info.color).Render(info.icon + " " + info.label)
-		info.renderedIcon = lipgloss.NewStyle().Foreground(info.color).Render(info.icon)
-		m[status] = info
-	}
-	return m
+var statusMap = map[DownloadStatus]statusInfo{
+	StatusQueued:      {icon: "⋯", label: "Queued"},
+	StatusDownloading: {icon: "⬇", label: "Downloading"},
+	StatusPaused:      {icon: "⏸", label: "Paused"},
+	StatusComplete:    {icon: "✔", label: "Completed"},
+	StatusError:       {icon: "✖", label: "Error"},
 }
-
-var statusMap = initStatusMap()
 
 // Icon returns the status icon
 func (s DownloadStatus) Icon() string {
@@ -66,16 +51,24 @@ func (s DownloadStatus) Label() string {
 
 // Color returns the status color
 func (s DownloadStatus) Color() color.Color {
-	if info, ok := statusMap[s]; ok {
-		return info.color
+	switch s {
+	case StatusQueued, StatusPaused:
+		return colors.StatePaused
+	case StatusDownloading:
+		return colors.StateDownloading
+	case StatusComplete:
+		return colors.StateDone
+	case StatusError:
+		return colors.StateError
+	default:
+		return colors.Gray
 	}
-	return colors.Gray
 }
 
 // Render returns the styled icon + label combination
 func (s DownloadStatus) Render() string {
 	if info, ok := statusMap[s]; ok {
-		return info.renderedFull
+		return lipgloss.NewStyle().Foreground(s.Color()).Render(info.icon + " " + info.label)
 	}
 	return "Unknown"
 }
@@ -83,7 +76,7 @@ func (s DownloadStatus) Render() string {
 // RenderIcon returns just the styled icon
 func (s DownloadStatus) RenderIcon() string {
 	if info, ok := statusMap[s]; ok {
-		return info.renderedIcon
+		return lipgloss.NewStyle().Foreground(s.Color()).Render(info.icon)
 	}
 	return "?"
 }

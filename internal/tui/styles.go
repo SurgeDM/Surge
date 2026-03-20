@@ -86,3 +86,43 @@ var (
 	LogStylePaused = lipgloss.NewStyle().
 			Foreground(colors.StatePaused)
 )
+
+func init() {
+	rebuildStyles()
+}
+
+func rebuildStyles() {
+	AppStyle = lipgloss.NewStyle().
+		Background(lipgloss.Color("0")).
+		Foreground(colors.White)
+
+	PaneStyle = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colors.Gray).
+		Padding(0, 1)
+
+	ActivePaneStyle = PaneStyle.BorderForeground(colors.NeonPink)
+	LogoStyle = lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true).MarginBottom(1)
+	GraphStyle = PaneStyle.BorderForeground(colors.NeonCyan)
+	ListStyle = ActivePaneStyle
+	DetailStyle = PaneStyle
+
+	TitleStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).MarginBottom(1)
+	PaneTitleStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
+	TabStyle = lipgloss.NewStyle().Foreground(colors.LightGray).Padding(0, 1)
+
+	ActiveTabStyle = lipgloss.NewStyle().
+		Foreground(colors.NeonPink).
+		Border(lipgloss.NormalBorder(), false, false, true, false).
+		BorderForeground(colors.NeonPink).
+		Padding(0, 1).
+		Bold(true)
+
+	StatsLabelStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Width(12)
+	StatsValueStyle = lipgloss.NewStyle().Foreground(colors.NeonPink).Bold(true)
+
+	LogStyleStarted = lipgloss.NewStyle().Foreground(colors.StateDownloading)
+	LogStyleComplete = lipgloss.NewStyle().Foreground(colors.StateDone)
+	LogStyleError = lipgloss.NewStyle().Foreground(colors.StateError)
+	LogStylePaused = lipgloss.NewStyle().Foreground(colors.StatePaused)
+}

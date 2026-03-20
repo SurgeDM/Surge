@@ -584,7 +584,7 @@ func (m RootModel) View() tea.View {
 	}
 
 	// Render the Graph
-	graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, colors.NeonPink, nil)
+	graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
 
 	// Create Y-axis (right side of graph)
 	axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)

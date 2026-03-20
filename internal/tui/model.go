@@ -245,6 +245,9 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		settings.General.AutoResume = false
 	}
 
+	applyColorModeForTheme(settings.General.Theme, initialDarkBackground)
+	rebuildStyles()
+
 	// Load paused downloads from master list (now uses global config directory)
 	var downloads []*DownloadModel
 	// Note: With Service abstraction, we might want to let the Service handle loading.
@@ -377,17 +380,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		cancelEnqueue:         cancelEnqueue,
 	}
 
-	// Apply configured theme
-	// We can't call m.ApplyTheme yet as m is returned, so apply logic directly
-	switch settings.General.Theme {
-	case config.ThemeLight:
-		colors.SetDarkMode(false)
-	case config.ThemeDark:
-		colors.SetDarkMode(true)
-	default:
-		colors.SetDarkMode(initialDarkBackground)
-		// ThemeAdaptive: do nothing, already set by system detection
-	}
+	m.refreshThemeCaches()
 
 	return m
 }
@@ -536,7 +529,7 @@ func (m RootModel) matchesCategoryFilter(d *DownloadModel) bool {
 // newFilepicker creates a fresh filepicker instance with consistent settings.
 // This is necessary to avoid cursor desync issues that cause "index out of range"
 // panics when navigating directories (especially on Windows).
-// See: https://charm.land/bubbles/v2/issues/864
+// See: https://github.com/charmbracelet/bubbles/issues/864
 func newFilepicker(currentDir string) filepicker.Model {
 	fp := filepicker.New()
 	fp.CurrentDirectory = currentDir
@@ -551,14 +544,27 @@ func newFilepicker(currentDir string) filepicker.Model {
 
 // ApplyTheme applies the selected theme mode
 func (m *RootModel) ApplyTheme(mode int) {
+	applyColorModeForTheme(mode, m.InitialDarkBackground)
+	m.refreshThemeCaches()
+}
+
+func applyColorModeForTheme(mode int, initialDarkBackground bool) {
 	switch mode {
 	case config.ThemeAdaptive:
-		// Restore initial system state
-		colors.SetDarkMode(m.InitialDarkBackground)
+		colors.SetDarkMode(initialDarkBackground)
 	case config.ThemeLight:
 		colors.SetDarkMode(false)
 	case config.ThemeDark:
 		colors.SetDarkMode(true)
+	default:
+		colors.SetDarkMode(initialDarkBackground)
 	}
-	m.logoCache = "" // Invalidate logo cache
+}
+
+func (m *RootModel) refreshThemeCaches() {
+	rebuildStyles()
+	m.help.Styles.ShortKey = lipgloss.NewStyle().Foreground(colors.LightGray)
+	m.help.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.Gray)
+	applyListTheme(&m.list)
+	m.logoCache = ""
 }

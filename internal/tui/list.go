@@ -181,26 +181,32 @@ func NewDownloadList(width, height int) list.Model {
 	l.SetShowHelp(false)
 	l.SetShowPagination(true)
 
-	// Style the list
+	applyListTheme(&l)
+
+	l.SetStatusBarItemName("download", "downloads")
+
+	return l
+}
+
+func applyListTheme(l *list.Model) {
+	if l == nil {
+		return
+	}
+
+	l.SetDelegate(newDownloadDelegate())
+
 	l.Styles.Title = lipgloss.NewStyle().
 		Foreground(colors.NeonPink).
 		Bold(true).
 		Padding(0, 1)
 
-	l.Styles.Filter.Focused.Prompt = lipgloss.NewStyle().
-		Foreground(colors.NeonCyan)
-	l.Styles.Filter.Blurred.Prompt = lipgloss.NewStyle().
-		Foreground(colors.NeonCyan)
+	l.Styles.Filter.Focused.Prompt = lipgloss.NewStyle().Foreground(colors.NeonCyan)
+	l.Styles.Filter.Blurred.Prompt = lipgloss.NewStyle().Foreground(colors.NeonCyan)
 	l.Styles.Filter.Cursor.Color = colors.NeonPink
 
-	// No items message - bright color for cyberpunk theme
 	l.Styles.NoItems = lipgloss.NewStyle().
 		Foreground(colors.NeonCyan).
 		Padding(2, 0)
-
-	l.SetStatusBarItemName("download", "downloads")
-
-	return l
 }
 
 // UpdateListItems updates the list with filtered downloads based on active tab
