@@ -128,6 +128,7 @@ type RootModel struct {
 	SettingsActiveTab     int              // Active category tab (0-3)
 	SettingsSelectedRow   int              // Selected setting within current tab
 	SettingsIsEditing     bool             // Whether currently editing a value
+	ResetAllPending       bool             // Whether waiting for reset-all confirmation
 	SettingsInput         textinput.Model  // Input for editing string/int values
 	SettingsFileBrowsing  bool             // Whether browsing for a directory
 	ExtensionFileBrowsing bool             // Whether browsing for extension prompt path
