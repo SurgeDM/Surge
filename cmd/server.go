@@ -50,8 +50,10 @@ var serverStartCmd = &cobra.Command{
 		mustInitializeGlobalState()
 
 		msg := runStartupIntegrityCheck()
-		utils.Debug("%s", msg)
-		fmt.Println(msg)
+		if msg != "" {
+			utils.Debug("%s", msg)
+			fmt.Println(msg)
+		}
 
 		portFlag, _ := cmd.Flags().GetInt("port")
 		batchFile, _ := cmd.Flags().GetString("batch")
