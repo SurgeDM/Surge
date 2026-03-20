@@ -767,14 +767,13 @@ async function init() {
     try {
       const { pendingAuthError } = await browser.storage.local.get('pendingAuthError');
       if (pendingAuthError) {
-        if (settingsSection && downloadsSection && settingsBtn) {
-          downloadsSection.classList.add('hidden');
-          settingsSection.classList.remove('hidden');
-          settingsBtn.classList.add('active');
-        }
-        // Only surface the error if the token is not already verified
         const alreadyValid = authStatus && authStatus.classList.contains('ok');
         if (!alreadyValid) {
+          if (settingsSection && downloadsSection && settingsBtn) {
+            downloadsSection.classList.add('hidden');
+            settingsSection.classList.remove('hidden');
+            settingsBtn.classList.add('active');
+          }
           if (authStatus) {
             authStatus.className = 'auth-status err';
             authStatus.textContent = 'Token missing or invalid';
