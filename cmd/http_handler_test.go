@@ -3,6 +3,7 @@ package cmd
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "github.com/charmbracelet/bubbletea"
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/core"
 	"github.com/surge-downloader/surge/internal/download"
@@ -349,5 +351,68 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("expected errored download entry in master list after probe failure via HTTP API")
+	}
+}
+
+type failingPublishService struct {
+	fakeRemoteDownloadService
+	publishErr error
+}
+
+func (f *failingPublishService) Publish(msg interface{}) error {
+	return f.publishErr
+}
+
+func TestHandleDownload_PublishError_RecordsPreflightError(t *testing.T) {
+	setupIsolatedCmdState(t)
+
+	GlobalPool = download.NewWorkerPool(nil, 1)
+	t.Cleanup(func() {
+		GlobalPool = nil
+	})
+
+	origServerProgram := serverProgram
+	serverProgram = &tea.Program{}
+	t.Cleanup(func() { serverProgram = origServerProgram })
+
+	settings := config.DefaultSettings()
+	settings.General.ExtensionPrompt = true
+	settings.General.WarnOnDuplicate = false
+	if err := config.SaveSettings(settings); err != nil {
+		t.Fatalf("SaveSettings failed: %v", err)
+	}
+
+	svc := &failingPublishService{publishErr: errors.New("publish failed")}
+	origService := GlobalService
+	GlobalService = svc
+	t.Cleanup(func() {
+		GlobalService = origService
+	})
+
+	outDir := t.TempDir()
+	body := fmt.Sprintf(`{"url": %q, "path": %q}`, "http://example.com/file.bin", outDir)
+	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handleDownload(rec, req, "", svc)
+
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	}
+
+	list, err := state.LoadMasterList()
+	if err != nil {
+		t.Fatalf("LoadMasterList failed: %v", err)
+	}
+
+	found := false
+	for _, entry := range list.Downloads {
+		if strings.Contains(entry.URL, "http://example.com/file.bin") && entry.Status == "error" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatal("expected errored download entry in master list after publish failure via HTTP API")
 	}
 }
