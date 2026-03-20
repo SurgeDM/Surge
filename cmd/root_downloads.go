@@ -201,6 +201,8 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 			Mirrors:  resolved.mirrorsForAdd,
 			Headers:  req.Headers,
 		}); err != nil {
+			recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
+			publishSystemLog(fmt.Sprintf("Error adding %s: %v", resolved.urlForAdd, err))
 			http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
 			return true
 		}
