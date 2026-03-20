@@ -187,27 +187,10 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 
 	go startHTTPServer(listener, port, outputDir, GlobalService, strings.TrimSpace(tokenOverride))
 
-	// Queue initial downloads
-	atomic.AddInt32(&pendingEnqueue, 1)
-	go func() {
-		defer atomic.AddInt32(&pendingEnqueue, -1)
-		var urls []string
-		urls = append(urls, args...)
-
-		if batchFile != "" {
-			fileURLs, err := utils.ReadURLsFromFile(batchFile)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading batch file: %v\n", err)
-			} else {
-				urls = append(urls, fileURLs...)
-			}
-		}
-
-		if len(urls) > 0 {
-			resolvedOutputDir := resolveClientOutputPath(outputDir)
-			processDownloads(urls, resolvedOutputDir, 0)
-		}
-	}()
+	queueInitialRootDownloads(args, rootRunOptions{
+		batchFile: batchFile,
+		outputDir: outputDir,
+	})
 
 	fmt.Printf("Surge %s running in server mode.\n", Version)
 	host := serverBindHost
