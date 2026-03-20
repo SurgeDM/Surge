@@ -767,7 +767,6 @@ async function init() {
     try {
       const { pendingAuthError } = await browser.storage.local.get('pendingAuthError');
       if (pendingAuthError) {
-        await browser.storage.local.remove('pendingAuthError');
         if (settingsSection && downloadsSection && settingsBtn) {
           downloadsSection.classList.add('hidden');
           settingsSection.classList.remove('hidden');
@@ -782,6 +781,7 @@ async function init() {
           }
           setAuthValid(false);
         }
+        await browser.storage.local.remove('pendingAuthError');
       }
     } catch (error) {
       console.error('[Surge Popup] Error checking pending auth error:', error);
