@@ -472,6 +472,11 @@ async function sendToSurge(url, filename, absolutePath) {
       const data = await response.json();
       console.log('[Surge] Download queued:', data);
       return { success: true, data };
+    } else if (response.status === 401 || response.status === 403) {
+      return {
+        success: false,
+        error: "Missing or invalid token. Please set your token in the extension settings.",
+      };
     } else if (response.status === 409) {
       const errorText = await response.text();
       let msg = "Download rejected: duplicate or approval required (headless mode)";
