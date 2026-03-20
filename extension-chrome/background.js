@@ -471,7 +471,7 @@ async function sendToSurge(url, filename, absolutePath) {
         response.status,
         error,
       );
-      return { success: false, error };
+      return { success: false, error, status: response.status };
     }
   } catch (error) {
     console.error("[Surge] Error sending to Surge:", error);
@@ -794,13 +794,25 @@ async function handleDownloadIntercept(downloadItem) {
         console.log("[Surge] Could not auto-open popup:", e.message);
       }
     } else {
-      // Failed to send to Surge - show error notification
+      const isAuthError = result.status === 401 || result.status === 403;
+
       chrome.notifications.create({
         type: "basic",
         iconUrl: "icons/icon48.png",
-        title: "Surge Error",
-        message: `Failed to start download: ${result.error}`,
+        title: isAuthError ? "Surge - Auth Token Required" : "Surge Error",
+        message: isAuthError
+          ? "Auth token is missing or invalid. Open the Surge extension and go to Settings to configure it."
+          : `Failed to start download: ${result.error}`,
       });
+
+      if (isAuthError) {
+        await chrome.storage.local.set({ pendingAuthError: true });
+        try {
+          await chrome.action.openPopup();
+        } catch (e) {
+          console.log("[Surge] Could not auto-open popup:", e.message);
+        }
+      }
     }
   } catch (error) {
     console.error("[Surge] Failed to intercept download:", error);

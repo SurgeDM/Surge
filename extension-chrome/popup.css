@@ -107,6 +107,38 @@ body {
   background-clip: text;
 }
 
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--bg-surface);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.settings-btn:hover {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  background: rgba(255, 121, 198, 0.08);
+}
+
+.settings-btn.active {
+  color: var(--accent-primary);
+  border-color: var(--accent-primary);
+  background: rgba(255, 121, 198, 0.12);
+}
+
 .status-badge {
   display: flex;
   align-items: center;
@@ -526,12 +558,66 @@ body {
   color: var(--text-muted);
 }
 
-/* === Footer === */
-.footer {
+/* === Settings Section === */
+.settings-section {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow-y: auto;
+}
+
+.settings-group {
   background: var(--bg-elevated);
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
   padding: 14px 16px;
+}
+
+.settings-group-title {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 12px;
+}
+
+.help-link {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 0;
+  color: var(--text-primary);
+  text-decoration: none;
+  font-size: 13px;
+  font-weight: 500;
+  border-bottom: 1px solid var(--border-subtle);
+  transition: color 0.15s ease;
+}
+
+.help-link:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.help-link:first-of-type {
+  padding-top: 0;
+}
+
+.help-link:hover {
+  color: var(--accent-primary);
+}
+
+.help-link-arrow {
+  color: var(--text-muted);
+  font-size: 14px;
+  transition: color 0.15s ease;
+}
+
+.help-link:hover .help-link-arrow {
+  color: var(--accent-primary);
 }
 
 .auth-row {

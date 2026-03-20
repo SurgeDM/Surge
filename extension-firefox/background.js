@@ -483,7 +483,7 @@ async function sendToSurge(url, filename, absolutePath) {
     } else {
       const error = await response.text();
       console.error('[Surge] Failed to queue download:', response.status, error);
-      return { success: false, error };
+      return { success: false, error, status: response.status };
     }
   } catch (error) {
     console.error('[Surge] Error sending to Surge:', error);
@@ -753,12 +753,25 @@ async function handleDownloadIntercept(downloadItem) {
         console.log('[Surge] Could not auto-open popup:', e.message);
       }
     } else {
+      const isAuthError = result.status === 401 || result.status === 403;
+
       browser.notifications.create({
         type: 'basic',
         iconUrl: 'icons/icon48.png',
-        title: 'Surge Error',
-        message: `Failed to start download: ${result.error}`,
+        title: isAuthError ? 'Surge - Auth Token Required' : 'Surge Error',
+        message: isAuthError
+          ? 'Auth token is missing or invalid. Open the Surge extension and go to Settings to configure it.'
+          : `Failed to start download: ${result.error}`,
       });
+
+      if (isAuthError) {
+        await browser.storage.local.set({ pendingAuthError: true });
+        try {
+          await browser.action.openPopup();
+        } catch (e) {
+          console.log('[Surge] Could not auto-open popup:', e.message);
+        }
+      }
     }
 
     // Check for next pending duplicate

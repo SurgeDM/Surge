@@ -41,6 +41,11 @@ const serverUrlInput = document.getElementById('serverUrl');
 const saveServerUrlButton = document.getElementById('saveServerUrl');
 const serverUrlStatus = document.getElementById('serverUrlStatus');
 
+// Settings view elements
+const settingsBtn = document.getElementById('settingsBtn');
+const downloadsSection = document.getElementById('downloadsSection');
+const settingsSection = document.getElementById('settingsSection');
+
 // Duplicate modal elements
 const duplicateModal = document.getElementById('duplicateModal');
 const duplicateFilename = document.getElementById('duplicateFilename');
@@ -689,6 +694,25 @@ if (viewTabHistory) {
   });
 }
 
+// === Settings View Toggle ===
+
+function toggleSettingsView() {
+  const isSettingsVisible = !settingsSection.classList.contains('hidden');
+  if (isSettingsVisible) {
+    settingsSection.classList.add('hidden');
+    downloadsSection.classList.remove('hidden');
+    settingsBtn.classList.remove('active');
+  } else {
+    downloadsSection.classList.add('hidden');
+    settingsSection.classList.remove('hidden');
+    settingsBtn.classList.add('active');
+  }
+}
+
+if (settingsBtn) {
+  settingsBtn.addEventListener('click', toggleSettingsView);
+}
+
 // === Initialization ===
 
 async function init() {
@@ -736,6 +760,28 @@ async function init() {
     }
   } catch (error) {
     console.error('[Surge Popup] Error getting status:', error);
+  }
+
+  // Check for pending auth error (set by background on 401/403)
+  if (isExtensionContext) {
+    try {
+      const { pendingAuthError } = await browser.storage.local.get('pendingAuthError');
+      if (pendingAuthError) {
+        await browser.storage.local.remove('pendingAuthError');
+        if (settingsSection && downloadsSection && settingsBtn) {
+          downloadsSection.classList.add('hidden');
+          settingsSection.classList.remove('hidden');
+          settingsBtn.classList.add('active');
+        }
+        if (authStatus) {
+          authStatus.className = 'auth-status err';
+          authStatus.textContent = 'Token missing or invalid';
+        }
+        setAuthValid(false);
+      }
+    } catch (error) {
+      console.error('[Surge Popup] Error checking pending auth error:', error);
+    }
   }
 
   // Check for pending duplicates
