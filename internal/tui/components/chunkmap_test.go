@@ -5,14 +5,9 @@ import (
 	"testing"
 
 	"charm.land/lipgloss/v2"
-	"github.com/muesli/termenv"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/tui/colors"
 )
-
-func init() {
-	lipgloss.SetColorProfile(termenv.ANSI256)
-}
 
 // Helper to check for colors
 const (

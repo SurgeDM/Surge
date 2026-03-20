@@ -1,6 +1,8 @@
 package components
 
 import (
+	"image/color"
+
 	"github.com/surge-downloader/surge/internal/tui/colors"
 
 	"charm.land/bubbles/v2/filepicker"
@@ -14,13 +16,13 @@ type FilePickerModal struct {
 	Picker      filepicker.Model
 	Help        help.Model
 	HelpKeys    help.KeyMap
-	BorderColor lipgloss.TerminalColor
+	BorderColor color.Color
 	Width       int
 	Height      int
 }
 
 // NewFilePickerModal creates a file picker modal with default styling
-func NewFilePickerModal(title string, picker filepicker.Model, helpModel help.Model, helpKeys help.KeyMap, borderColor lipgloss.TerminalColor) FilePickerModal {
+func NewFilePickerModal(title string, picker filepicker.Model, helpModel help.Model, helpKeys help.KeyMap, borderColor color.Color) FilePickerModal {
 	return FilePickerModal{
 		Title:       title,
 		Picker:      picker,
@@ -50,7 +52,7 @@ func (m FilePickerModal) View() string {
 
 // RenderWithBtopBox renders the modal using the btop-style box
 func (m FilePickerModal) RenderWithBtopBox(
-	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor lipgloss.TerminalColor) string,
+	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
 	titleStyle lipgloss.Style,
 ) string {
 	return renderBox(titleStyle.Render(m.Title), "", m.View(), m.Width, m.Height, m.BorderColor)

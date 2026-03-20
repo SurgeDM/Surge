@@ -106,7 +106,7 @@ func (m RootModel) viewSettings() string {
 			style := lipgloss.NewStyle().Foreground(colors.LightGray)
 
 			if meta.Key == "max_global_connections" {
-				style = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#aaaaaa", Dark: "238"}) // Darker gray
+				style = lipgloss.NewStyle().Foreground(colors.ThemeColor("#aaaaaa", "238")) // Darker gray
 			}
 
 			line = style.Render("  " + line)

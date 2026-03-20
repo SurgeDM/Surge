@@ -1,6 +1,8 @@
 package components
 
 import (
+	"image/color"
+
 	"github.com/surge-downloader/surge/internal/tui/colors"
 
 	"charm.land/lipgloss/v2"
@@ -21,7 +23,7 @@ const (
 type statusInfo struct {
 	icon         string
 	label        string
-	color        lipgloss.TerminalColor
+	color        color.Color
 	renderedFull string
 	renderedIcon string
 }
@@ -63,7 +65,7 @@ func (s DownloadStatus) Label() string {
 }
 
 // Color returns the status color
-func (s DownloadStatus) Color() lipgloss.TerminalColor {
+func (s DownloadStatus) Color() color.Color {
 	if info, ok := statusMap[s]; ok {
 		return info.color
 	}

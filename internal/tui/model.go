@@ -195,27 +195,29 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 }
 
 func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, orchestrator *processing.LifecycleManager, noResume bool) RootModel {
+	initialDarkBackground := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+
 	// Initialize inputs
 	urlInput := textinput.New()
 	urlInput.Placeholder = "https://example.com/file.zip"
 	urlInput.Focus()
-	urlInput.Width = InputWidth
+	urlInput.SetWidth(InputWidth)
 	urlInput.Prompt = ""
 
 	pathInput := textinput.New()
 	pathInput.Placeholder = "."
-	pathInput.Width = InputWidth
+	pathInput.SetWidth(InputWidth)
 	pathInput.Prompt = ""
 	pathInput.SetValue(".")
 
 	filenameInput := textinput.New()
 	filenameInput.Placeholder = "(auto-detect)"
-	filenameInput.Width = InputWidth
+	filenameInput.SetWidth(InputWidth)
 	filenameInput.Prompt = ""
 
 	mirrorsInput := textinput.New()
 	mirrorsInput.Placeholder = "http://mirror1.com, http://mirror2.com"
-	mirrorsInput.Width = InputWidth
+	mirrorsInput.SetWidth(InputWidth)
 	mirrorsInput.Prompt = ""
 
 	pwd, _ := os.Getwd()
@@ -311,40 +313,40 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	// Initialize settings input for editing
 	settingsInput := textinput.New()
-	settingsInput.Width = 40
+	settingsInput.SetWidth(40)
 	settingsInput.Prompt = ""
 
 	// Initialize search input
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Type to search..."
-	searchInput.Width = 30
+	searchInput.SetWidth(30)
 	searchInput.Prompt = ""
 
 	// Initialize URL update input
 	urlUpdateInput := textinput.New()
 	urlUpdateInput.Placeholder = "https://example.com/newlink.zip"
-	urlUpdateInput.Width = InputWidth
+	urlUpdateInput.SetWidth(InputWidth)
 	urlUpdateInput.Prompt = ""
 
 	// Initialize Category Manager inputs
 	catNameInput := textinput.New()
 	catNameInput.Placeholder = "Videos"
-	catNameInput.Width = 30
+	catNameInput.SetWidth(30)
 	catNameInput.Prompt = ""
 
 	catDescInput := textinput.New()
 	catDescInput.Placeholder = "Video files (.mp4, .mkv)"
-	catDescInput.Width = 50
+	catDescInput.SetWidth(50)
 	catDescInput.Prompt = ""
 
 	catPatternInput := textinput.New()
 	catPatternInput.Placeholder = "(?i)\\.(mp4|mkv)$"
-	catPatternInput.Width = 50
+	catPatternInput.SetWidth(50)
 	catPatternInput.Prompt = ""
 
 	catPathInput := textinput.New()
 	catPathInput.Placeholder = "/home/user/Videos"
-	catPathInput.Width = 50
+	catPathInput.SetWidth(50)
 	catPathInput.Prompt = ""
 
 	enqueueCtx, cancelEnqueue := context.WithCancel(context.Background())
@@ -360,8 +362,8 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		Orchestrator:          orchestrator,
 		PWD:                   pwd,
 		Settings:              settings,
-		SpeedHistory:          make([]float64, GraphHistoryPoints), // 60 points of history (30s at 0.5s interval)
-		logViewport:           viewport.New(40, 5),                 // Default size, will be resized
+		SpeedHistory:          make([]float64, GraphHistoryPoints),                          // 60 points of history (30s at 0.5s interval)
+		logViewport:           viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)), // Default size, will be resized
 		logEntries:            make([]string, 0),
 		SettingsInput:         settingsInput,
 		searchInput:           searchInput,
@@ -370,7 +372,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		keys:                  Keys,
 		ServerPort:            serverPort,
 		CurrentVersion:        currentVersion,
-		InitialDarkBackground: lipgloss.HasDarkBackground(),
+		InitialDarkBackground: initialDarkBackground,
 		enqueueCtx:            enqueueCtx,
 		cancelEnqueue:         cancelEnqueue,
 	}
@@ -379,9 +381,11 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	// We can't call m.ApplyTheme yet as m is returned, so apply logic directly
 	switch settings.General.Theme {
 	case config.ThemeLight:
-		lipgloss.SetHasDarkBackground(false)
+		colors.SetDarkMode(false)
 	case config.ThemeDark:
-		lipgloss.SetHasDarkBackground(true)
+		colors.SetDarkMode(true)
+	default:
+		colors.SetDarkMode(initialDarkBackground)
 		// ThemeAdaptive: do nothing, already set by system detection
 	}
 
@@ -550,11 +554,11 @@ func (m *RootModel) ApplyTheme(mode int) {
 	switch mode {
 	case config.ThemeAdaptive:
 		// Restore initial system state
-		lipgloss.SetHasDarkBackground(m.InitialDarkBackground)
+		colors.SetDarkMode(m.InitialDarkBackground)
 	case config.ThemeLight:
-		lipgloss.SetHasDarkBackground(false)
+		colors.SetDarkMode(false)
 	case config.ThemeDark:
-		lipgloss.SetHasDarkBackground(true)
+		colors.SetDarkMode(true)
 	}
 	m.logoCache = "" // Invalidate logo cache
 }

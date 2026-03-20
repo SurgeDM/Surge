@@ -187,11 +187,11 @@ func NewDownloadList(width, height int) list.Model {
 		Bold(true).
 		Padding(0, 1)
 
-	l.Styles.FilterPrompt = lipgloss.NewStyle().
+	l.Styles.Filter.Focused.Prompt = lipgloss.NewStyle().
 		Foreground(colors.NeonCyan)
-
-	l.Styles.FilterCursor = lipgloss.NewStyle().
-		Foreground(colors.NeonPink)
+	l.Styles.Filter.Blurred.Prompt = lipgloss.NewStyle().
+		Foreground(colors.NeonCyan)
+	l.Styles.Filter.Cursor.Color = colors.NeonPink
 
 	// No items message - bright color for cyberpunk theme
 	l.Styles.NoItems = lipgloss.NewStyle().

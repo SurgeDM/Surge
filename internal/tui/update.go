@@ -23,7 +23,6 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
-	"charm.land/bubbles/v2/progress"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -688,7 +687,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch m.state {
 		case DashboardState:
 			// Handle search input FIRST when active (intercepts ALL keys)
@@ -1756,12 +1755,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Propagate messages to progress bars - only update visible ones for performance
 	for _, d := range m.downloads {
-		var cmd tea.Cmd
-		var newModel tea.Model
-		newModel, cmd = d.progress.Update(msg)
-		if p, ok := newModel.(progress.Model); ok {
-			d.progress = p
-		}
+		newProgress, cmd := d.progress.Update(msg)
+		d.progress = newProgress
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}

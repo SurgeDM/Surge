@@ -449,7 +449,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 	}
 	m.IsRemote = false
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 	serverProgram = p // Save reference for HTTP handler
 
 	// Get event stream from service

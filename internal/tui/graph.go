@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
 	"github.com/surge-downloader/surge/internal/tui/colors"
@@ -17,11 +18,13 @@ type GraphStats struct {
 	DownloadTotal int64   // Total downloaded bytes
 }
 
-var graphGradient = []lipgloss.TerminalColor{
-	lipgloss.AdaptiveColor{Light: "#ce93d8", Dark: "#5f005f"}, // Bottom
-	lipgloss.AdaptiveColor{Light: "#ab47bc", Dark: "#8700af"},
-	lipgloss.AdaptiveColor{Light: "#8e24aa", Dark: "#af00d7"},
-	lipgloss.AdaptiveColor{Light: "#4a148c", Dark: "#ff00ff"}, // Top
+func graphGradient() []color.Color {
+	return []color.Color{
+		colors.ThemeColor("#ce93d8", "#5f005f"), // Bottom
+		colors.ThemeColor("#ab47bc", "#8700af"),
+		colors.ThemeColor("#8e24aa", "#af00d7"),
+		colors.ThemeColor("#4a148c", "#ff00ff"), // Top
+	}
 }
 
 // renderMultiLineGraph creates a multi-line bar graph with grid lines.
@@ -31,7 +34,7 @@ var graphGradient = []lipgloss.TerminalColor{
 // maxVal: maximum value for scaling
 // color: color for the data bars
 // stats: stats to display in overlay box (pass nil to skip)
-func renderMultiLineGraph(data []float64, width, height int, maxVal float64, color lipgloss.TerminalColor, stats *GraphStats) string {
+func renderMultiLineGraph(data []float64, width, height int, maxVal float64, _ color.Color, stats *GraphStats) string {
 	if width < 1 || height < 1 {
 		return ""
 	}
@@ -62,14 +65,15 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, col
 	// Pre-calculate styles for every row to avoid re-creating them in the loop
 	// Optimization: Pre-render all possible block characters for each row style
 	// This avoids calling style.Render() width*height times
+	gradient := graphGradient()
 	rowChars := make([][]string, height)
 	for y := 0; y < height; y++ {
-		// Map height 'y' to an index in graphGradient
-		colorIdx := (y * len(graphGradient)) / height
-		if colorIdx >= len(graphGradient) {
-			colorIdx = len(graphGradient) - 1
+		// Map height 'y' to an index in gradient
+		colorIdx := (y * len(gradient)) / height
+		if colorIdx >= len(gradient) {
+			colorIdx = len(gradient) - 1
 		}
-		style := lipgloss.NewStyle().Foreground(graphGradient[colorIdx])
+		style := lipgloss.NewStyle().Foreground(gradient[colorIdx])
 
 		// Pre-render the 8 block characters + space
 		rowChars[y] = make([]string, 9)

@@ -11,6 +11,7 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 
 	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 )
 
@@ -57,13 +58,19 @@ func (m RootModel) renderModalWithOverlay(modal string) string {
 	// Place modal centered with dark gray background fill for overlay effect
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal,
 		lipgloss.WithWhitespaceChars(" "), // Changed from "░" to avoid terminal rendering glitches
-		lipgloss.WithWhitespaceBackground(lipgloss.Color("236")),
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Background(lipgloss.Color("236"))),
 	)
 }
 
-func (m RootModel) View() string {
+func (m RootModel) wrapView(content string) tea.View {
+	v := tea.NewView(content)
+	v.AltScreen = true
+	return v
+}
+
+func (m RootModel) View() tea.View {
 	if m.width == 0 {
-		return "Loading..."
+		return m.wrapView("Loading...")
 	}
 
 	if m.shuttingDown {
@@ -78,7 +85,7 @@ func (m RootModel) View() string {
 			Height:      10,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	// === Handle Modal States First ===
@@ -98,7 +105,7 @@ func (m RootModel) View() string {
 			Height:          11,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == FilePickerState {
@@ -110,15 +117,15 @@ func (m RootModel) View() string {
 			colors.NeonPink,
 		)
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == SettingsState {
-		return m.viewSettings()
+		return m.wrapView(m.viewSettings())
 	}
 
 	if m.state == CategoryManagerState {
-		return m.viewCategoryManager()
+		return m.wrapView(m.viewCategoryManager())
 	}
 
 	if m.state == DuplicateWarningState {
@@ -133,7 +140,7 @@ func (m RootModel) View() string {
 			Height:      10,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == ExtensionConfirmationState {
@@ -157,7 +164,7 @@ func (m RootModel) View() string {
 			Height:          13,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == BatchFilePickerState {
@@ -169,7 +176,7 @@ func (m RootModel) View() string {
 			colors.NeonCyan,
 		)
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == BatchConfirmState {
@@ -185,7 +192,7 @@ func (m RootModel) View() string {
 			Height:      10,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
@@ -200,7 +207,7 @@ func (m RootModel) View() string {
 			Height:      12,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == URLUpdateState {
@@ -217,7 +224,7 @@ func (m RootModel) View() string {
 			Height:          8,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	// === MAIN DASHBOARD LAYOUT ===
@@ -229,7 +236,7 @@ func (m RootModel) View() string {
 
 	// Footer - keybindings on left, version on bottom-right
 	helpText := m.help.View(m.keys.Dashboard)
-	versionBlue := lipgloss.AdaptiveColor{Light: "#005cc5", Dark: "#58a6ff"}
+	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
 	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
 	footerContentWidth := availableWidth
 	leftFooterWidth := footerContentWidth - lipgloss.Width(versionText)
@@ -469,8 +476,8 @@ func (m RootModel) View() string {
 	if vpWidth < 0 {
 		vpWidth = 0
 	}
-	m.logViewport.Width = vpWidth           // Account for borders
-	m.logViewport.Height = headerHeight - 4 // Account for borders and title
+	m.logViewport.SetWidth(vpWidth)           // Account for borders
+	m.logViewport.SetHeight(headerHeight - 4) // Account for borders and title
 	logContent := m.logViewport.View()
 
 	// Use different border color when focused
@@ -755,7 +762,7 @@ func (m RootModel) View() string {
 		MaxWidth(availableWidth).
 		MaxHeight(m.height).
 		Render(fullView)
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Top, fullView)
+	return m.wrapView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Top, fullView))
 }
 
 // Helper to render the detailed info pane
@@ -815,7 +822,7 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 	if progressWidth < 20 {
 		progressWidth = 20
 	}
-	d.progress.Width = progressWidth
+	d.progress.SetWidth(progressWidth)
 	progView := d.progress.ViewAs(pct)
 
 	progLabel := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Progress: ")

@@ -85,7 +85,7 @@ func connectAndRunTUI(cmd *cobra.Command, target string) {
 
 	m := newRemoteRootModel(port, service, serverHost)
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 	go func() {
 		for msg := range stream {
 			p.Send(msg)

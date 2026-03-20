@@ -1,6 +1,8 @@
 package components
 
 import (
+	"image/color"
+
 	"github.com/surge-downloader/surge/internal/tui/colors"
 
 	"charm.land/bubbles/v2/help"
@@ -12,10 +14,10 @@ import (
 type ConfirmationModal struct {
 	Title       string
 	Message     string
-	Detail      string                 // Optional additional detail line (e.g., filename, URL)
-	Keys        help.KeyMap            // Key bindings to show in help
-	Help        help.Model             // Help model for rendering keys
-	BorderColor lipgloss.TerminalColor // Border color for the box
+	Detail      string      // Optional additional detail line (e.g., filename, URL)
+	Keys        help.KeyMap // Key bindings to show in help
+	Help        help.Model  // Help model for rendering keys
+	BorderColor color.Color // Border color for the box
 	Width       int
 	Height      int
 }
@@ -41,7 +43,7 @@ func (k ConfirmationKeyMap) FullHelp() [][]key.Binding {
 }
 
 // NewConfirmationModal creates a modal with default styling
-func NewConfirmationModal(title, message, detail string, keys help.KeyMap, helpModel help.Model, borderColor lipgloss.TerminalColor) ConfirmationModal {
+func NewConfirmationModal(title, message, detail string, keys help.KeyMap, helpModel help.Model, borderColor color.Color) ConfirmationModal {
 	return ConfirmationModal{
 		Title:       title,
 		Message:     message,
@@ -77,7 +79,7 @@ func (m ConfirmationModal) View() string {
 // RenderWithBtopBox renders the modal using the btop-style box with title in border
 // Help text is pushed to the last line of the modal
 func (m ConfirmationModal) RenderWithBtopBox(
-	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor lipgloss.TerminalColor) string,
+	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
 	titleStyle lipgloss.Style,
 ) string {
 	innerWidth := m.Width - 4 // Account for borders

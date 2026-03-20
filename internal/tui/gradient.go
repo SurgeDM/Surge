@@ -2,8 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"math"
-	"strconv"
 	"strings"
 
 	"charm.land/lipgloss/v2"
@@ -11,15 +11,15 @@ import (
 
 // ApplyGradient applies a vertical gradient to a multi-line string
 // ApplyGradient applies a vertical gradient to a multi-line string
-func ApplyGradient(text string, startColor, endColor lipgloss.TerminalColor) string {
+func ApplyGradient(text string, startColor, endColor color.Color) string {
 	lines := strings.Split(text, "\n")
 	height := len(lines)
 	if height == 0 {
 		return text
 	}
 
-	startRGB, _ := hexToRGB(resolveColor(startColor))
-	endRGB, _ := hexToRGB(resolveColor(endColor))
+	startRGB := colorToRGB(startColor)
+	endRGB := colorToRGB(endColor)
 
 	var coloredLines []string
 	for i, line := range lines {
@@ -48,46 +48,20 @@ func ApplyGradient(text string, startColor, endColor lipgloss.TerminalColor) str
 	return strings.Join(coloredLines, "\n")
 }
 
-func resolveColor(c lipgloss.TerminalColor) string {
-	if ac, ok := c.(lipgloss.AdaptiveColor); ok {
-		if lipgloss.HasDarkBackground() {
-			return ac.Dark
-		}
-		return ac.Light
-	}
-	if col, ok := c.(lipgloss.Color); ok {
-		return string(col)
-	}
-	return ""
-}
-
 type rgb struct {
 	r, g, b uint8
 }
 
-func hexToRGB(hex string) (rgb, error) {
-	// Remove leading hash
-	hex = strings.TrimPrefix(hex, "#")
-
-	// Handle short hex (e.g., "FFF")
-	if len(hex) == 3 {
-		hex = string([]byte{hex[0], hex[0], hex[1], hex[1], hex[2], hex[2]})
+func colorToRGB(c color.Color) rgb {
+	if c == nil {
+		return rgb{}
 	}
-
-	if len(hex) != 6 {
-		return rgb{}, fmt.Errorf("invalid hex color: %s", hex)
-	}
-
-	val, err := strconv.ParseUint(hex, 16, 32)
-	if err != nil {
-		return rgb{}, err
-	}
-
+	r, g, b, _ := c.RGBA()
 	return rgb{
-		r: uint8(val >> 16),
-		g: uint8((val >> 8) & 0xFF),
-		b: uint8(val & 0xFF),
-	}, nil
+		r: uint8(r >> 8),
+		g: uint8(g >> 8),
+		b: uint8(b >> 8),
+	}
 }
 
 func lerp(a, b, t float64) float64 {
