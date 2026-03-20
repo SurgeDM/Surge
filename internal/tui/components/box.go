@@ -5,7 +5,7 @@ import (
 
 	"github.com/surge-downloader/surge/internal/tui/colors"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // BoxRenderer is the function signature for rendering btop-style boxes

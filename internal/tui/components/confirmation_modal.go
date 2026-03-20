@@ -3,9 +3,9 @@ package components
 import (
 	"github.com/surge-downloader/surge/internal/tui/colors"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	"charm.land/lipgloss/v2"
 )
 
 // ConfirmationModal renders a styled confirmation dialog box

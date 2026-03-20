@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/filepicker"
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/filepicker"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/core"
@@ -532,7 +532,7 @@ func (m RootModel) matchesCategoryFilter(d *DownloadModel) bool {
 // newFilepicker creates a fresh filepicker instance with consistent settings.
 // This is necessary to avoid cursor desync issues that cause "index out of range"
 // panics when navigating directories (especially on Windows).
-// See: https://github.com/charmbracelet/bubbles/issues/864
+// See: https://charm.land/bubbles/v2/issues/864
 func newFilepicker(currentDir string) filepicker.Model {
 	fp := filepicker.New()
 	fp.CurrentDirectory = currentDir

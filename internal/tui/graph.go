@@ -7,7 +7,7 @@ import (
 	"github.com/surge-downloader/surge/internal/tui/colors"
 	"github.com/surge-downloader/surge/internal/utils"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // GraphStats contains the statistics to overlay on the graph

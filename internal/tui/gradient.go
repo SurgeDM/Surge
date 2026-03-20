@@ -6,7 +6,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // ApplyGradient applies a vertical gradient to a multi-line string

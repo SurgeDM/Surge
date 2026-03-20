@@ -23,7 +23,7 @@ import (
 	"github.com/surge-downloader/surge/internal/tui"
 	"github.com/surge-downloader/surge/internal/utils"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )

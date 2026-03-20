@@ -3,7 +3,7 @@ package components
 import (
 	"github.com/surge-downloader/surge/internal/tui/colors"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // DownloadStatus represents the state of a download

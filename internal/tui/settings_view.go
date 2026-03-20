@@ -11,7 +11,7 @@ import (
 	"github.com/surge-downloader/surge/internal/tui/colors"
 	"github.com/surge-downloader/surge/internal/tui/components"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // viewSettings renders the Btop-style settings page

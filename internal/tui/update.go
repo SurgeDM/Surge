@@ -21,10 +21,10 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 	"github.com/surge-downloader/surge/internal/version"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/progress"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/progress"
+	tea "charm.land/bubbletea/v2"
 )
 
 // notificationTickMsg is sent to check if a notification should be cleared

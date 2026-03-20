@@ -3,9 +3,9 @@ package components
 import (
 	"github.com/surge-downloader/surge/internal/tui/colors"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/lipgloss/v2"
 )
 
 // AddDownloadModal renders input-driven download forms (add download / extension prompt).

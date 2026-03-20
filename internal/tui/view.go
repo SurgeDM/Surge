@@ -10,8 +10,8 @@ import (
 	"github.com/surge-downloader/surge/internal/tui/components"
 	"github.com/surge-downloader/surge/internal/utils"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/lipgloss/v2"
 )
 
 // Define the Layout Ratios

@@ -3,9 +3,9 @@ package components
 import (
 	"github.com/surge-downloader/surge/internal/tui/colors"
 
-	"github.com/charmbracelet/bubbles/filepicker"
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/filepicker"
+	"charm.land/bubbles/v2/help"
+	"charm.land/lipgloss/v2"
 )
 
 // FilePickerModal represents a styled file picker modal

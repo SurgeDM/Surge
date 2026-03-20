@@ -3,7 +3,7 @@ package tui
 import (
 	"github.com/surge-downloader/surge/internal/tui/colors"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // === Layout Styles ===

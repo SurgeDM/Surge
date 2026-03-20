@@ -1,6 +1,6 @@
 package colors
 
-import "github.com/charmbracelet/lipgloss"
+import "charm.land/lipgloss/v2"
 
 // === Color Palette ===
 // Vibrant "Cyberpunk" Neon Colors (Dark Mode) + High Contrast (Light Mode)
