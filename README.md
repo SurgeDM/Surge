@@ -64,9 +64,9 @@ Surge is available on multiple platforms. Choose the method that works best for 
 | **Prebuilt Binary**          | [Download from Releases](https://github.com/surge-downloader/surge/releases/latest) | Easiest method. Just download and run.       |
 | **Arch Linux (AUR)**         | `yay -S surge`                                                                 | Managed via AUR.                             |
 | **macOS / Linux (Homebrew)** | `brew install surge-downloader/tap/surge`                                      | Recommended for Mac/Linux users.             |
-| **Windows (Winget)**         | `winget install surge-downloader.surge`<br />or<br />`scoop install surge` | Recommended for Windows users.               |
+| **Windows**         | `winget install surge-downloader.surge`<br />or<br />`scoop install surge` | Recommended for Windows users.               |
 | **Dockerfile**               | [See instructions](#4-server-mode-with-docker-compose)                              | Run Surge in server mode with Docker Compose |
-| **Go Install**               | `go install github.com/surge-downloader/surge@latest`                          | Requires Go 1.21+.                           |
+| **Go Install**               | `go install github.com/surge-downloader/surge@latest`                          | Requires Go 1.25+                           |
 
 ---
 
