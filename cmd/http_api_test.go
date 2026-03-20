@@ -154,10 +154,10 @@ func TestResolveDownloadDestPath(t *testing.T) {
 		wantErrContain string
 	}{
 		{
-			name:      "service unavailable",
+			name:          "service unavailable",
 			useNilService: true,
-			id:        "x",
-			wantErrIs: ErrServiceUnavailable,
+			id:            "x",
+			wantErrIs:     ErrServiceUnavailable,
 		},
 		{
 			name: "status path present",
@@ -176,7 +176,7 @@ func TestResolveDownloadDestPath(t *testing.T) {
 					"fallback": {ID: "fallback", DestPath: ""},
 				},
 				history: []types.DownloadEntry{{ID: "fallback", DestPath: "C:\\tmp\\b.bin"}},
-			}, 
+			},
 			id:       "fallback",
 			wantPath: `C:\tmp\b.bin`,
 		},
