@@ -94,6 +94,9 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				if existing.Downloaded > 0 {
 					entry.Downloaded = existing.Downloaded
 				}
+				if existing.TimeTaken > 0 {
+					entry.TimeTaken = existing.TimeTaken
+				}
 			}
 			if err := state.AddToMasterList(entry); err != nil {
 				utils.Debug("Lifecycle: Failed to save initial download state: %v", err)
@@ -147,6 +150,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 
 			// Pause snapshots can race slightly behind the master entry, so fall back to
 			// the DB values to keep the resume key stable when the in-memory state is sparse.
+			snapshot := *m.State
 			destPath := m.State.DestPath
 			url := m.State.URL
 
@@ -158,16 +162,23 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				if url == "" {
 					url = existing.URL
 				}
+				candidateElapsed := existing.TimeTaken * int64(time.Millisecond)
+				if candidateElapsed > snapshot.Elapsed {
+					snapshot.Elapsed = candidateElapsed
+				}
+				if snapshot.Downloaded > existing.Downloaded && snapshot.Elapsed <= candidateElapsed {
+					snapshot.Elapsed = candidateElapsed + int64(time.Millisecond)
+				}
 			}
 
 			entry := types.DownloadEntry{
 				ID:         m.DownloadID,
 				Status:     "paused",
-				Downloaded: m.State.Downloaded,
+				Downloaded: snapshot.Downloaded,
 				DestPath:   destPath,
 				Filename:   m.Filename,
-				TotalSize:  m.State.TotalSize,
-				TimeTaken:  m.State.Elapsed / int64(time.Millisecond),
+				TotalSize:  snapshot.TotalSize,
+				TimeTaken:  snapshot.Elapsed / int64(time.Millisecond),
 			}
 			if existing != nil {
 				entry.URL = existing.URL
@@ -181,7 +192,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			// destPath/url pair used everywhere else as the state DB key.
 			if destPath != "" && url != "" {
 				// Keep pause persistence fast so lifecycle events don't back up and get dropped.
-				if err := state.SaveStateWithOptions(url, destPath, m.State, state.SaveStateOptions{
+				if err := state.SaveStateWithOptions(url, destPath, &snapshot, state.SaveStateOptions{
 					SkipFileHash: true,
 				}); err != nil {
 					utils.Debug("Lifecycle: Failed to save pause state: %v", err)
