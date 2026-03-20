@@ -19,17 +19,24 @@ type GeneralSettings struct {
 	DefaultDownloadDir           string     `json:"default_download_dir"`
 	WarnOnDuplicate              bool       `json:"warn_on_duplicate"`
 	DownloadCompleteNotification bool       `json:"download_complete_notification"`
+	DownloadFailedNotification   bool       `json:"download_failed_notification"`
 	AllowRemoteOpenActions       bool       `json:"allow_remote_open_actions"`
 	ExtensionPrompt              bool       `json:"extension_prompt"`
 	AutoResume                   bool       `json:"auto_resume"`
 	SkipUpdateCheck              bool       `json:"skip_update_check"`
 	CategoryEnabled              bool       `json:"category_enabled"`
 	Categories                   []Category `json:"categories"`
+	FileExistsAction             string     `json:"file_exists_action"`
 
 	ClipboardMonitor  bool `json:"clipboard_monitor"`
 	Theme             int  `json:"theme"`
 	LogRetentionCount int  `json:"log_retention_count"`
 }
+
+const (
+	FileExistsRename    = "rename"
+	FileExistsOverwrite = "overwrite"
+)
 
 const (
 	ThemeAdaptive = 0
@@ -70,7 +77,9 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 	return map[string][]SettingMeta{
 		"General": {
 			{Key: "default_download_dir", Label: "Default Download Dir", Description: "Default directory for new downloads. Leave empty to use current directory.", Type: "string"},
-			{Key: "download_complete_notification", Label: "Download Complete Notification", Description: "Show system notification when a download finishes.", Type: "bool"},
+			{Key: "download_complete_notification", Label: "Download Complete Notification", Description: "Show system notification when a download finishes successfully.", Type: "bool"},
+			{Key: "download_failed_notification", Label: "Download Failed Notification", Description: "Show system notification when a download fails or errors.", Type: "bool"},
+			{Key: "file_exists_action", Label: "File Exists Action", Description: "Action when downloaded file already exists: Rename or Overwrite.", Type: "string"},
 			{Key: "allow_remote_open_actions", Label: "Allow Remote Open Actions", Description: "Allow /open-file and /open-folder API calls from non-loopback clients. Disabled by default for security.", Type: "bool"},
 			{Key: "warn_on_duplicate", Label: "Warn on Duplicate", Description: "Show warning when adding a download that already exists.", Type: "bool"},
 			{Key: "extension_prompt", Label: "Extension Prompt", Description: "Prompt for confirmation when adding downloads via browser extension.", Type: "bool"},
@@ -123,11 +132,13 @@ func DefaultSettings() *Settings {
 			DefaultDownloadDir:           defaultDir,
 			WarnOnDuplicate:              true,
 			DownloadCompleteNotification: true,
+			DownloadFailedNotification:   true,
 			AllowRemoteOpenActions:       false,
 			ExtensionPrompt:              false,
 			AutoResume:                   false,
 			CategoryEnabled:              false,
 			Categories:                   DefaultCategories(),
+			FileExistsAction:             FileExistsRename,
 
 			ClipboardMonitor:  true,
 			Theme:             ThemeAdaptive,

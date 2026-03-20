@@ -1476,6 +1476,14 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 
+				// Special handling for File Exists Action cycling
+				if key == "file_exists_action" {
+					categories := config.CategoryOrder()
+					currentCategory := categories[m.SettingsActiveTab]
+					_ = m.setSettingValue(currentCategory, key, "")
+					return m, nil
+				}
+
 				// Toggle bool or enter edit mode for other types
 				typ := m.getCurrentSettingType()
 				if typ == "bool" {
@@ -1511,6 +1519,19 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Special handling for Theme reset to ensure it applies immediately
 				if key == "theme" {
 					m.ApplyTheme(m.Settings.General.Theme)
+				}
+				return m, nil
+			}
+
+			// Reset All
+			if key.Matches(msg, m.keys.Settings.ResetAll) {
+				defaults := config.DefaultSettings()
+				m.Settings = defaults
+				m.ApplyTheme(m.Settings.General.Theme)
+				if err := m.persistSettings(); err != nil {
+					m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to reset settings: %s", err.Error())))
+				} else {
+					m.addLogEntry(LogStyleComplete.Render("✔ All settings reset to defaults"))
 				}
 				return m, nil
 			}

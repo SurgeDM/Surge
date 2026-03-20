@@ -179,7 +179,14 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 		}
 	}
 
-	finalFilename := GetUniqueFilename(destPath, filename, isNameActive)
+	var finalFilename string
+	if settings != nil && settings.General.FileExistsAction == config.FileExistsOverwrite {
+		// Overwrite mode: use original filename without uniqueness check
+		finalFilename = filepath.Base(strings.TrimSpace(filename))
+	} else {
+		// Rename (default) or Ask: generate unique filename
+		finalFilename = GetUniqueFilename(destPath, filename, isNameActive)
+	}
 	if finalFilename == "" {
 		return "", "", fmt.Errorf("could not determine a unique filename for %s", url)
 	}

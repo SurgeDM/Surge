@@ -93,18 +93,19 @@ type ExtensionKeyMap struct {
 
 // SettingsKeyMap defines keybindings for the settings view
 type SettingsKeyMap struct {
-	Tab1    key.Binding
-	Tab2    key.Binding
-	Tab3    key.Binding
-	Tab4    key.Binding
-	NextTab key.Binding
-	PrevTab key.Binding
-	Browse  key.Binding
-	Edit    key.Binding
-	Up      key.Binding
-	Down    key.Binding
-	Reset   key.Binding
-	Close   key.Binding
+	Tab1     key.Binding
+	Tab2     key.Binding
+	Tab3     key.Binding
+	Tab4     key.Binding
+	NextTab  key.Binding
+	PrevTab  key.Binding
+	Browse   key.Binding
+	Edit     key.Binding
+	Up       key.Binding
+	Down     key.Binding
+	Reset    key.Binding
+	ResetAll key.Binding
+	Close    key.Binding
 }
 
 // SettingsEditorKeyMap defines keybindings for editing a setting
@@ -386,8 +387,12 @@ var Keys = KeyMap{
 			key.WithHelp("↓/j", "down"),
 		),
 		Reset: key.NewBinding(
-			key.WithKeys("r", "R"),
+			key.WithKeys("r"),
 			key.WithHelp("r", "reset"),
+		),
+		ResetAll: key.NewBinding(
+			key.WithKeys("R"),
+			key.WithHelp("R", "reset all"),
 		),
 		Close: key.NewBinding(
 			key.WithKeys("esc"),
@@ -495,13 +500,13 @@ func (k ExtensionKeyMap) FullHelp() [][]key.Binding {
 }
 
 func (k SettingsKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.PrevTab, k.NextTab, k.Edit, k.Reset, k.Close}
+	return []key.Binding{k.PrevTab, k.NextTab, k.Edit, k.Reset, k.ResetAll, k.Close}
 }
 
 func (k SettingsKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Tab1, k.Tab2, k.Tab3, k.Tab4},
-		{k.PrevTab, k.NextTab, k.Up, k.Down, k.Edit, k.Reset, k.Browse, k.Close},
+		{k.PrevTab, k.NextTab, k.Up, k.Down, k.Edit, k.Reset, k.ResetAll, k.Browse, k.Close},
 	}
 }
 

@@ -252,6 +252,8 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 		values["default_download_dir"] = m.Settings.General.DefaultDownloadDir
 		values["warn_on_duplicate"] = m.Settings.General.WarnOnDuplicate
 		values["download_complete_notification"] = m.Settings.General.DownloadCompleteNotification
+		values["download_failed_notification"] = m.Settings.General.DownloadFailedNotification
+		values["file_exists_action"] = m.Settings.General.FileExistsAction
 		values["allow_remote_open_actions"] = m.Settings.General.AllowRemoteOpenActions
 		values["extension_prompt"] = m.Settings.General.ExtensionPrompt
 		values["auto_resume"] = m.Settings.General.AutoResume
@@ -332,6 +334,18 @@ func (m *RootModel) setGeneralSetting(key, value, typ string) error {
 		m.Settings.General.DefaultDownloadDir = value
 	case "warn_on_duplicate":
 		m.Settings.General.WarnOnDuplicate = !m.Settings.General.WarnOnDuplicate
+	case "download_complete_notification":
+		m.Settings.General.DownloadCompleteNotification = !m.Settings.General.DownloadCompleteNotification
+	case "download_failed_notification":
+		m.Settings.General.DownloadFailedNotification = !m.Settings.General.DownloadFailedNotification
+	case "file_exists_action":
+		// Cycle through: rename -> overwrite -> rename
+		switch m.Settings.General.FileExistsAction {
+		case config.FileExistsRename:
+			m.Settings.General.FileExistsAction = config.FileExistsOverwrite
+		default:
+			m.Settings.General.FileExistsAction = config.FileExistsRename
+		}
 	case "allow_remote_open_actions":
 		m.Settings.General.AllowRemoteOpenActions = !m.Settings.General.AllowRemoteOpenActions
 	case "extension_prompt":
@@ -553,6 +567,19 @@ func formatSettingValueForEdit(value interface{}, typ, key string) string {
 		}
 	}
 
+	if key == "file_exists_action" {
+		if s, ok := value.(string); ok {
+			switch s {
+			case config.FileExistsRename:
+				return "< Rename >"
+			case config.FileExistsOverwrite:
+				return "< Overwrite >"
+			default:
+				return "< Rename >"
+			}
+		}
+	}
+
 	if key == "theme" {
 		if v, ok := value.(int); ok {
 			switch v {
@@ -637,6 +664,10 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.General.WarnOnDuplicate = defaults.General.WarnOnDuplicate
 		case "download_complete_notification":
 			m.Settings.General.DownloadCompleteNotification = defaults.General.DownloadCompleteNotification
+		case "download_failed_notification":
+			m.Settings.General.DownloadFailedNotification = defaults.General.DownloadFailedNotification
+		case "file_exists_action":
+			m.Settings.General.FileExistsAction = defaults.General.FileExistsAction
 		case "extension_prompt":
 			m.Settings.General.ExtensionPrompt = defaults.General.ExtensionPrompt
 		case "auto_resume":
