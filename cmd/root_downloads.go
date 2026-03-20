@@ -114,11 +114,24 @@ func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) 
 	if req.URL == "" {
 		return req, fmt.Errorf("URL is required")
 	}
-	if strings.Contains(req.Path, "..") || strings.Contains(req.Filename, "..") {
-		return req, fmt.Errorf("Invalid path")
+	if strings.Contains(req.Filename, "..") {
+		return req, fmt.Errorf("Invalid filename")
 	}
 	if strings.Contains(req.Filename, "/") || strings.Contains(req.Filename, "\\") {
 		return req, fmt.Errorf("Invalid filename")
+	}
+	if strings.Contains(req.Path, "..") {
+		return req, fmt.Errorf("Invalid path")
+	}
+	if req.RelativeToDefaultDir && req.Path != "" {
+		if filepath.IsAbs(req.Path) {
+			return req, fmt.Errorf("Invalid path")
+		}
+		cleanPath := filepath.Clean(req.Path)
+		if cleanPath == ".." || strings.HasPrefix(cleanPath, ".."+string(filepath.Separator)) {
+			return req, fmt.Errorf("Invalid path")
+		}
+		req.Path = cleanPath
 	}
 	return req, nil
 }
@@ -345,6 +358,5 @@ func resolveOutputDir(reqPath string, relativeToDefaultDir bool, defaultOutputDi
 		}
 	}
 
-	_ = os.MkdirAll(outPath, 0o755)
 	return outPath
 }
