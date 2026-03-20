@@ -66,6 +66,8 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 
 	newID, err := enqueueDownloadRequest(r, service, resolved)
 	if err != nil {
+		recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
+		publishSystemLog(fmt.Sprintf("Error adding %s: %v", resolved.urlForAdd, err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
