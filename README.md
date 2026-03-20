@@ -227,6 +227,15 @@ The Surge extension intercepts browser downloads and sends them straight to your
 
 ---
 
+## Acknowledgements
+
+Huge thanks to the teams and sponsors helping us build and ship Surge:
+
+- [Charm](https://charm.sh/) for the incredible terminal UI ecosystem (Bubble Tea, Lip Gloss, and more).
+- [GoReleaser Pro](https://goreleaser.com/pro/) for release automation (provided free for open source).
+
+---
+
 ## Community & Contributing
 
 We love community contributions! Whether it's a bug fix, a new feature, or just cleaning up typos.
