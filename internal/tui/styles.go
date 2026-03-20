@@ -45,7 +45,7 @@ func rebuildStyles() {
 	ActivePaneStyle = PaneStyle.BorderForeground(colors.NeonPink)
 	LogoStyle = lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true).MarginBottom(1)
 	GraphStyle = PaneStyle.BorderForeground(colors.NeonCyan)
-	ListStyle = ActivePaneStyle
+	ListStyle = ActivePaneStyle // Download list is the primary focused pane on startup
 	DetailStyle = PaneStyle
 
 	TitleStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).MarginBottom(1)

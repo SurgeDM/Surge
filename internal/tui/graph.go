@@ -18,13 +18,11 @@ type GraphStats struct {
 	DownloadTotal int64   // Total downloaded bytes
 }
 
-func graphGradient() []color.Color {
-	return []color.Color{
-		colors.ThemeColor("#ce93d8", "#5f005f"), // Bottom
-		colors.ThemeColor("#ab47bc", "#8700af"),
-		colors.ThemeColor("#8e24aa", "#af00d7"),
-		colors.ThemeColor("#4a148c", "#ff00ff"), // Top
-	}
+var graphGradient = []color.Color{
+	colors.ThemeColor("#ce93d8", "#5f005f"), // Bottom
+	colors.ThemeColor("#ab47bc", "#8700af"),
+	colors.ThemeColor("#8e24aa", "#af00d7"),
+	colors.ThemeColor("#4a148c", "#ff00ff"), // Top
 }
 
 // renderMultiLineGraph creates a multi-line bar graph with grid lines.
@@ -63,15 +61,14 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 	// Pre-calculate styles for every row to avoid re-creating them in the loop
 	// Optimization: Pre-render all possible block characters for each row style
 	// This avoids calling style.Render() width*height times
-	gradient := graphGradient()
 	rowChars := make([][]string, height)
 	for y := 0; y < height; y++ {
 		// Map height 'y' to an index in gradient
-		colorIdx := (y * len(gradient)) / height
-		if colorIdx >= len(gradient) {
-			colorIdx = len(gradient) - 1
+		colorIdx := (y * len(graphGradient)) / height
+		if colorIdx >= len(graphGradient) {
+			colorIdx = len(graphGradient) - 1
 		}
-		style := lipgloss.NewStyle().Foreground(gradient[colorIdx])
+		style := lipgloss.NewStyle().Foreground(graphGradient[colorIdx])
 
 		rowChars[y] = make([]string, len(blocks))
 		for k, b := range blocks {
