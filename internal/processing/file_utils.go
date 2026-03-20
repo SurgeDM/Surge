@@ -187,6 +187,8 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 		base := filepath.Base(strings.TrimSpace(filename))
 		if base == "" || base == "." || base == ".." {
 			finalFilename = ""
+		} else if isNameActive != nil && isNameActive(destPath, base) {
+			return "", "", fmt.Errorf("file %q is already being downloaded", base)
 		} else {
 			finalFilename = base
 		}
