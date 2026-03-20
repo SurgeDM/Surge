@@ -2,6 +2,7 @@ package components
 
 import (
 	"image/color"
+	"sync"
 
 	"github.com/surge-downloader/surge/internal/tui/colors"
 
@@ -31,6 +32,28 @@ var statusMap = map[DownloadStatus]statusInfo{
 	StatusPaused:      {icon: "⏸", label: "Paused"},
 	StatusComplete:    {icon: "✔", label: "Completed"},
 	StatusError:       {icon: "✖", label: "Error"},
+}
+
+var (
+	statusRenderCache [StatusError + 1][2]string // [status][0:full,1:icon]
+	cacheMu           sync.RWMutex
+)
+
+func init() {
+	rebuildStatusCache()
+	colors.RegisterThemeChangeHook(rebuildStatusCache)
+}
+
+func rebuildStatusCache() {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+
+	for status := StatusQueued; status <= StatusError; status++ {
+		info := statusMap[status]
+		style := lipgloss.NewStyle().Foreground(status.Color())
+		statusRenderCache[status][0] = style.Render(info.icon + " " + info.label)
+		statusRenderCache[status][1] = style.Render(info.icon)
+	}
 }
 
 // Icon returns the status icon
@@ -67,16 +90,20 @@ func (s DownloadStatus) Color() color.Color {
 
 // Render returns the styled icon + label combination
 func (s DownloadStatus) Render() string {
-	if info, ok := statusMap[s]; ok {
-		return lipgloss.NewStyle().Foreground(s.Color()).Render(info.icon + " " + info.label)
+	cacheMu.RLock()
+	defer cacheMu.RUnlock()
+	if s >= StatusQueued && s <= StatusError {
+		return statusRenderCache[s][0]
 	}
 	return "Unknown"
 }
 
 // RenderIcon returns just the styled icon
 func (s DownloadStatus) RenderIcon() string {
-	if info, ok := statusMap[s]; ok {
-		return lipgloss.NewStyle().Foreground(s.Color()).Render(info.icon)
+	cacheMu.RLock()
+	defer cacheMu.RUnlock()
+	if s >= StatusQueued && s <= StatusError {
+		return statusRenderCache[s][1]
 	}
 	return "?"
 }

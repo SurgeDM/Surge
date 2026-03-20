@@ -7,58 +7,79 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+type themeColor struct {
+	light string
+	dark  string
+}
+
+func (c themeColor) RGBA() (r, g, b, a uint32) {
+	chosen := c.light
+	if IsDarkMode() {
+		chosen = c.dark
+	}
+	return lipgloss.Color(chosen).RGBA()
+}
+
 // === Color Palette ===
 // Vibrant "Cyberpunk" Neon Colors (Dark Mode) + High Contrast (Light Mode)
 var (
-	NeonPurple color.Color = lipgloss.Color("#5d40c9")
-	NeonPink   color.Color = lipgloss.Color("#d10074")
-	NeonCyan   color.Color = lipgloss.Color("#0073a8")
-	DarkGray   color.Color = lipgloss.Color("#ffffff") // Background
-	Gray       color.Color = lipgloss.Color("#d0d0d0") // Borders
-	LightGray  color.Color = lipgloss.Color("#4a4a4a") // Brighter text for secondary info
-	White      color.Color = lipgloss.Color("#1a1a1a")
+	NeonPurple color.Color = themeColor{light: "#5d40c9", dark: "#bd93f9"}
+	NeonPink   color.Color = themeColor{light: "#d10074", dark: "#ff79c6"}
+	NeonCyan   color.Color = themeColor{light: "#0073a8", dark: "#8be9fd"}
+	DarkGray   color.Color = themeColor{light: "#ffffff", dark: "#282a36"} // Background
+	Gray       color.Color = themeColor{light: "#d0d0d0", dark: "#44475a"} // Borders
+	LightGray  color.Color = themeColor{light: "#4a4a4a", dark: "#a9b1d6"} // Brighter text for secondary info
+	White      color.Color = themeColor{light: "#1a1a1a", dark: "#f8f8f2"}
 )
 
 // === Semantic State Colors ===
 var (
-	StateError       color.Color = lipgloss.Color("#d32f2f") // Red - Error/Stopped
-	StatePaused      color.Color = lipgloss.Color("#f57c00") // Orange - Paused/Queued
-	StateDownloading color.Color = lipgloss.Color("#2e7d32") // Green - Downloading
-	StateDone        color.Color = lipgloss.Color("#7b1fa2") // Purple - Completed
+	StateError       color.Color = themeColor{light: "#d32f2f", dark: "#ff5555"} // Red - Error/Stopped
+	StatePaused      color.Color = themeColor{light: "#f57c00", dark: "#ffb86c"} // Orange - Paused/Queued
+	StateDownloading color.Color = themeColor{light: "#2e7d32", dark: "#50fa7b"} // Green - Downloading
+	StateDone        color.Color = themeColor{light: "#7b1fa2", dark: "#bd93f9"} // Purple - Completed
 )
 
 // === Progress Bar Colors ===
 var (
-	ProgressStart color.Color = lipgloss.Color("#d10074") // Pink
-	ProgressEnd   color.Color = lipgloss.Color("#7b1fa2") // Purple
+	ProgressStart color.Color = themeColor{light: "#d10074", dark: "#ff79c6"} // Pink
+	ProgressEnd   color.Color = themeColor{light: "#7b1fa2", dark: "#bd93f9"} // Purple
 )
 
 var (
 	darkMode bool
 	modeMu   sync.RWMutex
+	hooks    []func()
+	hookMu   sync.RWMutex
 )
 
-// SetDarkMode applies the active light/dark palette for all exported colors.
+// RegisterThemeChangeHook registers a callback that runs after theme mode flips.
+func RegisterThemeChangeHook(fn func()) {
+	if fn == nil {
+		return
+	}
+	hookMu.Lock()
+	hooks = append(hooks, fn)
+	hookMu.Unlock()
+}
+
+// SetDarkMode updates the active theme mode and notifies registered listeners.
 func SetDarkMode(isDark bool) {
 	modeMu.Lock()
-	defer modeMu.Unlock()
+	changed := darkMode != isDark
 	darkMode = isDark
+	modeMu.Unlock()
 
-	NeonPurple = themeColorLocked("#5d40c9", "#bd93f9")
-	NeonPink = themeColorLocked("#d10074", "#ff79c6")
-	NeonCyan = themeColorLocked("#0073a8", "#8be9fd")
-	DarkGray = themeColorLocked("#ffffff", "#282a36")
-	Gray = themeColorLocked("#d0d0d0", "#44475a")
-	LightGray = themeColorLocked("#4a4a4a", "#a9b1d6")
-	White = themeColorLocked("#1a1a1a", "#f8f8f2")
+	if !changed {
+		return
+	}
 
-	StateError = themeColorLocked("#d32f2f", "#ff5555")
-	StatePaused = themeColorLocked("#f57c00", "#ffb86c")
-	StateDownloading = themeColorLocked("#2e7d32", "#50fa7b")
-	StateDone = themeColorLocked("#7b1fa2", "#bd93f9")
-
-	ProgressStart = themeColorLocked("#d10074", "#ff79c6")
-	ProgressEnd = themeColorLocked("#7b1fa2", "#bd93f9")
+	hookMu.RLock()
+	registeredHooks := append([]func(){}, hooks...)
+	hookMu.RUnlock()
+	for _, fn := range registeredHooks {
+		fn()
+	}
 }
 
 // IsDarkMode reports the current color mode used by the palette.
@@ -69,15 +90,7 @@ func IsDarkMode() bool {
 }
 
 // ThemeColor returns the light or dark variant based on current mode.
-func ThemeColor(lightHex, darkHex string) color.Color {
-	modeMu.RLock()
-	defer modeMu.RUnlock()
-	return themeColorLocked(lightHex, darkHex)
-}
-
-func themeColorLocked(lightHex, darkHex string) color.Color {
-	if darkMode {
-		return lipgloss.Color(darkHex)
-	}
-	return lipgloss.Color(lightHex)
+// `light` and `dark` accept any Lip Gloss color format (hex, ANSI number, etc.).
+func ThemeColor(light, dark string) color.Color {
+	return themeColor{light: light, dark: dark}
 }
