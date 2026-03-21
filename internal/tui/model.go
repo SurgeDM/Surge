@@ -158,7 +158,7 @@ type RootModel struct {
 	catMgrIsNew        bool               // Whether adding a new category
 	catMgrFileBrowsing bool               // Whether browsing for a category path
 
-	// Quit confirm button focus (0 = Yes, 1 = No)
+	// Quit confirm button focus (0 = Yep!, 1 = Nope)
 	quitConfirmFocused int
 
 	// Keybindings

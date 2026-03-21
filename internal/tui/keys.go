@@ -129,12 +129,12 @@ type UpdateKeyMap struct {
 
 // QuitConfirmKeyMap defines keybindings for the quit confirmation modal
 type QuitConfirmKeyMap struct {
-	Left   key.Binding
-	Right  key.Binding
-	Yes    key.Binding
-	No     key.Binding
-	Select key.Binding
-	Cancel key.Binding
+	Left    key.Binding
+	Right   key.Binding
+	Yes     key.Binding
+	No      key.Binding
+	Select  key.Binding
+	Cancel  key.Binding
 }
 
 // CategoryManagerKeyMap defines keybindings for the category manager
@@ -452,27 +452,23 @@ var Keys = KeyMap{
 	QuitConfirm: QuitConfirmKeyMap{
 		Left: key.NewBinding(
 			key.WithKeys("left", "h", "shift+tab"),
-			key.WithHelp("←", "move"),
 		),
 		Right: key.NewBinding(
 			key.WithKeys("right", "l", "tab"),
-			key.WithHelp("→", "move"),
 		),
 		Yes: key.NewBinding(
 			key.WithKeys("y", "Y"),
-			key.WithHelp("y", "yes"),
 		),
 		No: key.NewBinding(
 			key.WithKeys("n", "N"),
-			key.WithHelp("n", "no"),
 		),
 		Select: key.NewBinding(
 			key.WithKeys("enter", "space"),
-			key.WithHelp("enter", "select"),
+			key.WithHelp("y/enter", "confirm"),
 		),
 		Cancel: key.NewBinding(
 			key.WithKeys("esc", "ctrl+c", "ctrl+q"),
-			key.WithHelp("esc", "cancel"),
+			key.WithHelp("n/esc", "cancel"),
 		),
 	},
 }
@@ -575,9 +571,9 @@ func (k CategoryManagerKeyMap) FullHelp() [][]key.Binding {
 }
 
 func (k QuitConfirmKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Left, k.Right, k.Yes, k.No, k.Select, k.Cancel}
+	return []key.Binding{k.Select, k.Cancel}
 }
 
 func (k QuitConfirmKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Left, k.Right, k.Yes, k.No, k.Select, k.Cancel}}
+	return [][]key.Binding{{k.Select, k.Cancel}}
 }

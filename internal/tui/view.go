@@ -1042,7 +1042,7 @@ func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
 }
 
 func (m RootModel) viewQuitConfirm() string {
-	const width = 52
+	const width = 60
 	const height = 10
 	innerWidth := width - 4
 
@@ -1081,7 +1081,7 @@ func (m RootModel) viewQuitConfirm() string {
 	yesBtn := renderBtn(yesPad, yesFirst, yesRest, "Y", "ep!")
 	noBtn := renderBtn(noPad, noFirst, noRest, "N", "ope")
 
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, "   ", noBtn)
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, "     ", noBtn)
 	centeredButtons := lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(buttons)
 
 	stats := m.ComputeViewStats()
