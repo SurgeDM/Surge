@@ -703,10 +703,12 @@ function toggleSettingsView() {
     settingsSection.classList.add('hidden');
     downloadsSection.classList.remove('hidden');
     settingsBtn.classList.remove('active');
+    settingsBtn.setAttribute('aria-pressed', 'false');
   } else {
     downloadsSection.classList.add('hidden');
     settingsSection.classList.remove('hidden');
     settingsBtn.classList.add('active');
+    settingsBtn.setAttribute('aria-pressed', 'true');
   }
 }
 
@@ -763,7 +765,9 @@ async function init() {
     console.error('[Surge Popup] Error getting status:', error);
   }
 
-  // Check for pending auth error (set by background on 401/403)
+  // Storage flag is the only reliable cross-lifecycle handshake: if a 401/403
+  // occurred while this popup was closed, the background sets pendingAuthError
+  // so the next open can route the user directly to Settings.
   if (isExtensionContext) {
     try {
       const { pendingAuthError } = await chrome.storage.local.get('pendingAuthError');
@@ -774,6 +778,7 @@ async function init() {
             downloadsSection.classList.add('hidden');
             settingsSection.classList.remove('hidden');
             settingsBtn.classList.add('active');
+            settingsBtn.setAttribute('aria-pressed', 'true');
           }
           if (authStatus) {
             authStatus.className = 'auth-status err';
