@@ -1328,12 +1328,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.quitConfirmFocused = 0
 				return m, nil
 			}
-			if key.Matches(msg, m.keys.QuitConfirm.Left) {
-				m.quitConfirmFocused = 0
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.QuitConfirm.Right) {
-				m.quitConfirmFocused = 1
+			if key.Matches(msg, m.keys.QuitConfirm.Left) || key.Matches(msg, m.keys.QuitConfirm.Right) {
+				m.quitConfirmFocused = 1 - m.quitConfirmFocused
 				return m, nil
 			}
 			if key.Matches(msg, m.keys.QuitConfirm.Yes) {

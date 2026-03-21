@@ -656,6 +656,16 @@ func TestQuitConfirm_LeftMovesToYes(t *testing.T) {
 	}
 }
 
+func TestQuitConfirm_TabWrapsFromNoToYes(t *testing.T) {
+	m := newQuitConfirmModel()
+	m.quitConfirmFocused = 1
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m2 := updated.(RootModel)
+	if m2.quitConfirmFocused != 0 {
+		t.Fatal("expected tab on Nope to wrap back to Yep!")
+	}
+}
+
 func TestQuitConfirm_EscCancels(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
