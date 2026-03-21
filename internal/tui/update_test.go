@@ -984,3 +984,84 @@ func TestUpdate_CategoryEditorPasteRoutesToCategoryInput(t *testing.T) {
 		t.Fatalf("category editor paste = %q, want %q", got, "Audio files")
 	}
 }
+
+func TestUpdate_DashboardInactivePasteIsIgnored(t *testing.T) {
+	search := textinput.New()
+	search.SetValue("existing")
+
+	m := RootModel{
+		state:        DashboardState,
+		searchActive: false,
+		searchInput:  search,
+		Settings:     config.DefaultSettings(),
+		list:         NewDownloadList(80, 20),
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "ubuntu"})
+	m2 := updated.(RootModel)
+
+	if got := m2.searchInput.Value(); got != "existing" {
+		t.Fatalf("expected no paste when search inactive, got %q", got)
+	}
+}
+
+func TestUpdate_SettingsNotEditingPasteIsIgnored(t *testing.T) {
+	settingsInput := textinput.New()
+	settingsInput.SetValue("keep")
+
+	m := RootModel{
+		state:             SettingsState,
+		SettingsIsEditing: false,
+		SettingsInput:     settingsInput,
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "/tmp/new"})
+	m2 := updated.(RootModel)
+
+	if got := m2.SettingsInput.Value(); got != "keep" {
+		t.Fatalf("expected no paste when settings editor inactive, got %q", got)
+	}
+}
+
+func TestUpdate_CategoryManagerNotEditingPasteIsIgnored(t *testing.T) {
+	var catInputs [4]textinput.Model
+	for i := range catInputs {
+		catInputs[i] = textinput.New()
+	}
+	catInputs[2].SetValue("keep-pattern")
+
+	m := RootModel{
+		state:           CategoryManagerState,
+		catMgrEditing:   false,
+		catMgrEditField: 2,
+		catMgrInputs:    catInputs,
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "new-pattern"})
+	m2 := updated.(RootModel)
+
+	if got := m2.catMgrInputs[2].Value(); got != "keep-pattern" {
+		t.Fatalf("expected no paste when category editor inactive, got %q", got)
+	}
+}
+
+func TestUpdate_UnlistedStatePasteIsIgnored(t *testing.T) {
+	urlInput := textinput.New()
+	urlInput.SetValue("https://example.com/original")
+
+	m := RootModel{
+		state:          DetailState,
+		urlUpdateInput: urlInput,
+		searchActive:   true,
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "https://example.com/new"})
+	m2 := updated.(RootModel)
+
+	if m2.state != DetailState {
+		t.Fatalf("state changed on ignored paste: got %v", m2.state)
+	}
+	if got := m2.urlUpdateInput.Value(); got != "https://example.com/original" {
+		t.Fatalf("expected unlisted state paste to be ignored, got %q", got)
+	}
+}
