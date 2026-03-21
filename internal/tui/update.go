@@ -19,6 +19,7 @@ import (
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/surge-downloader/surge/internal/tui/components"
 	"github.com/surge-downloader/surge/internal/version"
 
 	"charm.land/bubbles/v2/key"
@@ -363,7 +364,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		needsSpinner := false
 		for _, d := range m.downloads {
-			if d.pausing || d.resuming || (d.Speed == 0 && d.Downloaded == 0 && !d.done && !d.paused && d.err == nil) {
+			if d.pausing || d.resuming || components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded) == components.StatusQueued {
 				needsSpinner = true
 				break
 			}
