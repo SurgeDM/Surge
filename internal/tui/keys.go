@@ -451,7 +451,7 @@ var Keys = KeyMap{
 	},
 	QuitConfirm: QuitConfirmKeyMap{
 		Left: key.NewBinding(
-			key.WithKeys("left", "h", "shift+tab"),
+			key.WithKeys("left", "h"),
 		),
 		Right: key.NewBinding(
 			key.WithKeys("right", "l", "tab"),
