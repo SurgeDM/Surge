@@ -741,6 +741,26 @@ func TestQuitConfirm_TabMovesToNo(t *testing.T) {
 	}
 }
 
+func TestQuitConfirm_HMovesToYes(t *testing.T) {
+	m := newQuitConfirmModel()
+	m.quitConfirmFocused = 1
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'h'})
+	m2 := updated.(RootModel)
+	if m2.quitConfirmFocused != 0 {
+		t.Fatal("expected h to move focus to Yes button")
+	}
+}
+
+func TestQuitConfirm_ShiftTabMovesToYes(t *testing.T) {
+	m := newQuitConfirmModel()
+	m.quitConfirmFocused = 1
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab, Mod: tea.ModShift})
+	m2 := updated.(RootModel)
+	if m2.quitConfirmFocused != 0 {
+		t.Fatal("expected shift+tab to move focus to Yes button")
+	}
+}
+
 func TestQuitConfirm_LMovesToNo(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'l'})
