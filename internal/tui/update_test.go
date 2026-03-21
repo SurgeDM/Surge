@@ -630,6 +630,99 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 	}
 }
 
+func newQuitConfirmModel() RootModel {
+	return RootModel{
+		state: QuitConfirmState,
+		keys:  Keys,
+	}
+}
+
+func TestQuitConfirm_RightMovesToNo(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	m2 := updated.(RootModel)
+	if m2.quitConfirmFocused != 1 {
+		t.Fatal("expected focus to move to No button")
+	}
+}
+
+func TestQuitConfirm_LeftMovesToYes(t *testing.T) {
+	m := newQuitConfirmModel()
+	m.quitConfirmFocused = 1
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	m2 := updated.(RootModel)
+	if m2.quitConfirmFocused != 0 {
+		t.Fatal("expected focus to move to Yes button")
+	}
+}
+
+func TestQuitConfirm_EscCancels(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m2 := updated.(RootModel)
+	if m2.state != DashboardState {
+		t.Fatal("expected esc to return to dashboard")
+	}
+	if m2.shuttingDown {
+		t.Fatal("expected no shutdown on cancel")
+	}
+}
+
+func TestQuitConfirm_NShortcutCancels(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'n'})
+	m2 := updated.(RootModel)
+	if m2.state != DashboardState {
+		t.Fatal("expected n to return to dashboard")
+	}
+	if m2.shuttingDown {
+		t.Fatal("expected no shutdown on n")
+	}
+}
+
+func TestQuitConfirm_YShortcutConfirms(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	m := newQuitConfirmModel()
+	m.enqueueCtx = ctx
+	m.cancelEnqueue = cancel
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'y'})
+	m2 := updated.(RootModel)
+	if !m2.shuttingDown {
+		t.Fatal("expected y to begin shutdown")
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatal("expected y to cancel enqueue context")
+	}
+}
+
+func TestQuitConfirm_EnterWithNoFocusedCancels(t *testing.T) {
+	m := newQuitConfirmModel()
+	m.quitConfirmFocused = 1
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m2 := updated.(RootModel)
+	if m2.state != DashboardState {
+		t.Fatal("expected enter on No button to return to dashboard")
+	}
+	if m2.shuttingDown {
+		t.Fatal("expected no shutdown when No is selected")
+	}
+	if m2.quitConfirmFocused != 0 {
+		t.Fatal("expected focus to reset to Yes after cancel")
+	}
+}
+
+func TestQuitConfirm_UnrelatedKeyIgnored(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'x'})
+	m2 := updated.(RootModel)
+	if m2.state != QuitConfirmState {
+		t.Fatal("expected unrelated key to keep modal open")
+	}
+}
+
 func TestWithEnqueueContext_OverridesStartDownloadContext(t *testing.T) {
 	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
 	t.Cleanup(func() {

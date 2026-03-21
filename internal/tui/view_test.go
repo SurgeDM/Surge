@@ -80,6 +80,52 @@ func TestView_DashboardFitsViewportWithoutTopCutoff(t *testing.T) {
 	}
 }
 
+func TestView_QuitConfirmContainsButtons(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.state = QuitConfirmState
+	m.width = 120
+	m.height = 35
+
+	plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
+	if !strings.Contains(plain, "Yep!") {
+		t.Fatal("expected Yep! button in quit confirm view")
+	}
+	if !strings.Contains(plain, "Nope") {
+		t.Fatal("expected Nope button in quit confirm view")
+	}
+	if !strings.Contains(plain, "Are you sure you want to quit?") {
+		t.Fatal("expected confirmation message in quit confirm view")
+	}
+}
+
+func TestView_QuitConfirmShowsActiveDownloadDetail(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.state = QuitConfirmState
+	m.width = 120
+	m.height = 35
+	m.downloads = []*DownloadModel{
+		{Speed: 1.0}, // active download
+	}
+
+	plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
+	if !strings.Contains(plain, "1 active download(s) will be paused") {
+		t.Fatalf("expected active download detail, got:\n%s", plain)
+	}
+}
+
+func TestView_QuitConfirmNoFocusedRendersCorrectly(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.state = QuitConfirmState
+	m.quitConfirmFocused = 1
+	m.width = 120
+	m.height = 35
+
+	plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
+	if !strings.Contains(plain, "Nope") {
+		t.Fatal("expected Nope button present when No is focused")
+	}
+}
+
 func TestView_SettingsTinyTerminalDoesNotPanic(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
 	m.state = SettingsState
