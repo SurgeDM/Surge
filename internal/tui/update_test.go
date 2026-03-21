@@ -714,6 +714,30 @@ func TestQuitConfirm_EnterWithNoFocusedCancels(t *testing.T) {
 	}
 }
 
+func TestQuitConfirm_CtrlCCancels(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	m2 := updated.(RootModel)
+	if m2.state != DashboardState {
+		t.Fatal("expected ctrl+c to return to dashboard from quit confirm modal")
+	}
+	if m2.shuttingDown {
+		t.Fatal("expected no shutdown on ctrl+c cancel")
+	}
+}
+
+func TestQuitConfirm_CtrlQCancels(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl})
+	m2 := updated.(RootModel)
+	if m2.state != DashboardState {
+		t.Fatal("expected ctrl+q to return to dashboard from quit confirm modal")
+	}
+	if m2.shuttingDown {
+		t.Fatal("expected no shutdown on ctrl+q cancel")
+	}
+}
+
 func TestQuitConfirm_UnrelatedKeyIgnored(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'x'})

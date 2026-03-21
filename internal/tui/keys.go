@@ -575,9 +575,9 @@ func (k CategoryManagerKeyMap) FullHelp() [][]key.Binding {
 }
 
 func (k QuitConfirmKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Left, k.Right, k.Select, k.Cancel}
+	return []key.Binding{k.Left, k.Right, k.Yes, k.No, k.Select, k.Cancel}
 }
 
 func (k QuitConfirmKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Left, k.Right, k.Select, k.Cancel}}
+	return [][]key.Binding{{k.Left, k.Right, k.Yes, k.No, k.Select, k.Cancel}}
 }
