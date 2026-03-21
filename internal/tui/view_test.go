@@ -126,6 +126,14 @@ func TestView_QuitConfirmNoFocusedRendersCorrectly(t *testing.T) {
 	}
 }
 
+func TestView_QuitConfirmTinyTerminalDoesNotPanic(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.state = QuitConfirmState
+	m.width = 10
+	m.height = 5
+	_ = m.View()
+}
+
 func TestView_SettingsTinyTerminalDoesNotPanic(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
 	m.state = SettingsState
