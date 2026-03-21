@@ -714,6 +714,42 @@ func TestQuitConfirm_EnterWithNoFocusedCancels(t *testing.T) {
 	}
 }
 
+func TestQuitConfirm_SpaceWithYesFocusedConfirms(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	m := newQuitConfirmModel()
+	m.enqueueCtx = ctx
+	m.cancelEnqueue = cancel
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	m2 := updated.(RootModel)
+	if !m2.shuttingDown {
+		t.Fatal("expected space on Yes button to begin shutdown")
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatal("expected space to cancel enqueue context")
+	}
+}
+
+func TestQuitConfirm_TabMovesToNo(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m2 := updated.(RootModel)
+	if m2.quitConfirmFocused != 1 {
+		t.Fatal("expected tab to move focus to No button")
+	}
+}
+
+func TestQuitConfirm_LMovesToNo(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'l'})
+	m2 := updated.(RootModel)
+	if m2.quitConfirmFocused != 1 {
+		t.Fatal("expected l to move focus to No button")
+	}
+}
+
 func TestQuitConfirm_CtrlCCancels(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})

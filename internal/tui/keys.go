@@ -467,7 +467,7 @@ var Keys = KeyMap{
 			key.WithHelp("n", "no"),
 		),
 		Select: key.NewBinding(
-			key.WithKeys("enter", " "),
+			key.WithKeys("enter", "space"),
 			key.WithHelp("enter", "select"),
 		),
 		Cancel: key.NewBinding(
