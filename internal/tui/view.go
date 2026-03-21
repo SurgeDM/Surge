@@ -1106,6 +1106,9 @@ func (m RootModel) viewQuitConfirm() string {
 	contentHeight := lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, lines...))
 	helpHeight := lipgloss.Height(helpText)
 	spacing := innerHeight - contentHeight - helpHeight
+	if spacing < 0 {
+		spacing = 0
+	}
 	for i := 0; i < spacing; i++ {
 		lines = append(lines, "")
 	}

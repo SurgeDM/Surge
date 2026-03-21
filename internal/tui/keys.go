@@ -471,7 +471,7 @@ var Keys = KeyMap{
 			key.WithHelp("enter", "select"),
 		),
 		Cancel: key.NewBinding(
-			key.WithKeys("esc"),
+			key.WithKeys("esc", "ctrl+c", "ctrl+q"),
 			key.WithHelp("esc", "cancel"),
 		),
 	},
