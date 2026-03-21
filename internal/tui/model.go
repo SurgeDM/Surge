@@ -77,8 +77,6 @@ type DownloadModel struct {
 	paused   bool
 	pausing  bool // UI state: transitioning to pause
 	resuming bool // UI state: waiting for async resume
-	
-	spinnerView string
 }
 
 type RootModel struct {
@@ -200,7 +198,6 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 		StartTime:     time.Now(),
 		progress:      progress.New(progress.WithSpringOptions(0.5, 0.1)),
 		state:         state,
-		spinnerView:   spinner.MiniDot.Frames[0],
 	}
 }
 
@@ -363,16 +360,12 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	enqueueCtx, cancelEnqueue := context.WithCancel(context.Background())
 
-	// Initialize the spinner
+	// A single root-level spinner provides a shared animation frame for rendering,
+	// avoiding the CPU and redraw overhead of independent per-item spinners on
+	// large download lists.
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
 	s.Style = lipgloss.NewStyle().Foreground(colors.NeonPink)
-	sv := s.View()
-
-	// Pre-populate spinner frame for any downloads loaded from state
-	for _, d := range downloads {
-		d.spinnerView = sv
-	}
 
 	m := RootModel{
 		downloads:             downloads,

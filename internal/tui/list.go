@@ -16,7 +16,8 @@ import (
 
 // DownloadItem implements list.Item interface for downloads
 type DownloadItem struct {
-	download *DownloadModel
+	download    *DownloadModel
+	spinnerView string
 }
 
 func (i DownloadItem) Title() string {
@@ -33,16 +34,12 @@ func (i DownloadItem) Description() string {
 	var styledStatus string
 	if d.pausing {
 		// Custom "Pausing..." style using existing colors
-		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused).Render(d.spinnerView + " Pausing...")
+		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused).Render(i.spinnerView + " Pausing...")
 	} else if d.resuming {
-		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading).Render(d.spinnerView + " Resuming...")
+		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading).Render(i.spinnerView + " Resuming...")
 	} else {
 		status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
-		if status == components.StatusQueued {
-			styledStatus = lipgloss.NewStyle().Foreground(status.Color()).Render(d.spinnerView + " " + status.Label())
-		} else {
-			styledStatus = status.Render()
-		}
+		styledStatus = status.RenderWithSpinner(i.spinnerView)
 	}
 
 	// Build progress info
@@ -220,8 +217,9 @@ func (m *RootModel) UpdateListItems() {
 		m.ManualTabSwitch = false
 		filtered := m.getFilteredDownloads()
 		items := make([]list.Item, len(filtered))
+		sv := m.spinner.View()
 		for i, d := range filtered {
-			items[i] = DownloadItem{download: d}
+			items[i] = DownloadItem{download: d, spinnerView: sv}
 		}
 		m.list.SetItems(items)
 		// Reset cursor to top when manually switching tabs (standard behavior)
@@ -239,8 +237,9 @@ func (m *RootModel) UpdateListItems() {
 
 	filtered := m.getFilteredDownloads()
 	items := make([]list.Item, len(filtered))
+	sv := m.spinner.View()
 	for i, d := range filtered {
-		items[i] = DownloadItem{download: d}
+		items[i] = DownloadItem{download: d, spinnerView: sv}
 	}
 	m.list.SetItems(items)
 

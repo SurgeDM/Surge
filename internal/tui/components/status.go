@@ -98,6 +98,14 @@ func (s DownloadStatus) Render() string {
 	return "Unknown"
 }
 
+// RenderWithSpinner returns the styled icon + label combination, conditionally substituting a dynamic spinner for the Queued state
+func (s DownloadStatus) RenderWithSpinner(spinnerView string) string {
+	if s == StatusQueued {
+		return lipgloss.NewStyle().Foreground(s.Color()).Render(spinnerView + " " + s.Label())
+	}
+	return s.Render()
+}
+
 // RenderIcon returns just the styled icon
 func (s DownloadStatus) RenderIcon() string {
 	cacheMu.RLock()

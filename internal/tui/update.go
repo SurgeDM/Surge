@@ -360,9 +360,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		cmds = append(cmds, cmd)
-		sv := m.spinner.View()
+
+		needsSpinner := false
 		for _, d := range m.downloads {
-			d.spinnerView = sv
+			if d.pausing || d.resuming || (d.Speed == 0 && d.Downloaded == 0 && !d.done && !d.paused && d.err == nil) {
+				needsSpinner = true
+				break
+			}
+		}
+		if needsSpinner {
+			m.UpdateListItems()
 		}
 		return m, tea.Batch(cmds...)
 
