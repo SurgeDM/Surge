@@ -131,6 +131,8 @@ type UpdateKeyMap struct {
 type QuitConfirmKeyMap struct {
 	Left   key.Binding
 	Right  key.Binding
+	Yes    key.Binding
+	No     key.Binding
 	Select key.Binding
 	Cancel key.Binding
 }
@@ -455,6 +457,14 @@ var Keys = KeyMap{
 		Right: key.NewBinding(
 			key.WithKeys("right", "l", "tab"),
 			key.WithHelp("→", "move"),
+		),
+		Yes: key.NewBinding(
+			key.WithKeys("y", "Y"),
+			key.WithHelp("y", "yes"),
+		),
+		No: key.NewBinding(
+			key.WithKeys("n", "N"),
+			key.WithHelp("n", "no"),
 		),
 		Select: key.NewBinding(
 			key.WithKeys("enter", " "),

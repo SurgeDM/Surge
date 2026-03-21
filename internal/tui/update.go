@@ -752,6 +752,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Quit
 			if key.Matches(msg, m.keys.Dashboard.Quit, m.keys.Dashboard.ForceQuit) {
 				m.state = QuitConfirmState
+				m.quitConfirmFocused = 0
 				return m, nil
 			}
 
@@ -1315,6 +1316,18 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 
 		case QuitConfirmState:
+			confirmQuit := func() (tea.Model, tea.Cmd) {
+				if m.cancelEnqueue != nil {
+					m.cancelEnqueue()
+				}
+				m.shuttingDown = true
+				return m, shutdownCmd(m.Service)
+			}
+			cancelQuit := func() (tea.Model, tea.Cmd) {
+				m.state = DashboardState
+				m.quitConfirmFocused = 0
+				return m, nil
+			}
 			if key.Matches(msg, m.keys.QuitConfirm.Left) {
 				m.quitConfirmFocused = 0
 				return m, nil
@@ -1323,35 +1336,20 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.quitConfirmFocused = 1
 				return m, nil
 			}
-			// y/n direct shortcuts
-			if msg.Code == 'y' || msg.Code == 'Y' {
-				if m.cancelEnqueue != nil {
-					m.cancelEnqueue()
-				}
-				m.shuttingDown = true
-				return m, shutdownCmd(m.Service)
+			if key.Matches(msg, m.keys.QuitConfirm.Yes) {
+				return confirmQuit()
 			}
-			if msg.Code == 'n' || msg.Code == 'N' {
-				m.state = DashboardState
-				m.quitConfirmFocused = 0
-				return m, nil
+			if key.Matches(msg, m.keys.QuitConfirm.No) {
+				return cancelQuit()
 			}
 			if key.Matches(msg, m.keys.QuitConfirm.Select) {
 				if m.quitConfirmFocused == 0 {
-					if m.cancelEnqueue != nil {
-						m.cancelEnqueue()
-					}
-					m.shuttingDown = true
-					return m, shutdownCmd(m.Service)
+					return confirmQuit()
 				}
-				m.state = DashboardState
-				m.quitConfirmFocused = 0
-				return m, nil
+				return cancelQuit()
 			}
 			if key.Matches(msg, m.keys.QuitConfirm.Cancel) {
-				m.state = DashboardState
-				m.quitConfirmFocused = 0
-				return m, nil
+				return cancelQuit()
 			}
 			return m, nil
 

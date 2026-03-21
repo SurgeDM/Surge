@@ -1067,12 +1067,19 @@ func (m RootModel) viewQuitConfirm() string {
 	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray).Background(lipgloss.Color("236"))
 	inactivePad := lipgloss.NewStyle().Background(lipgloss.Color("236"))
 
-	yesBtn := activePad.Render(pad) + activeFirst.Render("Y") + activeRest.Render("ep!") + activePad.Render(pad)
-	noBtn := inactivePad.Render(pad) + inactiveFirst.Render("N") + inactiveRest.Render("ope") + inactivePad.Render(pad)
-	if m.quitConfirmFocused == 1 {
-		yesBtn = inactivePad.Render(pad) + inactiveFirst.Render("Y") + inactiveRest.Render("ep!") + inactivePad.Render(pad)
-		noBtn = activePad.Render(pad) + activeFirst.Render("N") + activeRest.Render("ope") + activePad.Render(pad)
+	renderBtn := func(padStyle, firstStyle, restStyle lipgloss.Style, first, rest string) string {
+		return padStyle.Render(pad) + firstStyle.Render(first) + restStyle.Render(rest) + padStyle.Render(pad)
 	}
+
+	yesFirst, yesRest, yesPad := activeFirst, activeRest, activePad
+	noFirst, noRest, noPad := inactiveFirst, inactiveRest, inactivePad
+	if m.quitConfirmFocused == 1 {
+		yesFirst, yesRest, yesPad = inactiveFirst, inactiveRest, inactivePad
+		noFirst, noRest, noPad = activeFirst, activeRest, activePad
+	}
+
+	yesBtn := renderBtn(yesPad, yesFirst, yesRest, "Y", "ep!")
+	noBtn := renderBtn(noPad, noFirst, noRest, "N", "ope")
 
 	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, "   ", noBtn)
 	centeredButtons := lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(buttons)
