@@ -129,12 +129,12 @@ type UpdateKeyMap struct {
 
 // QuitConfirmKeyMap defines keybindings for the quit confirmation modal
 type QuitConfirmKeyMap struct {
-	Left    key.Binding
-	Right   key.Binding
-	Yes     key.Binding
-	No      key.Binding
-	Select  key.Binding
-	Cancel  key.Binding
+	Left   key.Binding
+	Right  key.Binding
+	Yes    key.Binding
+	No     key.Binding
+	Select key.Binding
+	Cancel key.Binding
 }
 
 // CategoryManagerKeyMap defines keybindings for the category manager

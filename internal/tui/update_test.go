@@ -761,7 +761,6 @@ func TestQuitConfirm_HMovesToYes(t *testing.T) {
 	}
 }
 
-
 func TestQuitConfirm_LMovesToNo(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'l'})
