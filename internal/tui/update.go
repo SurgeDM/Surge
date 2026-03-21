@@ -751,11 +751,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Quit
 			if key.Matches(msg, m.keys.Dashboard.Quit, m.keys.Dashboard.ForceQuit) {
-				if m.cancelEnqueue != nil {
-					m.cancelEnqueue()
-				}
-				m.shuttingDown = true
-				return m, shutdownCmd(m.Service)
+				m.state = QuitConfirmState
+				return m, nil
 			}
 
 			// Add download
@@ -1316,6 +1313,47 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 			return m, cmd
+
+		case QuitConfirmState:
+			if key.Matches(msg, m.keys.QuitConfirm.Left) {
+				m.quitConfirmFocused = 0
+				return m, nil
+			}
+			if key.Matches(msg, m.keys.QuitConfirm.Right) {
+				m.quitConfirmFocused = 1
+				return m, nil
+			}
+			// y/n direct shortcuts
+			if msg.Code == 'y' || msg.Code == 'Y' {
+				if m.cancelEnqueue != nil {
+					m.cancelEnqueue()
+				}
+				m.shuttingDown = true
+				return m, shutdownCmd(m.Service)
+			}
+			if msg.Code == 'n' || msg.Code == 'N' {
+				m.state = DashboardState
+				m.quitConfirmFocused = 0
+				return m, nil
+			}
+			if key.Matches(msg, m.keys.QuitConfirm.Select) {
+				if m.quitConfirmFocused == 0 {
+					if m.cancelEnqueue != nil {
+						m.cancelEnqueue()
+					}
+					m.shuttingDown = true
+					return m, shutdownCmd(m.Service)
+				}
+				m.state = DashboardState
+				m.quitConfirmFocused = 0
+				return m, nil
+			}
+			if key.Matches(msg, m.keys.QuitConfirm.Cancel) {
+				m.state = DashboardState
+				m.quitConfirmFocused = 0
+				return m, nil
+			}
+			return m, nil
 
 		case BatchConfirmState:
 			if key.Matches(msg, m.keys.BatchConfirm.Confirm) {

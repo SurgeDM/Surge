@@ -605,11 +605,23 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 		cancelEnqueue: cancel,
 	}
 
+	// ctrl+c should open the quit confirmation modal, not shut down immediately
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	m2 := updated.(RootModel)
 
-	if !m2.shuttingDown {
-		t.Fatal("expected model to enter shutdown state")
+	if m2.state != QuitConfirmState {
+		t.Fatal("expected model to enter quit confirmation state")
+	}
+	if m2.shuttingDown {
+		t.Fatal("expected model to not be shutting down yet")
+	}
+
+	// confirming with enter (Yes button focused by default) should cancel the context and begin shutdown
+	updated, _ = m2.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m3 := updated.(RootModel)
+
+	if !m3.shuttingDown {
+		t.Fatal("expected model to enter shutdown state after confirmation")
 	}
 	select {
 	case <-ctx.Done():

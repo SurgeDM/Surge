@@ -41,6 +41,7 @@ const (
 	UpdateAvailableState                      // UpdateAvailableState is 11
 	URLUpdateState                            // URLUpdateState is 12
 	CategoryManagerState                      // CategoryManagerState is 13
+	QuitConfirmState                          // QuitConfirmState is 14
 )
 
 const (
@@ -156,6 +157,9 @@ type RootModel struct {
 	catMgrInputs       [4]textinput.Model // Inputs for Name, Description, Pattern, Path
 	catMgrIsNew        bool               // Whether adding a new category
 	catMgrFileBrowsing bool               // Whether browsing for a category path
+
+	// Quit confirm button focus (0 = Yes, 1 = No)
+	quitConfirmFocused int
 
 	// Keybindings
 	keys KeyMap

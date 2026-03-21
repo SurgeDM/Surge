@@ -195,6 +195,10 @@ func (m RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
+	if m.state == QuitConfirmState {
+		return m.wrapView(m.renderModalWithOverlay(m.viewQuitConfirm()))
+	}
+
 	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
 		modal := components.ConfirmationModal{
 			Title:       "⬆ Update Available",
@@ -1035,6 +1039,73 @@ func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
 		{Label: "Done", Count: doneCount},
 	}
 	return components.RenderTabBar(tabs, activeTab, ActiveTabStyle, TabStyle)
+}
+
+func (m RootModel) viewQuitConfirm() string {
+	const width = 52
+	const height = 10
+	innerWidth := width - 4
+
+	messageStyle := lipgloss.NewStyle().
+		Foreground(colors.White).
+		Width(innerWidth).
+		Align(lipgloss.Center)
+
+	detailStyle := lipgloss.NewStyle().
+		Foreground(colors.NeonPurple).
+		Bold(true).
+		Width(innerWidth).
+		Align(lipgloss.Center)
+
+	pad := "   "
+
+	activeFirst := lipgloss.NewStyle().Foreground(colors.White).Background(colors.NeonPink).Bold(true).Underline(true)
+	activeRest := lipgloss.NewStyle().Foreground(colors.White).Background(colors.NeonPink).Bold(true)
+	activePad := lipgloss.NewStyle().Background(colors.NeonPink)
+
+	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray).Background(lipgloss.Color("236")).Underline(true)
+	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray).Background(lipgloss.Color("236"))
+	inactivePad := lipgloss.NewStyle().Background(lipgloss.Color("236"))
+
+	yesBtn := activePad.Render(pad) + activeFirst.Render("Y") + activeRest.Render("ep!") + activePad.Render(pad)
+	noBtn := inactivePad.Render(pad) + inactiveFirst.Render("N") + inactiveRest.Render("ope") + inactivePad.Render(pad)
+	if m.quitConfirmFocused == 1 {
+		yesBtn = inactivePad.Render(pad) + inactiveFirst.Render("Y") + inactiveRest.Render("ep!") + inactivePad.Render(pad)
+		noBtn = activePad.Render(pad) + activeFirst.Render("N") + activeRest.Render("ope") + activePad.Render(pad)
+	}
+
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, "   ", noBtn)
+	centeredButtons := lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(buttons)
+
+	stats := m.ComputeViewStats()
+	detail := ""
+	if stats.ActiveCount > 0 {
+		detail = fmt.Sprintf("%d active download(s) will be paused", stats.ActiveCount)
+	}
+
+	helpStyle := lipgloss.NewStyle().Foreground(colors.Gray).Width(innerWidth).Align(lipgloss.Center)
+	helpText := helpStyle.Render(m.help.View(m.keys.QuitConfirm))
+
+	var lines []string
+	lines = append(lines, messageStyle.Render("Are you sure you want to quit?"))
+	if detail != "" {
+		lines = append(lines, detailStyle.Render(detail))
+	}
+	lines = append(lines, "")
+	lines = append(lines, "")
+	lines = append(lines, centeredButtons)
+
+	innerHeight := height - 2
+	contentHeight := lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	helpHeight := lipgloss.Height(helpText)
+	spacing := innerHeight - contentHeight - helpHeight
+	for i := 0; i < spacing; i++ {
+		lines = append(lines, "")
+	}
+	lines = append(lines, helpText)
+
+	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
+	return renderBtopBox(PaneTitleStyle.Render(" Quit Surge "), "", content, width, height, colors.NeonPink)
 }
 
 // renderBtopBox creates a btop-style box with title embedded in the top border
