@@ -23,6 +23,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -354,6 +355,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+		cmds = append(cmds, cmd)
+		sv := m.spinner.View()
+		for _, d := range m.downloads {
+			d.spinnerView = sv
+		}
+		return m, tea.Batch(cmds...)
 
 	case resumeResultMsg:
 		if msg.err != nil {

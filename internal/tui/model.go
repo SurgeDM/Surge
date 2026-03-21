@@ -11,6 +11,7 @@ import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -76,6 +77,8 @@ type DownloadModel struct {
 	paused   bool
 	pausing  bool // UI state: transitioning to pause
 	resuming bool // UI state: waiting for async resume
+	
+	spinnerView string
 }
 
 type RootModel struct {
@@ -180,6 +183,8 @@ type RootModel struct {
 	enqueueCtx    context.Context
 	cancelEnqueue context.CancelFunc
 	shuttingDown  bool
+
+	spinner spinner.Model
 }
 
 // NewDownloadModel creates a new download model
@@ -195,6 +200,7 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 		StartTime:     time.Now(),
 		progress:      progress.New(progress.WithSpringOptions(0.5, 0.1)),
 		state:         state,
+		spinnerView:   spinner.MiniDot.Frames[0],
 	}
 }
 
@@ -357,6 +363,17 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	enqueueCtx, cancelEnqueue := context.WithCancel(context.Background())
 
+	// Initialize the spinner
+	s := spinner.New()
+	s.Spinner = spinner.MiniDot
+	s.Style = lipgloss.NewStyle().Foreground(colors.NeonPink)
+	sv := s.View()
+
+	// Pre-populate spinner frame for any downloads loaded from state
+	for _, d := range downloads {
+		d.spinnerView = sv
+	}
+
 	m := RootModel{
 		downloads:             downloads,
 		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
@@ -381,6 +398,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		InitialDarkBackground: initialDarkBackground,
 		enqueueCtx:            enqueueCtx,
 		cancelEnqueue:         cancelEnqueue,
+		spinner:               s,
 	}
 
 	m.refreshThemeCaches()
@@ -411,6 +429,8 @@ type ViewStats struct {
 
 func (m RootModel) Init() tea.Cmd {
 	var cmds []tea.Cmd
+
+	cmds = append(cmds, m.spinner.Tick)
 
 	// Trigger update check if not disabled in settings
 	if !m.Settings.General.SkipUpdateCheck {

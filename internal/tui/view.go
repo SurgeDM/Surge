@@ -985,12 +985,15 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 
 func getDownloadStatus(d *DownloadModel) string {
 	if d.pausing {
-		return lipgloss.NewStyle().Foreground(colors.StatePaused).Render("⏸ Pausing...")
+		return lipgloss.NewStyle().Foreground(colors.StatePaused).Render(d.spinnerView + " Pausing...")
 	}
 	if d.resuming {
-		return lipgloss.NewStyle().Foreground(colors.StateDownloading).Render("▶ Resuming...")
+		return lipgloss.NewStyle().Foreground(colors.StateDownloading).Render(d.spinnerView + " Resuming...")
 	}
 	status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
+	if status == components.StatusQueued {
+		return lipgloss.NewStyle().Foreground(status.Color()).Render(d.spinnerView + " " + status.Label())
+	}
 	return status.Render()
 }
 

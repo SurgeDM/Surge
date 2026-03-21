@@ -33,11 +33,16 @@ func (i DownloadItem) Description() string {
 	var styledStatus string
 	if d.pausing {
 		// Custom "Pausing..." style using existing colors
-		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused).Render("⏸ Pausing...")
+		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused).Render(d.spinnerView + " Pausing...")
 	} else if d.resuming {
-		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading).Render("▶ Resuming...")
+		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading).Render(d.spinnerView + " Resuming...")
 	} else {
-		styledStatus = components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded).Render()
+		status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
+		if status == components.StatusQueued {
+			styledStatus = lipgloss.NewStyle().Foreground(status.Color()).Render(d.spinnerView + " " + status.Label())
+		} else {
+			styledStatus = status.Render()
+		}
 	}
 
 	// Build progress info
