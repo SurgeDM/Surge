@@ -1,5 +1,6 @@
 # binary
 surge
+*.surge
 
 # python + uv stuff
 .python-version

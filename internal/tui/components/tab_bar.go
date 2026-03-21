@@ -3,7 +3,7 @@ package components
 import (
 	"fmt"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // Tab represents a single tab item

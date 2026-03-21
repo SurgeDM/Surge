@@ -31,7 +31,6 @@ type ProgressState struct {
 	Mirrors []MirrorStatus // Status of each mirror
 
 	// Chunk Visualization (Bitmap)
-	// Chunk Visualization (Bitmap)
 	ChunkBitmap     []byte  // 2 bits per chunk
 	ChunkProgress   []int64 // Bytes downloaded per chunk (runtime only, not persisted)
 	ActualChunkSize int64   // Size of each actual chunk in bytes

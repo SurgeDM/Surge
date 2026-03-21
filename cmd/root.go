@@ -23,7 +23,7 @@ import (
 	"github.com/surge-downloader/surge/internal/tui"
 	"github.com/surge-downloader/surge/internal/utils"
 
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 	"github.com/google/uuid"
 	"github.com/spf13/cobra"
 )
@@ -449,7 +449,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 	}
 	m.IsRemote = false
 
-	p := tea.NewProgram(m, tea.WithAltScreen())
+	p := tea.NewProgram(m)
 	serverProgram = p // Save reference for HTTP handler
 
 	// Get event stream from service

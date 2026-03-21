@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/surge-downloader/surge/internal/tui/colors"
 )
 
@@ -59,11 +59,11 @@ func TestView_DashboardFitsViewportWithoutTopCutoff(t *testing.T) {
 		m.height = tc.height
 
 		view := m.View()
-		if strings.HasPrefix(view, "\n") {
+		if strings.HasPrefix(view.Content, "\n") {
 			t.Fatalf("view starts with a blank line at %dx%d", tc.width, tc.height)
 		}
 
-		plain := ansiEscapeRE.ReplaceAllString(view, "")
+		plain := ansiEscapeRE.ReplaceAllString(view.Content, "")
 		trimmed := strings.TrimRight(plain, "\n")
 		lines := strings.Split(trimmed, "\n")
 
@@ -80,6 +80,60 @@ func TestView_DashboardFitsViewportWithoutTopCutoff(t *testing.T) {
 	}
 }
 
+func TestView_QuitConfirmContainsButtons(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.state = QuitConfirmState
+	m.width = 120
+	m.height = 35
+
+	plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
+	if !strings.Contains(plain, "Yep!") {
+		t.Fatal("expected Yep! button in quit confirm view")
+	}
+	if !strings.Contains(plain, "Nope") {
+		t.Fatal("expected Nope button in quit confirm view")
+	}
+	if !strings.Contains(plain, "Are you sure you want to quit?") {
+		t.Fatal("expected confirmation message in quit confirm view")
+	}
+}
+
+func TestView_QuitConfirmShowsActiveDownloadDetail(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.state = QuitConfirmState
+	m.width = 120
+	m.height = 35
+	m.downloads = []*DownloadModel{
+		{Speed: 1.0}, // active download
+	}
+
+	plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
+	if !strings.Contains(plain, "1 active download(s) will be paused") {
+		t.Fatalf("expected active download detail, got:\n%s", plain)
+	}
+}
+
+func TestView_QuitConfirmNoFocusedRendersCorrectly(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.state = QuitConfirmState
+	m.quitConfirmFocused = 1
+	m.width = 120
+	m.height = 35
+
+	plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
+	if !strings.Contains(plain, "Nope") {
+		t.Fatal("expected Nope button present when No is focused")
+	}
+}
+
+func TestView_QuitConfirmTinyTerminalDoesNotPanic(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.state = QuitConfirmState
+	m.width = 10
+	m.height = 5
+	_ = m.View()
+}
+
 func TestView_SettingsTinyTerminalDoesNotPanic(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
 	m.state = SettingsState
@@ -87,7 +141,7 @@ func TestView_SettingsTinyTerminalDoesNotPanic(t *testing.T) {
 	m.height = 8
 
 	view := m.View()
-	if strings.TrimSpace(ansiEscapeRE.ReplaceAllString(view, "")) == "" {
+	if strings.TrimSpace(ansiEscapeRE.ReplaceAllString(view.Content, "")) == "" {
 		t.Fatal("expected non-empty settings view for tiny terminal")
 	}
 }
@@ -98,7 +152,7 @@ func TestView_NetworkActivityShowsFiveAxisLabelsWhenTall(t *testing.T) {
 	m.height = 40
 
 	view := m.View()
-	plain := ansiEscapeRE.ReplaceAllString(view, "")
+	plain := ansiEscapeRE.ReplaceAllString(view.Content, "")
 
 	if !strings.Contains(plain, "0.8 MB/s") || !strings.Contains(plain, "0.2 MB/s") {
 		t.Fatalf("expected 5-axis labels (including 0.8 and 0.2 MB/s), got:\n%s", plain)

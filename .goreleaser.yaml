@@ -23,6 +23,7 @@ release:
     ---
     **Enjoying Surge?** Consider supporting the project to keep it blazing fast!
     - [Buy Me a Coffee](https://buymeacoffee.com/surge.downloader)
+    - Release automation powered by [GoReleaser Pro](https://goreleaser.com/pro/)
   extra_files:
     - glob: .goreleaser-extra/extension-chrome.zip
     - glob: .goreleaser-extra/extension-firefox.zip

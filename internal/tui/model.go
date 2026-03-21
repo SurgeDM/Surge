@@ -7,14 +7,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/filepicker"
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/filepicker"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/core"
@@ -41,6 +41,7 @@ const (
 	UpdateAvailableState                      // UpdateAvailableState is 11
 	URLUpdateState                            // URLUpdateState is 12
 	CategoryManagerState                      // CategoryManagerState is 13
+	QuitConfirmState                          // QuitConfirmState is 14
 )
 
 const (
@@ -157,6 +158,9 @@ type RootModel struct {
 	catMgrIsNew        bool               // Whether adding a new category
 	catMgrFileBrowsing bool               // Whether browsing for a category path
 
+	// Quit confirm button focus (0 = Yep!, 1 = Nope)
+	quitConfirmFocused int
+
 	// Keybindings
 	keys KeyMap
 
@@ -195,27 +199,29 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 }
 
 func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, orchestrator *processing.LifecycleManager, noResume bool) RootModel {
+	initialDarkBackground := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+
 	// Initialize inputs
 	urlInput := textinput.New()
 	urlInput.Placeholder = "https://example.com/file.zip"
 	urlInput.Focus()
-	urlInput.Width = InputWidth
+	urlInput.SetWidth(InputWidth)
 	urlInput.Prompt = ""
 
 	pathInput := textinput.New()
 	pathInput.Placeholder = "."
-	pathInput.Width = InputWidth
+	pathInput.SetWidth(InputWidth)
 	pathInput.Prompt = ""
 	pathInput.SetValue(".")
 
 	filenameInput := textinput.New()
 	filenameInput.Placeholder = "(auto-detect)"
-	filenameInput.Width = InputWidth
+	filenameInput.SetWidth(InputWidth)
 	filenameInput.Prompt = ""
 
 	mirrorsInput := textinput.New()
 	mirrorsInput.Placeholder = "http://mirror1.com, http://mirror2.com"
-	mirrorsInput.Width = InputWidth
+	mirrorsInput.SetWidth(InputWidth)
 	mirrorsInput.Prompt = ""
 
 	pwd, _ := os.Getwd()
@@ -242,6 +248,8 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	if noResume {
 		settings.General.AutoResume = false
 	}
+
+	applyColorModeForTheme(settings.General.Theme, initialDarkBackground)
 
 	// Load paused downloads from master list (now uses global config directory)
 	var downloads []*DownloadModel
@@ -311,40 +319,40 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	// Initialize settings input for editing
 	settingsInput := textinput.New()
-	settingsInput.Width = 40
+	settingsInput.SetWidth(40)
 	settingsInput.Prompt = ""
 
 	// Initialize search input
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Type to search..."
-	searchInput.Width = 30
+	searchInput.SetWidth(30)
 	searchInput.Prompt = ""
 
 	// Initialize URL update input
 	urlUpdateInput := textinput.New()
 	urlUpdateInput.Placeholder = "https://example.com/newlink.zip"
-	urlUpdateInput.Width = InputWidth
+	urlUpdateInput.SetWidth(InputWidth)
 	urlUpdateInput.Prompt = ""
 
 	// Initialize Category Manager inputs
 	catNameInput := textinput.New()
 	catNameInput.Placeholder = "Videos"
-	catNameInput.Width = 30
+	catNameInput.SetWidth(30)
 	catNameInput.Prompt = ""
 
 	catDescInput := textinput.New()
 	catDescInput.Placeholder = "Video files (.mp4, .mkv)"
-	catDescInput.Width = 50
+	catDescInput.SetWidth(50)
 	catDescInput.Prompt = ""
 
 	catPatternInput := textinput.New()
 	catPatternInput.Placeholder = "(?i)\\.(mp4|mkv)$"
-	catPatternInput.Width = 50
+	catPatternInput.SetWidth(50)
 	catPatternInput.Prompt = ""
 
 	catPathInput := textinput.New()
 	catPathInput.Placeholder = "/home/user/Videos"
-	catPathInput.Width = 50
+	catPathInput.SetWidth(50)
 	catPathInput.Prompt = ""
 
 	enqueueCtx, cancelEnqueue := context.WithCancel(context.Background())
@@ -360,8 +368,8 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		Orchestrator:          orchestrator,
 		PWD:                   pwd,
 		Settings:              settings,
-		SpeedHistory:          make([]float64, GraphHistoryPoints), // 60 points of history (30s at 0.5s interval)
-		logViewport:           viewport.New(40, 5),                 // Default size, will be resized
+		SpeedHistory:          make([]float64, GraphHistoryPoints),                          // 60 points of history (30s at 0.5s interval)
+		logViewport:           viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)), // Default size, will be resized
 		logEntries:            make([]string, 0),
 		SettingsInput:         settingsInput,
 		searchInput:           searchInput,
@@ -370,20 +378,12 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		keys:                  Keys,
 		ServerPort:            serverPort,
 		CurrentVersion:        currentVersion,
-		InitialDarkBackground: lipgloss.HasDarkBackground(),
+		InitialDarkBackground: initialDarkBackground,
 		enqueueCtx:            enqueueCtx,
 		cancelEnqueue:         cancelEnqueue,
 	}
 
-	// Apply configured theme
-	// We can't call m.ApplyTheme yet as m is returned, so apply logic directly
-	switch settings.General.Theme {
-	case config.ThemeLight:
-		lipgloss.SetHasDarkBackground(false)
-	case config.ThemeDark:
-		lipgloss.SetHasDarkBackground(true)
-		// ThemeAdaptive: do nothing, already set by system detection
-	}
+	m.refreshThemeCaches()
 
 	return m
 }
@@ -547,14 +547,27 @@ func newFilepicker(currentDir string) filepicker.Model {
 
 // ApplyTheme applies the selected theme mode
 func (m *RootModel) ApplyTheme(mode int) {
+	applyColorModeForTheme(mode, m.InitialDarkBackground)
+	m.refreshThemeCaches()
+}
+
+func applyColorModeForTheme(mode int, initialDarkBackground bool) {
 	switch mode {
 	case config.ThemeAdaptive:
-		// Restore initial system state
-		lipgloss.SetHasDarkBackground(m.InitialDarkBackground)
+		colors.SetDarkMode(initialDarkBackground)
 	case config.ThemeLight:
-		lipgloss.SetHasDarkBackground(false)
+		colors.SetDarkMode(false)
 	case config.ThemeDark:
-		lipgloss.SetHasDarkBackground(true)
+		colors.SetDarkMode(true)
+	default:
+		colors.SetDarkMode(initialDarkBackground)
 	}
-	m.logoCache = "" // Invalidate logo cache
+}
+
+func (m *RootModel) refreshThemeCaches() {
+	rebuildStyles()
+	m.help.Styles.ShortKey = lipgloss.NewStyle().Foreground(colors.LightGray)
+	m.help.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.Gray)
+	applyListTheme(&m.list)
+	m.logoCache = ""
 }

@@ -11,7 +11,7 @@ import (
 	"github.com/surge-downloader/surge/internal/tui/colors"
 	"github.com/surge-downloader/surge/internal/tui/components"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // viewSettings renders the Btop-style settings page
@@ -106,7 +106,7 @@ func (m RootModel) viewSettings() string {
 			style := lipgloss.NewStyle().Foreground(colors.LightGray)
 
 			if meta.Key == "max_global_connections" {
-				style = lipgloss.NewStyle().Foreground(lipgloss.AdaptiveColor{Light: "#aaaaaa", Dark: "238"}) // Darker gray
+				style = lipgloss.NewStyle().Foreground(colors.ThemeColor("#aaaaaa", "238")) // Darker gray
 			}
 
 			line = style.Render("  " + line)

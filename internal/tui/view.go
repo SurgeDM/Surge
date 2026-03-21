@@ -10,8 +10,9 @@ import (
 	"github.com/surge-downloader/surge/internal/tui/components"
 	"github.com/surge-downloader/surge/internal/utils"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/textinput"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // Define the Layout Ratios
@@ -57,13 +58,19 @@ func (m RootModel) renderModalWithOverlay(modal string) string {
 	// Place modal centered with dark gray background fill for overlay effect
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal,
 		lipgloss.WithWhitespaceChars(" "), // Changed from "░" to avoid terminal rendering glitches
-		lipgloss.WithWhitespaceBackground(lipgloss.Color("236")),
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Background(lipgloss.Color("236"))),
 	)
 }
 
-func (m RootModel) View() string {
+func (m RootModel) wrapView(content string) tea.View {
+	v := tea.NewView(content)
+	v.AltScreen = true
+	return v
+}
+
+func (m RootModel) View() tea.View {
 	if m.width == 0 {
-		return "Loading..."
+		return m.wrapView("Loading...")
 	}
 
 	if m.shuttingDown {
@@ -78,7 +85,7 @@ func (m RootModel) View() string {
 			Height:      10,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	// === Handle Modal States First ===
@@ -98,7 +105,7 @@ func (m RootModel) View() string {
 			Height:          11,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == FilePickerState {
@@ -110,15 +117,15 @@ func (m RootModel) View() string {
 			colors.NeonPink,
 		)
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == SettingsState {
-		return m.viewSettings()
+		return m.wrapView(m.viewSettings())
 	}
 
 	if m.state == CategoryManagerState {
-		return m.viewCategoryManager()
+		return m.wrapView(m.viewCategoryManager())
 	}
 
 	if m.state == DuplicateWarningState {
@@ -133,7 +140,7 @@ func (m RootModel) View() string {
 			Height:      10,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == ExtensionConfirmationState {
@@ -157,7 +164,7 @@ func (m RootModel) View() string {
 			Height:          13,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == BatchFilePickerState {
@@ -169,7 +176,7 @@ func (m RootModel) View() string {
 			colors.NeonCyan,
 		)
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == BatchConfirmState {
@@ -185,7 +192,11 @@ func (m RootModel) View() string {
 			Height:      10,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
+	}
+
+	if m.state == QuitConfirmState {
+		return m.wrapView(m.renderModalWithOverlay(m.viewQuitConfirm()))
 	}
 
 	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
@@ -200,7 +211,7 @@ func (m RootModel) View() string {
 			Height:      12,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == URLUpdateState {
@@ -217,7 +228,7 @@ func (m RootModel) View() string {
 			Height:          8,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
-		return m.renderModalWithOverlay(box)
+		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	// === MAIN DASHBOARD LAYOUT ===
@@ -229,7 +240,7 @@ func (m RootModel) View() string {
 
 	// Footer - keybindings on left, version on bottom-right
 	helpText := m.help.View(m.keys.Dashboard)
-	versionBlue := lipgloss.AdaptiveColor{Light: "#005cc5", Dark: "#58a6ff"}
+	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
 	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
 	footerContentWidth := availableWidth
 	leftFooterWidth := footerContentWidth - lipgloss.Width(versionText)
@@ -469,8 +480,8 @@ func (m RootModel) View() string {
 	if vpWidth < 0 {
 		vpWidth = 0
 	}
-	m.logViewport.Width = vpWidth           // Account for borders
-	m.logViewport.Height = headerHeight - 4 // Account for borders and title
+	m.logViewport.SetWidth(vpWidth)           // Account for borders
+	m.logViewport.SetHeight(headerHeight - 4) // Account for borders and title
 	logContent := m.logViewport.View()
 
 	// Use different border color when focused
@@ -577,7 +588,7 @@ func (m RootModel) View() string {
 	}
 
 	// Render the Graph
-	graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, colors.NeonPink, nil)
+	graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
 
 	// Create Y-axis (right side of graph)
 	axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)
@@ -755,7 +766,7 @@ func (m RootModel) View() string {
 		MaxWidth(availableWidth).
 		MaxHeight(m.height).
 		Render(fullView)
-	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Top, fullView)
+	return m.wrapView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Top, fullView))
 }
 
 // Helper to render the detailed info pane
@@ -815,7 +826,7 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 	if progressWidth < 20 {
 		progressWidth = 20
 	}
-	d.progress.Width = progressWidth
+	d.progress.SetWidth(progressWidth)
 	progView := d.progress.ViewAs(pct)
 
 	progLabel := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Progress: ")
@@ -1028,6 +1039,83 @@ func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
 		{Label: "Done", Count: doneCount},
 	}
 	return components.RenderTabBar(tabs, activeTab, ActiveTabStyle, TabStyle)
+}
+
+func (m RootModel) viewQuitConfirm() string {
+	const width = 60
+	const height = 10
+	innerWidth := width - 4
+
+	messageStyle := lipgloss.NewStyle().
+		Foreground(colors.White).
+		Width(innerWidth).
+		Align(lipgloss.Center)
+
+	detailStyle := lipgloss.NewStyle().
+		Foreground(colors.NeonPurple).
+		Bold(true).
+		Width(innerWidth).
+		Align(lipgloss.Center)
+
+	pad := "   "
+
+	activeFirst := lipgloss.NewStyle().Foreground(colors.White).Background(colors.NeonPink).Bold(true).Underline(true)
+	activeRest := lipgloss.NewStyle().Foreground(colors.White).Background(colors.NeonPink).Bold(true)
+	activePad := lipgloss.NewStyle().Background(colors.NeonPink)
+
+	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray).Background(lipgloss.Color("236")).Underline(true)
+	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray).Background(lipgloss.Color("236"))
+	inactivePad := lipgloss.NewStyle().Background(lipgloss.Color("236"))
+
+	renderBtn := func(padStyle, firstStyle, restStyle lipgloss.Style, first, rest string) string {
+		return padStyle.Render(pad) + firstStyle.Render(first) + restStyle.Render(rest) + padStyle.Render(pad)
+	}
+
+	yesFirst, yesRest, yesPad := activeFirst, activeRest, activePad
+	noFirst, noRest, noPad := inactiveFirst, inactiveRest, inactivePad
+	if m.quitConfirmFocused == 1 {
+		yesFirst, yesRest, yesPad = inactiveFirst, inactiveRest, inactivePad
+		noFirst, noRest, noPad = activeFirst, activeRest, activePad
+	}
+
+	yesBtn := renderBtn(yesPad, yesFirst, yesRest, "Y", "ep!")
+	noBtn := renderBtn(noPad, noFirst, noRest, "N", "ope")
+
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, "     ", noBtn)
+	centeredButtons := lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(buttons)
+
+	stats := m.ComputeViewStats()
+	detail := ""
+	if stats.ActiveCount > 0 {
+		detail = fmt.Sprintf("%d active download(s) will be paused", stats.ActiveCount)
+	}
+
+	helpStyle := lipgloss.NewStyle().Foreground(colors.Gray).Width(innerWidth).Align(lipgloss.Center)
+	helpText := helpStyle.Render(m.help.View(m.keys.QuitConfirm))
+
+	var lines []string
+	lines = append(lines, messageStyle.Render("Are you sure you want to quit?"))
+	if detail != "" {
+		lines = append(lines, detailStyle.Render(detail))
+	}
+	lines = append(lines, "")
+	lines = append(lines, "")
+	lines = append(lines, centeredButtons)
+
+	innerHeight := height - 2
+	contentHeight := lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, lines...))
+	helpHeight := lipgloss.Height(helpText)
+	spacing := innerHeight - contentHeight - helpHeight
+	if spacing < 0 {
+		spacing = 0
+	}
+	for i := 0; i < spacing; i++ {
+		lines = append(lines, "")
+	}
+	lines = append(lines, helpText)
+
+	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
+	return renderBtopBox(PaneTitleStyle.Render(" Quit Surge "), "", content, width, height, colors.NeonPink)
 }
 
 // renderBtopBox creates a btop-style box with title embedded in the top border

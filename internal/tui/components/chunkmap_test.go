@@ -4,15 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
+	"charm.land/lipgloss/v2"
 	"github.com/surge-downloader/surge/internal/engine/types"
 	"github.com/surge-downloader/surge/internal/tui/colors"
 )
-
-func init() {
-	lipgloss.SetColorProfile(termenv.ANSI256)
-}
 
 // Helper to check for colors
 const (
@@ -135,7 +130,8 @@ func TestChunkMap_LogicVerify(t *testing.T) {
 	model := NewChunkMapModel(bitmap, chunkCount, 2, 0, false, 2048, 1024, progress) // 1 col
 	out := model.View()
 
-	if strings.Contains(out, "38;5;198") { // 198 is NeonPink
+	pinkStyle := lipgloss.NewStyle().Foreground(colors.NeonPink)
+	if strings.Contains(out, pinkStyle.Render("■")) {
 		t.Error("Mixed state (Completed+Pending) should NOT render as Downloading (Pink)")
 	}
 }

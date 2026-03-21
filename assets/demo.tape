@@ -15,7 +15,7 @@ Set WindowBar Colorful
 Set Framerate 60
 
 # --- Launch Surge ---
-Type "./surge"
+Type "surge"
 Enter
 Sleep 3s
 
@@ -42,7 +42,7 @@ Enter
 Sleep 5s
 
 # --- Show Download Progress ---
-Sleep 5s
+Sleep 8s
 Screenshot assets/dashboard.png
 
 # --- Open Settings ---

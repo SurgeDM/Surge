@@ -8,10 +8,10 @@ import (
 	"github.com/surge-downloader/surge/internal/tui/components"
 	"github.com/surge-downloader/surge/internal/utils"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // DownloadItem implements list.Item interface for downloads
@@ -181,26 +181,31 @@ func NewDownloadList(width, height int) list.Model {
 	l.SetShowHelp(false)
 	l.SetShowPagination(true)
 
-	// Style the list
+	applyListTheme(&l)
+
+	return l
+}
+
+func applyListTheme(l *list.Model) {
+	if l == nil {
+		return
+	}
+
+	l.SetDelegate(newDownloadDelegate())
+	l.SetStatusBarItemName("download", "downloads")
+
 	l.Styles.Title = lipgloss.NewStyle().
 		Foreground(colors.NeonPink).
 		Bold(true).
 		Padding(0, 1)
 
-	l.Styles.FilterPrompt = lipgloss.NewStyle().
-		Foreground(colors.NeonCyan)
+	l.Styles.Filter.Focused.Prompt = lipgloss.NewStyle().Foreground(colors.NeonCyan)
+	l.Styles.Filter.Blurred.Prompt = lipgloss.NewStyle().Foreground(colors.NeonCyan)
+	l.Styles.Filter.Cursor.Color = colors.NeonPink
 
-	l.Styles.FilterCursor = lipgloss.NewStyle().
-		Foreground(colors.NeonPink)
-
-	// No items message - bright color for cyberpunk theme
 	l.Styles.NoItems = lipgloss.NewStyle().
 		Foreground(colors.NeonCyan).
 		Padding(2, 0)
-
-	l.SetStatusBarItemName("download", "downloads")
-
-	return l
 }
 
 // UpdateListItems updates the list with filtered downloads based on active tab

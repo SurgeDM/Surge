@@ -21,10 +21,9 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 	"github.com/surge-downloader/surge/internal/version"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/progress"
-	tea "github.com/charmbracelet/bubbletea"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
 )
 
 // notificationTickMsg is sent to check if a notification should be cleared
@@ -688,7 +687,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		switch m.state {
 		case DashboardState:
 			// Handle search input FIRST when active (intercepts ALL keys)
@@ -752,11 +751,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			// Quit
 			if key.Matches(msg, m.keys.Dashboard.Quit, m.keys.Dashboard.ForceQuit) {
-				if m.cancelEnqueue != nil {
-					m.cancelEnqueue()
-				}
-				m.shuttingDown = true
-				return m, shutdownCmd(m.Service)
+				m.state = QuitConfirmState
+				m.quitConfirmFocused = 0
+				return m, nil
 			}
 
 			// Add download
@@ -1318,6 +1315,40 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			return m, cmd
 
+		case QuitConfirmState:
+			confirmQuit := func() (tea.Model, tea.Cmd) {
+				if m.cancelEnqueue != nil {
+					m.cancelEnqueue()
+				}
+				m.shuttingDown = true
+				return m, shutdownCmd(m.Service)
+			}
+			cancelQuit := func() (tea.Model, tea.Cmd) {
+				m.state = DashboardState
+				m.quitConfirmFocused = 0
+				return m, nil
+			}
+			if key.Matches(msg, m.keys.QuitConfirm.Left) || key.Matches(msg, m.keys.QuitConfirm.Right) {
+				m.quitConfirmFocused = 1 - m.quitConfirmFocused
+				return m, nil
+			}
+			if key.Matches(msg, m.keys.QuitConfirm.Yes) {
+				return confirmQuit()
+			}
+			if key.Matches(msg, m.keys.QuitConfirm.No) {
+				return cancelQuit()
+			}
+			if key.Matches(msg, m.keys.QuitConfirm.Select) {
+				if m.quitConfirmFocused == 0 {
+					return confirmQuit()
+				}
+				return cancelQuit()
+			}
+			if key.Matches(msg, m.keys.QuitConfirm.Cancel) {
+				return cancelQuit()
+			}
+			return m, nil
+
 		case BatchConfirmState:
 			if key.Matches(msg, m.keys.BatchConfirm.Confirm) {
 				// Add all URLs as downloads, skipping duplicates
@@ -1756,12 +1787,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Propagate messages to progress bars - only update visible ones for performance
 	for _, d := range m.downloads {
-		var cmd tea.Cmd
-		var newModel tea.Model
-		newModel, cmd = d.progress.Update(msg)
-		if p, ok := newModel.(progress.Model); ok {
-			d.progress = p
-		}
+		newProgress, cmd := d.progress.Update(msg)
+		d.progress = newProgress
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}

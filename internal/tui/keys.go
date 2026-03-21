@@ -1,6 +1,6 @@
 package tui
 
-import "github.com/charmbracelet/bubbles/key"
+import "charm.land/bubbles/v2/key"
 
 // KeyMap defines the keybindings for the entire application
 type KeyMap struct {
@@ -15,6 +15,7 @@ type KeyMap struct {
 	BatchConfirm   BatchConfirmKeyMap
 	Update         UpdateKeyMap
 	CategoryMgr    CategoryManagerKeyMap
+	QuitConfirm    QuitConfirmKeyMap
 }
 
 // DashboardKeyMap defines keybindings for the main dashboard
@@ -124,6 +125,16 @@ type UpdateKeyMap struct {
 	OpenGitHub  key.Binding
 	IgnoreNow   key.Binding
 	NeverRemind key.Binding
+}
+
+// QuitConfirmKeyMap defines keybindings for the quit confirmation modal
+type QuitConfirmKeyMap struct {
+	Left   key.Binding
+	Right  key.Binding
+	Yes    key.Binding
+	No     key.Binding
+	Select key.Binding
+	Cancel key.Binding
 }
 
 // CategoryManagerKeyMap defines keybindings for the category manager
@@ -438,6 +449,28 @@ var Keys = KeyMap{
 		Tab:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next field")),
 		Close:  key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "save & close")),
 	},
+	QuitConfirm: QuitConfirmKeyMap{
+		Left: key.NewBinding(
+			key.WithKeys("left", "h"),
+		),
+		Right: key.NewBinding(
+			key.WithKeys("right", "l", "tab"),
+		),
+		Yes: key.NewBinding(
+			key.WithKeys("y", "Y"),
+		),
+		No: key.NewBinding(
+			key.WithKeys("n", "N"),
+		),
+		Select: key.NewBinding(
+			key.WithKeys("enter", "space"),
+			key.WithHelp("y/enter", "confirm"),
+		),
+		Cancel: key.NewBinding(
+			key.WithKeys("esc", "ctrl+c", "ctrl+q"),
+			key.WithHelp("n/esc", "cancel"),
+		),
+	},
 }
 
 // ShortHelp returns keybindings to show in the mini help view
@@ -535,4 +568,12 @@ func (k CategoryManagerKeyMap) ShortHelp() []key.Binding {
 
 func (k CategoryManagerKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{k.Up, k.Down, k.Edit, k.Add, k.Delete, k.Tab, k.Toggle, k.Close}}
+}
+
+func (k QuitConfirmKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Select, k.Cancel}
+}
+
+func (k QuitConfirmKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.Select, k.Cancel}}
 }
