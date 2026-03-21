@@ -866,3 +866,121 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 		t.Errorf("Expected urlUpdateInput to be pre-filled with 'http://example.com/file', got '%s'", newRoot.urlUpdateInput.Value())
 	}
 }
+
+func TestUpdate_InputStatePasteRoutesToFocusedField(t *testing.T) {
+	makeInputs := func() []textinput.Model {
+		in := []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()}
+		for i := range in {
+			in[i].Prompt = ""
+		}
+		return in
+	}
+
+	m := RootModel{
+		state:        InputState,
+		focusedInput: 0,
+		inputs:       makeInputs(),
+	}
+	m.inputs[0].Focus()
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "https://example.com/file.zip"})
+	m2 := updated.(RootModel)
+	if got := m2.inputs[0].Value(); got != "https://example.com/file.zip" {
+		t.Fatalf("url input paste = %q, want %q", got, "https://example.com/file.zip")
+	}
+
+	m2.inputs[0].Blur()
+	m2.focusedInput = 3
+	m2.inputs[3].Focus()
+
+	updated, _ = m2.Update(tea.PasteMsg{Content: "custom-name.zip"})
+	m3 := updated.(RootModel)
+	if got := m3.inputs[3].Value(); got != "custom-name.zip" {
+		t.Fatalf("filename input paste = %q, want %q", got, "custom-name.zip")
+	}
+
+	m3.inputs[3].Blur()
+	m3.state = ExtensionConfirmationState
+	m3.focusedInput = 2
+	m3.inputs[2].Focus()
+
+	updated, _ = m3.Update(tea.PasteMsg{Content: "/tmp/downloads"})
+	m4 := updated.(RootModel)
+	if got := m4.inputs[2].Value(); got != "/tmp/downloads" {
+		t.Fatalf("extension path input paste = %q, want %q", got, "/tmp/downloads")
+	}
+}
+
+func TestUpdate_DashboardSearchPasteRoutesToSearchInput(t *testing.T) {
+	search := textinput.New()
+	search.Focus()
+	m := RootModel{
+		state:        DashboardState,
+		searchActive: true,
+		searchInput:  search,
+		Settings:     config.DefaultSettings(),
+		list:         NewDownloadList(80, 20),
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "ubuntu"})
+	m2 := updated.(RootModel)
+
+	if got := m2.searchInput.Value(); got != "ubuntu" {
+		t.Fatalf("search input paste = %q, want %q", got, "ubuntu")
+	}
+	if got := m2.searchQuery; got != "ubuntu" {
+		t.Fatalf("search query = %q, want %q", got, "ubuntu")
+	}
+}
+
+func TestUpdate_URLUpdateStatePasteRoutesToURLInput(t *testing.T) {
+	urlInput := textinput.New()
+	urlInput.Focus()
+	m := RootModel{
+		state:          URLUpdateState,
+		urlUpdateInput: urlInput,
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "https://mirror.example/new.zip"})
+	m2 := updated.(RootModel)
+	if got := m2.urlUpdateInput.Value(); got != "https://mirror.example/new.zip" {
+		t.Fatalf("url update paste = %q, want %q", got, "https://mirror.example/new.zip")
+	}
+}
+
+func TestUpdate_SettingsEditingPasteRoutesToSettingsInput(t *testing.T) {
+	settingsInput := textinput.New()
+	settingsInput.Focus()
+	m := RootModel{
+		state:             SettingsState,
+		SettingsIsEditing: true,
+		SettingsInput:     settingsInput,
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "/mnt/storage"})
+	m2 := updated.(RootModel)
+	if got := m2.SettingsInput.Value(); got != "/mnt/storage" {
+		t.Fatalf("settings input paste = %q, want %q", got, "/mnt/storage")
+	}
+}
+
+func TestUpdate_CategoryEditorPasteRoutesToCategoryInput(t *testing.T) {
+	var catInputs [4]textinput.Model
+	for i := range catInputs {
+		catInputs[i] = textinput.New()
+	}
+	catInputs[1].Focus()
+
+	m := RootModel{
+		state:           CategoryManagerState,
+		catMgrEditing:   true,
+		catMgrEditField: 1,
+		catMgrInputs:    catInputs,
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "Audio files"})
+	m2 := updated.(RootModel)
+	if got := m2.catMgrInputs[1].Value(); got != "Audio files" {
+		t.Fatalf("category editor paste = %q, want %q", got, "Audio files")
+	}
+}
