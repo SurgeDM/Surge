@@ -662,6 +662,43 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Quit
 
+	case tea.PasteMsg:
+		switch m.state {
+		case DashboardState:
+			if m.searchActive {
+				var cmd tea.Cmd
+				m.searchInput, cmd = m.searchInput.Update(msg)
+				m.searchQuery = m.searchInput.Value()
+				m.UpdateListItems()
+				return m, cmd
+			}
+			return m, nil
+		case InputState, ExtensionConfirmationState:
+			var cmd tea.Cmd
+			m.inputs[m.focusedInput], cmd = m.inputs[m.focusedInput].Update(msg)
+			return m, cmd
+		case URLUpdateState:
+			var cmd tea.Cmd
+			m.urlUpdateInput, cmd = m.urlUpdateInput.Update(msg)
+			return m, cmd
+		case SettingsState:
+			if m.SettingsIsEditing {
+				var cmd tea.Cmd
+				m.SettingsInput, cmd = m.SettingsInput.Update(msg)
+				return m, cmd
+			}
+			return m, nil
+		case CategoryManagerState:
+			if m.catMgrEditing {
+				var cmd tea.Cmd
+				m.catMgrInputs[m.catMgrEditField], cmd = m.catMgrInputs[m.catMgrEditField].Update(msg)
+				return m, cmd
+			}
+			return m, nil
+		default:
+			return m, nil
+		}
+
 	// Handle filepicker messages for all message types when in FilePickerState
 	default:
 		if m.state == FilePickerState {
