@@ -302,14 +302,3 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
 }
-
-func (m RootModel) updateDashboardPaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
-	if m.searchActive {
-		var cmd tea.Cmd
-		m.searchInput, cmd = m.searchInput.Update(msg)
-		m.searchQuery = m.searchInput.Value()
-		m.UpdateListItems()
-		return m, cmd
-	}
-	return m, nil
-}

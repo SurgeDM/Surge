@@ -109,27 +109,27 @@ func handleDownloadStatusRequest(w http.ResponseWriter, r *http.Request, service
 func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) {
 	var req DownloadRequest
 	if err := decodeJSONBody(r, &req); err != nil {
-		return req, fmt.Errorf("Invalid JSON: %w", err)
+		return req, fmt.Errorf("invalid json: %w", err)
 	}
 	if req.URL == "" {
-		return req, fmt.Errorf("URL is required")
+		return req, fmt.Errorf("url is required")
 	}
 	if strings.Contains(req.Filename, "..") {
-		return req, fmt.Errorf("Invalid filename")
+		return req, fmt.Errorf("invalid filename")
 	}
 	if strings.Contains(req.Filename, "/") || strings.Contains(req.Filename, "\\") {
-		return req, fmt.Errorf("Invalid filename")
+		return req, fmt.Errorf("invalid filename")
 	}
 	if strings.Contains(req.Path, "..") {
-		return req, fmt.Errorf("Invalid path")
+		return req, fmt.Errorf("invalid path")
 	}
 	if req.RelativeToDefaultDir && req.Path != "" {
 		if filepath.IsAbs(req.Path) {
-			return req, fmt.Errorf("Invalid path")
+			return req, fmt.Errorf("invalid path")
 		}
 		cleanPath := filepath.Clean(req.Path)
 		if cleanPath == ".." || strings.HasPrefix(cleanPath, ".."+string(filepath.Separator)) {
-			return req, fmt.Errorf("Invalid path")
+			return req, fmt.Errorf("invalid path")
 		}
 		req.Path = cleanPath
 	}
@@ -238,7 +238,7 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resolved *resolvedDownloadRequest) (string, error) {
 	lifecycle, err := lifecycleForLocalService(service)
 	if err != nil {
-		return "", fmt.Errorf("Failed to initialize lifecycle manager: %w", err)
+		return "", fmt.Errorf("failed to initialize lifecycle manager: %w", err)
 	}
 
 	req := resolved.request
