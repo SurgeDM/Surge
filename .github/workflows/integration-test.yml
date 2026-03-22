@@ -701,6 +701,4 @@ jobs:
           echo "| Settings | ${{ needs.integration-settings.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Env Var Auth | ${{ needs.integration-env-auth.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Download Completion | ${{ needs.integration-download-completion.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Sequential Mode | ${{ needs.integration-sequential.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Docker | ${{ needs.integration-docker.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Remote Connect | ${{ needs.integration-remote-connect.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CLI Integration (ubuntu/macos/windows) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
