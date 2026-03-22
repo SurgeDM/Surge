@@ -365,7 +365,6 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	// large download lists.
 	s := spinner.New()
 	s.Spinner = spinner.MiniDot
-	s.Style = lipgloss.NewStyle().Foreground(colors.NeonPink)
 
 	m := RootModel{
 		downloads:             downloads,

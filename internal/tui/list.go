@@ -34,9 +34,9 @@ func (i DownloadItem) Description() string {
 	var styledStatus string
 	if d.pausing {
 		// Custom "Pausing..." style using existing colors
-		styledStatus = i.spinnerView + lipgloss.NewStyle().Foreground(colors.StatePaused).Render(" Pausing...")
+		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused).Render(i.spinnerView + " Pausing...")
 	} else if d.resuming {
-		styledStatus = i.spinnerView + lipgloss.NewStyle().Foreground(colors.StateDownloading).Render(" Resuming...")
+		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading).Render(i.spinnerView + " Resuming...")
 	} else {
 		status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
 		styledStatus = status.RenderWithSpinner(i.spinnerView)

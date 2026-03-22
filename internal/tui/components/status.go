@@ -106,7 +106,7 @@ func (s DownloadStatus) RenderWithSpinner(spinnerView string) string {
 		cacheMu.RLock()
 		style := queuedSpinnerStyle
 		cacheMu.RUnlock()
-		return spinnerView + style.Render(" " + s.Label())
+		return style.Render(spinnerView + " " + s.Label())
 	}
 	return s.Render()
 }
