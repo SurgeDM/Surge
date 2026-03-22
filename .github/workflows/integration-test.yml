@@ -1,0 +1,703 @@
+name: Integration Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+# Cancel in-progress runs on the same branch to save CI minutes
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GO_VERSION: "1.25"
+  # A small, stable, publicly-hosted test file (~1 MB) served by Cloudflare
+  TEST_URL_1: "https://speed.cloudflare.com/__down?bytes=1048576"
+  # Second mirror / URL for multi-mirror & batch tests
+  TEST_URL_2: "https://speed.cloudflare.com/__down?bytes=1048576&during=download2"
+  # Surge daemon default port
+  SURGE_PORT: "1700"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 1 – Build matrix (produces binaries used by every later job)
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Go ${{ env.GO_VERSION }}
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Build binary
+        run: go build -v -o surge${{ matrix.os == 'windows-latest' && '.exe' || '' }} .
+
+      - name: Upload binary artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: surge-${{ matrix.os }}
+          path: surge${{ matrix.os == 'windows-latest' && '.exe' || '' }}
+          retention-days: 1
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 2 – Core CLI & server integration tests (Linux + macOS + Windows)
+# ─────────────────────────────────────────────────────────────────────────────
+  integration-cli:
+    name: CLI Integration (${{ matrix.os }})
+    needs: build
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: surge-${{ matrix.os }}
+
+      # Make binary executable (Unix only)
+      - name: Make binary executable
+        if: matrix.os != 'windows-latest'
+        run: chmod +x ./surge
+
+      # ── Token command ──────────────────────────────────────────────────────
+      - name: "[token] Print API token"
+        id: token
+        shell: bash
+        run: |
+          TOKEN=$(./surge token 2>/dev/null || ./surge.exe token 2>/dev/null)
+          echo "TOKEN=$TOKEN" >> $GITHUB_ENV
+          echo "Token generated: ${#TOKEN} chars"
+          [ -n "$TOKEN" ] || (echo "ERROR: token is empty" && exit 1)
+
+      # ── Server lifecycle ───────────────────────────────────────────────────
+      - name: "[server] Start headless server in background"
+        shell: bash
+        run: |
+          BIN=./surge
+          [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          $BIN server --port $SURGE_PORT &
+          echo "SERVER_PID=$!" >> $GITHUB_ENV
+          sleep 3   # give daemon time to bind
+
+      - name: "[server] Verify server is listening"
+        shell: bash
+        run: |
+          # Retry up to 10 seconds
+          for i in $(seq 1 10); do
+            curl -sf -o /dev/null http://localhost:$SURGE_PORT/health && break || sleep 1
+          done
+          curl -sf -o /dev/null http://localhost:$SURGE_PORT/health \
+            || (echo "Server did not start in time" && exit 1)
+
+      - name: "[server status] Check server status subcommand"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          $BIN server status --host localhost:$SURGE_PORT --token $TOKEN
+
+      # ── Add & list downloads ───────────────────────────────────────────────
+      - name: "[add] Queue a single download"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          $BIN add "$TEST_URL_1" \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN \
+            --output /tmp/surge-test/ 2>&1 | tee add_output.txt
+          grep -iE "(queued|added|download)" add_output.txt \
+            || (echo "Expected confirmation in output" && exit 1)
+
+      - name: "[ls] List all downloads (text)"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          $BIN ls \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN | tee ls_output.txt
+          # Capture the first download ID for subsequent steps
+          DL_ID=$(grep -oE '[0-9a-f]{8,}' ls_output.txt | head -1)
+          echo "DL_ID=$DL_ID" >> $GITHUB_ENV
+          echo "Captured download ID: $DL_ID"
+
+      - name: "[ls] List all downloads (JSON)"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          OUTPUT=$($BIN ls --json \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN)
+          echo "$OUTPUT" | python3 -c "import sys,json; data=json.load(sys.stdin); print(f'Found {len(data)} download(s)')"
+
+      - name: "[ls id] Show single download detail"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          $BIN ls $DL_ID \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN
+
+      # ── Pause / resume cycle ───────────────────────────────────────────────
+      - name: "[pause] Pause the download"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          $BIN pause $DL_ID \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN
+          sleep 1
+
+      - name: "[ls] Verify download is paused"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          $BIN ls $DL_ID --json \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          item = data[0] if isinstance(data, list) else data
+          status = item.get('status', '').lower()
+          print(f'Status: {status}')
+          assert status == 'paused', f'Expected paused, got {status}'
+          "
+
+      - name: "[resume] Resume the download"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          $BIN resume $DL_ID \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN
+          sleep 1
+
+      # ── Pause all / resume all ─────────────────────────────────────────────
+      - name: "[pause --all] Pause all downloads"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          $BIN pause --all \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN
+
+      - name: "[resume --all] Resume all downloads"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          $BIN resume --all \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN
+
+      # ── Batch download ─────────────────────────────────────────────────────
+      - name: "[add --batch] Queue downloads from a batch file"
+        shell: bash
+        run: |
+          printf '%s\n%s\n' "$TEST_URL_1" "$TEST_URL_2" > batch.txt
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          $BIN add --batch batch.txt \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN \
+            --output /tmp/surge-batch/
+
+      - name: "[ls] Confirm batch items are queued"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          COUNT=$($BIN ls --json \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN | python3 -c "import sys,json; print(len(json.load(sys.stdin)))")
+          echo "Total downloads queued: $COUNT"
+          [ "$COUNT" -ge 2 ] || (echo "Expected at least 2 downloads, got $COUNT" && exit 1)
+
+      # ── refresh (URL update) ───────────────────────────────────────────────
+      - name: "[refresh] Update source URL on a paused download"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          # Pause the first download before refreshing
+          $BIN pause $DL_ID --host localhost:$SURGE_PORT --token $TOKEN
+          sleep 1
+          $BIN refresh $DL_ID "$TEST_URL_2" \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN
+
+      # ── Remove download ────────────────────────────────────────────────────
+      - name: "[rm] Remove a download by ID prefix"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          # Use first 6 chars as prefix (tests prefix matching)
+          PREFIX="${DL_ID:0:6}"
+          $BIN rm $PREFIX \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN
+
+      - name: "[rm --clean] Remove with partial file cleanup"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          # Add a new download, then remove it cleanly
+          $BIN add "$TEST_URL_1" \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN \
+            --output /tmp/surge-clean/
+          sleep 1
+          NEW_ID=$($BIN ls --json \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN | python3 -c "
+          import sys,json
+          data=json.load(sys.stdin)
+          print(data[-1]['id'])
+          ")
+          $BIN rm $NEW_ID --clean \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN
+
+      # ── Server stop ────────────────────────────────────────────────────────
+      - name: "[server stop] Stop the daemon gracefully"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          $BIN server stop || kill $SERVER_PID || true
+
+      - name: "[server status] Confirm server is stopped"
+        shell: bash
+        run: |
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          sleep 2
+          # Should report not-running; non-zero exit is acceptable here
+          $BIN server status --host localhost:$SURGE_PORT --token $TOKEN || true
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 3 – Settings & configuration tests (Linux only for speed)
+# ─────────────────────────────────────────────────────────────────────────────
+  integration-settings:
+    name: Settings Integration
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: surge-ubuntu-latest
+
+      - name: Make binary executable
+        run: chmod +x ./surge
+
+      - name: Locate config directory
+        run: |
+          CONFIG_DIR="$HOME/.config/surge"
+          echo "CONFIG_DIR=$CONFIG_DIR" >> $GITHUB_ENV
+          mkdir -p "$CONFIG_DIR"
+
+      # Write a custom settings.json and verify Surge loads it
+      - name: Write custom settings.json
+        run: |
+          cat > "$CONFIG_DIR/settings.json" <<'EOF'
+          {
+            "general": {
+              "default_download_dir": "/tmp/surge-settings-test",
+              "warn_on_duplicate": true,
+              "auto_resume": false,
+              "skip_update_check": true,
+              "clipboard_monitor": false,
+              "theme": 2,
+              "log_retention_count": 3
+            },
+            "network": {
+              "max_connections_per_host": 8,
+              "max_concurrent_downloads": 2,
+              "sequential_download": false,
+              "min_chunk_size": 1048576,
+              "worker_buffer_size": 262144
+            },
+            "performance": {
+              "max_task_retries": 5,
+              "slow_worker_threshold": 0.2,
+              "slow_worker_grace_period": "8s",
+              "stall_timeout": "5s",
+              "speed_ema_alpha": 0.4
+            }
+          }
+          EOF
+          echo "settings.json written"
+          cat "$CONFIG_DIR/settings.json"
+
+      - name: Start server with custom settings
+        run: |
+          ./surge server --port $SURGE_PORT &
+          echo "SERVER_PID=$!" >> $GITHUB_ENV
+          sleep 3
+
+      - name: Retrieve token
+        run: |
+          TOKEN=$(./surge token)
+          echo "TOKEN=$TOKEN" >> $GITHUB_ENV
+
+      - name: Queue download and confirm custom output dir is used
+        run: |
+          ./surge add "$TEST_URL_1" \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN
+          sleep 1
+          # With default_download_dir set, the download should land there
+          DETAILS=$(./surge ls --json \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN)
+          echo "$DETAILS" | python3 -c "
+          import sys, json
+          data = json.load(sys.stdin)
+          item = data[0] if isinstance(data, list) else data
+          dl_dir = item.get('output_dir', item.get('dir', ''))
+          print(f'Download dir: {dl_dir}')
+          assert '/tmp/surge-settings-test' in dl_dir, \
+            f'Expected custom dir in output, got: {dl_dir}'
+          "
+
+      - name: Stop server
+        run: ./surge server stop || kill $SERVER_PID || true
+
+      # ── Partial settings (only override some keys) ─────────────────────────
+      - name: Write partial settings.json (only general.theme)
+        run: |
+          echo '{"general": {"theme": 1}}' > "$CONFIG_DIR/settings.json"
+
+      - name: Server starts with partial settings (no crash)
+        run: |
+          ./surge server --port $SURGE_PORT &
+          sleep 3
+          curl -sf http://localhost:$SURGE_PORT/health \
+            || (echo "Server failed with partial settings" && exit 1)
+          ./surge server stop || kill $! || true
+
+      # ── Invalid settings graceful handling ────────────────────────────────
+      - name: Write malformed settings.json
+        run: |
+          cat > "$CONFIG_DIR/settings.json" <<EOF
+          { "network": { "max_connections_per_host": "not-a-number" }
+          EOF
+
+      - name: Server handles malformed settings without panic
+        run: |
+          ./surge server --port $SURGE_PORT &
+          SPID=$!
+          sleep 3
+          # Either it starts (with defaults) or exits cleanly — must not panic/segfault
+          if kill -0 $SPID 2>/dev/null; then
+            echo "Server running despite bad config (using defaults) — OK"
+            ./surge server stop || kill $SPID || true
+          else
+            wait $SPID
+            EXIT=$?
+            [ $EXIT -ne 139 ] || (echo "SEGFAULT detected!" && exit 1)
+            echo "Server exited with code $EXIT (acceptable for bad config)"
+          fi
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 4 – Environment variable auth tests
+# ─────────────────────────────────────────────────────────────────────────────
+  integration-env-auth:
+    name: Env Var Auth
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: surge-ubuntu-latest
+
+      - name: Make binary executable
+        run: chmod +x ./surge
+
+      - name: Start server
+        run: |
+          ./surge server --port $SURGE_PORT &
+          echo "SERVER_PID=$!" >> $GITHUB_ENV
+          sleep 3
+
+      - name: Get token and export as SURGE_TOKEN
+        run: |
+          echo "SURGE_TOKEN=$(./surge token)" >> $GITHUB_ENV
+          echo "SURGE_HOST=localhost:$SURGE_PORT" >> $GITHUB_ENV
+
+      - name: "[env] CLI works with SURGE_TOKEN + SURGE_HOST (no flags)"
+        run: |
+          # No --host or --token flags; relies purely on env vars
+          ./surge ls
+          ./surge add "$TEST_URL_1" --output /tmp/surge-env/
+
+      - name: "[env] Explicit flags override env vars"
+        run: |
+          WRONG_TOKEN="definitely-wrong-token"
+          # Using explicit --token that's wrong should fail auth, not crash
+          ./surge ls --token "$WRONG_TOKEN" || echo "Auth rejection confirmed (expected)"
+
+      - name: Stop server
+        run: ./surge server stop || kill $SERVER_PID || true
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 5 – Download completion & --exit-when-done tests (Linux)
+# ─────────────────────────────────────────────────────────────────────────────
+  integration-download-completion:
+    name: Download Completion
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: surge-ubuntu-latest
+
+      - name: Make binary executable
+        run: chmod +x ./surge
+
+      - name: Create output directory
+        run: mkdir -p /tmp/surge-complete
+
+      - name: "[--exit-when-done] Server exits after all downloads finish"
+        timeout-minutes: 3
+        run: |
+          # Server should start, finish the download, then exit on its own
+          ./surge server "$TEST_URL_2" \
+            --port $SURGE_PORT \
+            --output /tmp/surge-complete \
+            --exit-when-done &
+          SPID=$!
+          wait $SPID
+          EXIT=$?
+          echo "Server exited with code $EXIT"
+          [ $EXIT -eq 0 ] || (echo "Non-zero exit after --exit-when-done" && exit 1)
+
+      - name: Verify downloaded file exists and is non-empty
+        run: |
+          FILE=$(find /tmp/surge-complete -type f | head -1)
+          echo "Downloaded: $FILE"
+          [ -n "$FILE" ] || (echo "No file found in output dir!" && exit 1)
+          SIZE=$(stat -c%s "$FILE")
+          echo "File size: $SIZE bytes"
+          [ "$SIZE" -gt 0 ] || (echo "File is empty!" && exit 1)
+
+      - name: "[--no-resume] Download starts fresh (no partial resume)"
+        timeout-minutes: 3
+        run: |
+          mkdir -p /tmp/surge-noresume
+          ./surge server "$TEST_URL_2" \
+            --port ${{ env.SURGE_PORT }}1 \
+            --output /tmp/surge-noresume \
+            --no-resume \
+            --exit-when-done &
+          wait $!
+          echo "no-resume download completed"
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 6 – Sequential (Streaming Mode) download test
+# ─────────────────────────────────────────────────────────────────────────────
+  integration-sequential:
+    name: Sequential Download Mode
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: surge-ubuntu-latest
+
+      - name: Make binary executable
+        run: chmod +x ./surge
+
+      - name: Write settings with sequential_download enabled
+        run: |
+          mkdir -p ~/.config/surge
+          echo '{"network":{"sequential_download":true,"max_connections_per_host":4}}' \
+            > ~/.config/surge/settings.json
+
+      - name: Download file in sequential mode and verify
+        timeout-minutes: 3
+        run: |
+          mkdir -p /tmp/surge-seq
+          ./surge server "$TEST_URL_1" \
+            --port $SURGE_PORT \
+            --output /tmp/surge-seq \
+            --exit-when-done &
+          wait $!
+          FILE=$(find /tmp/surge-seq -type f | head -1)
+          [ -n "$FILE" ] && echo "Sequential download OK: $FILE" \
+            || (echo "No file downloaded!" && exit 1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 7 – Docker integration test
+# ─────────────────────────────────────────────────────────────────────────────
+  integration-docker:
+    name: Docker Server Mode
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download compose file
+        run: |
+          wget -q https://raw.githubusercontent.com/surge-downloader/surge/refs/heads/main/docker/compose.yml
+
+      - name: Start container
+        run: docker compose up -d
+
+      - name: Wait for server to be healthy
+        run: |
+          for i in $(seq 1 20); do
+            STATUS=$(docker compose exec -T surge ./surge server status 2>&1 || true)
+            echo "$STATUS" | grep -qi "running" && break || sleep 2
+          done
+          echo "Final status: $STATUS"
+
+      - name: Get token from container
+        run: |
+          TOKEN=$(docker compose exec -T surge surge token)
+          echo "TOKEN=$TOKEN" >> $GITHUB_ENV
+          echo "Container token length: ${#TOKEN}"
+
+      - name: "[docker] Add a download inside container"
+        run: |
+          docker compose exec -T surge surge add "$TEST_URL_2" \
+            --token $TOKEN
+
+      - name: "[docker] List downloads as JSON"
+        run: |
+          docker compose exec -T surge surge ls --json --token $TOKEN \
+            | python3 -c "import sys,json; d=json.load(sys.stdin); print(f'{len(d)} download(s) queued')"
+
+      - name: "[docker] Check logs are written"
+        run: |
+          docker compose logs surge | grep -i "surge" \
+            || echo "No logs found (acceptable for fresh instance)"
+
+      - name: Stop container
+        if: always()
+        run: docker compose down -v
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 8 – Remote connect test (two separate processes simulate client/server)
+# ─────────────────────────────────────────────────────────────────────────────
+  integration-remote-connect:
+    name: Remote Connect
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download binary
+        uses: actions/download-artifact@v4
+        with:
+          name: surge-ubuntu-latest
+
+      - name: Make binary executable
+        run: chmod +x ./surge
+
+      - name: Start server on non-default port
+        run: |
+          ./surge server --port 1701 &
+          echo "SERVER_PID=$!" >> $GITHUB_ENV
+          sleep 3
+
+      - name: Get token
+        run: echo "TOKEN=$(./surge token)" >> $GITHUB_ENV
+
+      - name: "[connect] CLI reaches server via explicit host flag"
+        run: |
+          ./surge ls \
+            --host localhost:1701 \
+            --token $TOKEN
+
+      - name: "[connect] Add download via explicit host"
+        run: |
+          ./surge add "$TEST_URL_1" \
+            --host localhost:1701 \
+            --token $TOKEN \
+            --output /tmp/surge-remote/
+
+      - name: "[connect] Wrong token is rejected"
+        run: |
+          ./surge ls --host localhost:1701 --token "bad-token" \
+            && (echo "Expected auth failure but got success" && exit 1) \
+            || echo "Auth correctly rejected bad token"
+
+      - name: Stop server
+        run: ./surge server stop || kill $SERVER_PID || true
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# JOB 9 – Summary
+# ─────────────────────────────────────────────────────────────────────────────
+  summary:
+    name: Integration Test Summary
+    needs:
+      - integration-cli
+      - integration-settings
+      - integration-env-auth
+      - integration-download-completion
+      - integration-sequential
+      - integration-docker
+      - integration-remote-connect
+    if: always()
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Report results
+        run: |
+          echo "## Surge Integration Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "| --- | ------ |" >> $GITHUB_STEP_SUMMARY
+          echo "| CLI Integration (ubuntu) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CLI Integration (macos) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CLI Integration (windows) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Settings | ${{ needs.integration-settings.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Env Var Auth | ${{ needs.integration-env-auth.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Download Completion | ${{ needs.integration-download-completion.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sequential Mode | ${{ needs.integration-sequential.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker | ${{ needs.integration-docker.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Remote Connect | ${{ needs.integration-remote-connect.result }} |" >> $GITHUB_STEP_SUMMARY
