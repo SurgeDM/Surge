@@ -78,7 +78,7 @@ func (m RootModel) View() tea.View {
 			Title:       "Shutting Down",
 			Message:     "Pausing downloads and saving resume state...",
 			Detail:      "Please wait",
-			Keys:        components.ConfirmationKeyMap{},
+			Keys:        components.NoKeys{},
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
 			Width:       60,

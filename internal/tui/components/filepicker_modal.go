@@ -57,8 +57,3 @@ func (m FilePickerModal) RenderWithBtopBox(
 ) string {
 	return renderBox(titleStyle.Render(m.Title), "", m.View(), m.Width, m.Height, m.BorderColor)
 }
-
-// Centered returns the modal centered in the given dimensions
-func (m FilePickerModal) Centered(width, height int, box string) string {
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)
-}

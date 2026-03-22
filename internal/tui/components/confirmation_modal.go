@@ -22,42 +22,14 @@ type ConfirmationModal struct {
 	Height      int
 }
 
-// ConfirmationKeyMap defines keybindings for a confirmation modal
-type ConfirmationKeyMap struct {
-	Confirm key.Binding
-	Cancel  key.Binding
-	Extra   key.Binding // Optional extra action (e.g., "Focus Existing")
-}
+// NoKeys satisfies help.KeyMap for informational modals with no interactive bindings.
+type NoKeys struct{}
 
-// ShortHelp returns keybindings to show
-func (k ConfirmationKeyMap) ShortHelp() []key.Binding {
-	if k.Extra.Enabled() {
-		return []key.Binding{k.Confirm, k.Extra, k.Cancel}
-	}
-	return []key.Binding{k.Confirm, k.Cancel}
-}
-
-// FullHelp returns keybindings for the expanded help view
-func (k ConfirmationKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{k.ShortHelp()}
-}
-
-// NewConfirmationModal creates a modal with default styling
-func NewConfirmationModal(title, message, detail string, keys help.KeyMap, helpModel help.Model, borderColor color.Color) ConfirmationModal {
-	return ConfirmationModal{
-		Title:       title,
-		Message:     message,
-		Detail:      detail,
-		Keys:        keys,
-		Help:        helpModel,
-		BorderColor: borderColor,
-		Width:       60,
-		Height:      10,
-	}
-}
+func (NoKeys) ShortHelp() []key.Binding  { return nil }
+func (NoKeys) FullHelp() [][]key.Binding { return nil }
 
 // View renders the confirmation modal content (without the box wrapper or help text)
-func (m ConfirmationModal) View() string {
+func (m ConfirmationModal) view() string {
 	detailStyle := lipgloss.NewStyle().
 		Foreground(colors.NeonPurple).
 		Bold(true)
@@ -86,7 +58,7 @@ func (m ConfirmationModal) RenderWithBtopBox(
 	innerHeight := m.Height - 2
 
 	// Get content without help
-	mainContent := m.View()
+	mainContent := m.view()
 
 	// Style and center help text
 	helpStyle := lipgloss.NewStyle().
@@ -140,7 +112,7 @@ func (m ConfirmationModal) Centered(width, height int) string {
 	innerWidth := m.Width - 10 // Account for borders and padding
 
 	// Get content without help
-	mainContent := m.View()
+	mainContent := m.view()
 
 	// Style and center help text
 	helpStyle := lipgloss.NewStyle().
