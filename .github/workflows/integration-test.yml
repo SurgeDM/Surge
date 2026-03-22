@@ -144,9 +144,10 @@ jobs:
 
       - name: "[ls] List all downloads (JSON)"
         shell: bash
-        run: |
-          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
-          OUTPUT=$($BIN ls --json \
+          DL_ID=$(grep -oE '[0-9a-f]{8,}' ls_output.txt | head -1)
+          echo "DL_ID=$DL_ID" >> $GITHUB_ENV
+          echo "Captured download ID: $DL_ID"
+          [ -n "$DL_ID" ] || (echo "ERROR: could not extract a download ID from ls output" && exit 1)
             --host localhost:$SURGE_PORT \
             --token $TOKEN)
           echo "$OUTPUT" | python3 -c "import sys,json; data=json.load(sys.stdin); print(f'Found {len(data)} download(s)')"
