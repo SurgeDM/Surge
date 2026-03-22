@@ -269,7 +269,6 @@ func (m *RootModel) UpdateListItems() {
 					// If it belongs to a different tab, switch to it
 					if newTab != -1 && newTab != m.activeTab {
 						m.activeTab = newTab
-						m.updateListTitle()
 
 						// Force selection for the recursive call
 						m.SelectedDownloadID = targetID
