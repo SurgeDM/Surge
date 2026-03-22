@@ -273,11 +273,15 @@ jobs:
           print(data[-1]['id'])
           ")
           $BIN rm $NEW_ID --clean \
+          NEW_ID=$($BIN ls --json \
             --host localhost:$SURGE_PORT \
-            --token $TOKEN
-
-      # ── Server stop ────────────────────────────────────────────────────────
-      - name: "[server stop] Stop the daemon gracefully"
+            --token $TOKEN | python3 -c "
+          import sys,json
+          data=json.load(sys.stdin)
+          # Sort descending by a stable field if one exists, or use the last entry as a best-effort
+          ids = [item['id'] for item in data if item.get('output_dir','').startswith('/tmp/surge-clean')]
+          print(ids[0] if ids else data[-1]['id'])
+          ")
         shell: bash
         run: |
           BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
