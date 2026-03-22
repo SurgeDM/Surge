@@ -361,8 +361,8 @@ func TestHandleDownload_InvalidJSON(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("Expected 400, got %d", rec.Code)
 	}
-	if !bytes.Contains(rec.Body.Bytes(), []byte("Invalid JSON")) {
-		t.Error("Expected 'Invalid JSON' in response body")
+	if !bytes.Contains(rec.Body.Bytes(), []byte("invalid json")) {
+		t.Error("Expected 'invalid json' in response body")
 	}
 }
 
@@ -377,8 +377,8 @@ func TestHandleDownload_MissingURL(t *testing.T) {
 	if rec.Code != http.StatusBadRequest {
 		t.Errorf("Expected 400, got %d", rec.Code)
 	}
-	if !bytes.Contains(rec.Body.Bytes(), []byte("URL is required")) {
-		t.Error("Expected 'URL is required' in response body")
+	if !bytes.Contains(rec.Body.Bytes(), []byte("url is required")) {
+		t.Error("Expected 'url is required' in response body")
 	}
 }
 

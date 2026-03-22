@@ -210,6 +210,11 @@ func applyListTheme(l *list.Model) {
 
 // UpdateListItems updates the list with filtered downloads based on active tab
 func (m *RootModel) UpdateListItems() {
+
+	if m.list.Width() == 0 {
+		return
+	}
+
 	// If the user manually switched tabs, don't try to preserve/follow selection
 	if m.ManualTabSwitch {
 		m.ManualTabSwitch = false

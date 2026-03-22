@@ -9,7 +9,7 @@ import (
 
 func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 
-	if m.searchActive {
+	if m.state == DashboardState && m.searchActive {
 		var cmd tea.Cmd
 		m.searchInput, cmd = m.searchInput.Update(msg)
 		m.searchQuery = m.searchInput.Value()
