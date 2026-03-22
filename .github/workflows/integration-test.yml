@@ -87,7 +87,8 @@ jobs:
         id: token
         shell: bash
         run: |
-          TOKEN=$(./surge token 2>/dev/null || ./surge.exe token 2>/dev/null)
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          TOKEN=$($BIN token 2>/dev/null)
           echo "TOKEN=$TOKEN" >> $GITHUB_ENV
           echo "Token generated: ${#TOKEN} chars"
           [ -n "$TOKEN" ] || (echo "ERROR: token is empty" && exit 1)
@@ -96,8 +97,7 @@ jobs:
       - name: "[server] Start headless server in background"
         shell: bash
         run: |
-          BIN=./surge
-          [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
           $BIN server --port $SURGE_PORT &
           echo "SERVER_PID=$!" >> $GITHUB_ENV
           sleep 3   # give daemon time to bind
@@ -105,7 +105,6 @@ jobs:
       - name: "[server] Verify server is listening"
         shell: bash
         run: |
-          # Retry up to 10 seconds
           for i in $(seq 1 10); do
             curl -sf -o /dev/null http://localhost:$SURGE_PORT/health && break || sleep 1
           done
@@ -126,7 +125,7 @@ jobs:
           $BIN add "$TEST_URL_1" \
             --host localhost:$SURGE_PORT \
             --token $TOKEN \
-            --output /tmp/surge-test/ 2>&1 | tee add_output.txt
+            --output "$RUNNER_TEMP/surge-test/" 2>&1 | tee add_output.txt
           grep -iE "(queued|added|download)" add_output.txt \
             || (echo "Expected confirmation in output" && exit 1)
 
@@ -212,7 +211,7 @@ jobs:
           $BIN add --batch batch.txt \
             --host localhost:$SURGE_PORT \
             --token $TOKEN \
-            --output /tmp/surge-batch/
+            --output "$RUNNER_TEMP/surge-batch/"
 
       - name: "[ls] Confirm batch items are queued"
         shell: bash
@@ -229,7 +228,6 @@ jobs:
         shell: bash
         run: |
           BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
-          # Pause the first download before refreshing
           $BIN pause $DL_ID --host localhost:$SURGE_PORT --token $TOKEN
           sleep 1
           $BIN refresh $DL_ID "$TEST_URL_2" \
@@ -251,18 +249,17 @@ jobs:
         shell: bash
         run: |
           BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
-          # Add a new download, then remove it cleanly
           $BIN add "$TEST_URL_1" \
             --host localhost:$SURGE_PORT \
             --token $TOKEN \
-            --output /tmp/surge-clean/
+            --output "$RUNNER_TEMP/surge-clean/"
           sleep 1
           NEW_ID=$($BIN ls --json \
             --host localhost:$SURGE_PORT \
             --token $TOKEN | python3 -c "
-          import sys,json
-          data=json.load(sys.stdin)
-          ids = [item['id'] for item in data if item.get('output_dir','').startswith('/tmp/surge-clean')]
+          import sys, json
+          data = json.load(sys.stdin)
+          ids = [item['id'] for item in data if item.get('output_dir','').find('surge-clean') != -1]
           print(ids[0] if ids else data[-1]['id'])
           ")
           $BIN rm $NEW_ID --clean \
@@ -271,12 +268,14 @@ jobs:
 
       # ── Server teardown ────────────────────────────────────────────────────
       - name: "[server] Stop server"
+        if: always()
         shell: bash
         run: |
           BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
           $BIN server stop || kill $SERVER_PID || true
 
       - name: "[server status] Confirm server is stopped"
+        if: always()
         shell: bash
         run: |
           BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
@@ -376,6 +375,7 @@ jobs:
           "
 
       - name: Stop server
+        if: always()
         run: ./surge server stop || kill $SERVER_PID || true
 
       # ── Partial settings (only override some keys) ─────────────────────────
@@ -455,10 +455,13 @@ jobs:
       - name: "[env] Explicit flags override env vars"
         run: |
           WRONG_TOKEN="definitely-wrong-token"
-          # Using explicit --token that's wrong should fail auth, not crash
-          ./surge ls --token "$WRONG_TOKEN" || echo "Auth rejection confirmed (expected)"
+          # Explicit --token that's wrong should fail auth; success here means the flag was ignored
+          ./surge ls --token "$WRONG_TOKEN" \
+            && (echo "Expected auth failure but got success — explicit flag not overriding env var" && exit 1) \
+            || echo "Auth rejection confirmed (expected)"
 
       - name: Stop server
+        if: always()
         run: ./surge server stop || kill $SERVER_PID || true
 
 
@@ -573,9 +576,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Download compose file
-        run: |
-          cp docker/compose.yml .
+      - name: Copy compose file
+        run: cp docker/compose.yml .
 
       - name: Start container
         run: docker compose up -d
@@ -587,6 +589,8 @@ jobs:
             echo "$STATUS" | grep -qi "running" && break || sleep 2
           done
           echo "Final status: $STATUS"
+          echo "$STATUS" | grep -qi "running" \
+            || (echo "ERROR: Docker server did not become healthy after 40s" && exit 1)
           TOKEN=$(docker compose exec -T surge surge token)
           echo "TOKEN=$TOKEN" >> $GITHUB_ENV
           echo "Container token length: ${#TOKEN}"
@@ -660,6 +664,7 @@ jobs:
             || echo "Auth correctly rejected bad token"
 
       - name: Stop server
+        if: always()
         run: ./surge server stop || kill $SERVER_PID || true
 
 
@@ -686,10 +691,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "| --- | ------ |" >> $GITHUB_STEP_SUMMARY
-          echo "| CLI Integration (ubuntu / macos / windows) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CLI Integration (ubuntu) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CLI Integration (macos) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CLI Integration (windows) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Settings | ${{ needs.integration-settings.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Env Var Auth | ${{ needs.integration-env-auth.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Download Completion | ${{ needs.integration-download-completion.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Sequential Download | ${{ needs.integration-sequential.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sequential Mode | ${{ needs.integration-sequential.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Docker | ${{ needs.integration-docker.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Remote Connect | ${{ needs.integration-remote-connect.result }} |" >> $GITHUB_STEP_SUMMARY
