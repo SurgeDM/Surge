@@ -132,7 +132,7 @@ jobs:
 
       - name: "[ls] List all downloads (text)"
         shell: bash
-            --output "$RUNNER_TEMP/surge-test/" 2>&1 | tee add_output.txt
+        run: |
           BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
           $BIN ls \
             --host localhost:$SURGE_PORT \
@@ -141,13 +141,8 @@ jobs:
           DL_ID=$(grep -oE '[0-9a-f]{8,}' ls_output.txt | head -1)
           echo "DL_ID=$DL_ID" >> $GITHUB_ENV
           echo "Captured download ID: $DL_ID"
-
-      - name: "[ls] List all downloads (JSON)"
-        shell: bash
-          DL_ID=$(grep -oE '[0-9a-f]{8,}' ls_output.txt | head -1)
-          echo "DL_ID=$DL_ID" >> $GITHUB_ENV
-          echo "Captured download ID: $DL_ID"
           [ -n "$DL_ID" ] || (echo "ERROR: could not extract a download ID from ls output" && exit 1)
+
       - name: "[ls] List all downloads (JSON)"
         shell: bash
         run: |
@@ -155,12 +150,7 @@ jobs:
           OUTPUT=$($BIN ls --json \
             --host localhost:$SURGE_PORT \
             --token $TOKEN)
-          DL_ID=$(echo "$OUTPUT" | python3 -c "import sys,json; data=json.load(sys.stdin); print(data[0]['id'])")
-          echo "DL_ID=$DL_ID" >> $GITHUB_ENV
-          echo "Captured download ID: $DL_ID"
-          [ -n "$DL_ID" ] || (echo "ERROR: could not extract a download ID from ls output" && exit 1)
           echo "$OUTPUT" | python3 -c "import sys,json; data=json.load(sys.stdin); print(f'Found {len(data)} download(s)')"
-            --token $TOKEN
 
       # ── Pause / resume cycle ───────────────────────────────────────────────
       - name: "[pause] Pause the download"
@@ -272,18 +262,15 @@ jobs:
             --token $TOKEN | python3 -c "
           import sys,json
           data=json.load(sys.stdin)
-          print(data[-1]['id'])
-          ")
-          $BIN rm $NEW_ID --clean \
-          NEW_ID=$($BIN ls --json \
-            --host localhost:$SURGE_PORT \
-            --token $TOKEN | python3 -c "
-          import sys,json
-          data=json.load(sys.stdin)
-          # Sort descending by a stable field if one exists, or use the last entry as a best-effort
           ids = [item['id'] for item in data if item.get('output_dir','').startswith('/tmp/surge-clean')]
           print(ids[0] if ids else data[-1]['id'])
           ")
+          $BIN rm $NEW_ID --clean \
+            --host localhost:$SURGE_PORT \
+            --token $TOKEN
+
+      # ── Server teardown ────────────────────────────────────────────────────
+      - name: "[server] Stop server"
         shell: bash
         run: |
           BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
@@ -532,9 +519,9 @@ jobs:
             --exit-when-done &
           wait $!
           echo "no-resume download completed"
-            --port 17001 \
 
-          echo "no-resume download completed"
+
+# ─────────────────────────────────────────────────────────────────────────────
 # JOB 6 – Sequential (Streaming Mode) download test
 # ─────────────────────────────────────────────────────────────────────────────
   integration-sequential:
@@ -588,13 +575,11 @@ jobs:
 
       - name: Download compose file
         run: |
-          wget -q https://raw.githubusercontent.com/surge-downloader/surge/refs/heads/main/docker/compose.yml
+          cp docker/compose.yml .
 
       - name: Start container
         run: docker compose up -d
 
-      - name: Wait for server to be healthy
-          cp docker/compose.yml .
       - name: Wait for server to be healthy
         run: |
           for i in $(seq 1 20); do
@@ -701,10 +686,10 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
           echo "| --- | ------ |" >> $GITHUB_STEP_SUMMARY
-          echo "| CLI Integration (ubuntu) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| CLI Integration (macos) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| CLI Integration (windows) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| CLI Integration (ubuntu / macos / windows) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Settings | ${{ needs.integration-settings.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Env Var Auth | ${{ needs.integration-env-auth.result }} |" >> $GITHUB_STEP_SUMMARY
           echo "| Download Completion | ${{ needs.integration-download-completion.result }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| CLI Integration (ubuntu/macos/windows) | ${{ needs.integration-cli.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Sequential Download | ${{ needs.integration-sequential.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker | ${{ needs.integration-docker.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Remote Connect | ${{ needs.integration-remote-connect.result }} |" >> $GITHUB_STEP_SUMMARY
