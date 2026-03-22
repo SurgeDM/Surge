@@ -292,7 +292,7 @@ func (m RootModel) View() tea.View {
 	}
 
 	if selected != nil {
-		detailContent = renderFocusedDetails(selected, detailWidth)
+		detailContent = renderFocusedDetails(selected, detailWidth, m.spinner.View())
 	} else {
 		// Default Placeholder
 		detailContent = lipgloss.Place(detailWidth, 8, lipgloss.Center, lipgloss.Center,
@@ -770,7 +770,7 @@ func (m RootModel) View() tea.View {
 }
 
 // Helper to render the detailed info pane
-func renderFocusedDetails(d *DownloadModel, w int) string {
+func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	pct := 0.0
 	if d.Total > 0 {
 		pct = float64(d.Downloaded) / float64(d.Total)
@@ -794,7 +794,7 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 		Padding(0, 1)
 
 	// --- 1. Status Section ---
-	statusStr := getDownloadStatus(d)
+	statusStr := getDownloadStatus(d, spinnerView)
 	statusStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colors.Gray).
@@ -983,15 +983,15 @@ func renderFocusedDetails(d *DownloadModel, w int) string {
 		Render(content)
 }
 
-func getDownloadStatus(d *DownloadModel) string {
+func getDownloadStatus(d *DownloadModel, spinnerView string) string {
 	if d.pausing {
-		return lipgloss.NewStyle().Foreground(colors.StatePaused).Render("⏸ Pausing...")
+		return lipgloss.NewStyle().Foreground(colors.StatePaused).Render(spinnerView + " Pausing...")
 	}
 	if d.resuming {
-		return lipgloss.NewStyle().Foreground(colors.StateDownloading).Render("▶ Resuming...")
+		return lipgloss.NewStyle().Foreground(colors.StateDownloading).Render(spinnerView + " Resuming...")
 	}
 	status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
-	return status.Render()
+	return status.RenderWithSpinner(spinnerView)
 }
 
 func (m RootModel) calcTotalSpeed() float64 {

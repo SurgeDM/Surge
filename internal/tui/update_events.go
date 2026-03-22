@@ -5,15 +5,34 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"github.com/surge-downloader/surge/internal/config"
 	"github.com/surge-downloader/surge/internal/engine/events"
+	"github.com/surge-downloader/surge/internal/tui/components"
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
+
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		m.spinner, cmd = m.spinner.Update(msg)
+
+		needsSpinner := false
+		for _, d := range m.downloads {
+			if d.pausing || d.resuming || components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded) == components.StatusQueued {
+				needsSpinner = true
+				break
+			}
+		}
+		if needsSpinner {
+			m.UpdateListItems()
+			return m, cmd
+		}
+		return m, nil
 
 	case resumeResultMsg:
 		if msg.err != nil {
@@ -25,7 +44,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.pausing = false
 			d.resuming = true
 		}
-		return m, nil
+		return m, m.spinner.Tick
 
 	case enqueueSuccessMsg:
 		if msg.tempID != "" && msg.tempID != msg.id {
@@ -159,7 +178,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		m.UpdateListItems()
 		m.addLogEntry(LogStyleStarted.Render("⬇ Started: " + msg.Filename))
-		return m, nil
+		return m, m.spinner.Tick
 
 	case events.ProgressMsg:
 		m.processProgressMsg(msg)
@@ -235,7 +254,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.addLogEntry(LogStyleStarted.Render("▶ Resumed: " + d.Filename))
 		}
 		m.UpdateListItems()
-		return m, nil
+		return m, m.spinner.Tick
 
 	case events.DownloadQueuedMsg:
 		// We optimistically added it, but if it came from elsewhere, handle it
@@ -249,6 +268,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newDownload.Destination = msg.DestPath
 			m.downloads = append(m.downloads, newDownload)
 			m.UpdateListItems()
+			return m, m.spinner.Tick
 		}
 		return m, nil
 

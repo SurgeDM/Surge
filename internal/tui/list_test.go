@@ -2,10 +2,64 @@ package tui
 
 import (
 	"bytes"
+	"regexp"
+	"strings"
 	"testing"
 
 	"charm.land/bubbles/v2/list"
 )
+
+var testAnsiEscapeRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
+
+func TestDownloadItem_Description(t *testing.T) {
+	spinnerView := "⠋"
+
+	tests := []struct {
+		name     string
+		model    *DownloadModel
+		expected string
+	}{
+		{
+			name: "Pausing State",
+			model: &DownloadModel{
+				pausing: true,
+			},
+			expected: "⠋ Pausing...",
+		},
+		{
+			name: "Resuming State",
+			model: &DownloadModel{
+				resuming: true,
+			},
+			expected: "⠋ Resuming...",
+		},
+		{
+			name: "Queued State",
+			model: &DownloadModel{
+				Speed:      0,
+				Downloaded: 0,
+				done:       false,
+				paused:     false,
+				err:        nil,
+			},
+			expected: "⠋ Queued",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			item := DownloadItem{
+				download:    tt.model,
+				spinnerView: spinnerView,
+			}
+			desc := item.Description()
+			plainDesc := testAnsiEscapeRE.ReplaceAllString(desc, "")
+			if !strings.Contains(plainDesc, tt.expected) {
+				t.Errorf("Description() = %q, want it to contain %q", plainDesc, tt.expected)
+			}
+		})
+	}
+}
 
 func BenchmarkDownloadDelegateRender(b *testing.B) {
 	d := newDownloadDelegate()

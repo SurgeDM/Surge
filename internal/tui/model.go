@@ -11,6 +11,7 @@ import (
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -180,6 +181,8 @@ type RootModel struct {
 	enqueueCtx    context.Context
 	cancelEnqueue context.CancelFunc
 	shuttingDown  bool
+
+	spinner spinner.Model
 }
 
 // NewDownloadModel creates a new download model
@@ -357,6 +360,12 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	enqueueCtx, cancelEnqueue := context.WithCancel(context.Background())
 
+	// A single root-level spinner provides a shared animation frame for rendering,
+	// avoiding the CPU and redraw overhead of independent per-item spinners on
+	// large download lists.
+	s := spinner.New()
+	s.Spinner = spinner.MiniDot
+
 	m := RootModel{
 		downloads:             downloads,
 		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
@@ -381,6 +390,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		InitialDarkBackground: initialDarkBackground,
 		enqueueCtx:            enqueueCtx,
 		cancelEnqueue:         cancelEnqueue,
+		spinner:               s,
 	}
 
 	m.refreshThemeCaches()
@@ -411,6 +421,8 @@ type ViewStats struct {
 
 func (m RootModel) Init() tea.Cmd {
 	var cmds []tea.Cmd
+
+	cmds = append(cmds, m.spinner.Tick)
 
 	// Trigger update check if not disabled in settings
 	if !m.Settings.General.SkipUpdateCheck {

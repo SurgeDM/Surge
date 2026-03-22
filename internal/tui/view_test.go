@@ -42,6 +42,52 @@ func TestFormatDurationForUI(t *testing.T) {
 	}
 }
 
+func TestGetDownloadStatus(t *testing.T) {
+	spinnerView := "⠋"
+
+	tests := []struct {
+		name     string
+		model    *DownloadModel
+		expected string
+	}{
+		{
+			name: "Pausing State",
+			model: &DownloadModel{
+				pausing: true,
+			},
+			expected: "⠋ Pausing...",
+		},
+		{
+			name: "Resuming State",
+			model: &DownloadModel{
+				resuming: true,
+			},
+			expected: "⠋ Resuming...",
+		},
+		{
+			name: "Queued State",
+			model: &DownloadModel{
+				Speed:      0,
+				Downloaded: 0,
+				done:       false,
+				paused:     false,
+				err:        nil,
+			},
+			expected: "⠋ Queued",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			status := getDownloadStatus(tt.model, spinnerView)
+			plainStatus := ansiEscapeRE.ReplaceAllString(status, "")
+			if !strings.Contains(plainStatus, tt.expected) {
+				t.Errorf("getDownloadStatus() = %q, want it to contain %q", plainStatus, tt.expected)
+			}
+		})
+	}
+}
+
 func TestView_DashboardFitsViewportWithoutTopCutoff(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
 

@@ -35,8 +35,9 @@ var statusMap = map[DownloadStatus]statusInfo{
 }
 
 var (
-	statusRenderCache [StatusError + 1][2]string // [status][0:full,1:icon]
-	cacheMu           sync.RWMutex
+	statusRenderCache  [StatusError + 1][2]string // [status][0:full,1:icon]
+	queuedSpinnerStyle lipgloss.Style
+	cacheMu            sync.RWMutex
 )
 
 func init() {
@@ -54,6 +55,7 @@ func rebuildStatusCache() {
 		statusRenderCache[status][0] = style.Render(info.icon + " " + info.label)
 		statusRenderCache[status][1] = style.Render(info.icon)
 	}
+	queuedSpinnerStyle = lipgloss.NewStyle().Foreground(StatusQueued.Color())
 }
 
 // Icon returns the status icon
@@ -96,6 +98,17 @@ func (s DownloadStatus) Render() string {
 		return statusRenderCache[s][0]
 	}
 	return "Unknown"
+}
+
+// RenderWithSpinner returns the styled icon + label combination, conditionally substituting a dynamic spinner for the Queued state
+func (s DownloadStatus) RenderWithSpinner(spinnerView string) string {
+	if s == StatusQueued {
+		cacheMu.RLock()
+		style := queuedSpinnerStyle
+		cacheMu.RUnlock()
+		return style.Render(spinnerView + " " + s.Label())
+	}
+	return s.Render()
 }
 
 // RenderIcon returns just the styled icon
