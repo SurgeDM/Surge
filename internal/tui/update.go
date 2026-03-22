@@ -114,26 +114,38 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Handle filepicker messages for all message types when in FilePickerState
 	default:
+		var cmds []tea.Cmd
+		for _, d := range m.downloads {
+			newProgress, cmd := d.progress.Update(msg)
+			d.progress = newProgress
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
 		if m.state == FilePickerState {
 			var cmd tea.Cmd
 			m.filepicker, cmd = m.filepicker.Update(msg)
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-				return m.handleFilePickerSelection(path)
+				model, selCmd := m.handleFilePickerSelection(path)
+				return model, tea.Batch(append(cmds, selCmd)...)
 			}
-			return m, cmd
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
 		}
 
 		if m.state == BatchFilePickerState {
 			var cmd tea.Cmd
 			m.filepicker, cmd = m.filepicker.Update(msg)
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-				return m.handleBatchFileSelection(path)
+				model, selCmd := m.handleBatchFileSelection(path)
+				return model, tea.Batch(append(cmds, selCmd)...)
 			}
-
-			return m, cmd
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
 		}
-
-		return m.updateEvents(msg) // ← this is what was missing
+		model, cmd := m.updateEvents(msg)
+		cmds = append(cmds, cmd)
+		return model, tea.Batch(cmds...)
 
 	case tea.KeyPressMsg:
 		switch m.state {
