@@ -87,7 +87,7 @@ func (m RootModel) View() string {
 	if m.state == InputState {
 		modal := components.AddDownloadModal{
 			Title:           "Add Download",
-			Inputs:          []textinput.Model{m.inputs[0], m.inputs[1], m.inputs[2], m.inputs[3]},
+			Inputs:          []any{m.inputs[0], m.inputs[1], m.inputs[2], m.inputs[3]},
 			Labels:          []string{"URL:", "Mirrors:", "Path:", "Filename:"},
 			FocusedInput:    m.focusedInput,
 			BrowseHintIndex: 2,
@@ -137,7 +137,7 @@ func (m RootModel) View() string {
 	}
 
 	if m.state == ExtensionConfirmationState {
-		extInputs := []textinput.Model{m.inputs[2], m.inputs[3]}
+		extInputs := []any{m.inputs[2], m.inputs[3]}
 		focused := 0
 		if m.focusedInput == 3 {
 			focused = 1
@@ -206,7 +206,7 @@ func (m RootModel) View() string {
 	if m.state == URLUpdateState {
 		modal := components.AddDownloadModal{
 			Title:           "Refresh URL",
-			Inputs:          []textinput.Model{m.urlUpdateInput},
+			Inputs:          []any{m.urlUpdateInput},
 			Labels:          []string{"New URL:"},
 			FocusedInput:    0,
 			BrowseHintIndex: -1, // No browse hint needed

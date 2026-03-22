@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/bubbles/help"
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/progress"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/bubbles/viewport"
 	tea "github.com/charmbracelet/bubbletea"
@@ -83,7 +84,7 @@ type RootModel struct {
 	height       int
 	state        UIState
 	activeTab    int // 0=Queued, 1=Active, 2=Done
-	inputs       []textinput.Model
+	inputs       []any
 	focusedInput int
 	// Service Interface
 	// Core
@@ -153,7 +154,7 @@ type RootModel struct {
 	catMgrCursor       int                // Selected category index
 	catMgrEditing      bool               // Whether editing a category
 	catMgrEditField    int                // 0=Name, 1=Description, 2=Pattern, 3=Path
-	catMgrInputs       [4]textinput.Model // Inputs for Name, Description, Pattern, Path
+	catMgrInputs       [4]any             // Inputs for Name, Description, Pattern, Path
 	catMgrIsNew        bool               // Whether adding a new category
 	catMgrFileBrowsing bool               // Whether browsing for a category path
 
@@ -213,10 +214,10 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	filenameInput.Width = InputWidth
 	filenameInput.Prompt = ""
 
-	mirrorsInput := textinput.New()
-	mirrorsInput.Placeholder = "http://mirror1.com, http://mirror2.com"
-	mirrorsInput.Width = InputWidth
-	mirrorsInput.Prompt = ""
+	mirrorsInput := textarea.New()
+	mirrorsInput.Placeholder = "http://mirror1.com\nhttp://mirror2.com"
+	mirrorsInput.SetWidth(InputWidth)
+	mirrorsInput.SetHeight(3)
 
 	pwd, _ := os.Getwd()
 
@@ -332,10 +333,10 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	catNameInput.Width = 30
 	catNameInput.Prompt = ""
 
-	catDescInput := textinput.New()
+	catDescInput := textarea.New()
 	catDescInput.Placeholder = "Video files (.mp4, .mkv)"
-	catDescInput.Width = 50
-	catDescInput.Prompt = ""
+	catDescInput.SetWidth(50)
+	catDescInput.SetHeight(2)
 
 	catPatternInput := textinput.New()
 	catPatternInput.Placeholder = "(?i)\\.(mp4|mkv)$"
@@ -351,7 +352,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	m := RootModel{
 		downloads:             downloads,
-		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
+		inputs:                []any{urlInput, mirrorsInput, pathInput, filenameInput},
 		state:                 DashboardState,
 		filepicker:            fp,
 		help:                  helpModel,
@@ -366,7 +367,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		SettingsInput:         settingsInput,
 		searchInput:           searchInput,
 		urlUpdateInput:        urlUpdateInput,
-		catMgrInputs:          [4]textinput.Model{catNameInput, catDescInput, catPatternInput, catPathInput},
+		catMgrInputs:          [4]any{catNameInput, catDescInput, catPatternInput, catPathInput},
 		keys:                  Keys,
 		ServerPort:            serverPort,
 		CurrentVersion:        currentVersion,
@@ -557,4 +558,66 @@ func (m *RootModel) ApplyTheme(mode int) {
 		lipgloss.SetHasDarkBackground(true)
 	}
 	m.logoCache = "" // Invalidate logo cache
+}
+
+func (m *RootModel) getInputValue(inputs []any, index int) string {
+	switch v := inputs[index].(type) {
+	case textinput.Model:
+		return v.Value()
+	case textarea.Model:
+		return v.Value()
+	}
+	return ""
+}
+
+func (m *RootModel) setInputValue(inputs []any, index int, val string) {
+	switch v := inputs[index].(type) {
+	case textinput.Model:
+		v.SetValue(val)
+		inputs[index] = v
+	case textarea.Model:
+		v.SetValue(val)
+		inputs[index] = v
+	}
+}
+
+func (m *RootModel) focusInput(inputs []any, index int) tea.Cmd {
+	switch v := inputs[index].(type) {
+	case textinput.Model:
+		cmd := v.Focus()
+		inputs[index] = v
+		return cmd
+	case textarea.Model:
+		cmd := v.Focus()
+		inputs[index] = v
+		return cmd
+	}
+	return nil
+}
+
+func (m *RootModel) blurInput(inputs []any, index int) {
+	switch v := inputs[index].(type) {
+	case textinput.Model:
+		v.Blur()
+		inputs[index] = v
+	case textarea.Model:
+		v.Blur()
+		inputs[index] = v
+	}
+}
+
+func (m *RootModel) updateInput(inputs []any, index int, msg tea.Msg) tea.Cmd {
+	switch v := inputs[index].(type) {
+	case textinput.Model:
+		var cmd tea.Cmd
+		v, cmd = v.Update(msg)
+		inputs[index] = v
+		return cmd
+	case textarea.Model:
+		var cmd tea.Cmd
+		v, cmd = v.Update(msg)
+		inputs[index] = v
+		return cmd
+	}
+	return nil
 }

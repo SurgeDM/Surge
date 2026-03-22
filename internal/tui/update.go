@@ -126,18 +126,18 @@ func (m *RootModel) handleFilePickerSelection(path string) (tea.Model, tea.Cmd) 
 		return m, nil
 	}
 	if m.ExtensionFileBrowsing {
-		m.inputs[2].SetValue(path)
+		m.setInputValue(m.inputs, 2, path)
 		m.ExtensionFileBrowsing = false
 		m.state = ExtensionConfirmationState
 		return m, nil
 	}
 	if m.catMgrFileBrowsing {
-		m.catMgrInputs[3].SetValue(path)
+		m.setInputValue(m.catMgrInputs[:], 3, path)
 		m.catMgrFileBrowsing = false
 		m.state = CategoryManagerState
 		return m, nil
 	}
-	m.inputs[2].SetValue(path)
+	m.setInputValue(m.inputs, 2, path)
 	m.state = InputState
 	return m, nil
 }
@@ -452,15 +452,15 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingPath = path
 			m.pendingIsDefaultPath = isDefaultPath
 			m.pendingFilename = msg.Filename
-			m.inputs[2].SetValue(path)
-			m.inputs[3].SetValue(msg.Filename)
+			m.setInputValue(m.inputs, 2, path)
+			m.setInputValue(m.inputs, 3, msg.Filename)
 			m.focusedInput = 2
 			for i := range m.inputs {
-				m.inputs[i].Blur()
+				m.blurInput(m.inputs, i)
 			}
-			m.inputs[m.focusedInput].Focus()
+			cmds = append(cmds, m.focusInput(m.inputs, m.focusedInput))
 			m.state = ExtensionConfirmationState
-			return m, nil
+			return m, tea.Batch(cmds...)
 		}
 
 		return m.startDownload(msg.URL, msg.Mirrors, msg.Headers, path, isDefaultPath, msg.Filename, msg.ID)
@@ -763,25 +763,25 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key.Matches(msg, m.keys.Dashboard.Add) {
 				m.state = InputState
 				m.focusedInput = 0
-				m.inputs[0].Focus()
+				cmds = append(cmds, m.focusInput(m.inputs, 0))
 				// Use default download dir from settings
 				defaultDir := m.Settings.General.DefaultDownloadDir
 				if defaultDir == "" {
 					defaultDir = "."
 				}
-				m.inputs[2].SetValue(defaultDir)
-				m.inputs[2].Blur()
-				m.inputs[3].SetValue("")
-				m.inputs[3].Blur()
-				m.inputs[1].SetValue("") // Clear mirrors
-				m.inputs[1].Blur()
+				m.setInputValue(m.inputs, 2, defaultDir)
+				m.blurInput(m.inputs, 2)
+				m.setInputValue(m.inputs, 3, "")
+				m.blurInput(m.inputs, 3)
+				m.setInputValue(m.inputs, 1, "") // Clear mirrors
+				m.blurInput(m.inputs, 1)
 
 				url := ""
 				if m.Settings.General.ClipboardMonitor {
 					url = clipboard.ReadURL()
 				}
-				m.inputs[0].SetValue(url)
-				return m, nil
+				m.setInputValue(m.inputs, 0, url)
+				return m, tea.Batch(cmds...)
 			}
 
 			// Next Tab
@@ -1007,21 +1007,21 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if key.Matches(msg, m.keys.Input.Enter) {
 				// Navigate through inputs: URL -> Mirrors -> Path -> Filename -> Start
 				if m.focusedInput < 3 {
-					m.inputs[m.focusedInput].Blur()
+					m.blurInput(m.inputs, m.focusedInput)
 					m.focusedInput++
-					m.inputs[m.focusedInput].Focus()
-					return m, nil
+					cmds = append(cmds, m.focusInput(m.inputs, m.focusedInput))
+					return m, tea.Batch(cmds...)
 				}
 				// Start download (on last input)
-				inputVal := m.inputs[0].Value()
+				inputVal := m.getInputValue(m.inputs, 0)
 				if inputVal == "" {
 					// URL is mandatory - don't start
 					m.focusedInput = 0
-					m.inputs[0].Focus()
-					m.inputs[1].Blur()
-					m.inputs[2].Blur()
-					m.inputs[3].Blur()
-					return m, nil
+					cmds = append(cmds, m.focusInput(m.inputs, 0))
+					m.blurInput(m.inputs, 1)
+					m.blurInput(m.inputs, 2)
+					m.blurInput(m.inputs, 3)
+					return m, tea.Batch(cmds...)
 				}
 
 				// Parse comma-separated URLs from primary input (backward compatibility)
@@ -1044,9 +1044,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 
 				// Parse mirrors from dedicated input
-				mirrorsVal := m.inputs[1].Value()
+				mirrorsVal := m.getInputValue(m.inputs, 1)
 				if mirrorsVal != "" {
-					mirrorParts := strings.Split(mirrorsVal, ",")
+					// Support both comma and newline separation for textarea compatibility
+					mirrorParts := strings.FieldsFunc(mirrorsVal, func(r rune) bool {
+						return r == ',' || r == '\n'
+					})
 					for _, part := range mirrorParts {
 						cleaned := strings.TrimSpace(part)
 						if cleaned != "" {
@@ -1058,18 +1061,18 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if url == "" {
 					// Should ideally check valid URL format here too
 					m.focusedInput = 0
-					m.inputs[0].Focus()
-					return m, nil
+					cmds = append(cmds, m.focusInput(m.inputs, 0))
+					return m, tea.Batch(cmds...)
 				}
 
-				pathInput := strings.TrimSpace(m.inputs[2].Value())
+				pathInput := strings.TrimSpace(m.getInputValue(m.inputs, 2))
 				path := pathInput
 				isDefaultPath := m.isDefaultDownloadPath(path)
 				if path == "" {
 					isDefaultPath = true
 					path = m.defaultDownloadPath()
 				}
-				filename := m.inputs[3].Value()
+				filename := m.getInputValue(m.inputs, 3)
 
 				// Check for duplicate URL
 				if d := m.checkForDuplicate(url); d != nil {
@@ -1086,30 +1089,29 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 				m.state = DashboardState
 				// Clear inputs
-				m.inputs[0].SetValue("")
-				m.inputs[1].SetValue("")
-				m.inputs[2].SetValue(path) // Keep path
-				m.inputs[3].SetValue("")
+				m.setInputValue(m.inputs, 0, "")
+				m.setInputValue(m.inputs, 1, "")
+				m.setInputValue(m.inputs, 2, path) // Keep path
+				m.setInputValue(m.inputs, 3, "")
 
 				return m.startDownload(url, mirrors, nil, path, isDefaultPath, filename, "")
 			}
 
 			// Up/Down navigation between inputs
 			if key.Matches(msg, m.keys.Input.Up) && m.focusedInput > 0 {
-				m.inputs[m.focusedInput].Blur()
+				m.blurInput(m.inputs, m.focusedInput)
 				m.focusedInput--
-				m.inputs[m.focusedInput].Focus()
-				return m, nil
+				cmds = append(cmds, m.focusInput(m.inputs, m.focusedInput))
+				return m, tea.Batch(cmds...)
 			}
 			if key.Matches(msg, m.keys.Input.Down) && m.focusedInput < 3 {
-				m.inputs[m.focusedInput].Blur()
+				m.blurInput(m.inputs, m.focusedInput)
 				m.focusedInput++
-				m.inputs[m.focusedInput].Focus()
-				return m, nil
+				cmds = append(cmds, m.focusInput(m.inputs, m.focusedInput))
+				return m, tea.Batch(cmds...)
 			}
 
-			var cmd tea.Cmd
-			m.inputs[m.focusedInput], cmd = m.inputs[m.focusedInput].Update(msg)
+			cmd := m.updateInput(m.inputs, m.focusedInput, msg)
 			return m, cmd
 
 		case FilePickerState:
@@ -1714,12 +1716,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// Enter edit mode
 				m.catMgrEditing = true
 				m.catMgrEditField = 0
-				m.catMgrInputs[0].SetValue(newCat.Name)
-				m.catMgrInputs[1].SetValue(newCat.Description)
-				m.catMgrInputs[2].SetValue(newCat.Pattern)
-				m.catMgrInputs[3].SetValue(newCat.Path)
-				m.catMgrInputs[0].Focus()
-				return m, nil
+				m.setInputValue(m.catMgrInputs[:], 0, newCat.Name)
+				m.setInputValue(m.catMgrInputs[:], 1, newCat.Description)
+				m.setInputValue(m.catMgrInputs[:], 2, newCat.Pattern)
+				m.setInputValue(m.catMgrInputs[:], 3, newCat.Path)
+				cmds = append(cmds, m.focusInput(m.catMgrInputs[:], 0))
+				return m, tea.Batch(cmds...)
 			}
 
 			if key.Matches(msg, m.keys.CategoryMgr.Edit) {
@@ -1728,11 +1730,11 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					cat := cats[m.catMgrCursor]
 					m.catMgrEditing = true
 					m.catMgrEditField = 0
-					m.catMgrInputs[0].SetValue(cat.Name)
-					m.catMgrInputs[1].SetValue(cat.Description)
-					m.catMgrInputs[2].SetValue(cat.Pattern)
-					m.catMgrInputs[3].SetValue(cat.Path)
-					m.catMgrInputs[0].Focus()
+					m.setInputValue(m.catMgrInputs[:], 0, cat.Name)
+					m.setInputValue(m.catMgrInputs[:], 1, cat.Description)
+					m.setInputValue(m.catMgrInputs[:], 2, cat.Pattern)
+					m.setInputValue(m.catMgrInputs[:], 3, cat.Path)
+					cmds = append(cmds, m.focusInput(m.catMgrInputs[:], 0))
 				} else {
 					// On "+ Add Category" row, same as Add
 					newCat := config.Category{Name: "New Category"}
@@ -1741,13 +1743,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					m.catMgrIsNew = true
 					m.catMgrEditing = true
 					m.catMgrEditField = 0
-					m.catMgrInputs[0].SetValue(newCat.Name)
-					m.catMgrInputs[1].SetValue(newCat.Description)
-					m.catMgrInputs[2].SetValue(newCat.Pattern)
-					m.catMgrInputs[3].SetValue(newCat.Path)
-					m.catMgrInputs[0].Focus()
+					m.setInputValue(m.catMgrInputs[:], 0, newCat.Name)
+					m.setInputValue(m.catMgrInputs[:], 1, newCat.Description)
+					m.setInputValue(m.catMgrInputs[:], 2, newCat.Pattern)
+					m.setInputValue(m.catMgrInputs[:], 3, newCat.Path)
+					cmds = append(cmds, m.focusInput(m.catMgrInputs[:], 0))
 				}
-				return m, nil
+				return m, tea.Batch(cmds...)
 			}
 
 			return m, nil

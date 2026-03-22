@@ -4,6 +4,7 @@ import (
 	"github.com/surge-downloader/surge/internal/tui/colors"
 
 	"github.com/charmbracelet/bubbles/help"
+	"github.com/charmbracelet/bubbles/textarea"
 	"github.com/charmbracelet/bubbles/textinput"
 	"github.com/charmbracelet/lipgloss"
 )
@@ -11,7 +12,7 @@ import (
 // AddDownloadModal renders input-driven download forms (add download / extension prompt).
 type AddDownloadModal struct {
 	Title           string
-	Inputs          []textinput.Model
+	Inputs          []any
 	Labels          []string
 	FocusedInput    int
 	ShowURL         bool
@@ -38,7 +39,14 @@ func (m AddDownloadModal) View() string {
 	}
 
 	for i := 0; i < len(m.Inputs) && i < len(m.Labels); i++ {
-		row := lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render(m.Labels[i]), m.Inputs[i].View())
+		var inputView string
+		switch v := m.Inputs[i].(type) {
+		case textinput.Model:
+			inputView = v.View()
+		case textarea.Model:
+			inputView = v.View()
+		}
+		row := lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render(m.Labels[i]), inputView)
 		if m.BrowseHintIndex == i {
 			hintStyle := hintBase
 			if m.FocusedInput == i {
