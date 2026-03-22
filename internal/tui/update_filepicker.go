@@ -6,6 +6,21 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
+func (m *RootModel) handleBatchFileSelection(path string) (tea.Model, tea.Cmd) {
+	urls, err := utils.ReadURLsFromFile(path)
+	if err != nil {
+		m.addLogEntry(LogStyleError.Render("✖ Failed to read batch file: " + err.Error()))
+		m.resetFilepickerToDirMode()
+		m.state = DashboardState
+		return m, nil
+	}
+	m.pendingBatchURLs = urls
+	m.batchFilePath = path
+	m.resetFilepickerToDirMode()
+	m.state = BatchConfirmState
+	return m, nil
+}
+
 func (m RootModel) updateFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.FilePicker.Cancel) {
 		// Cancel and return to appropriate state
@@ -44,7 +59,7 @@ func (m RootModel) updateFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// Check if a directory was selected
 	if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-		m.handleFilePickerSelection(path)
+		return m.handleFilePickerSelection(path)
 	}
 
 	return m, cmd
@@ -72,25 +87,7 @@ func (m RootModel) updateBatchFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 
 	// Check if a file was selected
 	if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-		// Read URLs from file
-		urls, err := utils.ReadURLsFromFile(path)
-		if err != nil {
-			m.addLogEntry(LogStyleError.Render("✖ Failed to read batch file: " + err.Error()))
-			// Reset filepicker and return
-			m.resetFilepickerToDirMode()
-			m.state = DashboardState
-			return m, nil
-		}
-
-		// Store pending URLs and show confirmation
-		m.pendingBatchURLs = urls
-		m.batchFilePath = path
-
-		// Reset filepicker to directory mode
-		m.resetFilepickerToDirMode()
-
-		m.state = BatchConfirmState
-		return m, nil
+		return m.handleBatchFileSelection(path)
 	}
 
 	return m, cmd

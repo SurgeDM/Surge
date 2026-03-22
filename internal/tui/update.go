@@ -32,19 +32,6 @@ type shutdownCompleteMsg struct {
 	err error
 }
 
-type enqueueSuccessMsg struct {
-	tempID   string
-	id       string
-	url      string
-	path     string
-	filename string
-}
-
-type enqueueErrorMsg struct {
-	tempID string
-	err    error
-}
-
 // checkForUpdateCmd performs an async update check
 func checkForUpdateCmd(currentVersion string) tea.Cmd {
 	return func() tea.Msg {
@@ -327,7 +314,6 @@ func (m RootModel) isDefaultDownloadPath(path string) bool {
 // Update handles messages and updates the model
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
-	var cmds []tea.Cmd
 	if m.Settings == nil {
 		m.Settings = config.DefaultSettings()
 	}
@@ -349,71 +335,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-
-	case resumeResultMsg:
-		if msg.err != nil {
-			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Auto-resume failed for %s: %v", msg.id, msg.err)))
-			return m, nil
-		}
-		if d := m.FindDownloadByID(msg.id); d != nil {
-			d.paused = false
-			d.pausing = false
-			d.resuming = true
-		}
-		return m, nil
-
-	case enqueueSuccessMsg:
-		if msg.tempID != "" && msg.tempID != msg.id {
-			temp := m.FindDownloadByID(msg.tempID)
-			real := m.FindDownloadByID(msg.id)
-			if temp != nil && real != nil && temp != real {
-				if real.URL == "" {
-					real.URL = temp.URL
-				}
-				if real.Filename == "" {
-					real.Filename = msg.filename
-					if real.Filename == "" {
-						real.Filename = temp.Filename
-					}
-					real.FilenameLower = strings.ToLower(real.Filename)
-				}
-				if real.Destination == "" {
-					real.Destination = temp.Destination
-				}
-				_ = m.removeDownloadByID(msg.tempID)
-			} else if temp != nil {
-				temp.ID = msg.id
-			}
-			if m.SelectedDownloadID == msg.tempID {
-				m.SelectedDownloadID = msg.id
-			}
-		}
-		m.UpdateListItems()
-		return m, nil
-
-	case enqueueErrorMsg:
-		if msg.tempID != "" {
-			if d := m.FindDownloadByID(msg.tempID); d != nil {
-				d.err = msg.err
-				d.done = true
-				d.paused = false
-				d.pausing = false
-				d.resuming = false
-				d.Speed = 0
-				d.Connections = 0
-				if d.FilenameLower == "" {
-					d.FilenameLower = strings.ToLower(d.Filename)
-				}
-			} else {
-				failed := NewDownloadModel(msg.tempID, "", "", 0)
-				failed.err = msg.err
-				failed.done = true
-				m.downloads = append(m.downloads, failed)
-			}
-			m.UpdateListItems()
-		}
-		m.addLogEntry(LogStyleError.Render("✖ Failed to enqueue download: " + msg.err.Error()))
-		return m, nil
 
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
@@ -487,43 +408,23 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.state == FilePickerState {
 			var cmd tea.Cmd
 			m.filepicker, cmd = m.filepicker.Update(msg)
-
-			// Check if a directory was selected
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
 				return m.handleFilePickerSelection(path)
 			}
-
 			return m, cmd
 		}
 
 		if m.state == BatchFilePickerState {
 			var cmd tea.Cmd
 			m.filepicker, cmd = m.filepicker.Update(msg)
-
-			// Check if a file was selected
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-				// Read URLs from file
-				urls, err := utils.ReadURLsFromFile(path)
-				if err != nil {
-					m.addLogEntry(LogStyleError.Render("✖ Failed to read batch file: " + err.Error()))
-					m.resetFilepickerToDirMode()
-					m.state = DashboardState
-					return m, nil
-				}
-
-				// Store pending URLs and show confirmation
-				m.pendingBatchURLs = urls
-				m.batchFilePath = path
-
-				// Reset filepicker to directory mode
-				m.resetFilepickerToDirMode()
-
-				m.state = BatchConfirmState
-				return m, nil
+				return m.handleBatchFileSelection(path)
 			}
 
 			return m, cmd
 		}
+
+		return m.updateEvents(msg) // ← this is what was missing
 
 	case tea.KeyPressMsg:
 		switch m.state {
@@ -574,24 +475,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateCategoryManager(msg)
 
 		default:
-			if m.state == FilePickerState {
-
-			}
-			if m.state == BatchFilePickerState {
-				// filepicker non-key messages handled here or move to updateEvents
-			}
-			return m.updateEvents(msg)
+			return m, nil
 		}
 	}
 
-	// Propagate messages to progress bars - only update visible ones for performance
-	for _, d := range m.downloads {
-		newProgress, cmd := d.progress.Update(msg)
-		d.progress = newProgress
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-	}
-
-	return m, tea.Batch(cmds...)
+	return m, nil
 }

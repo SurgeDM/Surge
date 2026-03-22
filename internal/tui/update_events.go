@@ -11,9 +11,87 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
+type enqueueSuccessMsg struct {
+	tempID   string
+	id       string
+	url      string
+	path     string
+	filename string
+}
+
+type enqueueErrorMsg struct {
+	tempID string
+	err    error
+}
+
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
+
+	case resumeResultMsg:
+		if msg.err != nil {
+			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Auto-resume failed for %s: %v", msg.id, msg.err)))
+			return m, nil
+		}
+		if d := m.FindDownloadByID(msg.id); d != nil {
+			d.paused = false
+			d.pausing = false
+			d.resuming = true
+		}
+		return m, nil
+
+	case enqueueSuccessMsg:
+		if msg.tempID != "" && msg.tempID != msg.id {
+			temp := m.FindDownloadByID(msg.tempID)
+			real := m.FindDownloadByID(msg.id)
+			if temp != nil && real != nil && temp != real {
+				if real.URL == "" {
+					real.URL = temp.URL
+				}
+				if real.Filename == "" {
+					real.Filename = msg.filename
+					if real.Filename == "" {
+						real.Filename = temp.Filename
+					}
+					real.FilenameLower = strings.ToLower(real.Filename)
+				}
+				if real.Destination == "" {
+					real.Destination = temp.Destination
+				}
+				_ = m.removeDownloadByID(msg.tempID)
+			} else if temp != nil {
+				temp.ID = msg.id
+			}
+			if m.SelectedDownloadID == msg.tempID {
+				m.SelectedDownloadID = msg.id
+			}
+		}
+		m.UpdateListItems()
+		return m, nil
+
+	case enqueueErrorMsg:
+		if msg.tempID != "" {
+			if d := m.FindDownloadByID(msg.tempID); d != nil {
+				d.err = msg.err
+				d.done = true
+				d.paused = false
+				d.pausing = false
+				d.resuming = false
+				d.Speed = 0
+				d.Connections = 0
+				if d.FilenameLower == "" {
+					d.FilenameLower = strings.ToLower(d.Filename)
+				}
+			} else {
+				failed := NewDownloadModel(msg.tempID, "", "", 0)
+				failed.err = msg.err
+				failed.done = true
+				m.downloads = append(m.downloads, failed)
+			}
+			m.UpdateListItems()
+		}
+		m.addLogEntry(LogStyleError.Render("✖ Failed to enqueue download: " + msg.err.Error()))
+		return m, nil
 
 	case events.DownloadRequestMsg:
 		path := strings.TrimSpace(msg.Path)
