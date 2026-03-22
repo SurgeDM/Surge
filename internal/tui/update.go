@@ -18,8 +18,8 @@ import (
 	"github.com/surge-downloader/surge/internal/engine/events"
 	"github.com/surge-downloader/surge/internal/engine/state"
 	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/utils"
 	"github.com/surge-downloader/surge/internal/tui/components"
+	"github.com/surge-downloader/surge/internal/utils"
 	"github.com/surge-downloader/surge/internal/version"
 
 	"charm.land/bubbles/v2/key"
