@@ -16,11 +16,11 @@ permissions:
 
 jobs:
   test-flakes:
-    name: Run Tests Multiple Times
+    name: Run Tests Multiple Times (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -29,7 +29,7 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.25.0"
-          check-latest: false
+          cache: true
 
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
@@ -44,7 +44,7 @@ jobs:
           COUNT="${{ github.event.inputs.runs || '10' }}"
           echo "Running tests $COUNT times to identify flakes..."
           gotestsum --junitfile test-results-${{ matrix.os }}.xml --format testdox -- -count=$COUNT ./...
-          
+
       - name: Upload Test Results
         uses: actions/upload-artifact@v4
         if: always()
