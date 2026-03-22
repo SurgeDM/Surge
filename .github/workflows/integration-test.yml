@@ -525,7 +525,7 @@ jobs:
             --exit-when-done &
           wait $!
           echo "no-resume download completed"
-
+            --port 17001 \
 
 # ─────────────────────────────────────────────────────────────────────────────
 # JOB 6 – Sequential (Streaming Mode) download test
