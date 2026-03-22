@@ -11,19 +11,6 @@ import (
 	"github.com/surge-downloader/surge/internal/utils"
 )
 
-type enqueueSuccessMsg struct {
-	tempID   string
-	id       string
-	url      string
-	path     string
-	filename string
-}
-
-type enqueueErrorMsg struct {
-	tempID string
-	err    error
-}
-
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {

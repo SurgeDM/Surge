@@ -447,11 +447,6 @@ func (m RootModel) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-type resumeResultMsg struct {
-	id  string
-	err error
-}
-
 // FindDownloadByID finds a download by its ID
 func (m *RootModel) FindDownloadByID(id string) *DownloadModel {
 	for _, d := range m.downloads {
