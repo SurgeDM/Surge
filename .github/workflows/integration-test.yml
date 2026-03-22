@@ -21,6 +21,9 @@ env:
   TEST_URL_1: "https://speed.cloudflare.com/__down?bytes=1048576"
   # Second mirror / URL for multi-mirror & batch tests
   TEST_URL_2: "https://speed.cloudflare.com/__down?bytes=1048576&during=download2"
+  # 1000 MB — slow enough to pause 
+  TEST_URL_SLOW: "https://speed.cloudflare.com/__down?bytes=1048576000"   
+
   # Surge daemon default port
   SURGE_PORT: "1700"
 
@@ -122,7 +125,7 @@ jobs:
         shell: bash
         run: |
           BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
-          $BIN add "$TEST_URL_1" \
+          $BIN add "$TEST_URL_SLOW" \
             --host localhost:$SURGE_PORT \
             --token $TOKEN \
             --output "$RUNNER_TEMP/surge-test/" 2>&1 | tee add_output.txt
@@ -156,6 +159,17 @@ jobs:
         shell: bash
         run: |
           BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
+          # Wait until the download is actively in-progress before pausing
+          for i in $(seq 1 10); do
+            STATUS=$($BIN ls $DL_ID --json \
+              --host localhost:$SURGE_PORT \
+              --token $TOKEN | python3 -c "
+          import sys,json; d=json.load(sys.stdin)
+          item=d[0] if isinstance(d,list) else d
+          print(item.get('status','').lower())")
+            echo "Status: $STATUS"
+            [ "$STATUS" = "downloading" ] && break || sleep 1
+          done
           $BIN pause $DL_ID \
             --host localhost:$SURGE_PORT \
             --token $TOKEN
