@@ -132,7 +132,7 @@ jobs:
 
       - name: "[ls] List all downloads (text)"
         shell: bash
-        run: |
+            --output "$RUNNER_TEMP/surge-test/" 2>&1 | tee add_output.txt
           BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
           $BIN ls \
             --host localhost:$SURGE_PORT \
@@ -148,16 +148,18 @@ jobs:
           echo "DL_ID=$DL_ID" >> $GITHUB_ENV
           echo "Captured download ID: $DL_ID"
           [ -n "$DL_ID" ] || (echo "ERROR: could not extract a download ID from ls output" && exit 1)
-            --host localhost:$SURGE_PORT \
-            --token $TOKEN)
-          echo "$OUTPUT" | python3 -c "import sys,json; data=json.load(sys.stdin); print(f'Found {len(data)} download(s)')"
-
-      - name: "[ls id] Show single download detail"
+      - name: "[ls] List all downloads (JSON)"
         shell: bash
         run: |
           BIN=./surge; [ "${{ matrix.os }}" = "windows-latest" ] && BIN=./surge.exe
-          $BIN ls $DL_ID \
+          OUTPUT=$($BIN ls --json \
             --host localhost:$SURGE_PORT \
+            --token $TOKEN)
+          DL_ID=$(echo "$OUTPUT" | python3 -c "import sys,json; data=json.load(sys.stdin); print(data[0]['id'])")
+          echo "DL_ID=$DL_ID" >> $GITHUB_ENV
+          echo "Captured download ID: $DL_ID"
+          [ -n "$DL_ID" ] || (echo "ERROR: could not extract a download ID from ls output" && exit 1)
+          echo "$OUTPUT" | python3 -c "import sys,json; data=json.load(sys.stdin); print(f'Found {len(data)} download(s)')"
             --token $TOKEN
 
       # ── Pause / resume cycle ───────────────────────────────────────────────
@@ -532,7 +534,7 @@ jobs:
           echo "no-resume download completed"
             --port 17001 \
 
-# ─────────────────────────────────────────────────────────────────────────────
+          echo "no-resume download completed"
 # JOB 6 – Sequential (Streaming Mode) download test
 # ─────────────────────────────────────────────────────────────────────────────
   integration-sequential:
@@ -593,14 +595,13 @@ jobs:
 
       - name: Wait for server to be healthy
           cp docker/compose.yml .
+      - name: Wait for server to be healthy
+        run: |
           for i in $(seq 1 20); do
             STATUS=$(docker compose exec -T surge ./surge server status 2>&1 || true)
             echo "$STATUS" | grep -qi "running" && break || sleep 2
           done
           echo "Final status: $STATUS"
-
-      - name: Get token from container
-        run: |
           TOKEN=$(docker compose exec -T surge surge token)
           echo "TOKEN=$TOKEN" >> $GITHUB_ENV
           echo "Container token length: ${#TOKEN}"
