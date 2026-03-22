@@ -1394,32 +1394,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 			// Not editing - handle navigation
 
-			// Handle reset-all confirmation before any other key
-			if m.ResetAllPending {
-				m.ResetAllPending = false
-				if msg.String() == "y" || msg.String() == "Y" {
-					defaults := config.DefaultSettings()
-					if err := config.SaveSettings(defaults); err != nil {
-						m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to persist reset: %s", err.Error())))
-						return m, nil
-					}
-					m.Settings = defaults
-					m.ApplyTheme(m.Settings.General.Theme)
-					if reloader, ok := m.Service.(interface{ ReloadSettings() error }); ok {
-						if err := reloader.ReloadSettings(); err != nil {
-							m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to reload settings after reset: %s", err.Error())))
-						}
-					}
-					if m.Orchestrator != nil {
-						m.Orchestrator.ApplySettings(m.Settings)
-					}
-					m.addLogEntry(LogStyleComplete.Render("✔ All settings reset to defaults"))
-				} else {
-					m.addLogEntry(LogStyleComplete.Render("Reset cancelled."))
-				}
-				return m, nil
-			}
-
 			if key.Matches(msg, m.keys.Settings.Close) {
 				// Save settings and exit
 				_ = m.persistSettings()
@@ -1550,17 +1524,40 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			// Reset All — requires confirmation
+			// Reset All — open confirmation modal
 			if key.Matches(msg, m.keys.Settings.ResetAll) {
-				if m.ResetAllPending {
-					// Already showing confirmation, ignore duplicate press
-					return m, nil
-				}
-				m.ResetAllPending = true
-				m.addLogEntry(LogStyleError.Render("⚠ Reset all settings to defaults? Press y to confirm, any other key to cancel."))
+				m.state = ResetAllConfirmState
 				return m, nil
 			}
 
+			return m, nil
+
+		case ResetAllConfirmState:
+			if key.Matches(msg, m.keys.ResetAllCfm.Confirm) {
+				defaults := config.DefaultSettings()
+				if err := config.SaveSettings(defaults); err != nil {
+					m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to persist reset: %s", err.Error())))
+					m.state = SettingsState
+					return m, nil
+				}
+				m.Settings = defaults
+				m.ApplyTheme(m.Settings.General.Theme)
+				if reloader, ok := m.Service.(interface{ ReloadSettings() error }); ok {
+					if err := reloader.ReloadSettings(); err != nil {
+						m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to reload settings after reset: %s", err.Error())))
+					}
+				}
+				if m.Orchestrator != nil {
+					m.Orchestrator.ApplySettings(m.Settings)
+				}
+				m.addLogEntry(LogStyleComplete.Render("✔ All settings reset to defaults"))
+				m.state = SettingsState
+				return m, nil
+			}
+			if key.Matches(msg, m.keys.ResetAllCfm.Cancel) {
+				m.state = SettingsState
+				return m, nil
+			}
 			return m, nil
 
 		case UpdateAvailableState:

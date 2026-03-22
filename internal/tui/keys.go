@@ -13,6 +13,7 @@ type KeyMap struct {
 	Settings       SettingsKeyMap
 	SettingsEditor SettingsEditorKeyMap
 	BatchConfirm   BatchConfirmKeyMap
+	ResetAllCfm    ResetAllConfirmKeyMap
 	Update         UpdateKeyMap
 	CategoryMgr    CategoryManagerKeyMap
 }
@@ -116,6 +117,12 @@ type SettingsEditorKeyMap struct {
 
 // BatchConfirmKeyMap defines keybindings for batch import confirmation
 type BatchConfirmKeyMap struct {
+	Confirm key.Binding
+	Cancel  key.Binding
+}
+
+// ResetAllConfirmKeyMap defines keybindings for reset-all confirmation modal
+type ResetAllConfirmKeyMap struct {
 	Confirm key.Binding
 	Cancel  key.Binding
 }
@@ -419,6 +426,16 @@ var Keys = KeyMap{
 			key.WithHelp("n", "cancel"),
 		),
 	},
+	ResetAllCfm: ResetAllConfirmKeyMap{
+		Confirm: key.NewBinding(
+			key.WithKeys("y", "Y", "enter"),
+			key.WithHelp("y/enter", "confirm"),
+		),
+		Cancel: key.NewBinding(
+			key.WithKeys("n", "N", "esc"),
+			key.WithHelp("n/esc", "cancel"),
+		),
+	},
 	Update: UpdateKeyMap{
 		OpenGitHub: key.NewBinding(
 			key.WithKeys("o", "O", "enter"),
@@ -523,6 +540,14 @@ func (k BatchConfirmKeyMap) ShortHelp() []key.Binding {
 }
 
 func (k BatchConfirmKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.Confirm, k.Cancel}}
+}
+
+func (k ResetAllConfirmKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Confirm, k.Cancel}
+}
+
+func (k ResetAllConfirmKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{k.Confirm, k.Cancel}}
 }
 

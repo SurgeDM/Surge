@@ -188,6 +188,20 @@ func (m RootModel) View() string {
 		return m.renderModalWithOverlay(box)
 	}
 
+	if m.state == ResetAllConfirmState {
+		modal := components.ConfirmationModal{
+			Title:       "⚠ Reset All Settings",
+			Message:     "Are you sure you want to reset all settings to defaults?",
+			Keys:        m.keys.ResetAllCfm,
+			Help:        m.help,
+			BorderColor: colors.NeonPink,
+			Width:       60,
+			Height:      10,
+		}
+		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		return m.renderModalWithOverlay(box)
+	}
+
 	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
 		modal := components.ConfirmationModal{
 			Title:       "⬆ Update Available",
