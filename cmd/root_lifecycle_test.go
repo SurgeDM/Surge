@@ -246,6 +246,12 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)
 	}
+	resetGlobalEnqueueContext()
+	select {
+	case <-currentEnqueueContext().Done():
+		t.Fatal("enqueue context unexpectedly canceled before local add")
+	default:
+	}
 
 	const filename = "artifact.bin"
 	const fileSize = int64(64 * 1024)
@@ -350,6 +356,12 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 		t.Fatalf("SaveSettings(updated) failed: %v", err)
 	}
 	GlobalLifecycle.ApplySettings(updated)
+	resetGlobalEnqueueContext()
+	select {
+	case <-currentEnqueueContext().Done():
+		t.Fatal("enqueue context unexpectedly canceled before settings-refresh add")
+	default:
+	}
 
 	const filename = "after-save.bin"
 	const fileSize = int64(32 * 1024)
