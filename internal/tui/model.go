@@ -365,9 +365,6 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	enqueueCtx, cancelEnqueue := context.WithCancel(context.Background())
 	settingsTabCount := len(config.CategoryOrder())
-	if settingsTabCount < 1 {
-		settingsTabCount = 1
-	}
 
 	// A single root-level spinner provides a shared animation frame for rendering,
 	// avoiding the CPU and redraw overhead of independent per-item spinners on
@@ -494,6 +491,10 @@ func clampTabIndex(tab, total int) int {
 }
 
 func (m *RootModel) ensureDashboardTabs() {
+	if m.dashboardTabs.TotalPages == dashboardTabCount && m.dashboardTabs.PerPage == 1 {
+		return
+	}
+
 	page := m.activeTab
 	if m.dashboardTabs.PerPage >= 1 && m.dashboardTabs.TotalPages >= 1 {
 		page = m.dashboardTabs.Page
@@ -530,6 +531,11 @@ func (m *RootModel) ensureSettingsTabs(categoryCount int) {
 	if totalPages < 1 {
 		totalPages = 1
 	}
+
+	if m.settingsTabs.TotalPages == totalPages && m.settingsTabs.PerPage == 1 {
+		return
+	}
+
 	page := m.SettingsActiveTab
 	if m.settingsTabs.PerPage >= 1 && m.settingsTabs.TotalPages >= 1 {
 		page = m.settingsTabs.Page

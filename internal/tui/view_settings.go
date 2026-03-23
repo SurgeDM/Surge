@@ -15,7 +15,7 @@ import (
 )
 
 // viewSettings renders the Btop-style settings page
-func (m *RootModel) viewSettings() string {
+func (m RootModel) viewSettings() string {
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
@@ -51,7 +51,13 @@ func (m *RootModel) viewSettings() string {
 	if categoryCount == 0 {
 		return ""
 	}
-	activeSettingsTab := m.currentSettingsTab(categoryCount)
+	activeSettingsTab := m.SettingsActiveTab
+	if activeSettingsTab < 0 {
+		activeSettingsTab = 0
+	}
+	if activeSettingsTab >= categoryCount {
+		activeSettingsTab = categoryCount - 1
+	}
 
 	// === TAB BAR ===
 	var tabs []components.Tab
@@ -472,13 +478,16 @@ func (m RootModel) getCurrentSettingKey() string {
 }
 
 // getCurrentSettingMeta returns the metadata for the currently selected setting
-func (m *RootModel) getCurrentSettingMeta() *config.SettingMeta {
+func (m RootModel) getCurrentSettingMeta() *config.SettingMeta {
 	categories := config.CategoryOrder()
 	categoryCount := len(categories)
 	if categoryCount == 0 {
 		return nil
 	}
-	activeSettingsTab := m.currentSettingsTab(categoryCount)
+	activeSettingsTab := m.SettingsActiveTab
+	if activeSettingsTab < 0 || activeSettingsTab >= categoryCount {
+		return nil
+	}
 
 	activeCategory := categories[activeSettingsTab]
 	settingsMap := config.GetSettingsMetadata()
@@ -490,7 +499,7 @@ func (m *RootModel) getCurrentSettingMeta() *config.SettingMeta {
 }
 
 // getCurrentSettingType returns the type of the currently selected setting
-func (m *RootModel) getCurrentSettingType() string {
+func (m RootModel) getCurrentSettingType() string {
 	meta := m.getCurrentSettingMeta()
 	if meta != nil {
 		return meta.Type
@@ -499,11 +508,11 @@ func (m *RootModel) getCurrentSettingType() string {
 }
 
 // getSettingsCount returns the number of settings in the current category
-func (m *RootModel) getSettingsCount() int {
+func (m RootModel) getSettingsCount() int {
 	categories := config.CategoryOrder()
 	categoryCount := len(categories)
-	if categoryCount > 0 {
-		activeCategory := categories[m.currentSettingsTab(categoryCount)]
+	if categoryCount > 0 && m.SettingsActiveTab >= 0 && m.SettingsActiveTab < categoryCount {
+		activeCategory := categories[m.SettingsActiveTab]
 		settingsMap := config.GetSettingsMetadata()
 
 		if settingsList, ok := settingsMap[activeCategory]; ok {
@@ -514,7 +523,7 @@ func (m *RootModel) getSettingsCount() int {
 }
 
 // getSettingUnit returns the unit suffix for the currently selected setting
-func (m *RootModel) getSettingUnit() string {
+func (m RootModel) getSettingUnit() string {
 	key := m.getCurrentSettingKey()
 	switch key {
 	case "min_chunk_size":
