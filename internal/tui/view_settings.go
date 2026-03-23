@@ -516,12 +516,6 @@ func (m RootModel) getSettingsCount() int {
 	return 0
 }
 
-// getSettingUnit returns the unit suffix for the currently selected setting
-func (m RootModel) getSettingUnit() string {
-	key := m.getCurrentSettingKey()
-	return getSettingUnitForKey(key)
-}
-
 func getSettingUnitForKey(key string) string {
 	switch key {
 	case "min_chunk_size":
