@@ -72,6 +72,21 @@ func TestSettingsTabPaginatorHelpers(t *testing.T) {
 	}
 }
 
+func TestSettingsTabClampsWhenCategoryCountShrinks(t *testing.T) {
+	var m RootModel
+
+	// Start from a larger category count and select the last tab.
+	m.setSettingsTab(3, 4)
+	if got := m.currentSettingsTab(4); got != 3 {
+		t.Fatalf("initial settings tab = %d, want 3", got)
+	}
+
+	// Simulate category removal: paginator should reinitialize and clamp page.
+	if got := m.currentSettingsTab(2); got != 1 {
+		t.Fatalf("settings tab after shrinking categories = %d, want 1", got)
+	}
+}
+
 func TestUpdateDashboardUsesPaginatorBackedTabs(t *testing.T) {
 	m := RootModel{
 		keys:     Keys,
