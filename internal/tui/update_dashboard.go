@@ -54,7 +54,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// Tab switching
 	switchTab := func(tab int) (tea.Model, tea.Cmd) {
-		m.activeTab = tab
+		m.setDashboardTab(tab)
 		m.ManualTabSwitch = true
 		m.UpdateListItems()
 		return m, nil
@@ -103,7 +103,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// Next Tab
 	if key.Matches(msg, m.keys.Dashboard.NextTab) {
-		m.activeTab = (m.activeTab + 1) % 3
+		m.nextDashboardTab()
 		m.ManualTabSwitch = true
 		m.UpdateListItems()
 		return m, nil
@@ -223,7 +223,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg, m.keys.Dashboard.Settings) {
 		m.state = SettingsState
-		m.SettingsActiveTab = 0
+		m.setSettingsTab(0, len(config.CategoryOrder()))
 		m.SettingsSelectedRow = 0
 		m.SettingsIsEditing = false
 		return m, nil

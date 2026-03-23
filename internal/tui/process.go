@@ -131,7 +131,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	}
 	m.downloads = append(m.downloads, newDownload)
 	m.SelectedDownloadID = optimisticID
-	m.activeTab = TabQueued
+	m.setDashboardTab(TabQueued)
 	m.UpdateListItems()
 
 	// Legacy path for tests or startup wiring where processing is not injected yet.

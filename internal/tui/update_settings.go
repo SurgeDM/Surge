@@ -23,7 +23,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keys.SettingsEditor.Confirm) {
-			currentCategory := categories[m.SettingsActiveTab]
+			currentCategory := categories[m.currentSettingsTab(categoryCount)]
 			settingKey := m.getCurrentSettingKey()
 			_ = m.setSettingValue(currentCategory, settingKey, m.SettingsInput.Value())
 			m.SettingsIsEditing = false
@@ -48,7 +48,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	for i, binding := range tabBindings {
 		if key.Matches(msg, binding) {
 			if categoryCount > i {
-				m.SettingsActiveTab = i
+				m.setSettingsTab(i, categoryCount)
 			}
 			m.SettingsSelectedRow = 0
 			return m, nil
@@ -57,12 +57,12 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// Tab Navigation
 	if key.Matches(msg, m.keys.Settings.NextTab) {
-		m.SettingsActiveTab = (m.SettingsActiveTab + 1) % categoryCount
+		m.nextSettingsTab(categoryCount)
 		m.SettingsSelectedRow = 0
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Settings.PrevTab) {
-		m.SettingsActiveTab = (m.SettingsActiveTab - 1 + categoryCount) % categoryCount
+		m.prevSettingsTab(categoryCount)
 		m.SettingsSelectedRow = 0
 		return m, nil
 	}
@@ -100,7 +100,8 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Edit / Toggle
 	if key.Matches(msg, m.keys.Settings.Edit) {
 		// Categories tab → open Category Manager
-		if m.SettingsActiveTab < len(categories) && categories[m.SettingsActiveTab] == "Categories" {
+		activeSettingsTab := m.currentSettingsTab(categoryCount)
+		if activeSettingsTab < len(categories) && categories[activeSettingsTab] == "Categories" {
 			m.catMgrCursor = 0
 			m.state = CategoryManagerState
 			return m, nil
@@ -122,8 +123,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 		// Toggle bool or enter edit mode for other types
 		typ := m.getCurrentSettingType()
-
-		currentCategory := categories[m.SettingsActiveTab]
+		currentCategory := categories[m.currentSettingsTab(categoryCount)]
 		if typ == "bool" {
 			_ = m.setSettingValue(currentCategory, settingKey, "")
 		} else {
@@ -144,7 +144,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		defaults := config.DefaultSettings()
-		currentCategory := categories[m.SettingsActiveTab]
+		currentCategory := categories[m.currentSettingsTab(categoryCount)]
 		m.resetSettingToDefault(currentCategory, settingKey, defaults)
 		if settingKey == "theme" {
 			m.ApplyTheme(m.Settings.General.Theme)

@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/filepicker"
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/paginator"
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
@@ -51,6 +52,8 @@ const (
 	TabDone   = 2
 )
 
+const dashboardTabCount = 3
+
 type DownloadModel struct {
 	ID            string
 	URL           string
@@ -80,13 +83,14 @@ type DownloadModel struct {
 }
 
 type RootModel struct {
-	downloads    []*DownloadModel
-	width        int
-	height       int
-	state        UIState
-	activeTab    int // 0=Queued, 1=Active, 2=Done
-	inputs       []textinput.Model
-	focusedInput int
+	downloads     []*DownloadModel
+	width         int
+	height        int
+	state         UIState
+	dashboardTabs paginator.Model // paginator-backed state for dashboard tabs
+	activeTab     int             // legacy compatibility mirror of dashboardTabs.Page
+	inputs        []textinput.Model
+	focusedInput  int
 	// Service Interface
 	// Core
 	Service      core.DownloadService
@@ -127,7 +131,8 @@ type RootModel struct {
 
 	// Settings
 	Settings              *config.Settings // Application settings
-	SettingsActiveTab     int              // Active category tab (0-3)
+	settingsTabs          paginator.Model  // paginator-backed state for settings category tabs
+	SettingsActiveTab     int              // legacy compatibility mirror of settingsTabs.Page
 	SettingsSelectedRow   int              // Selected setting within current tab
 	SettingsIsEditing     bool             // Whether currently editing a value
 	SettingsInput         textinput.Model  // Input for editing string/int values
@@ -359,6 +364,10 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	catPathInput.Prompt = ""
 
 	enqueueCtx, cancelEnqueue := context.WithCancel(context.Background())
+	settingsTabCount := len(config.CategoryOrder())
+	if settingsTabCount < 1 {
+		settingsTabCount = 1
+	}
 
 	// A single root-level spinner provides a shared animation frame for rendering,
 	// avoiding the CPU and redraw overhead of independent per-item spinners on
@@ -370,6 +379,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		downloads:             downloads,
 		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
 		state:                 DashboardState,
+		dashboardTabs:         newTabPaginator(dashboardTabCount),
 		filepicker:            fp,
 		help:                  helpModel,
 		list:                  downloadList,
@@ -377,6 +387,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		Orchestrator:          orchestrator,
 		PWD:                   pwd,
 		Settings:              settings,
+		settingsTabs:          newTabPaginator(settingsTabCount),
 		SpeedHistory:          make([]float64, GraphHistoryPoints),                          // 60 points of history (30s at 0.5s interval)
 		logViewport:           viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)), // Default size, will be resized
 		logEntries:            make([]string, 0),
@@ -459,6 +470,107 @@ func (m RootModel) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
+func newTabPaginator(totalPages int) paginator.Model {
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	return paginator.New(
+		paginator.WithPerPage(1),
+		paginator.WithTotalPages(totalPages),
+	)
+}
+
+func clampTabIndex(tab, total int) int {
+	if total < 1 {
+		return 0
+	}
+	if tab < 0 {
+		return 0
+	}
+	if tab >= total {
+		return total - 1
+	}
+	return tab
+}
+
+func (m *RootModel) ensureDashboardTabs() {
+	page := m.activeTab
+	if m.dashboardTabs.PerPage >= 1 && m.dashboardTabs.TotalPages >= 1 {
+		page = m.dashboardTabs.Page
+	}
+	page = clampTabIndex(page, dashboardTabCount)
+	m.dashboardTabs = newTabPaginator(dashboardTabCount)
+	m.dashboardTabs.Page = page
+	m.activeTab = page
+}
+
+func (m *RootModel) currentDashboardTab() int {
+	m.ensureDashboardTabs()
+	return m.dashboardTabs.Page
+}
+
+func (m *RootModel) setDashboardTab(tab int) {
+	m.ensureDashboardTabs()
+	m.dashboardTabs.Page = clampTabIndex(tab, m.dashboardTabs.TotalPages)
+	m.activeTab = m.dashboardTabs.Page
+}
+
+func (m *RootModel) nextDashboardTab() {
+	m.ensureDashboardTabs()
+	if m.dashboardTabs.Page >= m.dashboardTabs.TotalPages-1 {
+		m.dashboardTabs.Page = 0
+	} else {
+		m.dashboardTabs.Page++
+	}
+	m.activeTab = m.dashboardTabs.Page
+}
+
+func (m *RootModel) ensureSettingsTabs(categoryCount int) {
+	totalPages := categoryCount
+	if totalPages < 1 {
+		totalPages = 1
+	}
+	page := m.SettingsActiveTab
+	if m.settingsTabs.PerPage >= 1 && m.settingsTabs.TotalPages >= 1 {
+		page = m.settingsTabs.Page
+	}
+	page = clampTabIndex(page, totalPages)
+	m.settingsTabs = newTabPaginator(totalPages)
+	m.settingsTabs.Page = page
+	m.SettingsActiveTab = page
+}
+
+func (m *RootModel) currentSettingsTab(categoryCount int) int {
+	m.ensureSettingsTabs(categoryCount)
+	return m.settingsTabs.Page
+}
+
+func (m *RootModel) setSettingsTab(tab, categoryCount int) {
+	m.ensureSettingsTabs(categoryCount)
+	m.settingsTabs.Page = clampTabIndex(tab, m.settingsTabs.TotalPages)
+	m.SettingsActiveTab = m.settingsTabs.Page
+}
+
+func (m *RootModel) nextSettingsTab(categoryCount int) {
+	m.ensureSettingsTabs(categoryCount)
+	if m.settingsTabs.Page >= m.settingsTabs.TotalPages-1 {
+		m.settingsTabs.Page = 0
+	} else {
+		m.settingsTabs.Page++
+	}
+	m.SettingsActiveTab = m.settingsTabs.Page
+}
+
+func (m *RootModel) prevSettingsTab(categoryCount int) {
+	m.ensureSettingsTabs(categoryCount)
+	if m.settingsTabs.Page <= 0 {
+		m.settingsTabs.Page = m.settingsTabs.TotalPages - 1
+	} else {
+		m.settingsTabs.Page--
+	}
+	m.SettingsActiveTab = m.settingsTabs.Page
+}
+
 // FindDownloadByID finds a download by its ID
 func (m *RootModel) FindDownloadByID(id string) *DownloadModel {
 	for _, d := range m.downloads {
@@ -470,13 +582,14 @@ func (m *RootModel) FindDownloadByID(id string) *DownloadModel {
 }
 
 // Helper to get downloads for the current tab
-func (m RootModel) getFilteredDownloads() []*DownloadModel {
+func (m *RootModel) getFilteredDownloads() []*DownloadModel {
 	var filtered []*DownloadModel
 	searchLower := strings.ToLower(m.searchQuery)
+	activeTab := m.currentDashboardTab()
 
 	for _, d := range m.downloads {
 		// Apply tab filter first
-		switch m.activeTab {
+		switch activeTab {
 		case TabQueued:
 			if d.done || d.Speed > 0 {
 				continue

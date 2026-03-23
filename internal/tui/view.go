@@ -643,7 +643,7 @@ func (m RootModel) View() tea.View {
 
 	// --- SECTION 3: DOWNLOAD LIST (Bottom Left) ---
 	// Tab Bar
-	tabBar := renderTabs(m.activeTab, active, queued, downloaded)
+	tabBar := renderTabs(m.currentDashboardTab(), active, queued, downloaded)
 
 	// Search bar (shown when search is active or has a query)
 	var leftTitle string
