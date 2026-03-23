@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	"charm.land/bubbles/v2/textinput"
@@ -171,20 +172,31 @@ func TestUpdateSettingsEditingAndCategoryBranches(t *testing.T) {
 	}
 }
 
-func TestViewSettingsUsesSettingsPaginatorState(t *testing.T) {
+func TestCurrentSettingsTabClampsOOBActiveTab(t *testing.T) {
+	m := RootModel{SettingsActiveTab: 99}
+	if got := m.currentSettingsTab(len(config.CategoryOrder())); got >= len(config.CategoryOrder()) {
+		t.Fatalf("settings tab index should be clamped into range, got %d", got)
+	}
+}
+
+func TestViewSettingsUsesMirrorWhenPaginatorDiverges(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, nil, false)
 	m.Settings = config.DefaultSettings()
 	m.width = 120
 	m.height = 34
-	m.SettingsActiveTab = 99
+	m.settingsTabs = newTabPaginator(len(config.CategoryOrder()))
+	m.settingsTabs.Page = 0  // General
+	m.SettingsActiveTab = 2 // Performance
 
 	view := m.viewSettings()
 	if view == "" {
 		t.Fatal("expected non-empty settings view")
 	}
-
-	if got := m.currentSettingsTab(len(config.CategoryOrder())); got >= len(config.CategoryOrder()) {
-		t.Fatalf("settings tab index should be clamped into range, got %d", got)
+	if !strings.Contains(view, "Max Task Retries") {
+		t.Fatal("expected performance settings to be rendered from SettingsActiveTab")
+	}
+	if strings.Contains(view, "Default Download Dir") {
+		t.Fatal("did not expect general settings when paginator and mirror diverge")
 	}
 }
 
