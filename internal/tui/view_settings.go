@@ -128,8 +128,8 @@ func (m RootModel) viewSettings() string {
 		meta := settingsMeta[m.SettingsSelectedRow]
 		value := settingsValues[meta.Key]
 
-		// Get unit suffix
-		unit := m.getSettingUnit()
+		// Keep right-panel unit rendering aligned with the selected list row.
+		unit := getSettingUnitForKey(meta.Key)
 		unitStyle := lipgloss.NewStyle().Foreground(colors.Gray)
 
 		// Format value
@@ -519,6 +519,10 @@ func (m RootModel) getSettingsCount() int {
 // getSettingUnit returns the unit suffix for the currently selected setting
 func (m RootModel) getSettingUnit() string {
 	key := m.getCurrentSettingKey()
+	return getSettingUnitForKey(key)
+}
+
+func getSettingUnitForKey(key string) string {
 	switch key {
 	case "min_chunk_size":
 		return " MB"

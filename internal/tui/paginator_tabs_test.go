@@ -198,6 +198,9 @@ func TestViewSettingsUsesPaginatorWhenSourcesDiverge(t *testing.T) {
 	if strings.Contains(view, "Max Task Retries") {
 		t.Fatal("did not expect performance settings when paginator and mirror diverge")
 	}
+	if strings.Contains(view, " retries") {
+		t.Fatal("did not expect performance-only unit suffix in right panel when general tab is active")
+	}
 }
 
 func TestUpdateListItemsSwitchesTabViaPaginator(t *testing.T) {
