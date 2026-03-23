@@ -51,13 +51,7 @@ func (m RootModel) viewSettings() string {
 	if categoryCount == 0 {
 		return ""
 	}
-	activeSettingsTab := m.SettingsActiveTab
-	if activeSettingsTab < 0 {
-		activeSettingsTab = 0
-	}
-	if activeSettingsTab >= categoryCount {
-		activeSettingsTab = categoryCount - 1
-	}
+	activeSettingsTab := m.currentSettingsTab(categoryCount)
 
 	// === TAB BAR ===
 	var tabs []components.Tab

@@ -179,7 +179,7 @@ func TestCurrentSettingsTabClampsOOBActiveTab(t *testing.T) {
 	}
 }
 
-func TestViewSettingsUsesMirrorWhenPaginatorDiverges(t *testing.T) {
+func TestViewSettingsUsesPaginatorWhenSourcesDiverge(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, nil, false)
 	m.Settings = config.DefaultSettings()
 	m.width = 120
@@ -192,11 +192,11 @@ func TestViewSettingsUsesMirrorWhenPaginatorDiverges(t *testing.T) {
 	if view == "" {
 		t.Fatal("expected non-empty settings view")
 	}
-	if !strings.Contains(view, "Max Task Retries") {
-		t.Fatal("expected performance settings to be rendered from SettingsActiveTab")
+	if !strings.Contains(view, "Default Download Dir") {
+		t.Fatal("expected general settings to be rendered from settings paginator state")
 	}
-	if strings.Contains(view, "Default Download Dir") {
-		t.Fatal("did not expect general settings when paginator and mirror diverge")
+	if strings.Contains(view, "Max Task Retries") {
+		t.Fatal("did not expect performance settings when paginator and mirror diverge")
 	}
 }
 
