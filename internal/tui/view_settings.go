@@ -478,10 +478,7 @@ func (m RootModel) getCurrentSettingMeta() *config.SettingMeta {
 	if categoryCount == 0 {
 		return nil
 	}
-	activeSettingsTab := m.SettingsActiveTab
-	if activeSettingsTab < 0 || activeSettingsTab >= categoryCount {
-		return nil
-	}
+	activeSettingsTab := m.currentSettingsTab(categoryCount)
 
 	activeCategory := categories[activeSettingsTab]
 	settingsMap := config.GetSettingsMetadata()
@@ -505,8 +502,8 @@ func (m RootModel) getCurrentSettingType() string {
 func (m RootModel) getSettingsCount() int {
 	categories := config.CategoryOrder()
 	categoryCount := len(categories)
-	if categoryCount > 0 && m.SettingsActiveTab >= 0 && m.SettingsActiveTab < categoryCount {
-		activeCategory := categories[m.SettingsActiveTab]
+	if categoryCount > 0 {
+		activeCategory := categories[m.currentSettingsTab(categoryCount)]
 		settingsMap := config.GetSettingsMetadata()
 
 		if settingsList, ok := settingsMap[activeCategory]; ok {

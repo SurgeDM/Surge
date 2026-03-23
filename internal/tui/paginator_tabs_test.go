@@ -218,6 +218,25 @@ func TestViewSettingsUsesPaginatorWhenSourcesDiverge(t *testing.T) {
 	}
 }
 
+func TestSettingsHelpersUsePaginatorWhenSourcesDiverge(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, nil, false)
+	m.Settings = config.DefaultSettings()
+	m.settingsTabs = newTabPaginator(len(config.CategoryOrder()))
+	m.settingsTabs.Page = 0  // General
+	m.SettingsActiveTab = 2 // Performance
+	m.SettingsSelectedRow = 0
+
+	if got := m.getCurrentSettingType(); got != "string" {
+		t.Fatalf("current setting type = %q, want %q from general tab", got, "string")
+	}
+	if got := m.getCurrentSettingKey(); got != "default_download_dir" {
+		t.Fatalf("current setting key = %q, want %q from general tab", got, "default_download_dir")
+	}
+	if got := m.getSettingsCount(); got != len(config.GetSettingsMetadata()["General"]) {
+		t.Fatalf("settings count = %d, want general category count %d", got, len(config.GetSettingsMetadata()["General"]))
+	}
+}
+
 func TestUpdateListItemsSwitchesTabViaPaginator(t *testing.T) {
 	queued := NewDownloadModel("q1", "https://example.com/a.bin", "a.bin", 100)
 	done := NewDownloadModel("d1", "https://example.com/b.bin", "b.bin", 100)
