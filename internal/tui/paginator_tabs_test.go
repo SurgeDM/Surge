@@ -195,10 +195,12 @@ func TestCurrentSettingsTabClampsOOBActiveTab(t *testing.T) {
 }
 
 func TestViewSettingsUsesPaginatorWhenSourcesDiverge(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, nil, false)
-	m.Settings = config.DefaultSettings()
-	m.width = 120
-	m.height = 34
+	m := RootModel{
+		Settings: config.DefaultSettings(),
+		keys:     Keys,
+		width:    120,
+		height:   34,
+	}
 	m.settingsTabs = newTabPaginator(len(config.CategoryOrder()))
 	m.settingsTabs.Page = 0  // General
 	m.SettingsActiveTab = 2 // Performance
@@ -219,8 +221,10 @@ func TestViewSettingsUsesPaginatorWhenSourcesDiverge(t *testing.T) {
 }
 
 func TestSettingsHelpersUsePaginatorWhenSourcesDiverge(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, nil, false)
-	m.Settings = config.DefaultSettings()
+	m := RootModel{
+		Settings: config.DefaultSettings(),
+		keys:     Keys,
+	}
 	m.settingsTabs = newTabPaginator(len(config.CategoryOrder()))
 	m.settingsTabs.Page = 0  // General
 	m.SettingsActiveTab = 2 // Performance
