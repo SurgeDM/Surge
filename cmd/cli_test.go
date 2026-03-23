@@ -814,6 +814,21 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 
 func setupIsolatedCmdState(t *testing.T) {
 	t.Helper()
+
+	// Drain shared cmd globals first so each test starts from a deterministic
+	// lifecycle/shutdown/enqueue baseline.
+	resetGlobalShutdownCoordinatorForTest(nil)
+	if GlobalService != nil {
+		_ = GlobalService.Shutdown()
+		GlobalService = nil
+	}
+	GlobalLifecycle = nil
+	GlobalPool = nil
+	GlobalProgressCh = nil
+	globalSettings = nil
+	atomic.StoreInt32(&activeDownloads, 0)
+	atomic.StoreInt32(&pendingEnqueue, 0)
+
 	setupXDGEnvIsolation(t)
 	resetGlobalEnqueueContext()
 
