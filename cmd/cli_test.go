@@ -817,11 +817,11 @@ func setupIsolatedCmdState(t *testing.T) {
 
 	// Drain shared cmd globals first so each test starts from a deterministic
 	// lifecycle/shutdown/enqueue baseline.
-	resetGlobalShutdownCoordinatorForTest(nil)
 	if GlobalService != nil {
 		_ = GlobalService.Shutdown()
 		GlobalService = nil
 	}
+	resetGlobalShutdownCoordinatorForTest(nil)
 	GlobalLifecycle = nil
 	GlobalPool = nil
 	GlobalProgressCh = nil
