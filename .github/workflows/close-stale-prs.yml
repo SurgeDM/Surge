@@ -17,11 +17,13 @@ jobs:
         uses: actions/stale@v10.2.0
         with:
           # --- PR Configuration ---
-          days-before-pr-stale: 7
-          days-before-pr-close: 0
-          stale-pr-message: 'This pull request is being closed because it has been inactive for 7 days.'
+          days-before-pr-stale: 5
+          days-before-pr-close: 2
+          stale-pr-message: 'This PR has had no activity for 5 days. It will be closed in 2 days if no further updates are made.'
           stale-pr-label: 'stale'
           
           # --- Issue Configuration (Disabled) ---
           days-before-issue-stale: -1
           days-before-issue-close: -1
+
+          exempt-pr-labels: 'pinned,do-not-close'
