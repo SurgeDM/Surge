@@ -491,7 +491,9 @@ func TestPrintDownloads_FromDatabase_TableAndJSON(t *testing.T) {
 	}
 
 	tableOut := captureStdout(t, func() {
-		printDownloads(false, "", "", false)
+		if err := printDownloads(false, "", "", false); err != nil {
+			t.Fatalf("printDownloads table failed: %v", err)
+		}
 	})
 	if !strings.Contains(tableOut, "ID") {
 		t.Fatalf("expected table header in output, got: %s", tableOut)
@@ -507,7 +509,9 @@ func TestPrintDownloads_FromDatabase_TableAndJSON(t *testing.T) {
 	}
 
 	jsonOut := captureStdout(t, func() {
-		printDownloads(true, "", "", false)
+		if err := printDownloads(true, "", "", false); err != nil {
+			t.Fatalf("printDownloads json failed: %v", err)
+		}
 	})
 	var infos []downloadInfo
 	if err := json.Unmarshal([]byte(jsonOut), &infos); err != nil {
@@ -527,7 +531,9 @@ func TestPrintDownloads_JSONEmpty(t *testing.T) {
 	removeActivePort()
 
 	out := captureStdout(t, func() {
-		printDownloads(true, "", "", false)
+		if err := printDownloads(true, "", "", false); err != nil {
+			t.Fatalf("printDownloads empty json failed: %v", err)
+		}
 	})
 	var infos []any
 	if err := json.Unmarshal([]byte(out), &infos); err != nil {
@@ -561,7 +567,9 @@ func TestPrintDownloads_StrictRemoteEmpty_DoesNotFallbackToDB(t *testing.T) {
 	defer server.Close()
 
 	out := captureStdout(t, func() {
-		printDownloads(true, server.URL, "", true)
+		if err := printDownloads(true, server.URL, "", true); err != nil {
+			t.Fatalf("printDownloads strict remote failed: %v", err)
+		}
 	})
 	if strings.TrimSpace(out) != "[]" {
 		t.Fatalf("expected strict remote empty json array, got %q", strings.TrimSpace(out))
@@ -585,7 +593,9 @@ func TestShowDownloadDetails_UsesDatabaseFallback(t *testing.T) {
 	}
 
 	out := captureStdout(t, func() {
-		showDownloadDetails("87654321", true, "", "")
+		if err := showDownloadDetails("87654321", true, "", ""); err != nil {
+			t.Fatalf("showDownloadDetails fallback failed: %v", err)
+		}
 	})
 
 	var decoded types.DownloadStatus
