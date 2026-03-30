@@ -409,6 +409,7 @@ var rootCmd = &cobra.Command{
 	Version:       Version,
 	Args:          cobra.ArbitraryArgs,
 	SilenceErrors: true, //errors are printed in main.go this prevents double printing
+	SilenceUsage:  true, // prevent usage text from being printed on every error
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Set global verbose mode
 		utils.SetVerbose(verbose)
