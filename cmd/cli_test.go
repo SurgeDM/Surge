@@ -460,7 +460,9 @@ func TestRmClean_Offline_Works(t *testing.T) {
 	defer func() { _ = rmCmd.Flags().Set("clean", "false") }()
 
 	_ = captureStdout(t, func() {
-		rmCmd.Run(rmCmd, []string{})
+		if err := rmCmd.RunE(rmCmd, []string{}); err != nil {
+			t.Fatalf("rm clean failed: %v", err)
+		}
 	})
 
 	entry, err := state.GetDownload(completed.ID)
