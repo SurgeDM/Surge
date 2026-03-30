@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sync/atomic"
 
@@ -34,13 +33,6 @@ func runStartupIntegrityCheck() string {
 	}
 	utils.Debug("%s", "Startup integrity check: no issues found")
 	return ""
-}
-
-func mustInitializeGlobalState() {
-	if err := initializeGlobalState(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
-	}
 }
 
 // initializeGlobalState sets up the environment and configures the engine state and logging

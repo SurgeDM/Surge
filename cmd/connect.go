@@ -20,20 +20,19 @@ var connectCmd = &cobra.Command{
 	Short: "Connect TUI to a running Surge daemon",
 	Long:  `Connect to a running Surge daemon and open the TUI. When no target is specified, auto-detects a locally running server.`,
 	Args:  cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		var target string
 		if len(args) > 0 {
 			target = args[0]
 		} else {
 			port := readActivePort()
 			if port == 0 {
-				fmt.Println("No local Surge server detected. Start one with 'surge' or 'surge server', or specify a target: surge connect <host:port>")
-				os.Exit(1)
+				return fmt.Errorf("no local Surge server detected. Start one with 'surge' or 'surge server', or specify a target: surge connect <host:port>")
 			}
 			target = fmt.Sprintf("127.0.0.1:%d", port)
 			fmt.Printf("Auto-detected local server on port %d\n", port)
 		}
-		connectAndRunTUI(cmd, target)
+		return connectAndRunTUI(cmd, target)
 	},
 }
 
@@ -42,18 +41,16 @@ func init() {
 	rootCmd.AddCommand(connectCmd)
 }
 
-func connectAndRunTUI(cmd *cobra.Command, target string) {
+func connectAndRunTUI(cmd *cobra.Command, target string) error {
 	insecureHTTP, _ := cmd.Flags().GetBool("insecure-http")
 	baseURL, err := resolveConnectBaseURL(target, insecureHTTP)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		return err
 	}
 
 	token, err := resolveTokenForTarget(target)
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		return err
 	}
 
 	fmt.Printf("Connecting to %s...\n", baseURL)
@@ -61,14 +58,12 @@ func connectAndRunTUI(cmd *cobra.Command, target string) {
 	service := core.NewRemoteDownloadService(baseURL, token)
 	_, err = service.List()
 	if err != nil {
-		fmt.Printf("Failed to connect: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to connect: %w", err)
 	}
 
 	stream, cleanup, err := service.StreamEvents(context.Background())
 	if err != nil {
-		fmt.Printf("Failed to start event stream: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to start event stream: %w", err)
 	}
 	defer cleanup()
 
@@ -93,9 +88,9 @@ func connectAndRunTUI(cmd *cobra.Command, target string) {
 	}()
 
 	if _, err := p.Run(); err != nil {
-		fmt.Printf("Error running TUI: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error running TUI: %w", err)
 	}
+	return nil
 }
 
 func newRemoteRootModel(port int, service core.DownloadService, serverHost string) tui.RootModel {

@@ -21,25 +21,23 @@ var serverCmd = &cobra.Command{
 	Use:   "server [url]...",
 	Short: "Manage the Surge background server (daemon)",
 	Long:  `Run the Surge background server in headless mode.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		serverStartCmd.Run(cmd, args)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return serverStartCmd.RunE(cmd, args)
 	},
 }
 
 var serverStartCmd = &cobra.Command{
 	Use:   "start [url]...",
 	Short: "Start the Surge server in headless mode",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Attempt to acquire lock before any global state initialization
 		isMaster, err := AcquireLock()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error acquiring lock: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error acquiring lock: %w", err)
 		}
 
 		if !isMaster {
-			fmt.Fprintln(os.Stderr, "Error: Surge server is already running.")
-			os.Exit(1)
+			return fmt.Errorf("Surge server is already running")
 		}
 		defer func() {
 			if err := ReleaseLock(); err != nil {
@@ -47,7 +45,9 @@ var serverStartCmd = &cobra.Command{
 			}
 		}()
 
-		mustInitializeGlobalState()
+		if err := initializeGlobalState(); err != nil {
+			return err
+		}
 
 		msg := runStartupIntegrityCheck()
 		if msg != "" {
@@ -67,7 +67,7 @@ var serverStartCmd = &cobra.Command{
 
 		// Get token flag
 		tokenFlag := resolveServerToken(cmd)
-		startServerLogic(cmd, args, portFlag, batchFile, outputDir, exitWhenDone, noResume, tokenFlag)
+		return startServerLogic(cmd, args, portFlag, batchFile, outputDir, exitWhenDone, noResume, tokenFlag)
 	},
 }
 
@@ -171,17 +171,15 @@ func readPID() int {
 	return pid
 }
 
-func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile string, outputDir string, exitWhenDone bool, noResume bool, tokenOverride string) {
+func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile string, outputDir string, exitWhenDone bool, noResume bool, tokenOverride string) error {
 	port, listener, err := bindServerListener(portFlag)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	resetGlobalEnqueueContext()
 
 	if err := ensureGlobalLocalServiceAndLifecycle(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating lifecycle event stream: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error creating lifecycle event stream: %w", err)
 	}
 
 	saveActivePort(port)
@@ -237,7 +235,7 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 			fmt.Println("All downloads finished. Exiting...")
 			_ = executeGlobalShutdown("server: exit when done")
 		}
-		return
+		return nil
 	}
 
 	sigChan := make(chan os.Signal, 1)
@@ -247,6 +245,7 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 
 	fmt.Printf("\nReceived %s. Shutting down...\n", sig)
 	_ = executeGlobalShutdown(fmt.Sprintf("server signal: %s", sig))
+	return nil
 }
 
 func resolveServerToken(cmd *cobra.Command) string {

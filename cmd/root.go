@@ -317,58 +317,57 @@ func readRootRunOptions(cmd *cobra.Command) rootRunOptions {
 	}
 }
 
-func maybeRunRemoteTUI(cmd *cobra.Command, args []string) bool {
+func maybeRunRemoteTUI(cmd *cobra.Command, args []string) (bool, error) {
 	hostTarget := resolveHostTarget()
 	if hostTarget == "" {
-		return false
+		return false, nil
 	}
 
 	if len(args) > 0 {
-		fmt.Fprintln(os.Stderr, "Error: URLs cannot be passed when using --host. Use 'surge add <url>' after connecting.")
-		os.Exit(1)
+		return false, fmt.Errorf("URLs cannot be passed when using --host. Use 'surge add <url>' after connecting")
 	}
 
-	connectAndRunTUI(cmd, hostTarget)
-	return true
+	if err := connectAndRunTUI(cmd, hostTarget); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
-func acquireRootInstanceLock() func() {
+func acquireRootInstanceLock() (func(), error) {
 	isMaster, err := AcquireLock()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error acquiring lock: %v\n", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("error acquiring lock: %w", err)
 	}
 
 	if !isMaster {
-		fmt.Fprintln(os.Stderr, "Error: Surge is already running.")
-		fmt.Fprintln(os.Stderr, "Use 'surge add <url>' to add a download to the active instance.")
-		os.Exit(1)
+		return nil, fmt.Errorf("Surge is already running. Use 'surge add <url>' to add a download to the active instance")
 	}
 
 	return func() {
 		if err := ReleaseLock(); err != nil {
 			utils.Debug("Error releasing lock: %v", err)
 		}
-	}
+	}, nil
 }
 
-func initializeRootLocalRuntime() {
-	mustInitializeGlobalState()
+func initializeRootLocalRuntime() error {
+	if err := initializeGlobalState(); err != nil {
+		return err
+	}
 	resetGlobalEnqueueContext()
 
 	startupIntegrityMessage = runStartupIntegrityCheck()
 
 	if err := ensureGlobalLocalServiceAndLifecycle(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating lifecycle event stream: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error creating lifecycle event stream: %w", err)
 	}
+	return nil
 }
 
-func startRootHTTPServer(opts rootRunOptions) (int, func()) {
+func startRootHTTPServer(opts rootRunOptions) (int, func(), error) {
 	port, listener, err := bindServerListener(opts.portFlag)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return 0, nil, err
 	}
 
 	saveActivePort(port)
@@ -376,7 +375,7 @@ func startRootHTTPServer(opts rootRunOptions) (int, func()) {
 
 	return port, func() {
 		removeActivePort()
-	}
+	}, nil
 }
 
 func queueInitialRootDownloads(args []string, opts rootRunOptions) {
@@ -418,27 +417,37 @@ var rootCmd = &cobra.Command{
 		globalSettings = getSettings()
 		GlobalPool = download.NewWorkerPool(GlobalProgressCh, globalSettings.Network.MaxConcurrentDownloads)
 	},
-	Run: func(cmd *cobra.Command, args []string) {
-		if maybeRunRemoteTUI(cmd, args) {
-			return
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if ranRemote, err := maybeRunRemoteTUI(cmd, args); err != nil {
+			return err
+		} else if ranRemote {
+			return nil
 		}
 
-		releaseLock := acquireRootInstanceLock()
+		releaseLock, err := acquireRootInstanceLock()
+		if err != nil {
+			return err
+		}
 		defer releaseLock()
 
-		initializeRootLocalRuntime()
+		if err := initializeRootLocalRuntime(); err != nil {
+			return err
+		}
 
 		opts := readRootRunOptions(cmd)
-		port, cleanup := startRootHTTPServer(opts)
+		port, cleanup, err := startRootHTTPServer(opts)
+		if err != nil {
+			return err
+		}
 		defer cleanup()
 
 		queueInitialRootDownloads(args, opts)
-		startTUI(port, opts.exitWhenDone, opts.noResume)
+		return startTUI(port, opts.exitWhenDone, opts.noResume)
 	},
 }
 
 // startTUI initializes and runs the TUI program
-func startTUI(port int, exitWhenDone bool, noResume bool) {
+func startTUI(port int, exitWhenDone bool, noResume bool) error {
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
@@ -457,8 +466,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 	stream, cleanup, err := GlobalService.StreamEvents(context.Background())
 	if err != nil {
 		_ = executeGlobalShutdown("tui: stream init failed")
-		fmt.Fprintf(os.Stderr, "Error getting event stream: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error getting event stream: %w", err)
 	}
 	defer cleanup()
 
@@ -513,10 +521,10 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 	// Run TUI
 	if _, err := p.Run(); err != nil {
 		_ = executeGlobalShutdown("tui: p.Run failed")
-		fmt.Fprintf(os.Stderr, "Error running program: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error running program: %w", err)
 	}
 	_ = executeGlobalShutdown("tui: program exited")
+	return nil
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
