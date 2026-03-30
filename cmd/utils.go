@@ -177,24 +177,20 @@ func GetRemoteDownloads(baseURL string, token string) ([]types.DownloadStatus, e
 }
 
 // ExecuteAPIAction connects to the server, resolves the ID, and sends a request.
-// It prints a success message and then exits if successful, or prints an error and exits on failure.
-func ExecuteAPIAction(rawID, endpoint, method, successMsg string) {
+func ExecuteAPIAction(rawID, endpoint, method, successMsg string) error {
 	baseURL, token, err := resolveAPIConnection(true)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to connect to Surge server: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to connect to Surge server: %w", err)
 	}
 
 	id, err := resolveDownloadID(rawID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to resolve download ID: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to resolve download ID: %w", err)
 	}
 
 	resp, err := doAPIRequest(method, baseURL, token, fmt.Sprintf("%s/%s", endpoint, id), nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to send request to server: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to send request to server: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -204,12 +200,11 @@ func ExecuteAPIAction(rawID, endpoint, method, successMsg string) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		fmt.Fprintf(os.Stderr, "Server error: %s - %s\n", resp.Status, string(body))
-		os.Exit(1)
+		return fmt.Errorf("server error: %s - %s", resp.Status, string(body))
 	}
 
 	fmt.Println(successMsg)
-	os.Exit(0)
+	return nil
 }
 
 // resolveDownloadID resolves a partial ID (prefix) to a full download ID.

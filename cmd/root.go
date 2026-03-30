@@ -404,11 +404,12 @@ func queueInitialRootDownloads(args []string, opts rootRunOptions) {
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
-	Use:     "surge [url]...",
-	Short:   "Blazing fast TUI download manager built in Go for power users",
-	Long:    `Surge is a blazing fast TUI download manager built in Go for power users. Find more info here: https://github.com/surge-downloader/surge`,
-	Version: Version,
-	Args:    cobra.ArbitraryArgs,
+	Use:           "surge [url]...",
+	Short:         "Blazing fast TUI download manager built in Go for power users",
+	Long:          `Surge is a blazing fast TUI download manager built in Go for power users. Find more info here: https://github.com/surge-downloader/surge`,
+	Version:       Version,
+	Args:          cobra.ArbitraryArgs,
+	SilenceErrors: true, //errors are printed in main.go this prevents double printing
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		// Set global verbose mode
 		utils.SetVerbose(verbose)
@@ -519,10 +520,8 @@ func startTUI(port int, exitWhenDone bool, noResume bool) {
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
-func Execute() {
-	if err := rootCmd.Execute(); err != nil {
-		os.Exit(1)
-	}
+func Execute() error {
+	return rootCmd.Execute()
 }
 
 func init() {

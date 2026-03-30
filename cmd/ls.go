@@ -21,22 +21,22 @@ var lsCmd = &cobra.Command{
 	Short:   "List downloads",
 	Long:    `List all downloads from the running server or database. Optionally show details for a specific download by ID.`,
 	Args:    cobra.MaximumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		mustInitializeGlobalState()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := initializeGlobalState(); err != nil {
+			return err
+		}
 
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		watch, _ := cmd.Flags().GetBool("watch")
 
 		baseURL, token, err := resolveAPIConnection(false)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		// If ID provided, show details for that download
 		if len(args) == 1 {
-			showDownloadDetails(args[0], jsonOutput, baseURL, token)
-			return
+			return showDownloadDetails(args[0], jsonOutput, baseURL, token)
 		}
 
 		strictRemote := resolveHostTarget() != ""
@@ -45,12 +45,13 @@ var lsCmd = &cobra.Command{
 			for {
 				// Clear screen first for watch mode
 				fmt.Print("\033[H\033[2J")
-				printDownloads(jsonOutput, baseURL, token, strictRemote)
+				if err := printDownloads(jsonOutput, baseURL, token, strictRemote); err != nil {
+					return err
+				}
 				time.Sleep(1 * time.Second)
 			}
-		} else {
-			printDownloads(jsonOutput, baseURL, token, strictRemote)
 		}
+		return printDownloads(jsonOutput, baseURL, token, strictRemote)
 	},
 }
 
@@ -66,7 +67,7 @@ type downloadInfo struct {
 	Speed      float64 `json:"speed,omitempty"`
 }
 
-func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote bool) {
+func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote bool) error {
 	var downloads []downloadInfo
 
 	// Try to get from running server first
@@ -74,8 +75,7 @@ func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote 
 		serverDownloads, err := GetRemoteDownloads(baseURL, token)
 		if err != nil {
 			if strictRemote {
-				fmt.Fprintf(os.Stderr, "Error listing remote downloads: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("error listing remote downloads: %w", err)
 			}
 		} else {
 			for _, s := range serverDownloads {
@@ -96,8 +96,7 @@ func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote 
 	if len(downloads) == 0 && (!strictRemote || baseURL == "") {
 		dbDownloads, err := state.ListAllDownloads()
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error listing downloads: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error listing downloads: %w", err)
 		}
 
 		for _, d := range dbDownloads {
@@ -122,13 +121,13 @@ func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote 
 		} else {
 			fmt.Println("[]")
 		}
-		return
+		return nil
 	}
 
 	if jsonOutput {
 		data, _ := json.MarshalIndent(downloads, "", "  ")
 		fmt.Println(string(data))
-		return
+		return nil
 	}
 
 	// Table output
@@ -163,16 +162,16 @@ func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote 
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", id, filename, d.Status, progress, speed, size)
 	}
 	_ = w.Flush()
+	return nil
 }
 
-func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, token string) {
+func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, token string) error {
 	strictRemote := resolveHostTarget() != ""
 
 	// Resolve partial ID
 	fullID, err := resolveDownloadID(partialID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 
 	// Try to get from running server first
@@ -181,8 +180,7 @@ func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, toke
 		resp, err := doAPIRequest(http.MethodGet, baseURL, token, path, nil)
 		if err != nil {
 			if strictRemote {
-				fmt.Fprintf(os.Stderr, "Error fetching remote download details: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("error fetching remote download details: %w", err)
 			}
 		} else {
 			defer func() {
@@ -194,18 +192,15 @@ func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, toke
 				var status types.DownloadStatus
 				if err := json.NewDecoder(resp.Body).Decode(&status); err == nil {
 					printDownloadDetail(status, jsonOutput)
-					return
+					return nil
 				} else if strictRemote {
-					fmt.Fprintf(os.Stderr, "Error decoding remote download details: %v\n", err)
-					os.Exit(1)
+					return fmt.Errorf("error decoding remote download details: %w", err)
 				}
 			} else if strictRemote {
 				if resp.StatusCode == http.StatusNotFound {
-					fmt.Fprintf(os.Stderr, "Error: remote download not found: %s\n", partialID)
-				} else {
-					fmt.Fprintf(os.Stderr, "Error: remote server returned %s\n", resp.Status)
+					return fmt.Errorf("remote download not found: %s", partialID)
 				}
-				os.Exit(1)
+				return fmt.Errorf("remote server returned %s", resp.Status)
 			}
 		}
 	}
@@ -213,8 +208,7 @@ func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, toke
 	// Fall back to database - search through all downloads
 	downloads, err := state.ListAllDownloads()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error listing downloads: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error listing downloads: %w", err)
 	}
 
 	var found *types.DownloadEntry
@@ -226,9 +220,7 @@ func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, toke
 	}
 
 	if found == nil {
-		fmt.Fprintf(os.Stderr, "Error: download not found: %s\n", partialID)
-		os.Exit(1)
-		return
+		return fmt.Errorf("download not found: %s", partialID)
 	}
 
 	var progress float64
@@ -246,6 +238,7 @@ func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, toke
 		Progress:   progress,
 	}
 	printDownloadDetail(status, jsonOutput)
+	return nil
 }
 
 func printDownloadDetail(d types.DownloadStatus, jsonOutput bool) {

@@ -1,7 +1,15 @@
 package main
 
-import "github.com/surge-downloader/surge/cmd"
+import (
+	"fmt"
+	"os"
+
+	"github.com/surge-downloader/surge/cmd"
+)
 
 func main() {
-	cmd.Execute()
+	if err := cmd.Execute(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 }

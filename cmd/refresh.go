@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"os"
 
 	"github.com/spf13/cobra"
 	"github.com/surge-downloader/surge/internal/utils"
@@ -17,23 +16,23 @@ var refreshCmd = &cobra.Command{
 	Short: "Update the URL of a paused or errored download",
 	Long:  `Update the source URL of a download by its ID. It must be paused or in an error state to be refreshed.`,
 	Args:  cobra.ExactArgs(2),
-	Run: func(cmd *cobra.Command, args []string) {
-		mustInitializeGlobalState()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := initializeGlobalState(); err != nil {
+			return err
+		}
 
 		id := args[0]
 		newURL := args[1]
 
 		baseURL, token, err := resolveAPIConnection(true)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		// Resolve partial ID to full ID
 		id, err = resolveDownloadID(id)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
 
 		reqBody := map[string]string{
@@ -42,16 +41,14 @@ var refreshCmd = &cobra.Command{
 
 		jsonData, err := json.Marshal(reqBody)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error creating request: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error creating request: %w", err)
 		}
 
 		// Send to running server
 		path := fmt.Sprintf("/update-url?id=%s", url.QueryEscape(id))
 		resp, err := doAPIRequest(http.MethodPut, baseURL, token, path, bytes.NewBuffer(jsonData))
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error connecting to server: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error connecting to server: %w", err)
 		}
 		defer func() {
 			if err := resp.Body.Close(); err != nil {
@@ -60,10 +57,10 @@ var refreshCmd = &cobra.Command{
 		}()
 
 		if resp.StatusCode != http.StatusOK {
-			fmt.Fprintf(os.Stderr, "Error: server returned %s\n", resp.Status)
-			os.Exit(1)
+			return fmt.Errorf("server returned %s", resp.Status)
 		}
 		fmt.Printf("Successfully updated URL for download %s\n", id[:8])
+		return nil
 	},
 }
 
