@@ -42,18 +42,17 @@ var addCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-
-		// Resolve once before the loop so all downloads in this batch share
-		// the same absolute output path, avoiding per-URL CWD drift.
 		resolvedOutput := resolveClientOutputPath(output)
 
 		// Send downloads to server
 		count := 0
+		attempted := 0
 		for _, arg := range urls {
 			url, mirrors := ParseURLArg(arg)
 			if url == "" {
 				continue
 			}
+			attempted++
 			if err := sendToServer(url, mirrors, resolvedOutput, baseURL, token); err != nil {
 				fmt.Printf("Error adding %s: %v\n", url, err)
 				continue
@@ -63,9 +62,14 @@ var addCmd = &cobra.Command{
 
 		if count > 0 {
 			fmt.Printf("Successfully added %d downloads.\n", count)
+			return nil
 		}
 
-		return nil
+		if attempted > 0 {
+			return fmt.Errorf("failed to add any downloads")
+		}
+
+		return fmt.Errorf("no valid URLs to add")
 	},
 }
 

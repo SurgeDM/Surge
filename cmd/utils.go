@@ -63,8 +63,6 @@ func resolveHostTarget() string {
 }
 
 // resolveClientOutputPath resolves the output path for CLI client commands.
-// If connecting to a remote host, it passes the path through.
-// If running locally, it defaults to the CWD or resolves relative paths to absolute paths.
 func resolveClientOutputPath(outputDir string) string {
 	if resolveHostTarget() != "" {
 		// Pass-through for remote connections so the daemon uses its own default/CWD.
