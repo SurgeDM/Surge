@@ -246,6 +246,99 @@ func TestLoadSettings_CorruptedJSON(t *testing.T) {
 	}
 }
 
+func TestLoadSettings_CorruptedJSON_FallsBackToDefaults(t *testing.T) {
+	// Cenário
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	surgeDir := filepath.Join(tmpDir, "surge")
+	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
+		t.Fatalf("Failed to create surge dir: %v", err)
+	}
+	corruptPath := filepath.Join(surgeDir, "settings.json")
+	if err := os.WriteFile(corruptPath, []byte("{not valid json!!!"), 0o644); err != nil {
+		t.Fatalf("Failed to write corrupt settings: %v", err)
+	}
+
+	// Ação
+	settings, err := LoadSettings()
+
+	// Validação
+	if err != nil {
+		t.Fatalf("LoadSettings should not return error for corrupt JSON, got: %v", err)
+	}
+	if settings == nil {
+		t.Fatal("LoadSettings should return defaults, got nil")
+	}
+
+	defaults := DefaultSettings()
+	if settings.Network.MaxConnectionsPerHost != defaults.Network.MaxConnectionsPerHost {
+		t.Errorf("Expected default MaxConnectionsPerHost %d, got %d",
+			defaults.Network.MaxConnectionsPerHost, settings.Network.MaxConnectionsPerHost)
+	}
+	if settings.Performance.MaxTaskRetries != defaults.Performance.MaxTaskRetries {
+		t.Errorf("Expected default MaxTaskRetries %d, got %d",
+			defaults.Performance.MaxTaskRetries, settings.Performance.MaxTaskRetries)
+	}
+}
+
+func TestLoadSettings_TruncatedJSON_FallsBackToDefaults(t *testing.T) {
+	// Cenário
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	surgeDir := filepath.Join(tmpDir, "surge")
+	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
+		t.Fatalf("Failed to create surge dir: %v", err)
+	}
+	// Simula crash durante SaveSettings — arquivo truncado
+	truncated := `{"general": {"default_download_dir": "/home/user/Downloads", "warn_on_duplicate": tr`
+	corruptPath := filepath.Join(surgeDir, "settings.json")
+	if err := os.WriteFile(corruptPath, []byte(truncated), 0o644); err != nil {
+		t.Fatalf("Failed to write truncated settings: %v", err)
+	}
+
+	// Ação
+	settings, err := LoadSettings()
+
+	// Validação
+	if err != nil {
+		t.Fatalf("LoadSettings should not return error for truncated JSON, got: %v", err)
+	}
+	if settings == nil {
+		t.Fatal("LoadSettings should return defaults, got nil")
+	}
+	if settings.Network.MaxConnectionsPerHost != DefaultSettings().Network.MaxConnectionsPerHost {
+		t.Error("Expected default settings after truncated JSON")
+	}
+}
+
+func TestLoadSettings_EmptyFile_FallsBackToDefaults(t *testing.T) {
+	// Cenário
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	surgeDir := filepath.Join(tmpDir, "surge")
+	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
+		t.Fatalf("Failed to create surge dir: %v", err)
+	}
+	emptyPath := filepath.Join(surgeDir, "settings.json")
+	if err := os.WriteFile(emptyPath, []byte(""), 0o644); err != nil {
+		t.Fatalf("Failed to write empty settings: %v", err)
+	}
+
+	// Ação
+	settings, err := LoadSettings()
+
+	// Validação
+	if err != nil {
+		t.Fatalf("LoadSettings should not return error for empty file, got: %v", err)
+	}
+	if settings == nil {
+		t.Fatal("LoadSettings should return defaults, got nil")
+	}
+}
+
 func TestLoadSettings_PartialJSON(t *testing.T) {
 	// Test that missing fields get filled with defaults
 	partial := `{
