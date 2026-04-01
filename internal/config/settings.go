@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -156,14 +157,14 @@ func GetSettingsPath() string {
 	return filepath.Join(GetSurgeDir(), "settings.json")
 }
 
-// LoadSettings loads settings from disk. Returns defaults if file doesn't exist.
+// LoadSettings loads settings from disk. Returns defaults if file doesn't exist
+// or if the JSON is corrupt, so the application can always start.
 func LoadSettings() (*Settings, error) {
 	path := GetSettingsPath()
 
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			// File doesn't exist, return defaults
 			return DefaultSettings(), nil
 		}
 		return nil, err
@@ -171,7 +172,8 @@ func LoadSettings() (*Settings, error) {
 
 	settings := DefaultSettings() // Start with defaults to fill any missing fields
 	if err := json.Unmarshal(data, settings); err != nil {
-		return nil, err
+		log.Printf("Warning: corrupt settings file %s: %v — using defaults", path, err)
+		return DefaultSettings(), nil
 	}
 
 	return settings, nil
