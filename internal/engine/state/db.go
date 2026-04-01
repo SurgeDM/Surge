@@ -154,14 +154,24 @@ func CloseDB() {
 	configured = false
 }
 
-// GetDB returns the database instance, initializing it if necessary
+// GetDB returns the database instance, initializing it if necessary.
 func GetDB() (*sql.DB, error) {
-	if db == nil {
-		if err := initDB(); err != nil {
-			return nil, err
-		}
+	dbMu.Lock()
+	if db != nil {
+		d := db
+		dbMu.Unlock()
+		return d, nil
 	}
-	return db, nil
+	dbMu.Unlock()
+
+	if err := initDB(); err != nil {
+		return nil, err
+	}
+
+	dbMu.Lock()
+	d := db
+	dbMu.Unlock()
+	return d, nil
 }
 
 // Helper to ensure DB is initialized and return it
