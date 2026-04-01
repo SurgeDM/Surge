@@ -2,10 +2,11 @@ package config
 
 import (
 	"encoding/json"
-	"log"
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/surge-downloader/surge/internal/utils"
 )
 
 // Settings holds all user-configurable application settings organized by category.
@@ -172,7 +173,7 @@ func LoadSettings() (*Settings, error) {
 
 	settings := DefaultSettings() // Start with defaults to fill any missing fields
 	if err := json.Unmarshal(data, settings); err != nil {
-		log.Printf("Warning: corrupt settings file %s: %v — using defaults", path, err)
+		utils.Debug("Warning: corrupt settings file %s: %v — using defaults", path, err)
 		return DefaultSettings(), nil
 	}
 
