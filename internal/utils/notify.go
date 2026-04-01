@@ -27,19 +27,22 @@ func ensureIcon() string {
 	iconOnce.Do(func() {
 		cacheDir, err := os.UserCacheDir()
 		if err != nil {
-			Debug("Failed to determine user cache dir: %v", err)
-			return
+			Debug("Failed to determine user cache dir, falling back to temp: %v", err)
+			cacheDir = os.TempDir()
 		}
 		surgeCache := filepath.Join(cacheDir, "surge")
 		if err := os.MkdirAll(surgeCache, 0o755); err != nil {
 			Debug("Failed to create icon cache dir: %v", err)
 			return
 		}
-		iconPath = filepath.Join(surgeCache, "surge_logo.png")
-		if err := os.WriteFile(iconPath, assets.LogoData, 0o644); err != nil {
-			iconPath = ""
-			Debug("Failed to write notification icon: %v", err)
+		path := filepath.Join(surgeCache, "surge_logo.png")
+		if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
+			if err := os.WriteFile(path, assets.LogoData, 0o644); err != nil {
+				Debug("Failed to write notification icon: %v", err)
+				return
+			}
 		}
+		iconPath = path
 	})
 	return iconPath
 }
