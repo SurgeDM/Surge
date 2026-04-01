@@ -166,6 +166,9 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	if err != nil {
 		return err
 	}
+	defer func() {
+		_ = outFile.Close()
+	}()
 
 	preallocated := false
 	if fileSize > 0 {
@@ -174,10 +177,6 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		}
 		preallocated = true
 	}
-
-	defer func() {
-		_ = outFile.Close()
-	}()
 
 	start := time.Now()
 	var written int64
@@ -208,9 +207,6 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 	if err := outFile.Sync(); err != nil {
 		return fmt.Errorf("sync error: %w", err)
-	}
-	if err := outFile.Close(); err != nil {
-		return fmt.Errorf("close error: %w", err)
 	}
 
 	if d.State != nil {
