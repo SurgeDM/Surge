@@ -9,9 +9,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/surge/internal/config"
+	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/surge/internal/utils"
 )
 
 // AddDownloadFunc is the lifecycle's handoff into the engine-facing queue layer.

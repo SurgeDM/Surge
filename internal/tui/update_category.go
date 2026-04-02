@@ -8,7 +8,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/surge-downloader/surge/internal/config"
+	"github.com/SurgeDM/surge/internal/config"
 )
 
 func (m *RootModel) catMgrBeginAdd() {

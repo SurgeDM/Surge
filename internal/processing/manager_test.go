@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/SurgeDM/surge/internal/config"
+	"github.com/SurgeDM/surge/internal/engine/types"
 )
 
 func newProbeTestServer(t *testing.T, size int64) *httptest.Server {

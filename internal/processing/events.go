@@ -7,10 +7,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/surge/internal/engine/events"
+	"github.com/SurgeDM/surge/internal/engine/state"
+	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/surge/internal/utils"
 )
 
 var (

@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/surge-downloader/surge/internal/download"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/processing"
-	"github.com/surge-downloader/surge/internal/testutil"
+	"github.com/SurgeDM/surge/internal/download"
+	"github.com/SurgeDM/surge/internal/engine/state"
+	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/surge/internal/processing"
+	"github.com/SurgeDM/surge/internal/testutil"
 )
 
 func TestIntegration_PauseResume(t *testing.T) {

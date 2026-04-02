@@ -11,8 +11,8 @@ builds:
     main: .
     ldflags:
       - -s -w 
-      - -X github.com/surge-downloader/surge/cmd.Version={{.Version}}
-      - -X github.com/surge-downloader/surge/cmd.BuildTime={{.Date}}
+      - -X github.com/SurgeDM/surge/cmd.Version={{.Version}}
+      - -X github.com/SurgeDM/surge/cmd.BuildTime={{.Date}}
 
 before:
   hooks:
@@ -50,10 +50,10 @@ archives:
 homebrew_casks:
   - name: surge
     repository:
-      owner: surge-downloader
+      owner: SurgeDM
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: "https://github.com/surge-downloader/surge"
+    homepage: "https://github.com/SurgeDM/surge"
     
     description: "Blazing fast TUI download manager built in Go for power users"
     license: "MIT"

@@ -11,8 +11,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/spf13/cobra"
-	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/tui"
+	"github.com/SurgeDM/surge/internal/core"
+	"github.com/SurgeDM/surge/internal/tui"
 )
 
 var connectCmd = &cobra.Command{

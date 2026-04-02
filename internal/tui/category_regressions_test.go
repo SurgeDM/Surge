@@ -6,9 +6,9 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/download"
+	"github.com/SurgeDM/surge/internal/config"
+	"github.com/SurgeDM/surge/internal/core"
+	"github.com/SurgeDM/surge/internal/download"
 )
 
 func newCategoryTestModel(t *testing.T, settings *config.Settings) RootModel {

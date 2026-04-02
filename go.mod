@@ -1,4 +1,4 @@
-module github.com/surge-downloader/surge
+module github.com/SurgeDM/surge
 
 go 1.25.0
 

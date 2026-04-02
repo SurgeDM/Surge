@@ -5,7 +5,7 @@ import (
 	"net/http"
 
 	"github.com/spf13/cobra"
-	"github.com/surge-downloader/surge/internal/engine/state"
+	"github.com/SurgeDM/surge/internal/engine/state"
 )
 
 var rmCmd = &cobra.Command{

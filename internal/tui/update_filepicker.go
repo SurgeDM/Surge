@@ -3,7 +3,7 @@ package tui
 import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/surge/internal/utils"
 )
 
 func (m *RootModel) handleBatchFileSelection(path string) (tea.Model, tea.Cmd) {

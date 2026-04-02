@@ -8,7 +8,7 @@ import (
 	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/surge-downloader/surge/internal/config"
+	"github.com/SurgeDM/surge/internal/config"
 )
 
 func TestAcquireLock(t *testing.T) {

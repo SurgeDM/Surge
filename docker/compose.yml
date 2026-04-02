@@ -1,9 +1,9 @@
 services:
   surge:
-    image: ghcr.io/surge-downloader/surge # OR surge:latest if building
-#    build:
-#      context: .
-#      dockerfile: Dockerfile
+    image: ghcr.io/SurgeDM/surge # OR surge:latest if building
+    #    build:
+    #      context: .
+    #      dockerfile: Dockerfile
     container_name: surge
     ports:
       - "1700:1700"
@@ -22,7 +22,7 @@ services:
     #  retries: 3
     # start_period: 5s
     deploy:
-      resources: 
+      resources:
         limits:
           cpus: '0.5'
           memory: 256M # change to your liking or specs

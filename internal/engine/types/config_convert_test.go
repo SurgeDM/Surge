@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/config"
+	"github.com/SurgeDM/surge/internal/config"
 )
 
 // TestConvertRuntimeConfig_AllFieldsCopied verifies that every field in

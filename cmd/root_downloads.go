@@ -9,12 +9,12 @@ import (
 	"sync/atomic"
 
 	"github.com/google/uuid"
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/processing"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/surge/internal/config"
+	"github.com/SurgeDM/surge/internal/core"
+	"github.com/SurgeDM/surge/internal/engine/events"
+	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/surge/internal/processing"
+	"github.com/SurgeDM/surge/internal/utils"
 )
 
 // DownloadRequest represents a download request from the browser extension

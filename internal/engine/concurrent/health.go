@@ -3,8 +3,8 @@ package concurrent
 import (
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/surge/internal/utils"
 )
 
 // checkWorkerHealth detects slow workers and cancels them

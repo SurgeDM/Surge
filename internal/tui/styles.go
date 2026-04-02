@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"github.com/surge-downloader/surge/internal/tui/colors"
+	"github.com/SurgeDM/surge/internal/tui/colors"
 
 	"charm.land/lipgloss/v2"
 )

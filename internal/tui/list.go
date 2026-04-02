@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/surge-downloader/surge/internal/tui/colors"
-	"github.com/surge-downloader/surge/internal/tui/components"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/surge/internal/tui/colors"
+	"github.com/SurgeDM/surge/internal/tui/components"
+	"github.com/SurgeDM/surge/internal/utils"
 
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"

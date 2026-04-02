@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/gen2brain/beeep"
-	"github.com/surge-downloader/surge/assets"
+	"github.com/SurgeDM/surge/assets"
 )
 
 const NotificationAppName = "Surge"

@@ -41,7 +41,7 @@ jobs:
             echo "Using manually specified version: $SURGE_VERSION"
           else
             echo "Fetching latest Surge release..."
-            SURGE_VERSION=$(curl -s https://api.github.com/repos/surge-downloader/surge/releases/latest | jq -r .tag_name | sed 's/^v//')
+            SURGE_VERSION=$(curl -s https://api.github.com/repos/SurgeDM/surge/releases/latest | jq -r .tag_name | sed 's/^v//')
             echo "Latest Surge version: $SURGE_VERSION"
           fi
           echo "version=$SURGE_VERSION" >> $GITHUB_OUTPUT

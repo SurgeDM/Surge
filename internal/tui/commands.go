@@ -5,7 +5,7 @@ import (
 	"runtime"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/surge-downloader/surge/internal/version"
+	"github.com/SurgeDM/surge/internal/version"
 )
 
 // checkForUpdateCmd performs an async update check

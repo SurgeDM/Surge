@@ -3,7 +3,7 @@ package components
 import (
 	"image/color"
 
-	"github.com/surge-downloader/surge/internal/tui/colors"
+	"github.com/SurgeDM/surge/internal/tui/colors"
 
 	"charm.land/bubbles/v2/filepicker"
 	"charm.land/bubbles/v2/help"

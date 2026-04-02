@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/SurgeDM/surge/internal/engine/types"
 )
 
 func TestHealth_LastManStanding(t *testing.T) {

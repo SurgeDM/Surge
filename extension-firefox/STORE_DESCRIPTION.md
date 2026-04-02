@@ -13,4 +13,4 @@ Surge is a blazing fast, open-source download manager. This extension integrates
 - **TUI & Headless Support**: Works with Surge in both Interactive TUI and Headless Server modes.
 
 **Requirements:**
-- You must have the [Surge Download Manager](https://github.com/surge-downloader/surge) installed and running on your system.
+- You must have the [Surge Download Manager](https://github.com/SurgeDM/surge) installed and running on your system.

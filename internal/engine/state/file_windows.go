@@ -6,7 +6,7 @@ import (
 	"os"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/surge/internal/utils"
 )
 
 const (

@@ -1,7 +1,7 @@
 package tui
 
 import (
-	"github.com/surge-downloader/surge/internal/version"
+	"github.com/SurgeDM/surge/internal/version"
 )
 
 // notificationTickMsg is sent to check if a notification should be cleared

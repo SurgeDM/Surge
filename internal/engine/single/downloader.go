@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/surge/internal/utils"
 )
 
 // SingleDownloader handles single-threaded downloads for servers that don't support range requests.

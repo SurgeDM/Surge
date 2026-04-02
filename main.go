@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/surge-downloader/surge/cmd"
+	"github.com/SurgeDM/surge/cmd"
 )
 
 func main() {

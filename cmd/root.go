@@ -13,15 +13,15 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/download"
-	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/processing"
-	"github.com/surge-downloader/surge/internal/tui"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/surge/internal/config"
+	"github.com/SurgeDM/surge/internal/core"
+	"github.com/SurgeDM/surge/internal/download"
+	"github.com/SurgeDM/surge/internal/engine/events"
+	"github.com/SurgeDM/surge/internal/engine/state"
+	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/surge/internal/processing"
+	"github.com/SurgeDM/surge/internal/tui"
+	"github.com/SurgeDM/surge/internal/utils"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/google/uuid"
@@ -405,7 +405,7 @@ func queueInitialRootDownloads(args []string, opts rootRunOptions) {
 var rootCmd = &cobra.Command{
 	Use:           "surge [url]...",
 	Short:         "Blazing fast TUI download manager built in Go for power users",
-	Long:          `Surge is a blazing fast TUI download manager built in Go for power users. Find more info here: https://github.com/surge-downloader/surge`,
+	Long:          `Surge is a blazing fast TUI download manager built in Go for power users. Find more info here: https://github.com/SurgeDM/surge`,
 	Version:       Version,
 	Args:          cobra.ArbitraryArgs,
 	SilenceErrors: true, //errors are printed in main.go this prevents double printing

@@ -6,7 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/surge-downloader/surge/internal/engine/state"
+	"github.com/SurgeDM/surge/internal/engine/state"
 )
 
 func (m RootModel) updateHistory(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {

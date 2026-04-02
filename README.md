@@ -4,12 +4,12 @@
 
 **Blazing fast TUI download manager built in Go for power users**
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/surge-downloader/surge)
-[![Release](https://img.shields.io/github/v/release/surge-downloader/surge?style=flat-square&color=blue)](https://github.com/surge-downloader/surge/releases)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/surge-downloader/surge?style=flat-square&color=cyan)](go.mod)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/SurgeDM/surge)
+[![Release](https://img.shields.io/github/v/release/SurgeDM/surge?style=flat-square&color=blue)](https://github.com/SurgeDM/surge/releases)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/SurgeDM/surge?style=flat-square&color=cyan)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-grey.svg?style=flat-square)](LICENSE)
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-violet.svg)](https://www.buymeacoffee.com/surge.downloader)
-[![Stars](https://img.shields.io/github/stars/surge-downloader/surge?style=social)](https://github.com/surge-downloader/surge/stargazers)
+[![Stars](https://img.shields.io/github/stars/SurgeDM/surge?style=social)](https://github.com/SurgeDM/surge/stargazers)
 
 [Installation](#installation) • [Usage](#usage) • [Fonts](docs/FONTS.md) • [Benchmarks](#benchmarks) • [Extension](#browser-extension) • [Settings](docs/SETTINGS.md) • [CLI Reference](docs/USAGE.md)
 
@@ -61,12 +61,12 @@ Surge is available on multiple platforms. Choose the method that works best for 
 
 | Platform / Method                  | Command / Instructions                                                           | Notes                                        |
 | :--------------------------------- | :------------------------------------------------------------------------------- | :------------------------------------------- |
-| **Prebuilt Binary**          | [Download from Releases](https://github.com/surge-downloader/surge/releases/latest) | Easiest method. Just download and run.       |
+| **Prebuilt Binary**          | [Download from Releases](https://github.com/SurgeDM/surge/releases/latest) | Easiest method. Just download and run.       |
 | **Arch Linux (AUR)**         | `yay -S surge`                                                                 | Managed via AUR.                             |
-| **macOS / Linux (Homebrew)** | `brew install surge-downloader/tap/surge`                                      | Recommended for Mac/Linux users.             |
-| **Windows**         | `winget install surge-downloader.surge`<br />or<br />`scoop install surge` | Recommended for Windows users.               |
+| **macOS / Linux (Homebrew)** | `brew install SurgeDM/tap/surge`                                      | Recommended for Mac/Linux users.             |
+| **Windows**         | `winget install SurgeDM.surge`<br />or<br />`scoop install surge` | Recommended for Windows users.               |
 | **Dockerfile**               | [See instructions](#4-server-mode-with-docker-compose)                              | Run Surge in server mode with Docker Compose |
-| **Go Install**               | `go install github.com/surge-downloader/surge@latest`                          | Requires Go 1.25+                           |
+| **Go Install**               | `go install github.com/SurgeDM/surge@latest`                          | Requires Go 1.25+                           |
 
 ---
 
@@ -152,7 +152,7 @@ Environment variable fallbacks:
 Download the compose file and start the container:
 
 ```bash
-wget https://raw.githubusercontent.com/surge-downloader/surge/refs/heads/main/docker/compose.yml
+wget https://raw.githubusercontent.com/SurgeDM/surge/refs/heads/main/docker/compose.yml
 docker compose up -d
 ```
 
@@ -241,20 +241,20 @@ Huge thanks to the teams and sponsors helping us build and ship Surge:
 We love community contributions! Whether it's a bug fix, a new feature, or just cleaning up typos.
 PRs are always welcome. For a quick guide, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-You can check out the [Discussions](https://github.com/surge-downloader/surge/discussions) for any questions or ideas, or follow us on [X (Twitter)](https://x.com/SurgeDownloader)!
+You can check out the [Discussions](https://github.com/SurgeDM/surge/discussions) for any questions or ideas, or follow us on [X (Twitter)](https://x.com/SurgeDownloader)!
 
 ## License
 
-Distributed under the MIT License. See [LICENSE](https://github.com/surge-downloader/surge/blob/main/LICENSE) for more information.
+Distributed under the MIT License. See [LICENSE](https://github.com/SurgeDM/surge/blob/main/LICENSE) for more information.
 
 ---
 
 <div align="center">
-<a href="https://star-history.com/#surge-downloader/surge&Date">
+<a href="https://star-history.com/#SurgeDM/surge&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=surge-downloader/surge&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=surge-downloader/surge&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=surge-downloader/surge&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=SurgeDM/surge&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=SurgeDM/surge&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=SurgeDM/surge&type=Date" />
  </picture>
 </a>
 
