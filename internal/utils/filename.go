@@ -69,11 +69,15 @@ func DetermineFilename(rawurl string, resp *http.Response) (string, io.Reader, e
 
 	body := io.MultiReader(bytes.NewReader(header), resp.Body)
 
-	mimeType := http.DetectContentType(header)
-	Debug("Detected MIME: %s", mimeType)
+	kind, _ := filetype.Match(header)
 
-	if kind, _ := filetype.Match(header); kind != filetype.Unknown {
-		Debug("Magic Type: %s %s", kind.Extension, kind.MIME)
+	if IsLoggingEnabled() {
+		mimeType := http.DetectContentType(header)
+		Debug("Detected MIME: %s", mimeType)
+
+		if kind != filetype.Unknown {
+			Debug("Magic Type: %s %s", kind.Extension, kind.MIME)
+		}
 	}
 
 	if candidate == "." && len(header) >= 4 && bytes.HasPrefix(header, []byte{0x50, 0x4B, 0x03, 0x04}) && len(header) >= 30 {
@@ -90,11 +94,9 @@ func DetermineFilename(rawurl string, resp *http.Response) (string, io.Reader, e
 	}
 
 	if filepath.Ext(filename) == "" {
-		if kind, _ := filetype.Match(header); kind != filetype.Unknown {
-			if kind.Extension != "" {
-				filename = filename + "." + kind.Extension
-				Debug("Added extension from magic type: %s", kind.Extension)
-			}
+		if kind != filetype.Unknown && kind.Extension != "" {
+			filename = filename + "." + kind.Extension
+			Debug("Added extension from magic type: %s", kind.Extension)
 		}
 	}
 

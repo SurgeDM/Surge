@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"os"
 	"testing"
 )
 
@@ -152,5 +153,31 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 				t.Errorf("got %q, want %q", filename, tt.expected)
 			}
 		})
+	}
+}
+
+func TestDetermineFilename_LoggingIntegration(t *testing.T) {
+	// Setup temp dir for logs
+	tempDir, err := os.MkdirTemp("", "surge-debug-integration")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	// Enable logging
+	ConfigureDebug(tempDir)
+	defer ConfigureDebug("")
+
+	resp := &http.Response{
+		Header: http.Header{},
+		Body:   io.NopCloser(bytes.NewReader([]byte("%PDF-1.4\n"))),
+	}
+
+	filename, _, err := DetermineFilename("https://example.com/test", resp)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if filename != "test.pdf" {
+		t.Errorf("got %q, want test.pdf", filename)
 	}
 }

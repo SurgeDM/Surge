@@ -23,6 +23,17 @@ func ConfigureDebug(dir string) {
 	logsDir.Store(dir)
 }
 
+// IsLoggingEnabled returns true if debug logging is configured
+// This allows callers to skip expensive argument evaluation
+func IsLoggingEnabled() bool {
+	val := logsDir.Load()
+	if val == nil {
+		return false
+	}
+	dir, ok := val.(string)
+	return ok && dir != ""
+}
+
 // Debug writes a message to debug.log file in the configured directory
 func Debug(format string, args ...any) {
 	// Internal fast path check without lock
