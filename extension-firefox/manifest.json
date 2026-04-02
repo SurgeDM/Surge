@@ -23,7 +23,7 @@
   },
   "browser_specific_settings": {
     "gecko": {
-      "id": "surge@SurgeDM.com",
+      "id": "surge@surge-downloader.com",
       "strict_min_version": "109.0"
     }
   },
