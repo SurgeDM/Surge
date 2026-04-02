@@ -51,9 +51,13 @@ func initializeGlobalState() error {
 	// Config logging
 	utils.ConfigureDebug(logsDir)
 
-	// Clean up old logs
+	// Clean up old logs (keeping retention-1 because a new log will be created immediately after)
 	retention := getSettings().General.LogRetentionCount
-	utils.CleanupLogs(retention)
+	if retention > 0 {
+		utils.CleanupLogs(retention - 1)
+	} else {
+		utils.CleanupLogs(retention)
+	}
 	return nil
 }
 

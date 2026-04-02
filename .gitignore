@@ -1,6 +1,8 @@
 # binary
 surge
 *.surge
+Surge
+surge_bin
 
 # python + uv stuff
 .python-version
