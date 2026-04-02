@@ -9,10 +9,10 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/google/uuid"
 	"github.com/SurgeDM/surge/internal/config"
 	"github.com/SurgeDM/surge/internal/core"
 	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/google/uuid"
 )
 
 const serverBindHost = "0.0.0.0"

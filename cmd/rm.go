@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/spf13/cobra"
 	"github.com/SurgeDM/surge/internal/engine/state"
+	"github.com/spf13/cobra"
 )
 
 var rmCmd = &cobra.Command{

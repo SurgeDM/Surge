@@ -10,9 +10,9 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/spf13/cobra"
 	"github.com/SurgeDM/surge/internal/core"
 	"github.com/SurgeDM/surge/internal/tui"
+	"github.com/spf13/cobra"
 )
 
 var connectCmd = &cobra.Command{

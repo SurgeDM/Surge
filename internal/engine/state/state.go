@@ -12,9 +12,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/SurgeDM/surge/internal/engine/types"
 	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/google/uuid"
 )
 
 const (

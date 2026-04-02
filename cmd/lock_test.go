@@ -5,10 +5,10 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SurgeDM/surge/internal/config"
 	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"github.com/SurgeDM/surge/internal/config"
 )
 
 func TestAcquireLock(t *testing.T) {

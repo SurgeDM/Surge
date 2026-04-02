@@ -9,10 +9,10 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/SurgeDM/surge/internal/engine/state"
 	"github.com/SurgeDM/surge/internal/engine/types"
 	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/spf13/cobra"
 )
 
 var lsCmd = &cobra.Command{
