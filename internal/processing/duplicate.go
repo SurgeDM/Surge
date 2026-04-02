@@ -3,9 +3,9 @@ package processing
 import (
 	"strings"
 
-	"github.com/SurgeDM/surge/internal/config"
-	"github.com/SurgeDM/surge/internal/engine/state"
-	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 // DuplicateResult represents the outcome of a duplicate check

@@ -9,9 +9,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/SurgeDM/surge/internal/config"
-	"github.com/SurgeDM/surge/internal/core"
-	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 type httpAPITestService struct {

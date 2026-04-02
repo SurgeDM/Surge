@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/spf13/cobra"
 )
 

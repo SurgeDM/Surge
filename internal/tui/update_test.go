@@ -10,12 +10,12 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
-	"github.com/SurgeDM/surge/internal/config"
-	"github.com/SurgeDM/surge/internal/core"
-	"github.com/SurgeDM/surge/internal/download"
-	"github.com/SurgeDM/surge/internal/engine/events"
-	"github.com/SurgeDM/surge/internal/engine/types"
-	"github.com/SurgeDM/surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/download"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/processing"
 )
 
 var errTest = errors.New("test error")

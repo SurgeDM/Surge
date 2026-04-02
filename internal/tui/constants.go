@@ -3,7 +3,7 @@ package tui
 import (
 	"time"
 
-	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 const (

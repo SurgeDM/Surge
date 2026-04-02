@@ -17,12 +17,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
-	"github.com/SurgeDM/surge/internal/config"
-	"github.com/SurgeDM/surge/internal/core"
-	"github.com/SurgeDM/surge/internal/engine/types"
-	"github.com/SurgeDM/surge/internal/processing"
-	"github.com/SurgeDM/surge/internal/tui/colors"
-	"github.com/SurgeDM/surge/internal/version"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/version"
 )
 
 type UIState int // Defines UIState as int to be used in rootModel

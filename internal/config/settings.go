@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // Settings holds all user-configurable application settings organized by category.

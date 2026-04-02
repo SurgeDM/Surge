@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/SurgeDM/surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/processing"
 )
 
 func TestProbeRedirectRange(t *testing.T) {

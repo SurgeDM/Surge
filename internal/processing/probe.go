@@ -12,9 +12,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SurgeDM/surge/internal/config"
-	"github.com/SurgeDM/surge/internal/engine/types"
-	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +

@@ -3,7 +3,7 @@ package tui
 import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/SurgeDM/surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/config"
 )
 
 func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {

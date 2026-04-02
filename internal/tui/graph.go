@@ -5,8 +5,8 @@ import (
 	"image/color"
 	"strings"
 
-	"github.com/SurgeDM/surge/internal/tui/colors"
-	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/utils"
 
 	"charm.land/lipgloss/v2"
 )

@@ -4,10 +4,10 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/SurgeDM/surge/internal/config"
-	"github.com/SurgeDM/surge/internal/engine/events"
-	"github.com/SurgeDM/surge/internal/engine/state"
-	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 // EngineHooks defines the minimal callbacks Processing needs to orchestrate the worker pool.

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SurgeDM/surge/internal/engine/types"
-	"github.com/SurgeDM/surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/testutil"
 )
 
 func TestMirrors_HappyPath(t *testing.T) {

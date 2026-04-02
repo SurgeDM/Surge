@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/SurgeDM/surge/assets"
+	"github.com/SurgeDM/Surge/assets"
 	"github.com/gen2brain/beeep"
 )
 

@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/SurgeDM/surge/internal/core"
-	"github.com/SurgeDM/surge/internal/engine/events"
-	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 var (

@@ -13,10 +13,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SurgeDM/surge/internal/engine/events"
-	"github.com/SurgeDM/surge/internal/engine/state"
-	"github.com/SurgeDM/surge/internal/engine/types"
-	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // ConcurrentDownloader handles multi-connection downloads

@@ -1,8 +1,8 @@
 package tui
 
 import (
-	"github.com/SurgeDM/surge/internal/config"
-	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/utils"
 
 	tea "charm.land/bubbletea/v2"
 )

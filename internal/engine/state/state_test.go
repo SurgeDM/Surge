@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/google/uuid"
 )
 

@@ -13,13 +13,13 @@ RUN ARCH=$(uname -m) && \
     esac && \
     if [ -z "$SURGE_VERSION" ]; then \
     echo "Fetching latest surge release..."; \
-    SURGE_VERSION=$(curl -s https://api.github.com/repos/SurgeDM/surge/releases/latest | jq -r .tag_name | sed 's/^v//'); \
+    SURGE_VERSION=$(curl -s https://api.github.com/repos/SurgeDM/Surge/releases/latest | jq -r .tag_name | sed 's/^v//'); \
     else \
     echo "Using specified surge version: $SURGE_VERSION"; \
     fi && \
     echo "Downloading surge v${SURGE_VERSION} for architecture: ${SURGE_ARCH}" && \
     curl -L -o /tmp/surge.tar.gz \
-    "https://github.com/SurgeDM/surge/releases/download/v${SURGE_VERSION}/surge_${SURGE_VERSION}_linux_${SURGE_ARCH}.tar.gz" && \
+    "https://github.com/SurgeDM/Surge/releases/download/v${SURGE_VERSION}/surge_${SURGE_VERSION}_linux_${SURGE_ARCH}.tar.gz" && \
     tar -xzf /tmp/surge.tar.gz -C /usr/local/bin && \
     rm /tmp/surge.tar.gz && \
     chmod +x /usr/local/bin/surge && \
@@ -30,7 +30,7 @@ RUN mkdir -p /root/.local/state/surge/logs /downloads
 
 WORKDIR /downloads
 
-LABEL org.opencontainers.image.source="https://github.com/SurgeDM/surge"
+LABEL org.opencontainers.image.source="https://github.com/SurgeDM/Surge"
 LABEL org.opencontainers.image.description="Surge download manager"
 LABEL org.opencontainers.image.licenses="MIT"
 

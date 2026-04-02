@@ -3,7 +3,7 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/spf13/cobra"
 )
 

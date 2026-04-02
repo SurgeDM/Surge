@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/SurgeDM/surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/spf13/cobra"
 )
 

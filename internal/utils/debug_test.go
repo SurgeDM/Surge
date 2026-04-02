@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SurgeDM/surge/internal/config"
-	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func TestDebug_CreatesLogFile(t *testing.T) {

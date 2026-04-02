@@ -5,8 +5,8 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/SurgeDM/surge/internal/engine/events"
-	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // StartHeadlessConsumer starts a goroutine to consume progress messages and log to stdout

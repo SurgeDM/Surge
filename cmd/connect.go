@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/SurgeDM/surge/internal/core"
-	"github.com/SurgeDM/surge/internal/tui"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/tui"
 	"github.com/spf13/cobra"
 )
 

@@ -7,10 +7,10 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
-	"github.com/SurgeDM/surge/internal/config"
-	"github.com/SurgeDM/surge/internal/engine/events"
-	"github.com/SurgeDM/surge/internal/tui/components"
-	"github.com/SurgeDM/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/tui/components"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {

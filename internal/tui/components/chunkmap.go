@@ -4,8 +4,8 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/SurgeDM/surge/internal/engine/types"
-	"github.com/SurgeDM/surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
 
 // ChunkMapModel visualizes download chunks as a grid using a bitmap

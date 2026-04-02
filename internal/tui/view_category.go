@@ -5,7 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
-	"github.com/SurgeDM/surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
 
 // viewCategoryManager renders the category management screen.

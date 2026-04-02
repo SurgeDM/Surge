@@ -8,8 +8,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/SurgeDM/surge/internal/engine/types"
-	"github.com/SurgeDM/surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/processing"
 )
 
 // addLogEntry adds a log entry to the log viewport

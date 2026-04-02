@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/SurgeDM/surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/state"
 )
 
 // SetupStateDB configures a fresh temp SQLite DB for tests that exercise state persistence.

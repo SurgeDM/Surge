@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SurgeDM/surge/internal/core"
-	"github.com/SurgeDM/surge/internal/engine/events"
-	"github.com/SurgeDM/surge/internal/engine/types"
-	"github.com/SurgeDM/surge/internal/tui"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/tui"
 )
 
 type fakeRemoteDownloadService struct {

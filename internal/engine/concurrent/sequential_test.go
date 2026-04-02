@@ -3,7 +3,7 @@ package concurrent
 import (
 	"testing"
 
-	"github.com/SurgeDM/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 func TestSequentialVsParallelChunking(t *testing.T) {

@@ -5,7 +5,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/SurgeDM/surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/processing"
 )
 
 // startEventWorkerForTest wires up a LifecycleManager event worker to the

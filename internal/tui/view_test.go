@@ -1,14 +1,14 @@
 package tui
 
 import (
-	"github.com/SurgeDM/surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/processing"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"github.com/SurgeDM/surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
 
 var ansiEscapeRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
