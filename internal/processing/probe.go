@@ -200,7 +200,7 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	name, _, err := utils.DetermineFilename(rawurl, resp, false)
+	name, _, err := utils.DetermineFilename(rawurl, resp)
 	if err != nil {
 		utils.Debug("Error determining filename: %v", err)
 		name = "download.bin"

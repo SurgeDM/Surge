@@ -51,7 +51,6 @@ var pendingEnqueue int32
 
 // Command line flags
 var (
-	verbose     bool
 	globalHost  string
 	globalToken string
 )
@@ -411,8 +410,6 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true, //errors are printed in main.go this prevents double printing
 	SilenceUsage:  true, // prevent usage text from being printed on every error
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		// Set global verbose mode
-		utils.SetVerbose(verbose)
 
 		GlobalProgressCh = make(chan any, 100)
 		globalSettings = getSettings()
@@ -534,7 +531,6 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Enable verbose logging")
 	rootCmd.PersistentFlags().StringVar(&globalHost, "host", "", "Server host to connect/control (or set SURGE_HOST), e.g. 127.0.0.1:1700")
 	rootCmd.PersistentFlags().StringVar(&globalToken, "token", "", "Bearer token (or set SURGE_TOKEN)")
 	rootCmd.Flags().StringP("batch", "b", "", "File containing URLs to download (one per line)")

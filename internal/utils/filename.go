@@ -7,7 +7,6 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
 
@@ -18,7 +17,7 @@ import (
 // DetermineFilename extracts the filename from a URL and HTTP response,
 // applying various heuristics. It returns the determined filename,
 // a new io.Reader that includes any sniffed header bytes, and an error.
-func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string, io.Reader, error) {
+func DetermineFilename(rawurl string, resp *http.Response) (string, io.Reader, error) {
 	parsed, err := url.Parse(rawurl)
 	if err != nil {
 		return "", nil, err
@@ -31,9 +30,7 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 	// 1. Content-Disposition
 	if _, name, err := httpheader.ContentDisposition(resp.Header); err == nil && name != "" {
 		candidate = name
-		if verbose {
-			fmt.Fprintf(os.Stderr, "Filename from Content-Disposition: %s\n", candidate)
-		}
+		Debug("Filename from Content-Disposition: %s", candidate)
 	}
 
 	// 2. Query Parameters (if no Content-Disposition)
@@ -41,14 +38,10 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 		q := parsed.Query()
 		if name := q.Get("filename"); name != "" {
 			candidate = name
-			if verbose {
-				fmt.Fprintf(os.Stderr, "Filename from query param 'filename': %s\n", candidate)
-			}
+			Debug("Filename from query param 'filename': %s", candidate)
 		} else if name := q.Get("file"); name != "" {
 			candidate = name
-			if verbose {
-				fmt.Fprintf(os.Stderr, "Filename from query param 'file': %s\n", candidate)
-			}
+			Debug("Filename from query param 'file': %s", candidate)
 		}
 	}
 
@@ -76,13 +69,11 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 
 	body := io.MultiReader(bytes.NewReader(header), resp.Body)
 
-	if verbose {
-		mimeType := http.DetectContentType(header)
-		fmt.Fprintln(os.Stderr, "Detected MIME:", mimeType)
+	mimeType := http.DetectContentType(header)
+	Debug("Detected MIME: %s", mimeType)
 
-		if kind, _ := filetype.Match(header); kind != filetype.Unknown {
-			fmt.Fprintln(os.Stderr, "Magic Type:", kind.Extension, kind.MIME)
-		}
+	if kind, _ := filetype.Match(header); kind != filetype.Unknown {
+		Debug("Magic Type: %s %s", kind.Extension, kind.MIME)
 	}
 
 	if candidate == "." && len(header) >= 4 && bytes.HasPrefix(header, []byte{0x50, 0x4B, 0x03, 0x04}) && len(header) >= 30 {
@@ -93,9 +84,7 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 			zipName := string(header[start:end])
 			if zipName != "" {
 				filename = filepath.Base(zipName)
-				if verbose {
-					fmt.Fprintln(os.Stderr, "ZIP internal filename:", zipName)
-				}
+				Debug("ZIP internal filename: %s", zipName)
 			}
 		}
 	}
@@ -104,9 +93,7 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 		if kind, _ := filetype.Match(header); kind != filetype.Unknown {
 			if kind.Extension != "" {
 				filename = filename + "." + kind.Extension
-				if verbose {
-					fmt.Fprintf(os.Stderr, "Added extension from magic type: %s\n", kind.Extension)
-				}
+				Debug("Added extension from magic type: %s", kind.Extension)
 			}
 		}
 	}
@@ -117,9 +104,7 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 
 	if filename == "" || filename == "." || filename == "/" || filename == "_" {
 		filename = "download.bin"
-		if verbose {
-			fmt.Fprintln(os.Stderr, "Falling back to default filename: download.bin")
-		}
+		Debug("Falling back to default filename: download.bin")
 	}
 
 	return filename, body, nil

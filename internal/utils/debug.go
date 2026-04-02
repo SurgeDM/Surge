@@ -16,7 +16,6 @@ var (
 	debugFile *os.File
 	debugOnce sync.Once
 	logsDir   atomic.Value // string
-	verbose   atomic.Bool
 )
 
 // ConfigureDebug sets the directory for debug logs
@@ -24,23 +23,8 @@ func ConfigureDebug(dir string) {
 	logsDir.Store(dir)
 }
 
-// SetVerbose enables or disables verbose logging
-func SetVerbose(enabled bool) {
-	verbose.Store(enabled)
-}
-
-// IsVerbose returns true if verbose logging is enabled
-func IsVerbose() bool {
-	return verbose.Load()
-}
-
 // Debug writes a message to debug.log file in the configured directory
 func Debug(format string, args ...any) {
-	// Fast path: check verbose flag first
-	if !verbose.Load() {
-		return
-	}
-
 	// Internal fast path check without lock
 	val := logsDir.Load()
 	if val == nil {

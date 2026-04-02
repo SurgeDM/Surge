@@ -33,7 +33,6 @@ These are persistent flags and can be used with all commands.
 | :------------------- | :------------------------------------- |
 | `--host <host:port>` | Target server for TUI and CLI actions. |
 | `--token <token>`    | Bearer token used for API requests.    |
-| `--verbose, -v`      | Enable verbose logging.                |
 
 ## Environment Variables
 

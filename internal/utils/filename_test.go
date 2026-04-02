@@ -143,7 +143,7 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 				Body:   io.NopCloser(bytes.NewReader(tt.body)),
 			}
 
-			filename, _, err := DetermineFilename(tt.url, resp, false)
+			filename, _, err := DetermineFilename(tt.url, resp)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
