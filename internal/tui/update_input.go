@@ -112,19 +112,50 @@ func (m RootModel) submitInputForm() (tea.Model, tea.Cmd) {
 }
 
 // parseURLInput splits a comma-separated URL string into a primary URL and mirrors.
+// Only treats a part as a mirror if it looks like a real URL (starts with http://,
+// https://, or ftp://), so commas in the primary URL path are preserved.
 func parseURLInput(input string) (url string, mirrors []string) {
-	for _, part := range strings.Split(input, ",") {
-		cleaned := strings.TrimSpace(part)
-		if cleaned == "" {
+	parts := strings.Split(input, ",")
+
+	hasRealMirror := false
+	for _, p := range parts[1:] {
+		if trimmed := strings.TrimSpace(p); trimmed != "" && isURLLike(trimmed) {
+			hasRealMirror = true
+			break
+		}
+	}
+	if !hasRealMirror {
+		trimmed := strings.TrimSpace(input)
+		if trimmed == "" {
+			return "", nil
+		}
+		return trimmed, []string{trimmed}
+	}
+
+	for _, p := range parts {
+		trimmed := strings.TrimSpace(p)
+		if trimmed == "" {
 			continue
 		}
 		if url == "" {
-			url = cleaned
-		} else {
-			mirrors = append(mirrors, cleaned)
+			url = trimmed
+		} else if isURLLike(trimmed) {
+			mirrors = append(mirrors, trimmed)
+		}
+	}
+	if url == "" {
+		trimmed := strings.TrimSpace(input)
+		if trimmed != "" {
+			return trimmed, []string{trimmed}
 		}
 	}
 	return
+}
+
+// isURLLike returns true when s appears to begin with a URI scheme.
+func isURLLike(s string) bool {
+	lowered := strings.ToLower(s)
+	return strings.HasPrefix(lowered, "http://") || strings.HasPrefix(lowered, "https://") || strings.HasPrefix(lowered, "ftp://")
 }
 
 func (m RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
