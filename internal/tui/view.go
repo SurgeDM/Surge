@@ -909,10 +909,11 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	}
 	isActive := !d.done && !d.paused && !d.pausing && d.Speed > 0
 	if isActive {
-		connStr := "0"
-		if d.Connections > 0 {
-			connStr = fmt.Sprintf("%d", d.Connections)
+		conns := d.Connections
+		if conns == 0 {
+			conns = 1 // Single-connection download (range requests not supported)
 		}
+		connStr := fmt.Sprintf("%d", conns)
 		leftColItems = append(leftColItems, lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Conns:"), StatsValueStyle.Render(connStr)))
 	}
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, leftColItems...)
