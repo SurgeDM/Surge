@@ -128,7 +128,7 @@ func DefaultSettings() *Settings {
 		General: GeneralSettings{
 			DefaultDownloadDir:           defaultDir,
 			WarnOnDuplicate:              true,
-			DownloadCompleteNotification: false,
+			DownloadCompleteNotification: true,
 			DownloadFailedNotification:   true,
 			DownloadAddedNotification:    false,
 			AllowRemoteOpenActions:       false,
