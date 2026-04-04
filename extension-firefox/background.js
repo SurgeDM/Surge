@@ -685,7 +685,7 @@ async function handleDownloadIntercept(downloadItem) {
     pendingDuplicates.set(pendingId, {
       downloadItem,
       filename,
-      directory: '',
+      directory,
       url: downloadItem.url,
       timestamp: Date.now()
     });
@@ -725,7 +725,7 @@ async function handleDownloadIntercept(downloadItem) {
     return; // Let browser continue - download is already in progress
   }
 
-  const { filename } = extractPathInfo(downloadItem);
+  const { filename, directory } = extractPathInfo(downloadItem);
 
   try {
     await browser.downloads.cancel(downloadItem.id);
@@ -734,7 +734,7 @@ async function handleDownloadIntercept(downloadItem) {
     const result = await sendToSurge(
       downloadItem.url,
       filename,
-      ''
+      directory
     );
 
     if (result.success) {
