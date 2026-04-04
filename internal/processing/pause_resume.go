@@ -240,11 +240,13 @@ func (mgr *LifecycleManager) Cancel(id string) error {
 
 	var filename, destPath string
 	var completed bool
+	var found bool
 
 	// Mechanical cancel via pool
 	if hooks.Cancel != nil {
 		result := hooks.Cancel(id)
 		if result.Found {
+			found = true
 			filename = result.Filename
 			destPath = result.DestPath
 			completed = result.Completed
@@ -253,6 +255,7 @@ func (mgr *LifecycleManager) Cancel(id string) error {
 
 	// Supplement with DB info (covers DB-only / completed entries)
 	if entry, err := state.GetDownload(id); err == nil && entry != nil {
+		found = true
 		if filename == "" {
 			filename = entry.Filename
 		}
@@ -262,6 +265,10 @@ func (mgr *LifecycleManager) Cancel(id string) error {
 		if entry.Status == "completed" {
 			completed = true
 		}
+	}
+
+	if !found {
+		return fmt.Errorf("download not found")
 	}
 
 	// Emit removal event — event worker handles DB deletion and file cleanup.
@@ -285,9 +292,10 @@ func (mgr *LifecycleManager) UpdateURL(id string, newURL string) error {
 		if err := hooks.UpdateURL(id, newURL); err != nil {
 			return err
 		}
+		// Pool update succeeded; persist to DB.
+		return state.UpdateURL(id, newURL)
 	}
-
-	// Persist to database
+	// No pool connected — DB-only update is correct (no in-memory state to sync).
 	return state.UpdateURL(id, newURL)
 }
 
