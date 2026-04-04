@@ -347,7 +347,7 @@ func acquireRootInstanceLock() (func(), error) {
 	}
 
 	if !isMaster {
-		return nil, fmt.Errorf("Surge is already running. Use 'surge add <url>' to add a download to the active instance")
+		return nil, fmt.Errorf("surge is already running. Use 'surge add <url>' to add a download to the active instance")
 	}
 
 	return func() {
