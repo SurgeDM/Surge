@@ -1,8 +1,6 @@
 # binary
-surge
 *.surge
 Surge
-surge_bin
 
 # python + uv stuff
 .python-version
@@ -19,10 +17,3 @@ logs/
 dist/
 build/
 .goreleaser-extra/
-
-# secrets
-.github_token
-.env
-
-# temp markdowns
-implementation_plan.md
