@@ -73,6 +73,12 @@ func (m RootModel) View() tea.View {
 		return m.wrapView("Loading...")
 	}
 
+	// Terminal too small to render any meaningful layout
+	if m.width < 45 || m.height < 12 {
+		msg := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Terminal too small (min: 45×12)")
+		return m.wrapView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, msg))
+	}
+
 	if m.shuttingDown {
 		modal := components.ConfirmationModal{
 			Title:       "Shutting Down",
@@ -247,11 +253,17 @@ func (m RootModel) View() tea.View {
 	if leftFooterWidth < 0 {
 		leftFooterWidth = 0
 	}
-	footerContent := lipgloss.JoinHorizontal(
-		lipgloss.Top,
-		lipgloss.NewStyle().Width(leftFooterWidth).Render(helpText),
-		versionText,
-	)
+	// Hide help text at very narrow widths — version is more important
+	var footerContent string
+	if footerContentWidth < 60 {
+		footerContent = versionText
+	} else {
+		footerContent = lipgloss.JoinHorizontal(
+			lipgloss.Top,
+			lipgloss.NewStyle().Width(leftFooterWidth).Render(helpText),
+			versionText,
+		)
+	}
 	footer := footerContent
 
 	footerHeight := lipgloss.Height(footer)
@@ -263,18 +275,39 @@ func (m RootModel) View() tea.View {
 		availableHeight = 1
 	}
 
-	// Column Widths
+	// Column Widths (or full-width when right column is hidden)
 	leftWidth := int(float64(availableWidth) * ListWidthRatio)
 	rightWidth := availableWidth - leftWidth
 	if rightWidth < 0 {
 		rightWidth = 0
 	}
 
+	// Determine right column viability thresholds
+	hideRightColumn := rightWidth < 50                 // too narrow for any right content
+	hideGraphStats := rightWidth >= 50 && rightWidth < 70 // enough for graph, not for inline stats
+	hideLogo := leftWidth < 60                         // not enough room for ASCII logo
+
+	if hideRightColumn {
+		leftWidth = availableWidth
+	}
+
+	// Short terminal: reduce header and graph minimums
+	shortTerminal := availableHeight < 25
+
 	// --- LEFT COLUMN HEIGHTS ---
 	headerHeight := 11
+	if shortTerminal {
+		headerHeight = 3 // server info bar only, skip logo
+	}
 	listHeight := availableHeight - headerHeight
 	if listHeight < 10 {
 		listHeight = 10
+	}
+
+	// Short terminal: reduce minimum graph height
+	minGraphHeight := 9
+	if shortTerminal {
+		minGraphHeight = 5
 	}
 
 	// --- RIGHT COLUMN HEIGHTS ---
@@ -304,6 +337,9 @@ func (m RootModel) View() tea.View {
 
 	// Calculate Available Height for Rest
 	remainingHeight := availableHeight - detailHeight
+	if remainingHeight < 0 {
+		remainingHeight = 0
+	}
 
 	// Calculate Chunk Map Needs
 	chunkMapHeight := 0
@@ -328,7 +364,7 @@ func (m RootModel) View() tea.View {
 
 		hasChunks := len(bitmap) > 0 && bitmapWidth > 0
 
-		if !selected.done && hasChunks {
+		if !selected.done && hasChunks && availableHeight >= 18 {
 			showChunkMap = true
 		}
 	}
@@ -351,7 +387,6 @@ func (m RootModel) View() tea.View {
 	}
 
 	// Define Minimum Graph Height
-	minGraphHeight := 9
 	var graphHeight int
 
 	// Determine Layout
@@ -423,17 +458,7 @@ func (m RootModel) View() tea.View {
 		logWidth = 4 // Minimum for viewport
 	}
 
-	// Render logo and server panel in a shared column
-	var logoContent string
-	if m.logoCache != "" {
-		logoContent = m.logoCache
-	} else {
-		gradientLogo := ApplyGradient(logoText, colors.NeonPink, colors.NeonPurple)
-		m.logoCache = lipgloss.NewStyle().Render(gradientLogo)
-		logoContent = m.logoCache
-	}
-
-	// Server info box (below logo, same width)
+	// Server info vars
 	greenDot := lipgloss.NewStyle().Foreground(colors.StateDownloading).Render("●")
 	host := m.ServerHost
 	if host == "" {
@@ -452,36 +477,49 @@ func (m RootModel) View() tea.View {
 	if serverContentWidth < 0 {
 		serverContentWidth = 0
 	}
-
-	serverContent := greenDot + statusLine
-
 	serverPortContent := lipgloss.NewStyle().
 		Width(serverContentWidth).
 		Align(lipgloss.Center).
-		Render(serverContent)
-
-	// Keep server box only as tall as needed for its rendered content.
+		Render(greenDot + statusLine)
 	serverBoxHeight := lipgloss.Height(serverPortContent) + 2
 	if serverBoxHeight < 3 {
 		serverBoxHeight = 3
 	}
-	logoBoxHeight := headerHeight - serverBoxHeight
-	if logoBoxHeight < 1 {
-		logoBoxHeight = 1
-	}
-	logoBox := lipgloss.Place(logoWidth, logoBoxHeight, lipgloss.Center, lipgloss.Center, logoContent)
-	serverBox := renderBtopBox("", PaneTitleStyle.Render(" Server "), serverPortContent, logoWidth, serverBoxHeight, colors.Gray)
 
-	// Combine logo and server box vertically
-	logoColumn := lipgloss.JoinVertical(lipgloss.Left, logoBox, serverBox)
+	// Render logo column (or just server info when too narrow)
+	var logoColumn string
+	if hideLogo {
+		logoColumn = renderBtopBox("", PaneTitleStyle.Render(" Server "), serverPortContent, logoWidth, serverBoxHeight, colors.Gray)
+	} else {
+		var logoContent string
+		if m.logoCache != "" {
+			logoContent = m.logoCache
+		} else {
+			gradientLogo := ApplyGradient(logoText, colors.NeonPink, colors.NeonPurple)
+			m.logoCache = lipgloss.NewStyle().Render(gradientLogo)
+			logoContent = m.logoCache
+		}
+
+		logoBoxHeight := headerHeight - serverBoxHeight
+		if logoBoxHeight < 1 {
+			logoBoxHeight = 1
+		}
+		logoBox := lipgloss.Place(logoWidth, logoBoxHeight, lipgloss.Center, lipgloss.Center, logoContent)
+		serverBox := renderBtopBox("", PaneTitleStyle.Render(" Server "), serverPortContent, logoWidth, serverBoxHeight, colors.Gray)
+		logoColumn = lipgloss.JoinVertical(lipgloss.Left, logoBox, serverBox)
+	}
 
 	// Render log viewport
 	vpWidth := logWidth - 4
 	if vpWidth < 0 {
 		vpWidth = 0
 	}
-	m.logViewport.SetWidth(vpWidth)           // Account for borders
-	m.logViewport.SetHeight(headerHeight - 4) // Account for borders and title
+	vpHeight := headerHeight - 4
+	if vpHeight < 1 {
+		vpHeight = 1
+	}
+	m.logViewport.SetWidth(vpWidth)
+	m.logViewport.SetHeight(vpHeight)
 	logContent := m.logViewport.View()
 
 	// Use different border color when focused
@@ -496,9 +534,6 @@ func (m RootModel) View() tea.View {
 
 	// --- SECTION 2: SPEED GRAPH (Top Right) ---
 	// Use GraphHistoryPoints from config (30 seconds of history)
-
-	// Stats box width inside the Network Activity box
-	statsBoxWidth := 18
 
 	// Get the last 60 data points for the graph
 	var graphData []float64
@@ -544,92 +579,140 @@ func (m RootModel) View() tea.View {
 		graphContentHeight = 3
 	}
 
-	// Get current speed and calculate total downloaded
-	currentSpeed := 0.0
-	if len(m.SpeedHistory) > 0 {
-		currentSpeed = m.SpeedHistory[len(m.SpeedHistory)-1]
-	}
+	// Stats box width inside the Network Activity box
+	statsBoxWidth := 18
 
-	// Calculate total downloaded across all downloads
-	totalDownloaded := stats.TotalDownloaded
-
-	// Create stats content (left side inside box)
-	speedMbps := currentSpeed * 8
-	topMbps := topSpeed * 8
-
-	valueStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
-	labelStyleStats := lipgloss.NewStyle().Foreground(colors.LightGray)
-	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
-
-	statsContent := lipgloss.JoinVertical(lipgloss.Left,
-		fmt.Sprintf("%s %s", valueStyle.Render("▼"), valueStyle.Render(fmt.Sprintf("%.2f MB/s", currentSpeed))),
-		dimStyle.Render(fmt.Sprintf("  (%.0f Mbps)", speedMbps)),
-		"",
-		fmt.Sprintf("%s %s", labelStyleStats.Render("Top:"), valueStyle.Render(fmt.Sprintf("%.2f", topSpeed))),
-		dimStyle.Render(fmt.Sprintf("  (%.0f Mbps)", topMbps)),
-		"",
-		fmt.Sprintf("%s %s", labelStyleStats.Render("Total:"), valueStyle.Render(utils.ConvertBytesToHumanReadable(totalDownloaded))),
-	)
-
-	// Style stats with a border box
-	statsBoxStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colors.Gray).
-		Padding(0, 1).
-		Width(statsBoxWidth).
-		Height(graphContentHeight)
-	statsBox := statsBoxStyle.Render(statsContent)
-
-	// Graph takes remaining width after stats box
-	axisWidth := 10                                              // Width for "X.X MB/s" labels
-	graphAreaWidth := rightWidth - statsBoxWidth - axisWidth - 6 // borders + spacing
-	if graphAreaWidth < 10 {
-		graphAreaWidth = 10
-	}
-
-	// Render the Graph
-	graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
-
-	// Create Y-axis (right side of graph)
-	axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)
-	label := func(v float64) string {
-		if v <= 0 {
-			return "0 MB/s"
+	// Graph width calculation: hide stats box when too narrow
+	axisWidth := 10
+	var graphWithAxis string
+	if hideGraphStats {
+		// No stats box — graph gets almost full width
+		graphAreaWidth := rightWidth - axisWidth - 10
+		if graphAreaWidth < 10 {
+			graphAreaWidth = 10
 		}
-		return fmt.Sprintf("%.1f MB/s", v)
-	}
 
-	axisLines := make([]string, graphContentHeight)
-	for i := range axisLines {
-		axisLines[i] = axisStyle.Render("")
-	}
+		graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
 
-	if graphContentHeight >= 9 {
-		axisLines[0] = axisStyle.Render(label(maxSpeed))
-		axisLines[graphContentHeight/4] = axisStyle.Render(label(maxSpeed * 0.75))
-		axisLines[graphContentHeight/2] = axisStyle.Render(label(maxSpeed * 0.5))
-		axisLines[(graphContentHeight*3)/4] = axisStyle.Render(label(maxSpeed * 0.25))
-		axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
-	} else if graphContentHeight >= 5 {
-		axisLines[0] = axisStyle.Render(label(maxSpeed))
-		axisLines[graphContentHeight/2] = axisStyle.Render(label(maxSpeed * 0.5))
-		axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
+		// Y-axis labels
+		axisWidth := 10
+		axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)
+		label := func(v float64) string {
+			if v <= 0 {
+				return "0 MB/s"
+			}
+			return fmt.Sprintf("%.1f MB/s", v)
+		}
+
+		axisLines := make([]string, graphContentHeight)
+		for i := range axisLines {
+			axisLines[i] = axisStyle.Render("")
+		}
+		if graphContentHeight >= 7 {
+			axisLines[0] = axisStyle.Render(label(maxSpeed))
+			axisLines[graphContentHeight-2] = axisStyle.Render(label(maxSpeed * 0.5))
+			axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
+		} else if graphContentHeight >= 3 {
+			axisLines[0] = axisStyle.Render(label(maxSpeed))
+			axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
+		} else {
+			axisLines[0] = axisStyle.Render(label(maxSpeed))
+		}
+		axisColumn := lipgloss.NewStyle().
+			Height(graphContentHeight).
+			Align(lipgloss.Right).
+			Render(strings.Join(axisLines, "\n"))
+
+		graphWithAxis = lipgloss.JoinHorizontal(lipgloss.Top,
+			graphVisual,
+			axisColumn,
+		)
 	} else {
-		axisLines[0] = axisStyle.Render(label(maxSpeed))
-		axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
+		// Get current speed and calculate total downloaded
+		currentSpeed := 0.0
+		if len(m.SpeedHistory) > 0 {
+			currentSpeed = m.SpeedHistory[len(m.SpeedHistory)-1]
+		}
+
+		// Calculate total downloaded across all downloads
+		totalDownloaded := stats.TotalDownloaded
+
+		// Create stats content (left side inside box)
+		speedMbps := currentSpeed * 8
+		topMbps := topSpeed * 8
+
+		valueStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
+		labelStyleStats := lipgloss.NewStyle().Foreground(colors.LightGray)
+		dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
+
+		statsContent := lipgloss.JoinVertical(lipgloss.Left,
+			fmt.Sprintf("%s %s", valueStyle.Render("▼"), valueStyle.Render(fmt.Sprintf("%.2f MB/s", currentSpeed))),
+			dimStyle.Render(fmt.Sprintf("  (%.0f Mbps)", speedMbps)),
+			"",
+			fmt.Sprintf("%s %s", labelStyleStats.Render("Top:"), valueStyle.Render(fmt.Sprintf("%.2f", topSpeed))),
+			dimStyle.Render(fmt.Sprintf("  (%.0f Mbps)", topMbps)),
+			"",
+			fmt.Sprintf("%s %s", labelStyleStats.Render("Total:"), valueStyle.Render(utils.ConvertBytesToHumanReadable(totalDownloaded))),
+		)
+
+		// Style stats with a border box
+		statsBoxStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(colors.Gray).
+			Padding(0, 1).
+			Width(statsBoxWidth).
+			Height(graphContentHeight)
+		statsBox := statsBoxStyle.Render(statsContent)
+
+		// Graph takes remaining width after stats box
+		axisWidth := 10
+		graphAreaWidth := rightWidth - statsBoxWidth - axisWidth - 6 // borders + spacing
+		if graphAreaWidth < 10 {
+			graphAreaWidth = 10
+		}
+
+		graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
+
+		// Create Y-axis (right side of graph)
+		axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)
+		label := func(v float64) string {
+			if v <= 0 {
+				return "0 MB/s"
+			}
+			return fmt.Sprintf("%.1f MB/s", v)
+		}
+
+		axisLines := make([]string, graphContentHeight)
+		for i := range axisLines {
+			axisLines[i] = axisStyle.Render("")
+		}
+
+		if graphContentHeight >= 9 {
+			axisLines[0] = axisStyle.Render(label(maxSpeed))
+			axisLines[graphContentHeight/4] = axisStyle.Render(label(maxSpeed * 0.75))
+			axisLines[graphContentHeight/2] = axisStyle.Render(label(maxSpeed * 0.5))
+			axisLines[(graphContentHeight*3)/4] = axisStyle.Render(label(maxSpeed * 0.25))
+			axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
+		} else if graphContentHeight >= 5 {
+			axisLines[0] = axisStyle.Render(label(maxSpeed))
+			axisLines[graphContentHeight/2] = axisStyle.Render(label(maxSpeed * 0.5))
+			axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
+		} else {
+			axisLines[0] = axisStyle.Render(label(maxSpeed))
+			axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
+		}
+
+		axisColumn := lipgloss.NewStyle().
+			Height(graphContentHeight).
+			Align(lipgloss.Right).
+			Render(strings.Join(axisLines, "\n"))
+
+		graphWithAxis = lipgloss.JoinHorizontal(lipgloss.Top,
+			statsBox,
+			graphVisual,
+			axisColumn,
+		)
 	}
-
-	axisColumn := lipgloss.NewStyle().
-		Height(graphContentHeight).
-		Align(lipgloss.Right).
-		Render(strings.Join(axisLines, "\n"))
-
-	// Combine: stats box (left) | graph (middle) | axis (right)
-	graphWithAxis := lipgloss.JoinHorizontal(lipgloss.Top,
-		statsBox,
-		graphVisual,
-		axisColumn,
-	)
 
 	// Add top and bottom padding inside the Network Activity box
 	graphWithPadding := lipgloss.JoinVertical(lipgloss.Left,
@@ -742,14 +825,19 @@ func (m RootModel) View() tea.View {
 
 	// --- ASSEMBLY ---
 
-	// Left Column
-	leftColumn := lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
+	var body string
+	if hideRightColumn {
+		// Terminal too narrow for two-column layout — list-only mode
+		body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
+	} else {
+		// Left Column
+		leftColumn := lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
 
-	// Right Column (Graph + Detail + Chunk)
-	rightColumn := lipgloss.JoinVertical(lipgloss.Left, graphBox, detailBox, chunkBox)
+		// Right Column (Graph + Detail + Chunk)
+		rightColumn := lipgloss.JoinVertical(lipgloss.Left, graphBox, detailBox, chunkBox)
 
-	// Body
-	body := lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
+		body = lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
+	}
 	body = lipgloss.NewStyle().
 		Width(availableWidth).
 		Height(availableHeight).

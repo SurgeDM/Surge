@@ -224,10 +224,10 @@ func BenchmarkLogoGradient(b *testing.B) {
 
 func BenchmarkCachedLogo(b *testing.B) {
 	logoText := `
-   _______  ___________ ____ 
-  / ___/ / / / ___/ __ '/ _ \
+   _______  ___________ ____
+  / ___/ / / / ___/ __ '/ _ \\
  (__  ) /_/ / /  / /_/ /  __/
-/____/\__,_/_/   \__, /\___/ 
+/____/\__,_/_/   \__, /\___/
                 /____/       `
 
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
@@ -242,5 +242,152 @@ func BenchmarkCachedLogo(b *testing.B) {
 		} else {
 			_ = ApplyGradient(logoText, colors.NeonPink, colors.NeonPurple)
 		}
+	}
+}
+
+// Tests for issue #252: TUI layout breakage on non-standard terminal sizes
+
+func TestView_NoLineExceedsTerminalWidth(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+
+	sizes := []struct{ width, height int }{
+		{160, 40}, // full layout
+		{120, 30}, // full layout lower bound
+		{100, 24}, // compact: no stats box
+		{80, 24},  // narrow: no stats box, no logo
+		{60, 20},  // very narrow: right column hidden
+	}
+
+	for _, tc := range sizes {
+		m.width = tc.width
+		m.height = tc.height
+
+		plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
+		for i, line := range strings.Split(plain, "\n") {
+			// Count visible chars (excluding ANSI escapes already removed)
+			if len(line) > tc.width+2 { // +2 tolerance for lipgloss padding
+				t.Errorf("line %d exceeds width at %dx%d: got %d chars, content: %q",
+					i, tc.width, tc.height, len(line), line[:min(len(line), 80)])
+			}
+		}
+	}
+}
+
+func TestView_NoBoxCorruptionAtNarrowWidths(t *testing.T) {
+	// Check for doubled box-drawing characters that indicate overlapping panes
+	corruptionPatterns := []string{
+		"╭╭", "╮╮", "╰╰", "╯╯", // doubled corners
+		"──╮", "──╭",            // overlapping horizontal+vertical
+	}
+
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+
+	sizes := []struct{ width, height int }{
+		{160, 40},
+		{120, 30},
+		{100, 24},
+		{80, 24},
+		{60, 20},
+	}
+
+	for _, tc := range sizes {
+		m.width = tc.width
+		m.height = tc.height
+
+		plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
+		for _, pattern := range corruptionPatterns {
+			if strings.Contains(plain, pattern) {
+				t.Errorf("box corruption %q found at %dx%d", pattern, tc.width, tc.height)
+			}
+		}
+	}
+}
+
+func TestView_RightColumnHiddenAtNarrowWidth(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.width = 60
+	m.height = 20
+
+	view := m.View()
+	plain := ansiEscapeRE.ReplaceAllString(view.Content, "")
+
+	// Should NOT contain right column headers
+	if strings.Contains(plain, "Network Activity") {
+		t.Fatal("right column should be hidden at narrow width, but 'Network Activity' found")
+	}
+	if strings.Contains(plain, "File Details") {
+		t.Fatal("right column should be hidden at narrow width, but 'File Details' found")
+	}
+}
+
+func TestView_LogoHiddenAtNarrowWidth(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.width = 60
+	m.height = 24
+
+	view := m.View()
+	plain := ansiEscapeRE.ReplaceAllString(view.Content, "")
+
+	// ASCII logo starts with underscore-like characters that form the logo shape
+	// At narrow widths, the large logo should be hidden
+	if strings.Contains(plain, "_______") {
+		t.Fatal("logo should be hidden when leftWidth < 60, but found underscores")
+	}
+}
+
+func TestView_FooterHidesHelpTextAtNarrowWidth(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.width = 40
+	m.height = 24
+
+	view := m.View()
+	plain := ansiEscapeRE.ReplaceAllString(view.Content, "")
+	lines := strings.Split(plain, "\n")
+
+	// Last line should be version-only, no help text
+	lastLine := lines[len(lines)-1]
+	// Help text contains specific key bindings like "enter", "tab", etc.
+	if strings.Contains(lastLine, "enter") || strings.Contains(lastLine, "tab") ||
+		strings.Contains(lastLine, "del") || strings.Contains(lastLine, "down") {
+		t.Fatalf("footer should hide help text at narrow width, got: %q", lastLine)
+	}
+}
+
+func TestView_TerminalTooSmallMessage(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+
+	sizes := []struct{ width, height int }{
+		{40, 10},
+		{30, 20},
+		{44, 11},
+	}
+
+	for _, tc := range sizes {
+		m.width = tc.width
+		m.height = tc.height
+
+		plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
+		if !strings.Contains(plain, "Terminal too small") {
+			t.Errorf("expected 'Terminal too small' at %dx%d, got:\n%s", tc.width, tc.height, plain)
+		}
+	}
+}
+
+func TestView_DoesNotPanicAtExtremeSizes(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+
+	extremeSizes := []struct{ width, height int }{
+		{40, 12},  // very narrow and short
+		{40, 80},  // narrow and tall
+		{200, 15}, // wide but extremely short
+		{1, 1},    // minimum possible
+		{0, 24},   // zero width (loading)
+	}
+
+	for _, tc := range extremeSizes {
+		m.width = tc.width
+		m.height = tc.height
+		// Should not panic
+		_ = m.View()
 	}
 }
