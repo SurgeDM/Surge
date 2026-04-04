@@ -71,3 +71,14 @@ type DownloadStatus struct {
 	TimeTaken   int64   `json:"time_taken"`  // Duration in milliseconds (completed only)
 	AvgSpeed    float64 `json:"avg_speed"`   // Average speed in bytes/sec (completed only)
 }
+
+// CancelResult contains metadata about a cancelled download so callers
+// can handle event emission and cleanup without the pool needing to import
+// the events package (which would create an import cycle).
+type CancelResult struct {
+	Found     bool
+	Filename  string
+	DestPath  string
+	Completed bool
+	WasQueued bool
+}
