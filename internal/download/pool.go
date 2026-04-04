@@ -418,12 +418,7 @@ func (p *WorkerPool) worker() {
 			if cfg.State != nil {
 				cfg.State.SetError(err)
 			}
-			p.trySendProgress(events.DownloadErrorMsg{
-				DownloadID: cfg.ID,
-				Filename:   cfg.Filename,
-				DestPath:   resolveDestPath(&cfg),
-				Err:        err,
-			})
+			// Note: DownloadErrorMsg is already emitted by TUIDownload on the same progressCh.
 			// Clean up errored download from tracking (don't save to .surge)
 			p.mu.Lock()
 			delete(p.downloads, cfg.ID)
