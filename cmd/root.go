@@ -225,13 +225,13 @@ func ensureGlobalLocalServiceAndLifecycle() error {
 			PublishEvent:        localService.Publish,
 		})
 
-		localService.SetLifecycleHooks(
-			lifecycle.Pause,
-			lifecycle.Resume,
-			lifecycle.ResumeBatch,
-			lifecycle.Cancel,
-			lifecycle.UpdateURL,
-		)
+		localService.SetLifecycleHooks(core.LifecycleHooks{
+			Pause:       lifecycle.Pause,
+			Resume:      lifecycle.Resume,
+			ResumeBatch: lifecycle.ResumeBatch,
+			Cancel:      lifecycle.Cancel,
+			UpdateURL:   lifecycle.UpdateURL,
+		})
 	} else {
 		_, err := ensureLocalLifecycle(GlobalService, currentPoolConfigs)
 		return err

@@ -4,13 +4,16 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"testing"
 
 	"github.com/SurgeDM/Surge/assets"
 	"github.com/gen2brain/beeep"
 )
 
 const NotificationAppName = "Surge"
+
+// SuppressNotifications can be set to true to prevent desktop notifications.
+// Tests should set this to true via TestMain or init() to avoid notification spam.
+var SuppressNotifications bool
 
 var (
 	iconPath string
@@ -49,7 +52,7 @@ func ensureIcon() string {
 }
 
 func Notify(title, message string) {
-	if testing.Testing() {
+	if SuppressNotifications {
 		return
 	}
 	err := beeep.Notify(title, message, ensureIcon())

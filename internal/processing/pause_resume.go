@@ -60,6 +60,26 @@ func (mgr *LifecycleManager) Pause(id string) error {
 	return fmt.Errorf("download not found")
 }
 
+// hydrateConfigFromDisk loads the latest persisted pause snapshot from disk
+// and merges it into cfg so the download resumes at the correct byte offset
+// and task list even when the pool's in-memory state is stale.
+func hydrateConfigFromDisk(cfg *types.DownloadConfig) {
+	if cfg.URL == "" || cfg.DestPath == "" {
+		return
+	}
+	saved, err := state.LoadState(cfg.URL, cfg.DestPath)
+	if err != nil || saved == nil {
+		return
+	}
+	cfg.SavedState = saved
+	if saved.TotalSize > 0 {
+		cfg.TotalSize = saved.TotalSize
+	}
+	if len(saved.Tasks) > 0 {
+		cfg.SupportsRange = true
+	}
+}
+
 // Resume resumes a paused download.
 //
 // Hot path: download is still in pool memory (same session) — extract config directly.
@@ -77,20 +97,7 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	// Hot path: pool still holds the paused download in memory.
 	if hooks.ExtractPausedConfig != nil {
 		if cfg := hooks.ExtractPausedConfig(id); cfg != nil {
-			// Hydrate with the latest persisted pause snapshot so we resume at the
-			// correct byte offset and task list even when the pool's in-memory state
-			// is stale (e.g. the event worker hasn't flushed yet).
-			if cfg.URL != "" && cfg.DestPath != "" {
-				if saved, err := state.LoadState(cfg.URL, cfg.DestPath); err == nil && saved != nil {
-					cfg.SavedState = saved
-					if saved.TotalSize > 0 {
-						cfg.TotalSize = saved.TotalSize
-					}
-					if len(saved.Tasks) > 0 {
-						cfg.SupportsRange = true
-					}
-				}
-			}
+			hydrateConfigFromDisk(cfg)
 			cfg.IsResume = true
 			if hooks.AddConfig != nil {
 				hooks.AddConfig(*cfg)
@@ -168,17 +175,7 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 		// Try hot path first
 		if hooks.ExtractPausedConfig != nil {
 			if cfg := hooks.ExtractPausedConfig(id); cfg != nil {
-				if cfg.URL != "" && cfg.DestPath != "" {
-					if saved, err := state.LoadState(cfg.URL, cfg.DestPath); err == nil && saved != nil {
-						cfg.SavedState = saved
-						if saved.TotalSize > 0 {
-							cfg.TotalSize = saved.TotalSize
-						}
-						if len(saved.Tasks) > 0 {
-							cfg.SupportsRange = true
-						}
-					}
-				}
+				hydrateConfigFromDisk(cfg)
 				cfg.IsResume = true
 				if hooks.AddConfig != nil {
 					hooks.AddConfig(*cfg)

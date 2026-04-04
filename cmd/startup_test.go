@@ -48,10 +48,13 @@ func TestServer_Startup_HandlesResume(t *testing.T) {
 		PublishEvent:        GlobalService.Publish,
 	})
 	if svc, ok := GlobalService.(*core.LocalDownloadService); ok {
-		svc.SetLifecycleHooks(
-			GlobalLifecycle.Pause, GlobalLifecycle.Resume, GlobalLifecycle.ResumeBatch,
-			GlobalLifecycle.Cancel, GlobalLifecycle.UpdateURL,
-		)
+		svc.SetLifecycleHooks(core.LifecycleHooks{
+			Pause:       GlobalLifecycle.Pause,
+			Resume:      GlobalLifecycle.Resume,
+			ResumeBatch: GlobalLifecycle.ResumeBatch,
+			Cancel:      GlobalLifecycle.Cancel,
+			UpdateURL:   GlobalLifecycle.UpdateURL,
+		})
 	}
 	defer func() {
 		GlobalLifecycle = nil
