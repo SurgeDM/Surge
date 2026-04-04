@@ -685,7 +685,7 @@ async function handleDownloadIntercept(downloadItem) {
     pendingDuplicates.set(pendingId, {
       downloadItem,
       filename,
-      directory: directory,
+      directory,
       url: downloadItem.url,
       timestamp: Date.now()
     });
