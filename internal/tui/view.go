@@ -239,7 +239,7 @@ func (m RootModel) View() tea.View {
 
 	if m.state == HelpModalState {
 		modal := components.HelpModal{
-			Title:       " Keyboard Shortcuts ",
+			Title:       "Keyboard Shortcuts",
 			HelpKeys:    m.keys.Dashboard,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
@@ -385,7 +385,7 @@ func (m RootModel) View() tea.View {
 	if showChunkMap {
 		// chunkMapWidth = rightWidth - 4 (box border) - 2 (inner padding) = rightWidth - 6
 		// Calculate available height for chunk map (remaining height minus graph minimum 9)
-		availableChunkHeight := remainingHeight - 9 - 4 // -9 for min graph, -4 for borders/padding
+		availableChunkHeight := remainingHeight - minGraphHeight - 4 // -minGraphHeight for graph floor, -4 for borders/padding
 		if availableChunkHeight < 1 {
 			availableChunkHeight = 1
 		}
@@ -736,6 +736,9 @@ func (m RootModel) View() tea.View {
 	// Render single network activity box containing stats + graph
 	graphBox := renderBtopBox(PaneTitleStyle.Render(" Network Activity "), "", graphWithPadding, rightWidth, graphHeight, colors.NeonCyan)
 
+	// Don't include graph box when too small to render
+	renderGraphBox := graphHeight >= minGraphHeight
+
 	// --- SECTION 3: DOWNLOAD LIST (Bottom Left) ---
 	// Tab Bar
 	tabBar := renderTabs(m.activeTab, active, queued, downloaded)
@@ -846,7 +849,12 @@ func (m RootModel) View() tea.View {
 		leftColumn := lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
 
 		// Right Column (Graph + Detail + Chunk)
-		rightColumn := lipgloss.JoinVertical(lipgloss.Left, graphBox, detailBox, chunkBox)
+		var rightParts []string
+		if renderGraphBox {
+			rightParts = append(rightParts, graphBox)
+		}
+		rightParts = append(rightParts, detailBox, chunkBox)
+		rightColumn := lipgloss.JoinVertical(lipgloss.Left, rightParts...)
 
 		body = lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
 	}

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
@@ -367,6 +368,27 @@ func TestView_TerminalTooSmallMessage(t *testing.T) {
 		if !strings.Contains(plain, "Terminal too small") {
 			t.Errorf("expected 'Terminal too small' at %dx%d, got:\n%s", tc.width, tc.height, plain)
 		}
+	}
+}
+
+func TestHelpModal_RendersAndClosesOnEsc(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.width = 120
+	m.height = 40
+	m.state = HelpModalState
+
+	// Should render without panic
+	view := m.View()
+	output := ansiEscapeRE.ReplaceAllString(view.Content, "")
+	if !strings.Contains(output, "Keyboard Shortcuts") {
+		t.Error("help modal should contain 'Keyboard Shortcuts' title")
+	}
+
+	// Esc should transition back to DashboardState
+	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	updated := newModel.(RootModel)
+	if updated.state != DashboardState {
+		t.Errorf("expected DashboardState after esc, got %d", updated.state)
 	}
 }
 
