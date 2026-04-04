@@ -584,6 +584,51 @@ func (m RootModel) View() tea.View {
 
 	// Graph width calculation: hide stats box when too narrow
 	axisWidth := 10
+	buildAxisLines := func(height int, axisStyle lipgloss.Style) []string {
+		label := func(v float64) string {
+			if v <= 0 {
+				return "0 MB/s"
+			}
+			return fmt.Sprintf("%.1f MB/s", v)
+		}
+
+		axisLines := make([]string, height)
+		for i := range axisLines {
+			axisLines[i] = axisStyle.Render("")
+		}
+
+		type axisMark struct {
+			num int
+			den int
+		}
+
+		marks := []axisMark{
+			{num: 1, den: 1},
+			{num: 1, den: 2},
+			{num: 0, den: 1},
+		}
+		if height >= 9 {
+			marks = []axisMark{
+				{num: 1, den: 1},
+				{num: 4, den: 5},
+				{num: 3, den: 5},
+				{num: 2, den: 5},
+				{num: 1, den: 5},
+				{num: 0, den: 1},
+			}
+		}
+
+		for _, mark := range marks {
+			row := 0
+			if height > 1 {
+				row = ((mark.den-mark.num)*(height-1) + mark.den/2) / mark.den
+			}
+			value := maxSpeed * float64(mark.num) / float64(mark.den)
+			axisLines[row] = axisStyle.Render(label(value))
+		}
+
+		return axisLines
+	}
 	var graphWithAxis string
 	if hideGraphStats {
 		// No stats box — graph gets almost full width
@@ -595,29 +640,8 @@ func (m RootModel) View() tea.View {
 		graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
 
 		// Y-axis labels
-		axisWidth := 10
 		axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)
-		label := func(v float64) string {
-			if v <= 0 {
-				return "0 MB/s"
-			}
-			return fmt.Sprintf("%.1f MB/s", v)
-		}
-
-		axisLines := make([]string, graphContentHeight)
-		for i := range axisLines {
-			axisLines[i] = axisStyle.Render("")
-		}
-		if graphContentHeight >= 7 {
-			axisLines[0] = axisStyle.Render(label(maxSpeed))
-			axisLines[graphContentHeight-2] = axisStyle.Render(label(maxSpeed * 0.5))
-			axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
-		} else if graphContentHeight >= 3 {
-			axisLines[0] = axisStyle.Render(label(maxSpeed))
-			axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
-		} else {
-			axisLines[0] = axisStyle.Render(label(maxSpeed))
-		}
+		axisLines := buildAxisLines(graphContentHeight, axisStyle)
 		axisColumn := lipgloss.NewStyle().
 			Height(graphContentHeight).
 			Align(lipgloss.Right).
@@ -675,32 +699,7 @@ func (m RootModel) View() tea.View {
 
 		// Create Y-axis (right side of graph)
 		axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)
-		label := func(v float64) string {
-			if v <= 0 {
-				return "0 MB/s"
-			}
-			return fmt.Sprintf("%.1f MB/s", v)
-		}
-
-		axisLines := make([]string, graphContentHeight)
-		for i := range axisLines {
-			axisLines[i] = axisStyle.Render("")
-		}
-
-		if graphContentHeight >= 9 {
-			axisLines[0] = axisStyle.Render(label(maxSpeed))
-			axisLines[graphContentHeight/4] = axisStyle.Render(label(maxSpeed * 0.75))
-			axisLines[graphContentHeight/2] = axisStyle.Render(label(maxSpeed * 0.5))
-			axisLines[(graphContentHeight*3)/4] = axisStyle.Render(label(maxSpeed * 0.25))
-			axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
-		} else if graphContentHeight >= 5 {
-			axisLines[0] = axisStyle.Render(label(maxSpeed))
-			axisLines[graphContentHeight/2] = axisStyle.Render(label(maxSpeed * 0.5))
-			axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
-		} else {
-			axisLines[0] = axisStyle.Render(label(maxSpeed))
-			axisLines[graphContentHeight-1] = axisStyle.Render("0 MB/s")
-		}
+		axisLines := buildAxisLines(graphContentHeight, axisStyle)
 
 		axisColumn := lipgloss.NewStyle().
 			Height(graphContentHeight).

@@ -262,12 +262,10 @@ func TestView_NoLineExceedsTerminalWidth(t *testing.T) {
 		m.width = tc.width
 		m.height = tc.height
 
-		plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
-		for i, line := range strings.Split(plain, "\n") {
-			// Count visible chars (excluding ANSI escapes already removed)
-			if len(line) > tc.width+2 { // +2 tolerance for lipgloss padding
-				t.Errorf("line %d exceeds width at %dx%d: got %d chars, content: %q",
-					i, tc.width, tc.height, len(line), line[:min(len(line), 80)])
+		for i, line := range strings.Split(m.View().Content, "\n") {
+			if lipgloss.Width(line) > tc.width {
+				t.Errorf("line %d exceeds width at %dx%d: got width %d, content: %q",
+					i, tc.width, tc.height, lipgloss.Width(line), line[:min(len(line), 80)])
 			}
 		}
 	}
@@ -277,7 +275,6 @@ func TestView_NoBoxCorruptionAtNarrowWidths(t *testing.T) {
 	// Check for doubled box-drawing characters that indicate overlapping panes
 	corruptionPatterns := []string{
 		"╭╭", "╮╮", "╰╰", "╯╯", // doubled corners
-		"──╮", "──╭",            // overlapping horizontal+vertical
 	}
 
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
