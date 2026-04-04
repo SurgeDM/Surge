@@ -7,7 +7,6 @@ type KeyMap struct {
 	Dashboard      DashboardKeyMap
 	Input          InputKeyMap
 	FilePicker     FilePickerKeyMap
-	History        HistoryKeyMap
 	Duplicate      DuplicateKeyMap
 	Extension      ExtensionKeyMap
 	Settings       SettingsKeyMap
@@ -32,7 +31,7 @@ type DashboardKeyMap struct {
 	Delete         key.Binding
 	Settings       key.Binding
 	Log            key.Binding
-	History        key.Binding
+	ToggleHelp     key.Binding
 	OpenFile       key.Binding
 	Quit           key.Binding
 	ForceQuit      key.Binding
@@ -66,14 +65,6 @@ type FilePickerKeyMap struct {
 	Forward  key.Binding
 	Open     key.Binding
 	Cancel   key.Binding
-}
-
-// HistoryKeyMap defines keybindings for the history view
-type HistoryKeyMap struct {
-	Up     key.Binding
-	Down   key.Binding
-	Delete key.Binding
-	Close  key.Binding
 }
 
 // DuplicateKeyMap defines keybindings for duplicate warning
@@ -200,9 +191,9 @@ var Keys = KeyMap{
 			key.WithKeys("l"),
 			key.WithHelp("l", "toggle log"),
 		),
-		History: key.NewBinding(
+		ToggleHelp: key.NewBinding(
 			key.WithKeys("h"),
-			key.WithHelp("h", "history"),
+			key.WithHelp("h", "keybindings"),
 		),
 		OpenFile: key.NewBinding(
 			key.WithKeys("o"),
@@ -295,28 +286,6 @@ var Keys = KeyMap{
 		Open: key.NewBinding(
 			key.WithKeys("enter"),
 			key.WithHelp("enter", "select"),
-		),
-		Cancel: key.NewBinding(
-			key.WithKeys("esc"),
-			key.WithHelp("esc", "cancel"),
-		),
-	},
-	History: HistoryKeyMap{
-		Up: key.NewBinding(
-			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "up"),
-		),
-		Down: key.NewBinding(
-			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "down"),
-		),
-		Delete: key.NewBinding(
-			key.WithKeys("x"),
-			key.WithHelp("x", "remove"),
-		),
-		Close: key.NewBinding(
-			key.WithKeys("esc", "q"),
-			key.WithHelp("esc", "close"),
 		),
 	},
 	Duplicate: DuplicateKeyMap{
@@ -475,7 +444,7 @@ var Keys = KeyMap{
 
 // ShortHelp returns keybindings to show in the mini help view
 func (k DashboardKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.TabQueued, k.TabActive, k.TabDone, k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.OpenFile, k.Settings, k.Quit}
+	return []key.Binding{k.ToggleHelp}
 }
 
 // FullHelp returns keybindings for the expanded help view
@@ -483,7 +452,7 @@ func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab},
 		{k.Add, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings},
-		{k.Log, k.History, k.Quit},
+		{k.Log, k.Quit},
 	}
 }
 
@@ -501,14 +470,6 @@ func (k FilePickerKeyMap) ShortHelp() []key.Binding {
 
 func (k FilePickerKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{k.Back, k.Forward, k.UseDir, k.GotoHome, k.Open, k.Cancel}}
-}
-
-func (k HistoryKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Delete, k.Close}
-}
-
-func (k HistoryKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Up, k.Down, k.Delete, k.Close}}
 }
 
 func (k DuplicateKeyMap) ShortHelp() []key.Binding {

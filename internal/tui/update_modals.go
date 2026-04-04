@@ -6,39 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/SurgeDM/Surge/internal/engine/state"
 )
-
-func (m RootModel) updateHistory(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if key.Matches(msg, m.keys.History.Close) {
-		m.state = DashboardState
-		return m, nil
-	}
-	if key.Matches(msg, m.keys.History.Up) {
-		if m.historyCursor > 0 {
-			m.historyCursor--
-		}
-		return m, nil
-	}
-	if key.Matches(msg, m.keys.History.Down) {
-		if m.historyCursor < len(m.historyEntries)-1 {
-			m.historyCursor++
-		}
-		return m, nil
-	}
-	if key.Matches(msg, m.keys.History.Delete) {
-		if m.historyCursor >= 0 && m.historyCursor < len(m.historyEntries) {
-			entry := m.historyEntries[m.historyCursor]
-			_ = state.RemoveFromMasterList(entry.ID)
-			m.historyEntries, _ = state.LoadCompletedDownloads()
-			if m.historyCursor >= len(m.historyEntries) && m.historyCursor > 0 {
-				m.historyCursor--
-			}
-		}
-		return m, nil
-	}
-	return m, nil
-}
 
 func (m RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Duplicate.Continue) {

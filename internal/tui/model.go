@@ -32,8 +32,7 @@ const (
 	InputState                                // InputState is 1
 	DetailState                               // DetailState is 2
 	FilePickerState                           // FilePickerState is 3
-	HistoryState                              // HistoryState is 4
-	DuplicateWarningState                     // DuplicateWarningState is 5
+	DuplicateWarningState                     // DuplicateWarningState is 4
 	SearchState                               // SearchState is 6
 	SettingsState                             // SettingsState is 7
 	ExtensionConfirmationState                // ExtensionConfirmationState is 8
@@ -43,6 +42,7 @@ const (
 	URLUpdateState                            // URLUpdateState is 12
 	CategoryManagerState                      // CategoryManagerState is 13
 	QuitConfirmState                          // QuitConfirmState is 14
+	HelpModalState                            // HelpModalState is 15
 )
 
 const (
@@ -102,10 +102,6 @@ type RootModel struct {
 	list list.Model
 
 	PWD string
-
-	// History view
-	historyEntries []types.DownloadEntry
-	historyCursor  int
 
 	// Duplicate detection
 	pendingURL           string // URL pending confirmation

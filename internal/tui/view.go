@@ -237,6 +237,19 @@ func (m RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
+	if m.state == HelpModalState {
+		modal := components.HelpModal{
+			Title:       " Keyboard Shortcuts ",
+			HelpKeys:    m.keys.Dashboard,
+			Help:        m.help,
+			BorderColor: colors.NeonCyan,
+			Width:       70,
+			Height:      22,
+		}
+		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		return m.wrapView(m.renderModalWithOverlay(box))
+	}
+
 	// === MAIN DASHBOARD LAYOUT ===
 
 	availableWidth := m.width - 2
@@ -283,9 +296,9 @@ func (m RootModel) View() tea.View {
 	}
 
 	// Determine right column viability thresholds
-	hideRightColumn := rightWidth < 50                 // too narrow for any right content
+	hideRightColumn := rightWidth < 50                    // too narrow for any right content
 	hideGraphStats := rightWidth >= 50 && rightWidth < 70 // enough for graph, not for inline stats
-	hideLogo := leftWidth < 60                         // not enough room for ASCII logo
+	hideLogo := leftWidth < 60                            // not enough room for ASCII logo
 
 	if hideRightColumn {
 		leftWidth = availableWidth

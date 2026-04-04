@@ -164,9 +164,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case FilePickerState:
 			return m.updateFilePicker(msg)
 
-		case HistoryState:
-			return m.updateHistory(msg)
-
 		case DuplicateWarningState:
 			return m.updateDuplicateWarning(msg)
 
@@ -193,6 +190,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case CategoryManagerState:
 			return m.updateCategoryManager(msg)
+
+		case HelpModalState:
+			if msg.String() == "esc" {
+				m.state = DashboardState
+				return m, nil
+			}
+			return m, nil
 
 		default:
 			return m, nil
