@@ -6,7 +6,18 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
+
+// SuppressNotificationsInTests disables desktop notifications for any test
+// that imports this package. Call this from a per-package init() or TestMain.
+func SuppressNotificationsInTests() {
+	utils.SuppressNotifications = true
+}
+
+func init() {
+	SuppressNotificationsInTests()
+}
 
 // SetupStateDB configures a fresh temp SQLite DB for tests that exercise state persistence.
 func SetupStateDB(t *testing.T) string {

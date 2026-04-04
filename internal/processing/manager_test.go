@@ -760,9 +760,11 @@ func TestLifecycleManager_Resume_HydratesFromDisk(t *testing.T) {
 	var addedCfg *types.DownloadConfig
 	mgr := newLifecycleManagerForTest()
 	mgr.SetEngineHooks(EngineHooks{
-		GetStatus:           func(id string) *types.DownloadStatus { return &types.DownloadStatus{Status: "paused"} },
-		ExtractPausedConfig: func(id string) *types.DownloadConfig { return &types.DownloadConfig{ID: id, Filename: "hydrated.zip", URL: "http://example.com/hydrated.zip", DestPath: destPath} },
-		AddConfig:           func(cfg types.DownloadConfig) { addedCfg = &cfg },
+		GetStatus: func(id string) *types.DownloadStatus { return &types.DownloadStatus{Status: "paused"} },
+		ExtractPausedConfig: func(id string) *types.DownloadConfig {
+			return &types.DownloadConfig{ID: id, Filename: "hydrated.zip", URL: "http://example.com/hydrated.zip", DestPath: destPath}
+		},
+		AddConfig: func(cfg types.DownloadConfig) { addedCfg = &cfg },
 	})
 
 	if err := mgr.Resume("hydrate-id"); err != nil {
