@@ -69,6 +69,8 @@ type LocalDownloadService struct {
 	pauseFunc       func(id string) error
 	resumeFunc      func(id string) error
 	resumeBatchFunc func(ids []string) []error
+	deleteFunc      func(id string) error
+	updateURLFunc   func(id, newURL string) error
 }
 
 const (
@@ -542,62 +544,51 @@ func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
 }
 
 // SetLifecycleHooks wires the processing layer into the service so
-// pause/resume calls are routed through the event-worker lifecycle.
-func (s *LocalDownloadService) SetLifecycleHooks(pause func(string) error, resume func(string) error, resumeBatch func([]string) []error) {
+// pause/resume/cancel/updateURL calls are routed through the lifecycle manager.
+func (s *LocalDownloadService) SetLifecycleHooks(
+	pause func(string) error,
+	resume func(string) error,
+	resumeBatch func([]string) []error,
+	cancel func(string) error,
+	updateURL func(string, string) error,
+) {
 	s.pauseFunc = pause
 	s.resumeFunc = resume
 	s.resumeBatchFunc = resumeBatch
+	s.deleteFunc = cancel
+	s.updateURLFunc = updateURL
 }
 
 // UpdateURL updates the URL of a paused or errored download
 func (s *LocalDownloadService) UpdateURL(id string, newURL string) error {
+	if s.updateURLFunc != nil {
+		return s.updateURLFunc(id, newURL)
+	}
+	// Fallback: update pool in-memory only (no DB persistence)
 	if s.Pool == nil {
 		return fmt.Errorf("worker pool not initialized")
 	}
-
 	return s.Pool.UpdateURL(id, newURL)
 }
 
 // Delete cancels and removes a download.
 func (s *LocalDownloadService) Delete(id string) error {
+	if s.deleteFunc != nil {
+		return s.deleteFunc(id)
+	}
+	// Fallback when lifecycle hooks not wired (e.g. tests)
 	if s.Pool == nil {
 		return fmt.Errorf("worker pool not initialized")
 	}
-
-	removedFilename := ""
-	removedDestPath := ""
-	removedCompleted := false
-
-	// Capture runtime status before cancel; active downloads may not yet be in DB.
-	if st := s.Pool.GetStatus(id); st != nil {
-		if st.Filename != "" {
-			removedFilename = st.Filename
-		}
-		removedDestPath = st.DestPath
-		removedCompleted = st.Status == "completed"
-	}
-
 	s.Pool.Cancel(id)
-
-	// Cleanup persisted state if available
 	if entry, err := state.GetDownload(id); err == nil && entry != nil {
-		removedFilename = entry.Filename
-		if removedDestPath == "" {
-			removedDestPath = entry.DestPath
-		}
-		if entry.Status == "completed" {
-			removedCompleted = true
-		}
-	}
-
-	// Broadcast removal for multi-client UIs (including remote SSE clients).
-	// This also covers non-active (DB-only) deletes where WorkerPool.Cancel doesn't emit.
-	if s.InputCh != nil {
-		s.InputCh <- events.DownloadRemovedMsg{
-			DownloadID: id,
-			Filename:   removedFilename,
-			DestPath:   removedDestPath,
-			Completed:  removedCompleted,
+		if s.InputCh != nil {
+			s.InputCh <- events.DownloadRemovedMsg{
+				DownloadID: id,
+				Filename:   entry.Filename,
+				DestPath:   entry.DestPath,
+				Completed:  entry.Status == "completed",
+			}
 		}
 	}
 	return nil
