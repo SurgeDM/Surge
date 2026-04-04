@@ -894,6 +894,20 @@ func TestLifecycleManager_Cancel_Completed(t *testing.T) {
 	}
 }
 
+func TestLifecycleManager_Cancel_NotFound(t *testing.T) {
+	testutil.SetupStateDB(t)
+
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		Cancel: func(id string) types.CancelResult { return types.CancelResult{Found: false} },
+	})
+
+	err := mgr.Cancel("ghost-id")
+	if err == nil {
+		t.Fatal("expected error for non-existent download")
+	}
+}
+
 func TestLifecycleManager_UpdateURL_Success(t *testing.T) {
 	tempDir := testutil.SetupStateDB(t)
 

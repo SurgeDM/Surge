@@ -445,9 +445,10 @@ func TestWorkerPool_Cancel_QueuedDownload_RemovesFromQueueAndReturnsResult(t *te
 	}
 }
 
-// Resume logic has been promoted to LifecycleManager.Resume(), which calls
-// pool.ExtractPausedConfig() for the hot path and state.LoadState() for the cold path.
-// Note: LifecycleManager.Resume/Cancel/UpdateURL currently lack dedicated unit tests.
+// Resume orchestration (hot/cold path, DB hydration, event emission) was promoted to
+// LifecycleManager so the pool remains a pure executor with no knowledge of persistence
+// or events. Tests for pool-level extraction live below; LifecycleManager integration
+// tests live in internal/processing/manager_test.go (see TestLifecycleManager_Cancel_NotFound).
 
 func TestWorkerPool_GracefulShutdown_PausesAll(t *testing.T) {
 	ch := make(chan any, 10)

@@ -302,29 +302,28 @@ func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfi
 // The caller (LifecycleManager) is responsible for persisting the change to the DB.
 // It fails if the download is actively downloading (not paused or errored).
 func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
-	p.mu.RLock()
+	p.mu.Lock()
 	ad, exists := p.downloads[downloadID]
 	_, qExists := p.queued[downloadID]
-	p.mu.RUnlock()
 
 	if qExists {
+		p.mu.Unlock()
 		return fmt.Errorf("cannot update URL for a queued download, please cancel or wait for it to start")
 	}
 
 	if exists && ad != nil {
-		// If it exists in the active pool, it must be paused
 		if ad.config.State != nil && !ad.config.State.IsPaused() {
 			if ad.running.Load() {
+				p.mu.Unlock()
 				return fmt.Errorf("download is currently active, please pause it before updating the URL")
 			}
 		}
-
-		// Update the active download's config (in-memory only)
 		ad.config.URL = newURL
 		if ad.config.State != nil {
 			ad.config.State.SetURL(newURL)
 		}
 	}
+	p.mu.Unlock()
 
 	return nil
 }
