@@ -292,6 +292,9 @@ func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfi
 
 	cfg := ad.config
 	delete(p.downloads, downloadID)
+	if ad.config.State != nil {
+		ad.config.State.Resume()
+	}
 	return &cfg
 }
 
