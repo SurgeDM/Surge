@@ -75,9 +75,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 
 		// Calculate list dimensions
-		// List goes in bottom-left pane
+		// List goes in bottom-left pane — use full width; View() handles the actual box sizing
 		availableWidth := msg.Width - 4
-		leftWidth := int(float64(availableWidth) * ListWidthRatio)
 
 		// Calculate list height (total height - header row - margins)
 		topHeight := 9
@@ -86,7 +85,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			bottomHeight = 10
 		}
 
-		m.list.SetSize(leftWidth-2, bottomHeight-4)
+		m.list.SetSize(availableWidth-2, bottomHeight-4)
 
 		// Update list based on active tab
 		m.UpdateListItems()
