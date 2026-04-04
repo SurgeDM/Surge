@@ -37,7 +37,7 @@ var serverStartCmd = &cobra.Command{
 		}
 
 		if !isMaster {
-			return fmt.Errorf("Surge server is already running")
+			return fmt.Errorf("surge server is already running")
 		}
 		defer func() {
 			if err := ReleaseLock(); err != nil {

@@ -66,9 +66,16 @@ type LocalDownloadService struct {
 	settings   *config.Settings
 	settingsMu sync.RWMutex
 
-	pauseFunc       func(id string) error
-	resumeFunc      func(id string) error
-	resumeBatchFunc func(ids []string) []error
+	lifecycleHooks LifecycleHooks
+}
+
+// LifecycleHooks routes service-level management calls through the LifecycleManager.
+type LifecycleHooks struct {
+	Pause       func(id string) error
+	Resume      func(id string) error
+	ResumeBatch func(ids []string) []error
+	Cancel      func(id string) error
+	UpdateURL   func(id, newURL string) error
 }
 
 const (
@@ -515,24 +522,24 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 
 // Pause pauses an active download.
 func (s *LocalDownloadService) Pause(id string) error {
-	if s.pauseFunc != nil {
-		return s.pauseFunc(id)
+	if s.lifecycleHooks.Pause != nil {
+		return s.lifecycleHooks.Pause(id)
 	}
 	return fmt.Errorf("PauseFunc not initialized")
 }
 
 // Resume resumes a paused download.
 func (s *LocalDownloadService) Resume(id string) error {
-	if s.resumeFunc != nil {
-		return s.resumeFunc(id)
+	if s.lifecycleHooks.Resume != nil {
+		return s.lifecycleHooks.Resume(id)
 	}
 	return fmt.Errorf("ResumeFunc not initialized")
 }
 
 // ResumeBatch resumes multiple paused downloads efficiently.
 func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
-	if s.resumeBatchFunc != nil {
-		return s.resumeBatchFunc(ids)
+	if s.lifecycleHooks.ResumeBatch != nil {
+		return s.lifecycleHooks.ResumeBatch(ids)
 	}
 	errs := make([]error, len(ids))
 	for i := range errs {
@@ -542,62 +549,41 @@ func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
 }
 
 // SetLifecycleHooks wires the processing layer into the service so
-// pause/resume calls are routed through the event-worker lifecycle.
-func (s *LocalDownloadService) SetLifecycleHooks(pause func(string) error, resume func(string) error, resumeBatch func([]string) []error) {
-	s.pauseFunc = pause
-	s.resumeFunc = resume
-	s.resumeBatchFunc = resumeBatch
+// pause/resume/cancel/updateURL calls are routed through the lifecycle manager.
+func (s *LocalDownloadService) SetLifecycleHooks(hooks LifecycleHooks) {
+	s.lifecycleHooks = hooks
 }
 
 // UpdateURL updates the URL of a paused or errored download
 func (s *LocalDownloadService) UpdateURL(id string, newURL string) error {
+	if s.lifecycleHooks.UpdateURL != nil {
+		return s.lifecycleHooks.UpdateURL(id, newURL)
+	}
+	// Fallback: update pool in-memory only (no DB persistence)
 	if s.Pool == nil {
 		return fmt.Errorf("worker pool not initialized")
 	}
-
 	return s.Pool.UpdateURL(id, newURL)
 }
 
 // Delete cancels and removes a download.
 func (s *LocalDownloadService) Delete(id string) error {
+	if s.lifecycleHooks.Cancel != nil {
+		return s.lifecycleHooks.Cancel(id)
+	}
+	// Fallback when lifecycle hooks not wired (e.g. tests)
 	if s.Pool == nil {
 		return fmt.Errorf("worker pool not initialized")
 	}
-
-	removedFilename := ""
-	removedDestPath := ""
-	removedCompleted := false
-
-	// Capture runtime status before cancel; active downloads may not yet be in DB.
-	if st := s.Pool.GetStatus(id); st != nil {
-		if st.Filename != "" {
-			removedFilename = st.Filename
-		}
-		removedDestPath = st.DestPath
-		removedCompleted = st.Status == "completed"
-	}
-
 	s.Pool.Cancel(id)
-
-	// Cleanup persisted state if available
 	if entry, err := state.GetDownload(id); err == nil && entry != nil {
-		removedFilename = entry.Filename
-		if removedDestPath == "" {
-			removedDestPath = entry.DestPath
-		}
-		if entry.Status == "completed" {
-			removedCompleted = true
-		}
-	}
-
-	// Broadcast removal for multi-client UIs (including remote SSE clients).
-	// This also covers non-active (DB-only) deletes where WorkerPool.Cancel doesn't emit.
-	if s.InputCh != nil {
-		s.InputCh <- events.DownloadRemovedMsg{
-			DownloadID: id,
-			Filename:   removedFilename,
-			DestPath:   removedDestPath,
-			Completed:  removedCompleted,
+		if s.InputCh != nil {
+			s.InputCh <- events.DownloadRemovedMsg{
+				DownloadID: id,
+				Filename:   entry.Filename,
+				DestPath:   entry.DestPath,
+				Completed:  entry.Status == "completed",
+			}
 		}
 	}
 	return nil

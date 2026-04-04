@@ -12,7 +12,10 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/testutil"
 )
 
 func newProbeTestServer(t *testing.T, size int64) *httptest.Server {
@@ -579,5 +582,383 @@ func TestLifecycleManager_Enqueue_ContextCancellationBeforeReservation(t *testin
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+}
+
+// --- LifecycleManager.Resume / Cancel / UpdateURL Tests ---
+
+func TestLifecycleManager_Resume_HotPath(t *testing.T) {
+	var extractCalled, addCalled bool
+	var publishedEvent interface{}
+
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		GetStatus: func(id string) *types.DownloadStatus {
+			return &types.DownloadStatus{Status: "paused"}
+		},
+		ExtractPausedConfig: func(id string) *types.DownloadConfig {
+			extractCalled = true
+			return &types.DownloadConfig{ID: "hot-id", Filename: "hot-file.zip"}
+		},
+		AddConfig: func(cfg types.DownloadConfig) {
+			addCalled = true
+			if cfg.ID != "hot-id" {
+				t.Errorf("AddConfig ID = %q, want hot-id", cfg.ID)
+			}
+			if !cfg.IsResume {
+				t.Error("expected IsResume flag to be set")
+			}
+		},
+		PublishEvent: func(msg interface{}) error {
+			publishedEvent = msg
+			return nil
+		},
+	})
+
+	if err := mgr.Resume("hot-id"); err != nil {
+		t.Fatalf("Resume failed: %v", err)
+	}
+	if !extractCalled {
+		t.Error("Expected ExtractPausedConfig to be called for hot path")
+	}
+	if !addCalled {
+		t.Error("Expected AddConfig to be called")
+	}
+	if publishedEvent == nil {
+		t.Fatal("Expected PublishEvent to be called")
+	}
+	msg, ok := publishedEvent.(events.DownloadResumedMsg)
+	if !ok {
+		t.Fatalf("Expected DownloadResumedMsg, got %T", publishedEvent)
+	}
+	if msg.DownloadID != "hot-id" {
+		t.Errorf("ResumedMsg.DownloadID = %q, want hot-id", msg.DownloadID)
+	}
+	if msg.Filename != "hot-file.zip" {
+		t.Errorf("ResumedMsg.Filename = %q, want hot-file.zip", msg.Filename)
+	}
+}
+
+func TestLifecycleManager_Resume_ColdPath(t *testing.T) {
+	tempDir := testutil.SetupStateDB(t)
+	destPath := filepath.Join(tempDir, "cold-file.zip")
+
+	testutil.SeedMasterList(t, types.DownloadEntry{
+		ID:         "cold-id",
+		URL:        "http://example.com/cold.zip",
+		URLHash:    state.URLHash("http://example.com/cold.zip"),
+		DestPath:   destPath,
+		Filename:   "cold-file.zip",
+		Status:     "paused",
+		Downloaded: 500,
+		TotalSize:  1000,
+	})
+
+	var addCalled bool
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		ExtractPausedConfig: func(id string) *types.DownloadConfig { return nil },
+		AddConfig: func(cfg types.DownloadConfig) {
+			addCalled = true
+			if cfg.ID != "cold-id" {
+				t.Errorf("AddConfig ID = %q, want cold-id", cfg.ID)
+			}
+			if !cfg.IsResume {
+				t.Error("expected IsResume flag")
+			}
+		},
+	})
+
+	if err := mgr.Resume("cold-id"); err != nil {
+		t.Fatalf("Resume failed: %v", err)
+	}
+	if !addCalled {
+		t.Error("Expected AddConfig to be called for cold path")
+	}
+}
+
+func TestLifecycleManager_Resume_NotFound(t *testing.T) {
+	testutil.SetupStateDB(t)
+
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		ExtractPausedConfig: func(id string) *types.DownloadConfig { return nil },
+	})
+
+	err := mgr.Resume("missing-id")
+	if err == nil {
+		t.Fatal("expected error for unknown download")
+	}
+}
+
+func TestLifecycleManager_Resume_Completed(t *testing.T) {
+	tempDir := testutil.SetupStateDB(t)
+
+	testutil.SeedMasterList(t, types.DownloadEntry{
+		ID:       "done-id",
+		URL:      "http://example.com/done.zip",
+		URLHash:  state.URLHash("http://example.com/done.zip"),
+		DestPath: filepath.Join(tempDir, "done.zip"),
+		Filename: "done.zip",
+		Status:   "completed",
+	})
+
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		ExtractPausedConfig: func(id string) *types.DownloadConfig { return nil },
+	})
+
+	err := mgr.Resume("done-id")
+	if err == nil {
+		t.Fatal("expected error for completed download")
+	}
+}
+
+func TestLifecycleManager_Resume_StillPausing(t *testing.T) {
+	var extraCalled bool
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		GetStatus: func(id string) *types.DownloadStatus {
+			return &types.DownloadStatus{Status: "pausing"}
+		},
+		ExtractPausedConfig: func(id string) *types.DownloadConfig {
+			extraCalled = true
+			return nil
+		},
+	})
+
+	err := mgr.Resume("pausing-id")
+	if err == nil {
+		t.Fatal("expected error when download is still pausing")
+	}
+	if extraCalled {
+		t.Error("Expected ExtractPausedConfig to NOT be called while pausing")
+	}
+}
+
+func TestLifecycleManager_Resume_HydratesFromDisk(t *testing.T) {
+	tempDir := testutil.SetupStateDB(t)
+	destPath := filepath.Join(tempDir, "hydrated.zip")
+
+	testutil.SeedMasterList(t, types.DownloadEntry{
+		ID:       "hydrate-id",
+		URL:      "http://example.com/hydrated.zip",
+		URLHash:  state.URLHash("http://example.com/hydrated.zip"),
+		DestPath: destPath,
+		Filename: "hydrated.zip",
+		Status:   "paused",
+	})
+
+	if err := state.SaveStateWithOptions("http://example.com/hydrated.zip", destPath, &types.DownloadState{
+		ID: "hydrate-id", URL: "http://example.com/hydrated.zip", Filename: "hydrated.zip",
+		DestPath: destPath, TotalSize: 5000,
+		Tasks: []types.Task{{Offset: 0, Length: 2500}, {Offset: 2500, Length: 2500}},
+	}, state.SaveStateOptions{SkipFileHash: true}); err != nil {
+		t.Fatalf("failed to seed state: %v", err)
+	}
+
+	var addedCfg *types.DownloadConfig
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		GetStatus: func(id string) *types.DownloadStatus { return &types.DownloadStatus{Status: "paused"} },
+		ExtractPausedConfig: func(id string) *types.DownloadConfig {
+			return &types.DownloadConfig{ID: id, Filename: "hydrated.zip", URL: "http://example.com/hydrated.zip", DestPath: destPath}
+		},
+		AddConfig: func(cfg types.DownloadConfig) { addedCfg = &cfg },
+	})
+
+	if err := mgr.Resume("hydrate-id"); err != nil {
+		t.Fatalf("Resume failed: %v", err)
+	}
+	if addedCfg == nil {
+		t.Fatal("Expected AddConfig to be called")
+	}
+	if addedCfg.TotalSize != 5000 {
+		t.Errorf("TotalSize = %d, want 5000", addedCfg.TotalSize)
+	}
+	if !addedCfg.SupportsRange {
+		t.Error("Expected SupportsRange = true after loading tasks")
+	}
+}
+
+func TestLifecycleManager_Cancel_FromPool(t *testing.T) {
+	tempDir := testutil.SetupStateDB(t)
+
+	testutil.SeedMasterList(t, types.DownloadEntry{
+		ID:       "active-cancel",
+		URL:      "http://example.com/active.zip",
+		URLHash:  state.URLHash("http://example.com/active.zip"),
+		DestPath: filepath.Join(tempDir, "active.zip"),
+		Filename: "active.zip",
+		Status:   "downloading",
+	})
+
+	var publishedMsg interface{}
+	cancelResult := types.CancelResult{Found: true, Filename: "active.zip", DestPath: filepath.Join(tempDir, "active.zip")}
+
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		Cancel:       func(id string) types.CancelResult { return cancelResult },
+		PublishEvent: func(msg interface{}) error { publishedMsg = msg; return nil },
+	})
+
+	if err := mgr.Cancel("active-cancel"); err != nil {
+		t.Fatalf("Cancel failed: %v", err)
+	}
+	if publishedMsg == nil {
+		t.Fatal("Expected DownloadRemovedMsg to be published")
+	}
+	removed, ok := publishedMsg.(events.DownloadRemovedMsg)
+	if !ok {
+		t.Fatalf("Expected DownloadRemovedMsg, got %T", publishedMsg)
+	}
+	if removed.DownloadID != "active-cancel" {
+		t.Errorf("RemovedMsg.DownloadID = %q, want active-cancel", removed.DownloadID)
+	}
+	if removed.Filename != "active.zip" {
+		t.Errorf("RemovedMsg.Filename = %q, want active.zip", removed.Filename)
+	}
+}
+
+func TestLifecycleManager_Cancel_DBOnly(t *testing.T) {
+	tempDir := testutil.SetupStateDB(t)
+	destPath := filepath.Join(tempDir, "db-only.zip")
+
+	testutil.SeedMasterList(t, types.DownloadEntry{
+		ID:       "db-only",
+		URL:      "http://example.com/db-only.zip",
+		URLHash:  state.URLHash("http://example.com/db-only.zip"),
+		DestPath: destPath,
+		Filename: "db-only.zip",
+		Status:   "paused",
+	})
+
+	var publishedMsg interface{}
+
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		Cancel:       func(id string) types.CancelResult { return types.CancelResult{Found: false} },
+		PublishEvent: func(msg interface{}) error { publishedMsg = msg; return nil },
+	})
+
+	if err := mgr.Cancel("db-only"); err != nil {
+		t.Fatalf("Cancel failed: %v", err)
+	}
+
+	removed, ok := publishedMsg.(events.DownloadRemovedMsg)
+	if !ok {
+		t.Fatalf("Expected DownloadRemovedMsg, got %T", publishedMsg)
+	}
+	if removed.DownloadID != "db-only" {
+		t.Errorf("RemovedMsg.DownloadID = %q, want db-only", removed.DownloadID)
+	}
+	if removed.Filename != "db-only.zip" {
+		t.Errorf("RemovedMsg.Filename = %q, want db-only.zip", removed.Filename)
+	}
+}
+
+func TestLifecycleManager_Cancel_Completed(t *testing.T) {
+	tempDir := testutil.SetupStateDB(t)
+	destPath := filepath.Join(tempDir, "completed.zip")
+
+	testutil.SeedMasterList(t, types.DownloadEntry{
+		ID:       "completed-cancel",
+		URL:      "http://example.com/completed.zip",
+		URLHash:  state.URLHash("http://example.com/completed.zip"),
+		DestPath: destPath,
+		Filename: "completed.zip",
+		Status:   "completed",
+	})
+
+	var publishedMsg interface{}
+
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		Cancel:       func(id string) types.CancelResult { return types.CancelResult{} },
+		PublishEvent: func(msg interface{}) error { publishedMsg = msg; return nil },
+	})
+
+	if err := mgr.Cancel("completed-cancel"); err != nil {
+		t.Fatalf("Cancel failed: %v", err)
+	}
+
+	removed, ok := publishedMsg.(events.DownloadRemovedMsg)
+	if !ok {
+		t.Fatalf("Expected DownloadRemovedMsg, got %T", publishedMsg)
+	}
+	if !removed.Completed {
+		t.Error("Expected Completed=true for a completed download")
+	}
+	if removed.Filename != "completed.zip" {
+		t.Errorf("RemovedMsg.Filename = %q, want completed.zip", removed.Filename)
+	}
+}
+
+func TestLifecycleManager_Cancel_NotFound(t *testing.T) {
+	testutil.SetupStateDB(t)
+
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		Cancel: func(id string) types.CancelResult { return types.CancelResult{Found: false} },
+	})
+
+	err := mgr.Cancel("ghost-id")
+	if err == nil {
+		t.Fatal("expected error for non-existent download")
+	}
+}
+
+func TestLifecycleManager_UpdateURL_Success(t *testing.T) {
+	tempDir := testutil.SetupStateDB(t)
+
+	testutil.SeedMasterList(t, types.DownloadEntry{
+		ID:       "update-id",
+		URL:      "http://example.com/old.zip",
+		URLHash:  state.URLHash("http://example.com/old.zip"),
+		DestPath: filepath.Join(tempDir, "update.zip"),
+		Filename: "update.zip",
+		Status:   "paused",
+	})
+
+	var hookCalled bool
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		UpdateURL: func(id, newURL string) error {
+			hookCalled = true
+			if newURL != "http://example.com/new.zip" {
+				t.Errorf("UpdateURL newURL = %q", newURL)
+			}
+			return nil
+		},
+	})
+
+	if err := mgr.UpdateURL("update-id", "http://example.com/new.zip"); err != nil {
+		t.Fatalf("UpdateURL failed: %v", err)
+	}
+	if !hookCalled {
+		t.Error("Expected UpdateURL hook to be called")
+	}
+
+	entry, err := state.GetDownload("update-id")
+	if err != nil {
+		t.Fatalf("GetDownload failed: %v", err)
+	}
+	if entry == nil || entry.URL != "http://example.com/new.zip" {
+		t.Errorf("DB URL = %q, want http://example.com/new.zip", entry.URL)
+	}
+}
+
+func TestLifecycleManager_UpdateURL_HookError(t *testing.T) {
+	testutil.SetupStateDB(t)
+
+	expectedErr := fmt.Errorf("not in pausable state")
+	mgr := newLifecycleManagerForTest()
+	mgr.SetEngineHooks(EngineHooks{
+		UpdateURL: func(id, newURL string) error { return expectedErr },
+	})
+
+	err := mgr.UpdateURL("bad-id", "http://example.com/new.zip")
+	if err == nil {
+		t.Fatal("expected error from pool hook, got nil")
 	}
 }

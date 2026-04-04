@@ -11,13 +11,24 @@ import (
 )
 
 // EngineHooks defines the minimal callbacks Processing needs to orchestrate the worker pool.
+// All management decisions (event emission, DB persistence, state loading) live here in
+// LifecycleManager; the pool itself is a pure executor.
 type EngineHooks struct {
-	Pause     func(id string) bool
-	Resume    func(id string) bool
+	// Pause signals the pool to mechanically pause a download (cancel context, set state).
+	Pause func(id string) bool
+	// ExtractPausedConfig atomically removes a paused download from the pool and returns
+	// its config so LifecycleManager can re-enqueue it after hydration from saved state.
+	// Returns nil when not found / not paused / still transitioning.
+	ExtractPausedConfig func(id string) *types.DownloadConfig
+	// GetStatus returns the in-memory status for a download.
 	GetStatus func(id string) *types.DownloadStatus
-	// AddConfig enqueues a download config. Implementations must ensure cfg.ProgressCh
-	// is set; pool.Add fills it from p.progressCh when nil.
-	AddConfig    func(cfg types.DownloadConfig)
+	// AddConfig enqueues a DownloadConfig. The pool sets cfg.ProgressCh when nil.
+	AddConfig func(cfg types.DownloadConfig)
+	// Cancel mechanically removes a download from the pool and returns removal metadata.
+	Cancel func(id string) types.CancelResult
+	// UpdateURL updates the in-memory URL only; LifecycleManager persists to DB.
+	UpdateURL func(id, newURL string) error
+	// PublishEvent sends an event into the service's broadcast channel.
 	PublishEvent func(msg interface{}) error
 }
 
@@ -49,23 +60,59 @@ func (mgr *LifecycleManager) Pause(id string) error {
 	return fmt.Errorf("download not found")
 }
 
+// hydrateConfigFromDisk loads the latest persisted pause snapshot from disk
+// and merges it into cfg so the download resumes at the correct byte offset
+// and task list even when the pool's in-memory state is stale.
+func hydrateConfigFromDisk(cfg *types.DownloadConfig) {
+	if cfg.URL == "" || cfg.DestPath == "" {
+		return
+	}
+	saved, err := state.LoadState(cfg.URL, cfg.DestPath)
+	if err != nil || saved == nil {
+		return
+	}
+	cfg.SavedState = saved
+	if saved.TotalSize > 0 {
+		cfg.TotalSize = saved.TotalSize
+	}
+	if len(saved.Tasks) > 0 {
+		cfg.SupportsRange = true
+	}
+}
+
 // Resume resumes a paused download.
+//
+// Hot path: download is still in pool memory (same session) — extract config directly.
+// Cold path: download was paused in a prior session, only stored in DB.
 func (mgr *LifecycleManager) Resume(id string) error {
 	hooks := mgr.getEngineHooks()
-	if hooks.Resume == nil {
-		return fmt.Errorf("engine not initialized")
-	}
 
+	// Guard: still transitioning to paused
 	if hooks.GetStatus != nil {
 		if st := hooks.GetStatus(id); st != nil && st.Status == "pausing" {
 			return fmt.Errorf("download is still pausing, try again in a moment")
 		}
 	}
 
-	if hooks.Resume(id) {
-		return nil
+	// Hot path: pool still holds the paused download in memory.
+	if hooks.ExtractPausedConfig != nil {
+		if cfg := hooks.ExtractPausedConfig(id); cfg != nil {
+			hydrateConfigFromDisk(cfg)
+			cfg.IsResume = true
+			if hooks.AddConfig != nil {
+				hooks.AddConfig(*cfg)
+			}
+			if hooks.PublishEvent != nil {
+				_ = hooks.PublishEvent(events.DownloadResumedMsg{
+					DownloadID: id,
+					Filename:   cfg.Filename,
+				})
+			}
+			return nil
+		}
 	}
 
+	// Cold path: download from a prior session (only in DB).
 	entry, err := state.GetDownload(id)
 	if err != nil || entry == nil {
 		return fmt.Errorf("download not found")
@@ -106,15 +153,16 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 	errs := make([]error, len(ids))
 
 	hooks := mgr.getEngineHooks()
-	if hooks.Resume == nil {
-		for i := range errs {
-			errs[i] = fmt.Errorf("engine not initialized")
-		}
-		return errs
+
+	settings := mgr.GetSettings()
+	outputPath := settings.General.DefaultDownloadDir
+	if outputPath == "" {
+		outputPath = "."
 	}
 
-	var toLoad []string
-	idMap := make(map[string]int)
+	// Partition: downloads still in pool memory (hot) vs cold (DB-only).
+	var coldIDs []string
+	coldIdx := make(map[string]int)
 
 	for i, id := range ids {
 		if hooks.GetStatus != nil {
@@ -124,36 +172,45 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 			}
 		}
 
-		if hooks.Resume(id) {
-			errs[i] = nil
-		} else {
-			toLoad = append(toLoad, id)
-			idMap[id] = i
+		// Try hot path first
+		if hooks.ExtractPausedConfig != nil {
+			if cfg := hooks.ExtractPausedConfig(id); cfg != nil {
+				hydrateConfigFromDisk(cfg)
+				cfg.IsResume = true
+				if hooks.AddConfig != nil {
+					hooks.AddConfig(*cfg)
+				}
+				if hooks.PublishEvent != nil {
+					_ = hooks.PublishEvent(events.DownloadResumedMsg{
+						DownloadID: id,
+						Filename:   cfg.Filename,
+					})
+				}
+				errs[i] = nil
+				continue
+			}
 		}
+
+		// Tag for cold-path batch load
+		coldIDs = append(coldIDs, id)
+		coldIdx[id] = i
 	}
 
-	if len(toLoad) == 0 {
+	if len(coldIDs) == 0 {
 		return errs
 	}
 
-	settings := mgr.GetSettings()
-
-	outputPath := settings.General.DefaultDownloadDir
-	if outputPath == "" {
-		outputPath = "."
-	}
-
-	states, err := state.LoadStates(toLoad)
+	states, err := state.LoadStates(coldIDs)
 	if err != nil {
-		for _, id := range toLoad {
-			idx := idMap[id]
+		for _, id := range coldIDs {
+			idx := coldIdx[id]
 			errs[idx] = fmt.Errorf("failed to load state: %w", err)
 		}
 		return errs
 	}
 
-	for _, id := range toLoad {
-		idx := idMap[id]
+	for _, id := range coldIDs {
+		idx := coldIdx[id]
 		savedState, ok := states[id]
 		if !ok {
 			errs[idx] = fmt.Errorf("download not found or completed")
@@ -174,6 +231,72 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 	}
 
 	return errs
+}
+
+// Cancel stops a download (both pool in-memory and DB) and emits a removal event.
+// The event worker handles file cleanup and DB removal via DownloadRemovedMsg.
+func (mgr *LifecycleManager) Cancel(id string) error {
+	hooks := mgr.getEngineHooks()
+
+	var filename, destPath string
+	var completed bool
+	var found bool
+
+	// Mechanical cancel via pool
+	if hooks.Cancel != nil {
+		result := hooks.Cancel(id)
+		if result.Found {
+			found = true
+			filename = result.Filename
+			destPath = result.DestPath
+			completed = result.Completed
+		}
+	}
+
+	// Supplement with DB info (covers DB-only / completed entries)
+	if entry, err := state.GetDownload(id); err == nil && entry != nil {
+		found = true
+		if filename == "" {
+			filename = entry.Filename
+		}
+		if destPath == "" {
+			destPath = entry.DestPath
+		}
+		if entry.Status == "completed" {
+			completed = true
+		}
+	}
+
+	if !found {
+		return fmt.Errorf("download not found")
+	}
+
+	// Emit removal event — event worker handles DB deletion and file cleanup.
+	if hooks.PublishEvent != nil {
+		_ = hooks.PublishEvent(events.DownloadRemovedMsg{
+			DownloadID: id,
+			Filename:   filename,
+			DestPath:   destPath,
+			Completed:  completed,
+		})
+	}
+	return nil
+}
+
+// UpdateURL updates the URL of a download in both the pool (in-memory) and the DB.
+func (mgr *LifecycleManager) UpdateURL(id string, newURL string) error {
+	hooks := mgr.getEngineHooks()
+
+	// Update in-memory state via pool (validates download state too)
+	if hooks.UpdateURL != nil {
+		if err := hooks.UpdateURL(id, newURL); err != nil {
+			return err
+		}
+		// Pool update succeeded; persist to DB.
+		return state.UpdateURL(id, newURL)
+	}
+	// No pool connected — DB-only update is correct (no in-memory state to sync).
+	return state.UpdateURL(id, newURL)
 }
 
 // buildResumeConfig constructs a DownloadConfig for a cold-path resume from saved state.

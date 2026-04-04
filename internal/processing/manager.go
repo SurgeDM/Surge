@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -259,6 +260,20 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 		if err != nil {
 			_ = os.Remove(surgePath)
 			return "", err
+		}
+
+		// Emit queued event now that the pool has accepted the download.
+		// The event worker persists this to DB so it survives a crash before the
+		// worker emits a started event.
+		hooks := mgr.getEngineHooks()
+		if hooks.PublishEvent != nil {
+			_ = hooks.PublishEvent(events.DownloadQueuedMsg{
+				DownloadID: newID,
+				Filename:   finalFilename,
+				URL:        req.URL,
+				DestPath:   filepath.Join(finalPath, finalFilename),
+				Mirrors:    append([]string(nil), req.Mirrors...),
+			})
 		}
 
 		return newID, nil

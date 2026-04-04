@@ -8,8 +8,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/engine/events"
-	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
@@ -286,16 +284,18 @@ func TestWorkerPool_Cancel_RemovesFromMap(t *testing.T) {
 	pool.downloads["test-id"] = ad
 	pool.mu.Unlock()
 
-	pool.Cancel("test-id")
+	result := pool.Cancel("test-id")
 
-	// Consume removal message
+	if !result.Found {
+		t.Error("Expected CancelResult.Found to be true")
+	}
+
+	// Pool must NOT emit any event — that's the caller's responsibility
 	select {
 	case msg := <-ch:
-		if _, ok := msg.(events.DownloadRemovedMsg); !ok {
-			t.Errorf("Expected DownloadRemovedMsg, got %T", msg)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Error("Expected removal message")
+		t.Errorf("Pool should not emit events on cancel, got %T", msg)
+	default:
+		// expected
 	}
 
 	pool.mu.RLock()
@@ -324,14 +324,17 @@ func TestWorkerPool_Cancel_CallsCancelFunc(t *testing.T) {
 	}
 	pool.mu.Unlock()
 
-	pool.Cancel("test-id")
+	result := pool.Cancel("test-id")
+	if !result.Found {
+		t.Error("Expected CancelResult.Found")
+	}
 
-	// Consume removal message
+	// No event should be emitted by pool
 	select {
-	case <-ch:
-		// OK
-	case <-time.After(100 * time.Millisecond):
-		t.Error("Expected removal message")
+	case msg := <-ch:
+		t.Errorf("Pool should not emit events on cancel, got %T", msg)
+	default:
+		// expected
 	}
 
 	// Context should be canceled
@@ -358,14 +361,9 @@ func TestWorkerPool_Cancel_MarksDone(t *testing.T) {
 	}
 	pool.mu.Unlock()
 
-	pool.Cancel("test-id")
-
-	// Consume removal message
-	select {
-	case <-ch:
-		// OK
-	case <-time.After(100 * time.Millisecond):
-		t.Error("Expected removal message")
+	result := pool.Cancel("test-id")
+	if !result.Found {
+		t.Error("Expected CancelResult.Found")
 	}
 
 	if !state.Done.Load() {
@@ -396,12 +394,9 @@ func TestWorkerPool_Cancel_DoesNotRemoveIncompleteFile(t *testing.T) {
 	}
 	pool.mu.Unlock()
 
-	pool.Cancel("test-id")
-
-	select {
-	case <-ch:
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("expected removal message")
+	result := pool.Cancel("test-id")
+	if !result.Found {
+		t.Fatal("expected cancel to find download")
 	}
 
 	if _, err := os.Stat(incompletePath); err != nil {
@@ -409,7 +404,7 @@ func TestWorkerPool_Cancel_DoesNotRemoveIncompleteFile(t *testing.T) {
 	}
 }
 
-func TestWorkerPool_Cancel_QueuedDownload_RemovesFromQueueAndEmitsEvent(t *testing.T) {
+func TestWorkerPool_Cancel_QueuedDownload_RemovesFromQueueAndReturnsResult(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := &WorkerPool{
 		progressCh: ch,
@@ -422,7 +417,7 @@ func TestWorkerPool_Cancel_QueuedDownload_RemovesFromQueueAndEmitsEvent(t *testi
 		},
 	}
 
-	pool.Cancel("queued-id")
+	result := pool.Cancel("queued-id")
 
 	pool.mu.RLock()
 	_, exists := pool.queued["queued-id"]
@@ -431,230 +426,29 @@ func TestWorkerPool_Cancel_QueuedDownload_RemovesFromQueueAndEmitsEvent(t *testi
 		t.Fatal("expected queued download to be removed from queue")
 	}
 
+	if !result.Found {
+		t.Fatal("expected CancelResult.Found for queued cancel")
+	}
+	if !result.WasQueued {
+		t.Fatal("expected CancelResult.WasQueued for queued cancel")
+	}
+	if result.Filename != "queued.bin" {
+		t.Fatalf("result.Filename = %q, want queued.bin", result.Filename)
+	}
+
+	// Pool must NOT emit events — caller handles that
 	select {
 	case msg := <-ch:
-		removed, ok := msg.(events.DownloadRemovedMsg)
-		if !ok {
-			t.Fatalf("expected DownloadRemovedMsg, got %T", msg)
-		}
-		if removed.DownloadID != "queued-id" {
-			t.Fatalf("removed id = %q, want queued-id", removed.DownloadID)
-		}
-		if removed.Filename != "queued.bin" {
-			t.Fatalf("removed filename = %q, want queued.bin", removed.Filename)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Fatal("expected removal message for queued cancel")
-	}
-}
-
-func TestWorkerPool_Resume_NonExistentDownload(t *testing.T) {
-	ch := make(chan any, 10)
-	pool := NewWorkerPool(ch, 3)
-
-	// Should not panic
-	pool.Resume("non-existent-id")
-
-	// No message should be sent
-	select {
-	case <-ch:
-		t.Error("Should not send message for non-existent download")
+		t.Fatalf("pool should not emit events on cancel, got %T", msg)
 	default:
-		// Expected
+		// expected
 	}
 }
 
-func TestWorkerPool_Resume_WhilePausing(t *testing.T) {
-	ch := make(chan any, 10)
-	pool := NewWorkerPool(ch, 3)
-
-	state := types.NewProgressState("test-id", 1000)
-	state.Paused.Store(true)
-	state.SetPausing(true)
-
-	pool.mu.Lock()
-	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
-			ID:    "test-id",
-			State: state,
-		},
-	}
-	pool.mu.Unlock()
-
-	ok := pool.Resume("test-id")
-	if ok {
-		t.Fatal("Expected resume to be rejected while pausing")
-	}
-
-	select {
-	case msg := <-ch:
-		t.Fatalf("Did not expect any resume message while pausing, got %T", msg)
-	default:
-	}
-
-	if !state.IsPaused() {
-		t.Error("Expected state to remain paused while still pausing")
-	}
-}
-
-func TestWorkerPool_Resume_ClearsPausedFlag(t *testing.T) {
-	ch := make(chan any, 10)
-	pool := NewWorkerPool(ch, 3)
-
-	state := types.NewProgressState("test-id", 1000)
-	state.Paused.Store(true)
-
-	pool.mu.Lock()
-	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
-			ID:    "test-id",
-			State: state,
-		},
-	}
-	pool.mu.Unlock()
-
-	pool.Resume("test-id")
-
-	if state.IsPaused() {
-		t.Error("Expected paused flag to be cleared after resume")
-	}
-}
-
-func TestWorkerPool_Resume_UsesResolvedStatePathAndFilename(t *testing.T) {
-	ch := make(chan any, 10)
-	pool := &WorkerPool{
-		taskChan:   make(chan types.DownloadConfig, 10),
-		progressCh: ch,
-		downloads:  make(map[string]*activeDownload),
-		queued:     make(map[string]types.DownloadConfig),
-	}
-
-	state := types.NewProgressState("test-id", 1000)
-	state.Paused.Store(true)
-	state.SetDestPath("/tmp/final-name.bin")
-	state.SetFilename("final-name.bin")
-
-	pool.mu.Lock()
-	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
-			ID:       "test-id",
-			URL:      "http://example.com/file.zip",
-			Filename: "stale-name.bin",
-			DestPath: "",
-			State:    state,
-		},
-	}
-	pool.mu.Unlock()
-
-	ok := pool.Resume("test-id")
-	if !ok {
-		t.Fatal("expected resume to succeed")
-	}
-
-	pool.mu.RLock()
-	ad := pool.downloads["test-id"]
-	pool.mu.RUnlock()
-	if ad == nil {
-		t.Fatal("expected active download to remain tracked")
-	}
-	if ad.config.DestPath != "/tmp/final-name.bin" {
-		t.Fatalf("DestPath not propagated from state: got=%q", ad.config.DestPath)
-	}
-	if ad.config.Filename != "final-name.bin" {
-		t.Fatalf("Filename not propagated from state: got=%q", ad.config.Filename)
-	}
-
-	select {
-	case queued := <-pool.taskChan:
-		if queued.DestPath != "/tmp/final-name.bin" {
-			t.Fatalf("queued DestPath mismatch: got=%q", queued.DestPath)
-		}
-		if queued.Filename != "final-name.bin" {
-			t.Fatalf("queued Filename mismatch: got=%q", queued.Filename)
-		}
-	default:
-		t.Fatal("expected resumed config to be queued")
-	}
-}
-
-func TestWorkerPool_Resume_SendsResumedMessage(t *testing.T) {
-	ch := make(chan any, 10)
-	pool := NewWorkerPool(ch, 3)
-
-	state := types.NewProgressState("test-id", 1000)
-	state.Paused.Store(true)
-
-	pool.mu.Lock()
-	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
-			ID:    "test-id",
-			State: state,
-		},
-	}
-	pool.mu.Unlock()
-
-	pool.Resume("test-id")
-
-	// We can't reliably read from pool.taskChan because worker goroutines may consume the config before us. Just verify the resumed message was sent.
-	// Check for resumed message
-	select {
-	case msg := <-ch:
-		resumedMsg, ok := msg.(events.DownloadResumedMsg)
-		if !ok {
-			t.Errorf("Expected DownloadResumedMsg, got %T: %+v", msg, msg)
-		}
-		if resumedMsg.DownloadID != "test-id" {
-			t.Errorf("Expected download ID 'test-id', got '%s'", resumedMsg.DownloadID)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Error("Expected resume message to be sent")
-	}
-}
-
-func TestWorkerPool_Resume_RequeuesDownload(t *testing.T) {
-	ch := make(chan any, 10)
-	pool := NewWorkerPool(ch, 3)
-
-	state := types.NewProgressState("test-id", 1000)
-	cfg := types.DownloadConfig{
-		ID:    "test-id",
-		URL:   "http://example.com/file.zip",
-		State: state,
-	}
-
-	// Resume checks idempotency, so we MUST start in Paused state
-	state.Paused.Store(true)
-
-	pool.mu.Lock()
-	pool.downloads["test-id"] = &activeDownload{
-		config: cfg,
-	}
-	pool.mu.Unlock()
-
-	pool.Resume("test-id")
-
-	// Note: We can't reliably read from pool.taskChan because worker goroutines
-	// may consume the config before us. Instead, verify Resume cleared the paused
-	// flag and sent the resumed message.
-
-	if state.IsPaused() {
-		t.Error("Expected paused flag to be cleared")
-	}
-
-	// Check for resumed message
-	select {
-	case msg := <-ch:
-		if resumedMsg, ok := msg.(events.DownloadResumedMsg); ok {
-			if resumedMsg.DownloadID != cfg.ID {
-				t.Errorf("Expected ID '%s', got '%s'", cfg.ID, resumedMsg.DownloadID)
-			}
-		} else {
-			t.Errorf("Expected DownloadResumedMsg, got %T: %+v", msg, msg)
-		}
-	case <-time.After(100 * time.Millisecond):
-		t.Error("Expected resumed message to be sent")
-	}
-}
+// Resume orchestration (hot/cold path, DB hydration, event emission) was promoted to
+// LifecycleManager so the pool remains a pure executor with no knowledge of persistence
+// or events. Tests for pool-level extraction live below; LifecycleManager integration
+// tests live in internal/processing/manager_test.go (see TestLifecycleManager_Cancel_NotFound).
 
 func TestWorkerPool_GracefulShutdown_PausesAll(t *testing.T) {
 	ch := make(chan any, 10)
@@ -871,6 +665,125 @@ func TestWorkerPool_HasDownload(t *testing.T) {
 	// For now, this unit test covers the memory-check part of HasDownload which was the critical logic add.
 }
 
+// --- ExtractPausedConfig Tests (replaces old pool.Resume tests) ---
+
+func TestWorkerPool_ExtractPausedConfig_NonExistent(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 3)
+
+	// Should return nil for non-existent download
+	if cfg := pool.ExtractPausedConfig("non-existent-id"); cfg != nil {
+		t.Errorf("Expected nil for non-existent download, got %+v", cfg)
+	}
+}
+
+func TestWorkerPool_ExtractPausedConfig_WhilePausing(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 3)
+
+	state := types.NewProgressState("test-id", 1000)
+	state.Paused.Store(true)
+	state.SetPausing(true)
+
+	pool.mu.Lock()
+	pool.downloads["test-id"] = &activeDownload{
+		config: types.DownloadConfig{
+			ID:    "test-id",
+			State: state,
+		},
+	}
+	pool.mu.Unlock()
+
+	// Should return nil — still pausing (not safe to extract)
+	if cfg := pool.ExtractPausedConfig("test-id"); cfg != nil {
+		t.Fatal("Expected nil while still pausing")
+	}
+
+	// Download must still be in pool
+	pool.mu.RLock()
+	_, exists := pool.downloads["test-id"]
+	pool.mu.RUnlock()
+	if !exists {
+		t.Error("Expected download to remain in pool while pausing")
+	}
+}
+
+func TestWorkerPool_ExtractPausedConfig_NotPaused(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 3)
+
+	state := types.NewProgressState("test-id", 1000)
+	// NOT paused
+
+	pool.mu.Lock()
+	pool.downloads["test-id"] = &activeDownload{
+		config: types.DownloadConfig{
+			ID:    "test-id",
+			State: state,
+		},
+	}
+	pool.mu.Unlock()
+
+	if cfg := pool.ExtractPausedConfig("test-id"); cfg != nil {
+		t.Fatal("Expected nil for non-paused download")
+	}
+}
+
+func TestWorkerPool_ExtractPausedConfig_Success(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 3)
+
+	state := types.NewProgressState("test-id", 1000)
+	state.Paused.Store(true)
+	state.SetDestPath("/tmp/final.bin")
+	state.SetFilename("final.bin")
+
+	pool.mu.Lock()
+	pool.downloads["test-id"] = &activeDownload{
+		config: types.DownloadConfig{
+			ID:       "test-id",
+			URL:      "http://example.com/file.zip",
+			Filename: "stale.bin",
+			State:    state,
+		},
+	}
+	pool.mu.Unlock()
+
+	cfg := pool.ExtractPausedConfig("test-id")
+	if cfg == nil {
+		t.Fatal("Expected config to be returned")
+	}
+
+	// State sync: filename and destpath must come from live state
+	if cfg.Filename != "final.bin" {
+		t.Errorf("Filename = %q, want final.bin", cfg.Filename)
+	}
+	if cfg.DestPath != "/tmp/final.bin" {
+		t.Errorf("DestPath = %q, want /tmp/final.bin", cfg.DestPath)
+	}
+
+	// Download must be removed from pool
+	pool.mu.RLock()
+	_, exists := pool.downloads["test-id"]
+	pool.mu.RUnlock()
+	if exists {
+		t.Error("Expected download to be removed from pool after extract")
+	}
+
+	// Pause state should be cleared
+	if state.IsPaused() {
+		t.Error("Expected pause state to be cleared after extract")
+	}
+
+	// No events emitted by pool
+	select {
+	case msg := <-ch:
+		t.Errorf("Pool should not emit events on ExtractPausedConfig, got %T", msg)
+	default:
+		// expected
+	}
+}
+
 func TestWorkerPool_PauseResume_Idempotency(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 3)
@@ -894,39 +807,25 @@ func TestWorkerPool_PauseResume_Idempotency(t *testing.T) {
 		t.Error("Expected state to be Pausing after first Pause")
 	}
 
-	// Consume message
-	// select { ... } obsolete, now delegated to worker
-
 	// 2. Second Pause (Idempotent)
-	// Should NOT send another message or change state significantly (still Pausing/Paused)
 	pool.Pause("idempotent-test")
 
 	// Manually transition to Paused (simulating worker finish)
 	state.SetPausing(false)
 	state.Pause()
 
-	// 3. Resume
-	pool.Resume("idempotent-test")
+	// 3. ExtractPausedConfig (replaces Resume)
+	cfg := pool.ExtractPausedConfig("idempotent-test")
+	if cfg == nil {
+		t.Fatal("Expected config to be extracted after true pause")
+	}
 	if state.IsPaused() {
-		t.Error("Expected state to be Resumed (not paused)")
+		t.Error("Expected state to be cleared after extract")
 	}
 
-	// Consume resume message
-	select {
-	case <-ch:
-		// OK
-	case <-time.After(100 * time.Millisecond):
-		t.Error("Expected resume message")
-	}
-
-	// 4. Second Resume (Idempotent)
-	pool.Resume("idempotent-test")
-
-	select {
-	case <-ch:
-		t.Error("Did not expect second resume message")
-	default:
-		// OK
+	// 4. Second ExtractPausedConfig (idempotent — already extracted)
+	if cfg2 := pool.ExtractPausedConfig("idempotent-test"); cfg2 != nil {
+		t.Error("Expected nil on second extract (already removed from pool)")
 	}
 }
 
@@ -963,33 +862,41 @@ func TestWorkerPool_UpdateURL(t *testing.T) {
 
 	activeState := types.NewProgressState("active-id", 1000)
 	pool.mu.Lock()
-	activeDownload := &activeDownload{
+	ad := &activeDownload{
 		config: types.DownloadConfig{
 			ID:    "active-id",
 			URL:   "http://example.com/old.zip",
 			State: activeState,
 		},
 	}
-	activeDownload.running.Store(true)
-	pool.downloads["active-id"] = activeDownload
+	ad.running.Store(true)
+	pool.downloads["active-id"] = ad
 	pool.mu.Unlock()
 
-	// 1. Try updating a running download
+	// 1. Try updating a running download — should fail
 	err := pool.UpdateURL("active-id", "http://example.com/new.zip")
 	if err == nil {
 		t.Error("Expected error when updating URL for active download")
 	}
 
-	// 2. Try updating a paused download
+	// 2. Try updating a paused download — pool only updates in-memory (no DB)
 	activeState.Paused.Store(true)
-	activeDownload.running.Store(false)
+	ad.running.Store(false)
 
 	err = pool.UpdateURL("active-id", "http://example.com/new.zip")
-	if err != nil && err.Error() != "database not initialized" {
-		t.Errorf("Expected database not initialized error, got %v", err)
+	if err != nil {
+		t.Errorf("Expected no error for paused download, got %v", err)
 	}
 
-	// 3. Try updating a queued download
+	// Verify in-memory URL was updated
+	pool.mu.RLock()
+	gotURL := pool.downloads["active-id"].config.URL
+	pool.mu.RUnlock()
+	if gotURL != "http://example.com/new.zip" {
+		t.Errorf("in-memory URL not updated: got %q", gotURL)
+	}
+
+	// 3. Try updating a queued download — should fail
 	pool.mu.Lock()
 	pool.queued["queued-id"] = types.DownloadConfig{ID: "queued-id"}
 	pool.mu.Unlock()
@@ -1000,85 +907,5 @@ func TestWorkerPool_UpdateURL(t *testing.T) {
 	}
 }
 
-func TestWorkerPool_UpdateURL_PersistsToDB(t *testing.T) {
-	tempDir := t.TempDir()
-	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, "surge.db"))
-	if _, err := state.GetDB(); err != nil {
-		t.Fatalf("failed to initialize db: %v", err)
-	}
-	defer state.CloseDB()
-
-	oldURL := "http://example.com/old.zip"
-	newURL := "http://example.com/new.zip"
-
-	if err := state.AddToMasterList(types.DownloadEntry{
-		ID:       "paused-id",
-		URL:      oldURL,
-		URLHash:  state.URLHash(oldURL),
-		DestPath: filepath.Join(tempDir, "paused.zip"),
-		Filename: "paused.zip",
-		Status:   "paused",
-	}); err != nil {
-		t.Fatalf("failed to seed paused entry: %v", err)
-	}
-	if err := state.AddToMasterList(types.DownloadEntry{
-		ID:       "db-only-id",
-		URL:      oldURL,
-		URLHash:  state.URLHash(oldURL),
-		DestPath: filepath.Join(tempDir, "db-only.zip"),
-		Filename: "db-only.zip",
-		Status:   "paused",
-	}); err != nil {
-		t.Fatalf("failed to seed db-only entry: %v", err)
-	}
-
-	ch := make(chan any, 10)
-	pool := NewWorkerPool(ch, 3)
-
-	pausedState := types.NewProgressState("paused-id", 1000)
-	pausedState.Paused.Store(true)
-	pausedState.SetURL(oldURL)
-
-	pool.mu.Lock()
-	pool.downloads["paused-id"] = &activeDownload{
-		config: types.DownloadConfig{
-			ID:    "paused-id",
-			URL:   oldURL,
-			State: pausedState,
-		},
-	}
-	pool.mu.Unlock()
-
-	if err := pool.UpdateURL("paused-id", newURL); err != nil {
-		t.Fatalf("UpdateURL(paused-id) failed: %v", err)
-	}
-	pool.mu.RLock()
-	gotURL := pool.downloads["paused-id"].config.URL
-	pool.mu.RUnlock()
-	if gotURL != newURL {
-		t.Fatalf("config URL = %q, want %q", gotURL, newURL)
-	}
-	if got := pausedState.GetURL(); got != newURL {
-		t.Fatalf("state URL = %q, want %q", got, newURL)
-	}
-
-	entry, err := state.GetDownload("paused-id")
-	if err != nil {
-		t.Fatalf("failed to load paused entry: %v", err)
-	}
-	if entry == nil || entry.URL != newURL || entry.URLHash != state.URLHash(newURL) {
-		t.Fatalf("paused entry not updated in db: %#v", entry)
-	}
-
-	if err := pool.UpdateURL("db-only-id", newURL); err != nil {
-		t.Fatalf("UpdateURL(db-only-id) failed: %v", err)
-	}
-	entry, err = state.GetDownload("db-only-id")
-	if err != nil {
-		t.Fatalf("failed to load db-only entry: %v", err)
-	}
-	if entry == nil || entry.URL != newURL || entry.URLHash != state.URLHash(newURL) {
-		t.Fatalf("db-only entry not updated in db: %#v", entry)
-	}
-}
+// Note: UpdateURL DB persistence is now tested in internal/processing tests
+// since LifecycleManager.UpdateURL() is responsible for calling state.UpdateURL().

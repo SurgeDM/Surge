@@ -5,7 +5,19 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
+
+// SuppressNotificationsInTests disables desktop notifications for any test
+// that imports this package. Call this from a per-package init() or TestMain.
+func SuppressNotificationsInTests() {
+	utils.SuppressNotifications = true
+}
+
+func init() {
+	SuppressNotificationsInTests()
+}
 
 // SetupStateDB configures a fresh temp SQLite DB for tests that exercise state persistence.
 func SetupStateDB(t *testing.T) string {
@@ -19,4 +31,12 @@ func SetupStateDB(t *testing.T) string {
 	}
 	t.Cleanup(state.CloseDB)
 	return tempDir
+}
+
+// SeedMasterList inserts a DownloadEntry into the master list for test setups.
+func SeedMasterList(t *testing.T, entry types.DownloadEntry) {
+	t.Helper()
+	if err := state.AddToMasterList(entry); err != nil {
+		t.Fatalf("SeedMasterList failed: %v", err)
+	}
 }

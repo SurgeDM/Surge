@@ -8,6 +8,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func resetSharedStateDB() error {
@@ -20,6 +21,7 @@ func resetSharedStateDB() error {
 }
 
 func TestMain(m *testing.M) {
+	utils.SuppressNotifications = true
 	tmpDir, err := os.MkdirTemp("", "surge-cmd-test-*")
 	if err == nil {
 		_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)

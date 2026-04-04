@@ -216,14 +216,22 @@ func ensureGlobalLocalServiceAndLifecycle() error {
 		}
 
 		lifecycle.SetEngineHooks(processing.EngineHooks{
-			Pause:        GlobalPool.Pause,
-			Resume:       GlobalPool.Resume,
-			GetStatus:    GlobalPool.GetStatus,
-			AddConfig:    GlobalPool.Add,
-			PublishEvent: localService.Publish,
+			Pause:               GlobalPool.Pause,
+			ExtractPausedConfig: GlobalPool.ExtractPausedConfig,
+			GetStatus:           GlobalPool.GetStatus,
+			AddConfig:           GlobalPool.Add,
+			Cancel:              GlobalPool.Cancel,
+			UpdateURL:           GlobalPool.UpdateURL,
+			PublishEvent:        localService.Publish,
 		})
 
-		localService.SetLifecycleHooks(lifecycle.Pause, lifecycle.Resume, lifecycle.ResumeBatch)
+		localService.SetLifecycleHooks(core.LifecycleHooks{
+			Pause:       lifecycle.Pause,
+			Resume:      lifecycle.Resume,
+			ResumeBatch: lifecycle.ResumeBatch,
+			Cancel:      lifecycle.Cancel,
+			UpdateURL:   lifecycle.UpdateURL,
+		})
 	} else {
 		_, err := ensureLocalLifecycle(GlobalService, currentPoolConfigs)
 		return err
@@ -339,7 +347,7 @@ func acquireRootInstanceLock() (func(), error) {
 	}
 
 	if !isMaster {
-		return nil, fmt.Errorf("Surge is already running. Use 'surge add <url>' to add a download to the active instance")
+		return nil, fmt.Errorf("surge is already running. Use 'surge add <url>' to add a download to the active instance")
 	}
 
 	return func() {

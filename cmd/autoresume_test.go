@@ -83,14 +83,22 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 
 	GlobalLifecycle = processing.NewLifecycleManager(nil, nil, nil)
 	GlobalLifecycle.SetEngineHooks(processing.EngineHooks{
-		Pause:        GlobalPool.Pause,
-		Resume:       GlobalPool.Resume,
-		AddConfig:    GlobalPool.Add,
-		GetStatus:    GlobalPool.GetStatus,
-		PublishEvent: GlobalService.Publish,
+		Pause:               GlobalPool.Pause,
+		ExtractPausedConfig: GlobalPool.ExtractPausedConfig,
+		AddConfig:           GlobalPool.Add,
+		GetStatus:           GlobalPool.GetStatus,
+		Cancel:              GlobalPool.Cancel,
+		UpdateURL:           GlobalPool.UpdateURL,
+		PublishEvent:        GlobalService.Publish,
 	})
 	if svc, ok := GlobalService.(*core.LocalDownloadService); ok {
-		svc.SetLifecycleHooks(GlobalLifecycle.Pause, GlobalLifecycle.Resume, GlobalLifecycle.ResumeBatch)
+		svc.SetLifecycleHooks(core.LifecycleHooks{
+			Pause:       GlobalLifecycle.Pause,
+			Resume:      GlobalLifecycle.Resume,
+			ResumeBatch: GlobalLifecycle.ResumeBatch,
+			Cancel:      GlobalLifecycle.Cancel,
+			UpdateURL:   GlobalLifecycle.UpdateURL,
+		})
 	}
 	defer func() {
 		_ = GlobalService.Shutdown()
