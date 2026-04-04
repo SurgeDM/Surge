@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"testing"
 
 	"github.com/SurgeDM/Surge/assets"
 	"github.com/gen2brain/beeep"
@@ -48,6 +49,9 @@ func ensureIcon() string {
 }
 
 func Notify(title, message string) {
+	if testing.Testing() {
+		return
+	}
 	err := beeep.Notify(title, message, ensureIcon())
 	if err != nil {
 		Debug("Failed to send notification: %v", err)
