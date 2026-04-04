@@ -102,14 +102,6 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				utils.Debug("Lifecycle: Failed to save initial download state: %v", err)
 			}
 
-			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadAddedNotification {
-				totalStr := ""
-				if m.Total > 0 {
-					totalStr = fmt.Sprintf(" — %s", utils.ConvertBytesToHumanReadable(m.Total))
-				}
-				notify(fmt.Sprintf("Download Started: %s", m.Filename), fmt.Sprintf("Started downloading%s", totalStr))
-			}
-
 		case events.DownloadPausedMsg:
 			if m.State == nil {
 				existing, _ := state.GetDownload(m.DownloadID)
