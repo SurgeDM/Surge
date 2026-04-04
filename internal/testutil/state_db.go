@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 // SetupStateDB configures a fresh temp SQLite DB for tests that exercise state persistence.
@@ -19,4 +20,12 @@ func SetupStateDB(t *testing.T) string {
 	}
 	t.Cleanup(state.CloseDB)
 	return tempDir
+}
+
+// SeedMasterList inserts a DownloadEntry into the master list for test setups.
+func SeedMasterList(t *testing.T, entry types.DownloadEntry) {
+	t.Helper()
+	if err := state.AddToMasterList(entry); err != nil {
+		t.Fatalf("SeedMasterList failed: %v", err)
+	}
 }
