@@ -216,14 +216,22 @@ func ensureGlobalLocalServiceAndLifecycle() error {
 		}
 
 		lifecycle.SetEngineHooks(processing.EngineHooks{
-			Pause:        GlobalPool.Pause,
-			Resume:       GlobalPool.Resume,
-			GetStatus:    GlobalPool.GetStatus,
-			AddConfig:    GlobalPool.Add,
-			PublishEvent: localService.Publish,
+			Pause:               GlobalPool.Pause,
+			ExtractPausedConfig: GlobalPool.ExtractPausedConfig,
+			GetStatus:           GlobalPool.GetStatus,
+			AddConfig:           GlobalPool.Add,
+			Cancel:              GlobalPool.Cancel,
+			UpdateURL:           GlobalPool.UpdateURL,
+			PublishEvent:        localService.Publish,
 		})
 
-		localService.SetLifecycleHooks(lifecycle.Pause, lifecycle.Resume, lifecycle.ResumeBatch)
+		localService.SetLifecycleHooks(
+			lifecycle.Pause,
+			lifecycle.Resume,
+			lifecycle.ResumeBatch,
+			lifecycle.Cancel,
+			lifecycle.UpdateURL,
+		)
 	} else {
 		_, err := ensureLocalLifecycle(GlobalService, currentPoolConfigs)
 		return err
