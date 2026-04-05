@@ -8,7 +8,7 @@ export const MB = 1 << 20;
 export function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(KB));
+  const i = Math.min(Math.floor(Math.log(bytes) / Math.log(KB)), units.length - 1);
   const value = bytes / Math.pow(KB, i);
   return value.toFixed(i > 0 ? 1 : 0) + ' ' + units[i];
 }

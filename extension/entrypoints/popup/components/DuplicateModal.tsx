@@ -30,9 +30,13 @@ export default function DuplicateModal() {
     if (e.key === 'Escape' && visible()) handleSkip();
   };
 
-  onMount(() => {
+  onMount(async () => {
     browser.runtime.onMessage.addListener(onPrompt);
     document.addEventListener('keydown', onKey);
+    const res = await browser.runtime.sendMessage({ type: 'getPendingDuplicates' })
+      .catch(() => null) as { duplicates?: { id: string; filename: string }[] } | null;
+    const first = res?.duplicates?.[0];
+    if (first) { setPendingId(first.id); setFilename(first.filename); setVisible(true); }
   });
 
   onCleanup(() => {

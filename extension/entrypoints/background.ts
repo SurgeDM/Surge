@@ -160,10 +160,10 @@ async function fetchHistoryList(): Promise<HistoryEntry[]> {
   try { const j = await resp.json(); return Array.isArray(j) ? j : []; } catch { return []; }
 }
 
-async function sendToSurge(url: string, filename?: string): Promise<{ success: boolean; error?: string; status?: string }> {
+async function sendToSurge(url: string, filename?: string, headers?: Record<string, string>): Promise<{ success: boolean; error?: string; status?: string }> {
   const base = await getBaseUrl();
   if (!base) return { success: false, error: 'Server not running' };
-  const body: Record<string, unknown> = { url, filename: filename || '' };
+  const body: Record<string, unknown> = { url, filename: filename || '', headers: headers || {} };
   try {
     const resp = await fetch(`${base}/download`, {
       method: 'POST',
@@ -286,13 +286,13 @@ async function handleDownloadCreated(downloadItem: { id: number; url: string; fi
   if (!await checkHealthSilent()) return;
 
   const { filename } = extractPathInfo(downloadItem);
-  const _captured = getCapturedHeaders(downloadItem.url);
+  const captured = getCapturedHeaders(downloadItem.url);
 
   try {
     await browser.downloads.cancel(downloadItem.id);
     await browser.downloads.erase({ id: downloadItem.id } as any);
 
-    const result = await sendToSurge(downloadItem.url, filename);
+    const result = await sendToSurge(downloadItem.url, filename, captured ?? undefined);
     if (result.success) {
       browser.notifications.create({ type: 'basic', iconUrl: 'icons/icon48.png', title: 'Surge', message: `Download started: ${filename || downloadItem.url.split('/').pop()}` });
       try { await browser.action.openPopup(); } catch { /* ignore */ }
