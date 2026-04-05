@@ -1,6 +1,7 @@
 package torrent
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -26,8 +27,15 @@ func TestDefaultConfig(t *testing.T) {
 }
 
 func TestNewEngine_DefaultConfig(t *testing.T) {
+	// Use a manually managed temp dir instead of t.TempDir() because the
+	// anacrolix/torrent SQLite storage may hold file locks briefly after
+	// Close() returns on Windows, causing TempDir cleanup to fail.
+	dir, err := os.MkdirTemp("", "surge-torrent-test-*")
+	assert.NoError(t, err)
+	defer os.RemoveAll(dir)
+
 	cfg := DefaultConfig()
-	cfg.DataDir = t.TempDir()
+	cfg.DataDir = dir
 
 	engine, err := NewEngine(cfg)
 	assert.NoError(t, err)
