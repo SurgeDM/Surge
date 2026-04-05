@@ -1,5 +1,5 @@
 import { defineBackground } from 'wxt/sandbox';
-import { MB, normalizeToken, normalizeServerUrl } from './popup/lib/utils';
+import { normalizeToken, normalizeServerUrl } from './popup/lib/utils';
 import { DownloadStatus, HistoryEntry } from './popup/store/types';
 
 // ---------------------------------------------------------------------------
@@ -19,8 +19,6 @@ const STORAGE_KEYS = {
   SERVER_URL: 'serverUrl',
 } as const;
 
-const API_BASE = 'http://127.0.0.1:1700';
-
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -30,9 +28,7 @@ let cachedServerUrl: string | null = null;
 let cachedAuthToken: string | null = null;
 let isConnected = false;
 let lastHealthCheck = 0;
-let healthCheckTimer: ReturnType<typeof setInterval> | null = null;
-let syncIntervalTimer: ReturnType<typeof setInterval> | null = null;
-let sseAbortController: AbortController | null = null;
+const sseAbortController: AbortController | null = null;
 
 const capturedHeaders = new Map<string, { headers: Record<string, string>; timestamp: number }>();
 const pendingDuplicates = new Map<string, { url: string; filename: string; timestamp: number }>();
@@ -50,11 +46,6 @@ async function storageGet(key: string): Promise<string | undefined> {
 
 async function storageSet(key: string, value: string | boolean): Promise<void> {
   await browser.storage.local.set({ [key]: value });
-}
-
-async function loadCachedValues(): Promise<void> {
-  cachedServerUrl = (await storageGet(STORAGE_KEYS.SERVER_URL)) || null;
-  cachedAuthToken = normalizeToken(await storageGet(STORAGE_KEYS.TOKEN)) || null;
 }
 
 // ---------------------------------------------------------------------------
@@ -249,8 +240,8 @@ async function handleDownloadCreated(downloadItem: { id: number; url: string; fi
 
   if (!await checkHealthSilent()) return;
 
-  const { filename, directory } = extractPathInfo(downloadItem);
-  const captured = getCapturedHeaders(downloadItem.url);
+  const { filename } = extractPathInfo(downloadItem);
+  const _captured = getCapturedHeaders(downloadItem.url);
 
   try {
     await browser.downloads.cancel(downloadItem.id);

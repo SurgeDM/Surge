@@ -120,3 +120,5 @@ export interface DuplicatePending {
   filename: string;
   url: string;
 }
+
+export type Theme = 'dark' | 'light' | 'auto';

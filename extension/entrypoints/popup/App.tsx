@@ -1,26 +1,22 @@
-import { onMount, onCleanup } from 'solid-js';
+import { createSignal, onMount, onCleanup } from 'solid-js';
 import {
-  serverConnected, setServerConnected,
-  activeDownloads, setActiveDownloads,
-  serverUrl, setServerUrl,
-  authToken, setAuthToken,
-  authValid, setAuthValid,
-  currentView, setCurrentView,
+  serverConnected,
+  setServerConnected,
+  activeDownloads,
+  setActiveDownloads,
+  currentView,
+  setCurrentView,
   setHistoryDownloads,
-  interceptEnabled, setInterceptEnabled,
+  setInterceptEnabled,
   handleSseEvent,
-  ViewMode,
 } from './store';
 import StatusBadge from './components/StatusBadge';
 import DownloadList from './components/DownloadList';
 import DuplicateModal from './components/DuplicateModal';
-import ServerUrlInput from './components/ServerUrlInput';
-import AuthTokenInput from './components/AuthTokenInput';
-import ViewSwitch from './components/ViewSwitch';
-import { normalizeToken } from './lib/utils';
-import './popup.css';
+import SettingsModal from './components/SettingsModal';
 
 export default function App() {
+  const [showSettings, setShowSettings] = createSignal(false);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
   let healthInterval: ReturnType<typeof setInterval> | null = null;
   let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -46,7 +42,7 @@ export default function App() {
     } catch { /* ignore */ }
   }
 
-  async function fetchDownloads(full = false) {
+  async function fetchDownloads(_full = false) {
     try {
       const res = await browser.runtime.sendMessage({ type: 'getDownloads' });
       if (res?.downloads) {
@@ -79,7 +75,7 @@ export default function App() {
     }
   }
 
-  function onMessageListener(message: any) {
+  function onMessageListener(message: Record<string, unknown>) {
     if (message.type === 'sseEvent') {
       handleSseEvent(message.event, message.data);
       // Refresh full list periodically after SSE events to ensure consistency
@@ -125,45 +121,23 @@ export default function App() {
           <img src="/icons/icon48.png" alt="Surge" />
           <h1>SURGE</h1>
         </div>
-        <StatusBadge connected={serverConnected()} />
+        <div class="header-right">
+          <StatusBadge connected={serverConnected()} />
+          <button class="settings-btn" onClick={() => setShowSettings(true)} title="Settings">
+            &#x2699;
+          </button>
+        </div>
       </header>
 
       <section class="downloads-section">
-        <div class="downloads-header">
-          <div class="downloads-title-row">
-            <span class="section-title">Downloads</span>
-            <span class="download-count">{activeDownloads().length}</span>
-          </div>
-          <ViewSwitch currentView={currentView()} onChange={handleViewChange} />
-        </div>
-
         <DownloadList
           view={currentView()}
           activeDownloads={activeDownloads()}
         />
       </section>
 
-      <footer class="footer">
-        <ServerUrlInput />
-        <AuthTokenInput />
-        <div class="toggle-row">
-          <span>Intercept Downloads</span>
-          <div class="toggle">
-            <input
-              type="checkbox"
-              checked={interceptEnabled()}
-              onChange={async (e) => {
-                const checked = (e.target as HTMLInputElement).checked;
-                setInterceptEnabled(checked);
-                await browser.runtime.sendMessage({ type: 'setStatus', enabled: checked });
-              }}
-            />
-            <span class="toggle-slider" />
-          </div>
-        </div>
-      </footer>
-
       <DuplicateModal />
+      <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
 }

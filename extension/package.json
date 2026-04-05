@@ -11,14 +11,21 @@
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "echo 'No tests yet'"
   },
   "dependencies": {
     "solid-js": "^1.9.7"
   },
   "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.58.0",
+    "@typescript-eslint/parser": "^8.58.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-solid": "^0.14.5",
     "typescript": "^5.8.3",
-    "wxt": "^0.19.29",
-    "vite-plugin-solid": "^2.11.8"
+    "typescript-eslint": "^8.58.0",
+    "vite-plugin-solid": "^2.11.8",
+    "wxt": "^0.19.29"
   }
 }
