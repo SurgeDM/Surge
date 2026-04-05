@@ -4,6 +4,7 @@
  */
 
 import { createSignal } from 'solid-js';
+import { MB } from '../lib/utils';
 import type {
   DownloadStatus,
   HistoryEntry,
@@ -16,8 +17,6 @@ import type {
   DownloadQueuedMsg,
   DownloadRemovedMsg,
 } from './types';
-
-const MB = 1 << 20;
 
 // --- Active downloads (array of DownloadStatus) ---
 const [activeDownloads, setActiveDownloads] = createSignal<DownloadStatus[]>([]);
@@ -61,9 +60,6 @@ export { authToken, setAuthToken };
 // --- Auth state ---
 const [authValid, setAuthValid] = createSignal(false);
 export { authValid, setAuthValid };
-
-const [authValidationInProgress, setAuthValidationInProgress] = createSignal(false);
-export { authValidationInProgress, setAuthValidationInProgress };
 
 // --- View ---
 export type ViewMode = 'active' | 'history';
@@ -117,7 +113,7 @@ export function handleSseEvent(event: string, data: unknown): void {
           dest_path: msg.DestPath,
         });
       } else {
-        upsertActiveDownload({
+        setActiveDownloads(prev => [...prev, {
           id: msg.DownloadID,
           url: msg.URL,
           filename: msg.Filename,
@@ -132,7 +128,7 @@ export function handleSseEvent(event: string, data: unknown): void {
           added_at: Date.now(),
           time_taken: 0,
           avg_speed: 0,
-        });
+        }]);
       }
       break;
     }

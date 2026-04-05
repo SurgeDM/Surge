@@ -1,46 +1,43 @@
-import { createSignal } from 'solid-js';
+import { createSignal, onMount, onCleanup } from 'solid-js';
 
 export default function DuplicateModal() {
   const [visible, setVisible] = createSignal(false);
   const [filename, setFilename] = createSignal('');
   const [pendingId, setPendingId] = createSignal('');
 
-  // Listen for duplicate prompts from background
-  if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
-    const handler = (msg: any) => {
-      if (msg.type === 'promptDuplicate') {
-        setPendingId(msg.id);
-        setFilename(msg.filename);
-        setVisible(true);
-      }
-    };
-    chrome.runtime.onMessage.addListener(handler);
-  }
-
-  const handleConfirm = async () => {
+  const closeAndSend = async (type: 'confirmDuplicate' | 'skipDuplicate') => {
     const id = pendingId();
     setVisible(false);
     setPendingId('');
     if (id) {
-      await browser.runtime.sendMessage({ type: 'confirmDuplicate', id });
+      await browser.runtime.sendMessage({ type, id });
     }
   };
 
-  const handleSkip = async () => {
-    const id = pendingId();
-    setVisible(false);
-    setPendingId('');
-    if (id) {
-      await browser.runtime.sendMessage({ type: 'skipDuplicate', id });
+  const handleConfirm = async () => { await closeAndSend('confirmDuplicate'); };
+  const handleSkip = async () => { await closeAndSend('skipDuplicate'); };
+
+  const onPrompt = (msg: any) => {
+    if (msg.type === 'promptDuplicate') {
+      setPendingId(msg.id);
+      setFilename(msg.filename);
+      setVisible(true);
     }
   };
 
-  // Close on escape
-  if (typeof document !== 'undefined') {
-    document.addEventListener('keydown', (e) => {
-      if (e.key === 'Escape' && visible()) handleSkip();
-    });
-  }
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === 'Escape' && visible()) handleSkip();
+  };
+
+  onMount(() => {
+    browser.runtime.onMessage.addListener(onPrompt);
+    document.addEventListener('keydown', onKey);
+  });
+
+  onCleanup(() => {
+    browser.runtime.onMessage.removeListener(onPrompt);
+    document.removeEventListener('keydown', onKey);
+  });
 
   return (
     <div class={`modal-overlay${visible() ? '' : ' hidden'}`} id="duplicateModal">

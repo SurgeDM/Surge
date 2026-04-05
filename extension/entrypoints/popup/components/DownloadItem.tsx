@@ -22,45 +22,38 @@ export default function DownloadItem(props: Props) {
     }
   };
 
-  const renderActionButtons = (): JSX.Element => {
-    const s = dl().status;
-    const buttons: JSX.Element[] = [];
-    if (s === 'downloading') {
-      buttons.push(<button class="action-btn pause" title="Pause">&#x23F8;</button>);
-    }
-    if (s === 'paused' || s === 'queued') {
-      buttons.push(<button class="action-btn resume" title="Resume">&#x25B6;</button>);
-    }
-    if (s === 'completed') {
-      buttons.push(<button class="action-btn open-folder" title="Open folder">&#x1F4C1;</button>);
-      buttons.push(<button class="action-btn open-file" title="Open file">&#x1F4C4;</button>);
-    }
-    if (s !== 'completed') {
-      buttons.push(<button class="action-btn cancel" title="Cancel">&#x2715;</button>);
-    }
-    return <>{buttons}</>;
-  };
-
   const handleActionClick = async (e: MouseEvent) => {
     const btn = (e.target as HTMLElement).closest('.action-btn') as HTMLButtonElement | null;
     if (!btn) return;
 
+    const action = btn.dataset.action;
+    if (!action) return;
+
     btn.disabled = true;
     try {
-      if (btn.classList.contains('pause')) {
-        await browser.runtime.sendMessage({ type: 'pauseDownload', id: dl().id });
-      } else if (btn.classList.contains('resume')) {
-        await browser.runtime.sendMessage({ type: 'resumeDownload', id: dl().id });
-      } else if (btn.classList.contains('cancel')) {
-        await browser.runtime.sendMessage({ type: 'cancelDownload', id: dl().id });
-      } else if (btn.classList.contains('open-file')) {
-        await browser.runtime.sendMessage({ type: 'openFile', id: dl().id });
-      } else if (btn.classList.contains('open-folder')) {
-        await browser.runtime.sendMessage({ type: 'openFolder', id: dl().id });
-      }
+      await browser.runtime.sendMessage({ type: action, id: dl().id });
     } finally {
       btn.disabled = false;
     }
+  };
+
+  const renderActionButtons = (): JSX.Element => {
+    const s = dl().status;
+    const buttons: JSX.Element[] = [];
+    if (s === 'downloading') {
+      buttons.push(<button class="action-btn pause" data-action="pauseDownload" title="Pause">&#x23F8;</button>);
+    }
+    if (s === 'paused' || s === 'queued') {
+      buttons.push(<button class="action-btn resume" data-action="resumeDownload" title="Resume">&#x25B6;</button>);
+    }
+    if (s === 'completed') {
+      buttons.push(<button class="action-btn open-folder" data-action="openFolder" title="Open folder">&#x1F4C1;</button>);
+      buttons.push(<button class="action-btn open-file" data-action="openFile" title="Open file">&#x1F4C4;</button>);
+    }
+    if (s !== 'completed') {
+      buttons.push(<button class="action-btn cancel" data-action="cancelDownload" title="Cancel">&#x2715;</button>);
+    }
+    return <>{buttons}</>;
   };
 
   return (

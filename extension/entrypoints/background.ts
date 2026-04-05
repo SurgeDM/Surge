@@ -1,4 +1,5 @@
 import { defineBackground } from 'wxt/sandbox';
+import { MB, normalizeToken, normalizeServerUrl } from './popup/lib/utils';
 import { DownloadStatus, HistoryEntry } from './popup/store/types';
 
 // ---------------------------------------------------------------------------
@@ -10,7 +11,6 @@ const MAX_PORT_SCAN = 100;
 const HEADER_EXPIRY_MS = 120_000;
 const HEALTH_CHECK_INTERVAL_MS = 5_000;
 const SYNC_INTERVAL_MS = 60_000;
-const MB = 1 << 20;
 
 const STORAGE_KEYS = {
   INTERCEPT: 'interceptEnabled',
@@ -55,11 +55,6 @@ async function storageSet(key: string, value: string | boolean): Promise<void> {
 async function loadCachedValues(): Promise<void> {
   cachedServerUrl = (await storageGet(STORAGE_KEYS.SERVER_URL)) || null;
   cachedAuthToken = normalizeToken(await storageGet(STORAGE_KEYS.TOKEN)) || null;
-}
-
-function normalizeToken(token?: string): string {
-  if (!token) return '';
-  return token.replace(/\s+/g, '');
 }
 
 // ---------------------------------------------------------------------------
@@ -356,16 +351,25 @@ function handleMessage(message: Record<string, any>): Promise<any> | any {
     case 'setStatus': return storageSet(STORAGE_KEYS.INTERCEPT, message.enabled).then(() => ({ success: true }));
     case 'getServerUrl': return storageGet(STORAGE_KEYS.SERVER_URL).then(url => ({ url: url || '' }));
     case 'setServerUrl': {
-      const normalized = (message.url || '').trim().replace(/\/+$/, '');
+      const normalized = normalizeServerUrl(message.url || '');
       return storageSet(STORAGE_KEYS.SERVER_URL, normalized).then(() => { cachedServerUrl = normalized || null; lastHealthCheck = 0; return { success: true }; });
     }
     case 'getDownloads': return (async () => { const d = await fetchDownloadsList(); return { downloads: d, authError: false, connected: isConnected }; })();
     case 'getHistory': return (async () => { const h = await fetchHistoryList(); return { history: h.slice(0, 100), authError: false, connected: isConnected }; })();
-    case 'pauseDownload': return (async () => { const r = await apiFetch(`/pause?id=${message.id}`, { method: 'POST' }); return { success: r !== null }; })();
-    case 'resumeDownload': return (async () => { const r = await apiFetch(`/resume?id=${message.id}`, { method: 'POST' }); return { success: r !== null }; })();
-    case 'cancelDownload': return (async () => { const r = await apiFetch(`/delete?id=${message.id}`, { method: 'DELETE' }); return { success: r !== null }; })();
-    case 'openFile': return (async () => { const r = await apiFetch(`/open-file?id=${encodeURIComponent(message.id)}`, { method: 'POST' }); return { success: r !== null }; })();
-    case 'openFolder': return (async () => { const r = await apiFetch(`/open-folder?id=${encodeURIComponent(message.id)}`, { method: 'POST' }); return { success: r !== null }; })();
+    case 'pauseDownload':
+    case 'resumeDownload':
+    case 'cancelDownload':
+    case 'openFile':
+    case 'openFolder': {
+      const methodMap: Record<string, string> = {
+        pauseDownload: 'POST', resumeDownload: 'POST', cancelDownload: 'DELETE', openFile: 'POST', openFolder: 'POST',
+      };
+      const pathMap: Record<string, string> = {
+        pauseDownload: `/pause?id=${message.id}`, resumeDownload: `/resume?id=${message.id}`, cancelDownload: `/delete?id=${message.id}`,
+        openFile: `/open-file?id=${encodeURIComponent(message.id)}`, openFolder: `/open-folder?id=${encodeURIComponent(message.id)}`,
+      };
+      return (async () => { const r = await apiFetch(pathMap[message.type], { method: methodMap[message.type] }); return { success: r !== null }; })();
+    }
 
     case 'confirmDuplicate': {
       const pending = pendingDuplicates.get(message.id);

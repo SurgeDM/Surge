@@ -1,15 +1,13 @@
 import { serverUrl, setServerUrl } from '../store';
 import { createSignal } from 'solid-js';
+import { normalizeServerUrl } from '../lib/utils';
 
 export default function ServerUrlInput() {
   const [status, setStatus] = createSignal('');
   let inputRef: HTMLInputElement | undefined;
 
   const handleSave = async () => {
-    let url = inputRef?.value.trim() || '';
-    if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
-      url = 'http://' + url;
-    }
+    const url = normalizeServerUrl(inputRef?.value || '');
 
     setServerUrl(url);
     setStatus('Saving...');

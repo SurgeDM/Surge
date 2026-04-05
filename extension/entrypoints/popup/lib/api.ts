@@ -119,29 +119,33 @@ export async function sendDownload(
   }
 }
 
-export async function pauseDownload(client: SurgeApiClient, id: string): Promise<boolean> {
-  const result = await apiFetch(client, `/pause?id=${encodeURIComponent(id)}`, { method: 'POST' });
+async function apiAction(
+  client: SurgeApiClient,
+  method: string,
+  path: string,
+): Promise<boolean> {
+  const result = await apiFetch(client, path, { method });
   return result.ok;
+}
+
+export async function pauseDownload(client: SurgeApiClient, id: string): Promise<boolean> {
+  return apiAction(client, 'POST', `/pause?id=${encodeURIComponent(id)}`);
 }
 
 export async function resumeDownload(client: SurgeApiClient, id: string): Promise<boolean> {
-  const result = await apiFetch(client, `/resume?id=${encodeURIComponent(id)}`, { method: 'POST' });
-  return result.ok;
+  return apiAction(client, 'POST', `/resume?id=${encodeURIComponent(id)}`);
 }
 
 export async function cancelDownload(client: SurgeApiClient, id: string): Promise<boolean> {
-  const result = await apiFetch(client, `/delete?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
-  return result.ok;
+  return apiAction(client, 'DELETE', `/delete?id=${encodeURIComponent(id)}`);
 }
 
 export async function openFile(client: SurgeApiClient, id: string): Promise<boolean> {
-  const result = await apiFetch(client, `/open-file?id=${encodeURIComponent(id)}`, { method: 'POST' });
-  return result.ok;
+  return apiAction(client, 'POST', `/open-file?id=${encodeURIComponent(id)}`);
 }
 
 export async function openFolder(client: SurgeApiClient, id: string): Promise<boolean> {
-  const result = await apiFetch(client, `/open-folder?id=${encodeURIComponent(id)}`, { method: 'POST' });
-  return result.ok;
+  return apiAction(client, 'POST', `/open-folder?id=${encodeURIComponent(id)}`);
 }
 
 export async function validateAuth(client: SurgeApiClient): Promise<{ ok: boolean; status?: number; error?: string }> {

@@ -2,8 +2,8 @@
  * Utility functions for formatting and parsing download data.
  */
 
-const KB = 1 << 10;
-const MB = 1 << 20;
+export const KB = 1 << 10;
+export const MB = 1 << 20;
 
 export function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return '0 B';
@@ -53,4 +53,11 @@ export function extractFilename(url: string): string {
 export function normalizeToken(token: string | undefined): string {
   if (!token) return '';
   return token.replace(/\s+/g, '');
+}
+
+export function normalizeServerUrl(url: string): string {
+  if (!url) return '';
+  url = url.trim();
+  if (url && !/^https?:\/\//i.test(url)) url = 'http://' + url;
+  return url.replace(/\/+$/, '');
 }

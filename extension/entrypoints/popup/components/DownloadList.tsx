@@ -8,15 +8,14 @@ interface Props {
 
 export default function DownloadList(props: Props) {
   const getVisibleDownloads = (): DownloadStatus[] => {
-    const items = [...props.activeDownloads.values()];
     return props.view === 'active'
-      ? items.filter(dl => dl.status !== 'completed')
-      : items;
+      ? props.activeDownloads.filter(dl => dl.status !== 'completed')
+      : props.activeDownloads;
   };
 
   const sortDownloads = (items: DownloadStatus[]): DownloadStatus[] => {
     const statusOrder: Record<string, number> = { downloading: 0, paused: 1, queued: 2, completed: 3, error: 4 };
-    return items.sort((left, right) => {
+    return [...items].sort((left, right) => {
       const orderLeft = statusOrder[left.status] ?? 5;
       const orderRight = statusOrder[right.status] ?? 5;
       if (orderLeft !== orderRight) return orderLeft - orderRight;
@@ -33,17 +32,22 @@ export default function DownloadList(props: Props) {
 
   return (
     <div class="downloads-list" id="downloadsList">
-      {getVisibleDownloads().length === 0 ? (
-        <div class="empty-state" id="emptyState">
-          <div class="empty-icon">&#x1F4E6;</div>
-          <p>{getEmptyMessage().title}</p>
-          <p class="empty-hint">{getEmptyMessage().hint}</p>
-        </div>
-      ) : (
-        sortDownloads(getVisibleDownloads()).map(dl => (
+      {(() => {
+        const visible = sortDownloads(getVisibleDownloads());
+        if (visible.length === 0) {
+          const msg = getEmptyMessage();
+          return (
+            <div class="empty-state" id="emptyState">
+              <div class="empty-icon">&#x1F4E6;</div>
+              <p>{msg.title}</p>
+              <p class="empty-hint">{msg.hint}</p>
+            </div>
+          );
+        }
+        return visible.map(dl => (
           <DownloadItem download={dl} />
-        ))
-      )}
+        ));
+      })()}
     </div>
   );
 }

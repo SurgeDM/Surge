@@ -23,6 +23,12 @@ import './popup.css';
 export default function App() {
   let pollInterval: ReturnType<typeof setInterval> | null = null;
   let healthInterval: ReturnType<typeof setInterval> | null = null;
+  let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function scheduleRefresh(): void {
+    if (refreshDebounceTimer) return;
+    refreshDebounceTimer = setTimeout(() => { refreshDebounceTimer = null; fetchDownloads(false); }, 2000);
+  }
 
   async function loadSettings() {
     try {
@@ -77,7 +83,7 @@ export default function App() {
     if (message.type === 'sseEvent') {
       handleSseEvent(message.event, message.data);
       // Refresh full list periodically after SSE events to ensure consistency
-      setTimeout(() => fetchDownloads(false), 2000);
+      scheduleRefresh();
     }
     if (message.type === 'syncUpdate') {
       if (message.downloads) setActiveDownloads(message.downloads);
@@ -108,6 +114,7 @@ export default function App() {
   onCleanup(() => {
     if (pollInterval) clearInterval(pollInterval);
     if (healthInterval) clearInterval(healthInterval);
+    if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
     browser.runtime.onMessage.removeListener(onMessageListener);
   });
 
