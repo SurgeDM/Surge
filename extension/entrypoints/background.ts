@@ -61,7 +61,7 @@ async function addPendingDuplicate(id: string, data: { url: string; filename: st
   await persistPendingDuplicates();
 }
 
-async function removePendingDuplicate(id: string): Promise<void> {
+async function _removePendingDuplicate(id: string): Promise<void> {
   pendingDuplicates.delete(id);
   await persistPendingDuplicates();
 }
@@ -402,7 +402,7 @@ function handleMessage(message: Record<string, any>): Promise<any> | any {
       return (async () => { const r = await apiFetch(pathMap[message.type], { method: methodMap[message.type] }); return { success: r !== null }; })();
     }
 
-        case 'confirmDuplicate': {
+    case 'confirmDuplicate': {
       return (async () => {
         const pending = pendingDuplicates.get(message.id);
         if (!pending) return { success: false, error: 'Pending download not found' };
@@ -443,7 +443,7 @@ function handleMessage(message: Record<string, any>): Promise<any> | any {
 
 export default defineBackground(() => {
   // Download interception
-  browser.downloads.onCreated.addListener((downloadItem: browser.downloads.DownloadItem) => {
+  browser.downloads.onCreated.addListener((downloadItem: { id: number; url: string; filename?: string; state?: string; startTime?: string }) => {
     if (processedIds.has(downloadItem.id)) return;
     processedIds.add(downloadItem.id);
     setTimeout(() => processedIds.delete(downloadItem.id), 120_000);
@@ -461,12 +461,12 @@ export default defineBackground(() => {
   // Storage changes
   browser.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') return;
-    if (changes[STORAGE_KEYS.SERVER_URL]) { cachedServerUrl = changes[STORAGE_KEYS.SERVER_URL].newValue || ''; lastHealthCheck = 0; }
-    if (changes[STORAGE_KEYS.TOKEN]) cachedAuthToken = normalizeToken(changes[STORAGE_KEYS.TOKEN].newValue) || null;
+    if (changes[STORAGE_KEYS.SERVER_URL]) { cachedServerUrl = (changes[STORAGE_KEYS.SERVER_URL].newValue as string) || ''; lastHealthCheck = 0; }
+    if (changes[STORAGE_KEYS.TOKEN]) cachedAuthToken = normalizeToken(changes[STORAGE_KEYS.TOKEN].newValue as string) || null;
   });
 
   // Header capture
-  const isFF = browser.runtime.getURL('').startsWith('moz-extension:');
+  const isFF = (browser.runtime.getURL as (path?: string) => string)('').startsWith('moz-extension:');
   const extraHeaders = isFF ? ([] as any) : (['extraHeaders'] as any);
   browser.webRequest.onBeforeSendHeaders.addListener(
     (details: any) => captureHeaders(details),
@@ -475,7 +475,7 @@ export default defineBackground(() => {
   );
 
   // Message handler
-  browser.runtime.onMessage.addListener(handleMessage);
+  browser.runtime.onMessage.addListener(handleMessage as Parameters<typeof browser.runtime.onMessage.addListener>[0]);
 
   // Intervals
   _healthCheckTimer = setInterval(async () => {

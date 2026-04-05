@@ -28,10 +28,10 @@ export default function AuthTokenInput() {
 
     setStatus('Validating...');
     try {
-      const saveResult = await browser.runtime.sendMessage({ type: 'setAuthToken', token });
+      const saveResult = await browser.runtime.sendMessage({ type: 'setAuthToken', token }) as { success?: boolean; error?: string };
       if (!saveResult?.success) throw new Error(saveResult?.error || 'Failed to save');
 
-      const result = await browser.runtime.sendMessage({ type: 'validateAuth' });
+      const result = await browser.runtime.sendMessage({ type: 'validateAuth' }) as { ok?: boolean; error?: string };
       if (result?.ok) {
         setStatus('Token valid');
         await browser.runtime.sendMessage({ type: 'setAuthVerified', verified: true });

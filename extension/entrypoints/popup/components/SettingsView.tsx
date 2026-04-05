@@ -37,7 +37,7 @@ export default function SettingsView() {
     try {
       await browser.runtime.sendMessage({ type: 'setAuthToken', token });
       showTokenStatus('Saved');
-      const res = await browser.runtime.sendMessage({ type: 'validateAuth' }).catch(() => null);
+      const res = await browser.runtime.sendMessage({ type: 'validateAuth' }).catch(() => null) as { ok?: boolean } | null;
       setAuthValid(res?.ok ?? false);
       if (res?.ok) {
         await browser.runtime.sendMessage({ type: 'setAuthVerified', verified: true });

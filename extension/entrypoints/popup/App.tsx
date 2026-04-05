@@ -6,6 +6,7 @@ import {
   setActiveDownloads,
   setHistoryDownloads,
   currentView,
+  setCurrentView,
   setInterceptEnabled,
   handleSseEvent,
   setServerUrl,
@@ -17,6 +18,7 @@ import DownloadList from './components/DownloadList';
 import DuplicateModal from './components/DuplicateModal';
 import './popup.css';
 import type { DownloadStatus, HistoryEntry } from './store/types';
+import type { ViewMode } from './store';
 
 export default function App() {
   let pollInterval: ReturnType<typeof setInterval> | null = null;
@@ -30,25 +32,25 @@ export default function App() {
 
   async function loadSettings() {
     try {
-      const res = await browser.runtime.sendMessage({ type: 'getServerUrl' });
+      const res = await browser.runtime.sendMessage({ type: 'getServerUrl' }) as { url?: string };
       if (res?.url !== undefined) setServerUrl(res.url);
 
-      const tokenRes = await browser.runtime.sendMessage({ type: 'getAuthToken' });
+      const tokenRes = await browser.runtime.sendMessage({ type: 'getAuthToken' }) as { token?: string; verified?: boolean };
       if (tokenRes?.token !== undefined) {
         setAuthToken(tokenRes.token);
         if (tokenRes.verified) setAuthValid(true);
       }
 
-      const statusRes = await browser.runtime.sendMessage({ type: 'getStatus' });
+      const statusRes = await browser.runtime.sendMessage({ type: 'getStatus' }) as { enabled?: boolean };
       if (statusRes) setInterceptEnabled(statusRes.enabled !== false);
     } catch { /* ignore */ }
   }
 
   async function fetchDownloads(_full = false) {
     try {
-      const res = await browser.runtime.sendMessage({ type: 'getDownloads' });
+      const res = await browser.runtime.sendMessage({ type: 'getDownloads' }) as { downloads?: DownloadStatus[]; connected?: boolean; authError?: boolean };
       if (res?.downloads) {
-        setServerConnected(res.connected);
+        setServerConnected(res.connected || false);
         setActiveDownloads(res.downloads);
       }
       if (res?.authError) setAuthValid(false);
@@ -63,12 +65,17 @@ export default function App() {
 
   async function fetchHistory() {
     try {
-      const res = await browser.runtime.sendMessage({ type: 'getHistory' });
+      const res = await browser.runtime.sendMessage({ type: 'getHistory' }) as { history?: HistoryEntry[] };
       if (res?.history) {
         setHistoryDownloads(res.history);
       }
     } catch { /* ignore */ }
   }
+
+  const handleViewChange = (view: ViewMode) => {
+    setCurrentView(view);
+    if (view === 'history') void fetchHistory();
+  };
 
   function onMessageListener(message: Record<string, unknown>) {
     if (message.type === 'sseEvent') {
@@ -91,21 +98,21 @@ export default function App() {
     pollInterval = setInterval(() => fetchDownloads(false), 15000);
     healthInterval = setInterval(async () => {
       try {
-        const res = await browser.runtime.sendMessage({ type: 'checkHealth' });
+        const res = await browser.runtime.sendMessage({ type: 'checkHealth' }) as { healthy?: boolean };
         if (res && typeof res.healthy === 'boolean') setServerConnected(res.healthy);
       } catch {
         setServerConnected(false);
       }
     }, 3000);
 
-    browser.runtime.onMessage.addListener(onMessageListener);
+    browser.runtime.onMessage.addListener(onMessageListener as Parameters<typeof browser.runtime.onMessage.addListener>[0]);
   });
 
   onCleanup(() => {
     if (pollInterval) clearInterval(pollInterval);
     if (healthInterval) clearInterval(healthInterval);
     if (refreshDebounceTimer) clearTimeout(refreshDebounceTimer);
-    browser.runtime.onMessage.removeListener(onMessageListener);
+    browser.runtime.onMessage.removeListener(onMessageListener as Parameters<typeof browser.runtime.onMessage.removeListener>[0]);
   });
 
   return (
@@ -121,7 +128,7 @@ export default function App() {
       </header>
 
       <section class="downloads-section">
-        <DownloadList activeDownloads={activeDownloads()} />
+        <DownloadList activeDownloads={activeDownloads()} onViewChange={handleViewChange} />
       </section>
 
       <DuplicateModal />

@@ -5,7 +5,8 @@ export default defineConfig({
   outDir: 'output',
 
   vite: () => ({
-    plugins: [solid()],
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    plugins: [solid()] as any,
   }),
 
   manifest: ({ browser }) => {

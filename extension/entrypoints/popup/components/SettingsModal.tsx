@@ -41,7 +41,7 @@ export default function SettingsModal(props: Props) {
       setTokenStatus('Saved');
       setTimeout(() => setTokenStatus(''), 2000);
       try {
-        const res = await browser.runtime.sendMessage({ type: 'validateAuth' });
+        const res = await browser.runtime.sendMessage({ type: 'validateAuth' }) as { ok?: boolean };
         if (res?.ok) {
           setAuthValid(true);
           await browser.runtime.sendMessage({ type: 'setAuthVerified', verified: true });
