@@ -1,5 +1,5 @@
 import type { DownloadStatus } from '../store/types';
-import { currentView, setCurrentView } from '../store';
+import { currentView, setCurrentView, historyDownloads } from '../store';
 import DownloadItem from './DownloadItem';
 import ViewSwitch from './ViewSwitch';
 import SettingsView from './SettingsView';
@@ -9,10 +9,11 @@ interface Props {
 }
 
 export default function DownloadList(props: Props) {
-  const getVisibleDownloads = (): DownloadStatus[] =>
-    currentView() === 'active'
-      ? props.activeDownloads.filter(dl => dl.status !== 'completed')
-      : props.activeDownloads;
+  const getVisibleDownloads = (): DownloadStatus[] => {
+    const view = currentView();
+    if (view === 'active') return props.activeDownloads.filter(dl => dl.status !== 'completed');
+    return historyDownloads() as DownloadStatus[];
+  };
 
   const sortDownloads = (items: DownloadStatus[]): DownloadStatus[] => {
     const order = { downloading: 0, paused: 1, queued: 2, completed: 3, error: 4 };

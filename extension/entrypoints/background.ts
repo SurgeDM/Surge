@@ -32,8 +32,39 @@ let _healthCheckTimer: ReturnType<typeof setInterval> | null = null;
 let _syncIntervalTimer: ReturnType<typeof setInterval> | null = null;
 let sseAbortController: AbortController | null = null;
 
+const PENDING_DUP_KEY = 'pendingDuplicates';
 const capturedHeaders = new Map<string, { headers: Record<string, string>; timestamp: number }>();
 const pendingDuplicates = new Map<string, { url: string; filename: string; timestamp: number }>();
+
+// ---------------------------------------------------------------------------
+// Persistent pendingDuplicates (survives Chrome MV3 service worker restart)
+// ---------------------------------------------------------------------------
+
+async function persistPendingDuplicates(): Promise<void> {
+  const entries: [string, { url: string; filename: string; timestamp: number }][] = [...pendingDuplicates];
+  await browser.storage.local.set({ [PENDING_DUP_KEY]: entries });
+}
+
+async function rehydratePendingDuplicates(): Promise<void> {
+  try {
+    const result = await browser.storage.local.get(PENDING_DUP_KEY);
+    const entries = result[PENDING_DUP_KEY] as [string, { url: string; filename: string; timestamp: number }][] | undefined;
+    if (entries && Array.isArray(entries)) {
+      for (const [id, data] of entries) pendingDuplicates.set(id, data);
+      updateBadge();
+    }
+  } catch { /* ignore */ }
+}
+
+async function addPendingDuplicate(id: string, data: { url: string; filename: string; timestamp: number }): Promise<void> {
+  pendingDuplicates.set(id, data);
+  await persistPendingDuplicates();
+}
+
+async function removePendingDuplicate(id: string): Promise<void> {
+  pendingDuplicates.delete(id);
+  await persistPendingDuplicates();
+}
 let pendingDuplicateCounter = 0;
 const processedIds = new Set<number>();
 
@@ -231,9 +262,11 @@ async function handleDownloadCreated(downloadItem: { id: number; url: string; fi
     const { filename } = extractPathInfo(downloadItem);
     const displayName = filename || downloadItem.url.split('/').pop() || 'Unknown file';
 
-    pendingDuplicates.set(pendingId, { url: downloadItem.url, filename: displayName, timestamp: Date.now() });
-    for (const [id, data] of pendingDuplicates) { if (Date.now() - data.timestamp > 60_000) pendingDuplicates.delete(id); }
-    updateBadge();
+    await addPendingDuplicate(pendingId, { url: downloadItem.url, filename: displayName, timestamp: Date.now() });
+    for (const [id, data] of pendingDuplicates) {
+      if (Date.now() - data.timestamp > 60_000) { pendingDuplicates.delete(id); }
+    }
+    await persistPendingDuplicates();
 
     try { await browser.action.openPopup(); } catch { /* ignore */ }
     browser.runtime.sendMessage({ type: 'promptDuplicate', id: pendingId, filename: displayName }).catch(() => {});
@@ -364,22 +397,25 @@ function handleMessage(message: Record<string, any>): Promise<any> | any {
       return (async () => { const r = await apiFetch(pathMap[message.type], { method: methodMap[message.type] }); return { success: r !== null }; })();
     }
 
-    case 'confirmDuplicate': {
-      const pending = pendingDuplicates.get(message.id);
-      if (!pending) return Promise.resolve({ success: false, error: 'Pending download not found' });
-      pendingDuplicates.delete(message.id);
-      updateBadge();
-      return sendToSurge(pending.url, pending.filename).then(result => {
+        case 'confirmDuplicate': {
+      return (async () => {
+        const pending = pendingDuplicates.get(message.id);
+        if (!pending) return { success: false, error: 'Pending download not found' };
+        pendingDuplicates.delete(message.id);
+        await persistPendingDuplicates();
+        updateBadge();
+        const result = await sendToSurge(pending.url, pending.filename);
         if (result.success) browser.notifications.create({ type: 'basic', iconUrl: 'icons/icon48.png', title: 'Surge', message: `Download started: ${pending.filename}` });
         if (pendingDuplicates.size > 0) {
           const [nid, nd] = pendingDuplicates.entries().next().value!;
           browser.runtime.sendMessage({ type: 'promptDuplicate', id: nid, filename: nd.filename }).catch(() => {});
         }
         return { success: result.success };
-      });
+      })();
     }
     case 'skipDuplicate': {
       pendingDuplicates.delete(message.id);
+      persistPendingDuplicates();
       updateBadge();
       if (pendingDuplicates.size > 0) {
         const [nid, nd] = pendingDuplicates.entries().next().value!;
@@ -445,6 +481,7 @@ export default defineBackground(() => {
 
   _syncIntervalTimer = setInterval(() => { fullSync().catch(() => {}); }, SYNC_INTERVAL_MS);
 
-  // Initial health check
+  // Initial health check + rehydrate persisted state
+  rehydratePendingDuplicates().catch(() => {});
   checkHealthSilent().catch(() => {});
 });

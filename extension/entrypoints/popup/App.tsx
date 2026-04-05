@@ -5,6 +5,7 @@ import {
   activeDownloads,
   setActiveDownloads,
   setHistoryDownloads,
+  currentView,
   setInterceptEnabled,
   handleSseEvent,
   setServerUrl,
@@ -15,6 +16,7 @@ import StatusBadge from './components/StatusBadge';
 import DownloadList from './components/DownloadList';
 import DuplicateModal from './components/DuplicateModal';
 import './popup.css';
+import type { DownloadStatus, HistoryEntry } from './store/types';
 
 export default function App() {
   let pollInterval: ReturnType<typeof setInterval> | null = null;
@@ -51,7 +53,7 @@ export default function App() {
       }
       if (res?.authError) setAuthValid(false);
 
-      if (res?.connected) {
+      if (res?.connected && currentView() === 'history') {
         await fetchHistory();
       }
     } catch {
@@ -70,15 +72,15 @@ export default function App() {
 
   function onMessageListener(message: Record<string, unknown>) {
     if (message.type === 'sseEvent') {
-      handleSseEvent(message.event, message.data);
+      handleSseEvent(message.event as string, message.data);
       scheduleRefresh();
     }
     if (message.type === 'syncUpdate') {
-      if (message.downloads) setActiveDownloads(message.downloads);
-      if (message.history) setHistoryDownloads(message.history);
+      if (Array.isArray(message.downloads)) setActiveDownloads(message.downloads as DownloadStatus[]);
+      if (Array.isArray(message.history)) setHistoryDownloads(message.history as HistoryEntry[]);
     }
     if (message.type === 'serverStatus') {
-      setServerConnected(message.connected);
+      if (typeof message.connected === 'boolean') setServerConnected(message.connected);
     }
   }
 
