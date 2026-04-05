@@ -7,6 +7,9 @@ import {
   setHistoryDownloads,
   setInterceptEnabled,
   handleSseEvent,
+  setServerUrl,
+  setAuthToken,
+  setAuthValid,
 } from './store';
 import StatusBadge from './components/StatusBadge';
 import DownloadList from './components/DownloadList';
