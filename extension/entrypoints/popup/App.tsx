@@ -1,4 +1,4 @@
-import { createSignal, onMount, onCleanup } from 'solid-js';
+import { onMount, onCleanup } from 'solid-js';
 import {
   serverConnected,
   setServerConnected,
