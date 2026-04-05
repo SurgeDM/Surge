@@ -1,0 +1,24 @@
+{
+  "name": "surge-extension",
+  "description": "Surge Download Manager browser extension",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "solid-js": "^1.9.7"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "wxt": "^0.19.29",
+    "vite-plugin-solid": "^2.11.8"
+  }
+}
