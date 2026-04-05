@@ -62,7 +62,7 @@ const [authValid, setAuthValid] = createSignal(false);
 export { authValid, setAuthValid };
 
 // --- View ---
-export type ViewMode = 'active' | 'history';
+export type ViewMode = 'active' | 'history' | 'settings';
 const [currentView, setCurrentView] = createSignal<ViewMode>('active');
 export { currentView, setCurrentView };
 

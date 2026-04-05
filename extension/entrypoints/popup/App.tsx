@@ -4,7 +4,6 @@ import {
   setServerConnected,
   activeDownloads,
   setActiveDownloads,
-  currentView,
   setHistoryDownloads,
   setInterceptEnabled,
   handleSseEvent,
@@ -12,11 +11,9 @@ import {
 import StatusBadge from './components/StatusBadge';
 import DownloadList from './components/DownloadList';
 import DuplicateModal from './components/DuplicateModal';
-import SettingsModal from './components/SettingsModal';
 import './popup.css';
 
 export default function App() {
-  const [showSettings, setShowSettings] = createSignal(false);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
   let healthInterval: ReturnType<typeof setInterval> | null = null;
   let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -51,7 +48,7 @@ export default function App() {
       }
       if (res?.authError) setAuthValid(false);
 
-      if (currentView() === 'history' && res?.connected) {
+      if (res?.connected) {
         await fetchHistory();
       }
     } catch {
@@ -71,7 +68,6 @@ export default function App() {
   function onMessageListener(message: Record<string, unknown>) {
     if (message.type === 'sseEvent') {
       handleSseEvent(message.event, message.data);
-      // Refresh full list periodically after SSE events to ensure consistency
       scheduleRefresh();
     }
     if (message.type === 'syncUpdate') {
@@ -116,9 +112,6 @@ export default function App() {
         </div>
         <div class="header-right">
           <StatusBadge connected={serverConnected()} />
-          <button class="settings-btn" onClick={() => setShowSettings(true)} title="Settings">
-            &#x2699;
-          </button>
         </div>
       </header>
 
@@ -127,7 +120,6 @@ export default function App() {
       </section>
 
       <DuplicateModal />
-      <SettingsModal isOpen={showSettings} onClose={() => setShowSettings(false)} />
     </div>
   );
 }
