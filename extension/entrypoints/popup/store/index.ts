@@ -18,7 +18,7 @@ import type {
   DownloadRemovedMsg,
 } from './types';
 
-// --- Active downloads (array of DownloadStatus) ---
+// Active downloads: updated via SSE events and periodic polling.
 const [activeDownloads, setActiveDownloads] = createSignal<DownloadStatus[]>([]);
 export { activeDownloads, setActiveDownloads };
 
@@ -38,35 +38,35 @@ export function removeActiveDownload(id: string): void {
   setActiveDownloads(prev => prev.filter(d => d.id !== id));
 }
 
-// --- History ---
+// History downloads: capped to 100 entries by background handler.
 const [historyDownloads, setHistoryDownloads] = createSignal<HistoryEntry[]>([]);
 export { historyDownloads, setHistoryDownloads };
 
-// --- Connection status ---
+// Server connection state
 const [serverConnected, setServerConnected] = createSignal(false);
 export { serverConnected, setServerConnected };
 
-// --- Intercept toggle ---
+// Browser download interception state
 const [interceptEnabled, setInterceptEnabled] = createSignal(true);
 export { interceptEnabled, setInterceptEnabled };
 
-// --- Settings ---
+// Surge server URL for API requests
 const [serverUrl, setServerUrl] = createSignal('');
 export { serverUrl, setServerUrl };
 
 const [authToken, setAuthToken] = createSignal('');
 export { authToken, setAuthToken };
 
-// --- Auth state ---
+// Derived from token validity, not directly from token presence
 const [authValid, setAuthValid] = createSignal(false);
 export { authValid, setAuthValid };
 
-// --- View ---
+// Current UI view selection
 export type ViewMode = 'active' | 'history' | 'settings';
 const [currentView, setCurrentView] = createSignal<ViewMode>('active');
 export { currentView, setCurrentView };
 
-// --- SSE event handling ---
+// Maps SSE event types to store mutations
 
 export function handleSseEvent(event: string, data: unknown): void {
   switch (event) {

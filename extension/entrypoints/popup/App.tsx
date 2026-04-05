@@ -88,7 +88,7 @@ export default function App() {
     await loadSettings();
     await fetchDownloads();
 
-    pollInterval = setInterval(() => fetchDownloads(false), 1000);
+    pollInterval = setInterval(() => fetchDownloads(false), 15000);
     healthInterval = setInterval(async () => {
       try {
         const res = await browser.runtime.sendMessage({ type: 'checkHealth' });

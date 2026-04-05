@@ -87,7 +87,12 @@ async function storageSet(key: string, value: string | boolean): Promise<void> {
 
 async function getBaseUrl(): Promise<string | null> {
   if (cachedServerUrl) {
-    return isConnected ? cachedServerUrl : null;
+    try {
+      const resp = await fetch(`${cachedServerUrl}/health`, { signal: AbortSignal.timeout(300) });
+      if (resp.ok) { isConnected = true; return cachedServerUrl; }
+    } catch { /* fall through */ }
+    isConnected = false;
+    return null;
   }
   if (cachedPort) {
     try {

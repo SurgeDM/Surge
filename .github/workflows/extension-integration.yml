@@ -134,7 +134,7 @@ jobs:
           cleanup_http() {
             kill $PYTHON_HTTP_PID 2>/dev/null || true
           }
-          trap cleanup_http EXIT
+          trap 'cleanup; cleanup_http' EXIT
           echo "test-download-content" > /tmp/surge-test-file.txt
           python3 -m http.server 18000 --directory /tmp &
           PYTHON_HTTP_PID=$!
@@ -164,10 +164,13 @@ jobs:
 
           # 7. Test download status query (GET /download?id=...)
           echo "--- Testing download status endpoint ---"
-          STATUS_RESULT=$(curl -sf -s \
+          STATUS_RESULT=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer test-integration-token" \
             "http://127.0.0.1:1700/download?id=nonexistent")
-          # Should return 404 for nonexistent ID
+          if [ "$STATUS_RESULT" != "404" ]; then
+            echo "FAIL: Expected 404 for nonexistent ID, got $STATUS_RESULT"
+            exit 1
+          fi
           echo "PASS: download status endpoint"
 
           # 8. Test validation: invalid JSON
