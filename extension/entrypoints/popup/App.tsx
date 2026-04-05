@@ -5,7 +5,6 @@ import {
   activeDownloads,
   setActiveDownloads,
   currentView,
-  setCurrentView,
   setHistoryDownloads,
   setInterceptEnabled,
   handleSseEvent,
@@ -14,6 +13,7 @@ import StatusBadge from './components/StatusBadge';
 import DownloadList from './components/DownloadList';
 import DuplicateModal from './components/DuplicateModal';
 import SettingsModal from './components/SettingsModal';
+import './popup.css';
 
 export default function App() {
   const [showSettings, setShowSettings] = createSignal(false);
@@ -66,13 +66,6 @@ export default function App() {
         setHistoryDownloads(res.history);
       }
     } catch { /* ignore */ }
-  }
-
-  function handleViewChange(view: ViewMode) {
-    setCurrentView(view);
-    if (view === 'history') {
-      fetchHistory();
-    }
   }
 
   function onMessageListener(message: Record<string, unknown>) {
@@ -130,10 +123,7 @@ export default function App() {
       </header>
 
       <section class="downloads-section">
-        <DownloadList
-          view={currentView()}
-          activeDownloads={activeDownloads()}
-        />
+        <DownloadList activeDownloads={activeDownloads()} />
       </section>
 
       <DuplicateModal />

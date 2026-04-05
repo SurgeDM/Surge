@@ -1,7 +1,8 @@
 import { createSignal, onMount, onCleanup } from 'solid-js';
 import {
+  serverUrl, setServerUrl,
   authToken, setAuthToken,
-  authValid, setAuthValid,
+  setAuthValid,
   interceptEnabled, setInterceptEnabled,
 } from '../store';
 import { normalizeToken, normalizeServerUrl } from '../lib/utils';

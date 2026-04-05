@@ -28,7 +28,9 @@ let cachedServerUrl: string | null = null;
 let cachedAuthToken: string | null = null;
 let isConnected = false;
 let lastHealthCheck = 0;
-const sseAbortController: AbortController | null = null;
+let _healthCheckTimer: ReturnType<typeof setInterval> | null = null;
+let _syncIntervalTimer: ReturnType<typeof setInterval> | null = null;
+let sseAbortController: AbortController | null = null;
 
 const capturedHeaders = new Map<string, { headers: Record<string, string>; timestamp: number }>();
 const pendingDuplicates = new Map<string, { url: string; filename: string; timestamp: number }>();
@@ -435,13 +437,13 @@ export default defineBackground(() => {
   browser.runtime.onMessage.addListener(handleMessage);
 
   // Intervals
-  healthCheckTimer = setInterval(async () => {
+  _healthCheckTimer = setInterval(async () => {
     const wasConnected = isConnected;
     await checkHealthSilent();
     if (isConnected && !wasConnected) startSSEStream().catch(() => {});
   }, HEALTH_CHECK_INTERVAL_MS);
 
-  syncIntervalTimer = setInterval(() => { fullSync().catch(() => {}); }, SYNC_INTERVAL_MS);
+  _syncIntervalTimer = setInterval(() => { fullSync().catch(() => {}); }, SYNC_INTERVAL_MS);
 
   // Initial health check
   checkHealthSilent().catch(() => {});
