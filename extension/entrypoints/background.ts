@@ -45,12 +45,18 @@ async function persistPendingDuplicates(): Promise<void> {
   await browser.storage.local.set({ [PENDING_DUP_KEY]: entries });
 }
 
+let pendingDuplicateCounter = 0;
+
 async function rehydratePendingDuplicates(): Promise<void> {
   try {
     const result = await browser.storage.local.get(PENDING_DUP_KEY);
     const entries = result[PENDING_DUP_KEY] as [string, { url: string; filename: string; timestamp: number }][] | undefined;
     if (entries && Array.isArray(entries)) {
       for (const [id, data] of entries) pendingDuplicates.set(id, data);
+      for (const id of pendingDuplicates.keys()) {
+        const num = parseInt(id.replace('dup_', ''), 10);
+        if (!isNaN(num) && num > pendingDuplicateCounter) pendingDuplicateCounter = num;
+      }
       updateBadge();
     }
   } catch { /* ignore */ }
@@ -65,7 +71,6 @@ async function _removePendingDuplicate(id: string): Promise<void> {
   pendingDuplicates.delete(id);
   await persistPendingDuplicates();
 }
-let pendingDuplicateCounter = 0;
 const processedIds = new Set<number>();
 
 // ---------------------------------------------------------------------------

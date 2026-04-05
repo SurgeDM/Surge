@@ -22,8 +22,8 @@ export function formatSpeed(mbps: number): string {
 
 export function formatETA(seconds: number): string {
   if (!seconds || seconds <= 0) return '--:--';
+  if (seconds > 604800) return '> 1 week';
   if (seconds > 86400) return '> 1 day';
-  if (seconds > 3600 * 24 * 7) return '> 1 week';
 
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);

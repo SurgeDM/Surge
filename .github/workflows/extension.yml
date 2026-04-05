@@ -31,6 +31,7 @@ jobs:
           cache: "npm"
           cache-dependency-path: extension/package-lock.json
       - run: npm ci
+      - run: npx wxt prepare
       - run: npm run lint
 
   type-check:
@@ -48,6 +49,7 @@ jobs:
           cache: "npm"
           cache-dependency-path: extension/package-lock.json
       - run: npm ci
+      - run: npx wxt prepare
       - run: npm run check
 
   build:

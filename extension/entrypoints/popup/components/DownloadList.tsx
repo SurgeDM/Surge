@@ -1,4 +1,5 @@
 import type { DownloadStatus } from '../store/types';
+import { createMemo } from 'solid-js';
 import { currentView, setCurrentView, historyDownloads } from '../store';
 import type { ViewMode } from '../store';
 import DownloadItem from './DownloadItem';
@@ -40,7 +41,7 @@ export default function DownloadList(props: Props) {
     return { title: 'No active downloads', hint: 'Downloads will appear here automatically' };
   };
 
-  const items = sortDownloads(getVisibleDownloads());
+  const items = createMemo(() => sortDownloads(getVisibleDownloads()));
 
   return (
     <div class="downloads-list" id="downloadsList">
@@ -50,10 +51,10 @@ export default function DownloadList(props: Props) {
       <div class="downloads-list-content">
         {currentView() === 'settings'
           ? <SettingsView />
-          : items.map(dl => <DownloadItem download={dl} />)
+          : items().map(dl => <DownloadItem download={dl} />)
         }
 
-        {currentView() !== 'settings' && items.length === 0 && (() => {
+        {currentView() !== 'settings' && items().length === 0 && (() => {
           const msg = getEmptyMessage();
           return (
             <div class="empty-state" id="emptyState">
