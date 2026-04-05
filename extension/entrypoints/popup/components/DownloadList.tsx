@@ -1,14 +1,17 @@
+import { createSignal } from 'solid-js';
 import type { DownloadStatus } from '../store/types';
 import DownloadItem from './DownloadItem';
+import ViewSwitch from './ViewSwitch';
 
 interface Props {
-  view: 'active' | 'history';
   activeDownloads: DownloadStatus[];
 }
 
 export default function DownloadList(props: Props) {
+  const [view, setView] = createSignal<'active' | 'history'>('active');
+
   const getVisibleDownloads = (): DownloadStatus[] => {
-    return props.view === 'active'
+    return view() === 'active'
       ? props.activeDownloads.filter(dl => dl.status !== 'completed')
       : props.activeDownloads;
   };
@@ -24,7 +27,7 @@ export default function DownloadList(props: Props) {
   };
 
   const getEmptyMessage = (): { title: string; hint: string } => {
-    if (props.view === 'history') {
+    if (view() === 'history') {
       return { title: 'No history downloads', hint: 'Completed downloads will appear here' };
     }
     return { title: 'No active downloads', hint: 'Downloads will appear here automatically' };
@@ -32,6 +35,9 @@ export default function DownloadList(props: Props) {
 
   return (
     <div class="downloads-list" id="downloadsList">
+      <div class="downloads-list-header">
+        <ViewSwitch currentView={view()} onChange={setView} />
+      </div>
       {(() => {
         const visible = sortDownloads(getVisibleDownloads());
         if (visible.length === 0) {

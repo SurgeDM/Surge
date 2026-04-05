@@ -17,6 +17,7 @@ export default function DuplicateModal() {
   const handleConfirm = async () => { await closeAndSend('confirmDuplicate'); };
   const handleSkip = async () => { await closeAndSend('skipDuplicate'); };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const onPrompt = (msg: any) => {
     if (msg.type === 'promptDuplicate') {
       setPendingId(msg.id);

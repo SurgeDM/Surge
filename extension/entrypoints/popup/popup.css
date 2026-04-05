@@ -653,7 +653,11 @@ body {
   transition: color 0.2s ease;
 }
 
-.toggle-slider {
+.toggle-row:hover {
+  color: var(--accent-primary);
+}
+
+.toggle {
   position: relative;
   width: 44px;
   height: 24px;
