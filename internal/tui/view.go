@@ -238,13 +238,21 @@ func (m RootModel) View() tea.View {
 	}
 
 	if m.state == HelpModalState {
+		modalW := 70
+		if m.width < modalW {
+			modalW = m.width
+		}
+		modalH := 22
+		if m.height < modalH {
+			modalH = m.height
+		}
 		modal := components.HelpModal{
 			Title:       "Keyboard Shortcuts",
 			HelpKeys:    m.keys.Dashboard,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
-			Width:       70,
-			Height:      22,
+			Width:       modalW,
+			Height:      modalH,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
