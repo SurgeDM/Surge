@@ -51,7 +51,7 @@ export default function SettingsView() {
   };
 
   return (
-    <div class="settings-view-content">
+    <div>
       <div class="settings-group">
         <div class="toggle-row">
           <span>Intercept Downloads</span>

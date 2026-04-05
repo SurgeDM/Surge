@@ -1,4 +1,3 @@
-import { createSignal } from 'solid-js';
 import type { DownloadStatus } from '../store/types';
 import { currentView, setCurrentView } from '../store';
 import DownloadItem from './DownloadItem';
@@ -35,12 +34,13 @@ export default function DownloadList(props: Props) {
       <div class="downloads-list-header">
         <ViewSwitch currentView={currentView()} onChange={setCurrentView} />
       </div>
+      <div class="downloads-list-content">
+        {currentView() === 'settings'
+          ? <SettingsView />
+          : sortDownloads(getVisibleDownloads()).map(dl => <DownloadItem download={dl} />)
+        }
 
-      {currentView() === 'settings' && <SettingsView />}
-
-      {currentView() !== 'settings' && (() => {
-        const visible = sortDownloads(getVisibleDownloads());
-        if (visible.length === 0) {
+        {currentView() !== 'settings' && sortDownloads(getVisibleDownloads()).length === 0 && (() => {
           const msg = getEmptyMessage();
           return (
             <div class="empty-state" id="emptyState">
@@ -49,9 +49,8 @@ export default function DownloadList(props: Props) {
               <p class="empty-hint">{msg.hint}</p>
             </div>
           );
-        }
-        return visible.map(dl => <DownloadItem download={dl} />);
-      })()}
+        })()}
+      </div>
     </div>
   );
 }
