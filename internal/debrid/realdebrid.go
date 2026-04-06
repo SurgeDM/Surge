@@ -12,9 +12,11 @@ import (
 
 // Client is a Real-Debrid API client.
 type Client struct {
-	apiKey     string
-	httpClient *http.Client
-	baseURL    string
+	apiKey      string
+	httpClient  *http.Client
+	baseURL     string
+	cachedHosts []string
+	hostsCached time.Time
 }
 
 // NewClient creates a new Real-Debrid client with the given API key.
@@ -117,6 +119,21 @@ func (c *Client) SupportedHosts() ([]string, error) {
 	return domains, nil
 }
 
+// supportedHostsCached returns the supported hosts list, caching for 1 hour
+// to avoid making a live HTTP call on every invocation.
+func (c *Client) supportedHostsCached() ([]string, error) {
+	if c.cachedHosts != nil && time.Since(c.hostsCached) < time.Hour {
+		return c.cachedHosts, nil
+	}
+	hosts, err := c.SupportedHosts()
+	if err != nil {
+		return nil, err
+	}
+	c.cachedHosts = hosts
+	c.hostsCached = time.Now()
+	return hosts, nil
+}
+
 // IsSupported checks if a URL's host is supported by Real-Debrid.
 func (c *Client) IsSupported(rawURL string) bool {
 	parsed, err := url.Parse(rawURL)
@@ -125,7 +142,7 @@ func (c *Client) IsSupported(rawURL string) bool {
 	}
 	host := strings.ToLower(parsed.Hostname())
 
-	hosts, err := c.SupportedHosts()
+	hosts, err := c.supportedHostsCached()
 	if err != nil {
 		return false
 	}
