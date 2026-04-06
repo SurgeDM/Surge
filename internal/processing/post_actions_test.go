@@ -24,9 +24,9 @@ func TestExpandTemplate(t *testing.T) {
 		template string
 		want     string
 	}{
-		{"filename", "echo {filename}", "echo test.zip"},
-		{"filepath", "mv {filepath} /done/", "mv /downloads/test.zip /done/"},
-		{"all vars", "{id}: {filename} ({size} bytes, {speed} B/s, {duration})", "abc123: test.zip (1048576 bytes, 524288.00 B/s, 2s)"},
+		{"filename", "echo {filename}", "echo 'test.zip'"},
+		{"filepath", "mv {filepath} /done/", "mv '/downloads/test.zip' /done/"},
+		{"all vars", "{id}: {filename} ({size} bytes, {speed} B/s, {duration})", "'abc123': 'test.zip' (1048576 bytes, 524288.00 B/s, 2s)"},
 		{"no vars", "echo done", "echo done"},
 		{"empty", "", ""},
 	}
@@ -43,7 +43,7 @@ func TestRunPostActions_EmptyCommand(t *testing.T) {
 	// Should not panic or error with empty commands
 	RunPostActions(config.PostDownloadActions{}, PostActionContext{
 		Filename: "test.zip",
-	})
+	}, false)
 }
 
 func TestRunPostActions_ValidCommand(t *testing.T) {
@@ -51,7 +51,7 @@ func TestRunPostActions_ValidCommand(t *testing.T) {
 		OnCompleteCommand: "echo {filename}",
 	}, PostActionContext{
 		Filename: "test.zip",
-	})
+	}, false)
 }
 
 func TestRunPostActions_ErrorPath(t *testing.T) {
@@ -60,5 +60,5 @@ func TestRunPostActions_ErrorPath(t *testing.T) {
 	}, PostActionContext{
 		Filename: "test.zip",
 		Error:    "connection reset",
-	})
+	}, true)
 }

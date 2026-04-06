@@ -291,14 +291,16 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 			if settings != nil {
 				// Run post-download actions
-				go RunPostActions(settings.General.PostDownload, PostActionContext{
-					Filename: filename,
-					FilePath: destPath,
-					Size:     m.Total,
-					Speed:    avgSpeed,
-					Duration: m.Elapsed,
-					ID:       m.DownloadID,
-				})
+go RunPostActions(settings.General.PostDownload, PostActionContext{
+						Filename: filename,
+						FilePath: destPath,
+						Size:     m.Total,
+						Speed:    avgSpeed,
+						Duration: m.Elapsed,
+						ID:       m.DownloadID,
+						Error:    "",
+					}, false)
+
 			}
 
 		case events.DownloadErrorMsg:
@@ -339,12 +341,12 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				if m.Err != nil {
 					errMsg = m.Err.Error()
 				}
-				go RunPostActions(settings.General.PostDownload, PostActionContext{
+go RunPostActions(settings.General.PostDownload, PostActionContext{
 					Filename: filename,
 					FilePath: m.DestPath,
 					ID:       m.DownloadID,
 					Error:    errMsg,
-				})
+				}, true)
 			}
 
 		case events.DownloadRemovedMsg:

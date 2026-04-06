@@ -50,10 +50,12 @@ func expandTemplate(template string, ctx PostActionContext) string {
 // RunPostActions runs configured post-download actions.
 // Errors are logged but never propagated to prevent post-action failures from
 // corrupting the download lifecycle.
-func RunPostActions(settings config.PostDownloadActions, ctx PostActionContext) {
-	cmd := settings.OnCompleteCommand
-	if ctx.Error != "" {
+func RunPostActions(settings config.PostDownloadActions, ctx PostActionContext, isError bool) {
+	var cmd string
+	if isError {
 		cmd = settings.OnErrorCommand
+	} else {
+		cmd = settings.OnCompleteCommand
 	}
 	if cmd == "" {
 		return
