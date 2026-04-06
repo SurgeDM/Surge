@@ -74,6 +74,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
+		if m.state == SettingsState {
+			m.normalizeSettingsSelection()
+			if m.SettingsIsEditing {
+				m.updateSettingsInputWidthForViewport()
+			}
+		}
+
 		// Calculate list dimensions
 		// List goes in bottom-left pane — use full width; View() handles the actual box sizing
 		availableWidth := msg.Width - 4

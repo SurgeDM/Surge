@@ -20,21 +20,7 @@ func (m RootModel) viewSettings() string {
 		return ""
 	}
 
-	// Larger, more spacious modal size (responsive to terminal width)
-	width := int(float64(m.width) * 0.65) // 65% of terminal width
-	if width < 90 {
-		width = 90
-	}
-	if width > 120 {
-		width = 120
-	}
-	height := 24
-	if m.width < width+4 {
-		width = m.width - 4
-	}
-	if m.height < height+4 {
-		height = m.height - 4
-	}
+	width, height := settingsModalDimensions(m.width, m.height)
 	if width < 40 || height < 10 {
 		content := lipgloss.NewStyle().
 			Padding(1, 2).
@@ -44,80 +30,353 @@ func (m RootModel) viewSettings() string {
 		return m.renderModalWithOverlay(box)
 	}
 
-	// Get category metadata
 	categories := config.CategoryOrder()
+	if len(categories) == 0 {
+		content := lipgloss.NewStyle().
+			Padding(1, 2).
+			Foreground(colors.LightGray).
+			Render("No settings categories available")
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.NeonPurple)
+		return m.renderModalWithOverlay(box)
+	}
+
 	metadata := config.GetSettingsMetadata()
-
-	// Safety: Ensure active tab is within bounds (handling reduced category count)
-	if m.SettingsActiveTab >= len(categories) {
-		m.SettingsActiveTab = len(categories) - 1
+	activeTab := m.SettingsActiveTab
+	if activeTab < 0 {
+		activeTab = 0
 	}
-	if m.SettingsActiveTab < 0 {
-		m.SettingsActiveTab = 0
+	if activeTab >= len(categories) {
+		activeTab = len(categories) - 1
 	}
 
-	// === TAB BAR ===
-	var tabs []components.Tab
-	for _, cat := range categories {
-		tabs = append(tabs, components.Tab{Label: cat, Count: -1})
-	}
-	// Purple theme for settings tabs
-	settingsActiveTab := lipgloss.NewStyle().Foreground(colors.NeonPurple)
-	tabBar := components.RenderNumberedTabBar(tabs, m.SettingsActiveTab, settingsActiveTab, TabStyle)
-
-	// === CONTENT AREA ===
-	currentCategory := categories[m.SettingsActiveTab]
+	currentCategory := categories[activeTab]
 	settingsMeta := metadata[currentCategory]
+	if len(settingsMeta) == 0 {
+		content := lipgloss.NewStyle().
+			Padding(1, 2).
+			Foreground(colors.LightGray).
+			Render("No settings available in this category")
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.NeonPurple)
+		return m.renderModalWithOverlay(box)
+	}
 
-	// Get current settings values
+	selectedRow := m.SettingsSelectedRow
+	if selectedRow < 0 {
+		selectedRow = 0
+	}
+	if selectedRow >= len(settingsMeta) {
+		selectedRow = len(settingsMeta) - 1
+	}
+
 	settingsValues := m.getSettingsValues(currentCategory)
+	tabBar := m.renderSettingsTabBar(categories, activeTab, width-6)
+	helpText := m.renderSettingsHelp(width - 6)
 
-	// Calculate column widths - give left panel more room
-	leftWidth := 32
-	minRightWidth := 16
-	if width-leftWidth-8 < minRightWidth {
-		leftWidth = width - minRightWidth - 8
-	}
-	if leftWidth < 12 {
-		leftWidth = 12
-	}
-	rightWidth := width - leftWidth - 8
-	if rightWidth < minRightWidth {
-		rightWidth = minRightWidth
+	innerHeight := height - 2
+	tabBarHeight := lipgloss.Height(tabBar)
+	helpHeight := lipgloss.Height(helpText)
+	bodyHeight := innerHeight - tabBarHeight - helpHeight - 2 // one line gap above body and help
+	if bodyHeight < 3 {
+		bodyHeight = 3
 	}
 
-	// === LEFT COLUMN: Settings List (names only) ===
-	var listLines []string
-	for i, meta := range settingsMeta {
-		line := meta.Label
+	var content string
+	if width >= 72 && bodyHeight >= 8 {
+		content = m.renderSettingsTwoColumn(settingsMeta, selectedRow, settingsValues, width, bodyHeight)
+	} else {
+		content = m.renderSettingsCompact(settingsMeta, selectedRow, settingsValues, width, bodyHeight)
+	}
 
-		// Highlight selected row with better visual treatment
-		if i == m.SettingsSelectedRow {
-			style := lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
-			cursor := "▸ "
+	contentHeight := lipgloss.Height(content)
+	usedHeight := tabBarHeight + 1 + contentHeight + 1 + helpHeight
+	paddingLines := innerHeight - usedHeight
+	if paddingLines < 0 {
+		paddingLines = 0
+	}
+	padding := strings.Repeat("\n", paddingLines)
 
-			if meta.Key == "max_global_connections" {
-				style = lipgloss.NewStyle().Foreground(colors.Gray)
-				cursor = "# "
+	fullContent := lipgloss.JoinVertical(lipgloss.Left,
+		tabBar,
+		"",
+		content,
+		padding,
+		helpText,
+	)
+
+	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, colors.NeonPurple)
+	return m.renderModalWithOverlay(box)
+}
+
+func settingsModalDimensions(termWidth, termHeight int) (int, int) {
+	width := int(float64(termWidth) * 0.68)
+	if width < 64 {
+		width = 64
+	}
+	if width > 120 {
+		width = 120
+	}
+	height := 24
+
+	maxWidth := termWidth - 4
+	if maxWidth < 1 {
+		maxWidth = 1
+	}
+	maxHeight := termHeight - 4
+	if maxHeight < 1 {
+		maxHeight = 1
+	}
+
+	if width > maxWidth {
+		width = maxWidth
+	}
+	if height > maxHeight {
+		height = maxHeight
+	}
+
+	return width, height
+}
+
+func shortSettingsCategoryLabel(label string) string {
+	switch label {
+	case "General":
+		return "Gen"
+	case "Network":
+		return "Net"
+	case "Performance":
+		return "Perf"
+	case "Categories":
+		return "Cats"
+	default:
+		return label
+	}
+}
+
+func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxWidth int) string {
+	if maxWidth < 1 {
+		maxWidth = 1
+	}
+
+	makeTabs := func(useShort bool) []components.Tab {
+		tabs := make([]components.Tab, 0, len(categories))
+		for _, cat := range categories {
+			label := cat
+			if useShort {
+				label = shortSettingsCategoryLabel(cat)
 			}
+			tabs = append(tabs, components.Tab{Label: label, Count: -1})
+		}
+		return tabs
+	}
 
-			line = style.Render(cursor + line)
-		} else {
-			style := lipgloss.NewStyle().Foreground(colors.LightGray)
+	settingsActiveTab := lipgloss.NewStyle().Foreground(colors.NeonPurple)
+	tryBars := []string{
+		components.RenderNumberedTabBar(makeTabs(false), activeTab, settingsActiveTab, TabStyle),
+		components.RenderTabBar(makeTabs(false), activeTab, settingsActiveTab, TabStyle),
+		components.RenderTabBar(makeTabs(true), activeTab, settingsActiveTab, TabStyle),
+	}
 
-			if meta.Key == "max_global_connections" {
-				style = lipgloss.NewStyle().Foreground(colors.ThemeColor("#aaaaaa", "238")) // Darker gray
-			}
+	for _, candidate := range tryBars {
+		if lipgloss.Width(candidate) <= maxWidth {
+			return lipgloss.NewStyle().Width(maxWidth).Align(lipgloss.Center).Render(candidate)
+		}
+	}
 
-			line = style.Render("  " + line)
+	fallback := fmt.Sprintf("[%d/%d] %s", activeTab+1, len(categories), categories[activeTab])
+	return lipgloss.NewStyle().
+		Foreground(colors.Gray).
+		Width(maxWidth).
+		Align(lipgloss.Center).
+		Render(fallback)
+}
+
+func (m RootModel) renderSettingsHelp(width int) string {
+	if width < 1 {
+		width = 1
+	}
+
+	helpText := m.help.View(m.keys.Settings)
+	if width < 60 {
+		helpText = "esc: save/close  tab: next tab  enter: edit"
+	}
+	if width < 40 {
+		helpText = "esc close | enter edit"
+	}
+
+	return lipgloss.NewStyle().
+		Foreground(colors.Gray).
+		Width(width).
+		Align(lipgloss.Center).
+		Render(helpText)
+}
+
+func formatSettingsBlock(content string, width, rows int) string {
+	if width < 1 {
+		width = 1
+	}
+	if rows < 1 {
+		rows = 1
+	}
+
+	lines := strings.Split(content, "\n")
+	if len(lines) > rows {
+		lines = lines[:rows]
+	}
+	for len(lines) < rows {
+		lines = append(lines, "")
+	}
+
+	for i := range lines {
+		lines[i] = lipgloss.NewStyle().Width(width).MaxWidth(width).Render(lines[i])
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func renderSettingsListViewport(settingsMeta []config.SettingMeta, selectedRow, rows, innerWidth int) string {
+	if rows < 1 {
+		rows = 1
+	}
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+
+	if len(settingsMeta) == 0 {
+		return formatSettingsBlock("(No settings)", innerWidth, rows)
+	}
+
+	if selectedRow < 0 {
+		selectedRow = 0
+	}
+	if selectedRow >= len(settingsMeta) {
+		selectedRow = len(settingsMeta) - 1
+	}
+
+	start := 0
+	if selectedRow >= rows {
+		start = selectedRow - rows + 1
+	}
+	maxStart := len(settingsMeta) - rows
+	if maxStart < 0 {
+		maxStart = 0
+	}
+	if start > maxStart {
+		start = maxStart
+	}
+
+	lines := make([]string, 0, rows)
+	for i := 0; i < rows; i++ {
+		idx := start + i
+		if idx >= len(settingsMeta) {
+			lines = append(lines, "")
+			continue
 		}
 
-		listLines = append(listLines, line)
+		meta := settingsMeta[idx]
+		prefix := "  "
+		style := lipgloss.NewStyle().Foreground(colors.LightGray)
+		if idx == selectedRow {
+			prefix = "▸ "
+			style = lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
+		}
+
+		if meta.Key == "max_global_connections" {
+			style = lipgloss.NewStyle().Foreground(colors.ThemeColor("#aaaaaa", "238"))
+			if idx == selectedRow {
+				prefix = "# "
+				style = lipgloss.NewStyle().Foreground(colors.Gray)
+			}
+		}
+
+		lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+meta.Label))
 	}
 
-	listContent := lipgloss.JoinVertical(lipgloss.Left, listLines...)
+	return strings.Join(lines, "\n")
+}
 
-	// Wrap list in a bordered box with better padding
+func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, innerWidth, rows int) string {
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	if rows < 1 {
+		rows = 1
+	}
+	if len(settingsMeta) == 0 || selectedRow < 0 || selectedRow >= len(settingsMeta) {
+		return formatSettingsBlock("No setting selected", innerWidth, rows)
+	}
+
+	meta := settingsMeta[selectedRow]
+	value := settingsValues[meta.Key]
+	unit := m.getSettingUnit()
+	unitStyle := lipgloss.NewStyle().Foreground(colors.Gray)
+
+	var valueStr string
+	if m.SettingsIsEditing {
+		valueStr = m.SettingsInput.View() + unitStyle.Render(unit)
+	} else {
+		valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key) + unitStyle.Render(unit)
+		if meta.Key == "max_global_connections" {
+			valueStr += " (Ignored)"
+		}
+	}
+
+	valueLabel := "Value: "
+	if meta.Key == "default_download_dir" && !m.SettingsIsEditing {
+		valueLabel = "[Tab] Browse: "
+	}
+
+	valueLabelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
+	valueContentStyle := lipgloss.NewStyle().Foreground(colors.White)
+	valueDisplay := valueLabelStyle.Render(valueLabel) + valueContentStyle.Render(valueStr)
+	valueDisplay = lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(valueDisplay)
+
+	divider := lipgloss.NewStyle().
+		Foreground(colors.Gray).
+		Render(strings.Repeat("─", innerWidth))
+
+	descDisplay := lipgloss.NewStyle().
+		Foreground(colors.LightGray).
+		Width(innerWidth).
+		MaxWidth(innerWidth).
+		Render(meta.Description)
+
+	detail := lipgloss.JoinVertical(lipgloss.Left,
+		valueDisplay,
+		"",
+		divider,
+		"",
+		descDisplay,
+	)
+
+	return formatSettingsBlock(detail, innerWidth, rows)
+}
+
+func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
+	leftWidth := 32
+	minRightWidth := 22
+	if modalWidth-leftWidth-8 < minRightWidth {
+		leftWidth = modalWidth - minRightWidth - 8
+	}
+	if leftWidth < 16 {
+		leftWidth = 16
+	}
+
+	rightWidth := modalWidth - leftWidth - 8
+	if rightWidth < minRightWidth {
+		rightWidth = minRightWidth
+		if modalWidth-rightWidth-8 > 16 {
+			leftWidth = modalWidth - rightWidth - 8
+		}
+	}
+
+	if leftWidth < 12 || rightWidth < 14 {
+		return m.renderSettingsCompact(settingsMeta, selectedRow, settingsValues, modalWidth, bodyHeight)
+	}
+
+	listRows := bodyHeight - 4
+	if listRows < 1 {
+		listRows = 1
+	}
+	listContent := renderSettingsListViewport(settingsMeta, selectedRow, listRows, leftWidth-4)
 	listBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colors.Gray).
@@ -125,122 +384,134 @@ func (m RootModel) viewSettings() string {
 		Padding(1, 1).
 		Render(listContent)
 
-	// === RIGHT COLUMN: Value + Description ===
-	var rightContent string
-	if m.SettingsSelectedRow < len(settingsMeta) {
-		meta := settingsMeta[m.SettingsSelectedRow]
-		value := settingsValues[meta.Key]
-
-		// Get unit suffix
-		unit := m.getSettingUnit()
-		unitStyle := lipgloss.NewStyle().Foreground(colors.Gray)
-
-		// Format value
-		var valueStr string
-		if m.SettingsIsEditing {
-			// Show input with unit suffix (non-deletable)
-			valueStr = m.SettingsInput.View() + unitStyle.Render(unit)
-		} else {
-			// Show formatted value with unit
-			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key) + unitStyle.Render(unit)
-
-			if meta.Key == "max_global_connections" {
-				valueStr += " (Ignored)"
-			}
-		}
-
-		// Show Tab hint for directory settings
-		valueLabel := "Value: "
-		if meta.Key == "default_download_dir" && !m.SettingsIsEditing {
-			valueLabel = "[Tab] Browse: "
-		}
-
-		// Value section with better styling
-		valueLabelStyle := lipgloss.NewStyle().
-			Foreground(colors.NeonCyan).
-			Bold(true)
-		valueContentStyle := lipgloss.NewStyle().
-			Foreground(colors.White)
-
-		valueDisplay := valueLabelStyle.Render(valueLabel) + valueContentStyle.Render(valueStr)
-
-		// Subtle divider between value and description
-		dividerWidth := rightWidth - 4
-		if dividerWidth < 1 {
-			dividerWidth = 1
-		}
-		divider := lipgloss.NewStyle().
-			Foreground(colors.Gray).
-			Render(strings.Repeat("─", dividerWidth))
-
-		// Description with better formatting
-		descDisplay := lipgloss.NewStyle().
-			Foreground(colors.LightGray).
-			Width(rightWidth - 4).
-			Render(meta.Description)
-
-		rightContent = lipgloss.JoinVertical(lipgloss.Left,
-			valueDisplay,
-			"",
-			divider,
-			"",
-			descDisplay,
-		)
+	if m.SettingsIsEditing {
+		m.updateSettingsInputWidthForViewport()
 	}
 
+	rightRows := bodyHeight - 2
+	if rightRows < 1 {
+		rightRows = 1
+	}
+	rightContent := m.renderSettingsDetailBlock(settingsMeta, selectedRow, settingsValues, rightWidth-4, rightRows)
 	rightBox := lipgloss.NewStyle().
 		Width(rightWidth).
 		Padding(1, 2).
 		Render(rightContent)
 
-	// === VERTICAL DIVIDER ===
-	// Calculate divider height based on listBox height
-	listBoxHeight := lipgloss.Height(listBox)
-	dividerStyle := lipgloss.NewStyle().
-		Foreground(colors.Gray)
-	if listBoxHeight < 1 {
-		listBoxHeight = 1
+	dividerHeight := max(lipgloss.Height(listBox), lipgloss.Height(rightBox))
+	if dividerHeight < 1 {
+		dividerHeight = 1
 	}
-	divider := dividerStyle.Render(strings.Repeat("│\n", listBoxHeight-1) + "│")
-
-	// === COMBINE COLUMNS ===
-	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
-
-	// === HELP TEXT using Bubbles help ===
-	helpStyle := lipgloss.NewStyle().
+	divider := lipgloss.NewStyle().
 		Foreground(colors.Gray).
-		Width(width - 6).
-		Align(lipgloss.Center)
-	helpText := helpStyle.Render(m.help.View(m.keys.Settings))
+		Render(strings.Repeat("│\n", dividerHeight-1) + "│")
 
-	// Calculate heights for proper spacing
-	tabBarHeight := lipgloss.Height(tabBar)
-	contentHeight := lipgloss.Height(content)
-	helpHeight := lipgloss.Height(helpText)
+	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
+	return formatSettingsBlock(content, modalWidth-2, bodyHeight)
+}
 
-	// innerHeight = height - 2 (top/bottom borders)
-	innerHeight := height - 2
-	// Used space: 1 (empty line) + tabBarHeight + 1 (empty line) + contentHeight + helpHeight
-	usedHeight := 1 + tabBarHeight + 1 + contentHeight + helpHeight
-	// Padding needed to push help to bottom
-	paddingLines := innerHeight - usedHeight
-	if paddingLines < 0 {
-		paddingLines = 0
+func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
+	innerWidth := modalWidth - 2
+	if innerWidth < 1 {
+		innerWidth = 1
 	}
-	padding := strings.Repeat("\n", paddingLines)
 
-	// === FINAL ASSEMBLY ===
-	fullContent := lipgloss.JoinVertical(lipgloss.Left,
-		"",
-		tabBar,
-		"",
-		content,
-		padding+helpText,
+	if m.SettingsIsEditing {
+		m.updateSettingsInputWidthForViewport()
+	}
+
+	listRows := bodyHeight / 2
+	if listRows < 1 {
+		listRows = 1
+	}
+
+	detailRows := bodyHeight - listRows - 1
+	if detailRows < 1 {
+		detailRows = 1
+		listRows = bodyHeight - detailRows
+		if listRows < 1 {
+			listRows = 1
+		}
+	}
+
+	list := renderSettingsListViewport(settingsMeta, selectedRow, listRows, innerWidth)
+	detail := m.renderSettingsDetailBlock(settingsMeta, selectedRow, settingsValues, innerWidth, detailRows)
+	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("─", innerWidth))
+
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		list,
+		divider,
+		detail,
 	)
 
-	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, colors.NeonPurple)
+	return formatSettingsBlock(content, innerWidth, bodyHeight)
+}
 
-	return m.renderModalWithOverlay(box)
+func (m *RootModel) normalizeSettingsSelection() {
+	categories := config.CategoryOrder()
+	if len(categories) == 0 {
+		m.SettingsActiveTab = 0
+		m.SettingsSelectedRow = 0
+		if m.SettingsIsEditing {
+			m.SettingsIsEditing = false
+			m.SettingsInput.Blur()
+		}
+		return
+	}
+
+	if m.SettingsActiveTab < 0 {
+		m.SettingsActiveTab = 0
+	}
+	if m.SettingsActiveTab >= len(categories) {
+		m.SettingsActiveTab = len(categories) - 1
+	}
+
+	settingsMap := config.GetSettingsMetadata()
+	settingsList := settingsMap[categories[m.SettingsActiveTab]]
+	if len(settingsList) == 0 {
+		m.SettingsSelectedRow = 0
+		if m.SettingsIsEditing {
+			m.SettingsIsEditing = false
+			m.SettingsInput.Blur()
+		}
+		return
+	}
+
+	if m.SettingsSelectedRow < 0 {
+		m.SettingsSelectedRow = 0
+	}
+	if m.SettingsSelectedRow >= len(settingsList) {
+		m.SettingsSelectedRow = len(settingsList) - 1
+	}
+}
+
+func (m *RootModel) updateSettingsInputWidthForViewport() {
+	modalWidth, _ := settingsModalDimensions(m.width, m.height)
+
+	targetWidth := 24
+	if modalWidth >= 72 {
+		leftWidth := 32
+		minRightWidth := 22
+		if modalWidth-leftWidth-8 < minRightWidth {
+			leftWidth = modalWidth - minRightWidth - 8
+		}
+		if leftWidth < 16 {
+			leftWidth = 16
+		}
+		rightWidth := modalWidth - leftWidth - 8
+		targetWidth = rightWidth - 10
+	} else {
+		targetWidth = modalWidth - 16
+	}
+
+	if targetWidth < 8 {
+		targetWidth = 8
+	}
+	if targetWidth > 48 {
+		targetWidth = 48
+	}
+
+	m.SettingsInput.SetWidth(targetWidth)
 }
 
 // getSettingsValues returns a map of setting key -> value for a category
@@ -266,6 +537,7 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 
 		values["max_concurrent_downloads"] = m.Settings.Network.MaxConcurrentDownloads
 		values["user_agent"] = m.Settings.Network.UserAgent
+		values["proxy_url"] = m.Settings.Network.ProxyURL
 		values["sequential_download"] = m.Settings.Network.SequentialDownload
 		values["min_chunk_size"] = m.Settings.Network.MinChunkSize
 		values["worker_buffer_size"] = m.Settings.Network.WorkerBufferSize
@@ -396,6 +668,8 @@ func (m *RootModel) setNetworkSetting(key, value, typ string) error {
 		}
 	case "user_agent":
 		m.Settings.Network.UserAgent = value
+	case "proxy_url":
+		m.Settings.Network.ProxyURL = value
 	case "sequential_download":
 		// Toggle logic handled by generic bool toggle in Update, but just in case
 		if value == "" {
@@ -662,6 +936,8 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.Network.MaxConcurrentDownloads = defaults.Network.MaxConcurrentDownloads
 		case "user_agent":
 			m.Settings.Network.UserAgent = defaults.Network.UserAgent
+		case "proxy_url":
+			m.Settings.Network.ProxyURL = defaults.Network.ProxyURL
 		case "sequential_download":
 			m.Settings.Network.SequentialDownload = defaults.Network.SequentialDownload
 		case "min_chunk_size":

@@ -7,6 +7,7 @@ import (
 )
 
 func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	m.normalizeSettingsSelection()
 
 	categories := config.CategoryOrder()
 	categoryCount := len(categories)
@@ -132,6 +133,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			// Pre-fill with current value (without units)
 			values := m.getSettingsValues(currentCategory)
 			m.SettingsInput.SetValue(formatSettingValueForEdit(values[settingKey], typ, settingKey))
+			m.updateSettingsInputWidthForViewport()
 			m.SettingsInput.Focus()
 		}
 		return m, nil

@@ -1,11 +1,13 @@
 package tui
 
 import (
-	"github.com/SurgeDM/Surge/internal/processing"
 	"regexp"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/processing"
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
@@ -190,6 +192,84 @@ func TestView_SettingsTinyTerminalDoesNotPanic(t *testing.T) {
 	view := m.View()
 	if strings.TrimSpace(ansiEscapeRE.ReplaceAllString(view.Content, "")) == "" {
 		t.Fatal("expected non-empty settings view for tiny terminal")
+	}
+}
+
+func TestView_SettingsNoLineExceedsTerminalWidth(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.state = SettingsState
+
+	sizes := []struct{ width, height int }{
+		{120, 35},
+		{96, 24},
+		{72, 18},
+		{60, 16},
+		{50, 14},
+	}
+
+	for _, tc := range sizes {
+		m.width = tc.width
+		m.height = tc.height
+
+		for i, line := range strings.Split(m.View().Content, "\n") {
+			if lipgloss.Width(line) > tc.width {
+				t.Fatalf("settings line %d exceeds width at %dx%d: got width %d", i, tc.width, tc.height, lipgloss.Width(line))
+			}
+		}
+	}
+}
+
+func TestView_SettingsResizeSequenceKeepsSelectedVisible(t *testing.T) {
+	metadata := config.GetSettingsMetadata()["General"]
+	if len(metadata) == 0 {
+		t.Fatal("expected General settings metadata")
+	}
+
+	selectedRow := len(metadata) - 1
+	selectedLabel := metadata[selectedRow].Label
+
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.state = SettingsState
+	m.SettingsActiveTab = 0
+	m.SettingsSelectedRow = selectedRow
+
+	sequence := []struct{ width, height int }{
+		{120, 35},
+		{76, 18},
+		{58, 16},
+		{100, 30},
+	}
+
+	for _, tc := range sequence {
+		updated, _ := m.Update(tea.WindowSizeMsg{Width: tc.width, Height: tc.height})
+		m = updated.(RootModel)
+		m.state = SettingsState
+
+		plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
+		if strings.TrimSpace(plain) == "" {
+			t.Fatalf("empty settings view after resize to %dx%d", tc.width, tc.height)
+		}
+		if !strings.Contains(plain, selectedLabel) {
+			t.Fatalf("selected setting label %q not visible after resize to %dx%d", selectedLabel, tc.width, tc.height)
+		}
+	}
+}
+
+func TestView_SettingsEditModeNarrowWidthNoOverflow(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.state = SettingsState
+	m.width = 55
+	m.height = 16
+	m.SettingsActiveTab = 0
+	m.SettingsSelectedRow = 0 // default_download_dir
+	m.SettingsIsEditing = true
+	m.SettingsInput.SetValue(strings.Repeat("x", 180))
+	m.updateSettingsInputWidthForViewport()
+
+	for i, line := range strings.Split(m.View().Content, "\n") {
+		if lipgloss.Width(line) > m.width {
+			t.Fatalf("settings edit line %d exceeds width at %dx%d: got width %d", i, m.width, m.height, lipgloss.Width(line))
+		}
 	}
 }
 
