@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildDownloadRequestBody,
   buildEventStreamHeaders,
   coerceStoredBoolean,
   extractPathInfo,
@@ -34,6 +35,34 @@ describe('background logic', () => {
     expect(buildEventStreamHeaders(null)).toEqual({
       Accept: 'text/event-stream',
       'Cache-Control': 'no-cache',
+    });
+  });
+
+  it('builds download request bodies with optional skip approval', () => {
+    expect(buildDownloadRequestBody({
+      url: 'https://example.com/file.zip',
+      filename: 'file.zip',
+      directory: '/downloads',
+      headers: { Cookie: 'a=b' },
+      skipApproval: true,
+    })).toEqual({
+      url: 'https://example.com/file.zip',
+      filename: 'file.zip',
+      path: '/downloads',
+      headers: { Cookie: 'a=b' },
+      skip_approval: true,
+    });
+
+    expect(buildDownloadRequestBody({
+      url: 'https://example.com/file.zip',
+      filename: 'file.zip',
+      directory: '',
+      headers: {},
+    })).toEqual({
+      url: 'https://example.com/file.zip',
+      filename: 'file.zip',
+      headers: undefined,
+      skip_approval: undefined,
     });
   });
 

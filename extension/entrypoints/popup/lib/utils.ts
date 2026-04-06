@@ -5,6 +5,24 @@
 export const KB = 1 << 10;
 export const MB = 1 << 20;
 
+const historyTimeFormatter = new Intl.DateTimeFormat(undefined, {
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+const historyDateFormatter = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+});
+
+function isSameCalendarDay(left: Date, right: Date): boolean {
+  return left.getFullYear() === right.getFullYear()
+    && left.getMonth() === right.getMonth()
+    && left.getDate() === right.getDate();
+}
+
 export function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB', 'TB'];
@@ -32,6 +50,22 @@ export function formatETA(seconds: number): string {
   if (h > 0) return `${h}h ${m}m`;
   if (m > 0) return `${m}m ${s}s`;
   return `${s}s`;
+}
+
+export function formatHistoryTimestamp(timestampMs: number): string {
+  if (!timestampMs || timestampMs <= 0) return 'Unknown time';
+
+  const completedAt = new Date(timestampMs);
+  if (Number.isNaN(completedAt.getTime())) return 'Unknown time';
+
+  const now = new Date();
+  const yesterday = new Date(now);
+  yesterday.setDate(now.getDate() - 1);
+
+  const timeLabel = historyTimeFormatter.format(completedAt);
+  if (isSameCalendarDay(completedAt, now)) return `Today at ${timeLabel}`;
+  if (isSameCalendarDay(completedAt, yesterday)) return `Yesterday at ${timeLabel}`;
+  return historyDateFormatter.format(completedAt);
 }
 
 export function truncate(str: string, len: number): string {

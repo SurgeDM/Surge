@@ -45,6 +45,26 @@ export function buildEventStreamHeaders(authToken: string | null): Record<string
   };
 }
 
+interface DownloadRequestBodyOptions {
+  url: string;
+  filename: string;
+  directory: string;
+  headers: Record<string, string>;
+  skipApproval?: boolean;
+}
+
+export function buildDownloadRequestBody(opts: DownloadRequestBodyOptions): Record<string, unknown> {
+  const body: Record<string, unknown> = {
+    url: opts.url,
+    filename: opts.filename,
+    headers: Object.keys(opts.headers).length > 0 ? opts.headers : undefined,
+    skip_approval: opts.skipApproval === true ? true : undefined,
+  };
+
+  if (opts.directory) body.path = opts.directory;
+  return body;
+}
+
 export function filterPendingDuplicates(
   entries: [string, PendingDup][],
   now: number = Date.now(),

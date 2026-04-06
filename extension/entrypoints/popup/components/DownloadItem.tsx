@@ -1,6 +1,6 @@
 import { createMemo, createSignal, For } from 'solid-js';
 import type { Accessor, JSX } from 'solid-js';
-import { formatSpeed, formatETA, truncate, extractFilename, formatBytes } from '../lib/utils';
+import { formatSpeed, formatETA, truncate, extractFilename, formatBytes, formatHistoryTimestamp } from '../lib/utils';
 import type { DownloadStatus } from '../store/types';
 
 interface Props {
@@ -66,6 +66,13 @@ export default function DownloadItem(props: Props) {
   const [expanded, setExpanded] = createSignal(false);
   const dl = props.download;
   const status = createMemo(() => dl().status);
+  const isCompleted = createMemo(() => status() === 'completed');
+  const historyMeta = createMemo(() => {
+    if (!isCompleted()) return '';
+
+    const totalBytes = dl().total_size > 0 ? dl().total_size : dl().downloaded;
+    return `${formatBytes(totalBytes)} • ${formatHistoryTimestamp(dl().added_at)}`;
+  });
 
   const handleActionClick = async (e: MouseEvent) => {
     const btn = (e.target as HTMLElement).closest('.action-btn') as HTMLButtonElement | null;
@@ -103,6 +110,38 @@ export default function DownloadItem(props: Props) {
     return buttons;
   });
 
+  const renderActions = (inline = false) => (
+    <div class={`download-actions${inline ? ' inline' : ''}`} onClick={handleActionClick}>
+      <For each={actions()}>{(button) => (
+        <button
+          type="button"
+          class={`action-btn ${button.className}`}
+          data-action={button.action}
+          title={button.title}
+          aria-label={button.title}
+        >
+          {button.icon}
+        </button>
+      )}</For>
+    </div>
+  );
+
+  if (isCompleted()) {
+    return (
+      <div class="download-item completed-item" data-id={dl().id}>
+        <div class="download-summary">
+          <div class="download-main compact">
+            <span class="filename" title={dl().filename || dl().url}>
+              {truncate(dl().filename || extractFilename(dl().url), 30)}
+            </span>
+            <span class="download-history-meta">{historyMeta()}</span>
+          </div>
+          {renderActions(true)}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div class={`download-item${expanded() ? ' expanded' : ''}`} data-id={dl().id}>
       <div class="download-header" data-toggle onClick={() => setExpanded(!expanded())}>
@@ -134,7 +173,13 @@ export default function DownloadItem(props: Props) {
         </div>
         <div class="download-actions" onClick={handleActionClick}>
           <For each={actions()}>{(button) => (
-            <button class={`action-btn ${button.className}`} data-action={button.action} title={button.title}>
+            <button
+              type="button"
+              class={`action-btn ${button.className}`}
+              data-action={button.action}
+              title={button.title}
+              aria-label={button.title}
+            >
               {button.icon}
             </button>
           )}</For>

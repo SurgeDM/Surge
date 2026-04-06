@@ -2,6 +2,7 @@ import { defineBackground } from 'wxt/sandbox';
 import { normalizeToken, normalizeServerUrl } from './popup/lib/utils';
 import { DownloadStatus, HistoryEntry } from './popup/store/types';
 import {
+  buildDownloadRequestBody,
   buildEventStreamHeaders,
   coerceStoredBoolean,
   extractPathInfo,
@@ -214,22 +215,22 @@ async function sendToSurge(
   filename: string,
   directory: string,
   headers: Record<string, string>,
+  options?: { skipApproval?: boolean },
 ): Promise<{ success: boolean; error?: string }> {
   const base = await getBaseUrl();
   if (!base) return { success: false, error: 'Server not running' };
-
-  const body: Record<string, unknown> = {
-    url,
-    filename,
-    headers: Object.keys(headers).length > 0 ? headers : undefined,
-  };
-  if (directory) body.path = directory;
 
   try {
     const resp = await fetch(`${base}/download`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
-      body: JSON.stringify(body),
+      body: JSON.stringify(buildDownloadRequestBody({
+        url,
+        filename,
+        directory,
+        headers,
+        skipApproval: options?.skipApproval,
+      })),
       signal: AbortSignal.timeout(5000),
     });
 
@@ -568,7 +569,13 @@ async function handleConfirmDuplicate(id: string): Promise<{ success: boolean; e
   await persistPendingDuplicates();
   updateBadge();
 
-  const result = await sendToSurge(pending.url, pending.filename, pending.directory, {});
+  const result = await sendToSurge(
+    pending.url,
+    pending.filename,
+    pending.directory,
+    {},
+    { skipApproval: true },
+  );
   if (result.success) {
     browser.notifications.create({
       type: 'basic',
