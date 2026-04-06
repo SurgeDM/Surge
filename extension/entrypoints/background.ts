@@ -505,32 +505,6 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
   switch (message.type) {
     // Health / connection
     case 'checkHealth': return checkHealthSilent().then(healthy => ({ healthy }));
-    case 'getStatus': return isInterceptEnabled().then(enabled => ({ enabled }));
-
-    // Auth
-    case 'getAuthToken':
-      return ensurePersistedStateLoaded().then(() =>
-        Promise.all([
-          Promise.resolve(cachedAuthToken || ''),
-          storageGet(STORAGE_KEYS.VERIFIED).then(v => v === 'true'),
-        ]).then(([token, verified]) => ({ token, verified })),
-      );
-
-    case 'setAuthToken': {
-      const normalized = normalizeToken(message.token || '');
-      return storageSet(STORAGE_KEYS.TOKEN, normalized).then(async () => {
-        setCachedAuthTokenState(normalized || null);
-        await storageSet(STORAGE_KEYS.VERIFIED, 'false');
-        return { success: true };
-      }).catch(() => ({ success: false, error: 'Failed to persist auth token' }));
-    }
-
-    case 'getAuthVerified':
-      return storageGet(STORAGE_KEYS.VERIFIED).then(v => ({ verified: v === 'true' }));
-
-    case 'setAuthVerified':
-      return storageSet(STORAGE_KEYS.VERIFIED, message.verified === true ? 'true' : 'false')
-        .then(() => ({ success: true }));
 
     case 'validateAuth':
       return (async () => {
@@ -547,22 +521,6 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
           return resp.ok ? { ok: true } : { ok: false, status: resp.status };
         } catch (e) { return { ok: false, error: String(e) }; }
       })();
-
-    // Settings
-    case 'setStatus':
-      return storageSet(STORAGE_KEYS.INTERCEPT, message.enabled).then(() => ({ success: true }));
-
-    case 'getServerUrl':
-      return storageGet(STORAGE_KEYS.SERVER_URL).then(url => ({ url: url || '' }));
-
-    case 'setServerUrl': {
-      const normalized = normalizeServerUrl(message.url || '');
-      return storageSet(STORAGE_KEYS.SERVER_URL, normalized).then(() => {
-        setCachedServerUrlState(normalized || null);
-        lastHealthCheck = 0;
-        return { success: true };
-      });
-    }
 
     // Downloads / history
     case 'getDownloads':
@@ -744,7 +702,21 @@ export default defineBackground(() => {
 });
 
 export const __test__ = {
-  handleMessage,
+  ensurePersistedStateLoaded,
+  getCachedState(): {
+    authToken: string | null;
+    serverUrl: string | null;
+    discoveredServerUrl: string | null;
+  } {
+    return {
+      authToken: cachedAuthToken,
+      serverUrl: cachedServerUrl,
+      discoveredServerUrl: cachedDiscoveredServerUrl,
+    };
+  },
+  setCachedAuthToken(token: string | null): void {
+    setCachedAuthTokenState(token);
+  },
   resetState(): void {
     cachedServerUrl = null;
     cachedDiscoveredServerUrl = null;
