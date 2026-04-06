@@ -103,17 +103,24 @@ func ParseDigestHeader(header string) (algorithm string, hexHash string) {
 		}
 	}
 
-	// RFC 3230 uses base64
-	decoded, err := base64.StdEncoding.DecodeString(value)
-	if err != nil {
-		decoded, err = base64.URLEncoding.DecodeString(value)
-		if err != nil {
-			// Maybe it's already hex
-			if _, hexErr := hex.DecodeString(value); hexErr == nil {
-				return algo, strings.ToLower(value)
+	// RFC 3230 uses base64 (padded or unpadded, standard or URL-safe)
+	for _, enc := range []*base64.Encoding{
+		base64.StdEncoding,
+		base64.URLEncoding,
+		base64.RawStdEncoding,
+		base64.RawURLEncoding,
+	} {
+		if decoded, err := enc.DecodeString(value); err == nil {
+			h := hex.EncodeToString(decoded)
+			if len(h) == expectedHexLen {
+				return algo, h
 			}
-			return "", ""
 		}
 	}
-	return algo, hex.EncodeToString(decoded)
+
+	// Hex fallback - only accept if length matches the expected hash size
+	if _, err := hex.DecodeString(value); err == nil && len(value) == expectedHexLen {
+		return algo, strings.ToLower(value)
+	}
+	return "", ""
 }
