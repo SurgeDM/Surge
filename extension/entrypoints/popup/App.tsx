@@ -3,14 +3,16 @@ import {
   serverConnected,
   setServerConnected,
   activeDownloads,
-  setActiveDownloads,
+  reconcileActiveDownloads,
   setHistoryDownloads,
   currentView,
   setCurrentView,
   setInterceptEnabled,
   handleSseEvent,
   setServerUrl,
+  setServerUrlLocked,
   setAuthToken,
+  setAuthTokenLocked,
   setAuthValid,
 } from './store';
 import StatusBadge from './components/StatusBadge';
@@ -39,6 +41,10 @@ export default function App() {
     }, SSE_REFRESH_DEBOUNCE_MS);
   }
 
+  function shouldRefreshAfterSseEvent(event: string): boolean {
+    return event !== 'progress';
+  }
+
   async function sendMessage<T>(message: RuntimeMessage): Promise<T> {
     return browser.runtime.sendMessage(message) as Promise<T>;
   }
@@ -46,11 +52,15 @@ export default function App() {
   async function loadSettings(): Promise<void> {
     try {
       const serverUrlResponse = await sendMessage<{ url?: string }>({ type: 'getServerUrl' });
-      if (serverUrlResponse?.url !== undefined) setServerUrl(serverUrlResponse.url);
+      if (serverUrlResponse?.url !== undefined) {
+        setServerUrl(serverUrlResponse.url);
+        setServerUrlLocked(serverUrlResponse.url.trim().length > 0);
+      }
 
       const authResponse = await sendMessage<{ token?: string; verified?: boolean }>({ type: 'getAuthToken' });
       if (authResponse?.token !== undefined) {
         setAuthToken(authResponse.token);
+        setAuthTokenLocked(authResponse.token.trim().length > 0);
         setAuthValid(authResponse.verified === true);
       }
 
@@ -69,7 +79,7 @@ export default function App() {
 
       if (response?.downloads) {
         setServerConnected(response.connected === true);
-        setActiveDownloads(response.downloads);
+        reconcileActiveDownloads(response.downloads);
       }
       if (response?.authError) setAuthValid(false);
 
@@ -99,10 +109,10 @@ export default function App() {
     switch (message.type) {
       case 'sseEvent':
         handleSseEvent(String(message.event), message.data);
-        scheduleRefresh();
+        if (shouldRefreshAfterSseEvent(String(message.event))) scheduleRefresh();
         break;
       case 'syncUpdate':
-        if (Array.isArray(message.downloads)) setActiveDownloads(message.downloads as DownloadStatus[]);
+        if (Array.isArray(message.downloads)) reconcileActiveDownloads(message.downloads as DownloadStatus[]);
         if (Array.isArray(message.history)) setHistoryDownloads(message.history as HistoryEntry[]);
         break;
       case 'serverStatus':
@@ -115,7 +125,16 @@ export default function App() {
     await loadSettings();
     await fetchDownloads();
 
-    pollInterval = setInterval(() => { void fetchDownloads(); }, DOWNLOAD_POLL_MS);
+    pollInterval = setInterval(() => {
+      if (!serverConnected()) {
+        void fetchDownloads();
+        return;
+      }
+
+      if (currentView() === 'history') {
+        void fetchHistory();
+      }
+    }, DOWNLOAD_POLL_MS);
     healthInterval = setInterval(async () => {
       try {
         const response = await sendMessage<{ healthy?: boolean }>({ type: 'checkHealth' });
@@ -139,8 +158,13 @@ export default function App() {
     <div class="container">
       <header class="header">
         <div class="logo">
-          <img src="/icons/icon48.png" alt="Surge" />
-          <h1>SURGE</h1>
+          <div class="logo-mark-wrap">
+            <img src="/icons/icon48.png" alt="Surge" class="logo-mark" />
+          </div>
+          <div class="logo-wordmark" aria-label="Surge">
+            <span class="logo-word">Surge</span>
+            <span class="logo-cursor">_</span>
+          </div>
         </div>
         <div class="header-right">
           <StatusBadge connected={serverConnected()} />

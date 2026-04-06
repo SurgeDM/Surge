@@ -1,7 +1,9 @@
 import { createSignal } from 'solid-js';
 import {
   serverUrl, setServerUrl,
+  serverUrlLocked, setServerUrlLocked,
   authToken, setAuthToken,
+  authTokenLocked, setAuthTokenLocked,
   setAuthValid,
   interceptEnabled, setInterceptEnabled,
 } from '../store';
@@ -9,7 +11,12 @@ import { normalizeToken, normalizeServerUrl } from '../lib/utils';
 
 function saveStatusSignal() {
   const [status, setStatus] = createSignal('');
-  const show = (msg: string, ms = 2000) => { setStatus(msg); setTimeout(() => setStatus(''), ms); };
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const show = (msg: string, ms = 2000) => {
+    if (timer) clearTimeout(timer);
+    setStatus(msg);
+    if (ms > 0) timer = setTimeout(() => setStatus(''), ms);
+  };
   return [status, show] as const;
 }
 
@@ -24,9 +31,23 @@ export default function SettingsView() {
     showServerStatus('Saving...');
     try {
       await browser.runtime.sendMessage({ type: 'setServerUrl', url });
+      setServerUrlLocked(url.length > 0);
       showServerStatus('Saved');
     } catch {
       showServerStatus('Failed to save');
+    }
+  };
+
+  const handleServerDelete = async () => {
+    setServerUrl('');
+    setServerUrlLocked(false);
+    showServerStatus('Removing...');
+    try {
+      await browser.runtime.sendMessage({ type: 'setServerUrl', url: '' });
+      showServerStatus('Removed');
+    } catch {
+      setServerUrlLocked(true);
+      showServerStatus('Failed to remove');
     }
   };
 
@@ -36,6 +57,7 @@ export default function SettingsView() {
     showTokenStatus('Saving...');
     try {
       await browser.runtime.sendMessage({ type: 'setAuthToken', token });
+      setAuthTokenLocked(token.length > 0);
       showTokenStatus('Saved');
       const res = await browser.runtime.sendMessage({ type: 'validateAuth' }).catch(() => null) as { ok?: boolean } | null;
       setAuthValid(res?.ok ?? false);
@@ -44,6 +66,21 @@ export default function SettingsView() {
       }
     } catch {
       showTokenStatus('Failed to save');
+    }
+  };
+
+  const handleDeleteToken = async () => {
+    setAuthToken('');
+    setAuthTokenLocked(false);
+    setAuthValid(false);
+    showTokenStatus('Removing...');
+    try {
+      await browser.runtime.sendMessage({ type: 'setAuthToken', token: '' });
+      await browser.runtime.sendMessage({ type: 'setAuthVerified', verified: false });
+      showTokenStatus('Removed');
+    } catch {
+      setAuthTokenLocked(true);
+      showTokenStatus('Failed to remove');
     }
   };
 
@@ -71,35 +108,34 @@ export default function SettingsView() {
       <div class="settings-group">
         <h3 class="settings-group-title">Server</h3>
         <div class="settings-field">
-          <div class="settings-field-row">
-            <label class="settings-label">Server URL</label>
-            {serverStatus() && (
-              <span class={`auth-status${serverStatus() === 'Saved' ? ' ok' : ' err'}`}>{serverStatus()}</span>
-            )}
-          </div>
-          <div class="auth-input">
+          <label class="settings-label" for="server-url">Server URL</label>
+          <div class="auth-input settings-input-row">
             <input
+              id="server-url"
               type="text"
               value={serverUrl()}
               placeholder="http://127.0.0.1:1700"
+              disabled={serverUrlLocked()}
               onInput={(e) => { setServerUrl((e.target as HTMLInputElement).value); }}
             />
-            <button onClick={handleServerSave}>Save</button>
+            <button onClick={serverUrlLocked() ? handleServerDelete : handleServerSave}>
+              {serverUrlLocked() ? 'Delete' : 'Save'}
+            </button>
           </div>
+          {serverStatus() && (
+            <div class={`auth-status below${serverStatus() === 'Saved' || serverStatus() === 'Removed' ? ' ok' : serverStatus().endsWith('...') ? '' : ' err'}`}>{serverStatus()}</div>
+          )}
         </div>
 
         <div class="settings-field">
-          <div class="settings-field-row">
-            <label class="settings-label">Auth Token</label>
-            {tokenStatus() && !tokenFocused() && (
-              <span class={`auth-status${tokenStatus() === 'Saved' ? ' ok' : ' err'}`}>{tokenStatus()}</span>
-            )}
-          </div>
-          <div class="auth-input">
+          <label class="settings-label" for="auth-token">Auth Token</label>
+          <div class="auth-input settings-input-row">
             <input
+              id="auth-token"
               type="password"
               value={authToken()}
               placeholder="Enter your token"
+              disabled={authTokenLocked()}
               onInput={(e) => {
                 setAuthToken((e.target as HTMLInputElement).value);
                 showTokenStatus('');
@@ -107,8 +143,13 @@ export default function SettingsView() {
               onFocus={() => setTokenFocused(true)}
               onBlur={() => setTokenFocused(false)}
             />
-            <button onClick={handleSaveToken}>Save</button>
+            <button onClick={authTokenLocked() ? handleDeleteToken : handleSaveToken}>
+              {authTokenLocked() ? 'Delete' : 'Save'}
+            </button>
           </div>
+          {tokenStatus() && !tokenFocused() && (
+            <div class={`auth-status below${tokenStatus() === 'Saved' || tokenStatus() === 'Removed' ? ' ok' : tokenStatus().endsWith('...') ? '' : ' err'}`}>{tokenStatus()}</div>
+          )}
         </div>
       </div>
 

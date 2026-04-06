@@ -22,6 +22,41 @@ import type {
 const [activeDownloads, setActiveDownloads] = createSignal<DownloadStatus[]>([]);
 export { activeDownloads, setActiveDownloads };
 
+function sameDownloadStatus(left: DownloadStatus, right: DownloadStatus): boolean {
+  return left.id === right.id
+    && left.url === right.url
+    && left.filename === right.filename
+    && left.dest_path === right.dest_path
+    && left.total_size === right.total_size
+    && left.downloaded === right.downloaded
+    && left.progress === right.progress
+    && left.speed === right.speed
+    && left.status === right.status
+    && left.error === right.error
+    && left.eta === right.eta
+    && left.connections === right.connections
+    && left.added_at === right.added_at
+    && left.time_taken === right.time_taken
+    && left.avg_speed === right.avg_speed;
+}
+
+export function reconcileActiveDownloads(nextDownloads: DownloadStatus[]): void {
+  setActiveDownloads((prevDownloads) => {
+    const prevById = new Map(prevDownloads.map((download) => [download.id, download]));
+    const merged = nextDownloads.map((download) => {
+      const prev = prevById.get(download.id);
+      if (!prev) return download;
+      const next = { ...prev, ...download };
+      return sameDownloadStatus(prev, next) ? prev : next;
+    });
+
+    const hasChanged = merged.length !== prevDownloads.length
+      || merged.some((download, index) => prevDownloads[index] !== download);
+
+    return hasChanged ? merged : prevDownloads;
+  });
+}
+
 export function upsertActiveDownload(dl: DownloadStatus): void {
   setActiveDownloads(prev => {
     const idx = prev.findIndex(d => d.id === dl.id);
@@ -53,9 +88,13 @@ export { interceptEnabled, setInterceptEnabled };
 // Surge server URL for API requests
 const [serverUrl, setServerUrl] = createSignal('');
 export { serverUrl, setServerUrl };
+const [serverUrlLocked, setServerUrlLocked] = createSignal(false);
+export { serverUrlLocked, setServerUrlLocked };
 
 const [authToken, setAuthToken] = createSignal('');
 export { authToken, setAuthToken };
+const [authTokenLocked, setAuthTokenLocked] = createSignal(false);
+export { authTokenLocked, setAuthTokenLocked };
 
 // Derived from token validity, not directly from token presence
 const [authValid, setAuthValid] = createSignal(false);

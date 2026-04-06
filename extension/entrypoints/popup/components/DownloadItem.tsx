@@ -1,10 +1,10 @@
-import { createSignal } from 'solid-js';
-import type { JSX } from 'solid-js';
+import { createMemo, createSignal, For } from 'solid-js';
+import type { Accessor, JSX } from 'solid-js';
 import { formatSpeed, formatETA, truncate, extractFilename, formatBytes } from '../lib/utils';
 import type { DownloadStatus } from '../store/types';
 
 interface Props {
-  download: DownloadStatus;
+  download: Accessor<DownloadStatus>;
 }
 
 const STATUS_LABELS: Record<DownloadStatus['status'], string> = {
@@ -19,12 +19,53 @@ type DownloadAction = {
   action: string;
   className: string;
   title: string;
-  icon: string;
+  icon: JSX.Element;
 };
+
+function ActionIcon(props: { name: 'pause' | 'resume' | 'folder' | 'file' | 'cancel' }): JSX.Element {
+  switch (props.name) {
+    case 'pause':
+      return (
+        <svg viewBox="0 0 24 24" class="action-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="10" y1="5" x2="10" y2="19" />
+          <line x1="14" y1="5" x2="14" y2="19" />
+        </svg>
+      );
+    case 'resume':
+      return (
+        <svg viewBox="0 0 24 24" class="action-icon" fill="currentColor" aria-hidden="true">
+          <path d="M8 6.5v11l8.5-5.5L8 6.5Z" />
+        </svg>
+      );
+    case 'folder':
+      return (
+        <svg viewBox="0 0 24 24" class="action-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v7A2.5 2.5 0 0 1 18.5 19h-13A2.5 2.5 0 0 1 3 16.5v-9Z" />
+        </svg>
+      );
+    case 'file':
+      return (
+        <svg viewBox="0 0 24 24" class="action-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M14 3H7.5A2.5 2.5 0 0 0 5 5.5v13A2.5 2.5 0 0 0 7.5 21h9a2.5 2.5 0 0 0 2.5-2.5V8Z" />
+          <path d="M14 3v5h5" />
+          <path d="M9 13h6" />
+          <path d="M9 17h4" />
+        </svg>
+      );
+    case 'cancel':
+      return (
+        <svg viewBox="0 0 24 24" class="action-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <line x1="6" y1="6" x2="18" y2="18" />
+          <line x1="18" y1="6" x2="6" y2="18" />
+        </svg>
+      );
+  }
+}
 
 export default function DownloadItem(props: Props) {
   const [expanded, setExpanded] = createSignal(false);
-  const dl = () => props.download;
+  const dl = props.download;
+  const status = createMemo(() => dl().status);
 
   const handleActionClick = async (e: MouseEvent) => {
     const btn = (e.target as HTMLElement).closest('.action-btn') as HTMLButtonElement | null;
@@ -41,38 +82,26 @@ export default function DownloadItem(props: Props) {
     }
   };
 
-  const actions = (): DownloadAction[] => {
-    const status = dl().status;
+  const actions = createMemo<DownloadAction[]>(() => {
+    const currentStatus = status();
     const buttons: DownloadAction[] = [];
 
-    if (status === 'downloading') {
-      buttons.push({ action: 'pauseDownload', className: 'pause', title: 'Pause', icon: '\u23F8' });
+    if (currentStatus === 'downloading') {
+      buttons.push({ action: 'pauseDownload', className: 'pause', title: 'Pause', icon: <ActionIcon name="pause" /> });
     }
-    if (status === 'paused' || status === 'queued') {
-      buttons.push({ action: 'resumeDownload', className: 'resume', title: 'Resume', icon: '\u25B6' });
+    if (currentStatus === 'paused' || currentStatus === 'queued') {
+      buttons.push({ action: 'resumeDownload', className: 'resume', title: 'Resume', icon: <ActionIcon name="resume" /> });
     }
-    if (status === 'completed') {
-      buttons.push({ action: 'openFolder', className: 'open-folder', title: 'Open folder', icon: '\uD83D\uDCC1' });
-      buttons.push({ action: 'openFile', className: 'open-file', title: 'Open file', icon: '\uD83D\uDCC4' });
+    if (currentStatus === 'completed') {
+      buttons.push({ action: 'openFolder', className: 'open-folder', title: 'Open folder', icon: <ActionIcon name="folder" /> });
+      buttons.push({ action: 'openFile', className: 'open-file', title: 'Open file', icon: <ActionIcon name="file" /> });
     }
-    if (status !== 'completed') {
-      buttons.push({ action: 'cancelDownload', className: 'cancel', title: 'Cancel', icon: '\u2715' });
+    if (currentStatus !== 'completed') {
+      buttons.push({ action: 'cancelDownload', className: 'cancel', title: 'Cancel', icon: <ActionIcon name="cancel" /> });
     }
 
     return buttons;
-  };
-
-  const renderActionButtons = (): JSX.Element => {
-    return (
-      <>
-        {actions().map((button) => (
-          <button class={`action-btn ${button.className}`} data-action={button.action} title={button.title}>
-            {button.icon}
-          </button>
-        ))}
-      </>
-    );
-  };
+  });
 
   return (
     <div class={`download-item${expanded() ? ' expanded' : ''}`} data-id={dl().id}>
@@ -88,7 +117,7 @@ export default function DownloadItem(props: Props) {
           </div>
         </div>
         <div class="download-header-right">
-          <span class={`status-tag ${dl().status}`}>{STATUS_LABELS[dl().status]}</span>
+          <span class={`status-tag ${status()}`}>{STATUS_LABELS[status()]}</span>
           <span class="expand-icon">{expanded() ? '\u25BC' : '\u25B6'}</span>
         </div>
       </div>
@@ -104,7 +133,11 @@ export default function DownloadItem(props: Props) {
           </div>
         </div>
         <div class="download-actions" onClick={handleActionClick}>
-          {renderActionButtons()}
+          <For each={actions()}>{(button) => (
+            <button class={`action-btn ${button.className}`} data-action={button.action} title={button.title}>
+              {button.icon}
+            </button>
+          )}</For>
         </div>
       </div>
     </div>

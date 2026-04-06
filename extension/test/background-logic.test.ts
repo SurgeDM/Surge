@@ -2,6 +2,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   buildEventStreamHeaders,
   coerceStoredBoolean,
+  extractPathInfo,
+  filterPendingDuplicates,
   openEventStream,
   queueDuplicateDownload,
   resolveInterceptEnabled,
@@ -88,6 +90,34 @@ describe('background logic', () => {
         Authorization: 'Bearer token-123',
       },
       signal: controller.signal,
+    });
+  });
+
+  it('filters expired pending duplicates during rehydration', () => {
+    expect(filterPendingDuplicates([
+      ['dup_1', { url: 'a', filename: 'a', directory: '', timestamp: 50 }],
+      ['dup_2', { url: 'b', filename: 'b', directory: '', timestamp: 150 }],
+    ], 200, 100)).toEqual([
+      ['dup_2', { url: 'b', filename: 'b', directory: '', timestamp: 150 }],
+    ]);
+  });
+
+  it('extracts filename and directory across path styles', () => {
+    expect(extractPathInfo({ filename: 'C:\\Users\\me\\file.zip' })).toEqual({
+      filename: 'file.zip',
+      directory: 'C:/Users/me',
+    });
+    expect(extractPathInfo({ filename: '/home/me/file.zip' })).toEqual({
+      filename: 'file.zip',
+      directory: '/home/me',
+    });
+    expect(extractPathInfo({ filename: 'downloads/file with spaces.zip' })).toEqual({
+      filename: 'file with spaces.zip',
+      directory: 'downloads',
+    });
+    expect(extractPathInfo({ filename: 'plain.txt' })).toEqual({
+      filename: 'plain.txt',
+      directory: '',
     });
   });
 });

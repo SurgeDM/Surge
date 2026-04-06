@@ -1,5 +1,5 @@
 import type { DownloadStatus } from '../store/types';
-import { createMemo } from 'solid-js';
+import { createMemo, For } from 'solid-js';
 import { currentView, setCurrentView, historyDownloads } from '../store';
 import type { ViewMode } from '../store';
 import DownloadItem from './DownloadItem';
@@ -49,16 +49,18 @@ function sortDownloads(downloads: DownloadStatus[]): DownloadStatus[] {
 }
 
 export default function DownloadList(props: Props) {
-  const visibleDownloads = createMemo<DownloadStatus[]>(() => {
-    const view = currentView();
-    if (view === 'active') {
-      return props.activeDownloads.filter((download) => download.status !== 'completed');
-    }
-
-    return historyDownloads().map(mapHistoryEntryToDownload);
-  });
-
-  const sortedDownloads = createMemo(() => sortDownloads(visibleDownloads()));
+  const activeDownloads = createMemo<DownloadStatus[]>(() =>
+    props.activeDownloads.filter((download) => download.status !== 'completed'),
+  );
+  const activeDownloadById = createMemo(() =>
+    new Map(activeDownloads().map((download) => [download.id, download] as const)),
+  );
+  const sortedActiveDownloadIds = createMemo(() =>
+    sortDownloads(activeDownloads()).map((download) => download.id),
+  );
+  const sortedHistoryDownloads = createMemo(() =>
+    sortDownloads(historyDownloads().map(mapHistoryEntryToDownload)),
+  );
   const emptyMessage = createMemo(() => {
     if (currentView() === 'history') {
       return { title: 'No history downloads', hint: 'Completed downloads will appear here' };
@@ -75,10 +77,20 @@ export default function DownloadList(props: Props) {
       <div class="downloads-list-content">
         {currentView() === 'settings'
           ? <SettingsView />
-          : sortedDownloads().map((download) => <DownloadItem download={download} />)
+          : currentView() === 'active'
+            ? <For each={sortedActiveDownloadIds()}>{(id) => <DownloadItem download={() => activeDownloadById().get(id)!} />}</For>
+            : <For each={sortedHistoryDownloads()}>{(download) => <DownloadItem download={() => download} />}</For>
         }
 
-        {currentView() !== 'settings' && sortedDownloads().length === 0 && (
+        {currentView() === 'active' && sortedActiveDownloadIds().length === 0 && (
+          <div class="empty-state" id="emptyState">
+            <div class="empty-icon">&#x1F4E6;</div>
+            <p>{emptyMessage().title}</p>
+            <p class="empty-hint">{emptyMessage().hint}</p>
+          </div>
+        )}
+
+        {currentView() === 'history' && sortedHistoryDownloads().length === 0 && (
           <div class="empty-state" id="emptyState">
             <div class="empty-icon">&#x1F4E6;</div>
             <p>{emptyMessage().title}</p>

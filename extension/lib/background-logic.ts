@@ -5,6 +5,27 @@ export interface PendingDup {
   timestamp: number;
 }
 
+export function extractPathInfo(downloadItem: { filename?: string }): { filename: string; directory: string } {
+  if (!downloadItem.filename) return { filename: '', directory: '' };
+
+  const normalized = downloadItem.filename.replace(/\\/g, '/');
+  const parts = normalized.split('/');
+  const filename = parts.pop() || '';
+
+  let directory = '';
+  if (parts.length > 0) {
+    if (/^[A-Za-z]:$/.test(parts[0])) {
+      directory = parts.join('/');
+    } else if (parts[0] === '') {
+      directory = '/' + parts.slice(1).join('/');
+    } else {
+      directory = parts.join('/');
+    }
+  }
+
+  return { filename, directory };
+}
+
 export function coerceStoredBoolean(value: unknown): boolean | undefined {
   if (typeof value === 'boolean') return value;
   if (value === 'true') return true;
@@ -22,6 +43,15 @@ export function buildEventStreamHeaders(authToken: string | null): Record<string
     'Cache-Control': 'no-cache',
     ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
   };
+}
+
+export function filterPendingDuplicates(
+  entries: [string, PendingDup][],
+  now: number = Date.now(),
+  ttlMs: number = 60_000,
+): [string, PendingDup][] {
+  const cutoff = now - ttlMs;
+  return entries.filter(([, data]) => data.timestamp >= cutoff);
 }
 
 export async function openEventStream(

@@ -4,6 +4,8 @@ import { DownloadStatus, HistoryEntry } from './popup/store/types';
 import {
   buildEventStreamHeaders,
   coerceStoredBoolean,
+  extractPathInfo,
+  filterPendingDuplicates,
   queueDuplicateDownload,
   resolveInterceptEnabled,
   type PendingDup,
@@ -31,6 +33,7 @@ const STORAGE_KEYS = {
 // ---------------------------------------------------------------------------
 
 let cachedServerUrl: string | null = null;
+let resolvedBaseUrl: string | null = null;
 let cachedAuthToken: string | null = null;
 let isConnected = false;
 let lastHealthCheck = 0;
@@ -71,6 +74,7 @@ async function loadPersistedState(): Promise<void> {
   ]);
   cachedAuthToken = token || null;
   cachedServerUrl = serverUrl || null;
+  resolvedBaseUrl = null;
 }
 
 // ---------------------------------------------------------------------------
@@ -86,11 +90,13 @@ async function rehydratePendingDuplicates(): Promise<void> {
     const result = await browser.storage.local.get(PENDING_DUP_KEY);
     const entries = result[PENDING_DUP_KEY] as [string, PendingDup][] | undefined;
     if (entries?.length) {
-      for (const [id, data] of entries) {
+      const freshEntries = filterPendingDuplicates(entries);
+      for (const [id, data] of freshEntries) {
         pendingDuplicates.set(id, data);
         const num = parseInt(id.replace('dup_', ''), 10);
         if (!isNaN(num) && num > pendingDuplicateCounter) pendingDuplicateCounter = num;
       }
+      if (freshEntries.length !== entries.length) await persistPendingDuplicates();
       updateBadge();
     }
   } catch { /* ignore */ }
@@ -110,17 +116,28 @@ function cleanupStaleDuplicates(): void {
 async function getBaseUrl(): Promise<string | null> {
   // Try the user-configured URL first
   if (cachedServerUrl) {
-    if (await healthCheck(cachedServerUrl)) return cachedServerUrl;
+    if (resolvedBaseUrl === cachedServerUrl) return cachedServerUrl;
+    if (await healthCheck(cachedServerUrl)) {
+      resolvedBaseUrl = cachedServerUrl;
+      return cachedServerUrl;
+    }
+    resolvedBaseUrl = null;
     isConnected = false;
     return null;
   }
 
+  if (resolvedBaseUrl) return resolvedBaseUrl;
+
   // Fall back to port scanning
   for (let p = DEFAULT_PORT; p < DEFAULT_PORT + MAX_PORT_SCAN; p++) {
     const url = `http://127.0.0.1:${p}`;
-    if (await healthCheck(url)) return url;
+    if (await healthCheck(url)) {
+      resolvedBaseUrl = url;
+      return url;
+    }
   }
 
+  resolvedBaseUrl = null;
   isConnected = false;
   return null;
 }
@@ -130,6 +147,7 @@ async function healthCheck(url: string): Promise<boolean> {
     const resp = await fetch(`${url}/health`, { signal: AbortSignal.timeout(300) });
     if (resp.ok) { isConnected = true; return true; }
   } catch { /* ignore */ }
+  if (resolvedBaseUrl === url) resolvedBaseUrl = null;
   return false;
 }
 
@@ -155,12 +173,24 @@ async function apiFetch(url: string, options?: RequestInit): Promise<Response | 
   const base = await getBaseUrl();
   if (!base) return null;
   try {
-    return await fetch(`${base}${url}`, {
+    const response = await fetch(`${base}${url}`, {
       ...options,
       headers: { 'Content-Type': 'application/json', ...(await authHeaders()), ...(options?.headers || {}) },
       signal: AbortSignal.timeout(5000),
-    }).then(r => r.ok ? r : null);
-  } catch { return null; }
+    });
+    if (response.ok) return response;
+    if (resolvedBaseUrl === base) {
+      resolvedBaseUrl = null;
+      lastHealthCheck = 0;
+    }
+    return null;
+  } catch {
+    if (resolvedBaseUrl === base) {
+      resolvedBaseUrl = null;
+      lastHealthCheck = 0;
+    }
+    return null;
+  }
 }
 
 async function fetchDownloadsList(): Promise<DownloadStatus[]> {
@@ -247,38 +277,6 @@ function getCapturedHeaders(url: string): Record<string, string> | null {
     return null;
   }
   return data.headers;
-}
-
-// ---------------------------------------------------------------------------
-// Path extraction
-// ---------------------------------------------------------------------------
-
-/**
- * Parse the browser-provided downloadItem.filename into {filename, directory}.
- * Handles Windows paths (C:\foo\bar.txt) and POSIX paths (/home/foo/bar.txt).
- */
-function extractPathInfo(downloadItem: { filename?: string }): { filename: string; directory: string } {
-  if (!downloadItem.filename) return { filename: '', directory: '' };
-
-  const normalized = downloadItem.filename.replace(/\\/g, '/');
-  const parts = normalized.split('/');
-  const filename = parts.pop() || '';
-
-  let directory = '';
-  if (parts.length > 0) {
-    if (/^[A-Za-z]:$/.test(parts[0])) {
-      // Windows: C:/foo/bar => C:/foo
-      directory = parts.join('/');
-    } else if (parts[0] === '') {
-      // POSIX absolute: /foo/bar => /foo
-      directory = '/' + parts.slice(1).join('/');
-    } else {
-      // Relative path — treat the whole thing as directory
-      directory = parts.join('/');
-    }
-  }
-
-  return { filename, directory };
 }
 
 // ---------------------------------------------------------------------------
@@ -621,6 +619,7 @@ export default defineBackground(() => {
     if (areaName !== 'local') return;
     if (changes[STORAGE_KEYS.SERVER_URL]?.newValue !== undefined) {
       cachedServerUrl = (changes[STORAGE_KEYS.SERVER_URL].newValue as string) || '';
+      resolvedBaseUrl = null;
       lastHealthCheck = 0;
     }
     if (changes[STORAGE_KEYS.TOKEN]?.newValue !== undefined) {
@@ -653,6 +652,10 @@ export default defineBackground(() => {
 
   // Startup: restore persisted state
   rehydratePendingDuplicates().catch(() => {});
-  loadPersistedState().catch(() => {});
-  checkHealthSilent().catch(() => {});
+  loadPersistedState()
+    .then(() => checkHealthSilent())
+    .then(() => {
+      if (isConnected) startSSEStream().catch(() => {});
+    })
+    .catch(() => {});
 });
