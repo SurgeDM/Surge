@@ -25,6 +25,7 @@ export default function SettingsView() {
   const [serverStatus, showServerStatus] = saveStatusSignal();
   const [tokenStatus, showTokenStatus] = saveStatusSignal();
   const [tokenFocused, setTokenFocused] = createSignal(false);
+  const extensionVersion = browser.runtime.getManifest().version;
 
   const handleServerSave = async () => {
     const url = normalizeServerUrl(serverUrl());
@@ -161,6 +162,10 @@ export default function SettingsView() {
 
       <div class="settings-group">
         <h3 class="settings-group-title">Support</h3>
+        <div class="settings-field">
+          <span class="settings-label">Version</span>
+          <div class="settings-meta-value">v{extensionVersion}</div>
+        </div>
         <a
           href="https://github.com/SurgeDM/Surge"
           target="_blank"
