@@ -28,9 +28,15 @@ type GeneralSettings struct {
 	CategoryEnabled              bool       `json:"category_enabled"`
 	Categories                   []Category `json:"categories"`
 
-	ClipboardMonitor  bool `json:"clipboard_monitor"`
-	Theme             int  `json:"theme"`
-	LogRetentionCount int  `json:"log_retention_count"`
+	ClipboardMonitor  bool                `json:"clipboard_monitor"`
+	Theme             int                 `json:"theme"`
+	LogRetentionCount int                 `json:"log_retention_count"`
+	PostDownload      PostDownloadActions `json:"post_download"`
+}
+
+type PostDownloadActions struct {
+	OnCompleteCommand string `json:"on_complete_command"`
+	OnErrorCommand    string `json:"on_error_command"`
 }
 
 const (
@@ -86,6 +92,10 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 		"Categories": {
 			{Key: "category_enabled", Label: "Manage Categories", Description: "Sort downloads into subfolders by file type. Press Enter to open Category Manager.", Type: "bool"},
 		},
+		"Post-Download": {
+			{Key: "on_complete_command", Label: "On Complete Command", Description: "Shell command to run after a download completes. Variables: {filename}, {filepath}, {size}, {speed}, {duration}, {id}", Type: "string"},
+			{Key: "on_error_command", Label: "On Error Command", Description: "Shell command to run when a download fails. Variables: {filename}, {filepath}, {id}, {error}", Type: "string"},
+		},
 		"Network": {
 			{Key: "max_connections_per_host", Label: "Max Connections/Host", Description: "Maximum concurrent connections per host (1-64).", Type: "int"},
 			{Key: "max_concurrent_downloads", Label: "Max Concurrent Downloads", Description: "Maximum number of downloads running at once (1-10). Requires restart.", Type: "int"},
@@ -107,7 +117,7 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 
 // CategoryOrder returns the order of categories for UI tabs.
 func CategoryOrder() []string {
-	return []string{"General", "Network", "Performance", "Categories"}
+	return []string{"General", "Post-Download", "Network", "Performance", "Categories"}
 }
 
 const (
