@@ -18,6 +18,18 @@ func TestIsMagnetURI(t *testing.T) {
 func TestIsTorrentFile(t *testing.T) {
 	assert.False(t, IsTorrentFile("/nonexistent/file.torrent"))
 	assert.False(t, IsTorrentFile("/tmp/test.txt"))
+
+	// Positive case: real .torrent file
+	f, err := os.CreateTemp(t.TempDir(), "*.torrent")
+	assert.NoError(t, err)
+	f.Close()
+	assert.True(t, IsTorrentFile(f.Name()))
+
+	// Should NOT match extensions that merely end in "torrent"
+	f2, err := os.CreateTemp(t.TempDir(), "*.mytorrent")
+	assert.NoError(t, err)
+	f2.Close()
+	assert.False(t, IsTorrentFile(f2.Name()))
 }
 
 func TestDefaultConfig(t *testing.T) {

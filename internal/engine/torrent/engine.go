@@ -42,12 +42,16 @@ func NewEngine(cfg Config) (*Engine, error) {
 		clientCfg.ListenPort = cfg.ListenPort
 	}
 
-	// Disable upload by default (seed ratio 0)
+	// Default to no seeding so users don't unexpectedly upload
 	if cfg.SeedRatio <= 0 && cfg.SeedTime <= 0 {
 		clientCfg.NoUpload = true
 		clientCfg.Seed = false
 	} else {
 		clientCfg.Seed = true
+	}
+
+	if cfg.MaxPeers > 0 {
+		clientCfg.EstablishedConnsPerTorrent = cfg.MaxPeers
 	}
 
 	client, err := torrent.NewClient(clientCfg)
@@ -98,10 +102,9 @@ func (e *Engine) Download(ctx context.Context, t *torrent.Torrent, progressCh ch
 		return fmt.Errorf("torrent: timed out waiting for metadata")
 	}
 
-	// Start downloading all files
 	t.DownloadAll()
 
-	// Report progress periodically
+	// 500ms balances responsive TUI updates against CPU cost of stat calls
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -131,10 +134,11 @@ func (e *Engine) Download(ctx context.Context, t *torrent.Torrent, progressCh ch
 			lastTime = now
 
 			stats := t.Stats()
-			done := completed >= total
+			done := total > 0 && completed >= total
 
 			if progressCh != nil {
-				progressCh <- Progress{
+				select {
+				case progressCh <- Progress{
 					BytesCompleted: completed,
 					BytesTotal:     total,
 					PeerCount:      stats.ActivePeers,
@@ -142,6 +146,8 @@ func (e *Engine) Download(ctx context.Context, t *torrent.Torrent, progressCh ch
 					Speed:          speed,
 					Name:           t.Name(),
 					Done:           done,
+				}:
+				default:
 				}
 			}
 
@@ -162,5 +168,5 @@ func IsTorrentFile(path string) bool {
 	if _, err := os.Stat(path); err != nil {
 		return false
 	}
-	return strings.HasSuffix(strings.ToLower(filepath.Ext(path)), ".torrent")
+	return strings.ToLower(filepath.Ext(path)) == ".torrent"
 }
