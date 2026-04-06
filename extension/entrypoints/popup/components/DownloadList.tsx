@@ -51,17 +51,10 @@ function sortDownloads(downloads: DownloadStatus[]): DownloadStatus[] {
 function EmptyStateGraphic() {
   return (
     <div class="empty-icon" aria-hidden="true">
-      <svg viewBox="0 0 120 120" class="empty-illustration">
-        <defs>
-          <linearGradient id="empty-wireframe" x1="24" y1="24" x2="96" y2="92" gradientUnits="userSpaceOnUse">
-            <stop offset="0%" stop-color="#ff79c6" />
-            <stop offset="100%" stop-color="#8be9fd" />
-          </linearGradient>
-        </defs>
-        <path class="empty-illustration-frame" d="M60 18 92 36v48L60 102 28 84V36l32-18Z" />
-        <path class="empty-illustration-frame" d="M28 36 60 55l32-19" />
-        <path class="empty-illustration-frame" d="M60 55v47" />
-        <path class="empty-illustration-detail" d="M40 73h10l7-12 11 20 7-11h6" />
+      <svg viewBox="0 0 48 48" class="empty-illustration" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 30v12h24V30" />
+        <path d="M24 6v22" />
+        <path d="M16 20l8 8 8-8" />
       </svg>
     </div>
   );
