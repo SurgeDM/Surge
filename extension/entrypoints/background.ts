@@ -56,6 +56,15 @@ async function storageGet(key: string): Promise<string | undefined> {
   return typeof result[key] === 'string' ? result[key] : undefined;
 }
 
+async function storageGetBoolean(key: string): Promise<boolean | undefined> {
+  const result = await browser.storage.local.get(key);
+  const value = result[key];
+  if (typeof value === 'boolean') return value;
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  return undefined;
+}
+
 async function storageSet(key: string, value: string | boolean): Promise<void> {
   await browser.storage.local.set({ [key]: value });
 }
@@ -282,8 +291,8 @@ function extractPathInfo(downloadItem: { filename?: string }): { filename: strin
 // ---------------------------------------------------------------------------
 
 async function isInterceptEnabled(): Promise<boolean> {
-  const val = await storageGet(STORAGE_KEYS.INTERCEPT);
-  return val !== 'false';
+  const val = await storageGetBoolean(STORAGE_KEYS.INTERCEPT);
+  return val ?? true;
 }
 
 function shouldSkipUrl(url: string): boolean {
@@ -337,6 +346,7 @@ async function handleDownloadCreated(downloadItem: {
     });
     cleanupStaleDuplicates();
     await persistPendingDuplicates();
+    updateBadge();
 
     try { await browser.action.openPopup(); } catch { /* ignore */ }
     browser.runtime.sendMessage({ type: 'promptDuplicate', id: pendingId, filename: displayName }).catch(() => {});
@@ -388,7 +398,11 @@ async function startSSEStream(): Promise<void> {
 
   try {
     const resp = await fetch(`${base}/events`, {
-      headers: { Accept: 'text/event-stream' },
+      headers: {
+        Accept: 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        ...(await authHeaders()),
+      },
       signal: sseAbortController.signal,
     });
     if (!resp.ok || !resp.body) {
