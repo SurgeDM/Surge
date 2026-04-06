@@ -909,8 +909,8 @@ body {
 
 .modal-btn:active { transform: translateY(0); }
 
-/* === GitHub Link === */
-.github-link {
+/* === Support Links === */
+.support-link {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -926,7 +926,7 @@ body {
   margin-top: 12px;
 }
 
-.github-link:hover {
+.support-link:hover {
   color: var(--text-primary);
   border-color: var(--border-default);
 }
