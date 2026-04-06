@@ -1,6 +1,13 @@
 import { defineBackground } from 'wxt/sandbox';
 import { normalizeToken, normalizeServerUrl } from './popup/lib/utils';
 import { DownloadStatus, HistoryEntry } from './popup/store/types';
+import {
+  buildEventStreamHeaders,
+  coerceStoredBoolean,
+  queueDuplicateDownload,
+  resolveInterceptEnabled,
+  type PendingDup,
+} from '../lib/background-logic';
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -32,14 +39,6 @@ let sseAbortController: AbortController | null = null;
 // Stale headers captured during requests. Cleaned up on access + periodically.
 const capturedHeaders = new Map<string, { headers: Record<string, string>; timestamp: number }>();
 
-// Pending duplicate downloads that need user confirmation.
-// Persisted to storage so they survive Chrome MV3 service worker restarts.
-interface PendingDup {
-  url: string;
-  filename: string;
-  directory: string;
-  timestamp: number;
-}
 const PENDING_DUP_KEY = 'pendingDuplicates';
 let pendingDuplicateCounter = 0;
 const pendingDuplicates = new Map<string, PendingDup>();
@@ -58,11 +57,7 @@ async function storageGet(key: string): Promise<string | undefined> {
 
 async function storageGetBoolean(key: string): Promise<boolean | undefined> {
   const result = await browser.storage.local.get(key);
-  const value = result[key];
-  if (typeof value === 'boolean') return value;
-  if (value === 'true') return true;
-  if (value === 'false') return false;
-  return undefined;
+  return coerceStoredBoolean(result[key]);
 }
 
 async function storageSet(key: string, value: string | boolean): Promise<void> {
@@ -291,8 +286,7 @@ function extractPathInfo(downloadItem: { filename?: string }): { filename: strin
 // ---------------------------------------------------------------------------
 
 async function isInterceptEnabled(): Promise<boolean> {
-  const val = await storageGetBoolean(STORAGE_KEYS.INTERCEPT);
-  return val ?? true;
+  return resolveInterceptEnabled(await storageGetBoolean(STORAGE_KEYS.INTERCEPT));
 }
 
 function shouldSkipUrl(url: string): boolean {
@@ -337,19 +331,18 @@ async function handleDownloadCreated(downloadItem: {
     const { filename, directory } = extractPathInfo(downloadItem);
     const displayName = filename || downloadItem.url.split('/').pop() || 'Unknown file';
 
-    const pendingId = `dup_${++pendingDuplicateCounter}`;
-    pendingDuplicates.set(pendingId, {
+    pendingDuplicateCounter = await queueDuplicateDownload({
+      pendingDuplicates,
+      pendingDuplicateCounter,
       url: downloadItem.url,
       filename: displayName,
       directory,
-      timestamp: Date.now(),
+      cleanupStaleDuplicates,
+      persistPendingDuplicates,
+      updateBadge,
+      openPopup: () => browser.action.openPopup(),
+      sendPrompt: message => browser.runtime.sendMessage(message),
     });
-    cleanupStaleDuplicates();
-    await persistPendingDuplicates();
-    updateBadge();
-
-    try { await browser.action.openPopup(); } catch { /* ignore */ }
-    browser.runtime.sendMessage({ type: 'promptDuplicate', id: pendingId, filename: displayName }).catch(() => {});
     return;
   }
 
@@ -398,11 +391,7 @@ async function startSSEStream(): Promise<void> {
 
   try {
     const resp = await fetch(`${base}/events`, {
-      headers: {
-        Accept: 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        ...(await authHeaders()),
-      },
+      headers: buildEventStreamHeaders(cachedAuthToken),
       signal: sseAbortController.signal,
     });
     if (!resp.ok || !resp.body) {
