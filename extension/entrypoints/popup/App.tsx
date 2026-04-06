@@ -1,4 +1,5 @@
 import { onMount, onCleanup } from 'solid-js';
+import { readStoredBoolean, readStoredString, STORAGE_KEYS } from '../../lib/storage';
 import {
   serverConnected,
   setServerConnected,
@@ -51,24 +52,24 @@ export default function App() {
 
   async function loadSettings(): Promise<void> {
     try {
-      const [serverUrlResponse, authResponse, statusResponse] = await Promise.all([
-        sendMessage<{ url?: string }>({ type: 'getServerUrl' }),
-        sendMessage<{ token?: string; verified?: boolean }>({ type: 'getAuthToken' }),
-        sendMessage<{ enabled?: boolean }>({ type: 'getStatus' }),
+      const storedValues = await browser.storage.local.get([
+        STORAGE_KEYS.SERVER_URL,
+        STORAGE_KEYS.TOKEN,
+        STORAGE_KEYS.VERIFIED,
+        STORAGE_KEYS.INTERCEPT,
       ]);
 
-      if (serverUrlResponse?.url !== undefined) {
-        setServerUrl(serverUrlResponse.url);
-        setServerUrlLocked(serverUrlResponse.url.trim().length > 0);
-      }
+      const storedServerUrl = readStoredString(storedValues, STORAGE_KEYS.SERVER_URL);
+      const storedToken = readStoredString(storedValues, STORAGE_KEYS.TOKEN);
 
-      if (authResponse?.token !== undefined) {
-        setAuthToken(authResponse.token);
-        setAuthTokenLocked(authResponse.token.trim().length > 0);
-        setAuthValid(authResponse.verified === true);
-      }
+      setServerUrl(storedServerUrl);
+      setServerUrlLocked(storedServerUrl.trim().length > 0);
 
-      if (statusResponse) setInterceptEnabled(statusResponse.enabled !== false);
+      setAuthToken(storedToken);
+      setAuthTokenLocked(storedToken.trim().length > 0);
+      setAuthValid(readStoredBoolean(storedValues, STORAGE_KEYS.VERIFIED, false));
+
+      setInterceptEnabled(readStoredBoolean(storedValues, STORAGE_KEYS.INTERCEPT, true));
     } catch { /* ignore */ }
   }
 

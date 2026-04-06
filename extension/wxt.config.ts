@@ -4,6 +4,11 @@ import solid from 'vite-plugin-solid';
 export default defineConfig({
   outDir: 'output',
 
+  webExt: {
+    // Keep a stable Chromium dev profile so extension storage survives dev restarts.
+    chromiumArgs: ['--user-data-dir=./.wxt/chrome-data'],
+  },
+
   vite: () => ({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     plugins: [solid()] as any,

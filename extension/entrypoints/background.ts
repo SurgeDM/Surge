@@ -1,6 +1,7 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { normalizeToken, normalizeServerUrl } from './popup/lib/utils';
 import { DownloadStatus, HistoryEntry } from './popup/store/types';
+import { STORAGE_KEYS } from '../lib/storage';
 import {
   buildDownloadRequestBody,
   buildEventStreamHeaders,
@@ -26,14 +27,6 @@ const HEADER_EXPIRY_MS = 120_000;
 const HEALTH_CHECK_INTERVAL_MS = 5_000;
 const SYNC_INTERVAL_MS = 60_000;
 
-const STORAGE_KEYS = {
-  INTERCEPT: 'interceptEnabled',
-  TOKEN: 'authToken',
-  VERIFIED: 'authVerified',
-  SERVER_URL: 'serverUrl',
-  DISCOVERED_SERVER_URL: 'discoveredServerUrl',
-} as const;
-
 // ---------------------------------------------------------------------------
 // State
 // ---------------------------------------------------------------------------
@@ -42,6 +35,10 @@ let cachedServerUrl: string | null = null;
 let cachedDiscoveredServerUrl: string | null = null;
 let resolvedBaseUrl: string | null = null;
 let cachedAuthToken: string | null = null;
+let hasHydratedServerUrl = false;
+let hasHydratedDiscoveredServerUrl = false;
+let hasHydratedAuthToken = false;
+let persistedStatePromise: Promise<void> | null = null;
 let isConnected = false;
 let lastHealthCheck = 0;
 let lastBaseUrlFailureAt = 0;
@@ -76,16 +73,53 @@ async function storageSet(key: string, value: string | boolean): Promise<void> {
   await browser.storage.local.set({ [key]: value });
 }
 
+function setCachedAuthTokenState(token: string | null): void {
+  cachedAuthToken = token;
+  hasHydratedAuthToken = true;
+}
+
+function setCachedServerUrlState(url: string | null): void {
+  cachedServerUrl = url;
+  hasHydratedServerUrl = true;
+  resolvedBaseUrl = null;
+}
+
+function setCachedDiscoveredServerUrlState(url: string | null): void {
+  cachedDiscoveredServerUrl = url;
+  hasHydratedDiscoveredServerUrl = true;
+}
+
 async function loadPersistedState(): Promise<void> {
   const [token, serverUrl, discoveredServerUrl] = await Promise.all([
     storageGet(STORAGE_KEYS.TOKEN),
     storageGet(STORAGE_KEYS.SERVER_URL),
     storageGet(STORAGE_KEYS.DISCOVERED_SERVER_URL),
   ]);
-  cachedAuthToken = token || null;
-  cachedServerUrl = serverUrl || null;
-  cachedDiscoveredServerUrl = discoveredServerUrl || null;
-  resolvedBaseUrl = null;
+
+  if (!hasHydratedAuthToken) {
+    setCachedAuthTokenState(token || null);
+  }
+  if (!hasHydratedServerUrl) {
+    setCachedServerUrlState(serverUrl || null);
+  }
+  if (!hasHydratedDiscoveredServerUrl) {
+    setCachedDiscoveredServerUrlState(discoveredServerUrl || null);
+  }
+}
+
+function ensurePersistedStateLoaded(): Promise<void> {
+  if (hasHydratedAuthToken && hasHydratedServerUrl && hasHydratedDiscoveredServerUrl) {
+    return Promise.resolve();
+  }
+
+  if (!persistedStatePromise) {
+    persistedStatePromise = loadPersistedState().catch((error) => {
+      persistedStatePromise = null;
+      throw error;
+    });
+  }
+
+  return persistedStatePromise;
 }
 
 // ---------------------------------------------------------------------------
@@ -121,7 +155,7 @@ function cleanupStaleDuplicates(): void {
 }
 
 async function persistDiscoveredServerUrl(url: string | null): Promise<void> {
-  cachedDiscoveredServerUrl = url;
+  setCachedDiscoveredServerUrlState(url);
   await storageSet(STORAGE_KEYS.DISCOVERED_SERVER_URL, url || '');
 }
 
@@ -146,6 +180,7 @@ async function discoverBaseUrl(): Promise<string | null> {
 }
 
 async function getBaseUrl(): Promise<string | null> {
+  await ensurePersistedStateLoaded();
   if (resolvedBaseUrl) return resolvedBaseUrl;
   if (baseUrlResolutionPromise) return baseUrlResolutionPromise;
   if (Date.now() - lastBaseUrlFailureAt < BASE_URL_RETRY_COOLDOWN_MS) return null;
@@ -195,6 +230,7 @@ async function checkHealthSilent(): Promise<boolean> {
 }
 
 async function authHeaders(): Promise<Record<string, string>> {
+  await ensurePersistedStateLoaded();
   if (!cachedAuthToken) return {};
   return { Authorization: `Bearer ${cachedAuthToken}` };
 }
@@ -473,15 +509,17 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
 
     // Auth
     case 'getAuthToken':
-      return Promise.all([
-        Promise.resolve(cachedAuthToken || ''),
-        storageGet(STORAGE_KEYS.VERIFIED).then(v => v === 'true'),
-      ]).then(([token, verified]) => ({ token, verified }));
+      return ensurePersistedStateLoaded().then(() =>
+        Promise.all([
+          Promise.resolve(cachedAuthToken || ''),
+          storageGet(STORAGE_KEYS.VERIFIED).then(v => v === 'true'),
+        ]).then(([token, verified]) => ({ token, verified })),
+      );
 
     case 'setAuthToken': {
       const normalized = normalizeToken(message.token || '');
       return storageSet(STORAGE_KEYS.TOKEN, normalized).then(async () => {
-        cachedAuthToken = normalized;
+        setCachedAuthTokenState(normalized || null);
         await storageSet(STORAGE_KEYS.VERIFIED, 'false');
         return { success: true };
       }).catch(() => ({ success: false, error: 'Failed to persist auth token' }));
@@ -498,9 +536,12 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
       return (async () => {
         const base = await getBaseUrl();
         if (!base) return { ok: false, error: 'no_server' };
+
+        const token = normalizeToken(message.token || '');
+        const headers = token ? { Authorization: `Bearer ${token}` } : await authHeaders();
         try {
           const resp = await fetch(`${base}/list`, {
-            headers: await authHeaders(),
+            headers,
             signal: AbortSignal.timeout(3000),
           });
           return resp.ok ? { ok: true } : { ok: false, status: resp.status };
@@ -517,7 +558,7 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
     case 'setServerUrl': {
       const normalized = normalizeServerUrl(message.url || '');
       return storageSet(STORAGE_KEYS.SERVER_URL, normalized).then(() => {
-        cachedServerUrl = normalized || null;
+        setCachedServerUrlState(normalized || null);
         lastHealthCheck = 0;
         return { success: true };
       });
@@ -654,16 +695,15 @@ export default defineBackground(() => {
   browser.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') return;
     if (changes[STORAGE_KEYS.SERVER_URL]?.newValue !== undefined) {
-      cachedServerUrl = (changes[STORAGE_KEYS.SERVER_URL].newValue as string) || '';
-      resolvedBaseUrl = null;
+      setCachedServerUrlState(normalizeServerUrl(changes[STORAGE_KEYS.SERVER_URL].newValue as string) || null);
       lastHealthCheck = 0;
       lastBaseUrlFailureAt = 0;
     }
     if (changes[STORAGE_KEYS.TOKEN]?.newValue !== undefined) {
-      cachedAuthToken = normalizeToken(changes[STORAGE_KEYS.TOKEN].newValue as string) || null;
+      setCachedAuthTokenState(normalizeToken(changes[STORAGE_KEYS.TOKEN].newValue as string) || null);
     }
     if (changes[STORAGE_KEYS.DISCOVERED_SERVER_URL]?.newValue !== undefined) {
-      cachedDiscoveredServerUrl = normalizeServerUrl(changes[STORAGE_KEYS.DISCOVERED_SERVER_URL].newValue as string) || null;
+      setCachedDiscoveredServerUrlState(normalizeServerUrl(changes[STORAGE_KEYS.DISCOVERED_SERVER_URL].newValue as string) || null);
     }
   });
 
@@ -672,7 +712,10 @@ export default defineBackground(() => {
   const listenerOptions: Parameters<typeof browser.webRequest.onBeforeSendHeaders.addListener>[2] = ['requestHeaders'];
   if (!isFF) listenerOptions.push('extraHeaders');
   browser.webRequest.onBeforeSendHeaders.addListener(
-    details => captureHeaders(details as any),
+    (details) => {
+      captureHeaders(details as any);
+      return undefined;
+    },
     { urls: ['<all_urls>'] },
     listenerOptions,
   );
@@ -692,10 +735,33 @@ export default defineBackground(() => {
 
   // Startup: restore persisted state
   rehydratePendingDuplicates().catch(() => {});
-  loadPersistedState()
+  ensurePersistedStateLoaded()
     .then(() => checkHealthSilent())
     .then(() => {
       if (isConnected) startSSEStream().catch(() => {});
     })
     .catch(() => {});
 });
+
+export const __test__ = {
+  handleMessage,
+  resetState(): void {
+    cachedServerUrl = null;
+    cachedDiscoveredServerUrl = null;
+    resolvedBaseUrl = null;
+    cachedAuthToken = null;
+    hasHydratedServerUrl = false;
+    hasHydratedDiscoveredServerUrl = false;
+    hasHydratedAuthToken = false;
+    persistedStatePromise = null;
+    isConnected = false;
+    lastHealthCheck = 0;
+    lastBaseUrlFailureAt = 0;
+    sseAbortController = null;
+    baseUrlResolutionPromise = null;
+    capturedHeaders.clear();
+    pendingDuplicateCounter = 0;
+    pendingDuplicates.clear();
+    processedIds.clear();
+  },
+};

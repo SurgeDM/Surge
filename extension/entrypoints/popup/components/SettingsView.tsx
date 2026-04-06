@@ -1,4 +1,5 @@
 import { createSignal } from 'solid-js';
+import { STORAGE_KEYS } from '../../../lib/storage';
 import {
   serverUrl, setServerUrl,
   serverUrlLocked, setServerUrlLocked,
@@ -30,7 +31,7 @@ export default function SettingsView() {
     setServerUrl(url);
     showServerStatus('Saving...');
     try {
-      await browser.runtime.sendMessage({ type: 'setServerUrl', url });
+      await browser.storage.local.set({ [STORAGE_KEYS.SERVER_URL]: url });
       setServerUrlLocked(url.length > 0);
       showServerStatus('Saved');
     } catch {
@@ -43,7 +44,7 @@ export default function SettingsView() {
     setServerUrlLocked(false);
     showServerStatus('Removing...');
     try {
-      await browser.runtime.sendMessage({ type: 'setServerUrl', url: '' });
+      await browser.storage.local.set({ [STORAGE_KEYS.SERVER_URL]: '' });
       showServerStatus('Removed');
     } catch {
       setServerUrlLocked(true);
@@ -56,13 +57,16 @@ export default function SettingsView() {
     setAuthToken(token);
     showTokenStatus('Saving...');
     try {
-      await browser.runtime.sendMessage({ type: 'setAuthToken', token });
+      await browser.storage.local.set({
+        [STORAGE_KEYS.TOKEN]: token,
+        [STORAGE_KEYS.VERIFIED]: 'false',
+      });
       setAuthTokenLocked(token.length > 0);
       showTokenStatus('Saved');
-      const res = await browser.runtime.sendMessage({ type: 'validateAuth' }).catch(() => null) as { ok?: boolean } | null;
+      const res = await browser.runtime.sendMessage({ type: 'validateAuth', token }).catch(() => null) as { ok?: boolean } | null;
       setAuthValid(res?.ok ?? false);
       if (res?.ok) {
-        await browser.runtime.sendMessage({ type: 'setAuthVerified', verified: true });
+        await browser.storage.local.set({ [STORAGE_KEYS.VERIFIED]: 'true' });
       }
     } catch {
       showTokenStatus('Failed to save');
@@ -75,8 +79,10 @@ export default function SettingsView() {
     setAuthValid(false);
     showTokenStatus('Removing...');
     try {
-      await browser.runtime.sendMessage({ type: 'setAuthToken', token: '' });
-      await browser.runtime.sendMessage({ type: 'setAuthVerified', verified: false });
+      await browser.storage.local.set({
+        [STORAGE_KEYS.TOKEN]: '',
+        [STORAGE_KEYS.VERIFIED]: 'false',
+      });
       showTokenStatus('Removed');
     } catch {
       setAuthTokenLocked(true);
@@ -86,7 +92,7 @@ export default function SettingsView() {
 
   const handleInterceptToggle = async (checked: boolean) => {
     setInterceptEnabled(checked);
-    await browser.runtime.sendMessage({ type: 'setStatus', enabled: checked });
+    await browser.storage.local.set({ [STORAGE_KEYS.INTERCEPT]: checked });
   };
 
   return (
