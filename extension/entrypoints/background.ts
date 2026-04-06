@@ -552,7 +552,10 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
 }
 
 async function notifyNextPendingDuplicate(): Promise<void> {
-  const [id, data] = pendingDuplicates.entries().next().value as [string, PendingDup] | undefined;
+  const nextDuplicate = pendingDuplicates.entries().next().value as [string, PendingDup] | undefined;
+  if (!nextDuplicate) return;
+
+  const [id, data] = nextDuplicate;
   if (id) browser.runtime.sendMessage({ type: 'promptDuplicate', id, filename: data.filename }).catch(() => {});
 }
 
@@ -624,11 +627,12 @@ export default defineBackground(() => {
 
   // Header capture — Firefox doesn't support the extraHeaders permission
   const isFF = (browser.runtime.getURL as (path?: string) => string)('').startsWith('moz-extension:');
-  const extraHeaders = isFF ? [] : ['extraHeaders'];
+  const listenerOptions: Parameters<typeof browser.webRequest.onBeforeSendHeaders.addListener>[2] = ['requestHeaders'];
+  if (!isFF) listenerOptions.push('extraHeaders');
   browser.webRequest.onBeforeSendHeaders.addListener(
     details => captureHeaders(details as any),
     { urls: ['<all_urls>'] },
-    ['requestHeaders', ...extraHeaders],
+    listenerOptions,
   );
 
   // Message handler

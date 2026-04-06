@@ -20,6 +20,12 @@ import './popup.css';
 import type { DownloadStatus, HistoryEntry } from './store/types';
 import type { ViewMode } from './store';
 
+const DOWNLOAD_POLL_MS = 15_000;
+const HEALTH_POLL_MS = 3_000;
+const SSE_REFRESH_DEBOUNCE_MS = 2_000;
+
+type RuntimeMessage = Record<string, unknown>;
+
 export default function App() {
   let pollInterval: ReturnType<typeof setInterval> | null = null;
   let healthInterval: ReturnType<typeof setInterval> | null = null;
@@ -27,35 +33,47 @@ export default function App() {
 
   function scheduleRefresh(): void {
     if (refreshDebounceTimer) return;
-    refreshDebounceTimer = setTimeout(() => { refreshDebounceTimer = null; fetchDownloads(false); }, 2000);
+    refreshDebounceTimer = setTimeout(() => {
+      refreshDebounceTimer = null;
+      void fetchDownloads();
+    }, SSE_REFRESH_DEBOUNCE_MS);
   }
 
-  async function loadSettings() {
-    try {
-      const res = await browser.runtime.sendMessage({ type: 'getServerUrl' }) as { url?: string };
-      if (res?.url !== undefined) setServerUrl(res.url);
+  async function sendMessage<T>(message: RuntimeMessage): Promise<T> {
+    return browser.runtime.sendMessage(message) as Promise<T>;
+  }
 
-      const tokenRes = await browser.runtime.sendMessage({ type: 'getAuthToken' }) as { token?: string; verified?: boolean };
-      if (tokenRes?.token !== undefined) {
-        setAuthToken(tokenRes.token);
-        if (tokenRes.verified) setAuthValid(true);
+  async function loadSettings(): Promise<void> {
+    try {
+      const serverUrlResponse = await sendMessage<{ url?: string }>({ type: 'getServerUrl' });
+      if (serverUrlResponse?.url !== undefined) setServerUrl(serverUrlResponse.url);
+
+      const authResponse = await sendMessage<{ token?: string; verified?: boolean }>({ type: 'getAuthToken' });
+      if (authResponse?.token !== undefined) {
+        setAuthToken(authResponse.token);
+        setAuthValid(authResponse.verified === true);
       }
 
-      const statusRes = await browser.runtime.sendMessage({ type: 'getStatus' }) as { enabled?: boolean };
-      if (statusRes) setInterceptEnabled(statusRes.enabled !== false);
+      const statusResponse = await sendMessage<{ enabled?: boolean }>({ type: 'getStatus' });
+      if (statusResponse) setInterceptEnabled(statusResponse.enabled !== false);
     } catch { /* ignore */ }
   }
 
-  async function fetchDownloads(_full = false) {
+  async function fetchDownloads(): Promise<void> {
     try {
-      const res = await browser.runtime.sendMessage({ type: 'getDownloads' }) as { downloads?: DownloadStatus[]; connected?: boolean; authError?: boolean };
-      if (res?.downloads) {
-        setServerConnected(res.connected || false);
-        setActiveDownloads(res.downloads);
-      }
-      if (res?.authError) setAuthValid(false);
+      const response = await sendMessage<{
+        downloads?: DownloadStatus[];
+        connected?: boolean;
+        authError?: boolean;
+      }>({ type: 'getDownloads' });
 
-      if (res?.connected && currentView() === 'history') {
+      if (response?.downloads) {
+        setServerConnected(response.connected === true);
+        setActiveDownloads(response.downloads);
+      }
+      if (response?.authError) setAuthValid(false);
+
+      if (response?.connected && currentView() === 'history') {
         await fetchHistory();
       }
     } catch {
@@ -65,9 +83,9 @@ export default function App() {
 
   async function fetchHistory() {
     try {
-      const res = await browser.runtime.sendMessage({ type: 'getHistory' }) as { history?: HistoryEntry[] };
-      if (res?.history) {
-        setHistoryDownloads(res.history);
+      const response = await sendMessage<{ history?: HistoryEntry[] }>({ type: 'getHistory' });
+      if (response?.history) {
+        setHistoryDownloads(response.history);
       }
     } catch { /* ignore */ }
   }
@@ -77,17 +95,19 @@ export default function App() {
     if (view === 'history') void fetchHistory();
   };
 
-  function onMessageListener(message: Record<string, unknown>) {
-    if (message.type === 'sseEvent') {
-      handleSseEvent(message.event as string, message.data);
-      scheduleRefresh();
-    }
-    if (message.type === 'syncUpdate') {
-      if (Array.isArray(message.downloads)) setActiveDownloads(message.downloads as DownloadStatus[]);
-      if (Array.isArray(message.history)) setHistoryDownloads(message.history as HistoryEntry[]);
-    }
-    if (message.type === 'serverStatus') {
-      if (typeof message.connected === 'boolean') setServerConnected(message.connected);
+  function onMessageListener(message: RuntimeMessage): void {
+    switch (message.type) {
+      case 'sseEvent':
+        handleSseEvent(String(message.event), message.data);
+        scheduleRefresh();
+        break;
+      case 'syncUpdate':
+        if (Array.isArray(message.downloads)) setActiveDownloads(message.downloads as DownloadStatus[]);
+        if (Array.isArray(message.history)) setHistoryDownloads(message.history as HistoryEntry[]);
+        break;
+      case 'serverStatus':
+        if (typeof message.connected === 'boolean') setServerConnected(message.connected);
+        break;
     }
   }
 
@@ -95,15 +115,15 @@ export default function App() {
     await loadSettings();
     await fetchDownloads();
 
-    pollInterval = setInterval(() => fetchDownloads(false), 15000);
+    pollInterval = setInterval(() => { void fetchDownloads(); }, DOWNLOAD_POLL_MS);
     healthInterval = setInterval(async () => {
       try {
-        const res = await browser.runtime.sendMessage({ type: 'checkHealth' }) as { healthy?: boolean };
-        if (res && typeof res.healthy === 'boolean') setServerConnected(res.healthy);
+        const response = await sendMessage<{ healthy?: boolean }>({ type: 'checkHealth' });
+        if (response && typeof response.healthy === 'boolean') setServerConnected(response.healthy);
       } catch {
         setServerConnected(false);
       }
-    }, 3000);
+    }, HEALTH_POLL_MS);
 
     browser.runtime.onMessage.addListener(onMessageListener as Parameters<typeof browser.runtime.onMessage.addListener>[0]);
   });

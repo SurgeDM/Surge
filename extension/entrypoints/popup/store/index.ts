@@ -68,159 +68,123 @@ export { currentView, setCurrentView };
 
 // Maps SSE event types to store mutations
 
+function updateActiveDownload(id: string, update: (download: DownloadStatus) => DownloadStatus): void {
+  setActiveDownloads((downloads) => {
+    const index = downloads.findIndex((download) => download.id === id);
+    if (index < 0) return downloads;
+
+    const next = [...downloads];
+    next[index] = update(downloads[index]);
+    return next;
+  });
+}
+
+function createDownload(
+  message: DownloadStartedMsg | DownloadQueuedMsg,
+  status: DownloadStatus['status'],
+  totalSize = 0,
+): DownloadStatus {
+  return {
+    id: message.DownloadID,
+    url: message.URL,
+    filename: message.Filename,
+    dest_path: message.DestPath,
+    total_size: totalSize,
+    downloaded: 0,
+    progress: 0,
+    speed: 0,
+    status,
+    eta: 0,
+    connections: 0,
+    added_at: Date.now(),
+    time_taken: 0,
+    avg_speed: 0,
+  };
+}
+
+function calculateProgress(downloaded: number, totalSize: number): number {
+  return totalSize > 0 ? (downloaded / totalSize) * 100 : 0;
+}
+
 export function handleSseEvent(event: string, data: unknown): void {
   switch (event) {
     case 'progress': {
-      const msg = data as ProgressMsg;
-      const list = activeDownloads();
-      const idx = list.findIndex(d => d.id === msg.DownloadID);
-      if (idx >= 0) {
-        const existing = list[idx];
-        const totalBytes = msg.Total || existing.total_size;
-        const downloaded = msg.Downloaded;
-        const progress = totalBytes > 0 ? (downloaded / totalBytes) * 100 : 0;
-        const speedMBps = msg.Speed / MB;
-        const eta = msg.Speed > 0 ? Math.ceil((totalBytes - downloaded) / msg.Speed) : 0;
-
-        setActiveDownloads(prev => {
-          const next = [...prev];
-          next[idx] = {
-            ...existing,
-            downloaded,
-            progress,
-            speed: speedMBps,
-            eta,
-            connections: msg.ActiveConnections,
-            total_size: totalBytes,
-          };
-          return next;
-        });
-      }
+      const message = data as ProgressMsg;
+      updateActiveDownload(message.DownloadID, (download) => {
+        const totalSize = message.Total || download.total_size;
+        return {
+          ...download,
+          downloaded: message.Downloaded,
+          progress: calculateProgress(message.Downloaded, totalSize),
+          speed: message.Speed / MB,
+          eta: message.Speed > 0 ? Math.ceil((totalSize - message.Downloaded) / message.Speed) : 0,
+          connections: message.ActiveConnections,
+          total_size: totalSize,
+        };
+      });
       break;
     }
     case 'started': {
-      const msg = data as DownloadStartedMsg;
-      const list = activeDownloads();
-      const existing = list.find(d => d.id === msg.DownloadID);
+      const message = data as DownloadStartedMsg;
+      const existing = activeDownloads().find((download) => download.id === message.DownloadID);
       if (existing) {
-        // Transition from queued to downloading
         upsertActiveDownload({
           ...existing,
           status: 'downloading',
           downloaded: 0,
           progress: 0,
-          total_size: msg.Total,
-          dest_path: msg.DestPath,
+          total_size: message.Total,
+          dest_path: message.DestPath,
         });
       } else {
-        setActiveDownloads(prev => [...prev, {
-          id: msg.DownloadID,
-          url: msg.URL,
-          filename: msg.Filename,
-          dest_path: msg.DestPath,
-          total_size: msg.Total,
-          downloaded: 0,
-          progress: 0,
-          speed: 0,
-          status: 'downloading',
-          eta: 0,
-          connections: 0,
-          added_at: Date.now(),
-          time_taken: 0,
-          avg_speed: 0,
-        }]);
+        upsertActiveDownload(createDownload(message, 'downloading', message.Total));
       }
       break;
     }
     case 'complete': {
-      const msg = data as DownloadCompleteMsg;
-      const list = activeDownloads();
-      const idx = list.findIndex(d => d.id === msg.DownloadID);
-      if (idx >= 0) {
-        const existing = list[idx];
-        setActiveDownloads(prev => {
-          const next = [...prev];
-          next[idx] = {
-            ...existing,
-            status: 'completed',
-            progress: 100,
-            downloaded: msg.Total,
-            avg_speed: msg.AvgSpeed,
-            time_taken: msg.Elapsed,
-          };
-          return next;
-        });
-      }
+      const message = data as DownloadCompleteMsg;
+      updateActiveDownload(message.DownloadID, (download) => ({
+        ...download,
+        status: 'completed',
+        progress: 100,
+        downloaded: message.Total,
+        avg_speed: message.AvgSpeed,
+        time_taken: message.Elapsed,
+      }));
       break;
     }
     case 'error': {
-      const msg = data as DownloadErrorMsg;
-      const list = activeDownloads();
-      const idx = list.findIndex(d => d.id === msg.DownloadID);
-      if (idx >= 0) {
-        const existing = list[idx];
-        setActiveDownloads(prev => {
-          const next = [...prev];
-          next[idx] = { ...existing, status: 'error', error: msg.Err };
-          return next;
-        });
-      }
+      const message = data as DownloadErrorMsg;
+      updateActiveDownload(message.DownloadID, (download) => ({
+        ...download,
+        status: 'error',
+        error: message.Err,
+      }));
       break;
     }
     case 'paused': {
-      const msg = data as DownloadPausedMsg;
-      const list = activeDownloads();
-      const idx = list.findIndex(d => d.id === msg.DownloadID);
-      if (idx >= 0) {
-        const existing = list[idx];
-        setActiveDownloads(prev => {
-          const next = [...prev];
-          next[idx] = {
-            ...existing,
-            status: 'paused',
-            downloaded: msg.Downloaded,
-            progress: existing.total_size > 0 ? (msg.Downloaded / existing.total_size) * 100 : 0,
-          };
-          return next;
-        });
-      }
+      const message = data as DownloadPausedMsg;
+      updateActiveDownload(message.DownloadID, (download) => ({
+        ...download,
+        status: 'paused',
+        downloaded: message.Downloaded,
+        progress: calculateProgress(message.Downloaded, download.total_size),
+      }));
       break;
     }
     case 'resumed': {
-      const msg = data as DownloadResumedMsg;
-      const list = activeDownloads();
-      const idx = list.findIndex(d => d.id === msg.DownloadID);
-      if (idx >= 0) {
-        const existing = list[idx];
-        setActiveDownloads(prev => {
-          const next = [...prev];
-          next[idx] = { ...existing, status: 'downloading' };
-          return next;
-        });
-      }
+      const message = data as DownloadResumedMsg;
+      updateActiveDownload(message.DownloadID, (download) => ({
+        ...download,
+        status: 'downloading',
+      }));
       break;
     }
     case 'queued': {
-      const msg = data as DownloadQueuedMsg;
-      const list = activeDownloads();
-      const existing = list.find(d => d.id === msg.DownloadID);
+      const message = data as DownloadQueuedMsg;
+      const existing = activeDownloads().some((download) => download.id === message.DownloadID);
       if (!existing) {
-        upsertActiveDownload({
-          id: msg.DownloadID,
-          url: msg.URL,
-          filename: msg.Filename,
-          dest_path: msg.DestPath,
-          total_size: 0,
-          downloaded: 0,
-          progress: 0,
-          speed: 0,
-          status: 'queued',
-          eta: 0,
-          connections: 0,
-          added_at: Date.now(),
-          time_taken: 0,
-          avg_speed: 0,
-        });
+        upsertActiveDownload(createDownload(message, 'queued'));
       }
       break;
     }
