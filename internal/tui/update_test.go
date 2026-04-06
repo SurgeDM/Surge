@@ -1045,6 +1045,38 @@ func TestUpdate_CategoryManagerNotEditingPasteIsIgnored(t *testing.T) {
 	}
 }
 
+func TestUpdate_WindowSizeNormalizesCategoryManagerSelection(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.General.Categories = []config.Category{
+		{Name: "Docs", Pattern: `(?i)\\.txt$`, Path: "docs"},
+	}
+
+	var catInputs [4]textinput.Model
+	for i := range catInputs {
+		catInputs[i] = textinput.New()
+	}
+
+	m := RootModel{
+		state:           CategoryManagerState,
+		Settings:        settings,
+		catMgrCursor:    99,
+		catMgrEditing:   true,
+		catMgrEditField: 99,
+		catMgrInputs:    catInputs,
+		list:            NewDownloadList(80, 20),
+	}
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 58, Height: 16})
+	m2 := updated.(RootModel)
+
+	if got, want := m2.catMgrCursor, 0; got != want {
+		t.Fatalf("catMgrCursor = %d, want %d", got, want)
+	}
+	if got, want := m2.catMgrEditField, 3; got != want {
+		t.Fatalf("catMgrEditField = %d, want %d", got, want)
+	}
+}
+
 func TestUpdate_UnlistedStatePasteIsIgnored(t *testing.T) {
 	urlInput := textinput.New()
 	urlInput.SetValue("https://example.com/original")

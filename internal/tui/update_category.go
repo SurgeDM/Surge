@@ -22,6 +22,7 @@ func (m *RootModel) catMgrBeginAdd() {
 	m.catMgrInputs[1].SetValue(newCat.Description)
 	m.catMgrInputs[2].SetValue(newCat.Pattern)
 	m.catMgrInputs[3].SetValue(newCat.Path)
+	m.updateCategoryInputWidthsForViewport()
 	m.catMgrInputs[0].Focus()
 }
 
@@ -31,7 +32,73 @@ func (m *RootModel) blurAllCatInputs() {
 	}
 }
 
+func (m *RootModel) normalizeCategoryManagerSelection() {
+	if m.Settings == nil {
+		return
+	}
+
+	cats := m.Settings.General.Categories
+	maxCursor := len(cats)
+	if m.catMgrEditing {
+		if len(cats) == 0 {
+			m.catMgrCursor = 0
+			m.catMgrEditField = 0
+			m.catMgrEditing = false
+			m.catMgrIsNew = false
+			m.blurAllCatInputs()
+			return
+		}
+		maxCursor = len(cats) - 1
+	}
+
+	if m.catMgrCursor < 0 {
+		m.catMgrCursor = 0
+	}
+	if m.catMgrCursor > maxCursor {
+		m.catMgrCursor = maxCursor
+	}
+
+	if m.catMgrEditField < 0 {
+		m.catMgrEditField = 0
+	}
+	if m.catMgrEditField > 3 {
+		m.catMgrEditField = 3
+	}
+}
+
+func (m *RootModel) updateCategoryInputWidthsForViewport() {
+	modalWidth, _ := categoryModalDimensions(m.width, m.height)
+
+	var targetWidth int
+	if modalWidth >= 76 {
+		leftWidth := 28
+		minRightWidth := 24
+		if modalWidth-leftWidth-8 < minRightWidth {
+			leftWidth = modalWidth - minRightWidth - 8
+		}
+		if leftWidth < 16 {
+			leftWidth = 16
+		}
+		rightWidth := modalWidth - leftWidth - 8
+		targetWidth = rightWidth - 10
+	} else {
+		targetWidth = modalWidth - 14
+	}
+
+	if targetWidth < 10 {
+		targetWidth = 10
+	}
+	if targetWidth > 64 {
+		targetWidth = 64
+	}
+
+	for i := range m.catMgrInputs {
+		m.catMgrInputs[i].SetWidth(targetWidth)
+	}
+}
+
 func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	m.normalizeCategoryManagerSelection()
 	cats := m.Settings.General.Categories
 
 	// Handle editing mode
@@ -178,6 +245,7 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 			m.catMgrInputs[1].SetValue(cat.Description)
 			m.catMgrInputs[2].SetValue(cat.Pattern)
 			m.catMgrInputs[3].SetValue(cat.Path)
+			m.updateCategoryInputWidthsForViewport()
 			m.catMgrInputs[0].Focus()
 		} else {
 			m.catMgrBeginAdd()

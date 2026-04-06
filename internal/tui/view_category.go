@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
 
@@ -14,21 +15,7 @@ func (m RootModel) viewCategoryManager() string {
 		return ""
 	}
 
-	// Modal sizing
-	width := int(float64(m.width) * 0.70)
-	if width < 90 {
-		width = 90
-	}
-	if width > 130 {
-		width = 130
-	}
-	height := 26
-	if m.width < width+4 {
-		width = m.width - 4
-	}
-	if m.height < height+4 {
-		height = m.height - 4
-	}
+	width, height := categoryModalDimensions(m.width, m.height)
 	if width < 40 || height < 10 {
 		content := lipgloss.NewStyle().
 			Padding(1, 2).
@@ -39,6 +26,26 @@ func (m RootModel) viewCategoryManager() string {
 	}
 
 	cats := m.Settings.General.Categories
+	cursor := m.catMgrCursor
+	if m.catMgrEditing {
+		if len(cats) == 0 {
+			cursor = 0
+		} else {
+			if cursor < 0 {
+				cursor = 0
+			}
+			if cursor >= len(cats) {
+				cursor = len(cats) - 1
+			}
+		}
+	} else {
+		if cursor < 0 {
+			cursor = 0
+		}
+		if cursor > len(cats) {
+			cursor = len(cats)
+		}
+	}
 
 	// === TOGGLE BAR ===
 	enabledStr := "OFF"
@@ -51,142 +58,34 @@ func (m RootModel) viewCategoryManager() string {
 	toggleLine := lipgloss.NewStyle().Foreground(colors.LightGray).Render("  Auto-Sort Downloads: ") +
 		toggleStyle.Render(enabledStr) +
 		lipgloss.NewStyle().Foreground(colors.Gray).Render("  (t to toggle)")
-
-	// === LEFT PANE: Category List ===
-	leftWidth := 26
-	if width-leftWidth-8 < 20 {
-		leftWidth = width - 28
-	}
-	if leftWidth < 14 {
-		leftWidth = 14
-	}
-	rightWidth := width - leftWidth - 8
-
-	var listLines []string
-	for i, cat := range cats {
-		line := cat.Name
-		if i == m.catMgrCursor && !m.catMgrEditing {
-			style := lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
-			line = style.Render("▸ " + line)
-		} else {
-			style := lipgloss.NewStyle().Foreground(colors.LightGray)
-			line = style.Render("  " + line)
-		}
-		listLines = append(listLines, line)
+	if width < 70 {
+		toggleLine = lipgloss.NewStyle().Foreground(colors.LightGray).Render("  Auto-Sort: ") +
+			toggleStyle.Render(enabledStr) +
+			lipgloss.NewStyle().Foreground(colors.Gray).Render("  (t)")
 	}
 
-	// "+ Add Category" row
-	addLine := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("  + Add Category")
-	if m.catMgrCursor == len(cats) && !m.catMgrEditing {
-		addLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render("▸ + Add Category")
-	}
-	listLines = append(listLines, addLine)
-
-	listContent := lipgloss.JoinVertical(lipgloss.Left, listLines...)
-	listBox := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colors.Gray).
-		Width(leftWidth).
-		Padding(1, 1).
-		Render(listContent)
-
-	// === RIGHT PANE: Details / Edit ===
-	var rightContent string
-
-	if m.catMgrEditing {
-		// Edit mode with text inputs
-		fieldLabels := []string{"Name:", "Description:", "Pattern:", "Path:"}
-		var fieldLines []string
-		for i, label := range fieldLabels {
-			labelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
-			var valueStr string
-			if i == m.catMgrEditField {
-				valueStr = m.catMgrInputs[i].View()
-			} else {
-				valStyle := lipgloss.NewStyle().Foreground(colors.White)
-				valueStr = valStyle.Render(m.catMgrInputs[i].Value())
-			}
-			fieldLines = append(fieldLines, labelStyle.Render(label))
-			fieldLines = append(fieldLines, "  "+valueStr)
-			if i < len(fieldLabels)-1 {
-				fieldLines = append(fieldLines, "")
-			}
-		}
-
-		editHint := lipgloss.NewStyle().Foreground(colors.Gray).Render(
-			"tab: next field  enter: save  esc: cancel")
-		fieldLines = append(fieldLines, "", editHint)
-
-		rightContent = lipgloss.JoinVertical(lipgloss.Left, fieldLines...)
-	} else if m.catMgrCursor < len(cats) {
-		// View mode - show selected category details
-		cat := cats[m.catMgrCursor]
-		labelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
-		valueStyle := lipgloss.NewStyle().Foreground(colors.White)
-		dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
-
-		dividerWidth := rightWidth - 4
-		if dividerWidth < 1 {
-			dividerWidth = 1
-		}
-		divider := dimStyle.Render(strings.Repeat("─", dividerWidth))
-
-		rightContent = lipgloss.JoinVertical(lipgloss.Left,
-			labelStyle.Render("Name: ")+valueStyle.Render(cat.Name),
-			"",
-			labelStyle.Render("Description:"),
-			valueStyle.Width(rightWidth-4).Render(cat.Description),
-			"",
-			divider,
-			"",
-			labelStyle.Render("Pattern (Regex):"),
-			valueStyle.Width(rightWidth-4).Render(cat.Pattern),
-			"",
-			labelStyle.Render("Path:"),
-			valueStyle.Width(rightWidth-4).Render(cat.Path),
-		)
-	} else {
-		// On "+ Add Category" row
-		rightContent = lipgloss.NewStyle().Foreground(colors.Gray).
-			Width(rightWidth - 4).
-			Render("Press Enter to create a new category\nor 'a' to add.")
-	}
-
-	rightBox := lipgloss.NewStyle().
-		Width(rightWidth).
-		Padding(1, 2).
-		Render(rightContent)
-
-	// === VERTICAL DIVIDER ===
-	listBoxHeight := lipgloss.Height(listBox)
-	dividerStyle := lipgloss.NewStyle().Foreground(colors.Gray)
-	if listBoxHeight < 1 {
-		listBoxHeight = 1
-	}
-	divider := dividerStyle.Render(strings.Repeat("│\n", listBoxHeight-1) + "│")
-
-	// === COMBINE ===
-	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
-
-	// === HELP ===
-	helpStyle := lipgloss.NewStyle().
-		Foreground(colors.Gray).
-		Width(width - 6).
-		Align(lipgloss.Center)
-	helpText := helpStyle.Render(m.help.View(m.keys.CategoryMgr))
-
-	// === INFO LINE ===
+	helpText := m.renderCategoryHelp(width - 6)
 	catCount := fmt.Sprintf("%d categories", len(cats))
 	infoLine := lipgloss.NewStyle().Foreground(colors.Gray).Render("  " + catCount)
 
-	// Layout
-	toggleBarHeight := lipgloss.Height(toggleLine)
-	contentHeight := lipgloss.Height(content)
-	helpHeight := lipgloss.Height(helpText)
-	infoHeight := lipgloss.Height(infoLine)
-
 	innerHeight := height - 2
-	usedHeight := 1 + toggleBarHeight + 1 + infoHeight + contentHeight + helpHeight
+	toggleBarHeight := lipgloss.Height(toggleLine)
+	infoHeight := lipgloss.Height(infoLine)
+	helpHeight := lipgloss.Height(helpText)
+	bodyHeight := innerHeight - toggleBarHeight - infoHeight - helpHeight - 1
+	if bodyHeight < 3 {
+		bodyHeight = 3
+	}
+
+	var content string
+	if width >= 76 && bodyHeight >= 9 {
+		content = m.renderCategoryTwoColumn(cats, cursor, width, bodyHeight)
+	} else {
+		content = m.renderCategoryCompact(cats, cursor, width, bodyHeight)
+	}
+
+	contentHeight := lipgloss.Height(content)
+	usedHeight := toggleBarHeight + infoHeight + 1 + contentHeight + helpHeight
 	paddingLines := innerHeight - usedHeight
 	if paddingLines < 0 {
 		paddingLines = 0
@@ -194,7 +93,6 @@ func (m RootModel) viewCategoryManager() string {
 	padding := strings.Repeat("\n", paddingLines)
 
 	fullContent := lipgloss.JoinVertical(lipgloss.Left,
-		"",
 		toggleLine,
 		infoLine,
 		"",
@@ -204,4 +102,306 @@ func (m RootModel) viewCategoryManager() string {
 
 	box := renderBtopBox(PaneTitleStyle.Render(" Category Manager "), "", fullContent, width, height, colors.NeonPurple)
 	return m.renderModalWithOverlay(box)
+}
+
+func categoryModalDimensions(termWidth, termHeight int) (int, int) {
+	width := int(float64(termWidth) * 0.72)
+	if width < 64 {
+		width = 64
+	}
+	if width > 130 {
+		width = 130
+	}
+	height := 26
+
+	maxWidth := termWidth - 4
+	if maxWidth < 1 {
+		maxWidth = 1
+	}
+	maxHeight := termHeight - 4
+	if maxHeight < 1 {
+		maxHeight = 1
+	}
+
+	if width > maxWidth {
+		width = maxWidth
+	}
+	if height > maxHeight {
+		height = maxHeight
+	}
+
+	return width, height
+}
+
+func (m RootModel) renderCategoryHelp(width int) string {
+	if width < 1 {
+		width = 1
+	}
+
+	helpText := m.help.View(m.keys.CategoryMgr)
+	if width < 68 {
+		helpText = "esc: save/close  enter: edit/save  del: remove"
+	}
+	if width < 48 {
+		helpText = "esc close | enter edit | del rm"
+	}
+
+	return lipgloss.NewStyle().
+		Foreground(colors.Gray).
+		Width(width).
+		Align(lipgloss.Center).
+		Render(helpText)
+}
+
+func renderCategoryListViewport(cats []config.Category, cursor int, editing bool, rows, innerWidth int) string {
+	if rows < 1 {
+		rows = 1
+	}
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+
+	totalRows := len(cats) + 1 // + Add row
+	if totalRows < 1 {
+		totalRows = 1
+	}
+
+	if cursor < 0 {
+		cursor = 0
+	}
+	if cursor >= totalRows {
+		cursor = totalRows - 1
+	}
+
+	start := 0
+	if cursor >= rows {
+		start = cursor - rows + 1
+	}
+	maxStart := totalRows - rows
+	if maxStart < 0 {
+		maxStart = 0
+	}
+	if start > maxStart {
+		start = maxStart
+	}
+
+	lines := make([]string, 0, rows)
+	for i := 0; i < rows; i++ {
+		idx := start + i
+		if idx >= totalRows {
+			lines = append(lines, "")
+			continue
+		}
+
+		if idx < len(cats) {
+			label := strings.TrimSpace(cats[idx].Name)
+			if label == "" {
+				label = "(Unnamed Category)"
+			}
+
+			prefix := "  "
+			style := lipgloss.NewStyle().Foreground(colors.LightGray)
+			if idx == cursor && !editing {
+				prefix = "▸ "
+				style = lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
+			}
+			lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+label))
+			continue
+		}
+
+		addPrefix := "  "
+		addStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan)
+		if idx == cursor && !editing {
+			addPrefix = "▸ "
+			addStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
+		}
+		lines = append(lines, addStyle.Width(innerWidth).MaxWidth(innerWidth).Render(addPrefix+"+ Add Category"))
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func (m RootModel) renderCategoryDetailView(cats []config.Category, cursor, innerWidth, rows int) string {
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	if rows < 1 {
+		rows = 1
+	}
+
+	if cursor >= len(cats) || len(cats) == 0 {
+		msg := lipgloss.NewStyle().
+			Foreground(colors.Gray).
+			Width(innerWidth).
+			MaxWidth(innerWidth).
+			Render("Press Enter to create a new category\nor press 'a' to add.")
+		return formatSettingsBlock(msg, innerWidth, rows)
+	}
+
+	cat := cats[cursor]
+	labelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
+	valueStyle := lipgloss.NewStyle().Foreground(colors.White)
+	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
+	divider := dimStyle.Render(strings.Repeat("─", innerWidth))
+
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		labelStyle.Render("Name: ")+valueStyle.Width(innerWidth-6).Render(cat.Name),
+		"",
+		labelStyle.Render("Description:"),
+		valueStyle.Width(innerWidth).Render(cat.Description),
+		"",
+		divider,
+		"",
+		labelStyle.Render("Pattern (Regex):"),
+		valueStyle.Width(innerWidth).Render(cat.Pattern),
+		"",
+		labelStyle.Render("Path:"),
+		valueStyle.Width(innerWidth).Render(cat.Path),
+	)
+
+	return formatSettingsBlock(content, innerWidth, rows)
+}
+
+func (m RootModel) renderCategoryEditView(innerWidth, rows int) string {
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	if rows < 1 {
+		rows = 1
+	}
+
+	fieldLabels := []string{"Name:", "Description:", "Pattern:", "Path:"}
+	var fieldLines []string
+	for i, label := range fieldLabels {
+		labelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
+		valueStyle := lipgloss.NewStyle().Foreground(colors.White)
+		value := m.catMgrInputs[i].Value()
+		if i == m.catMgrEditField {
+			value = m.catMgrInputs[i].View()
+		}
+		fieldLines = append(fieldLines, labelStyle.Width(innerWidth).MaxWidth(innerWidth).Render(label))
+		fieldLines = append(fieldLines, valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render("  "+value))
+		if i < len(fieldLabels)-1 {
+			fieldLines = append(fieldLines, "")
+		}
+	}
+
+	hint := lipgloss.NewStyle().
+		Foreground(colors.Gray).
+		Width(innerWidth).
+		MaxWidth(innerWidth).
+		Render("tab: next field  enter: save  esc: cancel")
+	fieldLines = append(fieldLines, "", hint)
+
+	return formatSettingsBlock(strings.Join(fieldLines, "\n"), innerWidth, rows)
+}
+
+func (m RootModel) renderCategoryTwoColumn(cats []config.Category, cursor, modalWidth, bodyHeight int) string {
+	leftWidth := 28
+	minRightWidth := 24
+	if modalWidth-leftWidth-8 < minRightWidth {
+		leftWidth = modalWidth - minRightWidth - 8
+	}
+	if leftWidth < 16 {
+		leftWidth = 16
+	}
+
+	rightWidth := modalWidth - leftWidth - 8
+	if rightWidth < minRightWidth {
+		rightWidth = minRightWidth
+		if modalWidth-rightWidth-8 > 16 {
+			leftWidth = modalWidth - rightWidth - 8
+		}
+	}
+
+	if leftWidth < 14 || rightWidth < 16 {
+		return m.renderCategoryCompact(cats, cursor, modalWidth, bodyHeight)
+	}
+
+	listRows := bodyHeight - 4
+	if listRows < 1 {
+		listRows = 1
+	}
+	listContent := renderCategoryListViewport(cats, cursor, m.catMgrEditing, listRows, leftWidth-4)
+	listBox := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(colors.Gray).
+		Width(leftWidth).
+		Padding(1, 1).
+		Render(listContent)
+
+	if m.catMgrEditing {
+		m.updateCategoryInputWidthsForViewport()
+	}
+
+	rightRows := bodyHeight - 2
+	if rightRows < 1 {
+		rightRows = 1
+	}
+
+	var rightContent string
+	if m.catMgrEditing {
+		rightContent = m.renderCategoryEditView(rightWidth-4, rightRows)
+	} else {
+		rightContent = m.renderCategoryDetailView(cats, cursor, rightWidth-4, rightRows)
+	}
+
+	rightBox := lipgloss.NewStyle().
+		Width(rightWidth).
+		Padding(1, 2).
+		Render(rightContent)
+
+	dividerHeight := max(lipgloss.Height(listBox), lipgloss.Height(rightBox))
+	if dividerHeight < 1 {
+		dividerHeight = 1
+	}
+	divider := lipgloss.NewStyle().
+		Foreground(colors.Gray).
+		Render(strings.Repeat("│\n", dividerHeight-1) + "│")
+
+	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
+	return formatSettingsBlock(content, modalWidth-2, bodyHeight)
+}
+
+func (m RootModel) renderCategoryCompact(cats []config.Category, cursor, modalWidth, bodyHeight int) string {
+	innerWidth := modalWidth - 2
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+
+	if m.catMgrEditing {
+		m.updateCategoryInputWidthsForViewport()
+	}
+
+	listRows := bodyHeight / 2
+	if listRows < 1 {
+		listRows = 1
+	}
+
+	detailRows := bodyHeight - listRows - 1
+	if detailRows < 1 {
+		detailRows = 1
+		listRows = bodyHeight - detailRows
+		if listRows < 1 {
+			listRows = 1
+		}
+	}
+
+	list := renderCategoryListViewport(cats, cursor, m.catMgrEditing, listRows, innerWidth)
+
+	var detail string
+	if m.catMgrEditing {
+		detail = m.renderCategoryEditView(innerWidth, detailRows)
+	} else {
+		detail = m.renderCategoryDetailView(cats, cursor, innerWidth, detailRows)
+	}
+
+	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("─", innerWidth))
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		list,
+		divider,
+		detail,
+	)
+
+	return formatSettingsBlock(content, innerWidth, bodyHeight)
 }

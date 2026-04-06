@@ -81,6 +81,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
+		if m.state == CategoryManagerState {
+			m.normalizeCategoryManagerSelection()
+			if m.catMgrEditing {
+				m.updateCategoryInputWidthsForViewport()
+			}
+		}
+
 		// Calculate list dimensions
 		// List goes in bottom-left pane — use full width; View() handles the actual box sizing
 		availableWidth := msg.Width - 4

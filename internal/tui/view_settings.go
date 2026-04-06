@@ -488,7 +488,7 @@ func (m *RootModel) normalizeSettingsSelection() {
 func (m *RootModel) updateSettingsInputWidthForViewport() {
 	modalWidth, _ := settingsModalDimensions(m.width, m.height)
 
-	targetWidth := 24
+	var targetWidth int
 	if modalWidth >= 72 {
 		leftWidth := 32
 		minRightWidth := 22
