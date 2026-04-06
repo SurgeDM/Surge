@@ -13,6 +13,7 @@ import (
 type Settings struct {
 	General     GeneralSettings     `json:"general"`
 	Network     NetworkSettings     `json:"network"`
+	Torrent     TorrentSettings     `json:"torrent"`
 	Performance PerformanceSettings `json:"performance"`
 }
 
@@ -48,6 +49,13 @@ type NetworkSettings struct {
 	SequentialDownload     bool   `json:"sequential_download"`
 	MinChunkSize           int64  `json:"min_chunk_size"`
 	WorkerBufferSize       int    `json:"worker_buffer_size"`
+}
+
+// TorrentSettings contains BitTorrent download parameters.
+type TorrentSettings struct {
+	Enabled   bool    `json:"enabled"`
+	SeedRatio float64 `json:"seed_ratio"`
+	MaxPeers  int     `json:"max_peers"`
 }
 
 // PerformanceSettings contains performance tuning parameters.
@@ -95,6 +103,11 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 			{Key: "min_chunk_size", Label: "Min Chunk Size", Description: "Minimum download chunk size in MB (e.g., 2).", Type: "int64"},
 			{Key: "worker_buffer_size", Label: "Worker Buffer Size", Description: "I/O buffer size per worker in KB (e.g., 512).", Type: "int"},
 		},
+		"Torrent": {
+			{Key: "enabled", Label: "Enable Torrents", Description: "Enable BitTorrent and magnet link support.", Type: "bool"},
+			{Key: "seed_ratio", Label: "Seed Ratio", Description: "Upload-to-download ratio target. 0 disables seeding.", Type: "float64"},
+			{Key: "max_peers", Label: "Max Peers", Description: "Maximum peers per torrent (1-500).", Type: "int"},
+		},
 		"Performance": {
 			{Key: "max_task_retries", Label: "Max Task Retries", Description: "Number of times to retry a failed chunk before giving up.", Type: "int"},
 			{Key: "slow_worker_threshold", Label: "Slow Worker Threshold", Description: "Restart workers slower than this fraction of mean speed (0.0-1.0).", Type: "float64"},
@@ -107,7 +120,7 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 
 // CategoryOrder returns the order of categories for UI tabs.
 func CategoryOrder() []string {
-	return []string{"General", "Network", "Performance", "Categories"}
+	return []string{"General", "Network", "Torrent", "Performance", "Categories"}
 }
 
 const (
@@ -142,6 +155,11 @@ func DefaultSettings() *Settings {
 			SequentialDownload:     false,
 			MinChunkSize:           2 * MB,
 			WorkerBufferSize:       512 * KB,
+		},
+		Torrent: TorrentSettings{
+			Enabled:   false,
+			SeedRatio: 0,
+			MaxPeers:  50,
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        3,
