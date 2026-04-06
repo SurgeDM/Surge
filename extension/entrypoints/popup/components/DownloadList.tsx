@@ -52,9 +52,10 @@ function EmptyStateGraphic() {
   return (
     <div class="empty-icon" aria-hidden="true">
       <svg viewBox="0 0 48 48" class="empty-illustration" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 30v12h24V30" />
-        <path d="M24 6v22" />
-        <path d="M16 20l8 8 8-8" />
+        <path d="M24 10v16" />
+        <path d="M18 20l6 6 6-6" />
+        <path d="M12 30h7l3 4h4l3-4h7" />
+        <path d="M12 30v4a4 4 0 0 0 4 4h16a4 4 0 0 0 4-4v-4" />
       </svg>
     </div>
   );
