@@ -45,6 +45,70 @@ export function buildEventStreamHeaders(authToken: string | null): Record<string
   };
 }
 
+export function buildPortScanCandidates(
+  startPort: number,
+  portCount: number,
+  preferredUrls: Array<string | null | undefined> = [],
+): string[] {
+  const candidates: string[] = [];
+  const seen = new Set<string>();
+
+  const addCandidate = (url: string | null | undefined) => {
+    const normalized = typeof url === 'string' ? url.trim() : '';
+    if (!normalized || seen.has(normalized)) return;
+    seen.add(normalized);
+    candidates.push(normalized);
+  };
+
+  preferredUrls.forEach(addCandidate);
+  for (let port = startPort; port < startPort + portCount; port++) {
+    addCandidate(`http://127.0.0.1:${port}`);
+  }
+
+  return candidates;
+}
+
+export async function findReachableCandidate<T extends string>(
+  candidates: T[],
+  isReachable: (candidate: T) => Promise<boolean>,
+  batchSize = 20,
+): Promise<T | null> {
+  const size = Math.max(1, Math.floor(batchSize));
+
+  for (let index = 0; index < candidates.length; index += size) {
+    const batch = candidates.slice(index, index + size);
+    const match = await new Promise<T | null>((resolve) => {
+      let pending = batch.length;
+      let settled = false;
+
+      for (const candidate of batch) {
+        void isReachable(candidate)
+          .then((reachable) => {
+            if (settled) return;
+
+            if (reachable) {
+              settled = true;
+              resolve(candidate);
+              return;
+            }
+
+            pending -= 1;
+            if (pending === 0) resolve(null);
+          })
+          .catch(() => {
+            if (settled) return;
+            pending -= 1;
+            if (pending === 0) resolve(null);
+          });
+      }
+    });
+
+    if (match) return match;
+  }
+
+  return null;
+}
+
 interface DownloadRequestBodyOptions {
   url: string;
   filename: string;

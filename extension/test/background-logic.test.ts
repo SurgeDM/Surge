@@ -1,10 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  buildPortScanCandidates,
   buildDownloadRequestBody,
   buildEventStreamHeaders,
   coerceStoredBoolean,
   extractPathInfo,
   filterPendingDuplicates,
+  findReachableCandidate,
   openEventStream,
   queueDuplicateDownload,
   resolveInterceptEnabled,
@@ -64,6 +66,36 @@ describe('background logic', () => {
       headers: undefined,
       skip_approval: undefined,
     });
+  });
+
+  it('prioritizes preferred URLs when building port scan candidates', () => {
+    expect(buildPortScanCandidates(1700, 3, ['http://127.0.0.1:1702', 'http://127.0.0.1:1701']))
+      .toEqual([
+        'http://127.0.0.1:1702',
+        'http://127.0.0.1:1701',
+        'http://127.0.0.1:1700',
+      ]);
+  });
+
+  it('finds a reachable candidate without waiting for the full list', async () => {
+    const probe = vi.fn(async (candidate: string) => {
+      if (candidate === 'http://127.0.0.1:1703') {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return true;
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return false;
+    });
+
+    const match = await findReachableCandidate([
+      'http://127.0.0.1:1700',
+      'http://127.0.0.1:1701',
+      'http://127.0.0.1:1702',
+      'http://127.0.0.1:1703',
+    ], probe, 4);
+
+    expect(match).toBe('http://127.0.0.1:1703');
   });
 
   it('updates the badge when queueing a duplicate download', async () => {

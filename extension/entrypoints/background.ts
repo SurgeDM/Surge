@@ -4,9 +4,11 @@ import { DownloadStatus, HistoryEntry } from './popup/store/types';
 import {
   buildDownloadRequestBody,
   buildEventStreamHeaders,
+  buildPortScanCandidates,
   coerceStoredBoolean,
   extractPathInfo,
   filterPendingDuplicates,
+  findReachableCandidate,
   queueDuplicateDownload,
   resolveInterceptEnabled,
   type PendingDup,
@@ -18,6 +20,8 @@ import {
 
 const DEFAULT_PORT = 1700;
 const MAX_PORT_SCAN = 100;
+const PORT_SCAN_BATCH_SIZE = 20;
+const BASE_URL_RETRY_COOLDOWN_MS = 5_000;
 const HEADER_EXPIRY_MS = 120_000;
 const HEALTH_CHECK_INTERVAL_MS = 5_000;
 const SYNC_INTERVAL_MS = 60_000;
@@ -27,6 +31,7 @@ const STORAGE_KEYS = {
   TOKEN: 'authToken',
   VERIFIED: 'authVerified',
   SERVER_URL: 'serverUrl',
+  DISCOVERED_SERVER_URL: 'discoveredServerUrl',
 } as const;
 
 // ---------------------------------------------------------------------------
@@ -34,11 +39,14 @@ const STORAGE_KEYS = {
 // ---------------------------------------------------------------------------
 
 let cachedServerUrl: string | null = null;
+let cachedDiscoveredServerUrl: string | null = null;
 let resolvedBaseUrl: string | null = null;
 let cachedAuthToken: string | null = null;
 let isConnected = false;
 let lastHealthCheck = 0;
+let lastBaseUrlFailureAt = 0;
 let sseAbortController: AbortController | null = null;
+let baseUrlResolutionPromise: Promise<string | null> | null = null;
 
 // Stale headers captured during requests. Cleaned up on access + periodically.
 const capturedHeaders = new Map<string, { headers: Record<string, string>; timestamp: number }>();
@@ -69,12 +77,14 @@ async function storageSet(key: string, value: string | boolean): Promise<void> {
 }
 
 async function loadPersistedState(): Promise<void> {
-  const [token, serverUrl] = await Promise.all([
+  const [token, serverUrl, discoveredServerUrl] = await Promise.all([
     storageGet(STORAGE_KEYS.TOKEN),
     storageGet(STORAGE_KEYS.SERVER_URL),
+    storageGet(STORAGE_KEYS.DISCOVERED_SERVER_URL),
   ]);
   cachedAuthToken = token || null;
   cachedServerUrl = serverUrl || null;
+  cachedDiscoveredServerUrl = discoveredServerUrl || null;
   resolvedBaseUrl = null;
 }
 
@@ -110,37 +120,60 @@ function cleanupStaleDuplicates(): void {
   }
 }
 
+async function persistDiscoveredServerUrl(url: string | null): Promise<void> {
+  cachedDiscoveredServerUrl = url;
+  await storageSet(STORAGE_KEYS.DISCOVERED_SERVER_URL, url || '');
+}
+
 // ---------------------------------------------------------------------------
 // URL resolution
 // ---------------------------------------------------------------------------
 
-async function getBaseUrl(): Promise<string | null> {
-  // Try the user-configured URL first
+async function discoverBaseUrl(): Promise<string | null> {
+  // Try the user-configured URL first and only.
   if (cachedServerUrl) {
-    if (resolvedBaseUrl === cachedServerUrl) return cachedServerUrl;
-    if (await healthCheck(cachedServerUrl)) {
-      resolvedBaseUrl = cachedServerUrl;
-      return cachedServerUrl;
-    }
-    resolvedBaseUrl = null;
-    isConnected = false;
+    if (await healthCheck(cachedServerUrl)) return cachedServerUrl;
     return null;
   }
 
+  const candidates = buildPortScanCandidates(
+    DEFAULT_PORT,
+    MAX_PORT_SCAN,
+    [cachedDiscoveredServerUrl],
+  );
+
+  return findReachableCandidate(candidates, healthCheck, PORT_SCAN_BATCH_SIZE);
+}
+
+async function getBaseUrl(): Promise<string | null> {
   if (resolvedBaseUrl) return resolvedBaseUrl;
+  if (baseUrlResolutionPromise) return baseUrlResolutionPromise;
+  if (Date.now() - lastBaseUrlFailureAt < BASE_URL_RETRY_COOLDOWN_MS) return null;
 
-  // Fall back to port scanning
-  for (let p = DEFAULT_PORT; p < DEFAULT_PORT + MAX_PORT_SCAN; p++) {
-    const url = `http://127.0.0.1:${p}`;
-    if (await healthCheck(url)) {
-      resolvedBaseUrl = url;
-      return url;
+  baseUrlResolutionPromise = (async () => {
+    const nextBaseUrl = await discoverBaseUrl();
+
+    if (!nextBaseUrl) {
+      resolvedBaseUrl = null;
+      isConnected = false;
+      lastBaseUrlFailureAt = Date.now();
+      return null;
     }
-  }
 
-  resolvedBaseUrl = null;
-  isConnected = false;
-  return null;
+    resolvedBaseUrl = nextBaseUrl;
+    isConnected = true;
+    lastBaseUrlFailureAt = 0;
+
+    if (!cachedServerUrl && cachedDiscoveredServerUrl !== nextBaseUrl) {
+      await persistDiscoveredServerUrl(nextBaseUrl).catch(() => {});
+    }
+
+    return nextBaseUrl;
+  })().finally(() => {
+    baseUrlResolutionPromise = null;
+  });
+
+  return baseUrlResolutionPromise;
 }
 
 async function healthCheck(url: string): Promise<boolean> {
@@ -180,10 +213,6 @@ async function apiFetch(url: string, options?: RequestInit): Promise<Response | 
       signal: AbortSignal.timeout(5000),
     });
     if (response.ok) return response;
-    if (resolvedBaseUrl === base) {
-      resolvedBaseUrl = null;
-      lastHealthCheck = 0;
-    }
     return null;
   } catch {
     if (resolvedBaseUrl === base) {
@@ -628,9 +657,13 @@ export default defineBackground(() => {
       cachedServerUrl = (changes[STORAGE_KEYS.SERVER_URL].newValue as string) || '';
       resolvedBaseUrl = null;
       lastHealthCheck = 0;
+      lastBaseUrlFailureAt = 0;
     }
     if (changes[STORAGE_KEYS.TOKEN]?.newValue !== undefined) {
       cachedAuthToken = normalizeToken(changes[STORAGE_KEYS.TOKEN].newValue as string) || null;
+    }
+    if (changes[STORAGE_KEYS.DISCOVERED_SERVER_URL]?.newValue !== undefined) {
+      cachedDiscoveredServerUrl = normalizeServerUrl(changes[STORAGE_KEYS.DISCOVERED_SERVER_URL].newValue as string) || null;
     }
   });
 

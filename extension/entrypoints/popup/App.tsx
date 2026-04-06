@@ -51,20 +51,23 @@ export default function App() {
 
   async function loadSettings(): Promise<void> {
     try {
-      const serverUrlResponse = await sendMessage<{ url?: string }>({ type: 'getServerUrl' });
+      const [serverUrlResponse, authResponse, statusResponse] = await Promise.all([
+        sendMessage<{ url?: string }>({ type: 'getServerUrl' }),
+        sendMessage<{ token?: string; verified?: boolean }>({ type: 'getAuthToken' }),
+        sendMessage<{ enabled?: boolean }>({ type: 'getStatus' }),
+      ]);
+
       if (serverUrlResponse?.url !== undefined) {
         setServerUrl(serverUrlResponse.url);
         setServerUrlLocked(serverUrlResponse.url.trim().length > 0);
       }
 
-      const authResponse = await sendMessage<{ token?: string; verified?: boolean }>({ type: 'getAuthToken' });
       if (authResponse?.token !== undefined) {
         setAuthToken(authResponse.token);
         setAuthTokenLocked(authResponse.token.trim().length > 0);
         setAuthValid(authResponse.verified === true);
       }
 
-      const statusResponse = await sendMessage<{ enabled?: boolean }>({ type: 'getStatus' });
       if (statusResponse) setInterceptEnabled(statusResponse.enabled !== false);
     } catch { /* ignore */ }
   }
@@ -121,9 +124,11 @@ export default function App() {
     }
   }
 
-  onMount(async () => {
-    await loadSettings();
-    await fetchDownloads();
+  onMount(() => {
+    browser.runtime.onMessage.addListener(onMessageListener as Parameters<typeof browser.runtime.onMessage.addListener>[0]);
+
+    void loadSettings();
+    void fetchDownloads();
 
     pollInterval = setInterval(() => {
       if (!serverConnected()) {
@@ -144,7 +149,6 @@ export default function App() {
       }
     }, HEALTH_POLL_MS);
 
-    browser.runtime.onMessage.addListener(onMessageListener as Parameters<typeof browser.runtime.onMessage.addListener>[0]);
   });
 
   onCleanup(() => {
