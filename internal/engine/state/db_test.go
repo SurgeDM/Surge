@@ -1,8 +1,9 @@
 package state
 
 import (
+	"context"
 	"database/sql"
-	"fmt"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -52,7 +53,7 @@ func TestDBLifecycle(t *testing.T) {
 	}
 
 	// Test tables exist
-	tx, err := d3.Begin()
+	tx, err := d3.BeginTx(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("Failed to begin tx: %v", err)
 	}
@@ -104,7 +105,7 @@ func TestWithTx_Rollback(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	expectedErr := fmt.Errorf("intentional error")
+	expectedErr := errors.New("intentional error")
 	err := withTx(func(tx *sql.Tx) error {
 		_, err := tx.Exec("INSERT INTO downloads (id, url, dest_path) VALUES (?, ?, ?)", "tx-test-2", "http://tx.com/2", "/tmp/2")
 		if err != nil {
@@ -114,7 +115,7 @@ func TestWithTx_Rollback(t *testing.T) {
 		return expectedErr
 	})
 
-	if err != expectedErr {
+	if !errors.Is(err, expectedErr) {
 		t.Fatalf("Expected error %v, got %v", expectedErr, err)
 	}
 

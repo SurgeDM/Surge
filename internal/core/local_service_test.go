@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,7 +20,7 @@ import (
 func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 	tempDir := t.TempDir()
 	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	state.Configure(filepath.Join(tempDir, t.Name()+"-surge.db"))
 	defer state.CloseDB()
 
 	ch := make(chan interface{}, 20)
@@ -98,7 +97,7 @@ func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testing.T) {
 	tempDir := t.TempDir()
 	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	state.Configure(filepath.Join(tempDir, t.Name()+"-surge.db"))
 	defer state.CloseDB()
 
 	ch := make(chan interface{}, 100)
@@ -293,7 +292,7 @@ func TestLocalDownloadService_AddWithID_UsesProvidedID(t *testing.T) {
 func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	tempDir := t.TempDir()
 	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	state.Configure(filepath.Join(tempDir, t.Name()+"-surge.db"))
 	defer state.CloseDB()
 
 	ch := make(chan interface{}, 100)
@@ -397,7 +396,7 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 func TestLocalDownloadService_Shutdown_PersistsQueuedState(t *testing.T) {
 	tempDir := t.TempDir()
 	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	state.Configure(filepath.Join(tempDir, t.Name()+"-surge.db"))
 	defer state.CloseDB()
 
 	ch := make(chan interface{}, 200)
@@ -500,7 +499,7 @@ func TestLocalDownloadService_BatchProgress(t *testing.T) {
 	// Create temporary directory for downloads
 	tempDir := t.TempDir()
 	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	state.Configure(filepath.Join(tempDir, t.Name()+"-surge.db"))
 	defer state.CloseDB()
 
 	pool := download.NewWorkerPool(ch, 1)
@@ -543,7 +542,7 @@ func TestLocalDownloadService_BatchProgress(t *testing.T) {
 func TestLocalDownloadService_ResumeRejectedWhilePausing(t *testing.T) {
 	tempDir := t.TempDir()
 	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	state.Configure(filepath.Join(tempDir, t.Name()+"-surge.db"))
 	defer state.CloseDB()
 
 	ch := make(chan interface{}, 100)

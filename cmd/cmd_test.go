@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -66,7 +67,7 @@ func TestFindAvailablePort_ReturnsListener(t *testing.T) {
 func TestFindAvailablePort_SkipsOccupiedPorts(t *testing.T) {
 	requireTCPListener(t)
 	// Occupy any port
-	ln1, err := net.Listen("tcp", fmt.Sprintf("%s:0", serverBindHost))
+	ln1, err := net.Listen("tcp", serverBindHost+":0")
 	if err != nil {
 		t.Fatalf("Failed to occupy any port: %v", err)
 	}
@@ -785,7 +786,7 @@ func TestStartHTTPServer_OptionsRequest(t *testing.T) {
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
 
-	req, _ := http.NewRequest(http.MethodOptions, fmt.Sprintf("http://127.0.0.1:%d/download", port), nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodOptions, fmt.Sprintf("http://127.0.0.1:%d/download", port), nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -648,9 +649,11 @@ func TestUniqueFilePath_LongFilename(t *testing.T) {
 
 	// Create a file with a long name (within OS limits)
 	longName := ""
+	var longNameSb651 strings.Builder
 	for i := 0; i < 50; i++ {
-		longName += "a"
+		longNameSb651.WriteString("a")
 	}
+	longName += longNameSb651.String()
 	longName += ".txt"
 
 	existingFile := filepath.Join(tmpDir, longName)

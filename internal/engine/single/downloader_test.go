@@ -2,6 +2,7 @@ package single
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -424,7 +425,7 @@ func TestSingleDownloader_Download_Cancellation(t *testing.T) {
 	select {
 	case err := <-done:
 		// Accept context.Canceled or wrapped errors
-		if err != nil && err != context.Canceled && err.Error() != "context canceled" {
+		if err != nil && !errors.Is(err, context.Canceled) && err.Error() != "context canceled" {
 			t.Logf("Expected context.Canceled, got: %v", err)
 		}
 	case <-time.After(5 * time.Second):

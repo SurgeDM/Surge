@@ -854,12 +854,12 @@ func formatSettingValue(value interface{}, typ string) string {
 	case "int64":
 		if v, ok := value.(int64); ok {
 			// Just display the raw number - units handled by getSettingUnit
-			return fmt.Sprintf("%d", v)
+			return strconv.FormatInt(v, 10)
 		}
 	case "int":
 		v := reflect.ValueOf(value)
 		if v.Kind() == reflect.Int {
-			return fmt.Sprintf("%d", v.Int())
+			return strconv.FormatInt(v.Int(), 10)
 		}
 	case "float64":
 		if v, ok := value.(float64); ok {
@@ -881,7 +881,7 @@ func formatSettingValue(value interface{}, typ string) string {
 	v := reflect.ValueOf(value)
 	switch v.Kind() {
 	case reflect.Int, reflect.Int64:
-		return fmt.Sprintf("%d", v.Int())
+		return strconv.FormatInt(v.Int(), 10)
 	case reflect.Float64:
 		return fmt.Sprintf("%.2f", v.Float())
 	default:

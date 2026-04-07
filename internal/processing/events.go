@@ -47,7 +47,7 @@ func advanceRemainingTasks(tasks []types.Task, consumed int64) []types.Task {
 
 func finalizeCompletedFile(finalPath string) error {
 	if finalPath == "" {
-		return fmt.Errorf("missing destination path for completed download")
+		return errors.New("missing destination path for completed download")
 	}
 
 	surgePath := finalPath + types.IncompleteSuffix
@@ -248,7 +248,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 					msg = err.Error()
 				}
 				if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
-					notify(fmt.Sprintf("Download failed: %s", filename), msg)
+					notify("Download failed: "+filename, msg)
 				}
 				break
 			}
@@ -280,7 +280,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 					filename = m.DownloadID
 				}
 
-				title := fmt.Sprintf("Download Complete: %s", filename)
+				title := "Download Complete: " + filename
 
 				if m.Elapsed.Seconds() <= 0 {
 					notify(title, "Download complete!")
@@ -321,7 +321,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 					msg = m.Err.Error()
 				}
 
-				notify(fmt.Sprintf("Download failed: %s", filename), msg)
+				notify("Download failed: "+filename, msg)
 			}
 
 		case events.DownloadRemovedMsg:

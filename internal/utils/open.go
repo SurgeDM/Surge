@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,7 +12,7 @@ import (
 
 func OpenFile(path string) error {
 	if path == "" {
-		return fmt.Errorf("path is empty")
+		return errors.New("path is empty")
 	}
 
 	info, err := os.Stat(path)
@@ -27,7 +29,7 @@ func OpenFile(path string) error {
 
 func OpenContainingFolder(path string) error {
 	if path == "" {
-		return fmt.Errorf("path is empty")
+		return errors.New("path is empty")
 	}
 
 	targetPath := path
@@ -64,10 +66,10 @@ func openWithSystem(path string) error {
 func buildOpenCommand(path string) *exec.Cmd {
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.Command("open", path)
+		return exec.CommandContext(context.Background(), "open", path)
 	case "windows":
-		return exec.Command("cmd", "/c", "start", "", path)
+		return exec.CommandContext(context.Background(), "cmd", "/c", "start", "", path)
 	default:
-		return exec.Command("xdg-open", path)
+		return exec.CommandContext(context.Background(), "xdg-open", path)
 	}
 }

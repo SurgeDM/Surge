@@ -127,9 +127,9 @@ func (m RootModel) updateURLUpdate(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if newURL != "" {
 			if d := m.GetSelectedDownload(); d != nil {
 				if err := m.Service.UpdateURL(d.ID, newURL); err != nil {
-					m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to update URL: %s", err.Error())))
+					m.addLogEntry(LogStyleError.Render("✖ Failed to update URL: " + err.Error()))
 				} else {
-					m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("✔ URL Updated: %s", d.Filename)))
+					m.addLogEntry(LogStyleComplete.Render("✔ URL Updated: " + d.Filename))
 					d.URL = newURL
 				}
 			}

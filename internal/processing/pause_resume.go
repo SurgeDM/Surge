@@ -1,6 +1,7 @@
 package processing
 
 import (
+	"errors"
 	"fmt"
 	"time"
 
@@ -36,7 +37,7 @@ type EngineHooks struct {
 func (mgr *LifecycleManager) Pause(id string) error {
 	hooks := mgr.getEngineHooks()
 	if hooks.Pause == nil {
-		return fmt.Errorf("engine not initialized")
+		return errors.New("engine not initialized")
 	}
 
 	if hooks.Pause(id) {
@@ -57,7 +58,7 @@ func (mgr *LifecycleManager) Pause(id string) error {
 		return nil // Already stopped
 	}
 
-	return fmt.Errorf("download not found")
+	return errors.New("download not found")
 }
 
 // hydrateConfigFromDisk loads the latest persisted pause snapshot from disk
@@ -90,7 +91,7 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	// Guard: still transitioning to paused
 	if hooks.GetStatus != nil {
 		if st := hooks.GetStatus(id); st != nil && st.Status == "pausing" {
-			return fmt.Errorf("download is still pausing, try again in a moment")
+			return errors.New("download is still pausing, try again in a moment")
 		}
 	}
 
@@ -115,11 +116,11 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	// Cold path: download from a prior session (only in DB).
 	entry, err := state.GetDownload(id)
 	if err != nil || entry == nil {
-		return fmt.Errorf("download not found")
+		return errors.New("download not found")
 	}
 
 	if entry.Status == "completed" {
-		return fmt.Errorf("download already completed")
+		return errors.New("download already completed")
 	}
 
 	settings := mgr.GetSettings()
@@ -167,7 +168,7 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 	for i, id := range ids {
 		if hooks.GetStatus != nil {
 			if st := hooks.GetStatus(id); st != nil && st.Status == "pausing" {
-				errs[i] = fmt.Errorf("download is still pausing, try again in a moment")
+				errs[i] = errors.New("download is still pausing, try again in a moment")
 				continue
 			}
 		}
@@ -213,7 +214,7 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 		idx := coldIdx[id]
 		savedState, ok := states[id]
 		if !ok {
-			errs[idx] = fmt.Errorf("download not found or completed")
+			errs[idx] = errors.New("download not found or completed")
 			continue
 		}
 
@@ -268,7 +269,7 @@ func (mgr *LifecycleManager) Cancel(id string) error {
 	}
 
 	if !found {
-		return fmt.Errorf("download not found")
+		return errors.New("download not found")
 	}
 
 	// Emit removal event — event worker handles DB deletion and file cleanup.

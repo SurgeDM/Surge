@@ -45,7 +45,7 @@ var refreshCmd = &cobra.Command{
 		}
 
 		// Send to running server
-		path := fmt.Sprintf("/update-url?id=%s", url.QueryEscape(id))
+		path := "/update-url?id=" + url.QueryEscape(id)
 		resp, err := doAPIRequest(http.MethodPut, baseURL, token, path, bytes.NewBuffer(jsonData))
 		if err != nil {
 			return fmt.Errorf("error connecting to server: %w", err)

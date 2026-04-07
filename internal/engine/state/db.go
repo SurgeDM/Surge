@@ -1,7 +1,9 @@
 package state
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -32,7 +34,7 @@ func initDBLocked() error {
 	}
 
 	if !configured || dbPath == "" {
-		return fmt.Errorf("state database not configured: call state.Configure() first")
+		return errors.New("state database not configured: call state.Configure() first")
 	}
 
 	var err error
@@ -43,47 +45,47 @@ func initDBLocked() error {
 
 	// Enable WAL mode and busy_timeout for concurrent reader-writer access
 	// (required now that the processing layer's event worker writes from a goroutine)
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+	if _, err := db.ExecContext(context.Background(), "PRAGMA journal_mode=WAL"); err != nil {
 		return fmt.Errorf("failed to set WAL mode: %w", err)
 	}
-	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+	if _, err := db.ExecContext(context.Background(), "PRAGMA busy_timeout=5000"); err != nil {
 		return fmt.Errorf("failed to set busy_timeout: %w", err)
 	}
 
 	// Create tables
 	query := `
-	CREATE TABLE IF NOT EXISTS downloads (
-		id TEXT PRIMARY KEY,
-		url TEXT NOT NULL,
-		dest_path TEXT NOT NULL,
-		filename TEXT,
-		status TEXT,
-		total_size INTEGER,
-		downloaded INTEGER,
-		url_hash TEXT,
-		created_at INTEGER,
-		paused_at INTEGER,
-		completed_at INTEGER,
-		time_taken INTEGER,
-		mirrors TEXT,
-		chunk_bitmap BLOB,
-		actual_chunk_size INTEGER,
-		avg_speed REAL,
-		file_hash TEXT
-	);
+CREATE TABLE IF NOT EXISTS downloads (
+	id TEXT PRIMARY KEY,
+	url TEXT NOT NULL,
+	dest_path TEXT NOT NULL,
+	filename TEXT,
+	status TEXT,
+	total_size INTEGER,
+	downloaded INTEGER,
+	url_hash TEXT,
+	created_at INTEGER,
+	paused_at INTEGER,
+	completed_at INTEGER,
+	time_taken INTEGER,
+	mirrors TEXT,
+	chunk_bitmap BLOB,
+	actual_chunk_size INTEGER,
+	avg_speed REAL,
+	file_hash TEXT
+);
 
-	CREATE TABLE IF NOT EXISTS tasks (
-		id INTEGER PRIMARY KEY AUTOINCREMENT,
-		download_id TEXT,
-		offset INTEGER,
-		length INTEGER,
-		FOREIGN KEY(download_id) REFERENCES downloads(id) ON DELETE CASCADE
-	);
+CREATE TABLE IF NOT EXISTS tasks (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	download_id TEXT,
+	offset INTEGER,
+	length INTEGER,
+	FOREIGN KEY(download_id) REFERENCES downloads(id) ON DELETE CASCADE
+);
 
-	CREATE INDEX IF NOT EXISTS idx_tasks_download_id ON tasks(download_id);
-	`
+CREATE INDEX IF NOT EXISTS idx_tasks_download_id ON tasks(download_id);
+`
 
-	if _, err := db.Exec(query); err != nil {
+	if _, err := db.ExecContext(context.Background(), query); err != nil {
 		return fmt.Errorf("failed to create tables: %w", err)
 	}
 
@@ -102,7 +104,7 @@ func initDB() error {
 
 // ensureDownloadsSchema checks if required columns exist in the downloads table and adds them if missing.
 func ensureDownloadsSchema() error {
-	rows, err := db.Query("PRAGMA table_info(downloads)")
+	rows, err := db.QueryContext(context.Background(), "PRAGMA table_info(downloads)")
 	if err != nil {
 		return err
 	}
@@ -135,7 +137,7 @@ func ensureDownloadsSchema() error {
 	for _, col := range columnsToAdd {
 		if !existingColumns[col.name] {
 			alterQuery := fmt.Sprintf("ALTER TABLE downloads ADD COLUMN %s %s", col.name, col.def)
-			if _, err := db.Exec(alterQuery); err != nil {
+			if _, err := db.ExecContext(context.Background(), alterQuery); err != nil {
 				log.Printf("Failed to add column %s: %v", col.name, err)
 			}
 		}
@@ -182,10 +184,10 @@ func getDBHelper() *sql.DB {
 func withTx(fn func(*sql.Tx) error) error {
 	d := getDBHelper()
 	if d == nil {
-		return fmt.Errorf("database not initialized")
+		return errors.New("database not initialized")
 	}
 
-	tx, err := d.Begin()
+	tx, err := d.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}

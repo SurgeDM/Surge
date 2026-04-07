@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -208,8 +209,8 @@ func (m RootModel) View() tea.View {
 	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
 		modal := components.ConfirmationModal{
 			Title:       "⬆ Update Available",
-			Message:     fmt.Sprintf("A new version of Surge is available: %s", m.UpdateInfo.LatestVersion),
-			Detail:      fmt.Sprintf("Current: %s", m.UpdateInfo.CurrentVersion),
+			Message:     "A new version of Surge is available: " + m.UpdateInfo.LatestVersion,
+			Detail:      "Current: " + m.UpdateInfo.CurrentVersion,
 			Keys:        m.keys.Update,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
@@ -268,7 +269,7 @@ func (m RootModel) View() tea.View {
 	// Footer - keybindings on left, version on bottom-right
 	helpText := m.help.View(m.keys.Dashboard)
 	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
-	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
+	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render("v" + m.CurrentVersion)
 	footerContentWidth := availableWidth
 	leftFooterWidth := footerContentWidth - lipgloss.Width(versionText)
 	if leftFooterWidth < 0 {
@@ -1032,7 +1033,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		if conns == 0 {
 			conns = 1 // Single-connection download (range requests not supported)
 		}
-		connStr := fmt.Sprintf("%d", conns)
+		connStr := strconv.Itoa(conns)
 		leftColItems = append(leftColItems, lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Conns:"), StatsValueStyle.Render(connStr)))
 	}
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, leftColItems...)

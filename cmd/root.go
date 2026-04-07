@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -331,7 +332,7 @@ func maybeRunRemoteTUI(cmd *cobra.Command, args []string) (bool, error) {
 	}
 
 	if len(args) > 0 {
-		return false, fmt.Errorf("URLs cannot be passed when using --host. Use 'surge add <url>' after connecting")
+		return false, errors.New("URLs cannot be passed when using --host. Use 'surge add <url>' after connecting")
 	}
 
 	if err := connectAndRunTUI(cmd, hostTarget); err != nil {
@@ -347,7 +348,7 @@ func acquireRootInstanceLock() (func(), error) {
 	}
 
 	if !isMaster {
-		return nil, fmt.Errorf("surge is already running. Use 'surge add <url>' to add a download to the active instance")
+		return nil, errors.New("surge is already running. Use 'surge add <url>' to add a download to the active instance")
 	}
 
 	return func() {
