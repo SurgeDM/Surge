@@ -7,29 +7,30 @@ run:
 linters:
   disable-all: true
   enable:
-    - staticcheck # The gold standard for Go bugs and basic performance
-    - govet       # Official Go bug catcher
-    - errcheck    # Unhandled errors hide performance regressions and leaks
+    - staticcheck
+    - govet
+    - errcheck
+    - unused
+    - ineffassign
+    - unparam
     
-    - unused      # Finds unused constants, variables, functions, and types
-    - ineffassign # Finds assignments to variables that are never read
-    - unparam     # Finds function parameters and return values that are never used
+    - prealloc
+    - makezero
+    - goconst
     
-    - prealloc    # Forces slice preallocation to prevent heap re-allocations
-    - makezero    # Catches `make([]int, 0, len)` bugs that cause double-allocations
-    - gocritic    # Enabled strictly for performance and diagnostic checks
+    - bodyclose
+    - noctx
+    - sqlclosecheck
+    - rowserrcheck
+    
+    - errorlint
+    - nilerr
+    - copyloopvar
+    - gocritic
 
 linters-settings:
+  govet:
+    enable:
+      - shadow
   unparam:
-    # Check exported functions too (crucial for finding dead code in libraries)
     check-exported: true
-
-  gocritic:
-    # Disable opinionated style checks, enable ONLY performance and bug diagnostics
-    enabled-tags:
-      - performance
-      - diagnostic
-    disabled-tags:
-      - style
-      - experimental
-      - opinionated
