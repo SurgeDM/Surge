@@ -2,15 +2,14 @@ package tui
 
 import (
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -180,15 +179,15 @@ func (m *RootModel) handleExtensionAction() (tea.Model, tea.Cmd) {
 	settingKey := m.getCurrentSettingKey()
 	switch settingKey {
 	case "chrome_extension_link":
-		openURL(ChromeExtensionURL)
+		utils.OpenBrowser(utils.ChromeExtensionURL)
 		return m, nil
 	case "firefox_extension_link":
-		openURL(FirefoxExtensionURL)
+		utils.OpenBrowser(utils.FirefoxExtensionURL)
 		return m, nil
 	case "auth_token":
 		token := readAuthTokenFile()
 		if token != "" {
-			writeToClipboard(token)
+			utils.WriteToClipboard(token)
 			m.ExtensionTokenCopied = true
 			m.ExtensionTokenCopyTimer = time.Now()
 			return m, tea.Tick(time.Millisecond*2000, func(t time.Time) tea.Msg {
@@ -207,61 +206,6 @@ func readAuthTokenFile() string {
 		return ""
 	}
 	return strings.TrimSpace(string(data))
-}
-
-// openURL opens a URL in the user's default browser
-func openURL(url string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	_ = cmd.Start()
-}
-
-// writeToClipboard copies text to the system clipboard using platform-specific tools
-func writeToClipboard(text string) {
-	switch runtime.GOOS {
-	case "darwin":
-		cmd := exec.Command("pbcopy")
-		cmd.Stdin = strings.NewReader(text)
-		_ = cmd.Run()
-	case "windows":
-		cmd := exec.Command("clip")
-		cmd.Stdin = strings.NewReader(text)
-		_ = cmd.Run()
-	default:
-		// Try xclip first, fall back to wl-clipboard
-		cmd := exec.Command("xclip", "-selection", "clipboard")
-		cmd.Stdin = strings.NewReader(text)
-		if err := cmd.Run(); err != nil {
-			cmd = exec.Command("wl-copy")
-			cmd.Stdin = strings.NewReader(text)
-			_ = cmd.Run()
-		}
-	}
-}
-
-// formatTokenForDisplay masks a token for safe display in the UI
-func formatTokenForDisplay(token string) string {
-	if token == "" {
-		return "No token generated. Start surge server to generate one."
-	}
-	if len(token) <= 10 {
-		return token[:2] + strings.Repeat("•", len(token)-2)
-	}
-	parts := strings.Split(token, "-")
-	if len(parts) >= 4 {
-		for i := 1; i < len(parts); i++ {
-			parts[i] = strings.Repeat("•", len(parts[i]))
-		}
-		return strings.Join(parts, "-")
-	}
-	return token[:2] + strings.Repeat("*", len(token)-2)
 }
 
 type extensionTokenFlashFadeMsg struct{}
