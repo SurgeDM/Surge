@@ -349,11 +349,12 @@ func resolveOutputDir(reqPath string, relativeToDefaultDir bool, defaultOutputDi
 		}
 		outPath = filepath.Join(baseDir, reqPath)
 	} else if outPath == "" {
-		if defaultOutputDir != "" {
+		switch {
+		case defaultOutputDir != "":
 			outPath = defaultOutputDir
-		} else if settings.General.DefaultDownloadDir != "" {
+		case settings.General.DefaultDownloadDir != "":
 			outPath = settings.General.DefaultDownloadDir
-		} else {
+		default:
 			outPath = "."
 		}
 	}

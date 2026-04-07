@@ -556,24 +556,13 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 
 // setSettingValue sets a setting value from string input
 func (m *RootModel) setSettingValue(category, key, value string) error {
-	metadata := config.GetSettingsMetadata()
-	metas := metadata[category]
-
-	var meta config.SettingMeta
-	for _, sm := range metas {
-		if sm.Key == key {
-			meta = sm
-			break
-		}
-	}
-
 	switch category {
 	case "General":
-		return m.setGeneralSetting(key, value, meta.Type)
+		return m.setGeneralSetting(key, value)
 	case "Network":
-		return m.setNetworkSetting(key, value, meta.Type)
+		return m.setNetworkSetting(key, value)
 	case "Performance":
-		return m.setPerformanceSetting(key, value, meta.Type)
+		return m.setPerformanceSetting(key, value)
 	case "Categories":
 		if key == "category_enabled" {
 			m.Settings.General.CategoryEnabled = !m.Settings.General.CategoryEnabled
@@ -598,7 +587,7 @@ func (m *RootModel) persistSettings() error {
 	return nil
 }
 
-func (m *RootModel) setGeneralSetting(key, value, typ string) error {
+func (m *RootModel) setGeneralSetting(key, value string) error {
 	switch key {
 	case "default_download_dir":
 		m.Settings.General.DefaultDownloadDir = value
@@ -650,7 +639,7 @@ func (m *RootModel) setGeneralSetting(key, value, typ string) error {
 	return nil
 }
 
-func (m *RootModel) setNetworkSetting(key, value, typ string) error {
+func (m *RootModel) setNetworkSetting(key, value string) error {
 	switch key {
 	case "max_connections_per_host":
 		if v, err := strconv.Atoi(value); err == nil {
@@ -693,7 +682,7 @@ func (m *RootModel) setNetworkSetting(key, value, typ string) error {
 	return nil
 }
 
-func (m *RootModel) setPerformanceSetting(key, value, typ string) error {
+func (m *RootModel) setPerformanceSetting(key, value string) error {
 	switch key {
 	case "max_task_retries":
 		if v, err := strconv.Atoi(value); err == nil {
@@ -959,8 +948,7 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.Performance.SpeedEmaAlpha = defaults.Performance.SpeedEmaAlpha
 		}
 	case "Categories":
-		switch key {
-		case "category_enabled":
+		if key == "category_enabled" {
 			m.Settings.General.CategoryEnabled = defaults.General.CategoryEnabled
 		}
 	}

@@ -182,13 +182,14 @@ func (m ChunkMapModel) View() string {
 		}
 
 		// Determine Status
-		if allCompleted || (!hasApproximateProgress && downloadedInBlock >= blockSize) {
+		switch {
+		case allCompleted || (!hasApproximateProgress && downloadedInBlock >= blockSize):
 			visualChunks[i] = types.ChunkCompleted
-		} else if downloadedInBlock > 0 {
+		case downloadedInBlock > 0:
 			// If we have ANY bytes in this visual block, it is "Downloading" (or Paused Partial)
 			// This creates the "granular progress" we want.
 			visualChunks[i] = types.ChunkDownloading
-		} else {
+		default:
 			visualChunks[i] = types.ChunkPending
 		}
 	}

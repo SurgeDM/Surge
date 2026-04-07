@@ -171,7 +171,7 @@ func readPID() int {
 	return pid
 }
 
-func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile string, outputDir string, exitWhenDone bool, noResume bool, tokenOverride string) error {
+func startServerLogic(_ *cobra.Command, args []string, portFlag int, batchFile string, outputDir string, exitWhenDone bool, noResume bool, tokenOverride string) error {
 	port, listener, err := bindServerListener(portFlag)
 	if err != nil {
 		return err

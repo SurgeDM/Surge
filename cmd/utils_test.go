@@ -12,7 +12,7 @@ func TestResolveClientOutputPath(t *testing.T) {
 	originalHost := os.Getenv("SURGE_HOST")
 	originalGlobalHost := globalHost
 	defer func() {
-		os.Setenv("SURGE_HOST", originalHost)
+		_ = os.Setenv("SURGE_HOST", originalHost)
 		globalHost = originalGlobalHost
 	}()
 
@@ -31,7 +31,7 @@ func TestResolveClientOutputPath(t *testing.T) {
 		{
 			name: "Remote Host Set via Env - Pass Through Empty",
 			setupHost: func() {
-				os.Setenv("SURGE_HOST", "127.0.0.1:1234")
+				_ = os.Setenv("SURGE_HOST", "127.0.0.1:1234")
 				globalHost = ""
 			},
 			outputDir: "",
@@ -40,7 +40,7 @@ func TestResolveClientOutputPath(t *testing.T) {
 		{
 			name: "Remote Host Set via Global - Pass Through Exact",
 			setupHost: func() {
-				os.Setenv("SURGE_HOST", "")
+				_ = os.Setenv("SURGE_HOST", "")
 				globalHost = "127.0.0.1:1234"
 			},
 			outputDir: ".",
@@ -49,7 +49,7 @@ func TestResolveClientOutputPath(t *testing.T) {
 		{
 			name: "Local Execution - Empty Dir returns CWD",
 			setupHost: func() {
-				os.Setenv("SURGE_HOST", "")
+				_ = os.Setenv("SURGE_HOST", "")
 				globalHost = ""
 			},
 			outputDir: "",
@@ -58,7 +58,7 @@ func TestResolveClientOutputPath(t *testing.T) {
 		{
 			name: "Local Execution - Dot returns Absolute CWD",
 			setupHost: func() {
-				os.Setenv("SURGE_HOST", "")
+				_ = os.Setenv("SURGE_HOST", "")
 				globalHost = ""
 			},
 			outputDir: ".",
@@ -67,7 +67,7 @@ func TestResolveClientOutputPath(t *testing.T) {
 		{
 			name: "Local Execution - Relative Subdir returns Absolute",
 			setupHost: func() {
-				os.Setenv("SURGE_HOST", "")
+				_ = os.Setenv("SURGE_HOST", "")
 				globalHost = ""
 			},
 			outputDir: "downloads",

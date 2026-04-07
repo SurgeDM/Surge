@@ -44,12 +44,13 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 	for i := range rows {
 		rows[i] = make([]string, width)
 		for j := range rows[i] {
-			if i == height-1 {
+			switch {
+			case i == height-1:
 				// Bottom row: solid baseline
 				rows[i][j] = gridStyle.Render("─")
-			} else if i%2 == 0 {
+			case i%2 == 0:
 				rows[i][j] = gridStyle.Render("╌")
-			} else {
+			default:
 				rows[i][j] = " "
 			}
 		}
@@ -106,11 +107,12 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 					rowValue := totalSubBlocks - float64(y*8)
 
 					var charIndex int
-					if rowValue <= 0 {
+					switch {
+					case rowValue <= 0:
 						charIndex = 0 // Space
-					} else if rowValue >= 8 {
+					case rowValue >= 8:
 						charIndex = 7 // Full block (█)
-					} else {
+					default:
 						charIndex = int(rowValue) // Partial block
 					}
 

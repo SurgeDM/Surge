@@ -675,10 +675,8 @@ func TestMirrorsPersistence(t *testing.T) {
 
 	if len(loadedState.Mirrors) != 2 {
 		t.Errorf("Loaded mirrors count = %d, want 2", len(loadedState.Mirrors))
-	} else {
-		if loadedState.Mirrors[0] != mirrors[0] || loadedState.Mirrors[1] != mirrors[1] {
-			t.Errorf("Loaded mirrors mismatch: %v", loadedState.Mirrors)
-		}
+	} else if loadedState.Mirrors[0] != mirrors[0] || loadedState.Mirrors[1] != mirrors[1] {
+		t.Errorf("Loaded mirrors mismatch: %v", loadedState.Mirrors)
 	}
 
 	// 2. Test DownloadEntry (Master List / Completed)
@@ -708,10 +706,8 @@ func TestMirrorsPersistence(t *testing.T) {
 			foundVal = true
 			if len(e.Mirrors) != 2 {
 				t.Errorf("Entry mirrors count = %d, want 2", len(e.Mirrors))
-			} else {
-				if e.Mirrors[0] != mirrors[0] || e.Mirrors[1] != mirrors[1] {
-					t.Errorf("Entry mirrors mismatch: %v", e.Mirrors)
-				}
+			} else if e.Mirrors[0] != mirrors[0] || e.Mirrors[1] != mirrors[1] {
+				t.Errorf("Entry mirrors mismatch: %v", e.Mirrors)
 			}
 			break
 		}

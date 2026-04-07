@@ -415,7 +415,7 @@ var rootCmd = &cobra.Command{
 	Long:          `Surge is a blazing fast TUI download manager built in Go for power users. Find more info here: https://github.com/SurgeDM/Surge`,
 	Version:       Version,
 	Args:          cobra.ArbitraryArgs,
-	SilenceErrors: true, //errors are printed in main.go this prevents double printing
+	SilenceErrors: true, // errors are printed in main.go; this prevents double printing
 	SilenceUsage:  true, // prevent usage text from being printed on every error
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 

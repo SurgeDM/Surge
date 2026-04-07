@@ -88,8 +88,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	finalDestPath := filepath.Join(destPath, finalFilename)
 
 	// Local mirrors slice to avoid modifying config (race condition)
-	mirrors := make([]string, len(cfg.Mirrors))
-	copy(mirrors, cfg.Mirrors)
+	mirrors := append([]string(nil), cfg.Mirrors...)
 
 	// Check if this is a resume (explicitly marked by TUI)
 	var savedState *types.DownloadState
@@ -105,6 +104,11 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			existing := make(map[string]bool)
 			for _, m := range mirrors {
 				existing[m] = true
+			}
+			if len(mirrors) > 0 {
+				expandedMirrors := make([]string, len(mirrors), len(mirrors)+len(savedState.Mirrors))
+				copy(expandedMirrors, mirrors)
+				mirrors = expandedMirrors
 			}
 
 			// Add restored mirrors

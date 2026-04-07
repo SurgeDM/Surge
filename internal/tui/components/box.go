@@ -43,8 +43,9 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	borderStyler := lipgloss.NewStyle().Foreground(borderColor)
 	var topBorder string
 
+	switch {
 	// Case 1: Both Titles
-	if leftTitle != "" && rightTitle != "" {
+	case leftTitle != "" && rightTitle != "":
 		remainingWidth := innerWidth - leftTitleWidth - rightTitleWidth - 1 // 1 for the start dash
 		if remainingWidth < 1 {
 			remainingWidth = 1 // overflow mitigation (might break layout but prevents crash)
@@ -55,8 +56,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 			borderStyler.Render(strings.Repeat(horizontal, remainingWidth)) +
 			rightTitle +
 			borderStyler.Render(topRight)
-
-	} else if leftTitle != "" {
+	case leftTitle != "":
 		// Case 2: Only Left Title
 		remainingWidth := innerWidth - leftTitleWidth - 1
 		if remainingWidth < 0 {
@@ -66,8 +66,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 		topBorder = borderStyler.Render(topLeft+horizontal) +
 			leftTitle +
 			borderStyler.Render(strings.Repeat(horizontal, remainingWidth)+topRight)
-
-	} else if rightTitle != "" {
+	case rightTitle != "":
 		// Case 3: Only Right Title
 		remainingWidth := innerWidth - rightTitleWidth - 1
 		if remainingWidth < 0 {
@@ -77,8 +76,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 		topBorder = borderStyler.Render(topLeft+strings.Repeat(horizontal, remainingWidth)) +
 			rightTitle +
 			borderStyler.Render(horizontal+topRight)
-
-	} else {
+	default:
 		// Case 4: No Title
 		topBorder = borderStyler.Render(topLeft + strings.Repeat(horizontal, innerWidth) + topRight)
 	}
@@ -106,7 +104,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 		// Pad or truncate line to fit innerWidth
 		lineWidth := lipgloss.Width(line)
 		if lineWidth < innerWidth {
-			line = line + strings.Repeat(" ", innerWidth-lineWidth)
+			line += strings.Repeat(" ", innerWidth-lineWidth)
 		} else if lineWidth > innerWidth {
 			// Truncate (simplified - just take first innerWidth chars)
 			runes := []rune(line)

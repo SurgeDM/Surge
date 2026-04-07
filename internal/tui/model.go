@@ -440,7 +440,7 @@ func (m RootModel) Init() tea.Cmd {
 			errs := m.Service.ResumeBatch(resumeIDs)
 
 			// Dispatch individual messages for UI updates
-			var batch []tea.Cmd
+			batch := make([]tea.Cmd, 0, len(resumeIDs))
 			for i, id := range resumeIDs {
 				err := errs[i]
 				// Capture for closure

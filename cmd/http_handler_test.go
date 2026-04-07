@@ -167,20 +167,21 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 					// If expectedPathSuffix is relative (like "relative"), we check if path ends with it.
 					// If expectedPathSuffix is absolute (like /tmp/.../absolute), we check if paths match.
 
-					if tt.request.RelativeToDefaultDir {
+					switch {
+					case tt.request.RelativeToDefaultDir:
 						expectedAbs := filepath.Join(defaultDownloadDir, tt.request.Path)
 						if cfg.OutputPath != expectedAbs {
 							t.Errorf("Expected path %s, got %s", expectedAbs, cfg.OutputPath)
 						}
-					} else if tt.request.Path == "" {
+					case tt.request.Path == "":
 						if cfg.OutputPath != defaultDownloadDir {
 							t.Errorf("Expected path %s, got %s", defaultDownloadDir, cfg.OutputPath)
 						}
-					} else if filepath.IsAbs(tt.request.Path) {
+					case filepath.IsAbs(tt.request.Path):
 						if cfg.OutputPath != tt.request.Path {
 							t.Errorf("Expected path %s, got %s", tt.request.Path, cfg.OutputPath)
 						}
-					} else {
+					default:
 						// Relative path without flag (Ensured Absolute CWD)
 						// Hard to test exactly without knowing CWD, but it should end with the relative path
 						if !strings.HasSuffix(cfg.OutputPath, tt.request.Path) {

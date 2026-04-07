@@ -384,11 +384,12 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 				status.Connections = int(connections)
 
 				// Update status based on state
-				if cfg.State.IsPausing() {
+				switch {
+				case cfg.State.IsPausing():
 					status.Status = "pausing"
-				} else if cfg.State.IsPaused() {
+				case cfg.State.IsPaused():
 					status.Status = "paused"
-				} else if cfg.State.Done.Load() {
+				case cfg.State.Done.Load():
 					status.Status = "completed"
 				}
 
