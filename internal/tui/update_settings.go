@@ -210,7 +210,7 @@ func readAuthTokenFile() string {
 }
 
 // openURL opens a URL in the user's default browser
-func openURL(url string) error {
+func openURL(url string) {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
@@ -220,7 +220,7 @@ func openURL(url string) error {
 	default:
 		cmd = exec.Command("xdg-open", url)
 	}
-	return cmd.Start()
+	_ = cmd.Start()
 }
 
 // writeToClipboard copies text to the system clipboard using platform-specific tools
@@ -229,11 +229,11 @@ func writeToClipboard(text string) {
 	case "darwin":
 		cmd := exec.Command("pbcopy")
 		cmd.Stdin = strings.NewReader(text)
-		cmd.Run()
+		_ = cmd.Run()
 	case "windows":
 		cmd := exec.Command("clip")
 		cmd.Stdin = strings.NewReader(text)
-		cmd.Run()
+		_ = cmd.Run()
 	default:
 		// Try xclip first, fall back to wl-clipboard
 		cmd := exec.Command("xclip", "-selection", "clipboard")
@@ -241,7 +241,7 @@ func writeToClipboard(text string) {
 		if err := cmd.Run(); err != nil {
 			cmd = exec.Command("wl-copy")
 			cmd.Stdin = strings.NewReader(text)
-			cmd.Run()
+			_ = cmd.Run()
 		}
 	}
 }
