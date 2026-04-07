@@ -174,6 +174,8 @@ const (
 func (m *RootModel) handleExtensionAction() (tea.Model, tea.Cmd) {
 	settingKey := m.getCurrentSettingKey()
 	switch settingKey {
+	case "extension_prompt":
+		m.Settings.General.ExtensionPrompt = !m.Settings.General.ExtensionPrompt
 	case "chrome_extension_link":
 		utils.OpenBrowser(ChromeExtensionURL)
 	case "firefox_extension_link":
@@ -188,11 +190,12 @@ func (m *RootModel) handleExtensionAction() (tea.Model, tea.Cmd) {
 				return extensionTokenFlashFadeMsg{}
 			})
 		}
+
 	case "connection_instructions":
 		utils.OpenBrowser(ConnectInstructionURL)
 	}
-	return m, nil
 
+	return m, nil
 }
 
 type extensionTokenFlashFadeMsg struct{}
