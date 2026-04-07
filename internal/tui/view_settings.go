@@ -10,12 +10,9 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
-	"github.com/SurgeDM/Surge/internal/utils"
 
 	"charm.land/lipgloss/v2"
 )
-
-
 
 // viewSettings renders the Btop-style settings page
 func (m RootModel) viewSettings() string {
@@ -596,10 +593,10 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 		values["category_enabled"] = m.Settings.General.CategoryEnabled
 	case "Extension":
 		values["extension_prompt"] = m.Settings.General.ExtensionPrompt
-		values["chrome_extension_link"] = utils.ChromeExtensionURL
-		values["firefox_extension_link"] = utils.FirefoxExtensionURL
+		values["chrome_extension_link"] = ChromeExtensionURL
+		values["firefox_extension_link"] = FirefoxExtensionURL
 		values["auth_token"] = GetAuthToken()
-		values["connection_instructions"] = utils.ChromeExtensionURL
+		values["connection_instructions"] = ConnectInstructionURL
 	}
 
 	return values

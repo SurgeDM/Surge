@@ -51,6 +51,10 @@ func OpenContainingFolder(path string) error {
 	return openWithSystem(targetPath)
 }
 
+func OpenBrowser(url string) error {
+	return openWithSystem(url)
+}
+
 func openWithSystem(path string) error {
 	cmd := buildOpenCommand(path)
 	err := cmd.Start()
@@ -71,25 +75,6 @@ func buildOpenCommand(path string) *exec.Cmd {
 	default:
 		return exec.Command("xdg-open", path)
 	}
-}
-
-const (
-	ChromeExtensionURL  = "https://github.com/SurgeDM/Surge/releases/latest"
-	FirefoxExtensionURL = "https://addons.mozilla.org/en-US/firefox/addon/surge/"
-)
-
-// OpenBrowser opens a URL in the user's default browser
-func OpenBrowser(url string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	_ = cmd.Start()
 }
 
 // WriteToClipboard copies text to the system clipboard using platform-specific tools

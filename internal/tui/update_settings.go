@@ -165,16 +165,20 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// Extension URLs and instructions are sourced from internal/utils/open.go
+const (
+	ChromeExtensionURL    = "https://github.com/SurgeDM/Surge/releases/latest"
+	FirefoxExtensionURL   = "https://addons.mozilla.org/en-US/firefox/addon/surge/"
+	ConnectInstructionURL = "https://github.com/SurgeDM/Surge#browser-extension"
+)
 
 func (m *RootModel) handleExtensionAction() (tea.Model, tea.Cmd) {
 	settingKey := m.getCurrentSettingKey()
 	switch settingKey {
 	case "chrome_extension_link":
-		utils.OpenBrowser(utils.ChromeExtensionURL)
+		utils.OpenBrowser(ChromeExtensionURL)
 		return m, nil
 	case "firefox_extension_link":
-		utils.OpenBrowser(utils.FirefoxExtensionURL)
+		utils.OpenBrowser(FirefoxExtensionURL)
 		return m, nil
 	case "auth_token":
 		token := GetAuthToken()
@@ -187,8 +191,12 @@ func (m *RootModel) handleExtensionAction() (tea.Model, tea.Cmd) {
 			})
 		}
 		return m, nil
+	case "connection_instructions":
+		utils.OpenBrowser(ConnectInstructionURL)
+		return m, nil
 	}
 	return m, nil
+
 }
 
 type extensionTokenFlashFadeMsg struct{}
