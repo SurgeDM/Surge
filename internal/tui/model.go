@@ -161,6 +161,10 @@ type RootModel struct {
 	// Keybindings
 	keys KeyMap
 
+	// Extension tab state
+	ExtensionTokenCopied    bool      // flash "Token copied!" feedback
+	ExtensionTokenCopyTimer time.Time // when token was last copied (for fade)
+
 	// Server port for display
 	ServerPort int
 	ServerHost string

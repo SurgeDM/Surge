@@ -14,6 +14,13 @@ type Settings struct {
 	General     GeneralSettings     `json:"general"`
 	Network     NetworkSettings     `json:"network"`
 	Performance PerformanceSettings `json:"performance"`
+	Extension   ExtensionSettings   `json:"extension"`
+}
+
+// ExtensionSettings holds extension management settings (display-only in TUI).
+type ExtensionSettings struct {
+	LastChromeStore  string `json:"last_chrome_store"`
+	LastFirefoxStore string `json:"last_firefox_store"`
 }
 
 // GeneralSettings contains application behavior settings.
@@ -75,10 +82,8 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 			{Key: "download_complete_notification", Label: "Download Complete Notification", Description: "Show system notification when a download finishes.", Type: "bool"},
 			{Key: "allow_remote_open_actions", Label: "Allow Remote Open Actions", Description: "Allow /open-file and /open-folder API calls from non-loopback clients. Disabled by default for security.", Type: "bool"},
 			{Key: "warn_on_duplicate", Label: "Warn on Duplicate", Description: "Show warning when adding a download that already exists.", Type: "bool"},
-			{Key: "extension_prompt", Label: "Extension Prompt", Description: "Prompt for confirmation when adding downloads via browser extension.", Type: "bool"},
 			{Key: "auto_resume", Label: "Auto Resume", Description: "Automatically resume paused downloads on startup.", Type: "bool"},
 			{Key: "skip_update_check", Label: "Skip Update Check", Description: "Disable automatic check for new versions on startup.", Type: "bool"},
-
 			{Key: "clipboard_monitor", Label: "Clipboard Monitor", Description: "Watch clipboard for URLs and prompt to download them.", Type: "bool"},
 			{Key: "theme", Label: "App Theme", Description: "UI Theme (System, Light, Dark).", Type: "int"},
 			{Key: "log_retention_count", Label: "Log Retention Count", Description: "Number of recent log files to keep.", Type: "int"},
@@ -102,12 +107,19 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 			{Key: "stall_timeout", Label: "Stall Timeout", Description: "Restart workers with no data for this duration (e.g., 5s).", Type: "duration"},
 			{Key: "speed_ema_alpha", Label: "Speed EMA Alpha", Description: "Exponential moving average smoothing factor (0.0-1.0).", Type: "float64"},
 		},
+		"Extension": {
+			{Key: "extension_prompt", Label: "Extension Prompt", Description: "Prompt for confirmation when adding downloads via browser extension.", Type: "bool"},
+			{Key: "chrome_extension_link", Label: "Chrome Extension", Description: "", Type: "link"},
+			{Key: "firefox_extension_link", Label: "Firefox Extension", Description: "", Type: "link"},
+			{Key: "auth_token", Label: "Auth Token", Description: "Used by the browser extension to authenticate with Surge. Press Enter to copy.", Type: "string"},
+			{Key: "connection_instructions", Label: "How to Connect", Description: "", Type: "instructions"},
+		},
 	}
 }
 
 // CategoryOrder returns the order of categories for UI tabs.
 func CategoryOrder() []string {
-	return []string{"General", "Network", "Performance", "Categories"}
+	return []string{"General", "Extension", "Network", "Performance", "Categories"}
 }
 
 const (
@@ -150,6 +162,7 @@ func DefaultSettings() *Settings {
 			StallTimeout:          3 * time.Second,
 			SpeedEmaAlpha:         0.3,
 		},
+		Extension: ExtensionSettings{},
 	}
 }
 

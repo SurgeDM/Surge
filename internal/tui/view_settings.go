@@ -146,6 +146,8 @@ func shortSettingsCategoryLabel(label string) string {
 		return "Perf"
 	case "Categories":
 		return "Cats"
+	case "Extension":
+		return "Ext"
 	default:
 		return label
 	}
@@ -306,6 +308,53 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	meta := settingsMeta[selectedRow]
 	value := settingsValues[meta.Key]
+
+	// Extension tab: special rendering for certain settings
+	switch meta.Key {
+	case "connection_instructions":
+		url := ""
+		if s, ok := value.(string); ok {
+			url = s
+		}
+		label := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render("[Enter] Open documentation:")
+		urlDisplay := lipgloss.NewStyle().Foreground(colors.White).Render(url)
+		detail := lipgloss.JoinVertical(lipgloss.Left,
+			label,
+			" "+urlDisplay,
+		)
+		return formatSettingsBlock(detail, innerWidth, rows)
+	case "auth_token":
+		token := ""
+		if s, ok := value.(string); ok {
+			token = s
+		}
+		displayToken := formatTokenForDisplay(token)
+		label := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render("[Enter] Copy:")
+		valDisplay := lipgloss.NewStyle().Foreground(colors.White).Render(displayToken)
+		if m.ExtensionTokenCopied && time.Since(m.ExtensionTokenCopyTimer) < 2*time.Second {
+			valDisplay += " " + lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true).Render("Copied!")
+		} else {
+			m.ExtensionTokenCopied = false
+		}
+		detail := lipgloss.JoinVertical(lipgloss.Left,
+			label,
+			" "+valDisplay,
+		)
+		return formatSettingsBlock(detail, innerWidth, rows)
+	case "chrome_extension_link", "firefox_extension_link":
+		extURL := ""
+		if s, ok := value.(string); ok {
+			extURL = s
+		}
+		label := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render("[Enter] Open:")
+		urlDisplay := lipgloss.NewStyle().Foreground(colors.White).Render(extURL)
+		detail := lipgloss.JoinVertical(lipgloss.Left,
+			label,
+			" "+urlDisplay,
+		)
+		return formatSettingsBlock(detail, innerWidth, rows)
+	}
+
 	unit := m.getSettingUnit()
 	unitStyle := lipgloss.NewStyle().Foreground(colors.Gray)
 
@@ -524,10 +573,8 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 		values["warn_on_duplicate"] = m.Settings.General.WarnOnDuplicate
 		values["download_complete_notification"] = m.Settings.General.DownloadCompleteNotification
 		values["allow_remote_open_actions"] = m.Settings.General.AllowRemoteOpenActions
-		values["extension_prompt"] = m.Settings.General.ExtensionPrompt
 		values["auto_resume"] = m.Settings.General.AutoResume
 		values["skip_update_check"] = m.Settings.General.SkipUpdateCheck
-
 		values["clipboard_monitor"] = m.Settings.General.ClipboardMonitor
 		values["theme"] = m.Settings.General.Theme
 		values["log_retention_count"] = m.Settings.General.LogRetentionCount
@@ -549,6 +596,12 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 		values["speed_ema_alpha"] = m.Settings.Performance.SpeedEmaAlpha
 	case "Categories":
 		values["category_enabled"] = m.Settings.General.CategoryEnabled
+	case "Extension":
+		values["extension_prompt"] = m.Settings.General.ExtensionPrompt
+		values["chrome_extension_link"] = ChromeExtensionURL
+		values["firefox_extension_link"] = FirefoxExtensionURL
+		values["auth_token"] = readAuthTokenFile()
+		values["connection_instructions"] = connectionInstructions
 	}
 
 	return values
@@ -578,6 +631,10 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 		if key == "category_enabled" {
 			m.Settings.General.CategoryEnabled = !m.Settings.General.CategoryEnabled
 		}
+	case "Extension":
+		if key == "extension_prompt" {
+			m.Settings.General.ExtensionPrompt = !m.Settings.General.ExtensionPrompt
+		}
 	}
 
 	return nil
@@ -606,15 +663,12 @@ func (m *RootModel) setGeneralSetting(key, value, typ string) error {
 		m.Settings.General.WarnOnDuplicate = !m.Settings.General.WarnOnDuplicate
 	case "allow_remote_open_actions":
 		m.Settings.General.AllowRemoteOpenActions = !m.Settings.General.AllowRemoteOpenActions
-	case "extension_prompt":
-		m.Settings.General.ExtensionPrompt = !m.Settings.General.ExtensionPrompt
 	case "auto_resume":
 		m.Settings.General.AutoResume = !m.Settings.General.AutoResume
 	case "skip_update_check":
 		m.Settings.General.SkipUpdateCheck = !m.Settings.General.SkipUpdateCheck
 	case "clipboard_monitor":
 		m.Settings.General.ClipboardMonitor = !m.Settings.General.ClipboardMonitor
-
 	case "theme":
 		var theme int
 		valLower := strings.ToLower(value)
@@ -962,6 +1016,10 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 		switch key {
 		case "category_enabled":
 			m.Settings.General.CategoryEnabled = defaults.General.CategoryEnabled
+		}
+	case "Extension":
+		if key == "extension_prompt" {
+			m.Settings.General.ExtensionPrompt = defaults.General.ExtensionPrompt
 		}
 	}
 }

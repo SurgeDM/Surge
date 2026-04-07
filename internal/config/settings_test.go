@@ -426,17 +426,18 @@ func TestGetSettingsMetadata(t *testing.T) {
 			if setting.Label == "" {
 				t.Errorf("Category %s, key %s: Label is empty", category, setting.Key)
 			}
-			if setting.Description == "" {
+			if category != "Extension" && setting.Description == "" {
 				t.Errorf("Category %s, key %s: Description is empty", category, setting.Key)
 			}
 			if setting.Type == "" {
 				t.Errorf("Category %s, key %s: Type is empty", category, setting.Key)
 			}
 
-			// Verify Type is valid
+			// Verify Type is valid (Extension has additional types: link, instructions)
 			validTypes := map[string]bool{
 				"string": true, "int": true, "int64": true,
 				"bool": true, "duration": true, "float64": true,
+				"link": true, "instructions": true,
 			}
 			if !validTypes[setting.Type] {
 				t.Errorf("Category %s, key %s: Invalid type %q", category, setting.Key, setting.Type)
@@ -453,7 +454,7 @@ func TestCategoryOrder(t *testing.T) {
 	}
 
 	// Should have all expected categories
-	expectedCount := 4 // General, Network, Performance, Categories
+	expectedCount := 5 // General, Network, Performance, Categories, Extension
 	if len(order) != expectedCount {
 		t.Errorf("Expected %d categories, got %d", expectedCount, len(order))
 	}
