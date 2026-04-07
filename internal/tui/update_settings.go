@@ -165,12 +165,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// Constants for extension URLs
-const (
-	ChromeExtensionURL     = "https://github.com/SurgeDM/Surge/releases/latest"
-	FirefoxExtensionURL    = "https://addons.mozilla.org/en-US/firefox/addon/surge/"
-	connectionInstructions = "https://github.com/SurgeDM/Surge#browser-extension"
-)
+// Extension URLs and instructions are sourced from internal/utils/open.go
 
 func (m *RootModel) handleExtensionAction() (tea.Model, tea.Cmd) {
 	settingKey := m.getCurrentSettingKey()

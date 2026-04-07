@@ -10,8 +10,14 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
+	"github.com/SurgeDM/Surge/internal/utils"
 
 	"charm.land/lipgloss/v2"
+)
+
+// Constants for extension settings UI
+const (
+	connectionInstructions = "https://github.com/SurgeDM/Surge#browser-extension"
 )
 
 // viewSettings renders the Btop-style settings page
@@ -593,8 +599,8 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 		values["category_enabled"] = m.Settings.General.CategoryEnabled
 	case "Extension":
 		values["extension_prompt"] = m.Settings.General.ExtensionPrompt
-		values["chrome_extension_link"] = ChromeExtensionURL
-		values["firefox_extension_link"] = FirefoxExtensionURL
+		values["chrome_extension_link"] = utils.ChromeExtensionURL
+		values["firefox_extension_link"] = utils.FirefoxExtensionURL
 		values["auth_token"] = GetAuthToken()
 		values["connection_instructions"] = connectionInstructions
 	}

@@ -74,9 +74,8 @@ func buildOpenCommand(path string) *exec.Cmd {
 }
 
 const (
-	ChromeExtensionURL     = "https://github.com/SurgeDM/Surge/releases/latest"
-	FirefoxExtensionURL    = "https://addons.mozilla.org/en-US/firefox/addon/surge/"
-	ConnectionInstructions = "https://github.com/SurgeDM/Surge#browser-extension"
+	ChromeExtensionURL  = "https://github.com/SurgeDM/Surge/releases/latest"
+	FirefoxExtensionURL = "https://addons.mozilla.org/en-US/firefox/addon/surge/"
 )
 
 // OpenBrowser opens a URL in the user's default browser
@@ -114,22 +113,4 @@ func WriteToClipboard(text string) {
 			_ = cmd.Run()
 		}
 	}
-}
-
-// FormatTokenForDisplay masks a token for safe display
-func FormatTokenForDisplay(token string) string {
-	if token == "" {
-		return "No token generated. Start surge server to generate one."
-	}
-	if len(token) <= 10 {
-		return token[:2] + strings.Repeat("•", len(token)-2)
-	}
-	parts := strings.Split(token, "-")
-	if len(parts) >= 4 {
-		for i := 1; i < len(parts); i++ {
-			parts[i] = strings.Repeat("•", len(parts[i]))
-		}
-		return strings.Join(parts, "-")
-	}
-	return token[:2] + strings.Repeat("*", len(token)-2)
 }
