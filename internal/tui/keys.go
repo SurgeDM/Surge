@@ -332,11 +332,11 @@ var Keys = KeyMap{
 		),
 		Tab2: key.NewBinding(
 			key.WithKeys("2"),
-			key.WithHelp("2", "connections"),
+			key.WithHelp("2", "extension"),
 		),
 		Tab3: key.NewBinding(
 			key.WithKeys("3"),
-			key.WithHelp("3", "chunks"),
+			key.WithHelp("3", "network"),
 		),
 		Tab4: key.NewBinding(
 			key.WithKeys("4"),
@@ -344,7 +344,7 @@ var Keys = KeyMap{
 		),
 		Tab5: key.NewBinding(
 			key.WithKeys("5"),
-			key.WithHelp("5", "extension"),
+			key.WithHelp("5", "categories"),
 		),
 		NextTab: key.NewBinding(
 			key.WithKeys("right"),

@@ -252,6 +252,9 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		settings.General.AutoResume = false
 	}
 
+	// Load auth token once at startup to avoid per-frame disk I/O
+	InitAuthToken()
+
 	applyColorModeForTheme(settings.General.Theme, initialDarkBackground)
 
 	// Load paused downloads from master list (now uses global config directory)

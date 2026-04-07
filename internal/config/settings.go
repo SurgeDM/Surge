@@ -19,8 +19,6 @@ type Settings struct {
 
 // ExtensionSettings holds extension management settings (display-only in TUI).
 type ExtensionSettings struct {
-	LastChromeStore  string `json:"last_chrome_store"`
-	LastFirefoxStore string `json:"last_firefox_store"`
 }
 
 // GeneralSettings contains application behavior settings.

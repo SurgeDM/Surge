@@ -324,17 +324,12 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		)
 		return formatSettingsBlock(detail, innerWidth, rows)
 	case "auth_token":
-		token := ""
-		if s, ok := value.(string); ok {
-			token = s
-		}
-		displayToken := formatTokenForDisplay(token)
+		token := GetAuthToken()
+		displayToken := FormatTokenForDisplay(token)
 		label := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render("[Enter] Copy:")
 		valDisplay := lipgloss.NewStyle().Foreground(colors.White).Render(displayToken)
 		if m.ExtensionTokenCopied && time.Since(m.ExtensionTokenCopyTimer) < 2*time.Second {
 			valDisplay += " " + lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true).Render("Copied!")
-		} else {
-			m.ExtensionTokenCopied = false
 		}
 		detail := lipgloss.JoinVertical(lipgloss.Left,
 			label,
@@ -600,7 +595,7 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 		values["extension_prompt"] = m.Settings.General.ExtensionPrompt
 		values["chrome_extension_link"] = ChromeExtensionURL
 		values["firefox_extension_link"] = FirefoxExtensionURL
-		values["auth_token"] = readAuthTokenFile()
+		values["auth_token"] = GetAuthToken()
 		values["connection_instructions"] = connectionInstructions
 	}
 

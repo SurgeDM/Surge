@@ -125,6 +125,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.PasteMsg:
 		return m.updatePaste(msg)
 
+	case extensionTokenFlashFadeMsg:
+		return m.handleExtensionTokenFlashFade()
+
 	// Handle filepicker messages for all message types when in FilePickerState
 	default:
 		var cmds []tea.Cmd

@@ -1,9 +1,6 @@
 package tui
 
 import (
-	"os"
-	"path/filepath"
-	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -185,7 +182,7 @@ func (m *RootModel) handleExtensionAction() (tea.Model, tea.Cmd) {
 		utils.OpenBrowser(utils.FirefoxExtensionURL)
 		return m, nil
 	case "auth_token":
-		token := readAuthTokenFile()
+		token := GetAuthToken()
 		if token != "" {
 			utils.WriteToClipboard(token)
 			m.ExtensionTokenCopied = true
@@ -199,13 +196,9 @@ func (m *RootModel) handleExtensionAction() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func readAuthTokenFile() string {
-	tokenPath := filepath.Join(config.GetStateDir(), "token")
-	data, err := os.ReadFile(tokenPath)
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(data))
-}
-
 type extensionTokenFlashFadeMsg struct{}
+
+func (m *RootModel) handleExtensionTokenFlashFade() (tea.Model, tea.Cmd) {
+	m.ExtensionTokenCopied = false
+	return m, nil
+}
