@@ -176,10 +176,8 @@ func (m *RootModel) handleExtensionAction() (tea.Model, tea.Cmd) {
 	switch settingKey {
 	case "chrome_extension_link":
 		utils.OpenBrowser(ChromeExtensionURL)
-		return m, nil
 	case "firefox_extension_link":
 		utils.OpenBrowser(FirefoxExtensionURL)
-		return m, nil
 	case "auth_token":
 		token := GetAuthToken()
 		if token != "" {
@@ -190,10 +188,8 @@ func (m *RootModel) handleExtensionAction() (tea.Model, tea.Cmd) {
 				return extensionTokenFlashFadeMsg{}
 			})
 		}
-		return m, nil
 	case "connection_instructions":
 		utils.OpenBrowser(ConnectInstructionURL)
-		return m, nil
 	}
 	return m, nil
 
