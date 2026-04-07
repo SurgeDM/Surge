@@ -15,10 +15,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Constants for extension settings UI
-const (
-	connectionInstructions = "https://github.com/SurgeDM/Surge#browser-extension"
-)
+
 
 // viewSettings renders the Btop-style settings page
 func (m RootModel) viewSettings() string {
@@ -602,7 +599,7 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 		values["chrome_extension_link"] = utils.ChromeExtensionURL
 		values["firefox_extension_link"] = utils.FirefoxExtensionURL
 		values["auth_token"] = GetAuthToken()
-		values["connection_instructions"] = connectionInstructions
+		values["connection_instructions"] = utils.ChromeExtensionURL
 	}
 
 	return values

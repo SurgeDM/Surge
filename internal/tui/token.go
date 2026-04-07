@@ -27,11 +27,6 @@ func GetAuthToken() string {
 	return authToken
 }
 
-// ClearAuthToken resets the cached token to empty string.
-func ClearAuthToken() {
-	authToken = ""
-}
-
 // FormatTokenForDisplay returns a user-friendly representation of the token.
 // Long tokens are truncated with an ellipsis.
 func FormatTokenForDisplay(token string) string {

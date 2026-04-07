@@ -14,11 +14,6 @@ type Settings struct {
 	General     GeneralSettings     `json:"general"`
 	Network     NetworkSettings     `json:"network"`
 	Performance PerformanceSettings `json:"performance"`
-	Extension   ExtensionSettings   `json:"extension"`
-}
-
-// ExtensionSettings holds extension management settings (display-only in TUI).
-type ExtensionSettings struct {
 }
 
 // GeneralSettings contains application behavior settings.
@@ -160,7 +155,6 @@ func DefaultSettings() *Settings {
 			StallTimeout:          3 * time.Second,
 			SpeedEmaAlpha:         0.3,
 		},
-		Extension: ExtensionSettings{},
 	}
 }
 
