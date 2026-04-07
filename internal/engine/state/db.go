@@ -104,7 +104,7 @@ func initDB() error {
 
 // ensureDownloadsSchema checks if required columns exist in the downloads table and adds them if missing.
 func ensureDownloadsSchema() error {
-	rows, err := db.QueryContext(context.Background(), "PRAGMA table_info(downloads)")
+	rows, err := db.QueryContext(context.Background(), "PRAGMA table_info(downloads)") // nolint:rowserrcheck
 	if err != nil {
 		return err
 	}

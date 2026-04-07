@@ -64,7 +64,7 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	client := &http.Client{Timeout: 3 * time.Second}
 
 	doRequest := func(method, url string) (*http.Response, error) {
-		req, err := http.NewRequest(method, url, nil)
+		req, err := http.NewRequest(method, url, nil) // nolint:noctx // nolint:noctx
 		if err != nil {
 			return nil, err
 		}

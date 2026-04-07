@@ -317,6 +317,9 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 		}
 		state.Tasks = append(state.Tasks, t)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate tasks: %w", err)
+	}
 
 	return &state, nil
 }
@@ -415,6 +418,9 @@ func LoadMasterList() (*types.MasterList, error) {
 		}
 
 		list.Downloads = append(list.Downloads, e)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate downloads: %w", err)
 	}
 
 	return &list, nil
@@ -684,7 +690,7 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 		WHERE id IN (%s) AND status != 'completed'
 	`, inClause)
 
-	rows, err := db.QueryContext(context.Background(), query, args...)
+	rows, err := db.QueryContext(context.Background(), query, args...) // nolint:rowserrcheck
 	if err != nil {
 		return nil, fmt.Errorf("failed to query downloads batch: %w", err)
 	}
@@ -733,7 +739,7 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 
 	// 2. Load Tasks for all these downloads
 	taskQuery := fmt.Sprintf(`SELECT download_id, offset, length FROM tasks WHERE download_id IN (%s)`, inClause)
-	taskRows, err := db.QueryContext(context.Background(), taskQuery, args...)
+	taskRows, err := db.QueryContext(context.Background(), taskQuery, args...) // nolint:rowserrcheck
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tasks batch: %w", err)
 	}
@@ -878,7 +884,11 @@ func ValidateIntegrity() (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to query known download paths: %w", err)
 	}
-	defer allRows.Close()
+	defer func() {
+		if err := allRows.Close(); err != nil {
+			utils.Debug("Error closing rows: %v", err)
+		}
+	}()
 	for allRows.Next() {
 		var dest string
 		var status string

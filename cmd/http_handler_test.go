@@ -1,7 +1,10 @@
 package cmd
 
+// nolint:noctx
+
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -137,8 +140,8 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			body, _ := json.Marshal(tt.request)
-			req := httptest.NewRequest("POST", "/download", bytes.NewBuffer(body))
+			body, _ := json.Marshal(tt.request) // nolint:noctx
+			req := httptest.NewRequestWithContext(context.Background(),"POST", "/download", bytes.NewBuffer(body))
 			w := httptest.NewRecorder()
 			svc := core.NewLocalDownloadService(GlobalPool)
 
@@ -275,8 +278,8 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 		"is_explicit_category": true,
 		"headers": {"Authorization": "Bearer test"}
 	}`, probeServer.URL, expectedFile, tempDir)
-
-	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+ // nolint:noctx
+	req := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	handleDownload(rec, req, "", svc)
@@ -327,8 +330,8 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 	})
 
 	// Use a URL with an invalid scheme so ProbeServer fails immediately.
-	body := `{"url": "badscheme://example.com/file.bin", "path": "/tmp", "skip_approval": true}`
-	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	body := `{"url": "badscheme://example.com/file.bin", "path": "/tmp", "skip_approval": true}` // nolint:noctx
+	req := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	handleDownload(rec, req, "", svc)
@@ -392,7 +395,7 @@ func TestHandleDownload_PublishError_RecordsPreflightError(t *testing.T) {
 
 	outDir := t.TempDir()
 	body := fmt.Sprintf(`{"url": %q, "path": %q}`, "http://example.com/file.bin", outDir)
-	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	handleDownload(rec, req, "", svc)

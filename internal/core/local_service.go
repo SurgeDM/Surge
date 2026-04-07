@@ -18,8 +18,14 @@ import (
 	"github.com/google/uuid"
 )
 
+const (
+	statusCompleted = "completed"
+	statusPausing = "pausing"
+	statusPaused    = "paused"
+)
+
 func completedSpeedMBps(entry types.DownloadEntry) float64 {
-	if entry.Status != "completed" {
+	if entry.Status != statusCompleted {
 		return 0
 	}
 	if entry.AvgSpeed > 0 {
@@ -387,11 +393,11 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 				// Update status based on state
 				switch {
 				case cfg.State.IsPausing():
-					status.Status = "pausing"
+					status.Status = statusPausing
 				case cfg.State.IsPaused():
 					status.Status = "paused"
 				case cfg.State.Done.Load():
-					status.Status = "completed"
+					status.Status = statusCompleted
 				}
 
 				// Calculate speed from progress only while actively downloading.
@@ -432,7 +438,7 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 			var progress float64
 			if d.TotalSize > 0 {
 				progress = float64(d.Downloaded) * 100 / float64(d.TotalSize)
-			} else if d.Status == "completed" {
+			} else if d.Status == statusCompleted {
 				progress = 100.0
 			}
 
@@ -584,7 +590,7 @@ func (s *LocalDownloadService) Delete(id string) error {
 				DownloadID: id,
 				Filename:   entry.Filename,
 				DestPath:   entry.DestPath,
-				Completed:  entry.Status == "completed",
+				Completed:  entry.Status == statusCompleted,
 			}
 		}
 	}
@@ -611,7 +617,7 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 		var progress float64
 		if entry.TotalSize > 0 {
 			progress = float64(entry.Downloaded) * 100 / float64(entry.TotalSize)
-		} else if entry.Status == "completed" {
+		} else if entry.Status == statusCompleted {
 			progress = 100.0
 		}
 

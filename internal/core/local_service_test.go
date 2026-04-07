@@ -17,6 +17,8 @@ import (
 	"github.com/SurgeDM/Surge/internal/testutil"
 )
 
+const statusDownloading = "downloading"
+
 func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 	tempDir := t.TempDir()
 	state.CloseDB()
@@ -130,7 +132,7 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 	var runtimeDestPath string
 	for time.Now().Before(deadline) {
 		st, _ = svc.GetStatus(id)
-		if st != nil && st.DestPath != "" && st.Status == "downloading" {
+		if st != nil && st.DestPath != "" && st.Status == statusDownloading {
 			runtimeDestPath = st.DestPath
 			break
 		}
@@ -434,7 +436,7 @@ func TestLocalDownloadService_Shutdown_PersistsQueuedState(t *testing.T) {
 	for time.Now().Before(deadline) {
 		firstStatus, _ := svc.GetStatus(firstID)
 		secondStatus, _ := svc.GetStatus(secondID)
-		if firstStatus != nil && (firstStatus.Status == "downloading" || firstStatus.Status == "pausing") {
+		if firstStatus != nil && (firstStatus.Status == statusDownloading || firstStatus.Status == "pausing") {
 			seenFirstActive = true
 		}
 		if secondStatus != nil && secondStatus.Status == "queued" {
@@ -462,7 +464,7 @@ func TestLocalDownloadService_Shutdown_PersistsQueuedState(t *testing.T) {
 	if second == nil {
 		t.Fatal("expected queued download to be persisted on shutdown")
 	}
-	if second.Status != "queued" && second.Status != "paused" && second.Status != "completed" && second.Status != "downloading" {
+	if second.Status != "queued" && second.Status != "paused" && second.Status != "completed" && second.Status != statusDownloading {
 		t.Fatalf("status = %q, want queued/paused/completed/downloading", second.Status)
 	}
 }

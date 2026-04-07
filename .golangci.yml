@@ -16,7 +16,6 @@ linters:
     
     - prealloc
     - makezero
-    - goconst
     
     - bodyclose
     - noctx

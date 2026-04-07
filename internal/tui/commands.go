@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os/exec"
 	"runtime"
 
@@ -30,11 +31,11 @@ func openWithSystem(path string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", path)
+		cmd = exec.CommandContext(context.Background(), "open", path)
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", "", path)
+		cmd = exec.CommandContext(context.Background(), "cmd", "/c", "start", "", path)
 	default: // linux and others
-		cmd = exec.Command("xdg-open", path)
+		cmd = exec.CommandContext(context.Background(), "xdg-open", path)
 	}
 	err := cmd.Start()
 	if err == nil {
