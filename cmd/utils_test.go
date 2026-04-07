@@ -12,7 +12,9 @@ func TestResolveClientOutputPath(t *testing.T) {
 	originalHost := os.Getenv("SURGE_HOST")
 	originalGlobalHost := globalHost
 	defer func() {
-		os.Setenv("SURGE_HOST", originalHost)
+		if err := os.Setenv("SURGE_HOST", originalHost); err != nil {
+			t.Errorf("failed to restore SURGE_HOST: %v", err)
+		}
 		globalHost = originalGlobalHost
 	}()
 
@@ -31,7 +33,9 @@ func TestResolveClientOutputPath(t *testing.T) {
 		{
 			name: "Remote Host Set via Env - Pass Through Empty",
 			setupHost: func() {
-				os.Setenv("SURGE_HOST", "127.0.0.1:1234")
+				if err := os.Setenv("SURGE_HOST", "127.0.0.1:1234"); err != nil {
+					t.Fatalf("failed to set SURGE_HOST: %v", err)
+				}
 				globalHost = ""
 			},
 			outputDir: "",
@@ -40,7 +44,9 @@ func TestResolveClientOutputPath(t *testing.T) {
 		{
 			name: "Remote Host Set via Global - Pass Through Exact",
 			setupHost: func() {
-				os.Setenv("SURGE_HOST", "")
+				if err := os.Setenv("SURGE_HOST", ""); err != nil {
+					t.Fatalf("failed to clear SURGE_HOST: %v", err)
+				}
 				globalHost = "127.0.0.1:1234"
 			},
 			outputDir: ".",
@@ -49,7 +55,9 @@ func TestResolveClientOutputPath(t *testing.T) {
 		{
 			name: "Local Execution - Empty Dir returns CWD",
 			setupHost: func() {
-				os.Setenv("SURGE_HOST", "")
+				if err := os.Setenv("SURGE_HOST", ""); err != nil {
+					t.Fatalf("failed to clear SURGE_HOST: %v", err)
+				}
 				globalHost = ""
 			},
 			outputDir: "",
@@ -58,7 +66,9 @@ func TestResolveClientOutputPath(t *testing.T) {
 		{
 			name: "Local Execution - Dot returns Absolute CWD",
 			setupHost: func() {
-				os.Setenv("SURGE_HOST", "")
+				if err := os.Setenv("SURGE_HOST", ""); err != nil {
+					t.Fatalf("failed to clear SURGE_HOST: %v", err)
+				}
 				globalHost = ""
 			},
 			outputDir: ".",
@@ -67,7 +77,9 @@ func TestResolveClientOutputPath(t *testing.T) {
 		{
 			name: "Local Execution - Relative Subdir returns Absolute",
 			setupHost: func() {
-				os.Setenv("SURGE_HOST", "")
+				if err := os.Setenv("SURGE_HOST", ""); err != nil {
+					t.Fatalf("failed to clear SURGE_HOST: %v", err)
+				}
 				globalHost = ""
 			},
 			outputDir: "downloads",
