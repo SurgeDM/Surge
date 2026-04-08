@@ -35,7 +35,7 @@ func newProbeTestServer(t *testing.T, size int64) *httptest.Server {
 
 func newLifecycleManagerForTest() *LifecycleManager {
 	settings := config.DefaultSettings()
-	settings.General.CategoryEnabled = false
+	settings.Categories.CategoryEnabled = false
 	return &LifecycleManager{settings: settings, settingsRefreshedAt: time.Now()}
 }
 
@@ -403,7 +403,7 @@ func TestLifecycleManager_GetSettings_RefreshesFromDiskAfterTTL(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	initial := config.DefaultSettings()
-	initial.General.CategoryEnabled = false
+	initial.Categories.CategoryEnabled = false
 	if err := config.SaveSettings(initial); err != nil {
 		t.Fatalf("SaveSettings(initial) failed: %v", err)
 	}
@@ -411,7 +411,7 @@ func TestLifecycleManager_GetSettings_RefreshesFromDiskAfterTTL(t *testing.T) {
 	mgr := NewLifecycleManager(nil, nil)
 
 	updated := config.DefaultSettings()
-	updated.General.CategoryEnabled = true
+	updated.Categories.CategoryEnabled = true
 	if err := config.SaveSettings(updated); err != nil {
 		t.Fatalf("SaveSettings(updated) failed: %v", err)
 	}
@@ -423,7 +423,7 @@ func TestLifecycleManager_GetSettings_RefreshesFromDiskAfterTTL(t *testing.T) {
 	settingsRefreshTTL = 0
 
 	settings := mgr.GetSettings()
-	if !settings.General.CategoryEnabled {
+	if !settings.Categories.CategoryEnabled {
 		t.Fatal("expected GetSettings to pick up saved settings after TTL expiry")
 	}
 }

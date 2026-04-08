@@ -299,12 +299,12 @@ func TestView_CategoryManagerNoLineExceedsTerminalWidth(t *testing.T) {
 
 func TestView_CategoryManagerResizeSequenceKeepsSelectedVisible(t *testing.T) {
 	settings := config.DefaultSettings()
-	if len(settings.General.Categories) == 0 {
+	if len(settings.Categories.Categories) == 0 {
 		t.Fatal("expected default categories")
 	}
 
-	selectedCursor := len(settings.General.Categories) - 1
-	selectedLabel := settings.General.Categories[selectedCursor].Name
+	selectedCursor := len(settings.Categories.Categories) - 1
+	selectedLabel := settings.Categories.Categories[selectedCursor].Name
 
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
 	m.state = CategoryManagerState

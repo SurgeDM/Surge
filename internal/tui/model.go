@@ -490,7 +490,7 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 		}
 
 		// Apply dashboard category filter.
-		if m.categoryFilter != "" && m.Settings != nil && m.Settings.General.CategoryEnabled {
+		if m.categoryFilter != "" && m.Settings != nil && m.Settings.Categories.CategoryEnabled {
 			if !m.matchesCategoryFilter(d) {
 				continue
 			}
@@ -526,7 +526,7 @@ func (m RootModel) matchesCategoryFilter(d *DownloadModel) bool {
 		filename = processing.InferFilenameFromURL(d.URL)
 	}
 
-	cat, err := config.GetCategoryForFile(filename, m.Settings.General.Categories)
+	cat, err := config.GetCategoryForFile(filename, m.Settings.Categories.Categories)
 	if filter == "Uncategorized" {
 		return err != nil || cat == nil
 	}

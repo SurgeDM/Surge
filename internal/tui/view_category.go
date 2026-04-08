@@ -25,7 +25,7 @@ func (m RootModel) viewCategoryManager() string {
 		return m.renderModalWithOverlay(box)
 	}
 
-	cats := m.Settings.General.Categories
+	cats := m.Settings.Categories.Categories
 	cursor := m.catMgrCursor
 	if m.catMgrEditing {
 		if len(cats) == 0 {
@@ -50,7 +50,7 @@ func (m RootModel) viewCategoryManager() string {
 	// === TOGGLE BAR ===
 	enabledStr := "OFF"
 	enabledColor := colors.Gray
-	if m.Settings.General.CategoryEnabled {
+	if m.Settings.Categories.CategoryEnabled {
 		enabledStr = "ON"
 		enabledColor = colors.StateDownloading
 	}
