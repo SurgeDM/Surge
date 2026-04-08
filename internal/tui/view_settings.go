@@ -287,7 +287,22 @@ func renderSettingsListViewport(settingsMeta []config.SettingMeta, selectedRow, 
 			}
 		}
 
-		lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+meta.Label))
+		label := meta.Label
+		maxLabelLen := innerWidth - len(prefix)
+		if maxLabelLen < 0 {
+			maxLabelLen = 0
+		}
+		
+		// Truncate to avoid line wrapping which breaks parent height constraints
+		if len(label) > maxLabelLen {
+			if maxLabelLen > 3 {
+				label = label[:maxLabelLen-3] + "..."
+			} else {
+				label = label[:maxLabelLen]
+			}
+		}
+
+		lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+label))
 	}
 
 	return strings.Join(lines, "\n")
