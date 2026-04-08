@@ -406,15 +406,13 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 		m.updateSettingsInputWidthForViewport()
 	}
 
-	rightRows := bodyHeight - 2
+	rightBoxStyle := lipgloss.NewStyle().Width(rightWidth).Padding(1, 2)
+	rightRows := bodyHeight - rightBoxStyle.GetVerticalFrameSize()
 	if rightRows < 1 {
 		rightRows = 1
 	}
-	rightContent := m.renderSettingsDetailBlock(settingsMeta, selectedRow, settingsValues, rightWidth-4, rightRows)
-	rightBox := lipgloss.NewStyle().
-		Width(rightWidth).
-		Padding(1, 2).
-		Render(rightContent)
+	rightContent := m.renderSettingsDetailBlock(settingsMeta, selectedRow, settingsValues, rightWidth-rightBoxStyle.GetHorizontalFrameSize(), rightRows)
+	rightBox := rightBoxStyle.Render(rightContent)
 
 	dividerHeight := max(lipgloss.Height(listBox), lipgloss.Height(rightBox))
 	if dividerHeight < 1 {
