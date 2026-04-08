@@ -93,7 +93,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// View() handles the actual dynamic layout math; we supply available bounds.
 		listInnerPadding := lipgloss.NewStyle().Padding(1, 2)
 		availableWidth := msg.Width - WindowStyle.GetHorizontalFrameSize() - BoxStyle.GetHorizontalFrameSize()
-		
+
 		// Give bubbles/list roughly the right dimensions for word-wrapping, exact styling is handled in view.
 		approxHeaderHeight := 11
 		approxTabBarHeight := 2

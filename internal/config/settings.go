@@ -149,7 +149,7 @@ func CategoryOrder() []string {
 		if label == "" {
 			label = field.Name
 		}
-		
+
 		// Ensure category has UI elements before creating a tab!
 		catType := field.Type
 		hasUIElements := false
@@ -161,7 +161,7 @@ func CategoryOrder() []string {
 				}
 			}
 		}
-		
+
 		// Only tabulate categories with active inputs
 		if hasUIElements {
 			order = append(order, label)

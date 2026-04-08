@@ -292,7 +292,7 @@ func renderSettingsListViewport(settingsMeta []config.SettingMeta, selectedRow, 
 		if maxLabelLen < 0 {
 			maxLabelLen = 0
 		}
-		
+
 		// Truncate to avoid line wrapping which breaks parent height constraints
 		if len(label) > maxLabelLen {
 			if maxLabelLen > 3 {
@@ -368,9 +368,9 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
 	leftWidth := 32
 	minRightWidth := 22
-	
+
 	horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
-	
+
 	if modalWidth-leftWidth-horizontalPadding < minRightWidth {
 		leftWidth = modalWidth - minRightWidth - horizontalPadding
 	}
@@ -511,7 +511,7 @@ func (m *RootModel) updateSettingsInputWidthForViewport() {
 		leftWidth := 32
 		minRightWidth := 22
 		horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
-		
+
 		if modalWidth-leftWidth-horizontalPadding < minRightWidth {
 			leftWidth = modalWidth - minRightWidth - horizontalPadding
 		}

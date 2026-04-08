@@ -299,9 +299,9 @@ func (m RootModel) renderCategoryEditView(innerWidth, rows int) string {
 func (m RootModel) renderCategoryTwoColumn(cats []config.Category, cursor, modalWidth, bodyHeight int) string {
 	leftWidth := 28
 	minRightWidth := 24
-	
+
 	horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
-	
+
 	if modalWidth-leftWidth-horizontalPadding < minRightWidth {
 		leftWidth = modalWidth - minRightWidth - horizontalPadding
 	}
