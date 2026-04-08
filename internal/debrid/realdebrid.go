@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -15,6 +16,7 @@ type Client struct {
 	apiKey      string
 	httpClient  *http.Client
 	baseURL     string
+	mu          sync.RWMutex
 	cachedHosts []string
 	hostsCached time.Time
 }
@@ -122,6 +124,17 @@ func (c *Client) SupportedHosts() ([]string, error) {
 // supportedHostsCached returns the supported hosts list, caching for 1 hour
 // to avoid making a live HTTP call on every invocation.
 func (c *Client) supportedHostsCached() ([]string, error) {
+	c.mu.RLock()
+	if c.cachedHosts != nil && time.Since(c.hostsCached) < time.Hour {
+		hosts := c.cachedHosts
+		c.mu.RUnlock()
+		return hosts, nil
+	}
+	c.mu.RUnlock()
+
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// Double-check after acquiring write lock.
 	if c.cachedHosts != nil && time.Since(c.hostsCached) < time.Hour {
 		return c.cachedHosts, nil
 	}
