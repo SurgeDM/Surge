@@ -260,7 +260,7 @@ func (m RootModel) View() tea.View {
 
 	// === MAIN DASHBOARD LAYOUT ===
 
-	availableWidth := m.width - 2
+	availableWidth := m.width - WindowStyle.GetHorizontalFrameSize()
 	if availableWidth < 0 {
 		availableWidth = 0
 	}
@@ -340,7 +340,7 @@ func (m RootModel) View() tea.View {
 	var detailContent string
 	selected := m.GetSelectedDownload()
 
-	detailWidth := rightWidth - 4
+	detailWidth := rightWidth - PaneStyle.GetHorizontalFrameSize()
 	if detailWidth < 0 {
 		detailWidth = 0
 	}
@@ -354,7 +354,7 @@ func (m RootModel) View() tea.View {
 	}
 
 	// Exact height from content + borders
-	detailHeight := lipgloss.Height(detailContent) + 2
+	detailHeight := lipgloss.Height(detailContent) + BoxStyle.GetVerticalFrameSize()
 
 	// Calculate Available Height for Rest
 	remainingHeight := availableHeight - detailHeight
@@ -391,16 +391,16 @@ func (m RootModel) View() tea.View {
 	}
 
 	if showChunkMap {
-		// chunkMapWidth = rightWidth - 4 (box border) - 2 (inner padding) = rightWidth - 6
-		// Calculate available height for chunk map (remaining height minus graph minimum 9)
-		availableChunkHeight := remainingHeight - minGraphHeight - 4 // -minGraphHeight for graph floor, -4 for borders/padding
+		// Calculate available height for chunk map
+		chunkMapPadding := lipgloss.NewStyle().Padding(0, 2)
+		availableChunkHeight := remainingHeight - minGraphHeight - BoxStyle.GetVerticalFrameSize() - LayoutGapStyle.GetVerticalFrameSize() - LayoutGapStyle.GetVerticalFrameSize()
 		if availableChunkHeight < 1 {
 			availableChunkHeight = 1
 		}
-		contentLines := components.CalculateHeight(bitmapWidth, rightWidth-6, availableChunkHeight)
+		contentLines := components.CalculateHeight(bitmapWidth, rightWidth-BoxStyle.GetHorizontalFrameSize()-chunkMapPadding.GetHorizontalFrameSize(), availableChunkHeight)
 		if contentLines > 0 {
-			// +2 for top/bottom borders
-			chunkMapNeeded = contentLines + 2
+			// top/bottom borders
+			chunkMapNeeded = contentLines + BoxStyle.GetVerticalFrameSize()
 		} else {
 			// Minimum for message "Chunk visualization not available"
 			chunkMapNeeded = 6
@@ -470,7 +470,7 @@ func (m RootModel) View() tea.View {
 
 	// Logo takes ~45% of header width
 	logoWidth := int(float64(leftWidth) * 0.45)
-	logWidth := leftWidth - logoWidth - 2 // Rest for log box
+	logWidth := leftWidth - logoWidth - BoxStyle.GetHorizontalFrameSize() // Rest for log box
 
 	if logoWidth < 4 {
 		logoWidth = 4 // Minimum for server box content
@@ -494,7 +494,7 @@ func (m RootModel) View() tea.View {
 		statusLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render(" Serving at " + serverAddr)
 	}
 
-	serverContentWidth := logoWidth - 4
+	serverContentWidth := logoWidth - (BoxStyle.GetHorizontalFrameSize() * 2)
 	if serverContentWidth < 0 {
 		serverContentWidth = 0
 	}
@@ -531,11 +531,11 @@ func (m RootModel) View() tea.View {
 	}
 
 	// Render log viewport
-	vpWidth := logWidth - 4
+	vpWidth := logWidth - (BoxStyle.GetHorizontalFrameSize() * 2)
 	if vpWidth < 0 {
 		vpWidth = 0
 	}
-	vpHeight := headerHeight - 4
+	vpHeight := headerHeight - (BoxStyle.GetVerticalFrameSize() * 2)
 	if vpHeight < 1 {
 		vpHeight = 1
 	}
@@ -594,8 +594,7 @@ func (m RootModel) View() tea.View {
 	}
 
 	// Calculate Available Height for the Graph
-	// graphHeight - Borders (2) - title area (1) - top/bottom padding (2)
-	graphContentHeight := graphHeight - 5
+	graphContentHeight := graphHeight - BoxStyle.GetVerticalFrameSize() - LayoutGapStyle.GetVerticalFrameSize() - 2 // remaining padding
 	if graphContentHeight < 3 {
 		graphContentHeight = 3
 	}
@@ -653,7 +652,7 @@ func (m RootModel) View() tea.View {
 	var graphWithAxis string
 	if hideGraphStats {
 		// No stats box — graph gets almost full width
-		graphAreaWidth := rightWidth - axisWidth - 10
+		graphAreaWidth := rightWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 5)
 		if graphAreaWidth < 10 {
 			graphAreaWidth = 10
 		}
@@ -711,7 +710,7 @@ func (m RootModel) View() tea.View {
 
 		// Graph takes remaining width after stats box
 		axisWidth := 10
-		graphAreaWidth := rightWidth - statsBoxWidth - axisWidth - 6 // borders + spacing
+		graphAreaWidth := rightWidth - statsBoxWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 3)
 		if graphAreaWidth < 10 {
 			graphAreaWidth = 10
 		}
@@ -771,9 +770,9 @@ func (m RootModel) View() tea.View {
 	// Render the bubbles list or centered empty message
 	var listContent string
 	if len(m.list.Items()) == 0 {
-		listContentHeight := listHeight - 6
+		listContentHeight := listHeight - BoxStyle.GetVerticalFrameSize() - ModalPaddingStyle.GetVerticalFrameSize()
 
-		listContentWidth := leftWidth - 8
+		listContentWidth := leftWidth - (BoxStyle.GetHorizontalFrameSize() * 4)
 		if listContentWidth < 0 {
 			listContentWidth = 0
 		}
@@ -787,7 +786,7 @@ func (m RootModel) View() tea.View {
 		}
 	} else {
 		// ensure list fills the height
-		m.list.SetHeight(listHeight - 4) // adjust for padding/tabs
+		m.list.SetHeight(listHeight - BoxStyle.GetVerticalFrameSize() - ModalPaddingStyle.GetVerticalFrameSize()) // adjust for padding/tabs
 		listContent = m.list.View()
 	}
 
@@ -822,18 +821,19 @@ func (m RootModel) View() tea.View {
 			if targetRows > 5 {
 				targetRows = 5 // Maximum 5 rows for compact look
 			}
-			chunkMapWidth := rightWidth - 6
+			chunkMapPadding := lipgloss.NewStyle().Padding(0, 2)
+			chunkMapWidth := rightWidth - BoxStyle.GetHorizontalFrameSize() - chunkMapPadding.GetHorizontalFrameSize()
 			if chunkMapWidth < 4 {
 				chunkMapWidth = 4
 			}
 			chunkMap := components.NewChunkMapModel(bitmap, bitmapWidth, chunkMapWidth, targetRows, selected.paused, totalSize, chunkSize, chunkProgress)
-			chunkContent = lipgloss.NewStyle().Padding(0, 2).Render(chunkMap.View()) // No bottom padding
+			chunkContent = chunkMapPadding.Render(chunkMap.View()) // No bottom padding
 
 			// If no chunks (not initialized or small file), show message
 			if bitmapWidth == 0 {
 				msg := "Chunk visualization not available"
 
-				placeholderWidth := rightWidth - 4
+				placeholderWidth := rightWidth - BoxStyle.GetHorizontalFrameSize()
 				if placeholderWidth < 0 {
 					placeholderWidth = 0
 				}

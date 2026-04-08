@@ -25,6 +25,10 @@ var (
 	LogStyleComplete lipgloss.Style
 	LogStyleError    lipgloss.Style
 	LogStylePaused   lipgloss.Style
+	WindowStyle      lipgloss.Style
+	BoxStyle         lipgloss.Style
+	ModalPaddingStyle lipgloss.Style
+	LayoutGapStyle   lipgloss.Style
 )
 
 func init() {
@@ -33,6 +37,11 @@ func init() {
 }
 
 func rebuildStyles() {
+	WindowStyle = lipgloss.NewStyle().Margin(0, 1)
+	BoxStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder())
+	ModalPaddingStyle = lipgloss.NewStyle().Padding(1, 2)
+	LayoutGapStyle = lipgloss.NewStyle().MarginTop(1)
+
 	AppStyle = lipgloss.NewStyle().
 		Background(lipgloss.Color("0")).
 		Foreground(colors.White)

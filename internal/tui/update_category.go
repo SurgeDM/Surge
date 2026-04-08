@@ -73,13 +73,16 @@ func (m *RootModel) updateCategoryInputWidthsForViewport() {
 	if modalWidth >= 76 {
 		leftWidth := 28
 		minRightWidth := 24
-		if modalWidth-leftWidth-8 < minRightWidth {
-			leftWidth = modalWidth - minRightWidth - 8
+		
+		horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
+		
+		if modalWidth-leftWidth-horizontalPadding < minRightWidth {
+			leftWidth = modalWidth - minRightWidth - horizontalPadding
 		}
 		if leftWidth < 16 {
 			leftWidth = 16
 		}
-		rightWidth := modalWidth - leftWidth - 8
+		rightWidth := modalWidth - leftWidth - horizontalPadding
 		targetWidth = rightWidth - 10
 	} else {
 		targetWidth = modalWidth - 14

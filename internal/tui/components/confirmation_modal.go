@@ -54,8 +54,12 @@ func (m ConfirmationModal) RenderWithBtopBox(
 	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
 	titleStyle lipgloss.Style,
 ) string {
-	innerWidth := m.Width - 4 // Account for borders
-	innerHeight := m.Height - 2
+	boxFrameX := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).GetHorizontalFrameSize()
+	paddingX := lipgloss.NewStyle().Padding(0, 1).GetHorizontalFrameSize()
+	innerWidth := m.Width - boxFrameX - paddingX
+
+	boxFrameY := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).GetVerticalFrameSize()
+	innerHeight := m.Height - boxFrameY
 
 	// Get content without help
 	mainContent := m.view()
@@ -72,7 +76,8 @@ func (m ConfirmationModal) RenderWithBtopBox(
 	helpHeight := lipgloss.Height(helpText)
 
 	// Space above content to vertically center the main content in remaining space
-	remainingHeight := innerHeight - helpHeight - 1 // -1 for spacing before help
+	spacingStyle := lipgloss.NewStyle().MarginBottom(1)
+	remainingHeight := innerHeight - helpHeight - spacingStyle.GetVerticalFrameSize()
 	topPadding := (remainingHeight - mainContentHeight) / 2
 	if topPadding < 0 {
 		topPadding = 0
@@ -109,7 +114,7 @@ func (m ConfirmationModal) Centered(width, height int) string {
 		BorderForeground(m.BorderColor).
 		Padding(1, 4)
 
-	innerWidth := m.Width - 10 // Account for borders and padding
+	innerWidth := m.Width - boxStyle.GetHorizontalFrameSize()
 
 	// Get content without help
 	mainContent := m.view()

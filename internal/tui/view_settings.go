@@ -72,10 +72,10 @@ func (m RootModel) viewSettings() string {
 	tabBar := m.renderSettingsTabBar(categories, activeTab, width-6)
 	helpText := m.renderSettingsHelp(width - 6)
 
-	innerHeight := height - 2
+	innerHeight := height - BoxStyle.GetVerticalFrameSize()
 	tabBarHeight := lipgloss.Height(tabBar)
 	helpHeight := lipgloss.Height(helpText)
-	bodyHeight := innerHeight - tabBarHeight - helpHeight - 2 // one line gap above body and help
+	bodyHeight := innerHeight - tabBarHeight - helpHeight - (LayoutGapStyle.GetVerticalFrameSize() * 2) // one line gap above body and help
 	if bodyHeight < 3 {
 		bodyHeight = 3
 	}
@@ -88,7 +88,7 @@ func (m RootModel) viewSettings() string {
 	}
 
 	contentHeight := lipgloss.Height(content)
-	usedHeight := tabBarHeight + 1 + contentHeight + 1 + helpHeight
+	usedHeight := tabBarHeight + LayoutGapStyle.GetVerticalFrameSize() + contentHeight + LayoutGapStyle.GetVerticalFrameSize() + helpHeight
 	paddingLines := innerHeight - usedHeight
 	if paddingLines < 0 {
 		paddingLines = 0
@@ -117,11 +117,11 @@ func settingsModalDimensions(termWidth, termHeight int) (int, int) {
 	}
 	height := 24
 
-	maxWidth := termWidth - 4
+	maxWidth := termWidth - (WindowStyle.GetHorizontalFrameSize() * 2)
 	if maxWidth < 1 {
 		maxWidth = 1
 	}
-	maxHeight := termHeight - 4
+	maxHeight := termHeight - (WindowStyle.GetVerticalFrameSize() * 2) - 4 // fallback padding
 	if maxHeight < 1 {
 		maxHeight = 1
 	}
@@ -353,18 +353,21 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
 	leftWidth := 32
 	minRightWidth := 22
-	if modalWidth-leftWidth-8 < minRightWidth {
-		leftWidth = modalWidth - minRightWidth - 8
+	
+	horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
+	
+	if modalWidth-leftWidth-horizontalPadding < minRightWidth {
+		leftWidth = modalWidth - minRightWidth - horizontalPadding
 	}
 	if leftWidth < 16 {
 		leftWidth = 16
 	}
 
-	rightWidth := modalWidth - leftWidth - 8
+	rightWidth := modalWidth - leftWidth - horizontalPadding
 	if rightWidth < minRightWidth {
 		rightWidth = minRightWidth
-		if modalWidth-rightWidth-8 > 16 {
-			leftWidth = modalWidth - rightWidth - 8
+		if modalWidth-rightWidth-horizontalPadding > 16 {
+			leftWidth = modalWidth - rightWidth - horizontalPadding
 		}
 	}
 
@@ -372,11 +375,11 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 		return m.renderSettingsCompact(settingsMeta, selectedRow, settingsValues, modalWidth, bodyHeight)
 	}
 
-	listRows := bodyHeight - 4
+	listRows := bodyHeight - (BoxStyle.GetVerticalFrameSize() * 2)
 	if listRows < 1 {
 		listRows = 1
 	}
-	listContent := renderSettingsListViewport(settingsMeta, selectedRow, listRows, leftWidth-4)
+	listContent := renderSettingsListViewport(settingsMeta, selectedRow, listRows, leftWidth-(BoxStyle.GetHorizontalFrameSize()*2))
 	listBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colors.Gray).
@@ -407,11 +410,11 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 		Render(strings.Repeat("│\n", dividerHeight-1) + "│")
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
-	return formatSettingsBlock(content, modalWidth-2, bodyHeight)
+	return formatSettingsBlock(content, modalWidth-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
 }
 
 func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
-	innerWidth := modalWidth - 2
+	innerWidth := modalWidth - BoxStyle.GetHorizontalFrameSize()
 	if innerWidth < 1 {
 		innerWidth = 1
 	}
@@ -425,7 +428,7 @@ func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, sele
 		listRows = 1
 	}
 
-	detailRows := bodyHeight - listRows - 1
+	detailRows := bodyHeight - listRows - LayoutGapStyle.GetVerticalFrameSize()
 	if detailRows < 1 {
 		detailRows = 1
 		listRows = bodyHeight - detailRows
@@ -492,13 +495,15 @@ func (m *RootModel) updateSettingsInputWidthForViewport() {
 	if modalWidth >= 72 {
 		leftWidth := 32
 		minRightWidth := 22
-		if modalWidth-leftWidth-8 < minRightWidth {
-			leftWidth = modalWidth - minRightWidth - 8
+		horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
+		
+		if modalWidth-leftWidth-horizontalPadding < minRightWidth {
+			leftWidth = modalWidth - minRightWidth - horizontalPadding
 		}
 		if leftWidth < 16 {
 			leftWidth = 16
 		}
-		rightWidth := modalWidth - leftWidth - 8
+		rightWidth := modalWidth - leftWidth - horizontalPadding
 		targetWidth = rightWidth - 10
 	} else {
 		targetWidth = modalWidth - 16
