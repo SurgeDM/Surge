@@ -41,13 +41,21 @@ const (
 
 // NetworkSettings contains network connection parameters.
 type NetworkSettings struct {
-	MaxConnectionsPerHost  int    `json:"max_connections_per_host"`
-	MaxConcurrentDownloads int    `json:"max_concurrent_downloads"`
-	UserAgent              string `json:"user_agent"`
-	ProxyURL               string `json:"proxy_url"`
-	SequentialDownload     bool   `json:"sequential_download"`
-	MinChunkSize           int64  `json:"min_chunk_size"`
-	WorkerBufferSize       int    `json:"worker_buffer_size"`
+	MaxConnectionsPerHost  int            `json:"max_connections_per_host"`
+	MaxConcurrentDownloads int            `json:"max_concurrent_downloads"`
+	UserAgent              string         `json:"user_agent"`
+	ProxyURL               string         `json:"proxy_url"`
+	SequentialDownload     bool           `json:"sequential_download"`
+	MinChunkSize           int64          `json:"min_chunk_size"`
+	WorkerBufferSize       int            `json:"worker_buffer_size"`
+	Debrid                 DebridSettings `json:"debrid"`
+}
+
+// DebridSettings contains debrid service settings.
+type DebridSettings struct {
+	Enabled  bool   `json:"enabled"`
+	Provider string `json:"provider"`
+	APIKey   string `json:"api_key"`
 }
 
 // PerformanceSettings contains performance tuning parameters.
@@ -102,12 +110,17 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 			{Key: "stall_timeout", Label: "Stall Timeout", Description: "Restart workers with no data for this duration (e.g., 5s).", Type: "duration"},
 			{Key: "speed_ema_alpha", Label: "Speed EMA Alpha", Description: "Exponential moving average smoothing factor (0.0-1.0).", Type: "float64"},
 		},
+		"Debrid": {
+			{Key: "enabled", Label: "Enable Debrid", Description: "Route downloads through a debrid service for premium speeds from file hosts.", Type: "bool"},
+			{Key: "provider", Label: "Provider", Description: "Debrid service provider (currently only real-debrid).", Type: "string"},
+			{Key: "api_key", Label: "API Key", Description: "Your debrid service API key.", Type: "string"},
+		},
 	}
 }
 
 // CategoryOrder returns the order of categories for UI tabs.
 func CategoryOrder() []string {
-	return []string{"General", "Network", "Performance", "Categories"}
+	return []string{"General", "Network", "Performance", "Debrid", "Categories"}
 }
 
 const (
@@ -142,6 +155,11 @@ func DefaultSettings() *Settings {
 			SequentialDownload:     false,
 			MinChunkSize:           2 * MB,
 			WorkerBufferSize:       512 * KB,
+			Debrid: DebridSettings{
+				Enabled:  false,
+				Provider: "real-debrid",
+				APIKey:   "",
+			},
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        3,
