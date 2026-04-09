@@ -31,6 +31,7 @@ type GeneralSettings struct {
 	ClipboardMonitor  bool `json:"clipboard_monitor" ui_label:"Clipboard Monitor" ui_desc:"Watch clipboard for URLs and prompt to download them."`
 	Theme             int  `json:"theme" ui_label:"App Theme" ui_desc:"UI Theme (System, Light, Dark)."`
 	LogRetentionCount int  `json:"log_retention_count" ui_label:"Log Retention Count" ui_desc:"Number of recent log files to keep."`
+	LiveSpeedGraph    bool `json:"live_speed_graph" ui_label:"Live Speed Graph" ui_desc:"Use live speed for graph instead of EMA smoothed speed."`
 }
 
 const (
@@ -193,6 +194,7 @@ func DefaultSettings() *Settings {
 			ClipboardMonitor:  true,
 			Theme:             ThemeAdaptive,
 			LogRetentionCount: 5,
+			LiveSpeedGraph:    false,
 		},
 		Network: NetworkSettings{
 			MaxConnectionsPerHost:  32,
