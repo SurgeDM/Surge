@@ -220,7 +220,7 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 
 	settings := mgr.GetSettings()
 
-	probe, err := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.Network.ProxyURL)
+	probe, err := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
 	if err != nil {
 		utils.Debug("Lifecycle: Probe failed: %v\n", err)
 		return "", fmt.Errorf("probe failed: %w", err)

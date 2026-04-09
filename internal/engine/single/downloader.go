@@ -30,6 +30,7 @@ type SingleDownloader struct {
 type singleTransportKey struct {
 	proxyURL string
 	maxConns int
+	customDNS string
 }
 
 var singleTransportCache sync.Map // map[singleTransportKey]*http.Transport
@@ -83,8 +84,9 @@ func newSingleClient(runtime *types.RuntimeConfig, sd *SingleDownloader) *http.C
 
 func getSharedSingleTransport(runtime *types.RuntimeConfig) *http.Transport {
 	key := singleTransportKey{
-		proxyURL: runtime.ProxyURL,
-		maxConns: runtime.GetMaxConnectionsPerHost(),
+		proxyURL:  runtime.ProxyURL,
+		maxConns:  runtime.GetMaxConnectionsPerHost(),
+		customDNS: runtime.CustomDNS,
 	}
 
 	if cached, ok := singleTransportCache.Load(key); ok {
@@ -106,6 +108,13 @@ func newSingleTransport(runtime *types.RuntimeConfig) *http.Transport {
 		}
 	}
 
+	dialer := &net.Dialer{
+		Timeout:   types.DialTimeout,
+		KeepAlive: types.KeepAliveDuration,
+	}
+
+	utils.ConfigureDialer(dialer, runtime.CustomDNS)
+
 	return &http.Transport{
 		MaxIdleConns:        types.DefaultMaxIdleConns,
 		MaxIdleConnsPerHost: runtime.GetMaxConnectionsPerHost(),
@@ -118,10 +127,7 @@ func newSingleTransport(runtime *types.RuntimeConfig) *http.Transport {
 		ExpectContinueTimeout: types.DefaultExpectContinueTimeout,
 
 		DisableCompression: true,
-		DialContext: (&net.Dialer{
-			Timeout:   types.DialTimeout,
-			KeepAlive: types.KeepAliveDuration,
-		}).DialContext,
+		DialContext:        dialer.DialContext,
 	}
 }
 
