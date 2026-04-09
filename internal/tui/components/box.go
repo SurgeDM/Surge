@@ -45,7 +45,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 
 	switch {
 	// Case 1: Both Titles
-	if leftTitle != "" && rightTitle != "" {
+	case leftTitle != "" && rightTitle != "":
 		remainingWidth := innerWidth - leftTitleWidth - rightTitleWidth - lipgloss.Width(horizontal)
 		if remainingWidth < 1 {
 			remainingWidth = 1 // overflow mitigation (might break layout but prevents crash)

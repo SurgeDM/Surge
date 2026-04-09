@@ -148,7 +148,7 @@ func TestCorsMiddleware_SetsCORSHeaders(t *testing.T) {
 
 	corsHandler := corsMiddleware(handler)
 
-	req := httptest.NewRequestWithContext(context.Background(),http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	rec := httptest.NewRecorder()
 	corsHandler.ServeHTTP(rec, req)
 
@@ -165,7 +165,7 @@ func TestCorsMiddleware_OptionsHandledByMiddleware(t *testing.T) {
 
 	corsHandler := corsMiddleware(handler)
 
-	req := httptest.NewRequestWithContext(context.Background(),http.MethodOptions, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, "/test", nil)
 	rec := httptest.NewRecorder()
 	corsHandler.ServeHTTP(rec, req)
 
@@ -187,7 +187,7 @@ func TestCorsMiddleware_PassesThrough(t *testing.T) {
 
 	corsHandler := corsMiddleware(handler)
 
-	req := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/test", nil)
 	rec := httptest.NewRecorder()
 	corsHandler.ServeHTTP(rec, req)
 
@@ -343,7 +343,7 @@ func TestGetServerBindHost(t *testing.T) {
 // =============================================================================
 
 func TestHandleDownload_MethodNotAllowed(t *testing.T) {
-	req := httptest.NewRequestWithContext(context.Background(),http.MethodPut, "/download", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/download", nil)
 	rec := httptest.NewRecorder()
 
 	svc := core.NewLocalDownloadService(nil)
@@ -355,7 +355,7 @@ func TestHandleDownload_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleDownload_InvalidJSON(t *testing.T) {
-	req := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/download", bytes.NewBufferString("not json"))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString("not json"))
 	rec := httptest.NewRecorder()
 
 	svc := core.NewLocalDownloadService(nil)
@@ -371,7 +371,7 @@ func TestHandleDownload_InvalidJSON(t *testing.T) {
 
 func TestHandleDownload_MissingURL(t *testing.T) {
 	body := `{"filename": "test.bin"}`
-	req := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	svc := core.NewLocalDownloadService(nil)
@@ -387,7 +387,7 @@ func TestHandleDownload_MissingURL(t *testing.T) {
 
 func TestHandleDownload_EmptyURL(t *testing.T) {
 	body := `{"url": ""}`
-	req := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	svc := core.NewLocalDownloadService(nil)
@@ -412,7 +412,7 @@ func TestHandleDownload_PathTraversal(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			req := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/download", bytes.NewBufferString(tt.body))
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(tt.body))
 			rec := httptest.NewRecorder()
 			svc := core.NewLocalDownloadService(nil)
 			handleDownload(rec, req, "", svc)
@@ -463,7 +463,7 @@ func TestHandleDownload_PathTraversal(t *testing.T) {
 // }
 
 func TestHandleDownload_StatusQuery_NotFound(t *testing.T) {
-	req := httptest.NewRequestWithContext(context.Background(),http.MethodGet, "/download?id=missing-id", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/download?id=missing-id", nil)
 	rec := httptest.NewRecorder()
 
 	svc := core.NewLocalDownloadService(nil)
@@ -922,7 +922,7 @@ func TestHandleDownload_ValidRequest_NoServerProgram(t *testing.T) {
 	defer func() { serverProgram = orig }()
 
 	body := `{"url": "https://example.com/file.zip"}`
-	req := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	// This will panic because serverProgram is nil
@@ -939,7 +939,7 @@ func TestHandleDownload_ValidRequest_NoServerProgram(t *testing.T) {
 }
 
 func TestHandleDownload_EmptyBody(t *testing.T) {
-	req := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/download", bytes.NewBufferString(""))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(""))
 	rec := httptest.NewRecorder()
 
 	svc := core.NewLocalDownloadService(nil)
@@ -955,7 +955,7 @@ func TestHandleDownload_LargeURL(t *testing.T) {
 	largeURL := "https://example.com/" + string(make([]byte, 10000))
 	body := fmt.Sprintf(`{"url": "%s"}`, largeURL)
 
-	req := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	// This should handle large URLs gracefully (validation issues)
@@ -968,7 +968,7 @@ func TestHandleDownload_LargeURL(t *testing.T) {
 
 func TestHandleDownload_SpecialCharactersInPath(t *testing.T) {
 	body := `{"url": "https://example.com/file.zip", "path": "/path/with spaces/and (parens)"}`
-	req := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	defer func() {
@@ -1003,7 +1003,7 @@ func TestCorsMiddleware_AllMethods(t *testing.T) {
 
 	methods := []string{"GET", "POST", "PUT", "DELETE", "PATCH"}
 	for _, method := range methods {
-		req := httptest.NewRequestWithContext(context.Background(),method, "/test", nil)
+		req := httptest.NewRequestWithContext(context.Background(), method, "/test", nil)
 		rec := httptest.NewRecorder()
 		corsHandler.ServeHTTP(rec, req)
 

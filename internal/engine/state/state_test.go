@@ -2,7 +2,6 @@ package state
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"os"
 	"path/filepath"
@@ -273,8 +272,8 @@ func TestDeleteState(t *testing.T) {
 	_, err := LoadState(testURL, testDestPath)
 	if err == nil {
 		t.Error("LoadState should fail after DeleteState")
-	} else if !errors.Is(err, sql.ErrNoRows) {
-		t.Errorf("Expected sql.ErrNoRows, got %v", err)
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("Expected os.ErrNotExist, got %v", err)
 	}
 }
 
@@ -437,7 +436,7 @@ func TestUpdateStatus(t *testing.T) {
 		t.Fatalf("AddToMasterList failed: %v", err)
 	}
 	d := getDBHelper()
-	if _, err := d.ExecContext(context.Background(),"INSERT INTO tasks (download_id, offset, length) VALUES (?, ?, ?)", entry.ID, 0, 100); err != nil {
+	if _, err := d.ExecContext(context.Background(), "INSERT INTO tasks (download_id, offset, length) VALUES (?, ?, ?)", entry.ID, 0, 100); err != nil {
 		t.Fatalf("failed to seed task row: %v", err)
 	}
 
@@ -766,7 +765,7 @@ func TestValidateIntegrity_MissingFile(t *testing.T) {
 
 	d := getDBHelper()
 	var taskCount int
-	if err := d.QueryRowContext(context.Background(),"SELECT COUNT(*) FROM tasks WHERE download_id = ?", entry.ID).Scan(&taskCount); err != nil {
+	if err := d.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM tasks WHERE download_id = ?", entry.ID).Scan(&taskCount); err != nil {
 		t.Fatalf("failed to count tasks: %v", err)
 	}
 	if taskCount != 0 {
@@ -807,7 +806,7 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 
 	// Set file_hash directly in DB (simulating SaveState having computed it)
 	d := getDBHelper()
-	_, err = d.ExecContext(context.Background(),"UPDATE downloads SET file_hash = ? WHERE id = ?", expectedHash, "integrity-valid")
+	_, err = d.ExecContext(context.Background(), "UPDATE downloads SET file_hash = ? WHERE id = ?", expectedHash, "integrity-valid")
 	if err != nil {
 		t.Fatalf("Failed to set file_hash: %v", err)
 	}
@@ -859,7 +858,7 @@ func TestValidateIntegrity_TamperedFile(t *testing.T) {
 
 	// Set a fake hash that won't match the file content
 	d := getDBHelper()
-	_, _ = d.ExecContext(context.Background(),"UPDATE downloads SET file_hash = ? WHERE id = ?", "0000000000000000000000000000000000000000000000000000000000000000", "integrity-tampered")
+	_, _ = d.ExecContext(context.Background(), "UPDATE downloads SET file_hash = ? WHERE id = ?", "0000000000000000000000000000000000000000000000000000000000000000", "integrity-tampered")
 
 	// Run integrity check — hash mismatch, entry AND file should be removed
 	removed, err := ValidateIntegrity()

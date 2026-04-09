@@ -20,7 +20,7 @@ import (
 
 const (
 	statusCompleted = "completed"
-	statusPausing = "pausing"
+	statusPausing   = "pausing"
 	statusPaused    = "paused"
 )
 

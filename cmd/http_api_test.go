@@ -94,7 +94,7 @@ func TestEnsureOpenActionRequestAllowed_RemoteToggle(t *testing.T) {
 		globalSettings = original
 	})
 
-	request := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/open-file?id=example", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/open-file?id=example", nil)
 	request.RemoteAddr = "203.0.113.8:12345"
 
 	globalSettings = config.DefaultSettings()
@@ -121,7 +121,7 @@ func TestHistoryEndpoint_SortsMostRecentFirst(t *testing.T) {
 	mux := http.NewServeMux()
 	registerHTTPRoutes(mux, 0, "", service)
 
-	request := httptest.NewRequestWithContext(context.Background(),http.MethodGet, "/history", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/history", nil)
 	recorder := httptest.NewRecorder()
 	mux.ServeHTTP(recorder, request)
 
@@ -285,7 +285,7 @@ func TestOpenEndpoints_ReturnMappedResolveStatuses(t *testing.T) {
 			}
 			registerHTTPRoutes(mux, 0, "", service)
 
-			request := httptest.NewRequestWithContext(context.Background(),http.MethodPost, test.path, nil)
+			request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, test.path, nil)
 			request.RemoteAddr = "127.0.0.1:12345"
 			recorder := httptest.NewRecorder()
 
@@ -304,7 +304,7 @@ func TestEnsureOpenActionRequestAllowed_ForwardedLoopbackDenied(t *testing.T) {
 		globalSettings = original
 	})
 
-	request := httptest.NewRequestWithContext(context.Background(),http.MethodPost, "/open-file?id=example", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/open-file?id=example", nil)
 	request.RemoteAddr = "127.0.0.1:23456"
 	request.Header.Set("X-Forwarded-For", "198.51.100.10")
 
