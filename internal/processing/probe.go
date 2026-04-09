@@ -255,7 +255,8 @@ func getProbeClient(runCfg *config.RuntimeConfig) *http.Client {
 
 	key := ""
 	if runCfg != nil {
-		key = runCfg.ProxyURL + "|" + runCfg.CustomDNS
+		// Quote values to prevent ambiguity when one value contains the separator
+		key = fmt.Sprintf("%q|%q", runCfg.ProxyURL, runCfg.CustomDNS)
 	}
 
 	if cached, ok := probeClients[key]; ok {

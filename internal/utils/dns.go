@@ -15,17 +15,20 @@ func ConfigureDialer(dialer *net.Dialer, customAddr string) {
 	}
 
 	// Ensure there is a port in the address. If not, default to 53.
-	if _, _, err := net.SplitHostPort(customAddr); err != nil {
-		if strings.Contains(err.Error(), "missing port in address") {
-			customAddr = net.JoinHostPort(customAddr, "53")
-		}
+	host, port, err := net.SplitHostPort(customAddr)
+	if err != nil {
+		host = customAddr
+		port = "53"
 	}
+	customAddr = net.JoinHostPort(host, port)
 
 	dialer.Resolver = &net.Resolver{
 		PreferGo: true,
 		Dial: func(ctx context.Context, network, address string) (net.Conn, error) {
-			// Always route to the custom nameserver, ignoring the system address
-			return dialer.DialContext(ctx, "udp", customAddr)
+			// Use a clean dialer with no custom resolver to avoid recursive resolution
+			// when customAddr is a hostname rather than a literal IP.
+			d := net.Dialer{Timeout: dialer.Timeout}
+			return d.DialContext(ctx, "udp", customAddr)
 		},
 	}
 }

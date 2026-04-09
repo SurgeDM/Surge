@@ -90,9 +90,6 @@ chrome.webRequest.onBeforeRedirect.addListener(
       timestamp: Date.now(),
     });
 
-    // Also capture headers for the redirect target if available
-    // (the onBeforeSendHeaders for the new request will fire separately,
-    // but we want to preserve the original headers too)
 
     // Cleanup old chains
     if (redirectChains.size > 500) {
