@@ -66,6 +66,47 @@ chrome.webRequest.onBeforeSendHeaders.addListener(
   ["requestHeaders", "extraHeaders"],
 );
 
+// === Redirect Chain Tracking ===
+// Maps original URL → final redirected URL so we can find captured headers
+// after a redirect chain (e.g. pixeldrain.com → cdn-1.pixeldrain.com)
+const redirectChains = new Map(); // Key: originalUrl, Value: { finalUrl, timestamp }
+const REDIRECT_EXPIRY_MS = 120000; // 2 minutes
+
+chrome.webRequest.onBeforeRedirect.addListener(
+  (details) => {
+    if (!details.url || !details.redirectUrl) return;
+
+    // Find the chain start (walk back through existing chains)
+    let originUrl = details.url;
+    for (const [original, data] of redirectChains) {
+      if (data.finalUrl === details.url) {
+        originUrl = original;
+        break;
+      }
+    }
+
+    redirectChains.set(originUrl, {
+      finalUrl: details.redirectUrl,
+      timestamp: Date.now(),
+    });
+
+    // Also capture headers for the redirect target if available
+    // (the onBeforeSendHeaders for the new request will fire separately,
+    // but we want to preserve the original headers too)
+
+    // Cleanup old chains
+    if (redirectChains.size > 500) {
+      const now = Date.now();
+      for (const [url, data] of redirectChains) {
+        if (now - data.timestamp > REDIRECT_EXPIRY_MS) {
+          redirectChains.delete(url);
+        }
+      }
+    }
+  },
+  { urls: ["<all_urls>"] },
+);
+
 function cleanupExpiredHeaders() {
   const now = Date.now();
   for (const [url, data] of capturedHeaders) {
@@ -86,6 +127,56 @@ function getCapturedHeaders(url) {
   }
 
   return data.headers;
+}
+
+// Resolve headers by walking the redirect chain.
+// Tries the exact URL first, then the final redirect target, then the original URL.
+function resolveHeadersForUrl(url) {
+  // Try direct match first
+  let headers = getCapturedHeaders(url);
+  if (headers) return headers;
+
+  // Try looking up this URL's redirect chain to find the final URL's headers
+  const chain = redirectChains.get(url);
+  if (chain) {
+    headers = getCapturedHeaders(chain.finalUrl);
+    if (headers) return headers;
+  }
+
+  // Try reverse: maybe 'url' is a final URL, find the original
+  for (const [original, data] of redirectChains) {
+    if (data.finalUrl === url) {
+      headers = getCapturedHeaders(original);
+      if (headers) return headers;
+    }
+  }
+
+  return null;
+}
+
+// Resolve the best download URL by checking for redirect chains.
+// Returns the final URL if a redirect was tracked, otherwise the original.
+function resolveDownloadUrl(url) {
+  const chain = redirectChains.get(url);
+  if (chain && Date.now() - chain.timestamp < REDIRECT_EXPIRY_MS) {
+    return chain.finalUrl;
+  }
+  return url;
+}
+
+// Read cookies for a URL directly from the browser's cookie store.
+// This is more reliable than onBeforeSendHeaders for download requests,
+// which Chrome routes through the download manager without exposing headers
+// to extensions via webRequest.
+async function getCookiesAsHeader(url) {
+  try {
+    const cookies = await chrome.cookies.getAll({ url });
+    if (!cookies || cookies.length === 0) return null;
+    return cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+  } catch (e) {
+    console.log("[Surge] Failed to read cookies:", e.message);
+    return null;
+  }
 }
 
 async function loadAuthToken() {
@@ -435,11 +526,20 @@ async function sendToSurge(url, filename, absolutePath) {
       body.path = absolutePath;
     }
 
-    // Include captured headers for authenticated downloads
-    const headers = getCapturedHeaders(url);
-    if (headers) {
-      body.headers = headers;
-      console.log("[Surge] Forwarding captured headers to Surge");
+    // Build headers to forward to Surge.
+    // Primary: read cookies directly from browser storage (reliable for downloads).
+    // Fallback: use any headers captured via onBeforeSendHeaders.
+    const cookieString = await getCookiesAsHeader(url);
+    const capturedHdrs = resolveHeadersForUrl(url);
+
+    if (cookieString || capturedHdrs) {
+      const merged = Object.assign({}, capturedHdrs || {});
+      if (cookieString) {
+        // Cookies from the store take precedence over captured headers
+        merged["Cookie"] = cookieString;
+      }
+      body.headers = merged;
+      console.log("[Surge] Forwarding headers to Surge (cookie:", !!cookieString, "captured:", !!capturedHdrs, ")");
     }
 
     const auth = await authHeaders();
@@ -591,8 +691,13 @@ function isFreshDownload(downloadItem) {
 }
 
 function shouldSkipUrl(url) {
-  // Skip blob and data URLs
+  // Skip blob and data URLs - these exist only in browser memory and cannot
+  // be forwarded to an external downloader
   if (url.startsWith("blob:") || url.startsWith("data:")) {
+    console.log(
+      "[Surge] Skipping blob/data URL (browser-memory-only, cannot be forwarded):",
+      url.substring(0, 80),
+    );
     return true;
   }
 
@@ -642,69 +747,149 @@ function extractPathInfo(downloadItem) {
 }
 
 // === Download Interception ===
+// Uses onDeterminingFilename instead of onCreated to guarantee:
+// 1. Filename is fully resolved (Content-Disposition parsed)
+// 2. finalUrl is available (post-redirect)
+// 3. Download is paused, giving us time to intercept cleanly
 
 const processedIds = new Set();
 
-chrome.downloads.onCreated.addListener(async (downloadItem) => {
-  // Prevent duplicate events for the same download ID
-  if (processedIds.has(downloadItem.id)) {
-    return;
-  }
-
-  console.log(
-    "[Surge] Download created:",
-    downloadItem.url,
-    "filename:",
-    downloadItem.filename,
-    "state:",
-    downloadItem.state,
-  );
-
-  // Quick checks that can be done immediately
-  const enabled = await isInterceptEnabled();
-  if (!enabled) {
-    console.log("[Surge] Interception disabled");
-    return;
-  }
-
-  if (shouldSkipUrl(downloadItem.url)) {
-    console.log("[Surge] Skipping URL type");
-    return;
-  }
-
-  if (!isFreshDownload(downloadItem)) {
-    console.log("[Surge] Ignoring historical download");
-    return;
-  }
-
-  processedIds.add(downloadItem.id);
-  setTimeout(() => processedIds.delete(downloadItem.id), 120000);
-
-  await handleDownloadIntercept(downloadItem);
+// Must be registered synchronously at top level for MV3 service workers
+chrome.downloads.onDeterminingFilename.addListener((downloadItem, suggest) => {
+  // Return true to indicate we will call suggest() asynchronously
+  handleDeterminingFilename(downloadItem, suggest);
+  return true;
 });
 
-async function handleDownloadIntercept(downloadItem) {
-  // Check for duplicates (async - checks both time-based and Surge's download list)
-  if (await isDuplicateDownload(downloadItem.url)) {
-    // Cancel the browser download
+async function handleDeterminingFilename(downloadItem, suggest) {
+  // Default: let browser proceed normally with whatever filename it resolved
+  const allowBrowserDownload = () => {
     try {
-      await chrome.downloads.cancel(downloadItem.id);
-      await chrome.downloads.erase({ id: downloadItem.id });
+      suggest();
     } catch (e) {
-      console.log("[Surge] Error canceling duplicate:", e);
+      // suggest() may throw if download was already cancelled
+    }
+  };
+
+  try {
+    // Prevent duplicate events for the same download ID
+    if (processedIds.has(downloadItem.id)) {
+      allowBrowserDownload();
+      return;
     }
 
+    const enabled = await isInterceptEnabled();
+    if (!enabled) {
+      console.log("[Surge] Interception disabled");
+      allowBrowserDownload();
+      return;
+    }
+
+    // Use finalUrl (post-redirect) if available, otherwise fall back to url
+    const url = downloadItem.finalUrl || downloadItem.url;
+
+    if (shouldSkipUrl(url)) {
+      allowBrowserDownload();
+      return;
+    }
+
+    if (!isFreshDownload(downloadItem)) {
+      console.log("[Surge] Ignoring historical download");
+      allowBrowserDownload();
+      return;
+    }
+
+    // Fast pre-check using cached connection status to avoid a slow port scan
+    // in the critical window before cancel(). If we know Surge is offline, bail.
+    if (!isConnected) {
+      const healthy = await checkSurgeHealth();
+      if (!healthy) {
+        console.log("[Surge] Server not running, allowing browser download");
+        allowBrowserDownload();
+        return;
+      }
+    }
+
+    processedIds.add(downloadItem.id);
+    setTimeout(() => processedIds.delete(downloadItem.id), 120000);
+
+    // At this point, downloadItem.filename is the FINAL resolved filename
+    // from Content-Disposition or URL, already parsed by Chrome.
+    // This is the key advantage over onCreated.
+    const filename = downloadItem.filename || "";
+
+    console.log("[Surge] onDeterminingFilename:", {
+      url,
+      originalUrl: downloadItem.url,
+      filename,
+      mime: downloadItem.mime,
+    });
+
+    // Cancel the browser download NOW while it is still paused by onDeterminingFilename.
+    // Must happen BEFORE any slow async operation to avoid the
+    // "Download must be in progress" race condition.
+    const cancelOk = await new Promise((resolve) => {
+      chrome.downloads.cancel(downloadItem.id, () => {
+        const err = chrome.runtime.lastError;
+        if (err) {
+          console.log("[Surge] Could not cancel download (already ended?):", err.message);
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      });
+    });
+
+    // Release the filename determination lock regardless — must always be called.
+    allowBrowserDownload();
+
+    if (!cancelOk) {
+      // Download already ended before we could take it — nothing more to do.
+      processedIds.delete(downloadItem.id);
+      return;
+    }
+
+    await new Promise((resolve) => {
+      chrome.downloads.erase({ id: downloadItem.id }, () => {
+        const err = chrome.runtime.lastError; // read to clear warning
+        resolve();
+      });
+    });
+
+    // Now confirm Surge is still reachable (cancel is done, timing no longer matters).
+    const surgeRunning = await checkSurgeHealth();
+    if (!surgeRunning) {
+      console.log("[Surge] Server went offline after cancel — download lost");
+      chrome.notifications.create({
+        type: "basic",
+        iconUrl: "icons/icon48.png",
+        title: "Surge",
+        message: "Download intercepted but Surge is not running. Please restart Surge and try again.",
+      });
+      return;
+    }
+
+    // Hand off to Surge with the correct filename and resolved headers
+    await handleInterceptedDownload(url, downloadItem, filename);
+  } catch (error) {
+    console.error("[Surge] onDeterminingFilename error:", error);
+    allowBrowserDownload();
+  }
+}
+
+async function handleInterceptedDownload(url, downloadItem, filename) {
+  // Check for duplicates
+  if (await isDuplicateDownload(url)) {
     // Store pending duplicate and prompt user
     const pendingId = `dup_${++pendingDuplicateCounter}`;
-    const { filename, directory } = extractPathInfo(downloadItem);
     const displayName =
-      filename || downloadItem.url.split("/").pop() || "Unknown file";
+      filename || url.split("/").pop() || "Unknown file";
 
     pendingDuplicates.set(pendingId, {
       downloadItem,
       filename,
       directory: "",
-      url: downloadItem.url,
+      url: url,
       timestamp: Date.now(),
     });
 
@@ -719,52 +904,20 @@ async function handleDownloadIntercept(downloadItem) {
     // Update badge
     updateBadge();
 
-    // Try to open popup and send prompt (might fail if no user gesture)
-    try {
-      await chrome.action.openPopup();
-    } catch (e) {
-      console.log(
-        "[Surge] openPopup failed (might be open or no user gesture):",
-        e,
-      );
-    }
-
-    // Send message to popup
-    chrome.runtime
-      .sendMessage({
-        type: "promptDuplicate",
-        id: pendingId,
-        filename: displayName,
-      })
-      .catch((e) => {
-        // Popup might not be open, that's ok - duplicate will timeout
-        console.log("[Surge] Sending promptDuplicate failed:", e);
-      });
+    // Notify user via standard notification instead of popup (openPopup requires user gesture in MV3)
+    chrome.notifications.create({
+      type: "basic",
+      iconUrl: "icons/icon48.png",
+      title: "Surge / Duplicate",
+      message: `Already downloading: ${displayName}`,
+    });
 
     return;
   }
 
-  // Check if Surge is running
-  const surgeRunning = await checkSurgeHealth();
-  if (!surgeRunning) {
-    console.log("[Surge] Server not running, using browser download");
-    return; // Let browser continue - download is already in progress
-  }
-
-  const { filename } = extractPathInfo(downloadItem);
-
-  console.log(
-    "[Surge] Extracted path info - filename:",
-    filename,
-    "directory: (forced default)",
-  );
-
-  // Cancel browser download and send to Surge
+  // Send to Surge
   try {
-    await chrome.downloads.cancel(downloadItem.id);
-    await chrome.downloads.erase({ id: downloadItem.id });
-
-    const result = await sendToSurge(downloadItem.url, filename, "");
+    const result = await sendToSurge(url, filename, "");
 
     if (result.success) {
       if (result.data && result.data.status === "pending_approval") {
@@ -772,7 +925,7 @@ async function handleDownloadIntercept(downloadItem) {
           type: "basic",
           iconUrl: "icons/icon48.png",
           title: "Surge - Confirmation Required",
-          message: `Click to confirm download: ${filename || downloadItem.url.split("/").pop()}`,
+          message: `Click to confirm download: ${filename || url.split("/").pop()}`,
           requireInteraction: true,
         });
         return; // Don't auto-open popup for pending interactions
@@ -783,7 +936,7 @@ async function handleDownloadIntercept(downloadItem) {
         type: "basic",
         iconUrl: "icons/icon48.png",
         title: "Surge",
-        message: `Download started: ${filename || downloadItem.url.split("/").pop()}`,
+        message: `Download started: ${filename || url.split("/").pop()}`,
       });
 
       // Auto-open the popup to show download progress
@@ -803,7 +956,7 @@ async function handleDownloadIntercept(downloadItem) {
       });
     }
   } catch (error) {
-    console.error("[Surge] Failed to intercept download:", error);
+    console.error("[Surge] Failed to send download to Surge:", error);
   }
 }
 

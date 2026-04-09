@@ -303,6 +303,11 @@ func newProbeTransport(proxyURL string) *http.Transport {
 		}
 	}
 
+	dialer := &net.Dialer{
+		Timeout:   types.DialTimeout,
+		KeepAlive: types.KeepAliveDuration,
+	}
+
 	return &http.Transport{
 		Proxy:                 proxyFunc,
 		MaxIdleConns:          types.DefaultMaxIdleConns,
@@ -311,10 +316,15 @@ func newProbeTransport(proxyURL string) *http.Transport {
 		TLSHandshakeTimeout:   types.DefaultTLSHandshakeTimeout,
 		ResponseHeaderTimeout: types.DefaultResponseHeaderTimeout,
 		ExpectContinueTimeout: types.DefaultExpectContinueTimeout,
-		DialContext: (&net.Dialer{
-			Timeout:   types.DialTimeout,
-			KeepAlive: types.KeepAliveDuration,
-		}).DialContext,
+		// Use tcp4 to prefer IPv4 when connecting to CDN hosts.
+		// Some CDN nodes resolve to IPv6 addresses that are unreachable
+		// on networks that have IPv6 assigned but no working IPv6 path.
+		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+			if network == "tcp" {
+				network = "tcp4"
+			}
+			return dialer.DialContext(ctx, network, addr)
+		},
 	}
 }
 
