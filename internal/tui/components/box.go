@@ -108,11 +108,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 		if lineWidth < innerWidth {
 			line = line + strings.Repeat(" ", innerWidth-lineWidth)
 		} else if lineWidth > innerWidth {
-			// Truncate (simplified - just take first innerWidth chars)
-			runes := []rune(line)
-			if len(runes) > innerWidth {
-				line = string(runes[:innerWidth])
-			}
+			line = lipgloss.NewStyle().MaxWidth(innerWidth).Render(line)
 		}
 		wrappedLines = append(wrappedLines, borderStyle.Render(vertical)+line+borderStyle.Render(vertical))
 	}

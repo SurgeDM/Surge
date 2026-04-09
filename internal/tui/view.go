@@ -931,9 +931,9 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	}
 
 	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("File: "), StatsValueStyle.Render(truncateString(displayFilename, contentWidth-8))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Path: "), StatsValueStyle.Render(truncateString(displayPath, contentWidth-8))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray).Render(d.ID)),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("File: "), StatsValueStyle.Render(truncateString(displayFilename, contentWidth-12))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Path: "), StatsValueStyle.Render(truncateString(displayPath, contentWidth-12))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray).Render(truncateString(d.ID, contentWidth-12))),
 	)
 	fileSection := sectionStyle.Render(fileInfoContent)
 
@@ -1142,11 +1142,13 @@ func truncateString(s string, i int) string {
 	if i <= 0 {
 		return ""
 	}
-	runes := []rune(s)
-	if len(runes) > i {
-		return string(runes[:i]) + "..."
+	if lipgloss.Width(s) <= i {
+		return s
 	}
-	return s
+	if i <= 1 {
+		return "…"
+	}
+	return lipgloss.NewStyle().MaxWidth(i-1).Render(s) + "…"
 }
 
 func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
