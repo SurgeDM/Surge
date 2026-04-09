@@ -16,6 +16,8 @@ linters:
     
     - prealloc
     - makezero
+    - usestdlibvars
+    - perfsprint
     
     - bodyclose
     - noctx
@@ -24,12 +26,12 @@ linters:
     
     - errorlint
     - nilerr
-    - copyloopvar
     - gocritic
 
 linters-settings:
   govet:
     enable:
       - shadow
+      - fieldalignment
   unparam:
     check-exported: true
