@@ -848,7 +848,10 @@ async function handleDeterminingFilename(downloadItem, suggest) {
 
     await new Promise((resolve) => {
       chrome.downloads.erase({ id: downloadItem.id }, () => {
-        chrome.runtime.lastError; // read to clear warning
+        const err = chrome.runtime.lastError;
+        if (err) {
+          // Intentionally ignored: erase may fail if item is already gone.
+        }
         resolve();
       });
     });
