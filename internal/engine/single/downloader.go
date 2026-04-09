@@ -28,8 +28,8 @@ type SingleDownloader struct {
 }
 
 type singleTransportKey struct {
-	proxyURL string
-	maxConns int
+	proxyURL  string
+	maxConns  int
 	customDNS string
 }
 
