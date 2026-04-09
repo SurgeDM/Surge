@@ -5,6 +5,7 @@
   "description": "High-performance download acceleration with live progress tracking. Intercepts downloads and accelerates them using Surge's multi-connection engine.",
   "permissions": [
     "downloads",
+    "cookies",
     "storage",
     "notifications",
     "webRequest"

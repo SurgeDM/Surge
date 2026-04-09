@@ -13,7 +13,7 @@ uv.lock
 # analysis files
 speed_graph.png
 worker_speeds.png
-logs/
+*.log
 
 # Added by goreleaser init:
 dist/

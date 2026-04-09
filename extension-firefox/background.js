@@ -66,6 +66,43 @@ browser.webRequest.onBeforeSendHeaders.addListener(
   ["requestHeaders"]
 );
 
+// === Redirect Chain Tracking ===
+// Maps original URL → final redirected URL so we can find captured headers
+// after a redirect chain (e.g. pixeldrain.com → cdn-1.pixeldrain.com)
+const redirectChains = new Map(); // Key: originalUrl, Value: { finalUrl, timestamp }
+const REDIRECT_EXPIRY_MS = 120000; // 2 minutes
+
+browser.webRequest.onBeforeRedirect.addListener(
+  (details) => {
+    if (!details.url || !details.redirectUrl) return;
+
+    // Find the chain start (walk back through existing chains)
+    let originUrl = details.url;
+    for (const [original, data] of redirectChains) {
+      if (data.finalUrl === details.url) {
+        originUrl = original;
+        break;
+      }
+    }
+
+    redirectChains.set(originUrl, {
+      finalUrl: details.redirectUrl,
+      timestamp: Date.now(),
+    });
+
+    // Cleanup old chains
+    if (redirectChains.size > 500) {
+      const now = Date.now();
+      for (const [url, data] of redirectChains) {
+        if (now - data.timestamp > REDIRECT_EXPIRY_MS) {
+          redirectChains.delete(url);
+        }
+      }
+    }
+  },
+  { urls: ["<all_urls>"] },
+);
+
 function cleanupExpiredHeaders() {
   const now = Date.now();
   for (const [url, data] of capturedHeaders) {
@@ -86,6 +123,54 @@ function getCapturedHeaders(url) {
   }
   
   return data.headers;
+}
+
+// Resolve headers by walking the redirect chain.
+// Tries the exact URL first, then the final redirect target, then the original URL.
+function resolveHeadersForUrl(url) {
+  // Try direct match first
+  let headers = getCapturedHeaders(url);
+  if (headers) return headers;
+
+  // Try looking up this URL's redirect chain to find the final URL's headers
+  const chain = redirectChains.get(url);
+  if (chain) {
+    headers = getCapturedHeaders(chain.finalUrl);
+    if (headers) return headers;
+  }
+
+  // Try reverse: maybe 'url' is a final URL, find the original
+  for (const [original, data] of redirectChains) {
+    if (data.finalUrl === url) {
+      headers = getCapturedHeaders(original);
+      if (headers) return headers;
+    }
+  }
+
+  return null;
+}
+
+// Resolve the best download URL by checking for redirect chains.
+// Returns the final URL if a redirect was tracked, otherwise the original.
+function resolveDownloadUrl(url) {
+  const chain = redirectChains.get(url);
+  if (chain && Date.now() - chain.timestamp < REDIRECT_EXPIRY_MS) {
+    return chain.finalUrl;
+  }
+  return url;
+}
+
+// Read cookies for a URL directly from the browser's cookie store.
+// This is more reliable than onBeforeSendHeaders for download requests.
+async function getCookiesAsHeader(url) {
+  try {
+    const cookies = await browser.cookies.getAll({ url });
+    if (!cookies || cookies.length === 0) return null;
+    return cookies.map((c) => `${c.name}=${c.value}`).join("; ");
+  } catch (e) {
+    console.log("[Surge] Failed to read cookies:", e.message);
+    return null;
+  }
 }
 
 async function loadAuthToken() {
@@ -451,11 +536,20 @@ async function sendToSurge(url, filename, absolutePath) {
       body.path = absolutePath;
     }
 
-    // Include captured headers for authenticated downloads
-    const headers = getCapturedHeaders(url);
-    if (headers) {
-      body.headers = headers;
-      console.log('[Surge] Forwarding captured headers to Surge');
+    // Build headers to forward to Surge.
+    // Primary: read cookies directly from browser storage (reliable for downloads).
+    // Fallback: use any headers captured via onBeforeSendHeaders.
+    const cookieString = await getCookiesAsHeader(url);
+    const capturedHdrs = resolveHeadersForUrl(url);
+
+    if (cookieString || capturedHdrs) {
+      const merged = Object.assign({}, capturedHdrs || {});
+      if (cookieString) {
+        // Cookies from the store take precedence over captured headers
+        merged["Cookie"] = cookieString;
+      }
+      body.headers = merged;
+      console.log("[Surge] Forwarding headers to Surge (cookie:", !!cookieString, "captured:", !!capturedHdrs, ")");
     }
 
     const auth = await authHeaders();
@@ -595,7 +689,13 @@ function isFreshDownload(downloadItem) {
 }
 
 function shouldSkipUrl(url) {
+  // Skip blob and data URLs - these exist only in browser memory and cannot
+  // be forwarded to an external downloader
   if (url.startsWith('blob:') || url.startsWith('data:')) {
+    console.log(
+      '[Surge] Skipping blob/data URL (browser-memory-only, cannot be forwarded):',
+      url.substring(0, 80),
+    );
     return true;
   }
   
@@ -633,6 +733,40 @@ function extractPathInfo(downloadItem) {
   return { filename, directory };
 }
 
+// Firefox does not support onDeterminingFilename, so we must resolve
+// the filename from onCreated which may fire before Chrome finishes parsing
+// Content-Disposition. This polls downloads.search() as a fallback.
+async function resolveFilename(downloadItem) {
+  // If filename is already available and looks valid, use it
+  if (downloadItem.filename) {
+    const { filename } = extractPathInfo(downloadItem);
+    if (filename && !filename.includes('?')) return filename;
+  }
+
+  // Poll for the resolved filename (Firefox populates it slightly after onCreated)
+  for (let i = 0; i < 5; i++) {
+    await new Promise(r => setTimeout(r, 100));
+    try {
+      const [item] = await browser.downloads.search({ id: downloadItem.id });
+      if (item && item.filename) {
+        const { filename } = extractPathInfo(item);
+        if (filename && !filename.includes('?')) return filename;
+      }
+    } catch (e) {
+      // Download may have been cancelled/erased
+      break;
+    }
+  }
+
+  // Last resort: extract from URL path
+  try {
+    const urlObj = new URL(downloadItem.url);
+    return decodeURIComponent(urlObj.pathname.split('/').pop() || '');
+  } catch {
+    return downloadItem.url.split('/').pop() || '';
+  }
+}
+
 // === Download Interception ===
 
 const processedIds = new Set();
@@ -667,8 +801,11 @@ browser.downloads.onCreated.addListener(async (downloadItem) => {
 });
 
 async function handleDownloadIntercept(downloadItem) {
-  // Check for duplicates (async - checks both time-based and Surge's download list)
-  if (await isDuplicateDownload(downloadItem.url)) {
+  // Resolve the best URL (follow redirect chain if available)
+  const url = resolveDownloadUrl(downloadItem.url);
+
+  // Check for duplicates (async - checks Surge's download list)
+  if (await isDuplicateDownload(url)) {
     // Cancel the browser download
     try {
       await browser.downloads.cancel(downloadItem.id);
@@ -677,16 +814,18 @@ async function handleDownloadIntercept(downloadItem) {
       console.log('[Surge] Error canceling duplicate:', e);
     }
     
+    // Resolve filename (may need polling since Firefox lacks onDeterminingFilename)
+    const filename = await resolveFilename(downloadItem);
+    const displayName = filename || url.split('/').pop() || 'Unknown file';
+    
     // Store pending duplicate and prompt user
     const pendingId = `dup_${++pendingDuplicateCounter}`;
-    const { filename, directory } = extractPathInfo(downloadItem);
-    const displayName = filename || downloadItem.url.split('/').pop() || 'Unknown file';
     
     pendingDuplicates.set(pendingId, {
       downloadItem,
       filename,
-      directory,
-      url: downloadItem.url,
+      directory: '',
+      url: url,
       timestamp: Date.now()
     });
     
@@ -701,20 +840,11 @@ async function handleDownloadIntercept(downloadItem) {
     // Update badge
     updateBadge();
 
-    // Try to open popup and send prompt
-    try {
-      await browser.action.openPopup();
-    } catch (e) {
-      // Popup may already be open
-    }
-    
-    // Send message to popup
-    browser.runtime.sendMessage({
-      type: 'promptDuplicate',
-      id: pendingId,
-      filename: displayName
-    }).catch(() => {
-      // Popup might not be open, that's ok - duplicate will timeout
+    browser.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon48.png',
+      title: 'Surge / Duplicate',
+      message: `Already downloading: ${displayName}`,
     });
     
     return;
@@ -725,16 +855,23 @@ async function handleDownloadIntercept(downloadItem) {
     return; // Let browser continue - download is already in progress
   }
 
-  const { filename, directory } = extractPathInfo(downloadItem);
+  // Resolve filename (may need polling since Firefox lacks onDeterminingFilename)
+  const filename = await resolveFilename(downloadItem);
+
+  console.log('[Surge] Resolved download info:', {
+    url,
+    originalUrl: downloadItem.url,
+    filename,
+  });
 
   try {
     await browser.downloads.cancel(downloadItem.id);
     await browser.downloads.erase({ id: downloadItem.id });
 
     const result = await sendToSurge(
-      downloadItem.url,
+      url,
       filename,
-      directory
+      ''
     );
 
     if (result.success) {
@@ -742,7 +879,7 @@ async function handleDownloadIntercept(downloadItem) {
         type: 'basic',
         iconUrl: 'icons/icon48.png',
         title: 'Surge',
-        message: `Download started: ${filename || downloadItem.url.split('/').pop()}`,
+        message: `Download started: ${filename || url.split('/').pop()}`,
       });
       
       // Auto-open the popup to show download progress

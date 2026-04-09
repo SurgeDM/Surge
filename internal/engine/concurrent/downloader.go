@@ -222,13 +222,15 @@ func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 		DisableCompression: true,  // Files are usually already compressed
 		ForceAttemptHTTP2:  false, // FORCE HTTP/1.1 for multiple TCP connections
 		TLSNextProto:       make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
-
-		// Dial settings for TCP reliability
-		DialContext: (&net.Dialer{
-			Timeout:   types.DialTimeout,
-			KeepAlive: types.KeepAliveDuration,
-		}).DialContext,
 	}
+
+	dialer := &net.Dialer{
+		Timeout:   types.DialTimeout,
+		KeepAlive: types.KeepAliveDuration,
+	}
+
+	utils.ConfigureDialer(dialer, d.Runtime.CustomDNS)
+	transport.DialContext = dialer.DialContext
 
 	return &http.Client{
 		Transport: transport,

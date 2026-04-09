@@ -51,6 +51,7 @@ type NetworkSettings struct {
 	MaxConcurrentDownloads int    `json:"max_concurrent_downloads" ui_label:"Max Concurrent Downloads" ui_desc:"Maximum number of downloads running at once (1-10). Requires restart."`
 	UserAgent              string `json:"user_agent" ui_label:"User Agent" ui_desc:"Custom User-Agent string for HTTP requests. Leave empty for default."`
 	ProxyURL               string `json:"proxy_url" ui_label:"Proxy URL" ui_desc:"HTTP/HTTPS proxy URL (e.g. http://127.0.0.1:1700). Leave empty to use system default."`
+	CustomDNS              string `json:"custom_dns" ui_label:"Custom DNS Server" ui_desc:"Set custom DNS (e.g., 1.1.1.1:53, 94.140.14.14:53). Leave empty for system."`
 	SequentialDownload     bool   `json:"sequential_download" ui_label:"Sequential Download" ui_desc:"Download pieces in order (Streaming Mode). May be slower."`
 	MinChunkSize           int64  `json:"min_chunk_size" ui_label:"Min Chunk Size" ui_desc:"Minimum download chunk size in MB (e.g., 2)."`
 	WorkerBufferSize       int    `json:"worker_buffer_size" ui_label:"Worker Buffer Size" ui_desc:"I/O buffer size per worker in KB (e.g., 512)."`
@@ -197,6 +198,8 @@ func DefaultSettings() *Settings {
 			MaxConnectionsPerHost:  32,
 			MaxConcurrentDownloads: 3,
 			UserAgent:              "", // Empty means use default UA
+			ProxyURL:               "",
+			CustomDNS:              "",
 			SequentialDownload:     false,
 			MinChunkSize:           2 * MB,
 			WorkerBufferSize:       512 * KB,
@@ -271,6 +274,7 @@ type RuntimeConfig struct {
 	MaxConnectionsPerHost int
 	UserAgent             string
 	ProxyURL              string
+	CustomDNS             string
 	SequentialDownload    bool
 	MinChunkSize          int64
 	WorkerBufferSize      int
@@ -287,6 +291,7 @@ func (s *Settings) ToRuntimeConfig() *RuntimeConfig {
 		MaxConnectionsPerHost: s.Network.MaxConnectionsPerHost,
 		UserAgent:             s.Network.UserAgent,
 		ProxyURL:              s.Network.ProxyURL,
+		CustomDNS:             s.Network.CustomDNS,
 		SequentialDownload:    s.Network.SequentialDownload,
 		MinChunkSize:          s.Network.MinChunkSize,
 		WorkerBufferSize:      s.Network.WorkerBufferSize,
