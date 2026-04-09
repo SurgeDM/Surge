@@ -1047,7 +1047,7 @@ func TestUpdate_CategoryManagerNotEditingPasteIsIgnored(t *testing.T) {
 
 func TestUpdate_WindowSizeNormalizesCategoryManagerSelection(t *testing.T) {
 	settings := config.DefaultSettings()
-	settings.General.Categories = []config.Category{
+	settings.Categories.Categories = []config.Category{
 		{Name: "Docs", Pattern: `(?i)\\.txt$`, Path: "docs"},
 	}
 

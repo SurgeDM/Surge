@@ -45,8 +45,8 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 
 	switch {
 	// Case 1: Both Titles
-	case leftTitle != "" && rightTitle != "":
-		remainingWidth := innerWidth - leftTitleWidth - rightTitleWidth - 1 // 1 for the start dash
+	if leftTitle != "" && rightTitle != "" {
+		remainingWidth := innerWidth - leftTitleWidth - rightTitleWidth - lipgloss.Width(horizontal)
 		if remainingWidth < 1 {
 			remainingWidth = 1 // overflow mitigation (might break layout but prevents crash)
 		}
@@ -58,7 +58,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 			borderStyler.Render(topRight)
 	case leftTitle != "":
 		// Case 2: Only Left Title
-		remainingWidth := innerWidth - leftTitleWidth - 1
+		remainingWidth := innerWidth - leftTitleWidth - lipgloss.Width(horizontal)
 		if remainingWidth < 0 {
 			remainingWidth = 0
 		}
@@ -68,7 +68,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 			borderStyler.Render(strings.Repeat(horizontal, remainingWidth)+topRight)
 	case rightTitle != "":
 		// Case 3: Only Right Title
-		remainingWidth := innerWidth - rightTitleWidth - 1
+		remainingWidth := innerWidth - rightTitleWidth - lipgloss.Width(horizontal)
 		if remainingWidth < 0 {
 			remainingWidth = 0
 		}

@@ -4,6 +4,8 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/utils"
 
+	"charm.land/lipgloss/v2"
+
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -88,18 +90,14 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Calculate list dimensions
-		// List goes in bottom-left pane — use full width; View() handles the actual box sizing
-		availableWidth := msg.Width - 4
+		// View() handles the actual dynamic layout math; we supply available bounds.
+		listInnerPadding := lipgloss.NewStyle().Padding(1, 2)
+		availableWidth := msg.Width - WindowStyle.GetHorizontalFrameSize() - BoxStyle.GetHorizontalFrameSize()
 
-		// Calculate list height (total height - header row - margins)
-		topHeight := 9
-		bottomHeight := msg.Height - topHeight - 5
-		if bottomHeight < 10 {
-			bottomHeight = 10
-		}
-
-		m.list.SetSize(availableWidth-2, bottomHeight-4)
+		// Give bubbles/list roughly the right dimensions for word-wrapping, exact styling is handled in view.
+		approxHeaderHeight := 11
+		approxTabBarHeight := 2
+		m.list.SetSize(availableWidth-listInnerPadding.GetHorizontalFrameSize(), msg.Height-approxHeaderHeight-approxTabBarHeight-BoxStyle.GetVerticalFrameSize())
 
 		// Update list based on active tab
 		m.UpdateListItems()

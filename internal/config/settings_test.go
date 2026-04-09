@@ -578,7 +578,7 @@ func TestSaveAndLoadSettings_PreservesEmptyCategories(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	settings := DefaultSettings()
-	settings.General.Categories = []Category{}
+	settings.Categories.Categories = []Category{}
 
 	if err := SaveSettings(settings); err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)
@@ -597,11 +597,11 @@ func TestSaveAndLoadSettings_PreservesEmptyCategories(t *testing.T) {
 		t.Fatalf("LoadSettings failed: %v", err)
 	}
 
-	if loaded.General.Categories == nil {
+	if loaded.Categories.Categories == nil {
 		t.Fatal("expected categories slice to be non-nil after load")
 	}
-	if len(loaded.General.Categories) != 0 {
-		t.Fatalf("expected zero categories after reload, got %d", len(loaded.General.Categories))
+	if len(loaded.Categories.Categories) != 0 {
+		t.Fatalf("expected zero categories after reload, got %d", len(loaded.Categories.Categories))
 	}
 }
 

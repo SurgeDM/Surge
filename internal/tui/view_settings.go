@@ -72,10 +72,10 @@ func (m RootModel) viewSettings() string {
 	tabBar := m.renderSettingsTabBar(categories, activeTab, width-6)
 	helpText := m.renderSettingsHelp(width - 6)
 
-	innerHeight := height - 2
+	innerHeight := height - BoxStyle.GetVerticalFrameSize()
 	tabBarHeight := lipgloss.Height(tabBar)
 	helpHeight := lipgloss.Height(helpText)
-	bodyHeight := innerHeight - tabBarHeight - helpHeight - 2 // one line gap above body and help
+	bodyHeight := innerHeight - tabBarHeight - helpHeight - (LayoutGapStyle.GetVerticalFrameSize() * 2) // one line gap above body and help
 	if bodyHeight < 3 {
 		bodyHeight = 3
 	}
@@ -88,7 +88,7 @@ func (m RootModel) viewSettings() string {
 	}
 
 	contentHeight := lipgloss.Height(content)
-	usedHeight := tabBarHeight + 1 + contentHeight + 1 + helpHeight
+	usedHeight := tabBarHeight + LayoutGapStyle.GetVerticalFrameSize() + contentHeight + LayoutGapStyle.GetVerticalFrameSize() + helpHeight
 	paddingLines := innerHeight - usedHeight
 	if paddingLines < 0 {
 		paddingLines = 0
@@ -117,11 +117,11 @@ func settingsModalDimensions(termWidth, termHeight int) (int, int) {
 	}
 	height := 24
 
-	maxWidth := termWidth - 4
+	maxWidth := termWidth - (WindowStyle.GetHorizontalFrameSize() * 2)
 	if maxWidth < 1 {
 		maxWidth = 1
 	}
-	maxHeight := termHeight - 4
+	maxHeight := termHeight - (WindowStyle.GetVerticalFrameSize() * 2) - 4 // fallback padding
 	if maxHeight < 1 {
 		maxHeight = 1
 	}
@@ -287,7 +287,22 @@ func renderSettingsListViewport(settingsMeta []config.SettingMeta, selectedRow, 
 			}
 		}
 
-		lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+meta.Label))
+		label := meta.Label
+		maxLabelLen := innerWidth - len(prefix)
+		if maxLabelLen < 0 {
+			maxLabelLen = 0
+		}
+
+		// Truncate to avoid line wrapping which breaks parent height constraints
+		if len(label) > maxLabelLen {
+			if maxLabelLen > 3 {
+				label = label[:maxLabelLen-3] + "..."
+			} else {
+				label = label[:maxLabelLen]
+			}
+		}
+
+		lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+label))
 	}
 
 	return strings.Join(lines, "\n")
@@ -353,18 +368,21 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
 	leftWidth := 32
 	minRightWidth := 22
-	if modalWidth-leftWidth-8 < minRightWidth {
-		leftWidth = modalWidth - minRightWidth - 8
+
+	horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
+
+	if modalWidth-leftWidth-horizontalPadding < minRightWidth {
+		leftWidth = modalWidth - minRightWidth - horizontalPadding
 	}
 	if leftWidth < 16 {
 		leftWidth = 16
 	}
 
-	rightWidth := modalWidth - leftWidth - 8
+	rightWidth := modalWidth - leftWidth - horizontalPadding
 	if rightWidth < minRightWidth {
 		rightWidth = minRightWidth
-		if modalWidth-rightWidth-8 > 16 {
-			leftWidth = modalWidth - rightWidth - 8
+		if modalWidth-rightWidth-horizontalPadding > 16 {
+			leftWidth = modalWidth - rightWidth - horizontalPadding
 		}
 	}
 
@@ -372,11 +390,11 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 		return m.renderSettingsCompact(settingsMeta, selectedRow, settingsValues, modalWidth, bodyHeight)
 	}
 
-	listRows := bodyHeight - 4
+	listRows := bodyHeight - (BoxStyle.GetVerticalFrameSize() * 2)
 	if listRows < 1 {
 		listRows = 1
 	}
-	listContent := renderSettingsListViewport(settingsMeta, selectedRow, listRows, leftWidth-4)
+	listContent := renderSettingsListViewport(settingsMeta, selectedRow, listRows, leftWidth-(BoxStyle.GetHorizontalFrameSize()*2))
 	listBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colors.Gray).
@@ -388,15 +406,13 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 		m.updateSettingsInputWidthForViewport()
 	}
 
-	rightRows := bodyHeight - 2
+	rightBoxStyle := lipgloss.NewStyle().Width(rightWidth).Padding(1, 2)
+	rightRows := bodyHeight - rightBoxStyle.GetVerticalFrameSize()
 	if rightRows < 1 {
 		rightRows = 1
 	}
-	rightContent := m.renderSettingsDetailBlock(settingsMeta, selectedRow, settingsValues, rightWidth-4, rightRows)
-	rightBox := lipgloss.NewStyle().
-		Width(rightWidth).
-		Padding(1, 2).
-		Render(rightContent)
+	rightContent := m.renderSettingsDetailBlock(settingsMeta, selectedRow, settingsValues, rightWidth-rightBoxStyle.GetHorizontalFrameSize(), rightRows)
+	rightBox := rightBoxStyle.Render(rightContent)
 
 	dividerHeight := max(lipgloss.Height(listBox), lipgloss.Height(rightBox))
 	if dividerHeight < 1 {
@@ -407,11 +423,11 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 		Render(strings.Repeat("│\n", dividerHeight-1) + "│")
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
-	return formatSettingsBlock(content, modalWidth-2, bodyHeight)
+	return formatSettingsBlock(content, modalWidth-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
 }
 
 func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
-	innerWidth := modalWidth - 2
+	innerWidth := modalWidth - BoxStyle.GetHorizontalFrameSize()
 	if innerWidth < 1 {
 		innerWidth = 1
 	}
@@ -425,7 +441,7 @@ func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, sele
 		listRows = 1
 	}
 
-	detailRows := bodyHeight - listRows - 1
+	detailRows := bodyHeight - listRows - LayoutGapStyle.GetVerticalFrameSize()
 	if detailRows < 1 {
 		detailRows = 1
 		listRows = bodyHeight - detailRows
@@ -492,13 +508,15 @@ func (m *RootModel) updateSettingsInputWidthForViewport() {
 	if modalWidth >= 72 {
 		leftWidth := 32
 		minRightWidth := 22
-		if modalWidth-leftWidth-8 < minRightWidth {
-			leftWidth = modalWidth - minRightWidth - 8
+		horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
+
+		if modalWidth-leftWidth-horizontalPadding < minRightWidth {
+			leftWidth = modalWidth - minRightWidth - horizontalPadding
 		}
 		if leftWidth < 16 {
 			leftWidth = 16
 		}
-		rightWidth := modalWidth - leftWidth - 8
+		rightWidth := modalWidth - leftWidth - horizontalPadding
 		targetWidth = rightWidth - 10
 	} else {
 		targetWidth = modalWidth - 16
@@ -518,37 +536,42 @@ func (m *RootModel) updateSettingsInputWidthForViewport() {
 func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 	values := make(map[string]interface{})
 
-	switch category {
-	case "General":
-		values["default_download_dir"] = m.Settings.General.DefaultDownloadDir
-		values["warn_on_duplicate"] = m.Settings.General.WarnOnDuplicate
-		values["download_complete_notification"] = m.Settings.General.DownloadCompleteNotification
-		values["allow_remote_open_actions"] = m.Settings.General.AllowRemoteOpenActions
-		values["extension_prompt"] = m.Settings.General.ExtensionPrompt
-		values["auto_resume"] = m.Settings.General.AutoResume
-		values["skip_update_check"] = m.Settings.General.SkipUpdateCheck
+	val := reflect.ValueOf(m.Settings).Elem()
+	typ := val.Type()
 
-		values["clipboard_monitor"] = m.Settings.General.ClipboardMonitor
-		values["theme"] = m.Settings.General.Theme
-		values["log_retention_count"] = m.Settings.General.LogRetentionCount
+	var catVal reflect.Value
+	var found bool
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		label := field.Tag.Get("ui_label")
+		if label == "" {
+			label = field.Name
+		}
+		if label == category {
+			catVal = val.Field(i)
+			found = true
+			break
+		}
+	}
 
-	case "Network":
-		values["max_connections_per_host"] = m.Settings.Network.MaxConnectionsPerHost
+	if !found {
+		return values
+	}
 
-		values["max_concurrent_downloads"] = m.Settings.Network.MaxConcurrentDownloads
-		values["user_agent"] = m.Settings.Network.UserAgent
-		values["proxy_url"] = m.Settings.Network.ProxyURL
-		values["sequential_download"] = m.Settings.Network.SequentialDownload
-		values["min_chunk_size"] = m.Settings.Network.MinChunkSize
-		values["worker_buffer_size"] = m.Settings.Network.WorkerBufferSize
-	case "Performance":
-		values["max_task_retries"] = m.Settings.Performance.MaxTaskRetries
-		values["slow_worker_threshold"] = m.Settings.Performance.SlowWorkerThreshold
-		values["slow_worker_grace_period"] = m.Settings.Performance.SlowWorkerGracePeriod
-		values["stall_timeout"] = m.Settings.Performance.StallTimeout
-		values["speed_ema_alpha"] = m.Settings.Performance.SpeedEmaAlpha
-	case "Categories":
-		values["category_enabled"] = m.Settings.General.CategoryEnabled
+	if catVal.Kind() == reflect.Struct {
+		catTyp := catVal.Type()
+		for i := 0; i < catTyp.NumField(); i++ {
+			field := catTyp.Field(i)
+			if field.Tag.Get("ui_ignored") == "true" {
+				continue
+			}
+
+			key := field.Tag.Get("json")
+			if key == "" {
+				key = field.Name
+			}
+			values[key] = catVal.Field(i).Interface()
+		}
 	}
 
 	return values
@@ -556,19 +579,114 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 
 // setSettingValue sets a setting value from string input
 func (m *RootModel) setSettingValue(category, key, value string) error {
-	switch category {
-	case "General":
-		return m.setGeneralSetting(key, value)
-	case "Network":
-		return m.setNetworkSetting(key, value)
-	case "Performance":
-		return m.setPerformanceSetting(key, value)
-	case "Categories":
-		if key == "category_enabled" {
-			m.Settings.General.CategoryEnabled = !m.Settings.General.CategoryEnabled
+	val := reflect.ValueOf(m.Settings).Elem()
+	typ := val.Type()
+
+	var catVal reflect.Value
+	var foundCat bool
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		label := field.Tag.Get("ui_label")
+		if label == "" {
+			label = field.Name
+		}
+		if label == category {
+			catVal = val.Field(i)
+			foundCat = true
+			break
 		}
 	}
 
+	if !foundCat || catVal.Kind() != reflect.Struct {
+		return nil
+	}
+
+	catTyp := catVal.Type()
+	for i := 0; i < catTyp.NumField(); i++ {
+		field := catTyp.Field(i)
+		if field.Tag.Get("ui_ignored") == "true" {
+			continue
+		}
+
+		fieldKey := field.Tag.Get("json")
+		if fieldKey == "" {
+			fieldKey = field.Name
+		}
+
+		if fieldKey == key {
+			targetField := catVal.Field(i)
+			if !targetField.CanSet() {
+				return nil
+			}
+
+			// Special logic for Theme to trigger app re-rendering internally
+			if key == "theme" {
+				var theme int
+				valLower := strings.ToLower(value)
+				switch valLower {
+				case "system", "adaptive", "0":
+					theme = config.ThemeAdaptive
+				case "light", "1":
+					theme = config.ThemeLight
+				case "dark", "2":
+					theme = config.ThemeDark
+				default:
+					if v, err := strconv.Atoi(value); err == nil && v >= 0 && v <= 2 {
+						theme = v
+					} else {
+						return nil // Invalid
+					}
+				}
+				targetField.Set(reflect.ValueOf(theme))
+				m.ApplyTheme(theme)
+				return nil
+			}
+
+			// Generic Parsing and Application
+			switch targetField.Kind() {
+			case reflect.Bool:
+				// Typically toggled unless explicitly typed out
+				if value == "" {
+					targetField.SetBool(!targetField.Bool())
+				} else {
+					b, _ := strconv.ParseBool(value)
+					targetField.SetBool(b)
+				}
+			case reflect.String:
+				targetField.SetString(value)
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
+				if v, err := strconv.Atoi(value); err == nil {
+					targetField.SetInt(int64(v))
+				}
+			case reflect.Int64:
+				if targetField.Type().String() == "time.Duration" {
+					if _, err := strconv.ParseFloat(value, 64); err == nil {
+						value += "s"
+					}
+					if v, err := time.ParseDuration(value); err == nil {
+						targetField.Set(reflect.ValueOf(v))
+					}
+				} else {
+					// Handle KB/MB scaling gracefully if specified
+					if key == "min_chunk_size" {
+						if v, err := strconv.ParseFloat(value, 64); err == nil {
+							targetField.SetInt(int64(v * float64(config.MB)))
+						}
+					} else {
+						if v, err := strconv.ParseInt(value, 10, 64); err == nil {
+							targetField.SetInt(v)
+						}
+					}
+				}
+			case reflect.Float32, reflect.Float64:
+				if v, err := strconv.ParseFloat(value, 64); err == nil {
+					targetField.SetFloat(v)
+				}
+			}
+
+			return nil
+		}
+	}
 	return nil
 }
 
@@ -583,147 +701,6 @@ func (m *RootModel) persistSettings() error {
 	}
 	if m.Orchestrator != nil {
 		m.Orchestrator.ApplySettings(m.Settings)
-	}
-	return nil
-}
-
-func (m *RootModel) setGeneralSetting(key, value string) error {
-	switch key {
-	case "default_download_dir":
-		m.Settings.General.DefaultDownloadDir = value
-	case "warn_on_duplicate":
-		m.Settings.General.WarnOnDuplicate = !m.Settings.General.WarnOnDuplicate
-	case "allow_remote_open_actions":
-		m.Settings.General.AllowRemoteOpenActions = !m.Settings.General.AllowRemoteOpenActions
-	case "extension_prompt":
-		m.Settings.General.ExtensionPrompt = !m.Settings.General.ExtensionPrompt
-	case "auto_resume":
-		m.Settings.General.AutoResume = !m.Settings.General.AutoResume
-	case "skip_update_check":
-		m.Settings.General.SkipUpdateCheck = !m.Settings.General.SkipUpdateCheck
-	case "clipboard_monitor":
-		m.Settings.General.ClipboardMonitor = !m.Settings.General.ClipboardMonitor
-
-	case "theme":
-		var theme int
-		valLower := strings.ToLower(value)
-		switch valLower {
-		case "system", "adaptive", "0":
-			theme = config.ThemeAdaptive
-		case "light", "1":
-			theme = config.ThemeLight
-		case "dark", "2":
-			theme = config.ThemeDark
-		default:
-			// Try parsing as int fallback
-			if v, err := strconv.Atoi(value); err == nil {
-				if v >= 0 && v <= 2 {
-					theme = v
-				} else {
-					return nil // Invalid range
-				}
-			} else {
-				return nil // Invalid value
-			}
-		}
-		m.Settings.General.Theme = theme
-		m.ApplyTheme(theme)
-	case "log_retention_count":
-		if v, err := strconv.Atoi(value); err == nil {
-			if v < 0 {
-				v = 0 // Minimum valid value
-			}
-			m.Settings.General.LogRetentionCount = v
-		}
-	}
-	return nil
-}
-
-func (m *RootModel) setNetworkSetting(key, value string) error {
-	switch key {
-	case "max_connections_per_host":
-		if v, err := strconv.Atoi(value); err == nil {
-			m.Settings.Network.MaxConnectionsPerHost = v
-		}
-
-	case "max_concurrent_downloads":
-		if v, err := strconv.Atoi(value); err == nil {
-			if v < 1 {
-				v = 1
-			} else if v > 10 {
-				v = 10
-			}
-			m.Settings.Network.MaxConcurrentDownloads = v
-		}
-	case "user_agent":
-		m.Settings.Network.UserAgent = value
-	case "proxy_url":
-		m.Settings.Network.ProxyURL = value
-	case "sequential_download":
-		// Toggle logic handled by generic bool toggle in Update, but just in case
-		if value == "" {
-			m.Settings.Network.SequentialDownload = !m.Settings.Network.SequentialDownload
-		} else {
-			// For programmatic setting if ever needed
-			b, _ := strconv.ParseBool(value)
-			m.Settings.Network.SequentialDownload = b
-		}
-	case "min_chunk_size":
-		// Parse as MB and convert to bytes
-		if v, err := strconv.ParseFloat(value, 64); err == nil {
-			m.Settings.Network.MinChunkSize = int64(v * float64(config.MB))
-		}
-	case "worker_buffer_size":
-		// Keep buffer in KB
-		if v, err := strconv.ParseFloat(value, 64); err == nil {
-			m.Settings.Network.WorkerBufferSize = int(v * float64(config.KB))
-		}
-	}
-	return nil
-}
-
-func (m *RootModel) setPerformanceSetting(key, value string) error {
-	switch key {
-	case "max_task_retries":
-		if v, err := strconv.Atoi(value); err == nil {
-			m.Settings.Performance.MaxTaskRetries = v
-		}
-	case "slow_worker_threshold":
-		if v, err := strconv.ParseFloat(value, 64); err == nil {
-			// Clamp to valid range 0.0-1.0
-			if v < 0.0 {
-				v = 0.0
-			} else if v > 1.0 {
-				v = 1.0
-			}
-			m.Settings.Performance.SlowWorkerThreshold = v
-		}
-	case "slow_worker_grace_period":
-		// Check if it's just a number, if so add "s"
-		if _, err := strconv.ParseFloat(value, 64); err == nil {
-			value += "s"
-		}
-		if v, err := time.ParseDuration(value); err == nil {
-			m.Settings.Performance.SlowWorkerGracePeriod = v
-		}
-	case "stall_timeout":
-		// Check if it's just a number, if so add "s"
-		if _, err := strconv.ParseFloat(value, 64); err == nil {
-			value += "s"
-		}
-		if v, err := time.ParseDuration(value); err == nil {
-			m.Settings.Performance.StallTimeout = v
-		}
-	case "speed_ema_alpha":
-		if v, err := strconv.ParseFloat(value, 64); err == nil {
-			// Clamp to valid range 0.0-1.0
-			if v < 0.0 {
-				v = 0.0
-			} else if v > 1.0 {
-				v = 1.0
-			}
-			m.Settings.Performance.SpeedEmaAlpha = v
-		}
 	}
 	return nil
 }
@@ -948,8 +925,9 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.Performance.SpeedEmaAlpha = defaults.Performance.SpeedEmaAlpha
 		}
 	case "Categories":
-		if key == "category_enabled" {
-			m.Settings.General.CategoryEnabled = defaults.General.CategoryEnabled
+		switch key {
+		case "category_enabled":
+			m.Settings.Categories.CategoryEnabled = defaults.Categories.CategoryEnabled
 		}
 	}
 }

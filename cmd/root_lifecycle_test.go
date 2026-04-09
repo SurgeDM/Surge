@@ -237,8 +237,8 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 	customDir := filepath.Join(t.TempDir(), "bin-artifacts")
 	settings := config.DefaultSettings()
 	settings.General.DefaultDownloadDir = defaultDir
-	settings.General.CategoryEnabled = true
-	settings.General.Categories = append(settings.General.Categories, config.Category{
+	settings.Categories.CategoryEnabled = true
+	settings.Categories.Categories = append(settings.Categories.Categories, config.Category{
 		Name:    "Binary",
 		Pattern: `(?i)\.bin$`,
 		Path:    customDir,
@@ -323,7 +323,7 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 	defaultDir := t.TempDir()
 	initial := config.DefaultSettings()
 	initial.General.DefaultDownloadDir = defaultDir
-	initial.General.CategoryEnabled = false
+	initial.Categories.CategoryEnabled = false
 	if err := config.SaveSettings(initial); err != nil {
 		t.Fatalf("SaveSettings(initial) failed: %v", err)
 	}
@@ -338,8 +338,8 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 	customDir := filepath.Join(t.TempDir(), "bin-updated")
 	updated := config.DefaultSettings()
 	updated.General.DefaultDownloadDir = defaultDir
-	updated.General.CategoryEnabled = true
-	updated.General.Categories = []config.Category{
+	updated.Categories.CategoryEnabled = true
+	updated.Categories.Categories = []config.Category{
 		{
 			Name:    "Binary",
 			Pattern: `(?i)\.bin$`,
