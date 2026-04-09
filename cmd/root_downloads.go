@@ -143,7 +143,7 @@ func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolved
 		return nil, err
 	}
 
-	utils.Debug("Received download request: URL=%s, Path=%s", req.URL, req.Path)
+	utils.Debug("Received download request: URL=%s, Path=%s, Headers=%v", req.URL, req.Path, req.Headers)
 
 	outPath := utils.EnsureAbsPath(resolveOutputDir(req.Path, req.RelativeToDefaultDir, defaultOutputDir, settings))
 	urlForAdd, mirrorsForAdd := normalizeDownloadTargets(req.URL, req.Mirrors)
