@@ -689,8 +689,21 @@ export default defineBackground(() => {
     listenerOptions,
   );
 
-  // Message handler
-  browser.runtime.onMessage.addListener(handleMessage as Parameters<typeof browser.runtime.onMessage.addListener>[0]);
+  // Message handler — Chrome MV3 requires sendResponse + return true for async responses.
+  // Returning a Promise from onMessage does NOT work without webextension-polyfill.
+  browser.runtime.onMessage.addListener(((
+    message: Record<string, any>,
+    _sender: unknown,
+    sendResponse: (response: unknown) => void,
+  ) => {
+    const result = handleMessage(message);
+    if (result instanceof Promise) {
+      result.then(sendResponse).catch(() => sendResponse({ error: 'internal error' }));
+      return true; // Keep message channel open for async response
+    }
+    sendResponse(result);
+    return true;
+  }) as Parameters<typeof browser.runtime.onMessage.addListener>[0]);
 
   // Health check — start SSE stream when connection is established
   setInterval(async () => {

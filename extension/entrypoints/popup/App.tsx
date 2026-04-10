@@ -1,4 +1,4 @@
-import { onMount, onCleanup } from 'solid-js';
+import { onMount, onCleanup, createEffect } from 'solid-js';
 import { readStoredBoolean, readStoredString, STORAGE_KEYS } from '../../lib/storage';
 import {
   serverConnected,
@@ -33,6 +33,11 @@ export default function App() {
   let pollInterval: ReturnType<typeof setInterval> | null = null;
   let healthInterval: ReturnType<typeof setInterval> | null = null;
   let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  // Debug: track every signal value change
+  createEffect(() => {
+    console.log('[Surge:popup] serverConnected changed to:', serverConnected());
+  });
 
   function scheduleRefresh(): void {
     if (refreshDebounceTimer) return;
@@ -81,6 +86,8 @@ export default function App() {
         authError?: boolean;
       }>({ type: 'getDownloads' });
 
+      console.log('[Surge:popup] fetchDownloads response:', JSON.stringify(response));
+
       if (response?.downloads) {
         setServerConnected(response.connected === true);
         reconcileActiveDownloads(response.downloads);
@@ -90,7 +97,8 @@ export default function App() {
       if (response?.connected && currentView() === 'history') {
         await fetchHistory();
       }
-    } catch {
+    } catch (err) {
+      console.log('[Surge:popup] fetchDownloads error:', err);
       setServerConnected(false);
     }
   }
@@ -125,10 +133,24 @@ export default function App() {
     }
   }
 
-  onMount(() => {
+  onMount(async () => {
     browser.runtime.onMessage.addListener(onMessageListener as Parameters<typeof browser.runtime.onMessage.addListener>[0]);
 
+    console.log('[Surge:popup] onMount fired');
+
     void loadSettings();
+
+    // Fire an immediate health check BEFORE fetchDownloads so we establish connection first
+    try {
+      const healthResp = await sendMessage<{ healthy?: boolean }>({ type: 'checkHealth' });
+      console.log('[Surge:popup] initial health check:', JSON.stringify(healthResp));
+      if (healthResp && typeof healthResp.healthy === 'boolean') {
+        setServerConnected(healthResp.healthy);
+      }
+    } catch (err) {
+      console.log('[Surge:popup] initial health check error:', err);
+    }
+
     void fetchDownloads();
 
     pollInterval = setInterval(() => {
@@ -144,8 +166,10 @@ export default function App() {
     healthInterval = setInterval(async () => {
       try {
         const response = await sendMessage<{ healthy?: boolean }>({ type: 'checkHealth' });
+        console.log('[Surge:popup] healthPoll response:', JSON.stringify(response));
         if (response && typeof response.healthy === 'boolean') setServerConnected(response.healthy);
-      } catch {
+      } catch (err) {
+        console.log('[Surge:popup] healthPoll error:', err);
         setServerConnected(false);
       }
     }, HEALTH_POLL_MS);
