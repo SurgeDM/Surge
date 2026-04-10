@@ -38,7 +38,15 @@ func newProbeTestServer(t *testing.T, size int64) *httptest.Server {
 func newLifecycleManagerForTest() *LifecycleManager {
 	settings := config.DefaultSettings()
 	settings.Categories.CategoryEnabled = false
-	return &LifecycleManager{settings: settings, settingsRefreshedAt: time.Now()}
+	sem := make(chan struct{}, maxConcurrentProbes)
+	for i := 0; i < maxConcurrentProbes; i++ {
+		sem <- struct{}{}
+	}
+	return &LifecycleManager{
+		settings:            settings,
+		settingsRefreshedAt: time.Now(),
+		probeSem:            sem,
+	}
 }
 
 func TestLifecycleManager_Enqueue_PrecreatesWorkingFileBeforeDispatch(t *testing.T) {
@@ -1057,7 +1065,11 @@ func TestLifecycleManager_ProbeSemaphore_LimitsInflight(t *testing.T) {
 // is cancelled, without needing to wait for a slot to become available.
 func TestLifecycleManager_ProbeSemaphore_CancelledContextAbortsWait(t *testing.T) {
 	// Build a manager and fill its semaphore completely so the next Enqueue blocks.
-	mgr := NewLifecycleManager(nil, nil)
+	mgr := newLifecycleManagerForTest()
+	mgr.addFunc = func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		t.Fatal("dispatch should not run when context is cancelled")
+		return "", nil
+	}
 
 	// Drain all slots from the semaphore to simulate maxConcurrentProbes in-flight.
 	for i := 0; i < maxConcurrentProbes; i++ {
