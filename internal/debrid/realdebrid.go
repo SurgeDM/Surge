@@ -37,8 +37,8 @@ type UnrestrictResult struct {
 	ID       string `json:"id"`
 	Filename string `json:"filename"`
 	FileSize int64  `json:"filesize"`
-	Link     string `json:"link"`     // Original link
-	Download string `json:"download"` // Unrestricted direct download URL
+	Link     string `json:"link"`
+	Download string `json:"download"`
 	Host     string `json:"host"`
 	MimeType string `json:"mimeType"`
 }
