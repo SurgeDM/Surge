@@ -64,6 +64,7 @@ export default function App() {
         STORAGE_KEYS.TOKEN,
         STORAGE_KEYS.VERIFIED,
         STORAGE_KEYS.INTERCEPT,
+        STORAGE_KEYS.NOTIFICATIONS,
       ]);
 
       const storedServerUrl = readStoredString(storedValues, STORAGE_KEYS.SERVER_URL);
