@@ -8,6 +8,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -960,5 +962,133 @@ func TestLifecycleManager_UpdateURL_HookError(t *testing.T) {
 	err := mgr.UpdateURL("bad-id", "http://example.com/new.zip")
 	if err == nil {
 		t.Fatal("expected error from pool hook, got nil")
+	}
+}
+
+// --- Probe semaphore tests ---
+
+// newSlowProbeServer creates an httptest server that serves 206 Partial Content
+// but delays each response by `delay` so we can observe concurrency behaviour.
+func newSlowProbeServer(t *testing.T, size int64, delay time.Duration, inflight *int32) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(inflight, 1)
+		defer atomic.AddInt32(inflight, -1)
+		time.Sleep(delay)
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-0/%d", size))
+		w.Header().Set("Content-Length", "1")
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("x"))
+	}))
+}
+
+// TestLifecycleManager_ProbeSemaphore_LimitsInflight fires N concurrent Enqueue
+// calls against a slow probe server and verifies the peak in-flight count never
+// exceeds maxConcurrentProbes.
+func TestLifecycleManager_ProbeSemaphore_LimitsInflight(t *testing.T) {
+	const numDownloads = 9 // 3× the semaphore cap
+
+	var peak int32 // highest observed in-flight count
+	var inflight int32
+
+	server := newSlowProbeServer(t, 1024, 50*time.Millisecond, &inflight)
+	defer server.Close()
+
+	// Wrap the probe so we can record the peak without changing production code.
+	// We do this by polling inflight from a separate goroutine while probes run.
+	stopPoller := make(chan struct{})
+	go func() {
+		for {
+			select {
+			case <-stopPoller:
+				return
+			default:
+				cur := atomic.LoadInt32(&inflight)
+				for {
+					prev := atomic.LoadInt32(&peak)
+					if cur <= prev || atomic.CompareAndSwapInt32(&peak, prev, cur) {
+						break
+					}
+				}
+				time.Sleep(time.Millisecond)
+			}
+		}
+	}()
+
+	mgr := NewLifecycleManager(nil, nil)
+	settings := config.DefaultSettings()
+	settings.Categories.CategoryEnabled = false
+	mgr.ApplySettings(settings)
+
+	tempDir := t.TempDir()
+
+	var wg sync.WaitGroup
+	errs := make([]error, numDownloads)
+	for i := 0; i < numDownloads; i++ {
+		wg.Add(1)
+		go func(idx int) {
+			defer wg.Done()
+			_, errs[idx] = mgr.Enqueue(context.Background(), &DownloadRequest{
+				URL:      server.URL,
+				Filename: fmt.Sprintf("file%d.zip", idx),
+				Path:     tempDir,
+			})
+		}(i)
+	}
+	wg.Wait()
+	close(stopPoller)
+
+	// addFunc is nil so every enqueue fails after probe — that's fine;
+	// we only care that the probe phase was throttled.
+	for _, err := range errs {
+		if err == nil {
+			t.Error("expected Enqueue to fail (nil addFunc), got nil error")
+		}
+	}
+
+	observed := atomic.LoadInt32(&peak)
+	if observed > maxConcurrentProbes {
+		t.Errorf("peak concurrent probes = %d, want ≤ %d", observed, maxConcurrentProbes)
+	}
+}
+
+// TestLifecycleManager_ProbeSemaphore_CancelledContextAbortsWait verifies that
+// a queued enqueue waiting on the semaphore returns immediately when its context
+// is cancelled, without needing to wait for a slot to become available.
+func TestLifecycleManager_ProbeSemaphore_CancelledContextAbortsWait(t *testing.T) {
+	// Build a manager and fill its semaphore completely so the next Enqueue blocks.
+	mgr := NewLifecycleManager(nil, nil)
+
+	// Drain all slots from the semaphore to simulate maxConcurrentProbes in-flight.
+	for i := 0; i < maxConcurrentProbes; i++ {
+		<-mgr.probeSem
+	}
+	// Schedule slot return after a generous delay to confirm the test doesn't wait for it.
+	go func() {
+		time.Sleep(500 * time.Millisecond)
+		for i := 0; i < maxConcurrentProbes; i++ {
+			mgr.probeSem <- struct{}{}
+		}
+	}()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // already cancelled
+
+	start := time.Now()
+	_, err := mgr.Enqueue(ctx, &DownloadRequest{
+		URL:  "http://127.0.0.1:0/dummy",
+		Path: t.TempDir(),
+	})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected error due to cancelled context, got nil")
+	}
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+	// Should abort almost instantly, not wait for the delayed slot return.
+	if elapsed > 200*time.Millisecond {
+		t.Errorf("Enqueue took %v to abort — semaphore cancellation may be broken", elapsed)
 	}
 }
