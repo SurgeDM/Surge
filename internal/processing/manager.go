@@ -40,8 +40,13 @@ type LifecycleManager struct {
 
 const (
 	maxWorkingFileReservationAttempts = 100
-	// maxConcurrentProbes caps parallel probe requests across all enqueue callers.
-	maxConcurrentProbes = 3
+	// defaultMaxConcurrentProbes is the fallback probe concurrency cap used when
+	// no settings value is available. The live value comes from
+	// NetworkSettings.MaxConcurrentProbes.
+	defaultMaxConcurrentProbes = 3
+	// maxConcurrentProbes is the package-level cap used by tests that construct
+	// a manager without a settings snapshot (newLifecycleManagerForTest).
+	maxConcurrentProbes = defaultMaxConcurrentProbes
 )
 
 var settingsRefreshTTL = time.Second
@@ -86,8 +91,12 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 		activeCheck = isNameActive[0]
 	}
 
-	sem := make(chan struct{}, maxConcurrentProbes)
-	for i := 0; i < maxConcurrentProbes; i++ {
+	probeCap := defaultMaxConcurrentProbes
+	if settings != nil && settings.Network.MaxConcurrentProbes > 0 {
+		probeCap = settings.Network.MaxConcurrentProbes
+	}
+	sem := make(chan struct{}, probeCap)
+	for i := 0; i < probeCap; i++ {
 		sem <- struct{}{}
 	}
 

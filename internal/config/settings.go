@@ -50,6 +50,7 @@ type CategorySettings struct {
 type NetworkSettings struct {
 	MaxConnectionsPerHost  int    `json:"max_connections_per_host" ui_label:"Max Connections/Host" ui_desc:"Maximum concurrent connections per host (1-64)."`
 	MaxConcurrentDownloads int    `json:"max_concurrent_downloads" ui_label:"Max Concurrent Downloads" ui_desc:"Maximum number of downloads running at once (1-10). Requires restart."`
+	MaxConcurrentProbes    int    `json:"max_concurrent_probes" ui_label:"Max Concurrent Probes" ui_desc:"Maximum number of simultaneous server probes when adding many downloads at once (1-10)."`
 	UserAgent              string `json:"user_agent" ui_label:"User Agent" ui_desc:"Custom User-Agent string for HTTP requests. Leave empty for default."`
 	ProxyURL               string `json:"proxy_url" ui_label:"Proxy URL" ui_desc:"HTTP/HTTPS proxy URL (e.g. http://127.0.0.1:1700). Leave empty to use system default."`
 	CustomDNS              string `json:"custom_dns" ui_label:"Custom DNS Server" ui_desc:"Set custom DNS (e.g., 1.1.1.1:53, 94.140.14.14:53). Leave empty for system."`
@@ -199,6 +200,7 @@ func DefaultSettings() *Settings {
 		Network: NetworkSettings{
 			MaxConnectionsPerHost:  32,
 			MaxConcurrentDownloads: 3,
+			MaxConcurrentProbes:    3,
 			UserAgent:              "", // Empty means use default UA
 			ProxyURL:               "",
 			CustomDNS:              "",
@@ -274,6 +276,7 @@ func SaveSettings(s *Settings) error {
 // This is used to pass user settings to the download engine
 type RuntimeConfig struct {
 	MaxConnectionsPerHost int
+	MaxConcurrentProbes   int
 	UserAgent             string
 	ProxyURL              string
 	CustomDNS             string
@@ -291,6 +294,7 @@ type RuntimeConfig struct {
 func (s *Settings) ToRuntimeConfig() *RuntimeConfig {
 	return &RuntimeConfig{
 		MaxConnectionsPerHost: s.Network.MaxConnectionsPerHost,
+		MaxConcurrentProbes:   s.Network.MaxConcurrentProbes,
 		UserAgent:             s.Network.UserAgent,
 		ProxyURL:              s.Network.ProxyURL,
 		CustomDNS:             s.Network.CustomDNS,
