@@ -115,6 +115,8 @@ The API is token-protected. Generate/read your token by running:
 surge token
 ```
 
+Alternatively, you can find it in the TUI under **Settings > Extension**.
+
 ### 3. Remote TUI
 
 Connect to a running Surge daemon (local or remote).
@@ -207,6 +209,9 @@ We would love to see you benchmark Surge on your system!
 
 The Surge extension intercepts browser downloads and sends them straight to your terminal. It communicates with the Surge client on port **1700** by default.
 
+> [!IMPORTANT]
+> An **Auth Token** is required to connect the extension to your Surge server. This can be obtained from the TUI under **Settings > Extension** or by running `surge token`.
+
 ### Chrome / Edge / Brave
 
 1. Download `extension-chrome.zip` from the latest GitHub release.
@@ -215,6 +220,7 @@ The Surge extension intercepts browser downloads and sends them straight to your
 4. Enable **"Developer mode"** in the top right corner.
 5. Click **"Load unpacked"**.
 6. Select the unzipped `extension-chrome` folder.
+7. Click the Surge icon in your browser toolbar and enter your **Auth Token** in the settings.
 
 ### Firefox
 
@@ -224,6 +230,7 @@ The Surge extension intercepts browser downloads and sends them straight to your
    - Navigate to `about:debugging#/runtime/this-firefox`.
    - Click **"Load Temporary Add-on..."**.
    - Select the zip file (or unzip and select `manifest.json`).
+   - Click the Surge icon in your browser toolbar and enter your **Auth Token** in the settings.
 
 ---
 

@@ -761,6 +761,18 @@ body {
 .auth-status.ok { color: var(--success); }
 .auth-status.err { color: var(--error); }
 
+.settings-help {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.settings-help strong {
+  color: var(--text-secondary);
+  font-weight: 600;
+}
+
 /* === Toggle === */
 .toggle-row {
   display: flex;

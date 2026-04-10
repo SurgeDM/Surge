@@ -171,6 +171,9 @@ export default function SettingsView() {
               {authTokenLocked() ? 'Delete' : 'Save'}
             </button>
           </div>
+          <div class="settings-help">
+            Token can be obtained from <strong>TUI &gt; Settings &gt; Extension</strong>
+          </div>
           {tokenStatus() && !tokenFocused() && (
             <div class={`auth-status below${tokenStatus() === 'Saved' || tokenStatus() === 'Removed' ? ' ok' : tokenStatus().endsWith('...') ? '' : ' err'}`}>{tokenStatus()}</div>
           )}
