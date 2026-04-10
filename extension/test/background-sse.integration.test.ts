@@ -5,11 +5,13 @@ import { openEventStream } from '../lib/background-logic';
 
 const GO_SERVER_PATH = 'test/go/sse_auth_server.go';
 
-async function startGoSSEServer(): Promise<{ child: ChildProcess; baseUrl: string }> {
+async function startGoSSEServer(onSpawn: (child: ChildProcess) => void): Promise<{ baseUrl: string }> {
+  const start = Date.now();
   const child = spawn('go', ['run', GO_SERVER_PATH], {
     cwd: process.cwd(),
     stdio: ['ignore', 'pipe', 'pipe'],
   });
+  onSpawn(child);
 
   let stdout = '';
   let stderr = '';
@@ -25,8 +27,8 @@ async function startGoSSEServer(): Promise<{ child: ChildProcess; baseUrl: strin
 
   const started = await new Promise<string>((resolve, reject) => {
     const timeout = setTimeout(() => {
-      reject(new Error(`timed out starting Go SSE server\nstdout:\n${stdout}\nstderr:\n${stderr}`));
-    }, 20_000);
+      reject(new Error(`timed out starting Go SSE server after ${Date.now() - start}ms\nstdout:\n${stdout}\nstderr:\n${stderr}`));
+    }, 30_000);
 
     const onData = (chunk: string) => {
       stdout += chunk;
@@ -34,6 +36,7 @@ async function startGoSSEServer(): Promise<{ child: ChildProcess; baseUrl: strin
       if (match) {
         clearTimeout(timeout);
         child.stdout?.off('data', onData);
+        console.log(`Go SSE server started in ${Date.now() - start}ms: ${match[1]}`);
         resolve(match[1]);
       }
     };
@@ -45,7 +48,7 @@ async function startGoSSEServer(): Promise<{ child: ChildProcess; baseUrl: strin
     });
   });
 
-  return { child, baseUrl: started };
+  return { baseUrl: started };
 }
 
 async function stopChild(child: ChildProcess): Promise<void> {
@@ -62,8 +65,9 @@ describe('background SSE integration with Go server', () => {
   });
 
   it('requires bearer auth and streams encoded events', async () => {
-    const started = await startGoSSEServer();
-    child = started.child;
+    const started = await startGoSSEServer((c) => {
+      child = c;
+    });
 
     const noAuthResp = await openEventStream(started.baseUrl, null, new AbortController().signal);
     expect(noAuthResp.status).toBe(401);
@@ -76,5 +80,5 @@ describe('background SSE integration with Go server', () => {
     expect(body).toContain('event: queued');
     expect(body).toContain('"DownloadID":"queue-1"');
     expect(body).toContain('"Filename":"archive.zip"');
-  }, 15_000);
+  }, 60_000);
 });
