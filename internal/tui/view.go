@@ -1107,7 +1107,7 @@ func (m RootModel) ComputeViewStats() ViewStats {
 	for _, d := range m.downloads {
 		if d.done {
 			stats.DownloadedCount++
-		} else if d.Speed > 0 {
+		} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming) {
 			stats.ActiveCount++
 		} else {
 			stats.QueuedCount++

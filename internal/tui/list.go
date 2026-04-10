@@ -268,7 +268,7 @@ func (m *RootModel) UpdateListItems() {
 					var newTab int
 					if d.done {
 						newTab = TabDone
-					} else if d.Speed > 0 {
+					} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming) {
 						newTab = TabActive
 					} else {
 						newTab = TabQueued
