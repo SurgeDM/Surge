@@ -37,9 +37,9 @@ func init() {
 }
 
 func rebuildStyles() {
-	WindowStyle = lipgloss.NewStyle().Margin(0, 1)
+	WindowStyle = lipgloss.NewStyle().Margin(DefaultPaddingY, DefaultPaddingX)
 	BoxStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder())
-	ModalPaddingStyle = lipgloss.NewStyle().Padding(1, 2)
+	ModalPaddingStyle = lipgloss.NewStyle().Padding(PopupPaddingY, PopupPaddingX)
 	LayoutGapStyle = lipgloss.NewStyle().MarginTop(1)
 
 	AppStyle = lipgloss.NewStyle().
@@ -49,7 +49,7 @@ func rebuildStyles() {
 	PaneStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colors.Gray).
-		Padding(0, 1)
+		Padding(DefaultPaddingY, DefaultPaddingX)
 
 	ActivePaneStyle = PaneStyle.BorderForeground(colors.NeonPink)
 	LogoStyle = lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true).MarginBottom(1)
@@ -59,13 +59,13 @@ func rebuildStyles() {
 
 	TitleStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).MarginBottom(1)
 	PaneTitleStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
-	TabStyle = lipgloss.NewStyle().Foreground(colors.LightGray).Padding(0, 1)
+	TabStyle = lipgloss.NewStyle().Foreground(colors.LightGray).Padding(DefaultPaddingY, DefaultPaddingX)
 
 	ActiveTabStyle = lipgloss.NewStyle().
 		Foreground(colors.NeonPink).
 		Border(lipgloss.NormalBorder(), false, false, true, false).
 		BorderForeground(colors.NeonPink).
-		Padding(0, 1).
+		Padding(DefaultPaddingY, DefaultPaddingX).
 		Bold(true)
 
 	StatsLabelStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Width(12)

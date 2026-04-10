@@ -15,11 +15,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Define the Layout Ratios
-const (
-	ListWidthRatio = 0.6 // List takes 60% width
-)
-
+// Viewport layout
 const maxUIDuration = 30 * 24 * time.Hour
 
 // formatDurationForUI formats a duration as a human-readable clock string.
@@ -74,8 +70,8 @@ func (m RootModel) View() tea.View {
 	}
 
 	// Terminal too small to render any meaningful layout
-	if m.width < 45 || m.height < 12 {
-		msg := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Terminal too small (min: 45×12)")
+	if m.width < MinTermWidth || m.height < MinTermHeight {
+		msg := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render(fmt.Sprintf("Terminal too small (min: %d×%d)", MinTermWidth, MinTermHeight))
 		return m.wrapView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, msg))
 	}
 
@@ -238,11 +234,11 @@ func (m RootModel) View() tea.View {
 	}
 
 	if m.state == HelpModalState {
-		modalW := 70
+		modalW := PopupWidth
 		if m.width < modalW {
 			modalW = m.width
 		}
-		modalH := 22
+		modalH := 22 // Height for keyboard shortcuts (TODO: calculate based on key count)
 		if m.height < modalH {
 			modalH = m.height
 		}
@@ -297,39 +293,30 @@ func (m RootModel) View() tea.View {
 	}
 
 	// Column Widths (or full-width when right column is hidden)
-	leftWidth := int(float64(availableWidth) * ListWidthRatio)
+	leftWidth := GetListWidth(availableWidth)
 	rightWidth := availableWidth - leftWidth
 	if rightWidth < 0 {
 		rightWidth = 0
 	}
 
 	// Determine right column viability thresholds
-	hideRightColumn := rightWidth < 50                    // too narrow for any right content
-	hideGraphStats := rightWidth >= 50 && rightWidth < 70 // enough for graph, not for inline stats
-	hideLogo := leftWidth < 60                            // not enough room for ASCII logo
+	hideRightColumn := rightWidth < MinRightColumnWidth
+	hideGraphStats := rightWidth >= MinRightColumnWidth && rightWidth < MinGraphStatsWidth
+	hideLogo := leftWidth < MinLogoWidth
 
 	if hideRightColumn {
 		leftWidth = availableWidth
 	}
 
-	// Short terminal: reduce header and graph minimums
-	shortTerminal := availableHeight < 25
-
 	// --- LEFT COLUMN HEIGHTS ---
-	headerHeight := 11
-	if shortTerminal {
-		headerHeight = 3 // server info bar only, skip logo
-	}
+	headerHeight := GetHeaderHeight(availableHeight)
 	listHeight := availableHeight - headerHeight
-	if listHeight < 10 {
-		listHeight = 10
+	if listHeight < MinListHeight {
+		listHeight = MinListHeight
 	}
 
 	// Short terminal: reduce minimum graph height
-	minGraphHeight := 9
-	if shortTerminal {
-		minGraphHeight = 5
-	}
+	minGraphHeight := GetMinGraphHeight(availableHeight)
 
 	// --- RIGHT COLUMN HEIGHTS ---
 	// Priority 1: Details (Fixed content + Padding)
@@ -385,7 +372,7 @@ func (m RootModel) View() tea.View {
 
 		hasChunks := len(bitmap) > 0 && bitmapWidth > 0
 
-		if !selected.done && hasChunks && availableHeight >= 18 {
+		if !selected.done && hasChunks && availableHeight >= MinChunkMapVisibleH {
 			showChunkMap = true
 		}
 	}
@@ -438,10 +425,10 @@ func (m RootModel) View() tea.View {
 		chunkMapHeight = remainingHeight - graphHeight
 
 		// If ChunkMap gets squeezed too much, we might need to squeeze Graph purely to survive
-		if chunkMapHeight < 4 {
+		if chunkMapHeight < MinChunkMapHeight {
 			// Check if we can start eating into Graph's minimum?
 			// Let's enforce a hard floor for ChunkMap
-			chunkMapHeight = 4
+			chunkMapHeight = MinChunkMapHeight
 			graphHeight = remainingHeight - chunkMapHeight
 			// If graphHeight becomes negative, the whole UI is too small,
 			// renderBtopBox will handle truncation, but visual will be broken.
@@ -469,7 +456,7 @@ func (m RootModel) View() tea.View {
 	downloaded := stats.DownloadedCount
 
 	// Logo takes ~45% of header width
-	logoWidth := int(float64(leftWidth) * 0.45)
+	logoWidth := int(float64(leftWidth) * LogoWidthRatio)
 	logWidth := leftWidth - logoWidth - BoxStyle.GetHorizontalFrameSize() // Rest for log box
 
 	if logoWidth < 4 {
@@ -580,7 +567,7 @@ func (m RootModel) View() tea.View {
 		maxSpeed = 1.0 // Default scale for empty graph
 	} else {
 		// Add headroom
-		maxSpeed = maxSpeed * 1.1
+		maxSpeed = maxSpeed * GraphHeadroom
 
 		if maxSpeed < 1.0 {
 			maxSpeed = 1.0
@@ -600,10 +587,9 @@ func (m RootModel) View() tea.View {
 	}
 
 	// Stats box width inside the Network Activity box
-	statsBoxWidth := 18
+	statsBoxWidth := GraphStatsWidth
 
 	// Graph width calculation: hide stats box when too narrow
-	axisWidth := 10
 	buildAxisLines := func(height int, axisStyle lipgloss.Style) []string {
 		label := func(v float64) string {
 			if v <= 0 {
@@ -652,10 +638,7 @@ func (m RootModel) View() tea.View {
 	var graphWithAxis string
 	if hideGraphStats {
 		// No stats box — graph gets almost full width
-		graphAreaWidth := rightWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 5)
-		if graphAreaWidth < 10 {
-			graphAreaWidth = 10
-		}
+		graphAreaWidth, axisWidth := GetGraphAreaDimensions(rightWidth, true)
 
 		graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
 
@@ -709,11 +692,7 @@ func (m RootModel) View() tea.View {
 		statsBox := statsBoxStyle.Render(statsContent)
 
 		// Graph takes remaining width after stats box
-		axisWidth := 10
-		graphAreaWidth := rightWidth - statsBoxWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 3)
-		if graphAreaWidth < 10 {
-			graphAreaWidth = 10
-		}
+		graphAreaWidth, axisWidth := GetGraphAreaDimensions(rightWidth, false)
 
 		graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
 
