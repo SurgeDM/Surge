@@ -84,16 +84,16 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	}
 
 	// Build bottom border: ╰───────────────────╯
-	bottomBorder := lipgloss.NewStyle().Foreground(borderColor).Render(
+	bottomBorder := borderStyler.Render(
 		bottomLeft + strings.Repeat(horizontal, innerWidth) + bottomRight,
 	)
-
-	// Style for vertical borders
-	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
 
 	// Wrap content lines with vertical borders
 	contentLines := strings.Split(content, "\n")
 	innerHeight := height - 2 // Account for top and bottom borders
+
+	// Style for truncation
+	truncStyle := lipgloss.NewStyle().MaxWidth(innerWidth)
 
 	var wrappedLines []string
 	for i := 0; i < innerHeight; i++ {
@@ -108,9 +108,9 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 		if lineWidth < innerWidth {
 			line = line + strings.Repeat(" ", innerWidth-lineWidth)
 		} else if lineWidth > innerWidth {
-			line = lipgloss.NewStyle().MaxWidth(innerWidth).Render(line)
+			line = truncStyle.Render(line)
 		}
-		wrappedLines = append(wrappedLines, borderStyle.Render(vertical)+line+borderStyle.Render(vertical))
+		wrappedLines = append(wrappedLines, borderStyler.Render(vertical)+line+borderStyler.Render(vertical))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, topBorder, strings.Join(wrappedLines, "\n"), bottomBorder)
