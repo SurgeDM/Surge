@@ -167,11 +167,9 @@ async function persistDiscoveredServerUrl(url: string | null): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function discoverBaseUrl(): Promise<string | null> {
-  console.log('[Surge] discoverBaseUrl: cachedServerUrl=%s, cachedDiscoveredServerUrl=%s', cachedServerUrl, cachedDiscoveredServerUrl);
   // Try the user-configured URL first and only.
   if (cachedServerUrl) {
     const ok = await healthCheck(cachedServerUrl);
-    console.log('[Surge] discoverBaseUrl: configured URL %s health=%s', cachedServerUrl, ok);
     if (ok) return cachedServerUrl;
     return null;
   }
@@ -181,10 +179,8 @@ async function discoverBaseUrl(): Promise<string | null> {
     MAX_PORT_SCAN,
     [cachedDiscoveredServerUrl],
   );
-  console.log('[Surge] discoverBaseUrl: scanning %d candidates, first=%s', candidates.length, candidates[0]);
 
   const found = await findReachableCandidate(candidates, healthCheck, PORT_SCAN_BATCH_SIZE);
-  console.log('[Surge] discoverBaseUrl: found=%s', found);
   return found;
 }
 
@@ -223,11 +219,8 @@ async function getBaseUrl(): Promise<string | null> {
 async function healthCheck(url: string): Promise<boolean> {
   try {
     const resp = await fetch(`${url}/health`, { signal: AbortSignal.timeout(300) });
-    console.log('[Surge] healthCheck %s → status=%d ok=%s', url, resp.status, resp.ok);
     if (resp.ok) { isConnected = true; return true; }
-  } catch (err) {
-    console.log('[Surge] healthCheck %s → error: %s', url, err instanceof Error ? err.message : String(err));
-  }
+  } catch { /* ignore */ }
   if (resolvedBaseUrl === url) resolvedBaseUrl = null;
   return false;
 }
@@ -238,7 +231,6 @@ async function checkHealthSilent(): Promise<boolean> {
   lastHealthCheck = now;
   const url = await getBaseUrl();
   isConnected = url !== null;
-  console.log('[Surge] checkHealthSilent: baseUrl=%s isConnected=%s', url, isConnected);
   return isConnected;
 }
 
@@ -500,14 +492,28 @@ async function startSSEStream(): Promise<void> {
     const decoder = new TextDecoder();
     let buffer = '';
 
+    let currentEvent: string | null = null;
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
+      if (done) {
+        if (buffer.trim()) {
+          for (const line of buffer.split('\n')) {
+            if (line.startsWith('event: ')) currentEvent = line.slice(7).trim();
+            else if (line.startsWith('data: ') && currentEvent) {
+              try {
+                const data = JSON.parse(line.slice(6));
+                browser.runtime.sendMessage({ type: 'sseEvent', event: currentEvent, data }).catch(() => {});
+              } catch { /* skip malformed */ }
+            }
+          }
+        }
+        break;
+      }
+
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split('\n');
       buffer = lines.pop() || '';
 
-      let currentEvent: string | null = null;
       for (const line of lines) {
         if (line.startsWith('event: ')) currentEvent = line.slice(7).trim();
         else if (line.startsWith('data: ') && currentEvent) {
@@ -549,10 +555,7 @@ async function fullSync(): Promise<void> {
 function handleMessage(message: Record<string, any>): Promise<unknown> | unknown {
   switch (message.type) {
     // Health / connection
-    case 'checkHealth': return checkHealthSilent().then(healthy => {
-      console.log('[Surge] msg:checkHealth → healthy=%s', healthy);
-      return { healthy };
-    });
+    case 'checkHealth': return checkHealthSilent().then(healthy => ({ healthy }));
 
     case 'validateAuth':
       return (async () => {
