@@ -180,7 +180,7 @@ jobs:
 
           # 2. Verify auth rejection without token (extension auth flow)
           echo "--- Testing auth enforcement ---"
-          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:1700/list)
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:1700/list || true)
           if [ "$STATUS" != "401" ]; then
             echo "FAIL: Expected 401 without auth, got $STATUS"
             exit 1
@@ -191,7 +191,7 @@ jobs:
           echo "--- Testing Bearer auth ---"
           STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer test-integration-token" \
-            http://127.0.0.1:1700/list)
+            http://127.0.0.1:1700/list || true)
           if [ "$STATUS" != "200" ]; then
             echo "FAIL: Expected 200 with auth, got $STATUS"
             exit 1
@@ -236,7 +236,7 @@ jobs:
             -H "Origin: chrome-extension://test" \
             -H "Access-Control-Request-Method: POST" \
             -H "Access-Control-Request-Headers: Content-Type, Authorization" \
-            http://127.0.0.1:1700/download)
+            http://127.0.0.1:1700/download || true)
           if [ "$PREFLIGHT_STATUS" != "200" ]; then
             echo "FAIL: Expected 200 for CORS preflight, got $PREFLIGHT_STATUS"
             exit 1
@@ -247,7 +247,7 @@ jobs:
           echo "--- Testing download status endpoint ---"
           STATUS_RESULT=$(curl -s -o /dev/null -w "%{http_code}" \
             -H "Authorization: Bearer test-integration-token" \
-            "http://127.0.0.1:1700/download?id=nonexistent")
+            "http://127.0.0.1:1700/download?id=nonexistent" || true)
           if [ "$STATUS_RESULT" != "404" ]; then
             echo "FAIL: Expected 404 for nonexistent ID, got $STATUS_RESULT"
             exit 1
@@ -261,7 +261,7 @@ jobs:
             -H "Authorization: Bearer test-integration-token" \
             -H "Content-Type: application/json" \
             -d 'not-json' \
-            http://127.0.0.1:1700/download)
+            http://127.0.0.1:1700/download || true)
           if [ "$BAD_STATUS" != "400" ]; then
             echo "FAIL: Expected 400 for invalid JSON, got $BAD_STATUS"
             exit 1
@@ -274,7 +274,7 @@ jobs:
             -H "Authorization: Bearer test-integration-token" \
             -H "Content-Type: application/json" \
             -d '{"filename":"test.txt"}' \
-            http://127.0.0.1:1700/download)
+            http://127.0.0.1:1700/download || true)
           if [ "$EMPTY_URL_STATUS" != "400" ]; then
             echo "FAIL: Expected 400 for missing url, got $EMPTY_URL_STATUS"
             exit 1
@@ -287,7 +287,7 @@ jobs:
             -H "Authorization: Bearer test-integration-token" \
             -H "Content-Type: application/json" \
             -d '{"url":"http://example.com/f","path":"../etc"}' \
-            http://127.0.0.1:1700/download)
+            http://127.0.0.1:1700/download || true)
           if [ "$TRAVERSE_STATUS" != "400" ]; then
             echo "FAIL: Expected 400 for path traversal, got $TRAVERSE_STATUS"
             exit 1
