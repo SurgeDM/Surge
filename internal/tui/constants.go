@@ -36,7 +36,8 @@ const (
 	MinChunkMapVisibleH  = 18 // Min term height to show chunk map
 
 	// === Component Heights ===
-	HeaderHeightMax  = 11
+	ModalHeightPadding = 4  // Bottom fallback padding for modals to avoid clipping
+	HeaderHeightMax    = 11
 	HeaderHeightMin  = 3
 	FilePickerHeight = 12
 	CardHeight       = 2 // Compact rows for downloads list

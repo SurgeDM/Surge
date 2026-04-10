@@ -104,9 +104,7 @@ func (m RootModel) viewCategoryManager() string {
 	return m.renderModalWithOverlay(box)
 }
 
-func categoryModalDimensions(termWidth, termHeight int) (int, int) {
-	return GetSettingsDimensions(termWidth, termHeight)
-}
+
 
 func (m RootModel) renderCategoryHelp(width int) string {
 	if width < 1 {

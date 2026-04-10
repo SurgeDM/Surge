@@ -402,8 +402,8 @@ func (m RootModel) View() tea.View {
 		// Sufficient space for everything
 		chunkMapHeight = chunkMapNeeded
 		if !showChunkMap {
-			// User wants 4:6 ratio for Graph:Details
-			targetGraphHeight := int(float64(availableHeight) * 0.4)
+			// User wants target ratio for Graph:Details
+			targetGraphHeight := int(float64(availableHeight) * GraphTargetHeightRatio)
 			targetDetailHeight := availableHeight - targetGraphHeight
 
 			// Ensure Graph meets minimum

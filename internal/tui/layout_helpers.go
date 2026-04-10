@@ -35,7 +35,7 @@ func GetSettingsDimensions(termWidth, termHeight int) (int, int) {
 	}
 
 	height := MinSettingsHeight
-	maxHeight := termHeight - (WindowStyle.GetVerticalFrameSize() * 2) - 4 // fallback padding
+	maxHeight := termHeight - (WindowStyle.GetVerticalFrameSize() * 2) - ModalHeightPadding
 	if maxHeight < 1 {
 		maxHeight = 1
 	}
@@ -68,7 +68,9 @@ func GetGraphAreaDimensions(rightWidth int, isStatsHidden bool) (int, int) {
 	axisWidth := GraphAxisWidth
 	
 	if isStatsHidden {
-		// No stats box — graph gets almost full width
+		// No stats box — graph gets almost full width.
+		// Higher buffer (* 5) accounts for extra padding needed when axis is on the far right
+		// to maintain visual balance with the outer container borders.
 		graphAreaWidth := rightWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 5)
 		if graphAreaWidth < 10 {
 			graphAreaWidth = 10
@@ -76,7 +78,8 @@ func GetGraphAreaDimensions(rightWidth int, isStatsHidden bool) (int, int) {
 		return graphAreaWidth, axisWidth
 	}
 	
-	// Graph takes remaining width after stats box
+	// Graph takes remaining width after stats box.
+	// Smaller buffer (* 3) as the stats box provides its own internal padding.
 	graphAreaWidth := rightWidth - GraphStatsWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 3)
 	if graphAreaWidth < 10 {
 		graphAreaWidth = 10

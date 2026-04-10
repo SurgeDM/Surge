@@ -107,9 +107,7 @@ func (m RootModel) viewSettings() string {
 	return m.renderModalWithOverlay(box)
 }
 
-func settingsModalDimensions(termWidth, termHeight int) (int, int) {
-	return GetSettingsDimensions(termWidth, termHeight)
-}
+
 
 func shortSettingsCategoryLabel(label string) string {
 	switch label {
@@ -501,7 +499,7 @@ func (m *RootModel) normalizeSettingsSelection() {
 }
 
 func (m *RootModel) updateSettingsInputWidthForViewport() {
-	modalWidth, _ := settingsModalDimensions(m.width, m.height)
+	modalWidth, _ := GetSettingsDimensions(m.width, m.height)
 
 	var targetWidth int
 	if modalWidth >= 72 {

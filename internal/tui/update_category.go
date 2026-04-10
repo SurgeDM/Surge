@@ -67,7 +67,7 @@ func (m *RootModel) normalizeCategoryManagerSelection() {
 }
 
 func (m *RootModel) updateCategoryInputWidthsForViewport() {
-	modalWidth, _ := categoryModalDimensions(m.width, m.height)
+	modalWidth, _ := GetSettingsDimensions(m.width, m.height)
 
 	var targetWidth int
 	if modalWidth >= 76 {
