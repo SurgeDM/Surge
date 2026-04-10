@@ -275,6 +275,10 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 		values["slow_worker_grace_period"] = m.Settings.Performance.SlowWorkerGracePeriod
 		values["stall_timeout"] = m.Settings.Performance.StallTimeout
 		values["speed_ema_alpha"] = m.Settings.Performance.SpeedEmaAlpha
+	case "Debrid":
+		values["enabled"] = m.Settings.Network.Debrid.Enabled
+		values["provider"] = m.Settings.Network.Debrid.Provider
+		values["api_key"] = m.Settings.Network.Debrid.APIKey
 	case "Categories":
 		values["category_enabled"] = m.Settings.General.CategoryEnabled
 	}
@@ -302,6 +306,8 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 		return m.setNetworkSetting(key, value, meta.Type)
 	case "Performance":
 		return m.setPerformanceSetting(key, value, meta.Type)
+	case "Debrid":
+		return m.setDebridSetting(key, value, meta.Type)
 	case "Categories":
 		if key == "category_enabled" {
 			m.Settings.General.CategoryEnabled = !m.Settings.General.CategoryEnabled
@@ -461,6 +467,18 @@ func (m *RootModel) setPerformanceSetting(key, value, typ string) error {
 			}
 			m.Settings.Performance.SpeedEmaAlpha = v
 		}
+	}
+	return nil
+}
+
+func (m *RootModel) setDebridSetting(key, value, typ string) error {
+	switch key {
+	case "enabled":
+		m.Settings.Network.Debrid.Enabled = !m.Settings.Network.Debrid.Enabled
+	case "provider":
+		m.Settings.Network.Debrid.Provider = value
+	case "api_key":
+		m.Settings.Network.Debrid.APIKey = value
 	}
 	return nil
 }
