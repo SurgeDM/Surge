@@ -33,9 +33,16 @@ type LifecycleManager struct {
 	isNameActive        IsNameActiveFunc
 	engineHooks         EngineHooks
 	hooksMu             sync.RWMutex
+	// probeSem caps the number of simultaneous server probes so adding a
+	// large batch of downloads does not flood the network with HEAD requests.
+	probeSem chan struct{}
 }
 
-const maxWorkingFileReservationAttempts = 100
+const (
+	maxWorkingFileReservationAttempts = 100
+	// maxConcurrentProbes caps parallel probe requests across all enqueue callers.
+	maxConcurrentProbes = 3
+)
 
 var settingsRefreshTTL = time.Second
 
@@ -79,12 +86,18 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 		activeCheck = isNameActive[0]
 	}
 
+	sem := make(chan struct{}, maxConcurrentProbes)
+	for i := 0; i < maxConcurrentProbes; i++ {
+		sem <- struct{}{}
+	}
+
 	return &LifecycleManager{
 		settings:            settings,
 		settingsRefreshedAt: time.Now(),
 		addFunc:             addFunc,
 		addWithIDFunc:       addWithIDFunc,
 		isNameActive:        activeCheck,
+		probeSem:            sem,
 	}
 }
 
@@ -219,6 +232,18 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 	}
 
 	settings := mgr.GetSettings()
+
+	// Throttle concurrent probes — acquire a semaphore slot before probing.
+	// If the context is cancelled (e.g., shutdown) we abort immediately.
+	if mgr.probeSem != nil {
+		select {
+		case <-mgr.probeSem:
+			// acquired
+		case <-ctx.Done():
+			return "", fmt.Errorf("enqueue aborted before probe: %w", ctx.Err())
+		}
+		defer func() { mgr.probeSem <- struct{}{} }()
+	}
 
 	probe, err := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
 	if err != nil {
