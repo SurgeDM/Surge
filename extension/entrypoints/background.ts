@@ -286,7 +286,7 @@ async function fetchHistoryList(): Promise<HistoryEntry[]> {
 
 /**
  * Send a download request to the Surge backend.
- * Returns { success: true } or { success: false, error: string, isDuplicate: boolean }.
+ * Returns { success: true } or { success: false, error: string }.
  */
 async function sendToSurge(
   url: string,
@@ -294,7 +294,7 @@ async function sendToSurge(
   directory: string,
   headers: Record<string, string>,
   options?: { skipApproval?: boolean },
-): Promise<{ success: boolean; error?: string; isDuplicate?: boolean }> {
+): Promise<{ success: boolean; error?: string }> {
   const base = await getBaseUrl();
   if (!base) return { success: false, error: 'Server not running' };
 
@@ -313,17 +313,6 @@ async function sendToSurge(
     });
 
     if (resp.ok) return { success: true };
-
-    if (resp.status === 409) {
-      const text = await resp.text().catch(() => '');
-      try {
-        const j = JSON.parse(text);
-        return { success: false, isDuplicate: true, error: j.message || text };
-      } catch {
-        return { success: false, isDuplicate: true, error: text };
-      }
-    }
-
     return { success: false, error: await resp.text().catch(() => '') };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -389,6 +378,12 @@ function updateBadge(): void {
   if (count > 0) browser.action.setBadgeBackgroundColor({ color: '#FF0000' });
 }
 
+async function isDuplicateDownload(url: string): Promise<boolean> {
+  const list = await fetchDownloadsList();
+  const normalized = url.replace(/\/$/, '');
+  return list.some(dl => (dl.url || '').replace(/\/$/, '') === normalized);
+}
+
 async function handleDownloadCreated(downloadItem: {
   id: number; url: string; filename?: string; state?: string; startTime?: string;
 }): Promise<void> {
@@ -408,38 +403,37 @@ async function handleDownloadCreated(downloadItem: {
   if (!await checkHealthSilent()) return;
 
   const { filename, directory } = extractPathInfo(downloadItem);
+  const displayName = filename || downloadItem.url.split('/').pop() || 'Unknown file';
   const headers = getCapturedHeaders(downloadItem.url) ?? {};
 
-  const result = await sendToSurge(downloadItem.url, filename, directory, headers);
+  // Check for duplicates in the extension BEFORE sending to server.
+  // This way the TUI never sees a duplicate prompt.
+  if (await isDuplicateDownload(downloadItem.url)) {
+    pendingDuplicateCounter = await queueDuplicateDownload({
+      pendingDuplicates,
+      pendingDuplicateCounter,
+      url: downloadItem.url,
+      filename: displayName,
+      directory,
+      cleanupStaleDuplicates,
+      persistPendingDuplicates,
+      updateBadge,
+      openPopup: () => Promise.resolve(),
+      sendPrompt: message => browser.runtime.sendMessage(message),
+    });
+    return;
+  }
+
+  const result = await sendToSurge(downloadItem.url, displayName, directory, headers);
 
   if (result.success) {
     browser.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon48.png',
       title: 'Surge',
-      message: `Download started: ${filename || downloadItem.url.split('/').pop()}`,
+      message: `Download started: ${displayName}`,
     });
-    return;
-  }
-
-  if (result.isDuplicate) {
-    // Server says duplicate — queue for user confirmation
-    pendingDuplicateCounter = await queueDuplicateDownload({
-      pendingDuplicates,
-      pendingDuplicateCounter,
-      url: downloadItem.url,
-      filename: filename || downloadItem.url.split('/').pop() || 'Unknown file',
-      directory,
-      cleanupStaleDuplicates,
-      persistPendingDuplicates,
-      updateBadge,
-      openPopup: () => Promise.resolve(), // openPopup is unreliable; badge serves as indicator
-      sendPrompt: message => browser.runtime.sendMessage(message),
-    });
-    return;
-  }
-
-  if (result.error) {
+  } else if (result.error) {
     browser.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon48.png',
