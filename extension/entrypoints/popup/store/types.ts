@@ -94,31 +94,3 @@ export interface DownloadRemovedMsg {
   Completed: boolean;
 }
 
-export type SseEvent = 'progress' | 'started' | 'complete' | 'error' | 'paused' | 'resumed' | 'queued' | 'removed' | 'request' | 'system';
-
-export interface SseFrame {
-  event: SseEvent;
-  data: unknown;
-}
-
-// === API responses ===
-
-export interface HealthResponse {
-  status: 'ok';
-  port: number;
-}
-
-export interface ServerResponse<T> {
-  ok: boolean;
-  data?: T;
-}
-
-// === Background message types ===
-
-export interface DuplicatePending {
-  id: string;
-  filename: string;
-  url: string;
-}
-
-export type Theme = 'dark' | 'light' | 'auto';

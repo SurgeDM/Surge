@@ -26,6 +26,8 @@ const BASE_URL_RETRY_COOLDOWN_MS = 5_000;
 const HEADER_EXPIRY_MS = 120_000;
 const HEALTH_CHECK_INTERVAL_MS = 5_000;
 const SYNC_INTERVAL_MS = 60_000;
+const SSE_RETRY_BASE_MS = 3_000;
+const SSE_RETRY_MAX_MS = 30_000;
 
 // ---------------------------------------------------------------------------
 // State
@@ -44,6 +46,7 @@ let lastHealthCheck = 0;
 let lastBaseUrlFailureAt = 0;
 let sseAbortController: AbortController | null = null;
 let baseUrlResolutionPromise: Promise<string | null> | null = null;
+let sseRetryCount = 0;
 
 // Stale headers captured during requests. Cleaned up on access + periodically.
 const capturedHeaders = new Map<string, { headers: Record<string, string>; timestamp: number }>();
@@ -273,7 +276,7 @@ async function fetchHistoryList(): Promise<HistoryEntry[]> {
 
 /**
  * Send a download request to the Surge backend.
- * Returns { success: true } or { success: false, error: string }.
+ * Returns { success: true } or { success: false, error: string, isDuplicate: boolean }.
  */
 async function sendToSurge(
   url: string,
@@ -281,7 +284,7 @@ async function sendToSurge(
   directory: string,
   headers: Record<string, string>,
   options?: { skipApproval?: boolean },
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; error?: string; isDuplicate?: boolean }> {
   const base = await getBaseUrl();
   if (!base) return { success: false, error: 'Server not running' };
 
@@ -303,8 +306,12 @@ async function sendToSurge(
 
     if (resp.status === 409) {
       const text = await resp.text().catch(() => '');
-      try { const j = JSON.parse(text); return { success: false, error: j.message || text }; }
-      catch { return { success: false, error: text }; }
+      try {
+        const j = JSON.parse(text);
+        return { success: false, isDuplicate: true, error: j.message || text };
+      } catch {
+        return { success: false, isDuplicate: true, error: text };
+      }
     }
 
     return { success: false, error: await resp.text().catch(() => '') };
@@ -366,12 +373,6 @@ function isFreshDownload(item: { state?: string; startTime?: string }): boolean 
   return Date.now() - new Date(item.startTime).getTime() <= 30_000;
 }
 
-async function isDuplicateDownload(url: string): Promise<boolean> {
-  const list = await fetchDownloadsList();
-  const normalized = url.replace(/\/$/, '');
-  return list.some(dl => (dl.url || '').replace(/\/$/, '') === normalized);
-}
-
 function updateBadge(): void {
   const count = pendingDuplicates.size;
   browser.action.setBadgeText({ text: count > 0 ? count.toString() : '' });
@@ -385,60 +386,56 @@ async function handleDownloadCreated(downloadItem: {
   if (shouldSkipUrl(downloadItem.url)) return;
   if (!isFreshDownload(downloadItem)) return;
 
-  // Duplicate: cancel browser download, queue for user confirmation
-  if (await isDuplicateDownload(downloadItem.url)) {
-    try {
-      await browser.downloads.cancel(downloadItem.id);
-      await browser.downloads.erase({ id: downloadItem.id } as any);
-    } catch { /* ignore */ }
+  // Cancel the browser download IMMEDIATELY — before any network calls.
+  // This is the critical fix: when the browser window is focused, Chrome actively
+  // progresses the download during any async work. Cancelling first ensures we
+  // always win the race regardless of window focus state.
+  try {
+    await browser.downloads.cancel(downloadItem.id);
+    await browser.downloads.erase({ id: downloadItem.id } as any);
+  } catch { /* already completed or removed — ignore */ }
 
-    const { filename, directory } = extractPathInfo(downloadItem);
-    const displayName = filename || downloadItem.url.split('/').pop() || 'Unknown file';
-
-    pendingDuplicateCounter = await queueDuplicateDownload({
-      pendingDuplicates,
-      pendingDuplicateCounter,
-      url: downloadItem.url,
-      filename: displayName,
-      directory,
-      cleanupStaleDuplicates,
-      persistPendingDuplicates,
-      updateBadge,
-      openPopup: () => browser.action.openPopup(),
-      sendPrompt: message => browser.runtime.sendMessage(message),
-    });
-    return;
-  }
-
-  // Fresh download: send to Surge
   if (!await checkHealthSilent()) return;
 
   const { filename, directory } = extractPathInfo(downloadItem);
   const headers = getCapturedHeaders(downloadItem.url) ?? {};
 
-  try {
-    await browser.downloads.cancel(downloadItem.id);
-    await browser.downloads.erase({ id: downloadItem.id } as any);
+  const result = await sendToSurge(downloadItem.url, filename, directory, headers);
 
-    const result = await sendToSurge(downloadItem.url, filename, directory, headers);
-    if (result.success) {
-      browser.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon48.png',
-        title: 'Surge',
-        message: `Download started: ${filename || downloadItem.url.split('/').pop()}`,
-      });
-      try { await browser.action.openPopup(); } catch { /* ignore */ }
-    } else {
-      browser.notifications.create({
-        type: 'basic',
-        iconUrl: 'icons/icon48.png',
-        title: 'Surge Error',
-        message: `Failed to start download: ${result.error}`,
-      });
-    }
-  } catch (error) {
-    console.error('[Surge] Failed to intercept:', error);
+  if (result.success) {
+    browser.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon48.png',
+      title: 'Surge',
+      message: `Download started: ${filename || downloadItem.url.split('/').pop()}`,
+    });
+    return;
+  }
+
+  if (result.isDuplicate) {
+    // Server says duplicate — queue for user confirmation
+    pendingDuplicateCounter = await queueDuplicateDownload({
+      pendingDuplicates,
+      pendingDuplicateCounter,
+      url: downloadItem.url,
+      filename: filename || downloadItem.url.split('/').pop() || 'Unknown file',
+      directory,
+      cleanupStaleDuplicates,
+      persistPendingDuplicates,
+      updateBadge,
+      openPopup: () => Promise.resolve(), // openPopup is unreliable; badge serves as indicator
+      sendPrompt: message => browser.runtime.sendMessage(message),
+    });
+    return;
+  }
+
+  if (result.error) {
+    browser.notifications.create({
+      type: 'basic',
+      iconUrl: 'icons/icon48.png',
+      title: 'Surge Error',
+      message: `Failed to start download: ${result.error}`,
+    });
   }
 }
 
@@ -459,9 +456,12 @@ async function startSSEStream(): Promise<void> {
       signal: sseAbortController.signal,
     });
     if (!resp.ok || !resp.body) {
-      setTimeout(() => startSSEStream().catch(() => {}), 3000);
+      scheduleSSERetry();
       return;
     }
+
+    // Connected — reset retry backoff
+    sseRetryCount = 0;
 
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
@@ -486,9 +486,15 @@ async function startSSEStream(): Promise<void> {
         }
       }
     }
-  } catch { /* stream closed */ }
+  } catch { /* stream closed or aborted */ }
 
-  setTimeout(() => startSSEStream().catch(() => {}), 3000);
+  scheduleSSERetry();
+}
+
+function scheduleSSERetry(): void {
+  const delay = Math.min(SSE_RETRY_BASE_MS * Math.pow(2, sseRetryCount), SSE_RETRY_MAX_MS);
+  sseRetryCount++;
+  setTimeout(() => startSSEStream().catch(() => {}), delay);
 }
 
 async function fullSync(): Promise<void> {
@@ -641,14 +647,6 @@ export default defineBackground(() => {
     );
   });
 
-  // Notification click handler
-  browser.notifications.onClicked.addListener((notificationId: string) => {
-    if (notificationId.startsWith('surge-confirm-')) {
-      try { browser.action.openPopup(); } catch { /* ignore */ }
-      browser.notifications.clear(notificationId);
-    }
-  });
-
   // Storage change propagation
   browser.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') return;
@@ -731,6 +729,7 @@ export const __test__ = {
     lastBaseUrlFailureAt = 0;
     sseAbortController = null;
     baseUrlResolutionPromise = null;
+    sseRetryCount = 0;
     capturedHeaders.clear();
     pendingDuplicateCounter = 0;
     pendingDuplicates.clear();
