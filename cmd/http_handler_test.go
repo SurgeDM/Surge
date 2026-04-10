@@ -72,6 +72,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	// Create a temporary settings file
 	settings := config.DefaultSettings()
 	settings.General.DefaultDownloadDir = defaultDownloadDir
+	settings.Extension.ExtensionPrompt = false
 
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatal(err)
@@ -376,7 +377,7 @@ func TestHandleDownload_PublishError_RecordsPreflightError(t *testing.T) {
 	t.Cleanup(func() { serverProgram = origServerProgram })
 
 	settings := config.DefaultSettings()
-	settings.General.ExtensionPrompt = true
+	settings.Extension.ExtensionPrompt = true
 	settings.General.WarnOnDuplicate = false
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)

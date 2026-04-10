@@ -13,8 +13,8 @@ import (
 
 func (m *RootModel) catMgrBeginAdd() {
 	newCat := config.Category{Name: "New Category"}
-	m.Settings.General.Categories = append(m.Settings.General.Categories, newCat)
-	m.catMgrCursor = len(m.Settings.General.Categories) - 1
+	m.Settings.Categories.Categories = append(m.Settings.Categories.Categories, newCat)
+	m.catMgrCursor = len(m.Settings.Categories.Categories) - 1
 	m.catMgrIsNew = true
 	m.catMgrEditing = true
 	m.catMgrEditField = 0
@@ -37,7 +37,7 @@ func (m *RootModel) normalizeCategoryManagerSelection() {
 		return
 	}
 
-	cats := m.Settings.General.Categories
+	cats := m.Settings.Categories.Categories
 	maxCursor := len(cats)
 	if m.catMgrEditing {
 		if len(cats) == 0 {
@@ -67,19 +67,11 @@ func (m *RootModel) normalizeCategoryManagerSelection() {
 }
 
 func (m *RootModel) updateCategoryInputWidthsForViewport() {
-	modalWidth, _ := categoryModalDimensions(m.width, m.height)
+	modalWidth, _ := GetSettingsDimensions(m.width, m.height)
 
 	var targetWidth int
 	if modalWidth >= 76 {
-		leftWidth := 28
-		minRightWidth := 24
-		if modalWidth-leftWidth-8 < minRightWidth {
-			leftWidth = modalWidth - minRightWidth - 8
-		}
-		if leftWidth < 16 {
-			leftWidth = 16
-		}
-		rightWidth := modalWidth - leftWidth - 8
+		_, rightWidth := CalculateTwoColumnWidths(modalWidth, 28, 24)
 		targetWidth = rightWidth - 10
 	} else {
 		targetWidth = modalWidth - 14
@@ -99,7 +91,7 @@ func (m *RootModel) updateCategoryInputWidthsForViewport() {
 
 func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.normalizeCategoryManagerSelection()
-	cats := m.Settings.General.Categories
+	cats := m.Settings.Categories.Categories
 
 	// Handle editing mode
 	if m.catMgrEditing {
@@ -110,10 +102,10 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 			m.blurAllCatInputs()
 
 			// If was adding new, remove the placeholder
-			if wasNew && m.catMgrCursor < len(m.Settings.General.Categories) {
-				m.Settings.General.Categories = append(
-					m.Settings.General.Categories[:m.catMgrCursor],
-					m.Settings.General.Categories[m.catMgrCursor+1:]...,
+			if wasNew && m.catMgrCursor < len(m.Settings.Categories.Categories) {
+				m.Settings.Categories.Categories = append(
+					m.Settings.Categories.Categories[:m.catMgrCursor],
+					m.Settings.Categories.Categories[m.catMgrCursor+1:]...,
 				)
 				if m.catMgrCursor > 0 {
 					m.catMgrCursor--
@@ -145,7 +137,7 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		}
 		if key.Matches(msg, m.keys.CategoryMgr.Edit) {
 			// Save edits
-			if m.catMgrCursor < 0 || m.catMgrCursor >= len(m.Settings.General.Categories) {
+			if m.catMgrCursor < 0 || m.catMgrCursor >= len(m.Settings.Categories.Categories) {
 				m.addLogEntry(LogStyleError.Render("✖ Invalid category selection"))
 				return m, nil
 			}
@@ -172,7 +164,7 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 				return m, nil
 			}
 
-			target := &m.Settings.General.Categories[m.catMgrCursor]
+			target := &m.Settings.Categories.Categories[m.catMgrCursor]
 			target.Name = name
 			target.Description = description
 			target.Pattern = pattern
@@ -195,7 +187,7 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 	// Not editing - handle navigation
 	if key.Matches(msg, m.keys.CategoryMgr.Close) {
 		_ = m.persistSettings()
-		m.state = DashboardState
+		m.state = SettingsState
 		return m, nil
 	}
 
@@ -213,17 +205,17 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 	}
 
 	if key.Matches(msg, m.keys.CategoryMgr.Toggle) {
-		m.Settings.General.CategoryEnabled = !m.Settings.General.CategoryEnabled
+		m.Settings.Categories.CategoryEnabled = !m.Settings.Categories.CategoryEnabled
 		return m, nil
 	}
 
 	if key.Matches(msg, m.keys.CategoryMgr.Delete) {
 		if m.catMgrCursor < len(cats) {
-			m.Settings.General.Categories = append(
-				m.Settings.General.Categories[:m.catMgrCursor],
-				m.Settings.General.Categories[m.catMgrCursor+1:]...,
+			m.Settings.Categories.Categories = append(
+				m.Settings.Categories.Categories[:m.catMgrCursor],
+				m.Settings.Categories.Categories[m.catMgrCursor+1:]...,
 			)
-			if m.catMgrCursor >= len(m.Settings.General.Categories) && m.catMgrCursor > 0 {
+			if m.catMgrCursor >= len(m.Settings.Categories.Categories) && m.catMgrCursor > 0 {
 				m.catMgrCursor--
 			}
 		}

@@ -856,11 +856,6 @@ func ValidateIntegrity() (int, error) {
 		if e.destPath == "" {
 			continue
 		}
-		// Fresh queued entries may not have a partial file yet.
-		if e.status == "queued" && e.downloaded <= 0 {
-			candidateDirs[filepath.Dir(e.destPath)] = struct{}{}
-			continue
-		}
 		expectedSurgePaths[e.destPath+types.IncompleteSuffix] = struct{}{}
 		candidateDirs[filepath.Dir(e.destPath)] = struct{}{}
 	}
@@ -895,9 +890,6 @@ func ValidateIntegrity() (int, error) {
 	_ = allRows.Close()
 
 	for _, e := range entries {
-		if e.status == "queued" && e.downloaded <= 0 {
-			continue
-		}
 		surgePath := e.destPath + types.IncompleteSuffix
 
 		// Check if .surge file exists

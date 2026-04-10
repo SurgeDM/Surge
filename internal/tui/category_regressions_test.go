@@ -31,9 +31,9 @@ func TestStartDownload_RoutesDefaultPathWithURLDerivedFilename(t *testing.T) {
 	imageDir := filepath.Join(rootDir, "images")
 
 	settings := config.DefaultSettings()
-	settings.General.CategoryEnabled = true
+	settings.Categories.CategoryEnabled = true
 	settings.General.DefaultDownloadDir = rootDir
-	settings.General.Categories = []config.Category{
+	settings.Categories.Categories = []config.Category{
 		{Name: "Images", Pattern: `(?i)\.(jpg|jpeg|png)$`, Path: imageDir},
 	}
 
@@ -53,10 +53,10 @@ func TestUpdate_InputSubmit_BlankPathUsesDefaultPathRouting(t *testing.T) {
 	musicDir := filepath.Join(rootDir, "music")
 
 	settings := config.DefaultSettings()
-	settings.General.CategoryEnabled = true
+	settings.Categories.CategoryEnabled = true
 	settings.General.WarnOnDuplicate = false
 	settings.General.DefaultDownloadDir = rootDir
-	settings.General.Categories = []config.Category{
+	settings.Categories.Categories = []config.Category{
 		{Name: "Music", Pattern: `(?i)\.(mp3|flac)$`, Path: musicDir},
 	}
 
@@ -83,9 +83,9 @@ func TestUpdate_DuplicateContinuePreservesDefaultPathRouting(t *testing.T) {
 	videoDir := filepath.Join(rootDir, "videos")
 
 	settings := config.DefaultSettings()
-	settings.General.CategoryEnabled = true
+	settings.Categories.CategoryEnabled = true
 	settings.General.DefaultDownloadDir = rootDir
-	settings.General.Categories = []config.Category{
+	settings.Categories.Categories = []config.Category{
 		{Name: "Videos", Pattern: `(?i)\.mp4$`, Path: videoDir},
 	}
 
@@ -112,10 +112,10 @@ func TestUpdate_ExtensionConfirmBlankPathUsesDefaultPathRouting(t *testing.T) {
 	docDir := filepath.Join(rootDir, "docs")
 
 	settings := config.DefaultSettings()
-	settings.General.CategoryEnabled = true
+	settings.Categories.CategoryEnabled = true
 	settings.General.WarnOnDuplicate = false
 	settings.General.DefaultDownloadDir = rootDir
-	settings.General.Categories = []config.Category{
+	settings.Categories.Categories = []config.Category{
 		{Name: "Documents", Pattern: `(?i)\.pdf$`, Path: docDir},
 	}
 
@@ -138,7 +138,7 @@ func TestUpdate_ExtensionConfirmBlankPathUsesDefaultPathRouting(t *testing.T) {
 
 func TestUpdate_CategoryManagerEscRemovesNewPlaceholder(t *testing.T) {
 	settings := config.DefaultSettings()
-	settings.General.Categories = []config.Category{
+	settings.Categories.Categories = []config.Category{
 		{Name: "Existing", Pattern: `(?i)\.txt$`, Path: "docs"},
 		{Name: "New Category"},
 	}
@@ -164,15 +164,15 @@ func TestUpdate_CategoryManagerEscRemovesNewPlaceholder(t *testing.T) {
 	if m2.catMgrIsNew {
 		t.Fatal("expected catMgrIsNew to be cleared")
 	}
-	if got, want := len(m2.Settings.General.Categories), 1; got != want {
+	if got, want := len(m2.Settings.Categories.Categories), 1; got != want {
 		t.Fatalf("category count = %d, want %d", got, want)
 	}
 }
 
 func TestGetFilteredDownloads_AppliesCategoryFilter(t *testing.T) {
 	settings := config.DefaultSettings()
-	settings.General.CategoryEnabled = true
-	settings.General.Categories = []config.Category{
+	settings.Categories.CategoryEnabled = true
+	settings.Categories.Categories = []config.Category{
 		{Name: "Videos", Pattern: `(?i)\.mp4$`},
 		{Name: "Documents", Pattern: `(?i)\.pdf$`},
 	}

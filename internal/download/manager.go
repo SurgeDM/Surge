@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/concurrent"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/single"
@@ -160,7 +161,11 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			utils.Debug("Probing %d mirrors", len(mirrors))
 			// Always check primary + mirrors to ensure we are using the best set
 			allToCheck := append([]string{cfg.URL}, mirrors...)
-			valid, errs := processing.ProbeMirrorsWithProxy(ctx, allToCheck, cfg.Runtime.ProxyURL)
+			runCfg := &config.RuntimeConfig{
+				ProxyURL:  cfg.Runtime.ProxyURL,
+				CustomDNS: cfg.Runtime.CustomDNS,
+			}
+			valid, errs := processing.ProbeMirrorsWithProxy(ctx, allToCheck, runCfg)
 
 			// Log errors
 			for u, e := range errs {

@@ -2,6 +2,7 @@ package download
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -909,3 +910,130 @@ func TestWorkerPool_UpdateURL(t *testing.T) {
 
 // Note: UpdateURL DB persistence is now tested in internal/processing tests
 // since LifecycleManager.UpdateURL() is responsible for calling state.UpdateURL().
+
+// --- GracefulShutdown: queued download discard tests ---
+
+// TestWorkerPool_GracefulShutdown_ClearsQueuedMap verifies that GracefulShutdown
+// removes all entries from p.queued so that idle workers skip any items they
+// drain from taskChan after shutdown has started.
+func TestWorkerPool_GracefulShutdown_ClearsQueuedMap(t *testing.T) {
+	ch := make(chan any, 10)
+	// Use a pool with no workers so nothing auto-starts.
+	pool := &WorkerPool{
+		progressCh:   ch,
+		progressDone: make(chan struct{}),
+		taskChan:     make(chan types.DownloadConfig, 10),
+		downloads:    make(map[string]*activeDownload),
+		queued:       make(map[string]types.DownloadConfig),
+		maxDownloads: 0,
+	}
+
+	// Seed the queued map directly (simulating Add() without a live worker).
+	pool.mu.Lock()
+	for i := 0; i < 5; i++ {
+		id := fmt.Sprintf("queued-%d", i)
+		pool.queued[id] = types.DownloadConfig{ID: id, URL: "http://example.com/file.zip"}
+	}
+	pool.mu.Unlock()
+
+	done := make(chan struct{})
+	go func() {
+		pool.GracefulShutdown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("GracefulShutdown hung with no active downloads")
+	}
+
+	pool.mu.RLock()
+	remaining := len(pool.queued)
+	pool.mu.RUnlock()
+
+	if remaining != 0 {
+		t.Errorf("expected queued map to be empty after GracefulShutdown, got %d entries", remaining)
+	}
+}
+
+// TestWorkerPool_GracefulShutdown_DrainsTaskChan verifies that GracefulShutdown
+// drains buffered items from taskChan so no items remain for workers to consume.
+func TestWorkerPool_GracefulShutdown_DrainsTaskChan(t *testing.T) {
+	ch := make(chan any, 20)
+	pool := &WorkerPool{
+		progressCh:   ch,
+		progressDone: make(chan struct{}),
+		taskChan:     make(chan types.DownloadConfig, 10),
+		downloads:    make(map[string]*activeDownload),
+		queued:       make(map[string]types.DownloadConfig),
+		maxDownloads: 0,
+	}
+
+	// Write items directly to taskChan (simulating Add() with no worker to consume).
+	for i := 0; i < 5; i++ {
+		pool.taskChan <- types.DownloadConfig{ID: fmt.Sprintf("buffered-%d", i)}
+	}
+	if len(pool.taskChan) != 5 {
+		t.Fatalf("pre-condition: expected 5 items in taskChan, got %d", len(pool.taskChan))
+	}
+
+	done := make(chan struct{})
+	go func() {
+		pool.GracefulShutdown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("GracefulShutdown hung with no active downloads")
+	}
+
+	// After shutdown, taskChan is closed. Drain it to count any leftovers.
+	extra := 0
+	for range pool.taskChan {
+		extra++
+	}
+	if extra != 0 {
+		t.Errorf("expected taskChan empty after GracefulShutdown, found %d leftover items", extra)
+	}
+}
+
+// TestWorkerPool_GracefulShutdown_WorkerSkipsQueuedAfterShutdown confirms the
+// worker-side guard: a worker that pulls a cfg from taskChan after shutdown has
+// cleared p.queued will skip the item without starting a download.
+func TestWorkerPool_GracefulShutdown_WorkerSkipsQueuedAfterShutdown(t *testing.T) {
+	ch := make(chan any, 50)
+	// Single worker, small taskChan.
+	pool := NewWorkerPool(ch, 1)
+
+	// Manually insert into queued + taskChan without a real probe/download,
+	// then immediately shut down before the worker gets to process it.
+	id := "skip-me"
+	pool.mu.Lock()
+	pool.queued[id] = types.DownloadConfig{ID: id}
+	pool.mu.Unlock()
+	pool.taskChan <- types.DownloadConfig{ID: id}
+
+	// Shutdown should drain the queue and close taskChan.
+	done := make(chan struct{})
+	go func() {
+		pool.GracefulShutdown()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("GracefulShutdown timed out — worker may have started a download it should have skipped")
+	}
+
+	// The queued map must be empty.
+	pool.mu.RLock()
+	_, stillQueued := pool.queued[id]
+	pool.mu.RUnlock()
+	if stillQueued {
+		t.Error("expected queued map to be cleared after GracefulShutdown")
+	}
+}

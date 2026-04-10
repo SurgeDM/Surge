@@ -23,7 +23,9 @@ func (m HelpModal) RenderWithBtopBox(
 	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
 	titleStyle lipgloss.Style,
 ) string {
-	innerWidth := m.Width - 4
+	boxFrameX := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).GetHorizontalFrameSize()
+	paddingX := lipgloss.NewStyle().Padding(0, 1).GetHorizontalFrameSize()
+	innerWidth := m.Width - boxFrameX - paddingX
 
 	// Render the full help view from the keybindings
 	helpText := m.Help.FullHelpView(m.HelpKeys.FullHelp())
@@ -34,7 +36,8 @@ func (m HelpModal) RenderWithBtopBox(
 		Align(lipgloss.Center).
 		Render(helpText)
 
-	innerHeight := m.Height - 2
+	boxFrameY := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).GetVerticalFrameSize()
+	innerHeight := m.Height - boxFrameY
 	contentHeight := lipgloss.Height(helpContent)
 	topPadding := (innerHeight - contentHeight) / 2
 	if topPadding < 0 {

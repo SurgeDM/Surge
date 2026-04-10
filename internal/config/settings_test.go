@@ -28,9 +28,6 @@ func TestDefaultSettings(t *testing.T) {
 		if !settings.General.WarnOnDuplicate {
 			t.Error("WarnOnDuplicate should be true by default")
 		}
-		if settings.General.ExtensionPrompt {
-			t.Error("ExtensionPrompt should be false by default")
-		}
 		if settings.General.AllowRemoteOpenActions {
 			t.Error("AllowRemoteOpenActions should be false by default")
 		}
@@ -81,6 +78,22 @@ func TestDefaultSettings(t *testing.T) {
 		}
 		if settings.Performance.SpeedEmaAlpha < 0 || settings.Performance.SpeedEmaAlpha > 1 {
 			t.Errorf("SpeedEmaAlpha should be between 0 and 1, got: %f", settings.Performance.SpeedEmaAlpha)
+		}
+	})
+
+	// Verify Extension settings
+	t.Run("ExtensionSettings", func(t *testing.T) {
+		if !settings.Extension.ExtensionPrompt {
+			t.Error("ExtensionPrompt should be true by default in its new home")
+		}
+		if settings.Extension.ChromeExtensionURL == "" {
+			t.Error("ChromeExtensionURL should not be empty")
+		}
+		if settings.Extension.FirefoxExtensionURL == "" {
+			t.Error("FirefoxExtensionURL should not be empty")
+		}
+		if settings.Extension.InstructionsURL == "" {
+			t.Error("InstructionsURL should not be empty")
 		}
 	})
 }
@@ -137,8 +150,10 @@ func TestSaveAndLoadSettings(t *testing.T) {
 		General: GeneralSettings{
 			DefaultDownloadDir: tmpDir,
 			WarnOnDuplicate:    false,
-			ExtensionPrompt:    true,
 			AutoResume:         true,
+		},
+		Extension: ExtensionSettings{
+			ExtensionPrompt: true,
 		},
 		Network: NetworkSettings{
 			MaxConnectionsPerHost:  16,
@@ -187,7 +202,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	if loaded.General.WarnOnDuplicate != original.General.WarnOnDuplicate {
 		t.Error("WarnOnDuplicate mismatch")
 	}
-	if loaded.General.ExtensionPrompt != original.General.ExtensionPrompt {
+	if loaded.Extension.ExtensionPrompt != original.Extension.ExtensionPrompt {
 		t.Error("ExtensionPrompt mismatch")
 	}
 	if loaded.Network.MaxConcurrentDownloads != original.Network.MaxConcurrentDownloads {
@@ -437,6 +452,7 @@ func TestGetSettingsMetadata(t *testing.T) {
 			validTypes := map[string]bool{
 				"string": true, "int": true, "int64": true,
 				"bool": true, "duration": true, "float64": true,
+				"auth_token": true, "link": true,
 			}
 			if !validTypes[setting.Type] {
 				t.Errorf("Category %s, key %s: Invalid type %q", category, setting.Key, setting.Type)
@@ -453,7 +469,7 @@ func TestCategoryOrder(t *testing.T) {
 	}
 
 	// Should have all expected categories
-	expectedCount := 4 // General, Network, Performance, Categories
+	expectedCount := 5 // General, Network, Performance, Categories, Extension
 	if len(order) != expectedCount {
 		t.Errorf("Expected %d categories, got %d", expectedCount, len(order))
 	}
@@ -578,7 +594,7 @@ func TestSaveAndLoadSettings_PreservesEmptyCategories(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	settings := DefaultSettings()
-	settings.General.Categories = []Category{}
+	settings.Categories.Categories = []Category{}
 
 	if err := SaveSettings(settings); err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)
@@ -597,11 +613,11 @@ func TestSaveAndLoadSettings_PreservesEmptyCategories(t *testing.T) {
 		t.Fatalf("LoadSettings failed: %v", err)
 	}
 
-	if loaded.General.Categories == nil {
+	if loaded.Categories.Categories == nil {
 		t.Fatal("expected categories slice to be non-nil after load")
 	}
-	if len(loaded.General.Categories) != 0 {
-		t.Fatalf("expected zero categories after reload, got %d", len(loaded.General.Categories))
+	if len(loaded.Categories.Categories) != 0 {
+		t.Fatalf("expected zero categories after reload, got %d", len(loaded.Categories.Categories))
 	}
 }
 
@@ -612,8 +628,10 @@ func TestSaveAndLoadSettings_RoundTrip(t *testing.T) {
 		General: GeneralSettings{
 			DefaultDownloadDir: "/test/path",
 			WarnOnDuplicate:    false,
-			ExtensionPrompt:    true,
 			AutoResume:         true,
+		},
+		Extension: ExtensionSettings{
+			ExtensionPrompt: true,
 		},
 		Network: NetworkSettings{
 			MaxConnectionsPerHost: 64,
@@ -647,7 +665,7 @@ func TestSaveAndLoadSettings_RoundTrip(t *testing.T) {
 	if loaded.General.WarnOnDuplicate != original.General.WarnOnDuplicate {
 		t.Error("WarnOnDuplicate mismatch")
 	}
-	if loaded.General.ExtensionPrompt != original.General.ExtensionPrompt {
+	if loaded.Extension.ExtensionPrompt != original.Extension.ExtensionPrompt {
 		t.Error("ExtensionPrompt mismatch")
 	}
 

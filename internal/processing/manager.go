@@ -33,9 +33,21 @@ type LifecycleManager struct {
 	isNameActive        IsNameActiveFunc
 	engineHooks         EngineHooks
 	hooksMu             sync.RWMutex
+	// probeSem caps the number of simultaneous server probes so adding a
+	// large batch of downloads does not flood the network with HEAD requests.
+	probeSem chan struct{}
 }
 
-const maxWorkingFileReservationAttempts = 100
+const (
+	maxWorkingFileReservationAttempts = 100
+	// defaultMaxConcurrentProbes is the fallback probe concurrency cap used when
+	// no settings value is available. The live value comes from
+	// NetworkSettings.MaxConcurrentProbes.
+	defaultMaxConcurrentProbes = 3
+	// maxConcurrentProbes is the package-level cap used by tests that construct
+	// a manager without a settings snapshot (newLifecycleManagerForTest).
+	maxConcurrentProbes = defaultMaxConcurrentProbes
+)
 
 var settingsRefreshTTL = time.Second
 
@@ -79,12 +91,22 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 		activeCheck = isNameActive[0]
 	}
 
+	probeCap := defaultMaxConcurrentProbes
+	if settings != nil && settings.Network.MaxConcurrentProbes > 0 {
+		probeCap = settings.Network.MaxConcurrentProbes
+	}
+	sem := make(chan struct{}, probeCap)
+	for i := 0; i < probeCap; i++ {
+		sem <- struct{}{}
+	}
+
 	return &LifecycleManager{
 		settings:            settings,
 		settingsRefreshedAt: time.Now(),
 		addFunc:             addFunc,
 		addWithIDFunc:       addWithIDFunc,
 		isNameActive:        activeCheck,
+		probeSem:            sem,
 	}
 }
 
@@ -220,7 +242,19 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 
 	settings := mgr.GetSettings()
 
-	probe, err := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.Network.ProxyURL)
+	// Throttle concurrent probes — acquire a semaphore slot before probing.
+	// If the context is cancelled (e.g., shutdown) we abort immediately.
+	if mgr.probeSem != nil {
+		select {
+		case <-mgr.probeSem:
+			// acquired
+		case <-ctx.Done():
+			return "", fmt.Errorf("enqueue aborted before probe: %w", ctx.Err())
+		}
+		defer func() { mgr.probeSem <- struct{}{} }()
+	}
+
+	probe, err := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
 	if err != nil {
 		utils.Debug("Lifecycle: Probe failed: %v\n", err)
 		return "", fmt.Errorf("probe failed: %w", err)

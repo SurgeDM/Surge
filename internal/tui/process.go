@@ -56,7 +56,9 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) {
 		totalSpeed := m.calcTotalSpeed()
 		// EMA smooth against previous graph point for visual continuity
 		var smoothed float64
-		if len(m.SpeedHistory) > 0 {
+		if m.Settings != nil && m.Settings.General.LiveSpeedGraph {
+			smoothed = totalSpeed
+		} else if len(m.SpeedHistory) > 0 {
 			prev := m.SpeedHistory[len(m.SpeedHistory)-1]
 			const graphAlpha = 0.3 // Graph smoothing factor
 			smoothed = graphAlpha*totalSpeed + (1-graphAlpha)*prev

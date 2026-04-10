@@ -142,20 +142,19 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 		prefix = d.prefixNormal
 	}
 
-	// Truncate title if needed
-	width := m.Width() - 6
-	if width < 20 {
-		width = 20
+	// Truncate title and description if needed
+	// m.Width() is the available space for the list item
+	availableWidth := m.Width() - 4 // Account for prefix and some padding
+	if availableWidth < 10 {
+		availableWidth = 10
 	}
-	title := i.Title()
-	maxTitleWidth := width - 10
-	if len(title) > maxTitleWidth {
-		title = title[:maxTitleWidth-3] + "..."
-	}
+
+	title := truncateString(i.Title(), availableWidth)
+	description := truncateString(i.Description(), availableWidth)
 
 	// Render lines
 	line1 := prefix + titleStyle.Render(title)
-	line2 := prefix + descStyle.Render(i.Description())
+	line2 := prefix + descStyle.Render(description)
 
 	_, _ = fmt.Fprintf(w, "%s\n%s", line1, line2)
 }

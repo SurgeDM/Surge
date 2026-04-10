@@ -217,7 +217,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.CategoryFilter) {
-		if !m.Settings.General.CategoryEnabled || len(m.Settings.General.Categories) == 0 {
+		if !m.Settings.Categories.CategoryEnabled || len(m.Settings.Categories.Categories) == 0 {
 			if m.categoryFilter != "" {
 				m.categoryFilter = ""
 				m.addLogEntry(LogStyleStarted.Render("📂 Filter: All"))
@@ -227,7 +227,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.addLogEntry(LogStyleError.Render("✖ Enable categories in Settings first"))
 			return m, nil
 		}
-		names := config.CategoryNames(m.Settings.General.Categories)
+		names := config.CategoryNames(m.Settings.Categories.Categories)
 		cycle := append([]string{""}, names...)
 		cycle = append(cycle, "Uncategorized")
 		current := 0

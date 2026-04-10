@@ -89,6 +89,7 @@ type SettingsKeyMap struct {
 	Tab2    key.Binding
 	Tab3    key.Binding
 	Tab4    key.Binding
+	Tab5    key.Binding
 	NextTab key.Binding
 	PrevTab key.Binding
 	Browse  key.Binding
@@ -331,15 +332,19 @@ var Keys = KeyMap{
 		),
 		Tab2: key.NewBinding(
 			key.WithKeys("2"),
-			key.WithHelp("2", "connections"),
+			key.WithHelp("2", "network"),
 		),
 		Tab3: key.NewBinding(
 			key.WithKeys("3"),
-			key.WithHelp("3", "chunks"),
+			key.WithHelp("3", "performance"),
 		),
 		Tab4: key.NewBinding(
 			key.WithKeys("4"),
-			key.WithHelp("4", "performance"),
+			key.WithHelp("4", "categories"),
+		),
+		Tab5: key.NewBinding(
+			key.WithKeys("5"),
+			key.WithHelp("5", "extension"),
 		),
 		NextTab: key.NewBinding(
 			key.WithKeys("right"),
@@ -494,7 +499,7 @@ func (k SettingsKeyMap) ShortHelp() []key.Binding {
 
 func (k SettingsKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Tab1, k.Tab2, k.Tab3, k.Tab4},
+		{k.Tab1, k.Tab2, k.Tab3, k.Tab4, k.Tab5},
 		{k.PrevTab, k.NextTab, k.Up, k.Down, k.Edit, k.Reset, k.Browse, k.Close},
 	}
 }

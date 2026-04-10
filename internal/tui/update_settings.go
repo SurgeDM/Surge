@@ -1,10 +1,16 @@
 package tui
 
 import (
+	"time"
+
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/SurgeDM/Surge/internal/clipboard"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
+
+type extensionTokenFlashFadeMsg struct{}
 
 func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.normalizeSettingsSelection()
@@ -45,7 +51,13 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.state = DashboardState
 		return m, nil
 	}
-	tabBindings := []key.Binding{m.keys.Settings.Tab1, m.keys.Settings.Tab2, m.keys.Settings.Tab3, m.keys.Settings.Tab4}
+	tabBindings := []key.Binding{
+		m.keys.Settings.Tab1,
+		m.keys.Settings.Tab2,
+		m.keys.Settings.Tab3,
+		m.keys.Settings.Tab4,
+		m.keys.Settings.Tab5,
+	}
 	for i, binding := range tabBindings {
 		if key.Matches(msg, binding) {
 			if categoryCount > i {
@@ -123,6 +135,28 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 		// Toggle bool or enter edit mode for other types
 		typ := m.getCurrentSettingType()
+
+		// Special actions for custom types
+		if typ == "auth_token" {
+			token := GetAuthToken()
+			if token != "" {
+				_ = clipboard.Write(token)
+				m.ExtensionTokenCopied = true
+				return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
+					return extensionTokenFlashFadeMsg{}
+				})
+			}
+			return m, nil
+		}
+
+		if typ == "link" {
+			currentCategory := categories[m.SettingsActiveTab]
+			values := m.getSettingsValues(currentCategory)
+			if url, ok := values[settingKey].(string); ok && url != "" {
+				_ = utils.OpenBrowser(url)
+			}
+			return m, nil
+		}
 
 		currentCategory := categories[m.SettingsActiveTab]
 		if typ == "bool" {

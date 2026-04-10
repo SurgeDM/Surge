@@ -917,7 +917,7 @@ func TestValidateIntegrity_CompletedIgnored(t *testing.T) {
 	}
 }
 
-func TestValidateIntegrity_QueuedWithoutPartialFilePreserved(t *testing.T) {
+func TestValidateIntegrity_QueuedWithoutPartialFileRemoved(t *testing.T) {
 	tmpDir := setupTestDB(t)
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 	defer CloseDB()
@@ -940,16 +940,16 @@ func TestValidateIntegrity_QueuedWithoutPartialFilePreserved(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ValidateIntegrity failed: %v", err)
 	}
-	if removed != 0 {
-		t.Errorf("ValidateIntegrity removed = %d, want 0", removed)
+	if removed != 1 {
+		t.Errorf("ValidateIntegrity removed = %d, want 1", removed)
 	}
 
 	dl, err := GetDownload("integrity-queued-fresh")
 	if err != nil {
 		t.Fatalf("GetDownload failed: %v", err)
 	}
-	if dl == nil {
-		t.Fatal("queued entry should be preserved when no partial file exists yet")
+	if dl != nil {
+		t.Fatal("queued entry should be removed when no partial file exists")
 	}
 }
 

@@ -129,6 +129,7 @@ type RootModel struct {
 	SettingsInput         textinput.Model  // Input for editing string/int values
 	SettingsFileBrowsing  bool             // Whether browsing for a directory
 	ExtensionFileBrowsing bool             // Whether browsing for extension prompt path
+	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download
@@ -391,6 +392,8 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		spinner:               s,
 	}
 
+	InitAuthToken() // Cache auth token for TUI to avoid per-frame disk I/O
+
 	m.refreshThemeCaches()
 
 	return m
@@ -490,7 +493,7 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 		}
 
 		// Apply dashboard category filter.
-		if m.categoryFilter != "" && m.Settings != nil && m.Settings.General.CategoryEnabled {
+		if m.categoryFilter != "" && m.Settings != nil && m.Settings.Categories.CategoryEnabled {
 			if !m.matchesCategoryFilter(d) {
 				continue
 			}
@@ -526,7 +529,7 @@ func (m RootModel) matchesCategoryFilter(d *DownloadModel) bool {
 		filename = processing.InferFilenameFromURL(d.URL)
 	}
 
-	cat, err := config.GetCategoryForFile(filename, m.Settings.General.Categories)
+	cat, err := config.GetCategoryForFile(filename, m.Settings.Categories.Categories)
 	if filter == "Uncategorized" {
 		return err != nil || cat == nil
 	}
