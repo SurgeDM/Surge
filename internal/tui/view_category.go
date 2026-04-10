@@ -270,25 +270,7 @@ func (m RootModel) renderCategoryEditView(innerWidth, rows int) string {
 }
 
 func (m RootModel) renderCategoryTwoColumn(cats []config.Category, cursor, modalWidth, bodyHeight int) string {
-	leftWidth := 28
-	minRightWidth := 24
-
-	horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
-
-	if modalWidth-leftWidth-horizontalPadding < minRightWidth {
-		leftWidth = modalWidth - minRightWidth - horizontalPadding
-	}
-	if leftWidth < 16 {
-		leftWidth = 16
-	}
-
-	rightWidth := modalWidth - leftWidth - horizontalPadding
-	if rightWidth < minRightWidth {
-		rightWidth = minRightWidth
-		if modalWidth-rightWidth-horizontalPadding > 16 {
-			leftWidth = modalWidth - rightWidth - horizontalPadding
-		}
-	}
+	leftWidth, rightWidth := CalculateTwoColumnWidths(modalWidth, 28, 24)
 
 	if leftWidth < 14 || rightWidth < 16 {
 		return m.renderCategoryCompact(cats, cursor, modalWidth, bodyHeight)

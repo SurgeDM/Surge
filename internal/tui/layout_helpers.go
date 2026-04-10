@@ -86,3 +86,26 @@ func GetGraphAreaDimensions(rightWidth int, isStatsHidden bool) (int, int) {
 	}
 	return graphAreaWidth, axisWidth
 }
+
+// CalculateTwoColumnWidths calculates the distribution of widths for a two-column modal layout.
+func CalculateTwoColumnWidths(modalWidth, preferredLeft, minRight int) (int, int) {
+	horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
+
+	leftWidth := preferredLeft
+	if modalWidth-leftWidth-horizontalPadding < minRight {
+		leftWidth = modalWidth - minRight - horizontalPadding
+	}
+	if leftWidth < 16 {
+		leftWidth = 16
+	}
+
+	rightWidth := modalWidth - leftWidth - horizontalPadding
+	if rightWidth < minRight {
+		rightWidth = minRight
+		if modalWidth-rightWidth-horizontalPadding > 16 {
+			leftWidth = modalWidth - rightWidth - horizontalPadding
+		}
+	}
+
+	return leftWidth, rightWidth
+}

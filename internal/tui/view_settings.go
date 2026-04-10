@@ -363,25 +363,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 }
 
 func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
-	leftWidth := 32
-	minRightWidth := 22
-
-	horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
-
-	if modalWidth-leftWidth-horizontalPadding < minRightWidth {
-		leftWidth = modalWidth - minRightWidth - horizontalPadding
-	}
-	if leftWidth < 16 {
-		leftWidth = 16
-	}
-
-	rightWidth := modalWidth - leftWidth - horizontalPadding
-	if rightWidth < minRightWidth {
-		rightWidth = minRightWidth
-		if modalWidth-rightWidth-horizontalPadding > 16 {
-			leftWidth = modalWidth - rightWidth - horizontalPadding
-		}
-	}
+	leftWidth, rightWidth := CalculateTwoColumnWidths(modalWidth, 32, 22)
 
 	if leftWidth < 12 || rightWidth < 14 {
 		return m.renderSettingsCompact(settingsMeta, selectedRow, settingsValues, modalWidth, bodyHeight)
@@ -503,17 +485,7 @@ func (m *RootModel) updateSettingsInputWidthForViewport() {
 
 	var targetWidth int
 	if modalWidth >= 72 {
-		leftWidth := 32
-		minRightWidth := 22
-		horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
-
-		if modalWidth-leftWidth-horizontalPadding < minRightWidth {
-			leftWidth = modalWidth - minRightWidth - horizontalPadding
-		}
-		if leftWidth < 16 {
-			leftWidth = 16
-		}
-		rightWidth := modalWidth - leftWidth - horizontalPadding
+		_, rightWidth := CalculateTwoColumnWidths(modalWidth, 32, 22)
 		targetWidth = rightWidth - 10
 	} else {
 		targetWidth = modalWidth - 16
