@@ -120,9 +120,5 @@ func ParseDigestHeader(header string) (algorithm string, hexHash string) {
 		}
 	}
 
-	// Hex fallback - only accept if length matches the expected hash size
-	if _, err := hex.DecodeString(value); err == nil && len(value) == expectedHexLen {
-		return algo, strings.ToLower(value)
-	}
 	return "", ""
 }

@@ -1,6 +1,8 @@
 package processing
 
 import (
+	"crypto/md5"
+	"crypto/sha1"
 	"crypto/sha256"
 	"encoding/hex"
 	"os"
@@ -25,6 +27,38 @@ func TestVerifyChecksum_SHA256(t *testing.T) {
 	result, err := VerifyChecksum(path, "sha256", expected)
 	require.NoError(t, err)
 	assert.True(t, result.Match)
+	assert.Equal(t, expected, result.Actual)
+}
+
+func TestVerifyChecksum_MD5(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.bin")
+	content := []byte("hello surge")
+	require.NoError(t, os.WriteFile(path, content, 0o644))
+
+	h := md5.Sum(content)
+	expected := hex.EncodeToString(h[:])
+
+	result, err := VerifyChecksum(path, "md5", expected)
+	require.NoError(t, err)
+	assert.True(t, result.Match)
+	assert.Equal(t, "md5", result.Algorithm)
+	assert.Equal(t, expected, result.Actual)
+}
+
+func TestVerifyChecksum_SHA1(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "test.bin")
+	content := []byte("hello surge")
+	require.NoError(t, os.WriteFile(path, content, 0o644))
+
+	h := sha1.Sum(content)
+	expected := hex.EncodeToString(h[:])
+
+	result, err := VerifyChecksum(path, "sha-1", expected)
+	require.NoError(t, err)
+	assert.True(t, result.Match)
+	assert.Equal(t, "sha1", result.Algorithm)
 	assert.Equal(t, expected, result.Actual)
 }
 
@@ -53,7 +87,7 @@ func TestParseDigestHeader_SHA256Base64(t *testing.T) {
 	// sha256 of empty string in base64
 	algo, hash := ParseDigestHeader("sha-256=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=")
 	assert.Equal(t, "sha256", algo)
-	assert.NotEmpty(t, hash)
+	assert.Equal(t, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hash)
 }
 
 func TestParseDigestHeader_MD5Hex(t *testing.T) {
