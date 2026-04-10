@@ -69,6 +69,22 @@ func TestTabFiltering(t *testing.T) {
 			expectedCount: 0,
 		},
 		{
+			name:      "Active Tab excludes pausing downloads",
+			activeTab: TabActive,
+			downloads: []*DownloadModel{
+				{ID: "1", Speed: 1024, done: false, pausing: true},
+			},
+			expectedCount: 0,
+		},
+		{
+			name:      "Queued Tab includes pausing downloads",
+			activeTab: TabQueued,
+			downloads: []*DownloadModel{
+				{ID: "1", Speed: 1024, done: false, pausing: true},
+			},
+			expectedCount: 1,
+		},
+		{
 			name:      "Done Tab shows completed downloads",
 			activeTab: TabDone,
 			downloads: []*DownloadModel{
