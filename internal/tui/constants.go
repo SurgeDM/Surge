@@ -21,9 +21,10 @@ const (
 	MinTermHeight = 12
 	ShortTermHeightThreshold = 25 // Switch to compact header below this height
 
-	MinSettingsWidth  = 45
+	MinSettingsWidth  = 64
 	MaxSettingsWidth  = 130
 	MinSettingsHeight = 12
+	DefaultSettingsHeight = 26
 
 	MinRightColumnWidth = 50 // Hide right column if narrow
 	MinGraphStatsWidth  = 70 // Hide inline graph stats if narrow

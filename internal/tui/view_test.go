@@ -236,7 +236,7 @@ func TestView_SettingsResizeSequenceKeepsSelectedVisible(t *testing.T) {
 	sequence := []struct{ width, height int }{
 		{120, 35},
 		{76, 18},
-		{58, 16},
+		{80, 24},
 		{100, 30},
 	}
 
@@ -281,7 +281,7 @@ func TestView_CategoryManagerNoLineExceedsTerminalWidth(t *testing.T) {
 		{120, 35},
 		{92, 24},
 		{72, 18},
-		{58, 16},
+		{80, 24},
 		{50, 14},
 	}
 
@@ -314,7 +314,7 @@ func TestView_CategoryManagerResizeSequenceKeepsSelectedVisible(t *testing.T) {
 	sequence := []struct{ width, height int }{
 		{120, 35},
 		{76, 18},
-		{58, 16},
+		{80, 24},
 		{100, 30},
 	}
 
