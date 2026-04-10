@@ -1,4 +1,4 @@
-import { onMount, onCleanup, createEffect } from 'solid-js';
+import { onMount, onCleanup } from 'solid-js';
 import { readStoredBoolean, readStoredString, STORAGE_KEYS } from '../../lib/storage';
 import {
   serverConnected,
