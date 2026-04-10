@@ -420,7 +420,7 @@ func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, sele
 		listRows = 1
 	}
 
-	detailRows := bodyHeight - listRows - LayoutGapStyle.GetVerticalFrameSize()
+	detailRows := bodyHeight - listRows - 1 // -1 for the divider line
 	if detailRows < 1 {
 		detailRows = 1
 		listRows = bodyHeight - detailRows
