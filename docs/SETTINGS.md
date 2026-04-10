@@ -71,7 +71,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | :------------------------- | :----- | :---------------------------------------------------------------------------------------------------- | :------ |
 | `max_connections_per_host` | int    | Maximum concurrent connections allowed to a single host (1-64).                                       | `32`    |
 | `max_concurrent_downloads` | int    | Maximum number of downloads running simultaneously (requires restart).                                | `3`     |
-| `max_concurrent_probes`    | int    | Maximum number of simultaneous server probes when many downloads are added at once (1-10).            | `3`     |
+| `max_concurrent_probes`    | int    | Maximum number of simultaneous server probes when many downloads are added at once (1-10). Requires restart. | `3`     |
 | `user_agent`               | string | Custom User-Agent string for HTTP requests. Leave empty for default.                                  | `""`    |
 | `proxy_url`                | string | HTTP/HTTPS proxy URL (e.g., `http://127.0.0.1:8080`). Leave empty to use system settings.             | `""`    |
 | `sequential_download`      | bool   | Download file pieces in strict order (Streaming Mode). Useful for previewing media but may be slower. | `false` |

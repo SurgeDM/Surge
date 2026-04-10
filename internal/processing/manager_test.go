@@ -1023,7 +1023,10 @@ func TestLifecycleManager_ProbeSemaphore_LimitsInflight(t *testing.T) {
 		}
 	}()
 
-	mgr := NewLifecycleManager(nil, nil)
+	mgr := newLifecycleManagerForTest()
+	mgr.addFunc = func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		return "", fmt.Errorf("dispatch intentionally rejected for test")
+	}
 	settings := config.DefaultSettings()
 	settings.Categories.CategoryEnabled = false
 	mgr.ApplySettings(settings)
