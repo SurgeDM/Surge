@@ -198,7 +198,7 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 	// Not editing - handle navigation
 	if key.Matches(msg, m.keys.CategoryMgr.Close) {
 		_ = m.persistSettings()
-		m.state = DashboardState
+		m.state = SettingsState
 		return m, nil
 	}
 
