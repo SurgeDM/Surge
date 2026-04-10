@@ -34,7 +34,7 @@ func GetSettingsDimensions(termWidth, termHeight int) (int, int) {
 		width = maxWidth
 	}
 
-	height := MinSettingsHeight
+	height := DefaultSettingsHeight
 	maxHeight := termHeight - (WindowStyle.GetVerticalFrameSize() * 2) - ModalHeightPadding
 	if maxHeight < 1 {
 		maxHeight = 1
