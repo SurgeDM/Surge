@@ -24,8 +24,8 @@ type ChecksumResult struct {
 // VerifyChecksum computes the hash of a file and compares it to the expected value.
 // algorithm should be one of: md5, sha1, sha256.
 // expected should be a hex-encoded hash string.
-func VerifyChecksum(filepath string, algorithm string, expected string) (*ChecksumResult, error) {
-	if filepath == "" || algorithm == "" || expected == "" {
+func VerifyChecksum(filePath string, algorithm string, expected string) (*ChecksumResult, error) {
+	if filePath == "" || algorithm == "" || expected == "" {
 		return nil, fmt.Errorf("filepath, algorithm, and expected hash are all required")
 	}
 
@@ -37,14 +37,16 @@ func VerifyChecksum(filepath string, algorithm string, expected string) (*Checks
 	case "md5":
 		h = md5.New()
 	case "sha1", "sha-1":
+		algorithm = "sha1"
 		h = sha1.New()
 	case "sha256", "sha-256":
+		algorithm = "sha256"
 		h = sha256.New()
 	default:
 		return nil, fmt.Errorf("unsupported checksum algorithm: %s", algorithm)
 	}
 
-	f, err := os.Open(filepath)
+	f, err := os.Open(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file for checksum: %w", err)
 	}
@@ -81,7 +83,7 @@ func ParseDigestHeader(header string) (algorithm string, hexHash string) {
 	case "sha-1":
 		algo = "sha1"
 	case "md5":
-		// already correct
+		// no normalization needed
 	default:
 		return "", ""
 	}
