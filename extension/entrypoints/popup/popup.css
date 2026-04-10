@@ -755,6 +755,11 @@ body {
   cursor: pointer;
   color: var(--text-primary);
   transition: color 0.2s ease;
+  margin-bottom: 12px;
+}
+
+.toggle-row:last-child {
+  margin-bottom: 0;
 }
 
 .toggle-row:hover {

@@ -105,7 +105,7 @@ export default function SettingsView() {
   return (
     <div>
       <div class="settings-group">
-        <div class="toggle-row">
+        <label class="toggle-row">
           <span>Intercept Downloads</span>
           <div class="toggle">
             <input
@@ -115,8 +115,8 @@ export default function SettingsView() {
             />
             <span class="toggle-slider" />
           </div>
-        </div>
-        <div class="toggle-row">
+        </label>
+        <label class="toggle-row">
           <span>Show Notifications</span>
           <div class="toggle">
             <input
@@ -126,7 +126,7 @@ export default function SettingsView() {
             />
             <span class="toggle-slider" />
           </div>
-        </div>
+        </label>
       </div>
 
       <div class="settings-group">
