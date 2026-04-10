@@ -142,7 +142,6 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if token != "" {
 				_ = clipboard.Write(token)
 				m.ExtensionTokenCopied = true
-				m.ExtensionTokenCopyTimer = time.Now()
 				return m, tea.Tick(2*time.Second, func(t time.Time) tea.Msg {
 					return extensionTokenFlashFadeMsg{}
 				})

@@ -338,7 +338,11 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 				if m.ExtensionTokenCopied {
 					valueStr = lipgloss.NewStyle().Foreground(colors.StateDownloading).Bold(true).Render("Copied!")
 				} else {
-					valueStr = token[:8] + "..." + token[len(token)-8:] + lipgloss.NewStyle().Foreground(colors.Gray).Render(" [Enter to Copy]")
+					displayToken := token
+					if len(token) > 16 {
+						displayToken = token[:8] + "..." + token[len(token)-8:]
+					}
+					valueStr = displayToken + lipgloss.NewStyle().Foreground(colors.Gray).Render(" [Enter to Copy]")
 				}
 			}
 		} else if meta.Type == "link" {

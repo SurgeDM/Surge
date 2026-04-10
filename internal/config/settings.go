@@ -51,7 +51,7 @@ type ExtensionSettings struct {
 	ExtensionPrompt     bool   `json:"extension_prompt" ui_label:"Extension Prompt" ui_desc:"Prompt for confirmation when adding downloads via browser extension."`
 	ChromeExtensionURL  string `json:"chrome_extension_url" ui_label:"Get Chrome Extension" ui_type:"link" ui_desc:"Open the Surge Chrome extension page."`
 	FirefoxExtensionURL string `json:"firefox_extension_url" ui_label:"Get Firefox Extension" ui_type:"link" ui_desc:"Open the Surge Firefox extension page."`
-	AuthToken           string `json:"auth_token" ui_label:"Auth Token" ui_type:"auth_token" ui_desc:"Your authentication token. Use this to connect the Browser Extension to Surge."`
+	AuthToken           string `json:"-" ui_label:"Auth Token" ui_type:"auth_token" ui_desc:"Your authentication token. Use this to connect the Browser Extension to Surge."`
 	InstructionsURL     string `json:"instructions_url" ui_label:"Setup Instructions" ui_type:"link" ui_desc:"View detailed instructions on how to set up the Surge browser extension."`
 }
 
@@ -123,19 +123,19 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 				if typStr == "" {
 					typStr = "string"
 					switch settingField.Type.Kind() {
-				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
-					typStr = "int"
-				case reflect.Int64:
-					if settingField.Type.String() == "time.Duration" {
-						typStr = "duration"
-					} else {
-						typStr = "int64"
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
+						typStr = "int"
+					case reflect.Int64:
+						if settingField.Type.String() == "time.Duration" {
+							typStr = "duration"
+						} else {
+							typStr = "int64"
+						}
+					case reflect.Bool:
+						typStr = "bool"
+					case reflect.Float32, reflect.Float64:
+						typStr = "float64"
 					}
-				case reflect.Bool:
-					typStr = "bool"
-				case reflect.Float32, reflect.Float64:
-					typStr = "float64"
-				}
 				}
 
 				catMetas = append(catMetas, SettingMeta{
