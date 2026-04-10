@@ -63,6 +63,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `clipboard_monitor`    | bool   | Watch the system clipboard for URLs and prompt to download them.                                   | `true`  |
 | `theme`                | int    | UI Theme (0=Adaptive, 1=Light, 2=Dark).                                                            | `0`     |
 | `log_retention_count`  | int    | Number of recent log files to keep.                                                                | `5`     |
+| `live_speed_graph`     | bool   | Use live speed for graph instead of EMA smoothed speed.                                            | `false` |
 
 ### Connection Settings
 
