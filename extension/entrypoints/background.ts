@@ -378,6 +378,10 @@ function updateBadge(): void {
   if (count > 0) browser.action.setBadgeBackgroundColor({ color: '#FF0000' });
 }
 
+async function tryOpenPopup(): Promise<void> {
+  try { await browser.action.openPopup(); } catch { /* ignore — requires focused window */ }
+}
+
 async function isDuplicateDownload(url: string): Promise<boolean> {
   const list = await fetchDownloadsList();
   const normalized = url.replace(/\/$/, '');
@@ -418,15 +422,17 @@ async function handleDownloadCreated(downloadItem: {
       cleanupStaleDuplicates,
       persistPendingDuplicates,
       updateBadge,
-      openPopup: () => Promise.resolve(),
+      openPopup: tryOpenPopup,
       sendPrompt: message => browser.runtime.sendMessage(message),
     });
+    await tryOpenPopup();
     return;
   }
 
   const result = await sendToSurge(downloadItem.url, displayName, directory, headers);
 
   if (result.success) {
+    await tryOpenPopup();
     browser.notifications.create({
       type: 'basic',
       iconUrl: 'icons/icon48.png',
