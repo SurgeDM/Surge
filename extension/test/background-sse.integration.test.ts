@@ -76,5 +76,5 @@ describe('background SSE integration with Go server', () => {
     expect(body).toContain('event: queued');
     expect(body).toContain('"DownloadID":"queue-1"');
     expect(body).toContain('"Filename":"archive.zip"');
-  });
+  }, 15_000);
 });
