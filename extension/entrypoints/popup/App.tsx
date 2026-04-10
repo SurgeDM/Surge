@@ -9,6 +9,7 @@ import {
   currentView,
   setCurrentView,
   setInterceptEnabled,
+  setNotificationsEnabled,
   handleSseEvent,
   setServerUrl,
   setServerUrlLocked,
@@ -75,6 +76,7 @@ export default function App() {
       setAuthValid(readStoredBoolean(storedValues, STORAGE_KEYS.VERIFIED, false));
 
       setInterceptEnabled(readStoredBoolean(storedValues, STORAGE_KEYS.INTERCEPT, true));
+      setNotificationsEnabled(readStoredBoolean(storedValues, STORAGE_KEYS.NOTIFICATIONS, true));
     } catch { /* ignore */ }
   }
 

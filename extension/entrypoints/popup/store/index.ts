@@ -84,6 +84,8 @@ export { serverConnected, setServerConnected };
 // Browser download interception state
 const [interceptEnabled, setInterceptEnabled] = createSignal(true);
 export { interceptEnabled, setInterceptEnabled };
+const [notificationsEnabled, setNotificationsEnabled] = createSignal(true);
+export { notificationsEnabled, setNotificationsEnabled };
 
 // Surge server URL for API requests
 const [serverUrl, setServerUrl] = createSignal('');

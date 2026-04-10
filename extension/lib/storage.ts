@@ -4,6 +4,7 @@ export const STORAGE_KEYS = {
   VERIFIED: 'authVerified',
   SERVER_URL: 'serverUrl',
   DISCOVERED_SERVER_URL: 'discoveredServerUrl',
+  NOTIFICATIONS: 'notificationsEnabled',
 } as const;
 
 export function readStoredString(

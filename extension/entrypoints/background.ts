@@ -359,6 +359,11 @@ async function isInterceptEnabled(): Promise<boolean> {
   return resolveInterceptEnabled(await storageGetBoolean(STORAGE_KEYS.INTERCEPT));
 }
 
+async function isNotificationsEnabled(): Promise<boolean> {
+  const enabled = await storageGetBoolean(STORAGE_KEYS.NOTIFICATIONS);
+  return enabled !== false; // Default to true if undefined
+}
+
 function shouldSkipUrl(url: string): boolean {
   return url.startsWith('blob:')
     || url.startsWith('data:')
@@ -433,19 +438,23 @@ async function handleDownloadCreated(downloadItem: {
 
   if (result.success) {
     await tryOpenPopup();
-    browser.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon48.png',
-      title: 'Surge',
-      message: `Download started: ${displayName}`,
-    });
+    if (await isNotificationsEnabled()) {
+      browser.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon48.png',
+        title: 'Surge',
+        message: `Download started: ${displayName}`,
+      });
+    }
   } else if (result.error) {
-    browser.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon48.png',
-      title: 'Surge Error',
-      message: `Failed to start download: ${result.error}`,
-    });
+    if (await isNotificationsEnabled()) {
+      browser.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon48.png',
+        title: 'Surge Error',
+        message: `Failed to start download: ${result.error}`,
+      });
+    }
   }
 }
 
@@ -624,12 +633,14 @@ async function handleConfirmDuplicate(id: string): Promise<{ success: boolean; e
     { skipApproval: true },
   );
   if (result.success) {
-    browser.notifications.create({
-      type: 'basic',
-      iconUrl: 'icons/icon48.png',
-      title: 'Surge',
-      message: `Download started: ${pending.filename}`,
-    });
+    if (await isNotificationsEnabled()) {
+      browser.notifications.create({
+        type: 'basic',
+        iconUrl: 'icons/icon48.png',
+        title: 'Surge',
+        message: `Download started: ${pending.filename}`,
+      });
+    }
   }
   await notifyNextPendingDuplicate();
   return { success: result.success };

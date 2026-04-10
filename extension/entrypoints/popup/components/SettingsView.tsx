@@ -7,6 +7,7 @@ import {
   authTokenLocked, setAuthTokenLocked,
   setAuthValid,
   interceptEnabled, setInterceptEnabled,
+  notificationsEnabled, setNotificationsEnabled,
 } from '../store';
 import { normalizeToken, normalizeServerUrl } from '../lib/utils';
 
@@ -96,6 +97,10 @@ export default function SettingsView() {
     setInterceptEnabled(checked);
     await browser.storage.local.set({ [STORAGE_KEYS.INTERCEPT]: checked });
   };
+  const handleNotificationsToggle = async (checked: boolean) => {
+    setNotificationsEnabled(checked);
+    await browser.storage.local.set({ [STORAGE_KEYS.NOTIFICATIONS]: checked });
+  };
 
   return (
     <div>
@@ -107,6 +112,17 @@ export default function SettingsView() {
               type="checkbox"
               checked={interceptEnabled()}
               onChange={(e) => { void handleInterceptToggle((e.target as HTMLInputElement).checked); }}
+            />
+            <span class="toggle-slider" />
+          </div>
+        </div>
+        <div class="toggle-row">
+          <span>Show Notifications</span>
+          <div class="toggle">
+            <input
+              type="checkbox"
+              checked={notificationsEnabled()}
+              onChange={(e) => { void handleNotificationsToggle((e.target as HTMLInputElement).checked); }}
             />
             <span class="toggle-slider" />
           </div>
