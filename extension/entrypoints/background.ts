@@ -261,8 +261,8 @@ async function apiFetch(url: string, options?: RequestInit): Promise<Response | 
       headers: { 'Content-Type': 'application/json', ...(await authHeaders()), ...(options?.headers || {}) },
       signal: AbortSignal.timeout(5000),
     });
-    if (response.ok) return response;
-    return null;
+    // Return response even if not .ok so callers can check status codes (like 401)
+    return response;
   } catch {
     if (resolvedBaseUrl === base) {
       resolvedBaseUrl = null;
@@ -272,16 +272,30 @@ async function apiFetch(url: string, options?: RequestInit): Promise<Response | 
   }
 }
 
-async function fetchDownloadsList(): Promise<DownloadStatus[]> {
+async function fetchDownloadsList(): Promise<{ data: DownloadStatus[]; authError: boolean; ok: boolean }> {
   const resp = await apiFetch('/list');
-  if (!resp) return [];
-  try { const j = await resp.json(); return Array.isArray(j) ? j : []; } catch { return []; }
+  if (!resp) return { data: [], authError: false, ok: false };
+  if (resp.status === 401) return { data: [], authError: true, ok: false };
+  if (!resp.ok) return { data: [], authError: false, ok: false };
+  try {
+    const j = await resp.json();
+    return { data: Array.isArray(j) ? j : [], authError: false, ok: true };
+  } catch {
+    return { data: [], authError: false, ok: false };
+  }
 }
 
-async function fetchHistoryList(): Promise<HistoryEntry[]> {
+async function fetchHistoryList(): Promise<{ data: HistoryEntry[]; authError: boolean; ok: boolean }> {
   const resp = await apiFetch('/history');
-  if (!resp) return [];
-  try { const j = await resp.json(); return Array.isArray(j) ? j : []; } catch { return []; }
+  if (!resp) return { data: [], authError: false, ok: false };
+  if (resp.status === 401) return { data: [], authError: true, ok: false };
+  if (!resp.ok) return { data: [], authError: false, ok: false };
+  try {
+    const j = await resp.json();
+    return { data: Array.isArray(j) ? j : [], authError: false, ok: true };
+  } catch {
+    return { data: [], authError: false, ok: false };
+  }
 }
 
 /**
@@ -388,7 +402,7 @@ async function tryOpenPopup(): Promise<void> {
 }
 
 async function isDuplicateDownload(url: string): Promise<boolean> {
-  const list = await fetchDownloadsList();
+  const { data: list } = await fetchDownloadsList();
   const normalized = url.replace(/\/$/, '');
   return list.some(dl => (dl.url || '').replace(/\/$/, '') === normalized);
 }
@@ -518,8 +532,14 @@ function scheduleSSERetry(): void {
 
 async function fullSync(): Promise<void> {
   if (!await checkHealthSilent()) return;
-  const [downloads, history] = await Promise.all([fetchDownloadsList(), fetchHistoryList()]);
-  browser.runtime.sendMessage({ type: 'syncUpdate', downloads, history }).catch(() => {});
+  const [downloadsResult, historyResult] = await Promise.all([fetchDownloadsList(), fetchHistoryList()]);
+  browser.runtime.sendMessage({
+    type: 'syncUpdate',
+    downloads: downloadsResult.data,
+    history: historyResult.data,
+    authError: downloadsResult.authError || historyResult.authError,
+    authValid: downloadsResult.ok || historyResult.ok,
+  }).catch(() => {});
 }
 
 // ---------------------------------------------------------------------------
@@ -553,14 +573,14 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
     // Downloads / history
     case 'getDownloads':
       return (async () => {
-        const d = await fetchDownloadsList();
-        return { downloads: d, authError: false, connected: isConnected };
+        const { data, authError, ok } = await fetchDownloadsList();
+        return { downloads: data, authError, authValid: ok, connected: isConnected };
       })();
 
     case 'getHistory':
       return (async () => {
-        const h = await fetchHistoryList();
-        return { history: h.slice(0, 100), authError: false, connected: isConnected };
+        const { data, authError, ok } = await fetchHistoryList();
+        return { history: data.slice(0, 100), authError, authValid: ok, connected: isConnected };
       })();
 
     // Download actions
@@ -585,7 +605,7 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
       };
       return (async () => {
         const r = await apiFetch(pathMap[message.type], { method: methodMap[message.type] });
-        return { success: r !== null };
+        return { success: r !== null && r.ok };
       })();
     }
 

@@ -5,7 +5,7 @@ import {
   serverUrlLocked, setServerUrlLocked,
   authToken, setAuthToken,
   authTokenLocked, setAuthTokenLocked,
-  setAuthValid,
+  authValid, setAuthValid,
   interceptEnabled, setInterceptEnabled,
   notificationsEnabled, setNotificationsEnabled,
 } from '../store';
@@ -173,6 +173,12 @@ export default function SettingsView() {
           </div>
           {tokenStatus() && !tokenFocused() && (
             <div class={`auth-status below${tokenStatus() === 'Saved' || tokenStatus() === 'Removed' ? ' ok' : tokenStatus().endsWith('...') ? '' : ' err'}`}>{tokenStatus()}</div>
+          )}
+          {authTokenLocked() && !authValid() && !tokenFocused() && !tokenStatus() && (
+            <div class="auth-status below err">Invalid Token</div>
+          )}
+          {!authToken() && !tokenFocused() && !tokenStatus() && (
+            <div class="auth-status below err">Token is Required</div>
           )}
         </div>
       </div>

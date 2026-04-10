@@ -172,6 +172,7 @@ body {
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 0 0 1px rgba(255, 255, 255, 0.06);
   transition: all 0.2s ease;
+  cursor: pointer;
 }
 
 .status-badge.online {
@@ -188,6 +189,14 @@ body {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.06),
     0 0 0 1px rgba(248, 113, 113, 0.08);
+}
+
+.status-badge.warning {
+  color: rgba(255, 243, 221, 0.94);
+  background: rgba(251, 191, 36, 0.15);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.06),
+    0 0 0 1px rgba(251, 191, 36, 0.12);
 }
 
 .status-dot {
@@ -213,6 +222,13 @@ body {
   box-shadow:
     0 0 0 3px rgba(248, 113, 113, 0.14),
     0 0 14px rgba(248, 113, 113, 0.58);
+}
+
+.status-dot.warning {
+  background: var(--warning);
+  box-shadow:
+    0 0 0 3px rgba(251, 191, 36, 0.16),
+    0 0 14px rgba(251, 191, 36, 0.72);
 }
 
 /* === Downloads Section === */

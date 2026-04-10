@@ -15,6 +15,7 @@ import {
   setServerUrlLocked,
   setAuthToken,
   setAuthTokenLocked,
+  authValid,
   setAuthValid,
 } from './store';
 import StatusBadge from './components/StatusBadge';
@@ -86,6 +87,7 @@ export default function App() {
         downloads?: DownloadStatus[];
         connected?: boolean;
         authError?: boolean;
+        authValid?: boolean;
       }>({ type: 'getDownloads' });
 
       console.log('[Surge:popup] fetchDownloads response:', JSON.stringify(response));
@@ -95,6 +97,7 @@ export default function App() {
         reconcileActiveDownloads(response.downloads);
       }
       if (response?.authError) setAuthValid(false);
+      else if (response?.authValid) setAuthValid(true);
 
       if (response?.connected && currentView() === 'history') {
         await fetchHistory();
@@ -128,6 +131,8 @@ export default function App() {
       case 'syncUpdate':
         if (Array.isArray(message.downloads)) reconcileActiveDownloads(message.downloads as DownloadStatus[]);
         if (Array.isArray(message.history)) setHistoryDownloads(message.history as HistoryEntry[]);
+        if (message.authError === true) setAuthValid(false);
+        else if (message.authValid === true) setAuthValid(true);
         break;
       case 'serverStatus':
         if (typeof message.connected === 'boolean') setServerConnected(message.connected);
@@ -198,7 +203,11 @@ export default function App() {
           </div>
         </div>
         <div class="header-right">
-          <StatusBadge connected={serverConnected()} />
+          <StatusBadge
+            connected={serverConnected()}
+            authValid={authValid()}
+            onClick={() => handleViewChange('settings')}
+          />
         </div>
       </header>
 
