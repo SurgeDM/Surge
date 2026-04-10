@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -112,24 +113,24 @@ func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) 
 		return req, fmt.Errorf("invalid json: %w", err)
 	}
 	if req.URL == "" {
-		return req, fmt.Errorf("url is required")
+		return req, errors.New("url is required")
 	}
 	if strings.Contains(req.Filename, "..") {
-		return req, fmt.Errorf("invalid filename")
+		return req, errors.New("invalid filename")
 	}
 	if strings.Contains(req.Filename, "/") || strings.Contains(req.Filename, "\\") {
-		return req, fmt.Errorf("invalid filename")
+		return req, errors.New("invalid filename")
 	}
 	if strings.Contains(req.Path, "..") {
-		return req, fmt.Errorf("invalid path")
+		return req, errors.New("invalid path")
 	}
 	if req.RelativeToDefaultDir && req.Path != "" {
 		if filepath.IsAbs(req.Path) {
-			return req, fmt.Errorf("invalid path")
+			return req, errors.New("invalid path")
 		}
 		cleanPath := filepath.Clean(req.Path)
 		if cleanPath == ".." || strings.HasPrefix(cleanPath, ".."+string(filepath.Separator)) {
-			return req, fmt.Errorf("invalid path")
+			return req, errors.New("invalid path")
 		}
 		req.Path = cleanPath
 	}
@@ -313,7 +314,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		// CLI explicit arg means we do not auto-route when user provided an explicit output path.
 		isExplicit := isExplicitOutputPath(outPath, settings.General.DefaultDownloadDir)
 		if lifecycle == nil {
-			err := fmt.Errorf("lifecycle manager unavailable")
+			err := errors.New("lifecycle manager unavailable")
 			recordPreflightDownloadError(url, outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", url, err))
 			continue
@@ -349,11 +350,12 @@ func resolveOutputDir(reqPath string, relativeToDefaultDir bool, defaultOutputDi
 		}
 		outPath = filepath.Join(baseDir, reqPath)
 	} else if outPath == "" {
-		if defaultOutputDir != "" {
+		switch {
+		case defaultOutputDir != "":
 			outPath = defaultOutputDir
-		} else if settings.General.DefaultDownloadDir != "" {
+		case settings.General.DefaultDownloadDir != "":
 			outPath = settings.General.DefaultDownloadDir
-		} else {
+		default:
 			outPath = "."
 		}
 	}

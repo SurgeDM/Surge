@@ -578,7 +578,7 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 }
 
 // setSettingValue sets a setting value from string input
-func (m *RootModel) setSettingValue(category, key, value string) error {
+func (m *RootModel) setSettingValue(category, key, value string) {
 	val := reflect.ValueOf(m.Settings).Elem()
 	typ := val.Type()
 
@@ -598,7 +598,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 	}
 
 	if !foundCat || catVal.Kind() != reflect.Struct {
-		return nil
+		return
 	}
 
 	catTyp := catVal.Type()
@@ -616,7 +616,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 		if fieldKey == key {
 			targetField := catVal.Field(i)
 			if !targetField.CanSet() {
-				return nil
+				return
 			}
 
 			// Special logic for Theme to trigger app re-rendering internally
@@ -634,12 +634,12 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 					if v, err := strconv.Atoi(value); err == nil && v >= 0 && v <= 2 {
 						theme = v
 					} else {
-						return nil // Invalid
+						return // Invalid
 					}
 				}
 				targetField.Set(reflect.ValueOf(theme))
 				m.ApplyTheme(theme)
-				return nil
+				return
 			}
 
 			// Generic Parsing and Application
@@ -684,10 +684,9 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 				}
 			}
 
-			return nil
+			return
 		}
 	}
-	return nil
 }
 
 func (m *RootModel) persistSettings() error {
@@ -831,12 +830,12 @@ func formatSettingValue(value interface{}, typ string) string {
 	case "int64":
 		if v, ok := value.(int64); ok {
 			// Just display the raw number - units handled by getSettingUnit
-			return fmt.Sprintf("%d", v)
+			return strconv.FormatInt(v, 10)
 		}
 	case "int":
 		v := reflect.ValueOf(value)
 		if v.Kind() == reflect.Int {
-			return fmt.Sprintf("%d", v.Int())
+			return strconv.FormatInt(v.Int(), 10)
 		}
 	case "float64":
 		if v, ok := value.(float64); ok {
@@ -858,7 +857,7 @@ func formatSettingValue(value interface{}, typ string) string {
 	v := reflect.ValueOf(value)
 	switch v.Kind() {
 	case reflect.Int, reflect.Int64:
-		return fmt.Sprintf("%d", v.Int())
+		return strconv.FormatInt(v.Int(), 10)
 	case reflect.Float64:
 		return fmt.Sprintf("%.2f", v.Float())
 	default:
@@ -925,8 +924,7 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.Performance.SpeedEmaAlpha = defaults.Performance.SpeedEmaAlpha
 		}
 	case "Categories":
-		switch key {
-		case "category_enabled":
+		if key == "category_enabled" {
 			m.Settings.Categories.CategoryEnabled = defaults.Categories.CategoryEnabled
 		}
 	}

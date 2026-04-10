@@ -2,7 +2,7 @@ package download
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -154,7 +154,7 @@ func (p *WorkerPool) GetAll() []types.DownloadConfig {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	var configs []types.DownloadConfig
+	configs := make([]types.DownloadConfig, 0, len(p.downloads)+len(p.queued))
 	for _, ad := range p.downloads {
 		cfg := ad.config
 		syncConfigFromState(&cfg)
@@ -308,14 +308,14 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 
 	if qExists {
 		p.mu.Unlock()
-		return fmt.Errorf("cannot update URL for a queued download, please cancel or wait for it to start")
+		return errors.New("cannot update URL for a queued download, please cancel or wait for it to start")
 	}
 
 	if exists && ad != nil {
 		if ad.config.State != nil && !ad.config.State.IsPaused() {
 			if ad.running.Load() {
 				p.mu.Unlock()
-				return fmt.Errorf("download is currently active, please pause it before updating the URL")
+				return errors.New("download is currently active, please pause it before updating the URL")
 			}
 		}
 		ad.config.URL = newURL
@@ -370,10 +370,11 @@ func (p *WorkerPool) worker() {
 			ad.config.State.SetPausing(false)
 		}
 
-		if isPaused {
+		switch {
+		case isPaused:
 			utils.Debug("WorkerPool: Download %s paused cleanly", cfg.ID)
 			// If paused, we keep it in downloads map for potential resume via ExtractPausedConfig
-		} else if err != nil {
+		case err != nil:
 			if cfg.State != nil {
 				cfg.State.SetError(err)
 			}
@@ -382,8 +383,7 @@ func (p *WorkerPool) worker() {
 			p.mu.Lock()
 			delete(p.downloads, cfg.ID)
 			p.mu.Unlock()
-
-		} else {
+		default:
 			// Only mark as done if not paused
 			if cfg.State != nil {
 				cfg.State.Done.Store(true)
@@ -451,11 +451,12 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 		status.DestPath = ad.config.DestPath
 	}
 
-	if ad.config.State.IsPausing() {
+	switch {
+	case ad.config.State.IsPausing():
 		status.Status = "pausing"
-	} else if ad.config.State.IsPaused() {
+	case ad.config.State.IsPaused():
 		status.Status = "paused"
-	} else if state.Done.Load() {
+	case state.Done.Load():
 		status.Status = "completed"
 	}
 

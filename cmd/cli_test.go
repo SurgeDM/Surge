@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -22,6 +23,8 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
+const listEndpoint = "/list"
+
 // TestResolveDownloadID_Remote verifies that resolveDownloadID queries the server
 func TestResolveDownloadID_Remote(t *testing.T) {
 	// 1. Mock Server
@@ -30,7 +33,7 @@ func TestResolveDownloadID_Remote(t *testing.T) {
 	}
 
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/list" {
+		if r.URL.Path == listEndpoint {
 			_ = json.NewEncoder(w).Encode(downloads)
 			return
 		}
@@ -74,7 +77,7 @@ func TestResolveDownloadID_RemoteStillWorksWhenDBUnavailable(t *testing.T) {
 	}
 
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/list" {
+		if r.URL.Path == listEndpoint {
 			_ = json.NewEncoder(w).Encode(downloads)
 			return
 		}
@@ -116,7 +119,7 @@ func TestResolveDownloadID_StrictRemoteDoesNotFallbackToDBOnRemoteError(t *testi
 	}
 
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/list" {
+		if r.URL.Path == listEndpoint {
 			http.Error(w, "unauthorized", http.StatusUnauthorized)
 			return
 		}
@@ -155,7 +158,7 @@ func TestResolveDownloadID_LocalModeFallsBackToDBWhenRemoteListFails(t *testing.
 	}
 
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/list" {
+		if r.URL.Path == listEndpoint {
 			http.Error(w, "boom", http.StatusInternalServerError)
 			return
 		}
@@ -621,7 +624,7 @@ func TestActionCommandsRunE_ReturnAmbiguousIDErrors(t *testing.T) {
 			resetCommandConnectionState(t)
 
 			server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				if r.URL.Path == "/list" {
+				if r.URL.Path == listEndpoint {
 					http.Error(w, "boom", http.StatusInternalServerError)
 					return
 				}
@@ -739,7 +742,7 @@ func TestPrintDownloads_StrictRemoteEmpty_DoesNotFallbackToDB(t *testing.T) {
 	}
 
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/list" {
+		if r.URL.Path == listEndpoint {
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`[]`))
 			return
@@ -805,7 +808,8 @@ func TestSendToServer_SuccessAndServerError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ln, err := net.Listen("tcp", "127.0.0.1:0")
+			var lc net.ListenConfig
+			ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 			if err != nil {
 				t.Fatalf("listen failed: %v", err)
 			}
@@ -845,7 +849,8 @@ func TestSendToServer_SuccessAndServerError(t *testing.T) {
 func TestSendToServer_UsesBearerTokenFromEnv(t *testing.T) {
 	t.Setenv("SURGE_TOKEN", "env-token-123")
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen failed: %v", err)
 	}
@@ -875,14 +880,15 @@ func TestSendToServer_UsesBearerTokenFromEnv(t *testing.T) {
 func TestGetRemoteDownloads_UsesBearerTokenFromEnv(t *testing.T) {
 	t.Setenv("SURGE_TOKEN", "env-token-123")
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	var lc net.ListenConfig
+	ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen failed: %v", err)
 	}
 	defer func() { _ = ln.Close() }()
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("/list", func(w http.ResponseWriter, r *http.Request) {
+	mux.HandleFunc(listEndpoint, func(w http.ResponseWriter, r *http.Request) {
 		if r.Header.Get("Authorization") != "Bearer env-token-123" {
 			http.Error(w, "Unauthorized", http.StatusUnauthorized)
 			return
@@ -942,7 +948,8 @@ func TestGetRemoteDownloads_NonOKAndInvalidJSON(t *testing.T) {
 
 func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 	t.Run("remote-mode", func(t *testing.T) {
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		var lc net.ListenConfig
+		ln, err := lc.Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("listen failed: %v", err)
 		}

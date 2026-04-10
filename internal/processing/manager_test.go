@@ -951,7 +951,7 @@ func TestLifecycleManager_UpdateURL_Success(t *testing.T) {
 func TestLifecycleManager_UpdateURL_HookError(t *testing.T) {
 	testutil.SetupStateDB(t)
 
-	expectedErr := fmt.Errorf("not in pausable state")
+	expectedErr := errors.New("not in pausable state")
 	mgr := newLifecycleManagerForTest()
 	mgr.SetEngineHooks(EngineHooks{
 		UpdateURL: func(id, newURL string) error { return expectedErr },

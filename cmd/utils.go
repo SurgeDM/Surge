@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -105,7 +106,7 @@ func resolveAPIConnection(requireServer bool) (string, string, error) {
 
 func doAPIRequest(method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
 	reqURL := fmt.Sprintf("%s%s", strings.TrimRight(baseURL, "/"), path)
-	req, err := http.NewRequest(method, reqURL, body)
+	req, err := http.NewRequestWithContext(context.Background(), method, reqURL, body)
 	if err != nil {
 		return nil, err
 	}

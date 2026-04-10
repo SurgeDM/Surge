@@ -122,7 +122,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	// Wait for download to return
 	select {
 	case err := <-errCh:
-		if err != nil && err != context.Canceled && !errors.Is(err, types.ErrPaused) {
+		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, types.ErrPaused) {
 			t.Logf("Download returned error: %v", err)
 		}
 	case <-time.After(15 * time.Second):

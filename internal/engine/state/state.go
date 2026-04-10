@@ -1,10 +1,12 @@
 package state
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -79,7 +81,7 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 
 	return withTx(func(tx *sql.Tx) error {
 		// 1. Upsert into downloads table
-		_, err := tx.Exec(`
+		_, err := tx.ExecContext(context.Background(), `
 				INSERT INTO downloads (
 					id, url, dest_path, filename, status, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size, file_hash
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -104,7 +106,7 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 
 		// 2. Refresh tasks
 		// First delete existing tasks for this download
-		if _, err := tx.Exec("DELETE FROM tasks WHERE download_id = ?", state.ID); err != nil {
+		if _, err := tx.ExecContext(context.Background(), "DELETE FROM tasks WHERE download_id = ?", state.ID); err != nil {
 			return fmt.Errorf("failed to delete old tasks: %w", err)
 		}
 
@@ -118,7 +120,7 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 			// Prepare statement for full batches
 			placeholders := strings.Repeat("(?, ?, ?),", batchSize)
 			placeholders = placeholders[:len(placeholders)-1] // remove trailing comma
-			stmt, err := tx.Prepare("INSERT INTO tasks (download_id, offset, length) VALUES " + placeholders)
+			stmt, err := tx.PrepareContext(context.Background(), "INSERT INTO tasks (download_id, offset, length) VALUES "+placeholders)
 			if err != nil {
 				return fmt.Errorf("failed to prepare batch insert: %w", err)
 			}
@@ -141,7 +143,7 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 						q.WriteString("(?, ?, ?)")
 						args = append(args, state.ID, task.Offset, task.Length)
 					}
-					if _, err := tx.Exec(q.String(), args...); err != nil {
+					if _, err := tx.ExecContext(context.Background(), q.String(), args...); err != nil {
 						return fmt.Errorf("failed to insert partial batch: %w", err)
 					}
 				} else {
@@ -151,7 +153,7 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 					for _, task := range batch {
 						args = append(args, state.ID, task.Offset, task.Length)
 					}
-					if _, err := stmt.Exec(args...); err != nil {
+					if _, err := stmt.ExecContext(context.Background(), args...); err != nil {
 						return fmt.Errorf("failed to insert tasks batch: %w", err)
 					}
 				}
@@ -249,7 +251,7 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 
 	db := getDBHelper()
 	if db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errors.New("database not initialized")
 	}
 
 	var state types.DownloadState
@@ -257,7 +259,7 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 	var mirrors, fileHash sql.NullString                              // handle null mirrors/hash
 	var chunkBitmap []byte
 
-	row := db.QueryRow(`
+	row := db.QueryRowContext(context.Background(), `
 		SELECT id, url, dest_path, filename, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size, file_hash
 		FROM downloads 
 		WHERE url = ? AND dest_path = ? AND status != 'completed'
@@ -270,7 +272,7 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 		&createdAt, &pausedAt, &timeTaken, &mirrors, &chunkBitmap, &actualChunkSize, &fileHash,
 	)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			// Try finding without status constraint (just in case)
 			return nil, fmt.Errorf("state not found: %w", os.ErrNotExist) // mimic os.ErrNotExist for compatibility
 		}
@@ -298,7 +300,7 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 	}
 
 	// Load tasks
-	rows, err := db.Query("SELECT offset, length FROM tasks WHERE download_id = ?", state.ID)
+	rows, err := db.QueryContext(context.Background(), "SELECT offset, length FROM tasks WHERE download_id = ?", state.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tasks: %w", err)
 	}
@@ -315,6 +317,9 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 		}
 		state.Tasks = append(state.Tasks, t)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate tasks: %w", err)
+	}
 
 	return &state, nil
 }
@@ -323,11 +328,11 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 func DeleteState(id string) error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return errors.New("database not initialized")
 	}
 
 	if id == "" {
-		return fmt.Errorf("id cannot be empty")
+		return errors.New("id cannot be empty")
 	}
 
 	if err := removeDownloadAndTasks(id); err != nil {
@@ -341,14 +346,14 @@ func DeleteState(id string) error {
 func DeleteTasks(id string) error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return errors.New("database not initialized")
 	}
 
 	if id == "" {
-		return fmt.Errorf("id cannot be empty")
+		return errors.New("id cannot be empty")
 	}
 
-	_, err := db.Exec("DELETE FROM tasks WHERE download_id = ?", id)
+	_, err := db.ExecContext(context.Background(), "DELETE FROM tasks WHERE download_id = ?", id)
 	if err != nil {
 		return fmt.Errorf("failed to delete tasks: %w", err)
 	}
@@ -366,7 +371,7 @@ func LoadMasterList() (*types.MasterList, error) {
 		return &types.MasterList{Downloads: []types.DownloadEntry{}}, nil
 	}
 
-	rows, err := db.Query(`
+	rows, err := db.QueryContext(context.Background(), `
 		SELECT id, url, dest_path, filename, status, total_size, downloaded, completed_at, time_taken, url_hash, mirrors, avg_speed 
 		FROM downloads
 	`)
@@ -414,6 +419,9 @@ func LoadMasterList() (*types.MasterList, error) {
 
 		list.Downloads = append(list.Downloads, e)
 	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("failed to iterate downloads: %w", err)
+	}
 
 	return &list, nil
 }
@@ -431,7 +439,7 @@ func AddToMasterList(entry types.DownloadEntry) error {
 	}
 
 	return withTx(func(tx *sql.Tx) error {
-		_, err := tx.Exec(`
+		_, err := tx.ExecContext(context.Background(), `
 			INSERT INTO downloads (
 				id, url, dest_path, filename, status, total_size, downloaded, completed_at, time_taken, url_hash, mirrors, avg_speed
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -459,10 +467,10 @@ func AddToMasterList(entry types.DownloadEntry) error {
 func RemoveFromMasterList(id string) error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return errors.New("database not initialized")
 	}
 
-	_, err := db.Exec("DELETE FROM downloads WHERE id = ?", id)
+	_, err := db.ExecContext(context.Background(), "DELETE FROM downloads WHERE id = ?", id)
 	return err
 }
 
@@ -478,7 +486,7 @@ func GetDownload(id string) (*types.DownloadEntry, error) {
 	var urlHash, filename, mirrors sql.NullString
 	var avgSpeed sql.NullFloat64
 
-	row := db.QueryRow(`
+	row := db.QueryRowContext(context.Background(), `
 		SELECT id, url, dest_path, filename, status, total_size, downloaded, completed_at, time_taken, url_hash, mirrors, avg_speed 
 		FROM downloads
 		WHERE id = ?
@@ -553,12 +561,12 @@ func LoadCompletedDownloads() ([]types.DownloadEntry, error) {
 func CheckDownloadExists(url string) (bool, error) {
 	db := getDBHelper()
 	if db == nil {
-		return false, fmt.Errorf("database not initialized")
+		return false, errors.New("database not initialized")
 	}
 
 	var count int
 	// Check for any status (active, paused, completed)
-	err := db.QueryRow("SELECT COUNT(*) FROM downloads WHERE url = ?", url).Scan(&count)
+	err := db.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM downloads WHERE url = ?", url).Scan(&count)
 	if err != nil {
 		return false, fmt.Errorf("failed to query download existence: %w", err)
 	}
@@ -570,10 +578,10 @@ func CheckDownloadExists(url string) (bool, error) {
 func UpdateStatus(id string, status string) error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return errors.New("database not initialized")
 	}
 
-	result, err := db.Exec("UPDATE downloads SET status = ? WHERE id = ?", status, id)
+	result, err := db.ExecContext(context.Background(), "UPDATE downloads SET status = ? WHERE id = ?", status, id)
 	if err != nil {
 		return fmt.Errorf("failed to update status: %w", err)
 	}
@@ -590,12 +598,12 @@ func UpdateStatus(id string, status string) error {
 func UpdateURL(id string, newURL string) error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return errors.New("database not initialized")
 	}
 
 	newHash := URLHash(newURL)
 
-	result, err := db.Exec("UPDATE downloads SET url = ?, url_hash = ? WHERE id = ?", newURL, newHash, id)
+	result, err := db.ExecContext(context.Background(), "UPDATE downloads SET url = ?, url_hash = ? WHERE id = ?", newURL, newHash, id)
 	if err != nil {
 		return fmt.Errorf("failed to update url: %w", err)
 	}
@@ -612,10 +620,10 @@ func UpdateURL(id string, newURL string) error {
 func PauseAllDownloads() error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return errors.New("database not initialized")
 	}
 
-	_, err := db.Exec("UPDATE downloads SET status = 'paused' WHERE status != 'completed'")
+	_, err := db.ExecContext(context.Background(), "UPDATE downloads SET status = 'paused' WHERE status != 'completed'")
 	return err
 }
 
@@ -623,10 +631,10 @@ func PauseAllDownloads() error {
 func ResumeAllDownloads() error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return errors.New("database not initialized")
 	}
 
-	_, err := db.Exec("UPDATE downloads SET status = 'queued' WHERE status = 'paused'")
+	_, err := db.ExecContext(context.Background(), "UPDATE downloads SET status = 'queued' WHERE status = 'paused'")
 	return err
 }
 
@@ -643,10 +651,10 @@ func ListAllDownloads() ([]types.DownloadEntry, error) {
 func RemoveCompletedDownloads() (int64, error) {
 	db := getDBHelper()
 	if db == nil {
-		return 0, fmt.Errorf("database not initialized")
+		return 0, errors.New("database not initialized")
 	}
 
-	result, err := db.Exec("DELETE FROM downloads WHERE status = 'completed'")
+	result, err := db.ExecContext(context.Background(), "DELETE FROM downloads WHERE status = 'completed'")
 	if err != nil {
 		return 0, fmt.Errorf("failed to remove completed downloads: %w", err)
 	}
@@ -663,7 +671,7 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 
 	db := getDBHelper()
 	if db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, errors.New("database not initialized")
 	}
 
 	// Prepare IN clause placeholders
@@ -682,7 +690,7 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 		WHERE id IN (%s) AND status != 'completed'
 	`, inClause)
 
-	rows, err := db.Query(query, args...)
+	rows, err := db.QueryContext(context.Background(), query, args...) // nolint:rowserrcheck
 	if err != nil {
 		return nil, fmt.Errorf("failed to query downloads batch: %w", err)
 	}
@@ -731,7 +739,7 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 
 	// 2. Load Tasks for all these downloads
 	taskQuery := fmt.Sprintf(`SELECT download_id, offset, length FROM tasks WHERE download_id IN (%s)`, inClause)
-	taskRows, err := db.Query(taskQuery, args...)
+	taskRows, err := db.QueryContext(context.Background(), taskQuery, args...) // nolint:rowserrcheck
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tasks batch: %w", err)
 	}
@@ -773,10 +781,10 @@ func computeFileHash(path string) (string, error) {
 
 func removeDownloadAndTasks(id string) error {
 	return withTx(func(tx *sql.Tx) error {
-		if _, err := tx.Exec("DELETE FROM tasks WHERE download_id = ?", id); err != nil {
+		if _, err := tx.ExecContext(context.Background(), "DELETE FROM tasks WHERE download_id = ?", id); err != nil {
 			return fmt.Errorf("failed to delete tasks: %w", err)
 		}
-		if _, err := tx.Exec("DELETE FROM downloads WHERE id = ?", id); err != nil {
+		if _, err := tx.ExecContext(context.Background(), "DELETE FROM downloads WHERE id = ?", id); err != nil {
 			return fmt.Errorf("failed to delete download: %w", err)
 		}
 		return nil
@@ -792,10 +800,10 @@ func removeDownloadAndTasks(id string) error {
 func NormalizeStaleDownloads() (int, error) {
 	db := getDBHelper()
 	if db == nil {
-		return 0, fmt.Errorf("database not initialized")
+		return 0, errors.New("database not initialized")
 	}
 
-	result, err := db.Exec(`UPDATE downloads SET status = 'paused' WHERE status = 'downloading'`)
+	result, err := db.ExecContext(context.Background(), `UPDATE downloads SET status = 'paused' WHERE status = 'downloading'`)
 	if err != nil {
 		return 0, fmt.Errorf("failed to normalize stale downloads: %w", err)
 	}
@@ -810,11 +818,11 @@ func NormalizeStaleDownloads() (int, error) {
 func ValidateIntegrity() (int, error) {
 	db := getDBHelper()
 	if db == nil {
-		return 0, fmt.Errorf("database not initialized")
+		return 0, errors.New("database not initialized")
 	}
 
 	// Load all paused/queued downloads
-	rows, err := db.Query(`
+	rows, err := db.QueryContext(context.Background(), `
 		SELECT id, dest_path, file_hash, status, downloaded
 		FROM downloads
 		WHERE status IN ('paused', 'queued')
@@ -868,7 +876,7 @@ func ValidateIntegrity() (int, error) {
 	// Also include directories of all known downloads so we can clean orphan .surge
 	// files that no longer have corresponding DB entries.
 	// Keep .surge files for any non-completed entry (e.g. downloading after crash).
-	allRows, err := db.Query(`
+	allRows, err := db.QueryContext(context.Background(), `
 		SELECT dest_path, status
 		FROM downloads
 		WHERE dest_path IS NOT NULL AND dest_path != ''
@@ -876,11 +884,15 @@ func ValidateIntegrity() (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to query known download paths: %w", err)
 	}
+	defer func() {
+		if err := allRows.Close(); err != nil {
+			utils.Debug("Error closing rows: %v", err)
+		}
+	}()
 	for allRows.Next() {
 		var dest string
 		var status string
 		if err := allRows.Scan(&dest, &status); err != nil {
-			_ = allRows.Close()
 			return 0, fmt.Errorf("failed to scan download path: %w", err)
 		}
 		candidateDirs[filepath.Dir(dest)] = struct{}{}
@@ -889,10 +901,8 @@ func ValidateIntegrity() (int, error) {
 		}
 	}
 	if err := allRows.Err(); err != nil {
-		_ = allRows.Close()
 		return 0, fmt.Errorf("failed to iterate download paths: %w", err)
 	}
-	_ = allRows.Close()
 
 	for _, e := range entries {
 		if e.status == "queued" && e.downloaded <= 0 {

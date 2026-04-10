@@ -3,6 +3,7 @@ package testutil
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -348,13 +349,13 @@ func (m *MockServer) setCommonHeaders(w http.ResponseWriter, start, end int64) {
 // Handles formats like "bytes=0-499" or "bytes=500-"
 func parseRange(rangeHeader string, fileSize int64) (int64, int64, error) {
 	if !strings.HasPrefix(rangeHeader, "bytes=") {
-		return 0, 0, fmt.Errorf("invalid range prefix")
+		return 0, 0, errors.New("invalid range prefix")
 	}
 
 	rangeSpec := strings.TrimPrefix(rangeHeader, "bytes=")
 	parts := strings.Split(rangeSpec, "-")
 	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("invalid range format")
+		return 0, 0, errors.New("invalid range format")
 	}
 
 	var start, end int64
@@ -387,7 +388,7 @@ func parseRange(rangeHeader string, fileSize int64) (int64, int64, error) {
 
 	// Validate
 	if start < 0 || end >= fileSize || start > end {
-		return 0, 0, fmt.Errorf("range out of bounds")
+		return 0, 0, errors.New("range out of bounds")
 	}
 
 	return start, end, nil

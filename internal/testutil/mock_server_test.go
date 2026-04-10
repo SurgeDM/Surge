@@ -1,5 +1,7 @@
 package testutil
 
+// nolint:noctx
+
 import (
 	"io"
 	"net/http"
@@ -16,7 +18,7 @@ func TestMockServer_BasicDownload(t *testing.T) {
 	defer server.Close()
 
 	// Full download
-	resp, err := http.Get(server.URL())
+	resp, err := http.Get(server.URL()) // nolint:noctx
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
@@ -53,7 +55,7 @@ func TestMockServer_RangeRequest(t *testing.T) {
 
 	// Range request for first 1024 bytes
 	client := &http.Client{}
-	req, _ := http.NewRequest("GET", server.URL(), nil)
+	req, _ := http.NewRequest(http.MethodGet, server.URL(), nil) // nolint:noctx
 	req.Header.Set("Range", "bytes=0-1023")
 
 	resp, err := client.Do(req)
@@ -97,7 +99,7 @@ func TestMockServer_MultipleRangeRequests(t *testing.T) {
 			end = fileSize - 1
 		}
 
-		req, _ := http.NewRequest("GET", server.URL(), nil)
+		req, _ := http.NewRequest(http.MethodGet, server.URL(), nil) // nolint:noctx
 		req.Header.Set("Range", "bytes="+formatRange(offset, end))
 
 		resp, err := client.Do(req)
@@ -135,7 +137,7 @@ func TestMockServer_HeadRequest(t *testing.T) {
 	defer server.Close()
 
 	client := &http.Client{}
-	req, _ := http.NewRequest("HEAD", server.URL(), nil)
+	req, _ := http.NewRequest(http.MethodHead, server.URL(), nil) // nolint:noctx
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -165,7 +167,7 @@ func TestMockServer_NoRangeSupport(t *testing.T) {
 	defer server.Close()
 
 	client := &http.Client{}
-	req, _ := http.NewRequest("GET", server.URL(), nil)
+	req, _ := http.NewRequest(http.MethodGet, server.URL(), nil) // nolint:noctx
 	req.Header.Set("Range", "bytes=0-511")
 
 	resp, err := client.Do(req)
@@ -194,21 +196,21 @@ func TestMockServer_FailOnNthRequest(t *testing.T) {
 	defer server.Close()
 
 	// First request should succeed
-	resp1, _ := http.Get(server.URL())
+	resp1, _ := http.Get(server.URL()) // nolint:noctx
 	if resp1.StatusCode != http.StatusOK {
 		t.Errorf("First request should succeed, got %d", resp1.StatusCode)
 	}
 	_ = resp1.Body.Close()
 
 	// Second request should fail
-	resp2, _ := http.Get(server.URL())
+	resp2, _ := http.Get(server.URL()) // nolint:noctx
 	if resp2.StatusCode != http.StatusInternalServerError {
 		t.Errorf("Second request should fail, got %d", resp2.StatusCode)
 	}
 	_ = resp2.Body.Close()
 
 	// Third request should succeed
-	resp3, _ := http.Get(server.URL())
+	resp3, _ := http.Get(server.URL()) // nolint:noctx
 	if resp3.StatusCode != http.StatusOK {
 		t.Errorf("Third request should succeed, got %d", resp3.StatusCode)
 	}
@@ -229,7 +231,7 @@ func TestMockServer_Latency(t *testing.T) {
 	defer server.Close()
 
 	start := time.Now()
-	resp, _ := http.Get(server.URL())
+	resp, _ := http.Get(server.URL()) // nolint:noctx
 	_ = resp.Body.Close()
 	elapsed := time.Since(start)
 
@@ -243,7 +245,7 @@ func TestMockServer_Reset(t *testing.T) {
 	defer server.Close()
 
 	// Make a request
-	resp, _ := http.Get(server.URL())
+	resp, _ := http.Get(server.URL()) // nolint:noctx
 	_ = resp.Body.Close()
 
 	if server.Stats().TotalRequests != 1 {
@@ -266,7 +268,7 @@ func TestStreamingMockServer_LargeFile(t *testing.T) {
 
 	// Just request a small range to verify it works
 	client := &http.Client{}
-	req, _ := http.NewRequest("GET", server.URL(), nil)
+	req, _ := http.NewRequest(http.MethodGet, server.URL(), nil) // nolint:noctx
 	req.Header.Set("Range", "bytes=0-1023")
 
 	resp, err := client.Do(req)

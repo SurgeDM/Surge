@@ -26,7 +26,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.SettingsEditor.Confirm) {
 			currentCategory := categories[m.SettingsActiveTab]
 			settingKey := m.getCurrentSettingKey()
-			_ = m.setSettingValue(currentCategory, settingKey, m.SettingsInput.Value())
+			m.setSettingValue(currentCategory, settingKey, m.SettingsInput.Value())
 			m.SettingsIsEditing = false
 			m.SettingsInput.Blur()
 			return m, nil
@@ -126,7 +126,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 		currentCategory := categories[m.SettingsActiveTab]
 		if typ == "bool" {
-			_ = m.setSettingValue(currentCategory, settingKey, "")
+			m.setSettingValue(currentCategory, settingKey, "")
 		} else {
 			// Enter edit mode
 			m.SettingsIsEditing = true

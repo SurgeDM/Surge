@@ -1,7 +1,8 @@
 package state
 
 import (
-	"database/sql"
+	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -269,11 +270,10 @@ func TestDeleteState(t *testing.T) {
 
 	// Verify it was deleted
 	_, err := LoadState(testURL, testDestPath)
-	switch err {
-	case nil:
+	if err == nil {
 		t.Error("LoadState should fail after DeleteState")
-	case sql.ErrNoRows:
-		// Acceptable error
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("Expected os.ErrNotExist, got %v", err)
 	}
 }
 
@@ -436,7 +436,7 @@ func TestUpdateStatus(t *testing.T) {
 		t.Fatalf("AddToMasterList failed: %v", err)
 	}
 	d := getDBHelper()
-	if _, err := d.Exec("INSERT INTO tasks (download_id, offset, length) VALUES (?, ?, ?)", entry.ID, 0, 100); err != nil {
+	if _, err := d.ExecContext(context.Background(), "INSERT INTO tasks (download_id, offset, length) VALUES (?, ?, ?)", entry.ID, 0, 100); err != nil {
 		t.Fatalf("failed to seed task row: %v", err)
 	}
 
@@ -675,10 +675,8 @@ func TestMirrorsPersistence(t *testing.T) {
 
 	if len(loadedState.Mirrors) != 2 {
 		t.Errorf("Loaded mirrors count = %d, want 2", len(loadedState.Mirrors))
-	} else {
-		if loadedState.Mirrors[0] != mirrors[0] || loadedState.Mirrors[1] != mirrors[1] {
-			t.Errorf("Loaded mirrors mismatch: %v", loadedState.Mirrors)
-		}
+	} else if loadedState.Mirrors[0] != mirrors[0] || loadedState.Mirrors[1] != mirrors[1] {
+		t.Errorf("Loaded mirrors mismatch: %v", loadedState.Mirrors)
 	}
 
 	// 2. Test DownloadEntry (Master List / Completed)
@@ -708,10 +706,8 @@ func TestMirrorsPersistence(t *testing.T) {
 			foundVal = true
 			if len(e.Mirrors) != 2 {
 				t.Errorf("Entry mirrors count = %d, want 2", len(e.Mirrors))
-			} else {
-				if e.Mirrors[0] != mirrors[0] || e.Mirrors[1] != mirrors[1] {
-					t.Errorf("Entry mirrors mismatch: %v", e.Mirrors)
-				}
+			} else if e.Mirrors[0] != mirrors[0] || e.Mirrors[1] != mirrors[1] {
+				t.Errorf("Entry mirrors mismatch: %v", e.Mirrors)
 			}
 			break
 		}
@@ -769,7 +765,7 @@ func TestValidateIntegrity_MissingFile(t *testing.T) {
 
 	d := getDBHelper()
 	var taskCount int
-	if err := d.QueryRow("SELECT COUNT(*) FROM tasks WHERE download_id = ?", entry.ID).Scan(&taskCount); err != nil {
+	if err := d.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM tasks WHERE download_id = ?", entry.ID).Scan(&taskCount); err != nil {
 		t.Fatalf("failed to count tasks: %v", err)
 	}
 	if taskCount != 0 {
@@ -810,7 +806,7 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 
 	// Set file_hash directly in DB (simulating SaveState having computed it)
 	d := getDBHelper()
-	_, err = d.Exec("UPDATE downloads SET file_hash = ? WHERE id = ?", expectedHash, "integrity-valid")
+	_, err = d.ExecContext(context.Background(), "UPDATE downloads SET file_hash = ? WHERE id = ?", expectedHash, "integrity-valid")
 	if err != nil {
 		t.Fatalf("Failed to set file_hash: %v", err)
 	}
@@ -862,7 +858,7 @@ func TestValidateIntegrity_TamperedFile(t *testing.T) {
 
 	// Set a fake hash that won't match the file content
 	d := getDBHelper()
-	_, _ = d.Exec("UPDATE downloads SET file_hash = ? WHERE id = ?", "0000000000000000000000000000000000000000000000000000000000000000", "integrity-tampered")
+	_, _ = d.ExecContext(context.Background(), "UPDATE downloads SET file_hash = ? WHERE id = ?", "0000000000000000000000000000000000000000000000000000000000000000", "integrity-tampered")
 
 	// Run integrity check — hash mismatch, entry AND file should be removed
 	removed, err := ValidateIntegrity()

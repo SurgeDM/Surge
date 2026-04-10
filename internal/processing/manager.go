@@ -169,7 +169,7 @@ type DownloadRequest struct {
 // Enqueue probes and reserves a stable destination before dispatching to the queue layer.
 func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) (string, error) {
 	if mgr.addFunc == nil {
-		return "", fmt.Errorf("add function unavailable")
+		return "", errors.New("add function unavailable")
 	}
 
 	utils.Debug("Lifecycle: Enqueue %s", req.URL)
@@ -190,7 +190,7 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 // EnqueueWithID does the same lifecycle work as Enqueue while preserving a caller-owned id.
 func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadRequest, requestID string) (string, error) {
 	if mgr.addWithIDFunc == nil {
-		return "", fmt.Errorf("addWithID function unavailable")
+		return "", errors.New("addWithID function unavailable")
 	}
 
 	utils.Debug("Lifecycle: EnqueueWithID %s (%s)", req.URL, requestID)
@@ -212,10 +212,10 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 // download to the engine, so workers and lifecycle events agree on one stable destination.
 func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadRequest, dispatch func(string, string, *ProbeResult) (string, error)) (string, error) {
 	if req.URL == "" {
-		return "", fmt.Errorf("URL is required")
+		return "", errors.New("URL is required")
 	}
 	if req.Path == "" {
-		return "", fmt.Errorf("destination path is required")
+		return "", errors.New("destination path is required")
 	}
 
 	settings := mgr.GetSettings()

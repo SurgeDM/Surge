@@ -176,7 +176,7 @@ func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, toke
 
 	// Try to get from running server first
 	if baseURL != "" {
-		path := fmt.Sprintf("/download?id=%s", url.QueryEscape(fullID))
+		path := "/download?id=" + url.QueryEscape(fullID)
 		resp, err := doAPIRequest(http.MethodGet, baseURL, token, path, nil)
 		if err != nil {
 			if strictRemote {

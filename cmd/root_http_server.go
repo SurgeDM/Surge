@@ -1,12 +1,15 @@
 package cmd
 
 import (
+	"context"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/config"
@@ -20,8 +23,9 @@ const serverBindHost = "0.0.0.0"
 // findAvailablePort tries ports starting from 'start' until one is available
 func findAvailablePort(start int) (int, net.Listener) {
 	bindHost := serverBindHost
+	var lc net.ListenConfig
 	for port := start; port < start+100; port++ {
-		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindHost, port))
+		ln, err := lc.Listen(context.Background(), "tcp", fmt.Sprintf("%s:%d", bindHost, port))
 		if err == nil {
 			return port, ln
 		}
@@ -31,8 +35,9 @@ func findAvailablePort(start int) (int, net.Listener) {
 
 func bindServerListener(portFlag int) (int, net.Listener, error) {
 	bindHost := serverBindHost
+	var lc net.ListenConfig
 	if portFlag > 0 {
-		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindHost, portFlag))
+		ln, err := lc.Listen(context.Background(), "tcp", fmt.Sprintf("%s:%d", bindHost, portFlag))
 		if err != nil {
 			return 0, nil, fmt.Errorf("could not bind to port %d: %w", portFlag, err)
 		}
@@ -40,7 +45,7 @@ func bindServerListener(portFlag int) (int, net.Listener, error) {
 	}
 	port, ln := findAvailablePort(1700)
 	if ln == nil {
-		return 0, nil, fmt.Errorf("could not find available port")
+		return 0, nil, errors.New("could not find available port")
 	}
 	return port, ln, nil
 }
@@ -53,7 +58,7 @@ func saveActivePort(port int) {
 	}
 
 	portFile := filepath.Join(config.GetRuntimeDir(), "port")
-	if err := os.WriteFile(portFile, []byte(fmt.Sprintf("%d", port)), 0o644); err != nil {
+	if err := os.WriteFile(portFile, []byte(strconv.Itoa(port)), 0o644); err != nil {
 		utils.Debug("Error writing port file: %v", err)
 	}
 	utils.Debug("HTTP server listening on port %d", port)
@@ -97,7 +102,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Private-Network", "true")
 
 		// Handle preflight requests
-		if r.Method == "OPTIONS" {
+		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -115,7 +120,7 @@ func authMiddleware(token string, next http.Handler) http.Handler {
 		}
 
 		// Allow OPTIONS for CORS preflight
-		if r.Method == "OPTIONS" {
+		if r.Method == http.MethodOptions {
 			next.ServeHTTP(w, r)
 			return
 		}

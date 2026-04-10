@@ -1,0 +1,36 @@
+# .golangci.yml
+version: "2"
+
+run:
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    - staticcheck
+    - govet
+    - errcheck
+    - unused
+    - ineffassign
+    - unparam
+    
+    - prealloc
+    - makezero
+    - usestdlibvars
+    - perfsprint
+    
+    - bodyclose
+    - noctx
+    - sqlclosecheck
+    - rowserrcheck
+    
+    - errorlint
+    - nilerr
+    - gocritic
+  settings:
+    govet:
+      enable:
+        - shadow
+        - fieldalignment
+    unparam:
+      check-exported: true

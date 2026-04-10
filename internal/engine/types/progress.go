@@ -289,7 +289,7 @@ func (ps *ProgressState) RestoreBitmap(bitmap []byte, actualChunkSize int64) {
 		return
 	}
 
-	//utils.Debug("RestoreBitmap: Len=%d, ChunkSize=%d", len(bitmap), actualChunkSize)
+	// utils.Debug("RestoreBitmap: Len=%d, ChunkSize=%d", len(bitmap), actualChunkSize)
 
 	ps.ChunkBitmap = bitmap
 	ps.ActualChunkSize = actualChunkSize
@@ -434,11 +434,9 @@ func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkSta
 				ps.ChunkProgress[i] = chunkEnd - chunkStart // clamp
 				ps.setChunkState(i, ChunkCompleted)
 				// utils.Debug("Chunk %d completed (size=%d)", i, ps.ChunkProgress[i])
-			} else {
+			} else if ps.getChunkState(i) != ChunkCompleted {
 				// Partial progress -> Downloading
-				if ps.getChunkState(i) != ChunkCompleted {
-					ps.setChunkState(i, ChunkDownloading)
-				}
+				ps.setChunkState(i, ChunkDownloading)
 			}
 		case ChunkDownloading:
 			current := ps.getChunkState(i)
@@ -529,13 +527,14 @@ func (ps *ProgressState) RecalculateProgress(remainingTasks []Task) {
 		}
 		chunkSize := chunkEnd - chunkStart
 
-		if ps.ChunkProgress[i] >= chunkSize {
+		switch {
+		case ps.ChunkProgress[i] >= chunkSize:
 			ps.ChunkProgress[i] = chunkSize // clamp
 			ps.setChunkState(i, ChunkCompleted)
-		} else if ps.ChunkProgress[i] > 0 {
+		case ps.ChunkProgress[i] > 0:
 			// Even if saved bitmap said Pending, if we have bytes, it's actually partial
 			ps.setChunkState(i, ChunkDownloading)
-		} else {
+		default:
 			ps.ChunkProgress[i] = 0 // clamp
 			ps.setChunkState(i, ChunkPending)
 		}

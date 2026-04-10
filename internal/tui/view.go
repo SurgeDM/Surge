@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -208,8 +209,8 @@ func (m RootModel) View() tea.View {
 	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
 		modal := components.ConfirmationModal{
 			Title:       "⬆ Update Available",
-			Message:     fmt.Sprintf("A new version of Surge is available: %s", m.UpdateInfo.LatestVersion),
-			Detail:      fmt.Sprintf("Current: %s", m.UpdateInfo.CurrentVersion),
+			Message:     "A new version of Surge is available: " + m.UpdateInfo.LatestVersion,
+			Detail:      "Current: " + m.UpdateInfo.CurrentVersion,
 			Keys:        m.keys.Update,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
@@ -268,7 +269,7 @@ func (m RootModel) View() tea.View {
 	// Footer - keybindings on left, version on bottom-right
 	helpText := m.help.View(m.keys.Dashboard)
 	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
-	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
+	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render("v" + m.CurrentVersion)
 	footerContentWidth := availableWidth
 	leftFooterWidth := footerContentWidth - lipgloss.Width(versionText)
 	if leftFooterWidth < 0 {
@@ -580,7 +581,7 @@ func (m RootModel) View() tea.View {
 		maxSpeed = 1.0 // Default scale for empty graph
 	} else {
 		// Add headroom
-		maxSpeed = maxSpeed * 1.1
+		maxSpeed *= 1.1
 
 		if maxSpeed < 1.0 {
 			maxSpeed = 1.0
@@ -956,11 +957,12 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	// TUI owns elapsed time: compute from StartTime for active downloads,
 	// use frozen d.Elapsed for completed downloads.
 	var elapsed time.Duration
-	if d.done {
+	switch {
+	case d.done:
 		elapsed = d.Elapsed
-	} else if d.Elapsed > 0 {
+	case d.Elapsed > 0:
 		elapsed = d.Elapsed
-	} else if !d.StartTime.IsZero() {
+	case !d.StartTime.IsZero():
 		elapsed = time.Since(d.StartTime)
 	}
 
@@ -972,26 +974,28 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	}
 
 	// Speed & ETA
-	if d.done {
-		if elapsed.Seconds() >= 1 {
+	switch {
+	case d.done:
+		switch {
+		case elapsed.Seconds() >= 1:
 			avgSpeed := float64(d.Total) / float64(int(elapsed.Seconds()))
 			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(config.MB))
-		} else if d.Speed > 0 {
+		case d.Speed > 0:
 			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", d.Speed/float64(config.MB))
-		} else if elapsed.Seconds() > 0 {
+		case elapsed.Seconds() > 0:
 			avgSpeed := float64(d.Total) / elapsed.Seconds()
 			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(config.MB))
-		} else {
+		default:
 			speedStr = "N/A"
 		}
 		etaStr = "Done"
-	} else if d.resuming {
+	case d.resuming:
 		speedStr = "Resuming..."
 		etaStr = "..."
-	} else if d.paused || d.Speed == 0 {
+	case d.paused || d.Speed == 0:
 		speedStr = "Paused"
 		etaStr = "∞"
-	} else {
+	default:
 		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/float64(config.MB))
 		if d.Total > 0 {
 			remaining := d.Total - d.Downloaded
@@ -1029,7 +1033,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		if conns == 0 {
 			conns = 1 // Single-connection download (range requests not supported)
 		}
-		connStr := fmt.Sprintf("%d", conns)
+		connStr := strconv.Itoa(conns)
 		leftColItems = append(leftColItems, lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Conns:"), StatsValueStyle.Render(connStr)))
 	}
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, leftColItems...)
@@ -1126,11 +1130,12 @@ func (m RootModel) calcTotalSpeed() float64 {
 func (m RootModel) ComputeViewStats() ViewStats {
 	var stats ViewStats
 	for _, d := range m.downloads {
-		if d.done {
+		switch {
+		case d.done:
 			stats.DownloadedCount++
-		} else if d.Speed > 0 {
+		case d.Speed > 0:
 			stats.ActiveCount++
-		} else {
+		default:
 			stats.QueuedCount++
 		}
 		stats.TotalDownloaded += d.Downloaded

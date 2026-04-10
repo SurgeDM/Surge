@@ -1,5 +1,7 @@
 package testutil
 
+// nolint:noctx
+
 import (
 	"net"
 	"net/http"
@@ -9,7 +11,7 @@ import (
 
 // NewHTTPServer starts an httptest server bound to IPv4 to avoid IPv6 listener issues in sandboxed environments.
 func NewHTTPServer(handler http.Handler) *httptest.Server {
-	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	ln, err := net.Listen("tcp4", "127.0.0.1:0") // nolint:noctx
 	if err != nil {
 		return httptest.NewServer(handler)
 	}
@@ -27,7 +29,7 @@ func NewHTTPServer(handler http.Handler) *httptest.Server {
 // NewHTTPServerT starts an httptest server bound to IPv4 and skips the test if binding fails.
 func NewHTTPServerT(t *testing.T, handler http.Handler) *httptest.Server {
 	t.Helper()
-	ln, err := net.Listen("tcp4", "127.0.0.1:0")
+	ln, err := net.Listen("tcp4", "127.0.0.1:0") // nolint:noctx
 	if err != nil {
 		t.Skipf("tcp4 listener unavailable: %v", err)
 		return nil
