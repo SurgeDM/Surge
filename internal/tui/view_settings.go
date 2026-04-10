@@ -108,14 +108,14 @@ func (m RootModel) viewSettings() string {
 }
 
 func settingsModalDimensions(termWidth, termHeight int) (int, int) {
-	width := int(float64(termWidth) * 0.68)
+	width := int(float64(termWidth) * 0.72)
 	if width < 64 {
 		width = 64
 	}
-	if width > 120 {
-		width = 120
+	if width > 130 {
+		width = 130
 	}
-	height := 24
+	height := 26
 
 	maxWidth := termWidth - (WindowStyle.GetHorizontalFrameSize() * 2)
 	if maxWidth < 1 {
