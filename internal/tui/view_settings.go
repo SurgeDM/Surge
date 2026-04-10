@@ -146,6 +146,8 @@ func shortSettingsCategoryLabel(label string) string {
 		return "Perf"
 	case "Categories":
 		return "Cats"
+	case "Extension":
+		return "Ext"
 	default:
 		return label
 	}
@@ -328,15 +330,33 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	if m.SettingsIsEditing {
 		valueStr = m.SettingsInput.View() + unitStyle.Render(unit)
 	} else {
-		valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key) + unitStyle.Render(unit)
-		if meta.Key == "max_global_connections" {
-			valueStr += " (Ignored)"
+		if meta.Type == "auth_token" {
+			token := GetAuthToken()
+			if token == "" {
+				valueStr = lipgloss.NewStyle().Foreground(colors.Gray).Render("(Not generated yet)")
+			} else {
+				if m.ExtensionTokenCopied {
+					valueStr = lipgloss.NewStyle().Foreground(colors.StateDownloading).Bold(true).Render("Copied!")
+				} else {
+					valueStr = token[:8] + "..." + token[len(token)-8:] + lipgloss.NewStyle().Foreground(colors.Gray).Render(" [Enter to Copy]")
+				}
+			}
+		} else if meta.Type == "link" {
+			valueStr = lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Open [Enter]")
+		} else {
+			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key) + unitStyle.Render(unit)
+			if meta.Key == "max_global_connections" {
+				valueStr += " (Ignored)"
+			}
 		}
 	}
 
 	valueLabel := "Value: "
 	if meta.Key == "default_download_dir" && !m.SettingsIsEditing {
 		valueLabel = "[Tab] Browse: "
+	}
+	if meta.Type == "link" {
+		valueLabel = "Action: "
 	}
 
 	valueLabelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
@@ -842,7 +862,7 @@ func formatSettingValue(value interface{}, typ string) string {
 		if v, ok := value.(float64); ok {
 			return fmt.Sprintf("%.2f", v)
 		}
-	case "string":
+	case "string", "link":
 		if s, ok := value.(string); ok {
 			if s == "" {
 				return "(default)"
@@ -852,6 +872,8 @@ func formatSettingValue(value interface{}, typ string) string {
 			}
 			return s
 		}
+	case "auth_token":
+		return "********"
 	}
 
 	// Fallback using reflection for numeric types
@@ -877,8 +899,6 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.General.WarnOnDuplicate = defaults.General.WarnOnDuplicate
 		case "download_complete_notification":
 			m.Settings.General.DownloadCompleteNotification = defaults.General.DownloadCompleteNotification
-		case "extension_prompt":
-			m.Settings.General.ExtensionPrompt = defaults.General.ExtensionPrompt
 		case "auto_resume":
 			m.Settings.General.AutoResume = defaults.General.AutoResume
 		case "skip_update_check":
@@ -928,6 +948,11 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 		switch key {
 		case "category_enabled":
 			m.Settings.Categories.CategoryEnabled = defaults.Categories.CategoryEnabled
+		}
+	case "Extension":
+		switch key {
+		case "extension_prompt":
+			m.Settings.Extension.ExtensionPrompt = defaults.Extension.ExtensionPrompt
 		}
 	}
 }

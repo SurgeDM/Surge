@@ -81,7 +81,7 @@ func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
 func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
 	service := &fakeRemoteDownloadService{}
 	m := newRemoteRootModel(1700, service, "example.com")
-	m.Settings.General.ExtensionPrompt = false
+	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = false
 
 	updated, cmd := m.Update(events.DownloadRequestMsg{

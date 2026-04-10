@@ -129,6 +129,8 @@ type RootModel struct {
 	SettingsInput         textinput.Model  // Input for editing string/int values
 	SettingsFileBrowsing  bool             // Whether browsing for a directory
 	ExtensionFileBrowsing bool             // Whether browsing for extension prompt path
+	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
+	ExtensionTokenCopyTimer time.Time       // Timer for fading flash message
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download
@@ -390,6 +392,8 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		cancelEnqueue:         cancelEnqueue,
 		spinner:               s,
 	}
+
+	InitAuthToken() // Cache auth token for TUI to avoid per-frame disk I/O
 
 	m.refreshThemeCaches()
 

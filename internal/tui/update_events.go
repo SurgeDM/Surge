@@ -122,7 +122,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.Settings.General.ExtensionPrompt {
+		if m.Settings != nil && m.Settings.Extension.ExtensionPrompt {
 			m.pendingURL = msg.URL
 			m.pendingMirrors = msg.Mirrors
 			m.pendingHeaders = msg.Headers

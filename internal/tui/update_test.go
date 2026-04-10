@@ -356,7 +356,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 1. Test Extension Prompt Enabled
-	m.Settings.General.ExtensionPrompt = true
+	m.Settings.Extension.ExtensionPrompt = true
 	m.Settings.General.WarnOnDuplicate = true
 
 	msg := events.DownloadRequestMsg{
@@ -382,7 +382,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 2. Test Duplicate Warning (when prompt disabled but duplicate exists)
-	m.Settings.General.ExtensionPrompt = false
+	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = true
 
 	// Add existing download
@@ -399,7 +399,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 3. Test No Prompt (Direct Download)
-	m.Settings.General.ExtensionPrompt = false
+	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = true
 	m.downloads = nil // Clear downloads
 

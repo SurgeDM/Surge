@@ -16,6 +16,7 @@ type Settings struct {
 	Network     NetworkSettings     `json:"network" ui_label:"Network"`
 	Performance PerformanceSettings `json:"performance" ui_label:"Performance"`
 	Categories  CategorySettings    `json:"categories" ui_label:"Categories"`
+	Extension   ExtensionSettings   `json:"extension" ui_label:"Extension"`
 }
 
 // GeneralSettings contains application behavior settings.
@@ -24,7 +25,6 @@ type GeneralSettings struct {
 	WarnOnDuplicate              bool   `json:"warn_on_duplicate" ui_label:"Warn on Duplicate" ui_desc:"Show warning when adding a download that already exists."`
 	DownloadCompleteNotification bool   `json:"download_complete_notification" ui_label:"Download Complete Notification" ui_desc:"Show system notification when a download finishes."`
 	AllowRemoteOpenActions       bool   `json:"allow_remote_open_actions" ui_label:"Allow Remote Open Actions" ui_desc:"Allow /open-file and /open-folder API calls from non-loopback clients. Disabled by default for security."`
-	ExtensionPrompt              bool   `json:"extension_prompt" ui_label:"Extension Prompt" ui_desc:"Prompt for confirmation when adding downloads via browser extension."`
 	AutoResume                   bool   `json:"auto_resume" ui_label:"Auto Resume" ui_desc:"Automatically resume paused downloads on startup."`
 	SkipUpdateCheck              bool   `json:"skip_update_check" ui_label:"Skip Update Check" ui_desc:"Disable automatic check for new versions on startup."`
 
@@ -44,6 +44,15 @@ const (
 type CategorySettings struct {
 	CategoryEnabled bool       `json:"category_enabled" ui_label:"Manage Categories" ui_desc:"Sort downloads into subfolders by file type. Press Enter to open Category Manager."`
 	Categories      []Category `json:"categories" ui_ignored:"true"`
+}
+
+// ExtensionSettings contains settings for the browser extension.
+type ExtensionSettings struct {
+	ExtensionPrompt     bool   `json:"extension_prompt" ui_label:"Extension Prompt" ui_desc:"Prompt for confirmation when adding downloads via browser extension."`
+	ChromeExtensionURL  string `json:"chrome_extension_url" ui_label:"Get Chrome Extension" ui_type:"link" ui_desc:"Open the Surge Chrome extension page."`
+	FirefoxExtensionURL string `json:"firefox_extension_url" ui_label:"Get Firefox Extension" ui_type:"link" ui_desc:"Open the Surge Firefox extension page."`
+	AuthToken           string `json:"auth_token" ui_label:"Auth Token" ui_type:"auth_token" ui_desc:"Your authentication token. Use this to connect the Browser Extension to Surge."`
+	InstructionsURL     string `json:"instructions_url" ui_label:"Setup Instructions" ui_type:"link" ui_desc:"View detailed instructions on how to set up the Surge browser extension."`
 }
 
 // NetworkSettings contains network connection parameters.
@@ -73,7 +82,7 @@ type SettingMeta struct {
 	Key         string // JSON key name
 	Label       string // Human-readable label
 	Description string // Help text displayed in right pane
-	Type        string // "string", "int", "int64", "bool", "duration", "float64"
+	Type        string // "string", "int", "int64", "bool", "duration", "float64", "auth_token", "link"
 }
 
 // GetSettingsMetadata returns metadata for all settings organized by category.
@@ -110,8 +119,10 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 				desc := settingField.Tag.Get("ui_desc")
 
 				// Determine implicit Type
-				typStr := "string"
-				switch settingField.Type.Kind() {
+				typStr := settingField.Tag.Get("ui_type")
+				if typStr == "" {
+					typStr = "string"
+					switch settingField.Type.Kind() {
 				case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
 					typStr = "int"
 				case reflect.Int64:
@@ -124,6 +135,7 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 					typStr = "bool"
 				case reflect.Float32, reflect.Float64:
 					typStr = "float64"
+				}
 				}
 
 				catMetas = append(catMetas, SettingMeta{
@@ -189,7 +201,6 @@ func DefaultSettings() *Settings {
 			WarnOnDuplicate:              true,
 			DownloadCompleteNotification: true,
 			AllowRemoteOpenActions:       false,
-			ExtensionPrompt:              false,
 			AutoResume:                   false,
 
 			ClipboardMonitor:  true,
@@ -218,6 +229,13 @@ func DefaultSettings() *Settings {
 		Categories: CategorySettings{
 			CategoryEnabled: false,
 			Categories:      DefaultCategories(),
+		},
+		Extension: ExtensionSettings{
+			ExtensionPrompt:     true,
+			ChromeExtensionURL:  "https://github.com/SurgeDM/Surge/releases/latest",
+			FirefoxExtensionURL: "https://addons.mozilla.org/en-US/firefox/addon/surge/",
+			AuthToken:           "", // Handled specially in TUI
+			InstructionsURL:     "https://github.com/SurgeDM/Surge#browser-extension",
 		},
 	}
 }

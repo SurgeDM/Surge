@@ -197,7 +197,7 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 		return false
 	}
 
-	shouldPrompt := resolved.settings.General.ExtensionPrompt || (resolved.settings.General.WarnOnDuplicate && resolved.isDuplicate)
+	shouldPrompt := resolved.settings.Extension.ExtensionPrompt || (resolved.settings.General.WarnOnDuplicate && resolved.isDuplicate)
 	if !shouldPrompt {
 		return false
 	}
