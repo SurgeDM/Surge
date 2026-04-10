@@ -436,6 +436,9 @@ var rootCmd = &cobra.Command{
 		}
 		defer releaseLock()
 
+		savePID()
+		defer removePID()
+
 		if err := initializeRootLocalRuntime(); err != nil {
 			return err
 		}
