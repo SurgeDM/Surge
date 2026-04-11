@@ -98,7 +98,7 @@ export default function App() {
       if (response?.connected && currentView() === 'history') {
         await fetchHistory();
       }
-    } catch (err) {
+    } catch {
       setServerConnected(false);
     }
   }
@@ -147,8 +147,7 @@ export default function App() {
       if (healthResp && typeof healthResp.healthy === 'boolean') {
         setServerConnected(healthResp.healthy);
       }
-    } catch (err) {
-    }
+    } catch { /* ignore */ }
 
     void fetchDownloads();
 
@@ -166,7 +165,7 @@ export default function App() {
       try {
         const response = await sendMessage<{ healthy?: boolean }>({ type: 'checkHealth' });
         if (response && typeof response.healthy === 'boolean') setServerConnected(response.healthy);
-      } catch (err) {
+      } catch {
         setServerConnected(false);
       }
     }, HEALTH_POLL_MS);
