@@ -32,6 +32,7 @@ type DashboardKeyMap struct {
 	Settings       key.Binding
 	Log            key.Binding
 	ToggleHelp     key.Binding
+	ReportBug      key.Binding
 	OpenFile       key.Binding
 	Quit           key.Binding
 	ForceQuit      key.Binding
@@ -195,6 +196,10 @@ var Keys = KeyMap{
 		ToggleHelp: key.NewBinding(
 			key.WithKeys("h"),
 			key.WithHelp("h", "keybindings"),
+		),
+		ReportBug: key.NewBinding(
+			key.WithKeys("?"),
+			key.WithHelp("?", "report bug"),
 		),
 		OpenFile: key.NewBinding(
 			key.WithKeys("o"),
@@ -457,7 +462,7 @@ func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab},
 		{k.Add, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings},
-		{k.Log, k.Quit},
+		{k.Log, k.ReportBug, k.Quit},
 	}
 }
 

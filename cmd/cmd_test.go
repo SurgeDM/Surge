@@ -543,6 +543,12 @@ func TestBuildTime_DefaultValue(t *testing.T) {
 	}
 }
 
+func TestCommit_DefaultValue(t *testing.T) {
+	if Commit == "" {
+		t.Error("Commit should not be empty")
+	}
+}
+
 // =============================================================================
 // rootCmd Tests
 // =============================================================================
@@ -558,6 +564,19 @@ func TestRootCmd_HasSubcommands(t *testing.T) {
 	}
 	if !found {
 		t.Error("'add' subcommand not found")
+	}
+}
+
+func TestRootCmd_HasBugReportSubcommand(t *testing.T) {
+	found := false
+	for _, cmd := range rootCmd.Commands() {
+		if cmd.Name() == "bug-report" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("'bug-report' subcommand not found")
 	}
 }
 

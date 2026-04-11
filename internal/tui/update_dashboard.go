@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"github.com/SurgeDM/Surge/internal/bugreport"
 	"github.com/SurgeDM/Surge/internal/clipboard"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
@@ -205,6 +206,22 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg, m.keys.Dashboard.ToggleHelp) {
 		m.state = HelpModalState
+		return m, nil
+	}
+
+	if key.Matches(msg, m.keys.Dashboard.ReportBug) {
+		reportURL := bugreport.BugReportURL(m.CurrentVersion, m.CurrentCommit)
+		if reportURL == "" {
+			m.addLogEntry(LogStyleError.Render("✖ Could not build bug report URL"))
+			return m, nil
+		}
+
+		if err := bugreport.OpenBrowser(reportURL); err != nil {
+			m.addLogEntry(LogStyleError.Render("✖ Could not open browser. Open manually: " + reportURL))
+			return m, nil
+		}
+
+		m.addLogEntry(LogStyleStarted.Render("🐞 Opening browser to file bug report..."))
 		return m, nil
 	}
 

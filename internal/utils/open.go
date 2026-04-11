@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 func OpenFile(path string) error {
@@ -48,6 +49,15 @@ func OpenContainingFolder(path string) error {
 	}
 
 	return openWithSystem(targetPath)
+}
+
+// OpenURL opens a URL with the system's default browser.
+func OpenURL(rawURL string) error {
+	if strings.TrimSpace(rawURL) == "" {
+		return fmt.Errorf("url is empty")
+	}
+
+	return openWithSystem(rawURL)
 }
 
 func openWithSystem(path string) error {

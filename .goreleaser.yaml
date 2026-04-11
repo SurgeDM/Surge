@@ -12,6 +12,7 @@ builds:
     ldflags:
       - -s -w 
       - -X github.com/SurgeDM/Surge/cmd.Version={{.Version}}
+      - -X github.com/SurgeDM/Surge/cmd.Commit={{.Commit}}
       - -X github.com/SurgeDM/Surge/cmd.BuildTime={{.Date}}
 
 before:
