@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/SurgeDM/Surge/internal/bugreport"
+	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -18,12 +19,12 @@ var bugReportCmd = &cobra.Command{
 			return fmt.Errorf("failed to build bug report URL")
 		}
 
-		if err := bugreport.OpenBrowser(reportURL); err != nil {
+		fmt.Println("Opening browser to file bug report...")
+		if err := utils.OpenBrowser(reportURL); err != nil {
 			fmt.Printf("Could not open browser. Please open this URL manually:\n%s\n", reportURL)
 			return nil
 		}
 
-		fmt.Println("Opening browser to file bug report...")
 		return nil
 	},
 }

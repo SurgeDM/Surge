@@ -51,15 +51,6 @@ func OpenContainingFolder(path string) error {
 	return openWithSystem(targetPath)
 }
 
-// OpenURL opens a URL with the system's default browser.
-func OpenURL(rawURL string) error {
-	if strings.TrimSpace(rawURL) == "" {
-		return fmt.Errorf("url is empty")
-	}
-
-	return openWithSystem(rawURL)
-}
-
 func openWithSystem(path string) error {
 	cmd := buildOpenCommand(path)
 	err := cmd.Start()
@@ -84,7 +75,7 @@ func buildOpenCommand(path string) *exec.Cmd {
 
 // OpenBrowser opens a URL in the system's default web browser.
 func OpenBrowser(url string) error {
-	if url == "" {
+	if strings.TrimSpace(url) == "" {
 		return fmt.Errorf("url is empty")
 	}
 	return openWithSystem(url)

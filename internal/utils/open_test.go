@@ -81,7 +81,7 @@ func TestOpenContainingFolder_Validation(t *testing.T) {
 	}
 }
 
-func TestOpenURL_Validation(t *testing.T) {
+func TestOpenBrowser_Validation(t *testing.T) {
 	tests := []struct {
 		name       string
 		url        string
@@ -101,7 +101,7 @@ func TestOpenURL_Validation(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := OpenURL(tc.url)
+			err := OpenBrowser(tc.url)
 			if err == nil {
 				t.Fatalf("expected validation error for %q", tc.url)
 			}

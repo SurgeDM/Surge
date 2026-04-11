@@ -8,6 +8,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/clipboard"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -216,7 +217,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if err := bugreport.OpenBrowser(reportURL); err != nil {
+		if err := utils.OpenBrowser(reportURL); err != nil {
 			m.addLogEntry(LogStyleError.Render("✖ Could not open browser. Open manually: " + reportURL))
 			return m, nil
 		}

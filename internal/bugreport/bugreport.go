@@ -5,8 +5,6 @@ import (
 	"net/url"
 	"runtime"
 	"strings"
-
-	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 const newIssueURL = "https://github.com/SurgeDM/Surge/issues/new"
@@ -62,12 +60,6 @@ Add any other context about the problem here.
 	issueURL.RawQuery = params.Encode()
 
 	return issueURL.String()
-}
-
-// OpenBrowser opens rawURL in the user's default browser.
-// Callers should print the URL as fallback if this returns an error.
-func OpenBrowser(rawURL string) error {
-	return utils.OpenURL(rawURL)
 }
 
 func normalizeValue(value string) string {
