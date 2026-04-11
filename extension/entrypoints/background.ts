@@ -436,7 +436,6 @@ async function handleDownloadCreated(downloadItem: {
       openPopup: tryOpenPopup,
       sendPrompt: message => browser.runtime.sendMessage(message),
     });
-    await tryOpenPopup();
     return;
   }
 
@@ -743,6 +742,7 @@ export default defineBackground(() => {
   setInterval(async () => {
     const wasConnected = isConnected;
     await checkHealthSilent();
+    if (!isConnected && wasConnected) sseAbortController?.abort();
     if (isConnected && !wasConnected) startSSEStream().catch(() => {});
   }, HEALTH_CHECK_INTERVAL_MS);
 

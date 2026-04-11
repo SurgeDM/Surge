@@ -96,7 +96,7 @@ export default function DownloadList(props: Props) {
         }
 
         {currentView() === 'active' && sortedActiveDownloadIds().length === 0 && (
-          <div class="empty-state" id="emptyState">
+          <div class="empty-state" id="emptyState-active">
             <EmptyStateGraphic />
             <h2 class="empty-title">{emptyMessage().title}</h2>
             <p class="empty-hint">{emptyMessage().hint}</p>
@@ -104,7 +104,7 @@ export default function DownloadList(props: Props) {
         )}
 
         {currentView() === 'history' && sortedHistoryDownloads().length === 0 && (
-          <div class="empty-state" id="emptyState">
+          <div class="empty-state" id="emptyState-history">
             <EmptyStateGraphic />
             <h2 class="empty-title">{emptyMessage().title}</h2>
             <p class="empty-hint">{emptyMessage().hint}</p>
