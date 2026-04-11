@@ -217,12 +217,11 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		m.addLogEntry(LogStyleStarted.Render("🐞 Opening browser to file bug report..."))
 		if err := utils.OpenBrowser(reportURL); err != nil {
 			m.addLogEntry(LogStyleError.Render("✖ Could not open browser. Open manually: " + reportURL))
 			return m, nil
 		}
-
-		m.addLogEntry(LogStyleStarted.Render("🐞 Opening browser to file bug report..."))
 		return m, nil
 	}
 
