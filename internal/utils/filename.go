@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/h2non/filetype"
 	"github.com/vfaronov/httpheader"
@@ -154,6 +155,24 @@ func sanitizeFilename(name string) string {
 
 	if name == "" {
 		return "_"
+	}
+
+	// Truncate to 255 bytes (Linux/macOS/Windows fs limit), preserving extension.
+	const maxBytes = 255
+	if len(name) > maxBytes {
+		ext := filepath.Ext(name)
+		stem := strings.TrimSuffix(name, ext)
+		// Ensure ext itself fits; if the extension alone is absurdly long, drop it.
+		if len(ext) >= maxBytes {
+			ext = ""
+		}
+		allowedStem := maxBytes - len(ext)
+		// Trim stem by rune boundary so we don't split a multi-byte character.
+		for len(stem) > allowedStem {
+			_, size := utf8.DecodeLastRuneInString(stem)
+			stem = stem[:len(stem)-size]
+		}
+		name = stem + ext
 	}
 
 	return name

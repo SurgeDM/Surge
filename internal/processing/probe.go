@@ -206,7 +206,13 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 		name = "download.bin"
 	}
 
-	if filenameHint != "" {
+	// Prefer the name resolved from the response (Content-Disposition, magic
+	// bytes, etc.) because it is always more authoritative than a hint derived
+	// from the raw URL.  Only fall back to the hint when DetermineFilename
+	// could not do better than the generic "download.bin" placeholder.
+	if name != "" && name != "download.bin" {
+		result.Filename = name
+	} else if filenameHint != "" {
 		result.Filename = filenameHint
 	} else {
 		result.Filename = name
