@@ -325,12 +325,23 @@ body {
 }
 
 .settings-group-title {
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 1px;
   margin-bottom: 12px;
+}
+
+.settings-group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.settings-group-header .settings-group-title {
+  margin-bottom: 0;
 }
 
 .settings-field {
@@ -367,6 +378,30 @@ body {
     Consolas,
     "Liberation Mono",
     monospace;
+}
+
+.version-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  background: linear-gradient(135deg, rgba(255, 121, 198, 0.08), rgba(189, 147, 249, 0.08));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.02);
+  transition: all 0.2s ease;
+  user-select: none;
+  cursor: default;
+}
+
+.version-badge:hover {
+  background: linear-gradient(135deg, rgba(255, 121, 198, 0.12), rgba(189, 147, 249, 0.12));
+  border-color: rgba(255, 255, 255, 0.15);
+  color: var(--text-primary);
+  transform: translateY(-1px);
 }
 
 .settings-input-row {
