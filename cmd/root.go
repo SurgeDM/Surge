@@ -31,16 +31,32 @@ import (
 // Version information - set via ldflags during build
 var (
 	Version   = "dev"
+	Commit    = "unknown"
 	BuildTime = "unknown"
 )
 
 func init() {
-	// Override with build info if ldflags didn't inject a version
-	if Version == "dev" || Version == "" {
-		if info, ok := debug.ReadBuildInfo(); ok && info.Main.Version != "" && info.Main.Version != "(devel)" {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		// Override with build info if ldflags didn't inject a version.
+		if (Version == "dev" || Version == "") && info.Main.Version != "" && info.Main.Version != "(devel)" {
 			Version = strings.TrimPrefix(info.Main.Version, "v")
 		}
+
+		if Commit == "" || Commit == "unknown" {
+			if rev := buildInfoSetting(info.Settings, "vcs.revision"); rev != "" {
+				Commit = rev
+			}
+		}
 	}
+}
+
+func buildInfoSetting(settings []debug.BuildSetting, key string) string {
+	for _, setting := range settings {
+		if setting.Key == key {
+			return strings.TrimSpace(setting.Value)
+		}
+	}
+	return ""
 }
 
 // activeDownloads tracks in-flight downloads for headless/server exit logic.
@@ -459,7 +475,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) error {
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
-	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), noResume)
+	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), noResume, Commit)
 	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())
 	m.ServerHost = serverBindHost
 	if m.ServerHost == "" {

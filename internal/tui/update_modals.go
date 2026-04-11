@@ -6,7 +6,13 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/SurgeDM/Surge/internal/bugreport"
+	"github.com/SurgeDM/Surge/internal/clipboard"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
+
+var openBugReportBrowser = utils.OpenBrowser
+var writeBugReportClipboard = clipboard.Write
 
 func (m RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Duplicate.Continue) {
@@ -171,4 +177,152 @@ func (m RootModel) updateUpdateAvailable(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 	}
 
 	return m, nil
+}
+
+func (m RootModel) updateBugReportTarget(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if key.Matches(msg, m.keys.BugReport.Cancel) {
+		m = m.resetBugReportFlow()
+		return m, nil
+	}
+
+	if key.Matches(msg, m.keys.BugReport.Core) {
+		m.bugReportIncludeSystemInfo = true
+		m.bugReportIncludeLatestLog = true
+		m.quitConfirmFocused = 0
+		m.state = BugReportSystemDetailsState
+		return m, nil
+	}
+
+	if key.Matches(msg, m.keys.BugReport.Extension) {
+		reportURL := bugreport.ExtensionBugReportURL()
+		m = m.tryOpenBugReportURL(reportURL)
+		m = m.resetBugReportFlow()
+		return m, nil
+	}
+
+	return m, nil
+}
+
+func (m RootModel) updateBugReportSystemDetails(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	m, decision, handled := m.handleYesNoSelection(msg)
+	if !handled {
+		return m, nil
+	}
+
+	switch decision {
+	case yesNoNone:
+		return m, nil
+	case yesNoCancel:
+		m = m.resetBugReportFlow()
+	case yesNoYes:
+		m.bugReportIncludeSystemInfo = true
+		m.quitConfirmFocused = 0
+		m.state = BugReportLogPathState
+	case yesNoNo:
+		m.bugReportIncludeSystemInfo = false
+		m.quitConfirmFocused = 0
+		m.state = BugReportLogPathState
+	}
+
+	return m, nil
+}
+
+func (m RootModel) updateBugReportLogPath(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	m, decision, handled := m.handleYesNoSelection(msg)
+	if !handled {
+		return m, nil
+	}
+
+	switch decision {
+	case yesNoNone:
+		return m, nil
+	case yesNoCancel:
+		m = m.resetBugReportFlow()
+	case yesNoYes:
+		m.bugReportIncludeLatestLog = true
+		reportURL := m.buildCoreBugReportURL()
+		m = m.tryOpenBugReportURL(reportURL)
+		m = m.resetBugReportFlow()
+	case yesNoNo:
+		m.bugReportIncludeLatestLog = false
+		reportURL := m.buildCoreBugReportURL()
+		m = m.tryOpenBugReportURL(reportURL)
+		m = m.resetBugReportFlow()
+	}
+
+	return m, nil
+}
+
+type yesNoDecision int
+
+const (
+	yesNoNone yesNoDecision = iota
+	yesNoCancel
+	yesNoYes
+	yesNoNo
+)
+
+func (m RootModel) handleYesNoSelection(msg tea.KeyPressMsg) (RootModel, yesNoDecision, bool) {
+	if key.Matches(msg, m.keys.QuitConfirm.Left) || key.Matches(msg, m.keys.QuitConfirm.Right) {
+		m.quitConfirmFocused = 1 - m.quitConfirmFocused
+		return m, yesNoNone, true
+	}
+
+	if key.Matches(msg, m.keys.QuitConfirm.Yes) {
+		return m, yesNoYes, true
+	}
+
+	if key.Matches(msg, m.keys.QuitConfirm.No) {
+		return m, yesNoNo, true
+	}
+
+	if key.Matches(msg, m.keys.QuitConfirm.Select) {
+		if m.quitConfirmFocused == 0 {
+			return m, yesNoYes, true
+		}
+		return m, yesNoNo, true
+	}
+
+	if key.Matches(msg, m.keys.QuitConfirm.Cancel) {
+		return m, yesNoCancel, true
+	}
+
+	return m, yesNoNone, false
+}
+
+func (m RootModel) buildCoreBugReportURL() string {
+	return bugreport.CoreBugReportURL(bugreport.CoreReportOptions{
+		Version:              m.CurrentVersion,
+		Commit:               m.CurrentCommit,
+		IncludeSystemDetails: m.bugReportIncludeSystemInfo,
+		IncludeLatestLogPath: m.bugReportIncludeLatestLog,
+	})
+}
+
+func (m RootModel) tryOpenBugReportURL(reportURL string) RootModel {
+	if reportURL == "" {
+		m.addLogEntry(LogStyleError.Render("✖ Could not open browser. Try running surge bug-report from your terminal instead."))
+		return m
+	}
+
+	if err := openBugReportBrowser(reportURL); err != nil {
+		if err := writeBugReportClipboard(reportURL); err == nil {
+			m.addLogEntry(LogStyleError.Render("✖ Could not open browser. URL copied to clipboard."))
+			return m
+		}
+
+		m.addLogEntry(LogStyleError.Render("✖ Could not open browser. Try running surge bug-report from your terminal instead."))
+		return m
+	}
+
+	m.addLogEntry(LogStyleStarted.Render("🐞 Opening browser to file bug report..."))
+	return m
+}
+
+func (m RootModel) resetBugReportFlow() RootModel {
+	m.bugReportIncludeSystemInfo = true
+	m.bugReportIncludeLatestLog = true
+	m.quitConfirmFocused = 0
+	m.state = DashboardState
+	return m
 }

@@ -232,6 +232,55 @@ func (m RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
+	if m.state == BugReportTargetState {
+		modal := components.ConfirmationModal{
+			Title:       "Bug Report",
+			Message:     "What would you like to report?",
+			Detail:      "1) Surge Core (CLI/TUI/server)\n2) Browser Extension",
+			Keys:        m.keys.BugReport,
+			Help:        m.help,
+			BorderColor: colors.NeonCyan,
+			Width:       64,
+			Height:      12,
+		}
+		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		return m.wrapView(m.renderModalWithOverlay(box))
+	}
+
+	if m.state == BugReportSystemDetailsState {
+		modal := components.ConfirmationModal{
+			Title:            "Core Bug Report",
+			Message:          "Include system details in issue body?",
+			Detail:           "(OS, version, commit)",
+			Keys:             m.keys.QuitConfirm,
+			Help:             m.help,
+			BorderColor:      colors.NeonCyan,
+			Width:            66,
+			Height:           12,
+			ShowYesNoButtons: true,
+			YesNoFocused:     m.quitConfirmFocused,
+		}
+		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		return m.wrapView(m.renderModalWithOverlay(box))
+	}
+
+	if m.state == BugReportLogPathState {
+		modal := components.ConfirmationModal{
+			Title:            "Core Bug Report",
+			Message:          "Include latest debug log path in issue body?",
+			Detail:           "Choose yes to prefill the latest path when available.",
+			Keys:             m.keys.QuitConfirm,
+			Help:             m.help,
+			BorderColor:      colors.NeonCyan,
+			Width:            72,
+			Height:           12,
+			ShowYesNoButtons: true,
+			YesNoFocused:     m.quitConfirmFocused,
+		}
+		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		return m.wrapView(m.renderModalWithOverlay(box))
+	}
+
 	if m.state == QuitConfirmState {
 		return m.wrapView(m.renderModalWithOverlay(m.viewQuitConfirm()))
 	}

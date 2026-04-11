@@ -230,6 +230,15 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 
+		case BugReportTargetState:
+			return m.updateBugReportTarget(msg)
+
+		case BugReportSystemDetailsState:
+			return m.updateBugReportSystemDetails(msg)
+
+		case BugReportLogPathState:
+			return m.updateBugReportLogPath(msg)
+
 		default:
 			return m, nil
 		}

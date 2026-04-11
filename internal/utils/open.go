@@ -6,6 +6,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
 func OpenFile(path string) error {
@@ -74,7 +75,7 @@ func buildOpenCommand(path string) *exec.Cmd {
 
 // OpenBrowser opens a URL in the system's default web browser.
 func OpenBrowser(url string) error {
-	if url == "" {
+	if strings.TrimSpace(url) == "" {
 		return fmt.Errorf("url is empty")
 	}
 	return openWithSystem(url)

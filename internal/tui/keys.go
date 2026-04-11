@@ -13,6 +13,7 @@ type KeyMap struct {
 	SettingsEditor SettingsEditorKeyMap
 	BatchConfirm   BatchConfirmKeyMap
 	Update         UpdateKeyMap
+	BugReport      BugReportKeyMap
 	CategoryMgr    CategoryManagerKeyMap
 	QuitConfirm    QuitConfirmKeyMap
 }
@@ -32,6 +33,7 @@ type DashboardKeyMap struct {
 	Settings       key.Binding
 	Log            key.Binding
 	ToggleHelp     key.Binding
+	ReportBug      key.Binding
 	OpenFile       key.Binding
 	Quit           key.Binding
 	ForceQuit      key.Binding
@@ -119,6 +121,13 @@ type UpdateKeyMap struct {
 	NeverRemind key.Binding
 }
 
+// BugReportKeyMap defines keybindings for selecting bug report target.
+type BugReportKeyMap struct {
+	Core      key.Binding
+	Extension key.Binding
+	Cancel    key.Binding
+}
+
 // QuitConfirmKeyMap defines keybindings for the quit confirmation modal
 type QuitConfirmKeyMap struct {
 	Left   key.Binding
@@ -195,6 +204,10 @@ var Keys = KeyMap{
 		ToggleHelp: key.NewBinding(
 			key.WithKeys("h"),
 			key.WithHelp("h", "keybindings"),
+		),
+		ReportBug: key.NewBinding(
+			key.WithKeys("?"),
+			key.WithHelp("?", "report bug"),
 		),
 		OpenFile: key.NewBinding(
 			key.WithKeys("o"),
@@ -417,6 +430,20 @@ var Keys = KeyMap{
 			key.WithHelp("n", "never remind"),
 		),
 	},
+	BugReport: BugReportKeyMap{
+		Core: key.NewBinding(
+			key.WithKeys("1", "c", "C"),
+			key.WithHelp("1", "core report"),
+		),
+		Extension: key.NewBinding(
+			key.WithKeys("2", "e", "E"),
+			key.WithHelp("2", "extension report"),
+		),
+		Cancel: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "cancel"),
+		),
+	},
 	CategoryMgr: CategoryManagerKeyMap{
 		Up:     key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("\u2191/k", "up")),
 		Down:   key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("\u2193/j", "down")),
@@ -461,7 +488,7 @@ func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab},
 		{k.Add, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings},
-		{k.Log, k.Quit},
+		{k.Log, k.ReportBug, k.Quit},
 	}
 }
 
@@ -530,6 +557,14 @@ func (k UpdateKeyMap) ShortHelp() []key.Binding {
 
 func (k UpdateKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{{k.OpenGitHub, k.IgnoreNow, k.NeverRemind}}
+}
+
+func (k BugReportKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Core, k.Extension, k.Cancel}
+}
+
+func (k BugReportKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{{k.Core, k.Extension, k.Cancel}}
 }
 
 func (k CategoryManagerKeyMap) ShortHelp() []key.Binding {

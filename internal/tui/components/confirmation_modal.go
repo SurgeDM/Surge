@@ -21,6 +21,11 @@ type ConfirmationModal struct {
 	BorderColor color.Color // Border color for the box
 	Width       int
 	Height      int
+
+	ShowYesNoButtons bool
+	YesNoFocused     int
+	YesLabel         string
+	NoLabel          string
 }
 
 // NoKeys satisfies help.KeyMap for informational modals with no interactive bindings.
@@ -55,7 +60,66 @@ func (m ConfirmationModal) renderBody(width int) string {
 		)
 	}
 
+	if m.ShowYesNoButtons {
+		yesLabel := m.YesLabel
+		if yesLabel == "" {
+			yesLabel = "Yep!"
+		}
+		noLabel := m.NoLabel
+		if noLabel == "" {
+			noLabel = "Nope"
+		}
+
+		content = lipgloss.JoinVertical(lipgloss.Center,
+			content,
+			"",
+			renderYesNoButtons(yesLabel, noLabel, m.YesNoFocused),
+		)
+	}
+
 	return content
+}
+
+func renderYesNoButtons(yesLabel, noLabel string, focused int) string {
+	pad := "   "
+
+	activeFirst := lipgloss.NewStyle().Foreground(colors.White).Background(colors.NeonPink).Bold(true).Underline(true)
+	activeRest := lipgloss.NewStyle().Foreground(colors.White).Background(colors.NeonPink).Bold(true)
+	activePad := lipgloss.NewStyle().Background(colors.NeonPink)
+
+	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray).Background(lipgloss.Color("236")).Underline(true)
+	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray).Background(lipgloss.Color("236"))
+	inactivePad := lipgloss.NewStyle().Background(lipgloss.Color("236"))
+
+	yesFirst, yesRest := splitFirst(yesLabel)
+	noFirst, noRest := splitFirst(noLabel)
+
+	yesFirstStyle, yesRestStyle, yesPadStyle := activeFirst, activeRest, activePad
+	noFirstStyle, noRestStyle, noPadStyle := inactiveFirst, inactiveRest, inactivePad
+	if focused == 1 {
+		yesFirstStyle, yesRestStyle, yesPadStyle = inactiveFirst, inactiveRest, inactivePad
+		noFirstStyle, noRestStyle, noPadStyle = activeFirst, activeRest, activePad
+	}
+
+	renderBtn := func(padStyle, firstStyle, restStyle lipgloss.Style, first, rest string) string {
+		return padStyle.Render(pad) + firstStyle.Render(first) + restStyle.Render(rest) + padStyle.Render(pad)
+	}
+
+	yesBtn := renderBtn(yesPadStyle, yesFirstStyle, yesRestStyle, yesFirst, yesRest)
+	noBtn := renderBtn(noPadStyle, noFirstStyle, noRestStyle, noFirst, noRest)
+
+	return lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, "     ", noBtn)
+}
+
+func splitFirst(label string) (string, string) {
+	runes := []rune(label)
+	if len(runes) == 0 {
+		return "", ""
+	}
+	if len(runes) == 1 {
+		return string(runes[0]), ""
+	}
+	return string(runes[0]), string(runes[1:])
 }
 
 // RenderWithBtopBox renders the modal using the btop-style box with title in border

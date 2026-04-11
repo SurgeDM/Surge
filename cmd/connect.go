@@ -101,7 +101,7 @@ func connectAndRunTUI(_ *cobra.Command, target string) error {
 
 func newRemoteRootModel(baseURL string, service core.DownloadService) tui.RootModel {
 	serverHost, serverPort := parseRemoteServerAddress(baseURL)
-	m := tui.InitialRootModel(serverPort, Version, service, nil, false)
+	m := tui.InitialRootModel(serverPort, Version, service, nil, false, Commit)
 	m.ServerHost = serverHost
 	m.ServerPort = serverPort
 	m.IsRemote = true

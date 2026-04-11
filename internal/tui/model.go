@@ -37,21 +37,24 @@ func InitializeTUI() {
 type UIState int // Defines UIState as int to be used in rootModel
 
 const (
-	DashboardState             UIState = iota // DashboardState is 0 increments after each line
-	InputState                                // InputState is 1
-	DetailState                               // DetailState is 2
-	FilePickerState                           // FilePickerState is 3
-	DuplicateWarningState                     // DuplicateWarningState is 4
-	SearchState                               // SearchState is 6
-	SettingsState                             // SettingsState is 7
-	ExtensionConfirmationState                // ExtensionConfirmationState is 8
-	BatchFilePickerState                      // BatchFilePickerState is 9
-	BatchConfirmState                         // BatchConfirmState is 10
-	UpdateAvailableState                      // UpdateAvailableState is 11
-	URLUpdateState                            // URLUpdateState is 12
-	CategoryManagerState                      // CategoryManagerState is 13
-	QuitConfirmState                          // QuitConfirmState is 14
-	HelpModalState                            // HelpModalState is 15
+	DashboardState              UIState = iota // DashboardState is 0 increments after each line
+	InputState                                 // InputState is 1
+	DetailState                                // DetailState is 2
+	FilePickerState                            // FilePickerState is 3
+	DuplicateWarningState                      // DuplicateWarningState is 4
+	SearchState                                // SearchState is 6
+	SettingsState                              // SettingsState is 7
+	ExtensionConfirmationState                 // ExtensionConfirmationState is 8
+	BatchFilePickerState                       // BatchFilePickerState is 9
+	BatchConfirmState                          // BatchConfirmState is 10
+	UpdateAvailableState                       // UpdateAvailableState is 11
+	URLUpdateState                             // URLUpdateState is 12
+	CategoryManagerState                       // CategoryManagerState is 13
+	QuitConfirmState                           // QuitConfirmState is 14
+	HelpModalState                             // HelpModalState is 15
+	BugReportTargetState                       // BugReportTargetState is 16
+	BugReportSystemDetailsState                // BugReportSystemDetailsState is 17
+	BugReportLogPathState                      // BugReportLogPathState is 18
 )
 
 type FilePickerOrigin int
@@ -177,6 +180,10 @@ type RootModel struct {
 	// Quit confirm button focus (0 = Yep!, 1 = Nope)
 	quitConfirmFocused int
 
+	// Bug report flow context
+	bugReportIncludeSystemInfo bool
+	bugReportIncludeLatestLog  bool
+
 	// Keybindings
 	keys KeyMap
 
@@ -188,6 +195,7 @@ type RootModel struct {
 	// Update check
 	UpdateInfo     *version.UpdateInfo // Update information (nil if no update available)
 	CurrentVersion string              // Current version of Surge
+	CurrentCommit  string              // Current commit hash of Surge
 
 	InitialDarkBackground bool // Captured at startup for "System" theme
 
@@ -220,8 +228,14 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 	}
 }
 
-func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, orchestrator *processing.LifecycleManager, noResume bool) RootModel {
+func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, orchestrator *processing.LifecycleManager, noResume bool, currentCommit ...string) RootModel {
 	initialDarkBackground := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	commitValue := "unknown"
+	if len(currentCommit) > 0 {
+		if trimmed := strings.TrimSpace(currentCommit[0]); trimmed != "" {
+			commitValue = trimmed
+		}
+	}
 
 	// Initialize inputs
 	urlInput := textinput.New()
@@ -409,6 +423,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		keys:                  Keys,
 		ServerPort:            serverPort,
 		CurrentVersion:        currentVersion,
+		CurrentCommit:         commitValue,
 		InitialDarkBackground: initialDarkBackground,
 		enqueueCtx:            enqueueCtx,
 		cancelEnqueue:         cancelEnqueue,

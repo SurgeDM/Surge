@@ -208,6 +208,14 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if key.Matches(msg, m.keys.Dashboard.ReportBug) {
+		m.quitConfirmFocused = 0
+		m.bugReportIncludeSystemInfo = true
+		m.bugReportIncludeLatestLog = true
+		m.state = BugReportTargetState
+		return m, nil
+	}
+
 	if key.Matches(msg, m.keys.Dashboard.Settings) {
 		m.state = SettingsState
 		m.SettingsActiveTab = 0
