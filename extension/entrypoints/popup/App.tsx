@@ -161,12 +161,17 @@ export default function App() {
         void fetchHistory();
       }
     }, DOWNLOAD_POLL_MS);
+    let prevHealthy = false;
     healthInterval = setInterval(async () => {
       try {
         const response = await sendMessage<{ healthy?: boolean }>({ type: 'checkHealth' });
-        if (response && typeof response.healthy === 'boolean') setServerConnected(response.healthy);
+        const healthy = response?.healthy === true;
+        if (response && typeof response.healthy === 'boolean') setServerConnected(healthy);
+        if (healthy && !prevHealthy) void fetchDownloads();
+        prevHealthy = healthy;
       } catch {
         setServerConnected(false);
+        prevHealthy = false;
       }
     }, HEALTH_POLL_MS);
 

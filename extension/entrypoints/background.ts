@@ -472,7 +472,10 @@ async function startSSEStream(): Promise<void> {
   sseAbortController = new AbortController();
 
   const base = await getBaseUrl();
-  if (!base) return;
+  if (!base) {
+    scheduleSSERetry();
+    return;
+  }
 
   try {
     const resp = await fetch(`${base}/events`, {
