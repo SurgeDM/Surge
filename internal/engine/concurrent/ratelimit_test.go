@@ -35,9 +35,9 @@ func TestConcurrentDownloader_GlobalRateLimit(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Apply global rate limit of 64KB/s. First 64KB is instant (burst), next 64KB takes ~1s.
-	utils.GlobalRateLimiter.SetRate(64 * 1024)
-	defer utils.GlobalRateLimiter.SetRate(0)
+	// Apply rate limit of 64KB/s via state.Limiter to prevent data race across test packages.
+	// First 64KB is instant (burst), next 64KB takes ~1s.
+	state.Limiter = utils.NewTokenBucket(64 * 1024)
 
 	if f, err := os.Create(destPath + ".surge"); err == nil {
 		_ = f.Close()

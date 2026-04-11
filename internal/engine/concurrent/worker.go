@@ -285,10 +285,16 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			if n > 0 {
 				// Apply per-task rate limit
 				if d.State != nil && d.State.Limiter != nil {
-					_ = d.State.Limiter.WaitN(ctx, n)
+					if limiterErr := d.State.Limiter.WaitN(ctx, n); limiterErr != nil {
+						readErr = limiterErr
+						break
+					}
 				}
 				// Apply global rate limit
-				_ = utils.GlobalRateLimiter.WaitN(ctx, n)
+				if limiterErr := utils.GlobalRateLimiter.WaitN(ctx, n); limiterErr != nil {
+					readErr = limiterErr
+					break
+				}
 
 				readSoFar += n
 				// CONTINUOUS HEALTH KEEPALIVE:

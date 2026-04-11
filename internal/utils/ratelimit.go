@@ -3,43 +3,65 @@ package utils
 import (
 	"context"
 	"sync"
-	"time"
+
+	"golang.org/x/time/rate"
 )
 
 // TokenBucket is a thread-safe rate limiter.
 type TokenBucket struct {
-	mu         sync.Mutex
-	rateBytes  float64 // tokens per second
-	tokens     float64 // current tokens
-	lastUpdate time.Time
-	enabled    bool
+	mu      sync.RWMutex
+	limiter *rate.Limiter
+	enabled bool
 }
 
 // GlobalRateLimiter is the shared singleton for global application bandwidth limit.
 var GlobalRateLimiter = NewTokenBucket(0)
 
-// NewTokenBucket creates a new rate limiter allowing 'rate' bytes per second.
-// If rate is 0, the limiter is disabled and WaitN returns immediately.
-func NewTokenBucket(rate int64) *TokenBucket {
-	// A max burst size is usually 1 second's worth of tokens or more, 
-	// but since we update exactly, we can just use rate as our capacity.
-	enabled := rate > 0
+// NewTokenBucket creates a new rate limiter allowing 'rateBytes' bytes per second.
+// If rateBytes is 0, the limiter is disabled and WaitN returns immediately.
+func NewTokenBucket(rateBytes int64) *TokenBucket {
+	// A max burst size is usually 1 second's worth of tokens or more.
+	// Since we chunk requests in WaitN, burst can strictly follow rateBytes.
+	burst := int(rateBytes)
+	if burst < 1 && rateBytes > 0 {
+		burst = 1
+	}
+
+	enabled := rateBytes > 0
+	var l *rate.Limiter
+	if enabled {
+		l = rate.NewLimiter(rate.Limit(rateBytes), burst)
+	}
+
 	return &TokenBucket{
-		rateBytes:  float64(rate),
-		tokens:     float64(rate),
-		lastUpdate: time.Now(),
-		enabled:    enabled,
+		limiter: l,
+		enabled: enabled,
 	}
 }
 
 // SetRate dynamically updates the rate limit. 0 disables it.
-func (tb *TokenBucket) SetRate(rate int64) {
+func (tb *TokenBucket) SetRate(rateBytes int64) {
 	tb.mu.Lock()
 	defer tb.mu.Unlock()
 
-	tb.rateBytes = float64(rate)
-	tb.enabled = rate > 0
-	// Don't modify current tokens or restrict them right away, wait to drain.
+	if rateBytes <= 0 {
+		tb.enabled = false
+		tb.limiter = nil
+		return
+	}
+
+	burst := int(rateBytes)
+	if burst < 1 {
+		burst = 1
+	}
+
+	if tb.limiter == nil {
+		tb.limiter = rate.NewLimiter(rate.Limit(rateBytes), burst)
+	} else {
+		tb.limiter.SetLimit(rate.Limit(rateBytes))
+		tb.limiter.SetBurst(burst)
+	}
+	tb.enabled = true
 }
 
 // WaitN blocks until 'n' bytes are available according to the rate limit.
@@ -48,51 +70,40 @@ func (tb *TokenBucket) WaitN(ctx context.Context, n int) error {
 		return nil
 	}
 
-	for {
-		// Use a minimal block scope for locking so we don't hold the mutex during sleep
-		sleepDur := time.Duration(0)
-		
-		tb.mu.Lock()
-		
-		if !tb.enabled {
-			tb.mu.Unlock()
-			return nil
-		}
+	tb.mu.RLock()
+	enabled := tb.enabled
+	l := tb.limiter
+	tb.mu.RUnlock()
 
-		now := time.Now()
-		elapsed := now.Sub(tb.lastUpdate).Seconds()
-
-		// Refill tokens based on elapsed time
-		tb.tokens += elapsed * tb.rateBytes
-		
-		// Cap tokens to 1 second worth of bandwidth (max burst)
-		if tb.tokens > tb.rateBytes {
-			tb.tokens = tb.rateBytes
-		}
-		
-		tb.lastUpdate = now
-
-		reqTokens := float64(n)
-		if tb.tokens >= reqTokens {
-			// We have enough tokens, consume them and proceed
-			tb.tokens -= reqTokens
-			tb.mu.Unlock()
-			return nil
-		}
-		
-		// Not enough tokens. Calculate time to wait.
-		deficit := reqTokens - tb.tokens
-		sleepSecs := deficit / tb.rateBytes
-		sleepDur = time.Duration(sleepSecs * float64(time.Second))
-
-		tb.mu.Unlock()
-
-		// Wait, while remaining respectful to the context
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(sleepDur):
-			// Time passed, loop again to claim tokens
-		}
+	if !enabled || l == nil {
+		return nil
 	}
+
+	// Wait handles context cancellation naturally
+	// Loop over burst chunks to avoid WaitN error if n > burst
+	burst := l.Burst()
+	if burst <= 0 {
+		return nil
+	}
+
+	for n > 0 {
+		req := n
+		if req > burst {
+			req = burst
+		}
+		if err := l.WaitN(ctx, req); err != nil {
+			// rate.Limiter may return a non-wrapped error if the deadline is too soon.
+			// Map it to standard context errors for compatibility.
+			if err.Error() != "" && (err == context.DeadlineExceeded || err == context.Canceled) {
+				return err
+			}
+			if ctxErr := ctx.Err(); ctxErr != nil {
+				return ctxErr
+			}
+			// If rate limiter rejected it because it would exceed the deadline:
+			return context.DeadlineExceeded
+		}
+		n -= req
+	}
+	return nil
 }

@@ -193,12 +193,15 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	buf := *bufPtr
 	defer bufPool.Put(bufPtr)
 
-	if d.State == nil {
-		progressReader := newProgressReader(ctx, resp.Body, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
-		written, err = io.CopyBuffer(outFile, progressReader, buf)
-	} else {
-		progressReader := newProgressReader(ctx, resp.Body, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
-		written, err = io.CopyBuffer(outFile, progressReader, buf)
+	if d.State != nil {
+		d.State.Downloaded.Store(written)
+		d.State.VerifiedProgress.Store(written)
+		// Set d.State earlier, then merge code branches
+	}
+
+	progressReader := newProgressReader(ctx, resp.Body, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
+	written, err = io.CopyBuffer(outFile, progressReader, buf)
+	if d.State != nil {
 		progressReader.Flush()
 	}
 	if err != nil {
@@ -268,9 +271,13 @@ func (w *progressReader) Read(p []byte) (int, error) {
 	
 	if n > 0 {
 		if w.state != nil && w.state.Limiter != nil {
-			_ = w.state.Limiter.WaitN(w.ctx, n)
+			if limiterErr := w.state.Limiter.WaitN(w.ctx, n); limiterErr != nil {
+				return n, limiterErr
+			}
 		}
-		_ = utils.GlobalRateLimiter.WaitN(w.ctx, n)
+		if limiterErr := utils.GlobalRateLimiter.WaitN(w.ctx, n); limiterErr != nil {
+			return n, limiterErr
+		}
 	}
 
 	if n <= 0 || w.state == nil {
