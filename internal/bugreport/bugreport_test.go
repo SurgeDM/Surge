@@ -71,3 +71,29 @@ func TestBugReportURLRoundTripsSpecialCharacters(t *testing.T) {
 		t.Fatalf("commit did not round-trip through URL encoding: %q", body)
 	}
 }
+
+func TestBugReportURLNormalizesEmptyInputs(t *testing.T) {
+	tests := []struct {
+		version string
+		commit  string
+	}{
+		{"", ""},
+		{"  ", "  "},
+	}
+
+	for _, tc := range tests {
+		reportURL := BugReportURL(tc.version, tc.commit)
+		parsed, err := url.Parse(reportURL)
+		if err != nil {
+			t.Fatalf("failed to parse bug-report URL: %v", err)
+		}
+
+		body := parsed.Query().Get("body")
+		if !strings.Contains(body, "- Surge Version: unknown") {
+			t.Errorf("expected unknown version fallback, got: %q", body)
+		}
+		if !strings.Contains(body, "- Commit: unknown") {
+			t.Errorf("expected unknown commit fallback, got: %q", body)
+		}
+	}
+}
