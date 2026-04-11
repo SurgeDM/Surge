@@ -19,14 +19,20 @@ func TestExpandTemplate(t *testing.T) {
 		Error:    "",
 	}
 
+	// Build expected values using shellEscape so the quoting style matches
+	// the current platform (single quotes on Unix, double quotes on Windows).
+	filename := shellEscape("test.zip")
+	filepath := shellEscape("/downloads/test.zip")
+	id := shellEscape("abc123")
+
 	tests := []struct {
 		name     string
 		template string
 		want     string
 	}{
-		{"filename", "echo {filename}", "echo 'test.zip'"},
-		{"filepath", "mv {filepath} /done/", "mv '/downloads/test.zip' /done/"},
-		{"all vars", "{id}: {filename} ({size} bytes, {speed} B/s, {duration})", "'abc123': 'test.zip' (1048576 bytes, 524288.00 B/s, 2s)"},
+		{"filename", "echo {filename}", "echo " + filename},
+		{"filepath", "mv {filepath} /done/", "mv " + filepath + " /done/"},
+		{"all vars", "{id}: {filename} ({size} bytes, {speed} B/s, {duration})", id + ": " + filename + " (1048576 bytes, 524288.00 B/s, 2s)"},
 		{"no vars", "echo done", "echo done"},
 		{"empty", "", ""},
 	}
