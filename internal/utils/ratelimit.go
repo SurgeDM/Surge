@@ -71,18 +71,18 @@ func (tb *TokenBucket) WaitN(ctx context.Context, n int) error {
 		return nil
 	}
 
-	tb.mu.RLock()
-	enabled := tb.enabled
-	l := tb.limiter
-	tb.mu.RUnlock()
-
-	if !enabled || l == nil {
-		return nil
-	}
-
 	// Wait handles context cancellation naturally
 	// Loop over burst chunks to avoid WaitN error if n > burst
 	for n > 0 {
+		tb.mu.RLock()
+		enabled := tb.enabled
+		l := tb.limiter
+		tb.mu.RUnlock()
+
+		if !enabled || l == nil {
+			return nil
+		}
+
 		burst := l.Burst()
 		if burst <= 0 {
 			return nil
