@@ -83,27 +83,45 @@ func TestVerifyChecksum_EmptyArgs(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func mustParseDigestHeader(t *testing.T, header string) (string, string) {
+	t.Helper()
+	algo, hash, err := ParseDigestHeader(header)
+	require.NoError(t, err)
+	return algo, hash
+}
+
 func TestParseDigestHeader_SHA256Base64(t *testing.T) {
 	// sha256 of empty string in base64
-	algo, hash := ParseDigestHeader("sha-256=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=")
+	algo, hash := mustParseDigestHeader(t, "sha-256=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU=")
 	assert.Equal(t, "sha256", algo)
 	assert.Equal(t, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hash)
 }
 
 func TestParseDigestHeader_MD5Hex(t *testing.T) {
-	algo, hash := ParseDigestHeader("md5=d41d8cd98f00b204e9800998ecf8427e")
+	algo, hash := mustParseDigestHeader(t, "md5=d41d8cd98f00b204e9800998ecf8427e")
 	assert.Equal(t, "md5", algo)
 	assert.Equal(t, "d41d8cd98f00b204e9800998ecf8427e", hash)
 }
 
 func TestParseDigestHeader_Invalid(t *testing.T) {
-	algo, hash := ParseDigestHeader("invalid")
+	algo, hash := mustParseDigestHeader(t, "invalid")
 	assert.Empty(t, algo)
 	assert.Empty(t, hash)
 }
 
 func TestParseDigestHeader_UnsupportedAlgo(t *testing.T) {
-	algo, hash := ParseDigestHeader("sha-512=abc")
+	algo, hash := mustParseDigestHeader(t, "sha-512=abc")
 	assert.Empty(t, algo)
 	assert.Empty(t, hash)
+}
+
+func TestParseDigestHeader_SHA256UnpaddedBase64(t *testing.T) {
+	algo, hash := mustParseDigestHeader(t, "sha-256=47DEQpj8HBSa+/TImW+5JCeuQeRkm5NMpJWZG3hSuFU")
+	assert.Equal(t, "sha256", algo)
+	assert.Equal(t, "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", hash)
+}
+
+func TestParseDigestHeader_SHA256WrongLengthHex(t *testing.T) {
+	_, _, err := ParseDigestHeader("sha-256=d41d8cd98f00b204e9800998ecf8427e")
+	require.Error(t, err)
 }

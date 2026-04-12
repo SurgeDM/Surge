@@ -50,7 +50,7 @@ func VerifyChecksum(filePath string, algorithm string, expected string) (*Checks
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file for checksum: %w", err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	if _, err := io.Copy(h, f); err != nil {
 		return nil, fmt.Errorf("failed to read file for checksum: %w", err)
@@ -66,12 +66,12 @@ func VerifyChecksum(filePath string, algorithm string, expected string) (*Checks
 }
 
 // ParseDigestHeader parses an HTTP Digest header (RFC 3230) and returns
-// the algorithm and hex-encoded hash. Returns empty strings if not parseable.
+// the algorithm and hex-encoded hash.
 // Example header: "sha-256=base64hash" or "SHA-256=base64hash"
-func ParseDigestHeader(header string) (algorithm string, hexHash string) {
+func ParseDigestHeader(header string) (algorithm string, hexHash string, err error) {
 	parts := strings.SplitN(header, "=", 2)
 	if len(parts) != 2 {
-		return "", ""
+		return "", "", nil
 	}
 
 	algo := strings.ToLower(strings.TrimSpace(parts[0]))
@@ -85,27 +85,28 @@ func ParseDigestHeader(header string) (algorithm string, hexHash string) {
 	case "md5":
 		// no normalization needed
 	default:
-		return "", ""
+		return "", "", nil
 	}
 
-	// Some servers provide hex directly in Digest; prefer that when it matches
-	// the expected hash length for the selected algorithm.
-	expectedHexLen := 0
+	expectedBytes := 0
 	switch algo {
 	case "md5":
-		expectedHexLen = 32
+		expectedBytes = md5.Size
 	case "sha1":
-		expectedHexLen = 40
+		expectedBytes = sha1.Size
 	case "sha256":
-		expectedHexLen = 64
+		expectedBytes = sha256.Size
 	}
+	expectedHexLen := expectedBytes * 2
 	if len(value) == expectedHexLen {
-		if _, err := hex.DecodeString(value); err == nil {
-			return algo, strings.ToLower(value)
+		if decoded, err := hex.DecodeString(value); err == nil {
+			if len(decoded) != expectedBytes {
+				return "", "", fmt.Errorf("digest length mismatch for %s", algo)
+			}
+			return algo, strings.ToLower(value), nil
 		}
 	}
 
-	// RFC 3230 uses base64 (padded or unpadded, standard or URL-safe)
 	for _, enc := range []*base64.Encoding{
 		base64.StdEncoding,
 		base64.URLEncoding,
@@ -113,12 +114,12 @@ func ParseDigestHeader(header string) (algorithm string, hexHash string) {
 		base64.RawURLEncoding,
 	} {
 		if decoded, err := enc.DecodeString(value); err == nil {
-			h := hex.EncodeToString(decoded)
-			if len(h) == expectedHexLen {
-				return algo, h
+			if len(decoded) != expectedBytes {
+				return "", "", fmt.Errorf("digest length mismatch for %s", algo)
 			}
+			return algo, hex.EncodeToString(decoded), nil
 		}
 	}
 
-	return "", ""
+	return "", "", nil
 }
