@@ -9,8 +9,8 @@ import (
 
 // renderHeaderBox displays the Surge logo and the server connection status within a box.
 func (m *RootModel) renderHeaderBox(width, height int) string {
-	contentWidth := width - (BoxStyle.GetHorizontalFrameSize() * 2)
-	contentHeight := height - (BoxStyle.GetVerticalFrameSize() * 2)
+	contentWidth := width - 2
+	contentHeight := height - 2
 
 	if contentWidth < 0 {
 		contentWidth = 0

@@ -12,8 +12,8 @@ func (m *RootModel) renderLogBox(width, height int) string {
 		return ""
 	}
 
-	contentWidth := width - (BoxStyle.GetHorizontalFrameSize() * 2)
-	contentHeight := height - (BoxStyle.GetVerticalFrameSize() * 2)
+	contentWidth := width - 2
+	contentHeight := height - 2
 
 	if contentWidth < 0 {
 		contentWidth = 0

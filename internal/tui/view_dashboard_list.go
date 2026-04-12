@@ -7,8 +7,8 @@ import (
 
 // renderDownloadsBox generates the download list box with the top-left corner search bar string.
 func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) string {
-	contentWidth := width - (BoxStyle.GetHorizontalFrameSize() * 2)
-	contentHeight := height - (BoxStyle.GetVerticalFrameSize() * 2)
+	contentWidth := width - 2
+	contentHeight := height - 2
 
 	if contentWidth < 0 {
 		contentWidth = 0
