@@ -188,16 +188,9 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 	start := time.Now()
 	var written int64
-
 	bufPtr := bufPool.Get().(*[]byte)
 	buf := *bufPtr
 	defer bufPool.Put(bufPtr)
-
-	if d.State != nil {
-		d.State.Downloaded.Store(written)
-		d.State.VerifiedProgress.Store(written)
-		// Set d.State earlier, then merge code branches
-	}
 
 	progressReader := newProgressReader(ctx, resp.Body, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
 	written, err = io.CopyBuffer(outFile, progressReader, buf)

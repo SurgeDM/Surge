@@ -171,6 +171,12 @@ func (m *LifecycleManager) ApplySettings(s *config.Settings) {
 
 	// Dynamically update the global rate limit
 	utils.GlobalRateLimiter.SetRate(s.Network.GlobalRateLimit * 1024)
+	
+	// Update active per-task limiters if the hook is wired
+	hooks := m.getEngineHooks()
+	if hooks.UpdateActiveRates != nil {
+		hooks.UpdateActiveRates(s.Network.PerTaskRateLimit * 1024)
+	}
 }
 
 // SaveSettings persists and applies a new routing snapshot for future enqueue calls.

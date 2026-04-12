@@ -101,7 +101,7 @@ func (tb *TokenBucket) WaitN(ctx context.Context, n int) error {
 
 			// rate.Limiter may return a non-wrapped error if the deadline is too soon.
 			// Map it to standard context errors for compatibility.
-			if err.Error() != "" && (err == context.DeadlineExceeded || err == context.Canceled) {
+			if err == context.DeadlineExceeded || err == context.Canceled {
 				return err
 			}
 			if ctxErr := ctx.Err(); ctxErr != nil {

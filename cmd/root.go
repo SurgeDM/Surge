@@ -223,6 +223,13 @@ func ensureGlobalLocalServiceAndLifecycle() error {
 			Cancel:              GlobalPool.Cancel,
 			UpdateURL:           GlobalPool.UpdateURL,
 			PublishEvent:        localService.Publish,
+			UpdateActiveRates: func(rate int64) {
+				for _, cfg := range GlobalPool.GetAll() {
+					if cfg.State != nil && cfg.State.Limiter != nil {
+						cfg.State.Limiter.SetRate(rate)
+					}
+				}
+			},
 		})
 
 		localService.SetLifecycleHooks(core.LifecycleHooks{
