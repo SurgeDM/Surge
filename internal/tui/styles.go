@@ -58,7 +58,7 @@ func rebuildStyles() {
 	DetailStyle = PaneStyle
 
 	TitleStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).MarginBottom(1)
-	PaneTitleStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
+	PaneTitleStyle = lipgloss.NewStyle().Foreground(colors.LightGray).Bold(true)
 	TabStyle = lipgloss.NewStyle().Foreground(colors.LightGray).Padding(DefaultPaddingY, DefaultPaddingX)
 
 	ActiveTabStyle = lipgloss.NewStyle().
