@@ -216,6 +216,18 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if key.Matches(msg, m.keys.Dashboard.DataTransfer) {
+		m.state = DataTransferState
+		m.transferStatus = ""
+		if m.transferRootDir == "" {
+			m.transferRootDir = m.Settings.General.DefaultDownloadDir
+			if m.transferRootDir == "" {
+				m.transferRootDir = "."
+			}
+		}
+		return m, nil
+	}
+
 	if key.Matches(msg, m.keys.Dashboard.CategoryFilter) {
 		if !m.Settings.Categories.CategoryEnabled || len(m.Settings.Categories.Categories) == 0 {
 			if m.categoryFilter != "" {
