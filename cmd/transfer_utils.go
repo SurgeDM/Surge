@@ -59,6 +59,9 @@ func printImportResult(result *backup.ImportResult) {
 		printImportPreview(result.Preview)
 	}
 	fmt.Printf("Imported: %d\n", result.Imported)
+	if result.LogsRestored > 0 {
+		fmt.Printf("Logs restored: %d\n", result.LogsRestored)
+	}
 }
 
 func exportBundle(ctx context.Context, transfer core.TransferService, path string, opts backup.ExportOptions) (*backup.Manifest, error) {
@@ -79,13 +82,13 @@ func exportBundle(ctx context.Context, transfer core.TransferService, path strin
 	return manifest, nil
 }
 
-func previewBundle(ctx context.Context, transfer core.TransferService, path string) (*backup.ImportPreview, error) {
+func previewBundle(ctx context.Context, transfer core.TransferService, path string, opts backup.ImportOptions) (*backup.ImportPreview, error) {
 	file, err := os.Open(filepath.Clean(path))
 	if err != nil {
 		return nil, err
 	}
 	defer func() { _ = file.Close() }()
-	return transfer.PreviewImport(ctx, file)
+	return transfer.PreviewImport(ctx, file, opts)
 }
 
 func applyBundle(ctx context.Context, transfer core.TransferService, path string, opts backup.ImportOptions) (*backup.ImportResult, error) {
@@ -100,4 +103,3 @@ func applyBundle(ctx context.Context, transfer core.TransferService, path string
 	}
 	return transfer.ApplyImport(ctx, src, opts)
 }
-

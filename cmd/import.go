@@ -26,12 +26,13 @@ var importCmd = &cobra.Command{
 			return err
 		}
 
-		preview, err := previewBundle(context.Background(), transfer, args[0])
+		previewOpts := backup.ImportOptions{
+			RootDir: rootDir,
+			Replace: replace,
+		}
+		preview, err := previewBundle(context.Background(), transfer, args[0], previewOpts)
 		if err != nil {
 			return err
-		}
-		if rootDir != "" {
-			preview.RootDir = rootDir
 		}
 
 		if !apply {
@@ -42,10 +43,7 @@ var importCmd = &cobra.Command{
 			return nil
 		}
 
-		opts := backup.ImportOptions{
-			RootDir: rootDir,
-			Replace: replace,
-		}
+		opts := previewOpts
 		if isRemote {
 			opts.SessionID = preview.SessionID
 		}
@@ -69,4 +67,3 @@ func init() {
 	importCmd.Flags().String("root", "", "Root directory for rebased imported paths")
 	importCmd.Flags().Bool("json", false, "Output preview/result as JSON")
 }
-

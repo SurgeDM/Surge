@@ -16,7 +16,7 @@ import (
 // TransferService defines import/export operations for local and remote use.
 type TransferService interface {
 	Export(ctx context.Context, opts backup.ExportOptions, dst io.Writer) (*backup.Manifest, error)
-	PreviewImport(ctx context.Context, src io.Reader) (*backup.ImportPreview, error)
+	PreviewImport(ctx context.Context, src io.Reader, opts backup.ImportOptions) (*backup.ImportPreview, error)
 	ApplyImport(ctx context.Context, src io.Reader, opts backup.ImportOptions) (*backup.ImportResult, error)
 }
 
@@ -37,8 +37,8 @@ func (s *LocalTransferService) Export(ctx context.Context, opts backup.ExportOpt
 	return backup.Export(ctx, dst, opts, s.Controller)
 }
 
-func (s *LocalTransferService) PreviewImport(ctx context.Context, src io.Reader) (*backup.ImportPreview, error) {
-	return backup.PreviewImport(ctx, src, backup.ImportOptions{})
+func (s *LocalTransferService) PreviewImport(ctx context.Context, src io.Reader, opts backup.ImportOptions) (*backup.ImportPreview, error) {
+	return backup.PreviewImport(ctx, src, opts)
 }
 
 func (s *LocalTransferService) ApplyImport(ctx context.Context, src io.Reader, opts backup.ImportOptions) (*backup.ImportResult, error) {
@@ -98,8 +98,19 @@ func (s *RemoteTransferService) Export(ctx context.Context, opts backup.ExportOp
 	return &manifest, nil
 }
 
-func (s *RemoteTransferService) PreviewImport(ctx context.Context, src io.Reader) (*backup.ImportPreview, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, s.BaseURL+"/data/import/preview", src)
+func (s *RemoteTransferService) PreviewImport(ctx context.Context, src io.Reader, opts backup.ImportOptions) (*backup.ImportPreview, error) {
+	endpoint := s.BaseURL + "/data/import/preview"
+	query := url.Values{}
+	if strings.TrimSpace(opts.RootDir) != "" {
+		query.Set("root_dir", opts.RootDir)
+	}
+	if opts.Replace {
+		query.Set("replace", "true")
+	}
+	if encoded := query.Encode(); encoded != "" {
+		endpoint += "?" + encoded
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, src)
 	if err != nil {
 		return nil, err
 	}
@@ -160,4 +171,3 @@ func (s *RemoteTransferService) ApplyImport(ctx context.Context, src io.Reader, 
 	_ = src
 	return &result, nil
 }
-

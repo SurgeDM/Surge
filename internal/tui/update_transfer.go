@@ -43,10 +43,10 @@ func (m RootModel) previewImportCmd(path string) tea.Cmd {
 			return transferPreviewResultMsg{err: err}
 		}
 		defer func() { _ = file.Close() }()
-		preview, err := m.Transfer.PreviewImport(context.Background(), file)
-		if preview != nil && m.transferRootDir != "" {
-			preview.RootDir = m.transferRootDir
-		}
+		preview, err := m.Transfer.PreviewImport(context.Background(), file, backup.ImportOptions{
+			RootDir: m.transferRootDir,
+			Replace: m.transferReplace,
+		})
 		return transferPreviewResultMsg{preview: preview, err: err}
 	}
 }
@@ -91,6 +91,8 @@ func (m *RootModel) handleTransferFileSelection(path string) (tea.Model, tea.Cmd
 		return m, m.previewImportCmd(path)
 	case TransferRootPickerState:
 		m.transferRootDir = path
+		m.transferPreview = nil
+		m.transferStatus = "Import root changed. Reload preview."
 		m.state = DataTransferState
 		return m, nil
 	default:
@@ -137,6 +139,8 @@ func (m RootModel) updateTransfer(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if key.Matches(msg, m.keys.Transfer.ToggleReplace) {
 		m.transferReplace = !m.transferReplace
+		m.transferPreview = nil
+		m.transferStatus = "Import mode changed. Reload preview."
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Transfer.BrowseRoot) {
@@ -174,4 +178,3 @@ func (m RootModel) updateTransfer(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	return m, nil
 }
-
