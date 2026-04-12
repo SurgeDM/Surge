@@ -23,9 +23,9 @@ type PostActionContext struct {
 }
 
 // shellEscape quotes a string so it is safe to embed in a shell command.
-// On Unix it wraps the value in single quotes, escaping any internal single
-// quotes with the '\'' idiom.  On Windows it wraps in double quotes and
-// escapes internal double quotes with "".
+// On Unix it wraps the value in single quotes and escapes internal single
+// quotes with the standard shell single-quote escaping idiom. On Windows
+// it wraps in double quotes and escapes internal double quotes with "".
 func shellEscape(s string) string {
 	if runtime.GOOS == "windows" {
 		return `"` + strings.ReplaceAll(s, `"`, `""`) + `"`
@@ -40,7 +40,7 @@ func expandTemplate(template string, ctx PostActionContext) string {
 		"{filepath}", shellEscape(ctx.FilePath),
 		"{size}", fmt.Sprintf("%d", ctx.Size),
 		"{speed}", fmt.Sprintf("%.2f", ctx.Speed),
-		"{duration}", ctx.Duration.Truncate(time.Second).String(),
+		"{duration}", shellEscape(ctx.Duration.Truncate(time.Second).String()),
 		"{id}", shellEscape(ctx.ID),
 		"{error}", shellEscape(ctx.Error),
 	)

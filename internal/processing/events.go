@@ -291,15 +291,15 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 			if settings != nil {
 				// Run post-download actions
-go RunPostActions(settings.General.PostDownload, PostActionContext{
-						Filename: filename,
-						FilePath: destPath,
-						Size:     m.Total,
-						Speed:    avgSpeed,
-						Duration: m.Elapsed,
-						ID:       m.DownloadID,
-						Error:    "",
-					}, false)
+				go RunPostActions(settings.General.PostDownload, PostActionContext{
+					Filename: filename,
+					FilePath: destPath,
+					Size:     m.Total,
+					Speed:    avgSpeed,
+					Duration: m.Elapsed,
+					ID:       m.DownloadID,
+					Error:    "",
+				}, false)
 
 			}
 
@@ -327,7 +327,8 @@ go RunPostActions(settings.General.PostDownload, PostActionContext{
 					utils.Debug("Lifecycle: Failed to remove incomplete file after error: %v", err)
 				}
 			}
-			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
+			settings := mgr.GetSettings()
+			if settings != nil && settings.General.DownloadCompleteNotification {
 				msg := "Download failed"
 				if m.Err != nil {
 					msg = m.Err.Error()
@@ -336,12 +337,10 @@ go RunPostActions(settings.General.PostDownload, PostActionContext{
 				notify(fmt.Sprintf("Download failed: %s", filename), msg)
 			}
 			// Run post-download error action
-			if settings := mgr.GetSettings(); settings != nil && settings.General.PostDownload.OnErrorCommand != "" {
+			if settings != nil && m.Err != nil && settings.General.PostDownload.OnErrorCommand != "" {
 				errMsg := ""
-				if m.Err != nil {
-					errMsg = m.Err.Error()
-				}
-go RunPostActions(settings.General.PostDownload, PostActionContext{
+				errMsg = m.Err.Error()
+				go RunPostActions(settings.General.PostDownload, PostActionContext{
 					Filename: filename,
 					FilePath: m.DestPath,
 					ID:       m.DownloadID,
