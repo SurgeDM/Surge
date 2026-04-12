@@ -2,8 +2,9 @@ package cmd
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
@@ -15,6 +16,8 @@ import (
 	"github.com/SurgeDM/Surge/internal/backup"
 	"github.com/SurgeDM/Surge/internal/core"
 )
+
+var maxImportPreviewSize int64 = 512 * 1024 * 1024
 
 type stagedImportSession struct {
 	Path      string
@@ -39,6 +42,14 @@ func cleanupImportSessions() {
 		_ = os.Remove(session.Path)
 		delete(importSessionStore.items, id)
 	}
+}
+
+func newImportSessionID() (string, error) {
+	token := make([]byte, 16)
+	if _, err := rand.Read(token); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(token), nil
 }
 
 func registerTransferRoutes(mux *http.ServeMux, service core.DownloadService) {
@@ -84,12 +95,17 @@ func registerTransferRoutes(mux *http.ServeMux, service core.DownloadService) {
 
 	mux.HandleFunc("/data/import/preview", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
 		cleanupImportSessions()
+		opts := backup.ImportOptions{
+			RootDir: strings.TrimSpace(r.URL.Query().Get("root_dir")),
+			Replace: strings.EqualFold(strings.TrimSpace(r.URL.Query().Get("replace")), "true"),
+		}
 		tmpFile, err := os.CreateTemp("", "surge-import-preview-*.zip")
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
 		defer func() { _ = tmpFile.Close() }()
+		r.Body = http.MaxBytesReader(w, r.Body, maxImportPreviewSize)
 		if _, err := io.Copy(tmpFile, r.Body); err != nil {
 			_ = os.Remove(tmpFile.Name())
 			http.Error(w, err.Error(), http.StatusBadRequest)
@@ -102,14 +118,19 @@ func registerTransferRoutes(mux *http.ServeMux, service core.DownloadService) {
 		}
 
 		transfer := core.NewLocalTransferService(service, Version)
-		preview, err := transfer.PreviewImport(context.Background(), tmpFile)
+		preview, err := transfer.PreviewImport(context.Background(), tmpFile, opts)
 		if err != nil {
 			_ = os.Remove(tmpFile.Name())
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
 
-		sessionID := strings.TrimSpace(url.QueryEscape(fmt.Sprintf("%d-%d", time.Now().UnixNano(), os.Getpid())))
+		sessionID, err := newImportSessionID()
+		if err != nil {
+			_ = os.Remove(tmpFile.Name())
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 		importSessionStore.mu.Lock()
 		importSessionStore.items[sessionID] = stagedImportSession{
 			Path:      tmpFile.Name(),
@@ -168,4 +189,3 @@ func registerTransferRoutes(mux *http.ServeMux, service core.DownloadService) {
 		writeJSONResponse(w, http.StatusOK, result)
 	}))
 }
-
