@@ -39,6 +39,41 @@ func trimVolumePrefix(path string) string {
 	return trimmed
 }
 
+func pathWithinRoot(root, candidate string) bool {
+	cleanRoot, err := filepath.Abs(filepath.Clean(root))
+	if err != nil {
+		return false
+	}
+	cleanCandidate, err := filepath.Abs(filepath.Clean(candidate))
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(cleanRoot, cleanCandidate)
+	if err != nil {
+		return false
+	}
+	return rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+}
+
+func sanitizeRelativeExternalPath(path string) string {
+	cleaned := filepath.Clean(strings.TrimSpace(path))
+	parts := strings.FieldsFunc(cleaned, func(r rune) bool {
+		return r == '/' || r == '\\'
+	})
+	safeParts := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part == "" || part == "." || part == ".." {
+			continue
+		}
+		safeParts = append(safeParts, part)
+	}
+	if len(safeParts) == 0 {
+		return "imported"
+	}
+	return filepath.Join(safeParts...)
+}
+
 func rebaseImportedPath(originalPath, exportedRoot, targetRoot string) pathRebaseResult {
 	targetRoot = utils.EnsureAbsPath(strings.TrimSpace(targetRoot))
 	if targetRoot == "" {
@@ -52,9 +87,16 @@ func rebaseImportedPath(originalPath, exportedRoot, targetRoot string) pathRebas
 	}
 
 	if !filepath.IsAbs(cleanOriginal) {
+		joined := filepath.Join(targetRoot, cleanOriginal)
+		if pathWithinRoot(targetRoot, joined) {
+			return pathRebaseResult{
+				Path:    joined,
+				Rebased: true,
+			}
+		}
 		return pathRebaseResult{
-			Path:    filepath.Join(targetRoot, cleanOriginal),
-			Rebased: true,
+			Path:         filepath.Join(targetRoot, "external", "relative", sanitizeRelativeExternalPath(cleanOriginal)),
+			Externalized: true,
 		}
 	}
 
@@ -79,4 +121,3 @@ func rebaseImportedPath(originalPath, exportedRoot, targetRoot string) pathRebas
 		Externalized: true,
 	}
 }
-
