@@ -121,11 +121,13 @@ func (c *Client) SupportedHosts() ([]string, error) {
 	return domains, nil
 }
 
-// supportedHostsCached returns the supported hosts list, caching for 1 hour
-// to avoid making a live HTTP call on every invocation.
+// supportedHostsCached returns the supported hosts list, caching briefly to
+// avoid making a live HTTP call on every invocation.
 func (c *Client) supportedHostsCached() ([]string, error) {
+	now := time.Now()
+
 	c.mu.RLock()
-	if c.cachedHosts != nil && time.Since(c.hostsCached) < time.Hour {
+	if c.cachedHosts != nil && now.Sub(c.hostsCached) < 5*time.Minute {
 		hosts := c.cachedHosts
 		c.mu.RUnlock()
 		return hosts, nil
@@ -135,7 +137,8 @@ func (c *Client) supportedHostsCached() ([]string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	// Double-check after acquiring write lock.
-	if c.cachedHosts != nil && time.Since(c.hostsCached) < time.Hour {
+	now = time.Now()
+	if c.cachedHosts != nil && now.Sub(c.hostsCached) < 5*time.Minute {
 		return c.cachedHosts, nil
 	}
 	hosts, err := c.SupportedHosts()
@@ -143,7 +146,7 @@ func (c *Client) supportedHostsCached() ([]string, error) {
 		return nil, err
 	}
 	c.cachedHosts = hosts
-	c.hostsCached = time.Now()
+	c.hostsCached = now
 	return hosts, nil
 }
 
