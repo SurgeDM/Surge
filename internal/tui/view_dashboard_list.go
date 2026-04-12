@@ -1,0 +1,85 @@
+package tui
+
+import (
+	"charm.land/lipgloss/v2"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
+)
+
+// renderDownloadsBox generates the download list box with the top-left corner search bar string.
+func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) string {
+	contentWidth := width - (BoxStyle.GetHorizontalFrameSize() * 2)
+	contentHeight := height - (BoxStyle.GetVerticalFrameSize() * 2)
+
+	if contentWidth < 0 {
+		contentWidth = 0
+	}
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+
+	var leftTitle string
+	// Tab Bar
+	tabBar := renderTabs(m.activeTab, stats.ActiveCount, stats.QueuedCount, stats.DownloadedCount)
+
+	// Search bar (shown when search is active or has a query)
+	if m.searchActive || m.searchQuery != "" {
+		searchIcon := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("> ")
+		var searchDisplay string
+		if m.searchActive {
+			searchDisplay = m.searchInput.View() +
+				lipgloss.NewStyle().Foreground(colors.Gray).Render(" [esc exit]")
+		} else {
+			// Show query with clear hint
+			searchDisplay = lipgloss.NewStyle().Foreground(colors.NeonPink).Render(m.searchQuery) +
+				lipgloss.NewStyle().Foreground(colors.Gray).Render(" [f to clear]")
+		}
+		// Pad the search bar to look like a title block
+		leftTitle = " " + lipgloss.JoinHorizontal(lipgloss.Left, searchIcon, searchDisplay) + " "
+	}
+
+	// Calculate precise internal sizing
+	// padding is 1 top/bottom, 2 left/right
+	listPadding := lipgloss.NewStyle().Padding(1, 2)
+	padTopBottom := listPadding.GetVerticalFrameSize()   // 2
+	padLeftRight := listPadding.GetHorizontalFrameSize() // 4
+	
+	// tabBar is effectively 1 line (plus padding below if any, usually 1 or 2 lines)
+	tabBarHeight := lipgloss.Height(tabBar)
+
+	// listContentHeight handles available space for the bubbletea list itself
+	listContentHeight := contentHeight - padTopBottom - tabBarHeight
+	if listContentHeight < 1 {
+		listContentHeight = 1
+	}
+
+	listContentWidth := contentWidth - padLeftRight
+	if listContentWidth < 1 {
+		listContentWidth = 1
+	}
+
+	var listContent string
+	if len(m.list.Items()) == 0 {
+		if m.searchQuery != "" {
+			listContent = lipgloss.Place(listContentWidth, listContentHeight, lipgloss.Center, lipgloss.Center,
+				lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No matching downloads"))
+		} else {
+			listContent = lipgloss.Place(listContentWidth, listContentHeight, lipgloss.Center, lipgloss.Center,
+				lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No downloads"))
+		}
+	} else {
+		// Update list dimensions to fill available box space tightly
+		m.list.SetHeight(listContentHeight)
+		listContent = m.list.View()
+	}
+
+	// Build list inner content - No search bar inside
+	listInnerContent := lipgloss.JoinVertical(lipgloss.Left, tabBar, listContent)
+	innerContent := listPadding.Render(listInnerContent)
+	
+	downloadsBorderColor := colors.NeonPink
+	if m.logFocused {
+		downloadsBorderColor = colors.Gray
+	}
+
+	return renderBtopBox(leftTitle, PaneTitleStyle.Render(" Downloads "), innerContent, width, height, downloadsBorderColor)
+}
