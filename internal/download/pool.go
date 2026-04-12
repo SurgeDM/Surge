@@ -2,7 +2,7 @@ package download
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -308,14 +308,14 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 
 	if qExists {
 		p.mu.Unlock()
-		return fmt.Errorf("cannot update URL for a queued download, please cancel or wait for it to start")
+		return errors.New("cannot update URL for a queued download, please cancel or wait for it to start")
 	}
 
 	if exists && ad != nil {
 		if ad.config.State != nil && !ad.config.State.IsPaused() {
 			if ad.running.Load() {
 				p.mu.Unlock()
-				return fmt.Errorf("download is currently active, please pause it before updating the URL")
+				return errors.New("download is currently active, please pause it before updating the URL")
 			}
 		}
 		ad.config.URL = newURL

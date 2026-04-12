@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -10,7 +11,7 @@ import (
 
 func OpenFile(path string) error {
 	if path == "" {
-		return fmt.Errorf("path is empty")
+		return errors.New("path is empty")
 	}
 
 	info, err := os.Stat(path)
@@ -27,7 +28,7 @@ func OpenFile(path string) error {
 
 func OpenContainingFolder(path string) error {
 	if path == "" {
-		return fmt.Errorf("path is empty")
+		return errors.New("path is empty")
 	}
 
 	targetPath := path
@@ -75,7 +76,7 @@ func buildOpenCommand(path string) *exec.Cmd {
 // OpenBrowser opens a URL in the system's default web browser.
 func OpenBrowser(url string) error {
 	if url == "" {
-		return fmt.Errorf("url is empty")
+		return errors.New("url is empty")
 	}
 	return openWithSystem(url)
 }

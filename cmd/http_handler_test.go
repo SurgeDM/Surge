@@ -139,7 +139,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body, _ := json.Marshal(tt.request)
-			req := httptest.NewRequest("POST", "/download", bytes.NewBuffer(body))
+			req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBuffer(body))
 			w := httptest.NewRecorder()
 			svc := core.NewLocalDownloadService(GlobalPool)
 

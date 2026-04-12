@@ -66,7 +66,7 @@ func TestFindAvailablePort_ReturnsListener(t *testing.T) {
 func TestFindAvailablePort_SkipsOccupiedPorts(t *testing.T) {
 	requireTCPListener(t)
 	// Occupy any port
-	ln1, err := net.Listen("tcp", fmt.Sprintf("%s:0", serverBindHost))
+	ln1, err := net.Listen("tcp", serverBindHost+":0")
 	if err != nil {
 		t.Fatalf("Failed to occupy any port: %v", err)
 	}

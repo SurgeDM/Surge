@@ -46,7 +46,7 @@ func CheckForUpdate(currentVersion string) (*UpdateInfo, error) {
 		Timeout: RequestTimeout,
 	}
 
-	req, err := http.NewRequest("GET", GitHubAPIURL, nil)
+	req, err := http.NewRequest(http.MethodGet, GitHubAPIURL, nil)
 	if err != nil {
 		return nil, nil // Fail silently
 	}

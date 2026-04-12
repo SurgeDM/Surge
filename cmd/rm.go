@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -22,7 +23,7 @@ var rmCmd = &cobra.Command{
 		clean, _ := cmd.Flags().GetBool("clean")
 
 		if !clean && len(args) == 0 {
-			return fmt.Errorf("provide a download ID or use --clean")
+			return errors.New("provide a download ID or use --clean")
 		}
 
 		if clean {

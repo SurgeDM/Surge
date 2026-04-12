@@ -295,7 +295,7 @@ func ensureOpenActionRequestAllowed(r *http.Request) error {
 		return nil
 	}
 
-	return fmt.Errorf("open actions are only allowed from local host")
+	return errors.New("open actions are only allowed from local host")
 }
 
 func decodeJSONBody(r *http.Request, dst interface{}) error {

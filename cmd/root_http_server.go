@@ -2,11 +2,13 @@ package cmd
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/config"
@@ -40,7 +42,7 @@ func bindServerListener(portFlag int) (int, net.Listener, error) {
 	}
 	port, ln := findAvailablePort(1700)
 	if ln == nil {
-		return 0, nil, fmt.Errorf("could not find available port")
+		return 0, nil, errors.New("could not find available port")
 	}
 	return port, ln, nil
 }
@@ -53,7 +55,7 @@ func saveActivePort(port int) {
 	}
 
 	portFile := filepath.Join(config.GetRuntimeDir(), "port")
-	if err := os.WriteFile(portFile, []byte(fmt.Sprintf("%d", port)), 0o644); err != nil {
+	if err := os.WriteFile(portFile, []byte(strconv.Itoa(port)), 0o644); err != nil {
 		utils.Debug("Error writing port file: %v", err)
 	}
 	utils.Debug("HTTP server listening on port %d", port)
@@ -97,7 +99,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Private-Network", "true")
 
 		// Handle preflight requests
-		if r.Method == "OPTIONS" {
+		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -115,7 +117,7 @@ func authMiddleware(token string, next http.Handler) http.Handler {
 		}
 
 		// Allow OPTIONS for CORS preflight
-		if r.Method == "OPTIONS" {
+		if r.Method == http.MethodOptions {
 			next.ServeHTTP(w, r)
 			return
 		}

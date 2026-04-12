@@ -3,6 +3,7 @@ package concurrent
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -238,7 +239,7 @@ func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 		// Since these headers were explicitly provided by the browser for this download, we forward them.
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
+				return errors.New("stopped after 10 redirects")
 			}
 			// Copy headers from original request to redirect request
 			if len(via) > 0 {
@@ -505,7 +506,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		go func(workerID int) {
 			defer wg.Done()
 			err := d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
-			if err != nil && err != context.Canceled {
+			if err != nil && !errors.Is(err, context.Canceled) {
 				workerErrors <- err
 			}
 		}(i)

@@ -961,7 +961,7 @@ func TestLifecycleManager_UpdateURL_Success(t *testing.T) {
 func TestLifecycleManager_UpdateURL_HookError(t *testing.T) {
 	testutil.SetupStateDB(t)
 
-	expectedErr := fmt.Errorf("not in pausable state")
+	expectedErr := errors.New("not in pausable state")
 	mgr := newLifecycleManagerForTest()
 	mgr.SetEngineHooks(EngineHooks{
 		UpdateURL: func(id, newURL string) error { return expectedErr },
@@ -1025,7 +1025,7 @@ func TestLifecycleManager_ProbeSemaphore_LimitsInflight(t *testing.T) {
 
 	mgr := newLifecycleManagerForTest()
 	mgr.addFunc = func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
-		return "", fmt.Errorf("dispatch intentionally rejected for test")
+		return "", errors.New("dispatch intentionally rejected for test")
 	}
 	settings := config.DefaultSettings()
 	settings.Categories.CategoryEnabled = false

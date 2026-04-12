@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -55,7 +56,7 @@ func ReadURLsFromFile(filepath string) ([]string, error) {
 		return nil, err
 	}
 	if len(urls) == 0 {
-		return nil, fmt.Errorf("no valid URLs found in file")
+		return nil, errors.New("no valid URLs found in file")
 	}
 	return urls, nil
 }

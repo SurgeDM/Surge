@@ -2,6 +2,7 @@ package state
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -32,7 +33,7 @@ func initDBLocked() error {
 	}
 
 	if !configured || dbPath == "" {
-		return fmt.Errorf("state database not configured: call state.Configure() first")
+		return errors.New("state database not configured: call state.Configure() first")
 	}
 
 	var err error
@@ -182,7 +183,7 @@ func getDBHelper() *sql.DB {
 func withTx(fn func(*sql.Tx) error) error {
 	d := getDBHelper()
 	if d == nil {
-		return fmt.Errorf("database not initialized")
+		return errors.New("database not initialized")
 	}
 
 	tx, err := d.Begin()

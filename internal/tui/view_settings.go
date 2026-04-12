@@ -107,8 +107,6 @@ func (m RootModel) viewSettings() string {
 	return m.renderModalWithOverlay(box)
 }
 
-
-
 func shortSettingsCategoryLabel(label string) string {
 	switch label {
 	case "General":
@@ -303,7 +301,8 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	if m.SettingsIsEditing {
 		valueStr = m.SettingsInput.View() + unitStyle.Render(unit)
 	} else {
-		if meta.Type == "auth_token" {
+		switch meta.Type {
+		case "auth_token":
 			token := GetAuthToken()
 			if token == "" {
 				valueStr = lipgloss.NewStyle().Foreground(colors.Gray).Render("(Not generated yet)")
@@ -318,9 +317,9 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 					valueStr = displayToken + lipgloss.NewStyle().Foreground(colors.Gray).Render(" [Enter to Copy]")
 				}
 			}
-		} else if meta.Type == "link" {
+		case "link":
 			valueStr = lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Open [Enter]")
-		} else {
+		default:
 			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key) + unitStyle.Render(unit)
 			if meta.Key == "max_global_connections" {
 				valueStr += " (Ignored)"
@@ -800,12 +799,12 @@ func formatSettingValue(value interface{}, typ string) string {
 	case "int64":
 		if v, ok := value.(int64); ok {
 			// Just display the raw number - units handled by getSettingUnit
-			return fmt.Sprintf("%d", v)
+			return strconv.FormatInt(v, 10)
 		}
 	case "int":
 		v := reflect.ValueOf(value)
 		if v.Kind() == reflect.Int {
-			return fmt.Sprintf("%d", v.Int())
+			return strconv.FormatInt(v.Int(), 10)
 		}
 	case "float64":
 		if v, ok := value.(float64); ok {
@@ -829,7 +828,7 @@ func formatSettingValue(value interface{}, typ string) string {
 	v := reflect.ValueOf(value)
 	switch v.Kind() {
 	case reflect.Int, reflect.Int64:
-		return fmt.Sprintf("%d", v.Int())
+		return strconv.FormatInt(v.Int(), 10)
 	case reflect.Float64:
 		return fmt.Sprintf("%.2f", v.Float())
 	default:
