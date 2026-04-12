@@ -25,8 +25,8 @@ func (m RootModel) viewTransfer() string {
 	lines := []string{
 		lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render("Data Transfer"),
 		"",
-		fmt.Sprintf("[e] Export bundle"),
-		fmt.Sprintf("[i] Import bundle"),
+		"[e] Export bundle",
+		"[i] Import bundle",
 		fmt.Sprintf("[p] Include partials: %s", boolLabel(m.transferIncludePartials)),
 		fmt.Sprintf("[l] Include logs: %s", boolLabel(m.transferIncludeLogs)),
 		fmt.Sprintf("[x] Replace on apply: %s", boolLabel(m.transferReplace)),
@@ -62,4 +62,3 @@ func (m RootModel) viewTransfer() string {
 	)
 	return box
 }
-
