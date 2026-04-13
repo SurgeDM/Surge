@@ -103,6 +103,18 @@ func TestMapWindowsPathToDefaultDir(t *testing.T) {
 			defaultDir: `/downloads`,
 			wantOK:     false,
 		},
+		{
+			name:       "empty request path",
+			request:    "",
+			defaultDir: `/downloads`,
+			wantOK:     false,
+		},
+		{
+			name:       "linux path is not mapped",
+			request:    `/tmp/downloads`,
+			defaultDir: `/downloads`,
+			wantOK:     false,
+		},
 	}
 
 	for _, tt := range tests {
