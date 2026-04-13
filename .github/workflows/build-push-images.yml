@@ -72,7 +72,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ steps.surge-version.outputs.version }}
-            type=raw,value=latest,enable=${{ inputs.tag_as_latest }}
+            type=raw,value=latest,enable=${{ github.event_name == 'push' || inputs.tag_as_latest == true }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
