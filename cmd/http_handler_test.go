@@ -82,10 +82,9 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	GlobalPool = download.NewWorkerPool(nil, 1)
 
 	tests := []struct {
-		name                 string
-		request              DownloadRequest
-		expectedPathSuffix   string
-		expectedPathAbsolute bool
+		name               string
+		request            DownloadRequest
+		expectedOutputPath string
 	}{
 		{
 			name: "Absolute Path (Explicit)",
@@ -93,8 +92,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				URL:  "http://example.com/file1",
 				Path: filepath.Join(tempDir, "absolute"),
 			},
-			expectedPathSuffix:   "absolute",
-			expectedPathAbsolute: true,
+			expectedOutputPath: filepath.Join(tempDir, "absolute"),
 		},
 		{
 			name: "Relative Path (No Flag)",
@@ -102,8 +100,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				URL:  "http://example.com/file2",
 				Path: "relative",
 			},
-			expectedPathSuffix:   "relative",
-			expectedPathAbsolute: true,
+			expectedOutputPath: filepath.Join(mustGetwd(t), "relative"),
 		},
 		{
 			name: "Relative to Default Dir",
@@ -112,8 +109,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				Path:                 "subdir",
 				RelativeToDefaultDir: true,
 			},
-			expectedPathSuffix:   filepath.Join(filepath.Base(defaultDownloadDir), "subdir"),
-			expectedPathAbsolute: true,
+			expectedOutputPath: filepath.Join(defaultDownloadDir, "subdir"),
 		},
 		{
 			name: "Nested Relative to Default Dir",
@@ -122,8 +118,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				Path:                 "nested/deep",
 				RelativeToDefaultDir: true,
 			},
-			expectedPathSuffix:   filepath.Join(filepath.Base(defaultDownloadDir), "nested", "deep"),
-			expectedPathAbsolute: true,
+			expectedOutputPath: filepath.Join(defaultDownloadDir, "nested", "deep"),
 		},
 		{
 			name: "Empty Path (Default)",
@@ -131,8 +126,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				URL:  "http://example.com/file5",
 				Path: "",
 			},
-			expectedPathSuffix:   filepath.Base(defaultDownloadDir), // Should be just the default dir
-			expectedPathAbsolute: true,
+			expectedOutputPath: defaultDownloadDir,
 		},
 		{
 			name: "Windows Download Root Maps To Default Dir",
@@ -140,8 +134,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				URL:  "http://example.com/file6",
 				Path: "C:/Users/me/Downloads",
 			},
-			expectedPathSuffix:   filepath.Base(defaultDownloadDir),
-			expectedPathAbsolute: true,
+			expectedOutputPath: defaultDownloadDir,
 		},
 		{
 			name: "Windows Nested Path Maps Under Default Dir",
@@ -149,8 +142,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				URL:  "http://example.com/file7",
 				Path: "C:/Users/me/Downloads/surge-repro",
 			},
-			expectedPathSuffix:   filepath.Join(filepath.Base(defaultDownloadDir), "surge-repro"),
-			expectedPathAbsolute: true,
+			expectedOutputPath: filepath.Join(defaultDownloadDir, "surge-repro"),
 		},
 		{
 			name: "Windows Nested Path Relative Flag Maps Under Default Dir",
@@ -159,8 +151,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				Path:                 "C:/Users/me/Downloads/surge-repro",
 				RelativeToDefaultDir: true,
 			},
-			expectedPathSuffix:   filepath.Join(filepath.Base(defaultDownloadDir), "surge-repro"),
-			expectedPathAbsolute: true,
+			expectedOutputPath: filepath.Join(defaultDownloadDir, "surge-repro"),
 		},
 		{
 			name: "Unmatched Windows Path Falls Back To Default Dir",
@@ -169,8 +160,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				Path:                 "E:/Torrents/complete",
 				RelativeToDefaultDir: true,
 			},
-			expectedPathSuffix:   filepath.Base(defaultDownloadDir),
-			expectedPathAbsolute: true,
+			expectedOutputPath: defaultDownloadDir,
 		},
 	}
 
@@ -197,48 +187,12 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 					found = true
 					t.Logf("OutputPath for %s: %s", tt.name, cfg.OutputPath)
 
-					if !filepath.IsAbs(cfg.OutputPath) && tt.expectedPathAbsolute {
+					if !filepath.IsAbs(cfg.OutputPath) {
 						t.Errorf("Expected absolute path, got %s", cfg.OutputPath)
 					}
 
-					// Verify suffix
-					// NOTE: cfg.OutputPath is absolute path.
-					// If expectedPathSuffix is relative (like "relative"), we check if path ends with it.
-					// If expectedPathSuffix is absolute (like /tmp/.../absolute), we check if paths match.
-
-					if strings.HasPrefix(tt.request.Path, "C:/Users/me/Downloads") {
-						rel := strings.TrimPrefix(tt.request.Path, "C:/Users/me/Downloads")
-						rel = strings.TrimPrefix(rel, "/")
-						expectedAbs := defaultDownloadDir
-						if rel != "" {
-							expectedAbs = filepath.Join(defaultDownloadDir, filepath.FromSlash(rel))
-						}
-						if cfg.OutputPath != expectedAbs {
-							t.Errorf("Expected Windows client path to map to %s, got %s", expectedAbs, cfg.OutputPath)
-						}
-					} else if tt.request.RelativeToDefaultDir && strings.HasPrefix(tt.request.Path, "E:/") {
-						if cfg.OutputPath != defaultDownloadDir {
-							t.Errorf("Expected unmatched Windows path to fall back to %s, got %s", defaultDownloadDir, cfg.OutputPath)
-						}
-					} else if tt.request.RelativeToDefaultDir {
-						expectedAbs := filepath.Join(defaultDownloadDir, tt.request.Path)
-						if cfg.OutputPath != expectedAbs {
-							t.Errorf("Expected path %s, got %s", expectedAbs, cfg.OutputPath)
-						}
-					} else if tt.request.Path == "" {
-						if cfg.OutputPath != defaultDownloadDir {
-							t.Errorf("Expected path %s, got %s", defaultDownloadDir, cfg.OutputPath)
-						}
-					} else if filepath.IsAbs(tt.request.Path) {
-						if cfg.OutputPath != tt.request.Path {
-							t.Errorf("Expected path %s, got %s", tt.request.Path, cfg.OutputPath)
-						}
-					} else {
-						// Relative path without flag (Ensured Absolute CWD)
-						// Hard to test exactly without knowing CWD, but it should end with the relative path
-						if !strings.HasSuffix(cfg.OutputPath, tt.request.Path) {
-							t.Errorf("Expected suffix %s, got %s", tt.request.Path, cfg.OutputPath)
-						}
+					if cfg.OutputPath != tt.expectedOutputPath {
+						t.Errorf("Expected path %s, got %s", tt.expectedOutputPath, cfg.OutputPath)
 					}
 					break
 				}
@@ -248,6 +202,15 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			}
 		})
 	}
+}
+
+func mustGetwd(t *testing.T) string {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd failed: %v", err)
+	}
+	return wd
 }
 
 func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
