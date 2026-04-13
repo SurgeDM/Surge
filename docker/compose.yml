@@ -1,17 +1,19 @@
 services:
   surge:
-    image: ghcr.io/SurgeDM/Surge # OR surge:latest if building
+    image: ghcr.io/surgedm/surge # Or build locally with the commented block below.
     #    build:
     #      context: .
     #      dockerfile: Dockerfile
+    #      args:
+    #        SURGE_VERSION: "0.8.0"
     container_name: surge
     ports:
       - "1700:1700"
     volumes:
       #- ~/docker/volumes/surge/downloads:/downloads # isolation if using in a professional envir
-      #- ~/docker/volumes/surge/config:/root/.surge  # isolation if using in a professional envir
+      #- ~/docker/volumes/surge/config:/var/lib/surge # state, token, logs
       - ./downloads:/downloads
-      - ./surge-config:/root/.local/state/surge
+      - ./surge-config:/var/lib/surge
     restart: unless-stopped
     environment:
       - TZ=UTC
