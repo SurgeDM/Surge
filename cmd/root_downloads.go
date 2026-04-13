@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync/atomic"
 
@@ -392,7 +393,7 @@ func mapClientWindowsPath(reqPath string, relativeToDefaultDir bool, defaultOutp
 		return mapped
 	}
 
-	if !relativeToDefaultDir {
+	if !shouldFallbackUnmappedWindowsPath(relativeToDefaultDir, runtime.GOOS) {
 		return ""
 	}
 
@@ -401,4 +402,8 @@ func mapClientWindowsPath(reqPath string, relativeToDefaultDir bool, defaultOutp
 	// rooted at baseDir instead of letting a bogus "E:/..." path turn into
 	// a Linux-relative path via EnsureAbsPath.
 	return filepath.Clean(baseDir)
+}
+
+func shouldFallbackUnmappedWindowsPath(relativeToDefaultDir bool, hostOS string) bool {
+	return relativeToDefaultDir || hostOS != "windows"
 }

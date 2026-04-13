@@ -204,6 +204,48 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	}
 }
 
+func TestShouldFallbackUnmappedWindowsPath(t *testing.T) {
+	tests := []struct {
+		name                 string
+		relativeToDefaultDir bool
+		hostOS               string
+		want                 bool
+	}{
+		{
+			name:                 "relative request falls back on windows",
+			relativeToDefaultDir: true,
+			hostOS:               "windows",
+			want:                 true,
+		},
+		{
+			name:                 "relative request falls back on linux",
+			relativeToDefaultDir: true,
+			hostOS:               "linux",
+			want:                 true,
+		},
+		{
+			name:                 "explicit request does not fall back on windows",
+			relativeToDefaultDir: false,
+			hostOS:               "windows",
+			want:                 false,
+		},
+		{
+			name:                 "explicit request falls back on linux",
+			relativeToDefaultDir: false,
+			hostOS:               "linux",
+			want:                 true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldFallbackUnmappedWindowsPath(tt.relativeToDefaultDir, tt.hostOS); got != tt.want {
+				t.Fatalf("shouldFallbackUnmappedWindowsPath(%v, %q) = %v, want %v", tt.relativeToDefaultDir, tt.hostOS, got, tt.want)
+			}
+		})
+	}
+}
+
 func mustGetwd(t *testing.T) string {
 	t.Helper()
 	wd, err := os.Getwd()
