@@ -4,6 +4,12 @@ on:
   pull_request:
     branches:
       - main
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
 
 permissions:
   contents: read

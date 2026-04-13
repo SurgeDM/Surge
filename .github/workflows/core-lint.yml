@@ -1,10 +1,22 @@
-name: Lint
+name: Core Lint
 
 on:
   push:
     branches:
       - main
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
   pull_request:
+    paths:
+      - "cmd/**"
+      - "internal/**"
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
 
 permissions:
   contents: read

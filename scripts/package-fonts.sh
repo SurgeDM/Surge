@@ -16,40 +16,8 @@ if ! command -v tar >/dev/null 2>&1; then
   echo "tar is required to extract Nerd Fonts assets" >&2
   exit 1
 fi
-if ! command -v npx >/dev/null 2>&1; then
-  echo "npm is required to build extensions" >&2
-  exit 1
-fi
 
 mkdir -p "${OUT_DIR}"
-rm -f "${OUT_DIR}/extension-chrome.zip" \
-  "${OUT_DIR}/extension-firefox.zip" \
-  "${OUT_DIR}/fonts.zip"
-
-echo "=== Building extension (Chrome) ==="
-(
-  cd "${ROOT}/extension"
-
-  if [ ! -d "node_modules" ]; then
-    echo "Installing extension dependencies..."
-    npm ci
-  fi
-
-  npx wxt build -b chrome --mv3
-
-  cd "${ROOT}/extension/output/chrome-mv3"
-  zip -r -9 "${OUT_DIR}/extension-chrome.zip" . -x "*.DS_Store"
-)
-
-echo "=== Building extension (Firefox) ==="
-(
-  cd "${ROOT}/extension"
-
-  npx wxt build -b firefox
-
-  cd "${ROOT}/extension/output/firefox-mv2"
-  zip -r -9 "${OUT_DIR}/extension-firefox.zip" . -x "*.DS_Store" -x "extension.zip" -x "STORE_DESCRIPTION.md"
-)
 
 echo "=== Packaging fonts ==="
 TMP_DIR="$(mktemp -d)"
