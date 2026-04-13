@@ -111,6 +111,12 @@ func TestMapWindowsPathToDefaultDir(t *testing.T) {
 			wantOK:     false,
 		},
 		{
+			name:       "parent traversal segment is rejected",
+			request:    `C:/Downloads/../../etc/passwd`,
+			defaultDir: `/downloads`,
+			wantOK:     false,
+		},
+		{
 			name:       "empty request path",
 			request:    "",
 			defaultDir: `/downloads`,

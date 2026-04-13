@@ -74,6 +74,9 @@ func MapWindowsPathToDefaultDir(requestPath, defaultDir string) (string, bool) {
 		if part == "" || part == "." {
 			continue
 		}
+		if part == ".." {
+			return "", false
+		}
 		relParts = append(relParts, part)
 	}
 
