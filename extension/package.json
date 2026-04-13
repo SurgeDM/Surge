@@ -11,6 +11,7 @@
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
+    "zip:edge": "wxt zip -b edge",
     "check": "tsc --noEmit",
     "lint": "eslint .",
     "test": "vitest run"
