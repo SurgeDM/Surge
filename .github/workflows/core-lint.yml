@@ -4,19 +4,11 @@ on:
   push:
     branches:
       - main
-    paths:
-      - "cmd/**"
-      - "internal/**"
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
+    paths-ignore:
+      - "extension/**"
   pull_request:
-    paths:
-      - "cmd/**"
-      - "internal/**"
-      - "**.go"
-      - "go.mod"
-      - "go.sum"
+    paths-ignore:
+      - "extension/**"
 
 permissions:
   contents: read
