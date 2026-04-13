@@ -16,7 +16,7 @@ builds:
 
 before:
   hooks:
-    - ./scripts/package-release-assets.sh
+    - ./scripts/package-fonts.sh
 
 release:
   footer: |
