@@ -79,7 +79,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        browser: [chrome, firefox]
+        browser: [chrome, firefox, edge]
     defaults:
       run:
         working-directory: extension
@@ -92,4 +92,13 @@ jobs:
           cache: "npm"
           cache-dependency-path: extension/package-lock.json
       - run: npm ci
-      - run: npm run build -- -b ${{ matrix.browser }}
+      - name: Build and Package
+        run: |
+          npm run zip -- -b ${{ matrix.browser }}
+          mv .output/*.zip .output/extension-${{ matrix.browser }}.zip
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-${{ matrix.browser }}
+          path: extension/.output/extension-${{ matrix.browser }}.zip
+          if-no-files-found: error

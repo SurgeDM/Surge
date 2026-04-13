@@ -1,22 +1,12 @@
-name: Extension CI
+name: Extension Release
 
 on:
   push:
-    branches:
-      - main
-    paths:
-      - "extension/**"
-  pull_request:
-    paths:
-      - "extension/**"
-  workflow_dispatch:
+    tags:
+      - "ext-v*"
 
 permissions:
-  contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  contents: write
 
 jobs:
   lint:
@@ -75,11 +65,12 @@ jobs:
 
   build:
     name: Build (${{ matrix.browser }})
+    needs: [lint, type-check, test]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        browser: [chrome, firefox]
+        browser: [chrome, firefox, edge]
     defaults:
       run:
         working-directory: extension
@@ -92,4 +83,33 @@ jobs:
           cache: "npm"
           cache-dependency-path: extension/package-lock.json
       - run: npm ci
-      - run: npm run build -- -b ${{ matrix.browser }}
+      - name: Build and Package
+        run: |
+          npm run zip -- -b ${{ matrix.browser }}
+          mv .output/*.zip .output/extension-${{ matrix.browser }}.zip
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: extension-${{ matrix.browser }}
+          path: extension/.output/extension-${{ matrix.browser }}.zip
+          if-no-files-found: error
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          pattern: extension-*
+          merge-multiple: true
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*.zip
+          generate_release_notes: true
+          draft: false
+          prerelease: false
