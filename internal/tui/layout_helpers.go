@@ -49,7 +49,7 @@ func GetSettingsDimensions(termWidth, termHeight int) (int, int) {
 // GetListWidth calculates the list width based on available width
 func GetListWidth(availableWidth int) int {
 	leftWidth := int(float64(availableWidth) * ListWidthRatio)
-	
+
 	// Determine right column viability
 	rightWidth := availableWidth - leftWidth
 	if rightWidth < MinRightColumnWidth {
@@ -66,7 +66,7 @@ func IsShortTerminal(height int) bool {
 // GetGraphAreaDimensions calculates dimensions for the graph area
 func GetGraphAreaDimensions(rightWidth int, isStatsHidden bool) (int, int) {
 	axisWidth := GraphAxisWidth
-	
+
 	if isStatsHidden {
 		// No stats box — graph gets almost full width.
 		// Higher buffer (* 5) accounts for extra padding needed when axis is on the far right
@@ -77,7 +77,7 @@ func GetGraphAreaDimensions(rightWidth int, isStatsHidden bool) (int, int) {
 		}
 		return graphAreaWidth, axisWidth
 	}
-	
+
 	// Graph takes remaining width after stats box.
 	// Smaller buffer (* 3) as the stats box provides its own internal padding.
 	graphAreaWidth := rightWidth - GraphStatsWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 3)

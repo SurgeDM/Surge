@@ -107,8 +107,6 @@ func (m RootModel) viewSettings() string {
 	return m.renderModalWithOverlay(box)
 }
 
-
-
 func shortSettingsCategoryLabel(label string) string {
 	switch label {
 	case "General":
