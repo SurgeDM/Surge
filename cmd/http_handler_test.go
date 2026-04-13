@@ -134,6 +134,34 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			expectedPathSuffix:   filepath.Base(defaultDownloadDir), // Should be just the default dir
 			expectedPathAbsolute: true,
 		},
+		{
+			name: "Windows Download Root Maps To Default Dir",
+			request: DownloadRequest{
+				URL:  "http://example.com/file6",
+				Path: "C:/Users/me/Downloads",
+			},
+			expectedPathSuffix:   filepath.Base(defaultDownloadDir),
+			expectedPathAbsolute: true,
+		},
+		{
+			name: "Windows Nested Path Maps Under Default Dir",
+			request: DownloadRequest{
+				URL:  "http://example.com/file7",
+				Path: "C:/Users/me/Downloads/surge-repro",
+			},
+			expectedPathSuffix:   filepath.Join(filepath.Base(defaultDownloadDir), "surge-repro"),
+			expectedPathAbsolute: true,
+		},
+		{
+			name: "Windows Nested Path Relative Flag Maps Under Default Dir",
+			request: DownloadRequest{
+				URL:                  "http://example.com/file8",
+				Path:                 "C:/Users/me/Downloads/surge-repro",
+				RelativeToDefaultDir: true,
+			},
+			expectedPathSuffix:   filepath.Join(filepath.Base(defaultDownloadDir), "surge-repro"),
+			expectedPathAbsolute: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -168,7 +196,17 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 					// If expectedPathSuffix is relative (like "relative"), we check if path ends with it.
 					// If expectedPathSuffix is absolute (like /tmp/.../absolute), we check if paths match.
 
-					if tt.request.RelativeToDefaultDir {
+					if strings.HasPrefix(tt.request.Path, "C:/Users/me/Downloads") {
+						rel := strings.TrimPrefix(tt.request.Path, "C:/Users/me/Downloads")
+						rel = strings.TrimPrefix(rel, "/")
+						expectedAbs := defaultDownloadDir
+						if rel != "" {
+							expectedAbs = filepath.Join(defaultDownloadDir, filepath.FromSlash(rel))
+						}
+						if cfg.OutputPath != expectedAbs {
+							t.Errorf("Expected Windows client path to map to %s, got %s", expectedAbs, cfg.OutputPath)
+						}
+					} else if tt.request.RelativeToDefaultDir {
 						expectedAbs := filepath.Join(defaultDownloadDir, tt.request.Path)
 						if cfg.OutputPath != expectedAbs {
 							t.Errorf("Expected path %s, got %s", expectedAbs, cfg.OutputPath)
