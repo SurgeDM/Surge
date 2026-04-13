@@ -52,6 +52,19 @@ jobs:
           fi
           echo "version=$SURGE_VERSION" >> $GITHUB_OUTPUT
 
+      - name: Decide latest tag behavior
+        id: latest-tag
+        run: |
+          ENABLE_LATEST=false
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            if [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              ENABLE_LATEST=true
+            fi
+          elif [[ "${{ inputs.tag_as_latest }}" == "true" ]]; then
+            ENABLE_LATEST=true
+          fi
+          echo "enable=$ENABLE_LATEST" >> $GITHUB_OUTPUT
+
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
 
@@ -72,7 +85,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ steps.surge-version.outputs.version }}
-            type=raw,value=latest,enable=${{ github.event_name == 'push' || inputs.tag_as_latest == true }}
+            type=raw,value=latest,enable=${{ steps.latest-tag.outputs.enable }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
