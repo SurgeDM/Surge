@@ -162,6 +162,16 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			expectedPathSuffix:   filepath.Join(filepath.Base(defaultDownloadDir), "surge-repro"),
 			expectedPathAbsolute: true,
 		},
+		{
+			name: "Unmatched Windows Path Falls Back To Default Dir",
+			request: DownloadRequest{
+				URL:                  "http://example.com/file9",
+				Path:                 "E:/Torrents/complete",
+				RelativeToDefaultDir: true,
+			},
+			expectedPathSuffix:   filepath.Base(defaultDownloadDir),
+			expectedPathAbsolute: true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -205,6 +215,10 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 						}
 						if cfg.OutputPath != expectedAbs {
 							t.Errorf("Expected Windows client path to map to %s, got %s", expectedAbs, cfg.OutputPath)
+						}
+					} else if tt.request.RelativeToDefaultDir && strings.HasPrefix(tt.request.Path, "E:/") {
+						if cfg.OutputPath != defaultDownloadDir {
+							t.Errorf("Expected unmatched Windows path to fall back to %s, got %s", defaultDownloadDir, cfg.OutputPath)
 						}
 					} else if tt.request.RelativeToDefaultDir {
 						expectedAbs := filepath.Join(defaultDownloadDir, tt.request.Path)

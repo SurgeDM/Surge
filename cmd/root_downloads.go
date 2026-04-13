@@ -392,5 +392,13 @@ func mapClientWindowsPath(reqPath string, relativeToDefaultDir bool, defaultOutp
 		return mapped
 	}
 
-	return ""
+	if !relativeToDefaultDir {
+		return ""
+	}
+
+	// If we positively identified a Windows absolute path but could not
+	// project it onto the server-side default directory, keep the download
+	// rooted at baseDir instead of letting a bogus "E:/..." path turn into
+	// a Linux-relative path via EnsureAbsPath.
+	return filepath.Clean(baseDir)
 }
