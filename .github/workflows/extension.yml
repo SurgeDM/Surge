@@ -43,7 +43,7 @@ jobs:
       - name: Build and Package
         run: |
           npm run zip -- -b ${{ matrix.browser }}
-          mv output/*.zip output/extension-${{ matrix.browser }}.zip
+          mv output/*-${{ matrix.browser }}.zip output/extension-${{ matrix.browser }}.zip
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
