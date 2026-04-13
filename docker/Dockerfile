@@ -6,11 +6,7 @@ ARG TARGETOS
 ARG TARGETARCH
 ARG SURGE_VERSION
 
-RUN if [ -z "${SURGE_VERSION}" ]; then \
-      echo "SURGE_VERSION build arg is required for reproducible Docker builds" >&2; \
-      exit 1; \
-    fi && \
-    if [ "${TARGETOS:-linux}" != "linux" ]; then \
+RUN if [ "${TARGETOS:-linux}" != "linux" ]; then \
       echo "Unsupported target OS: ${TARGETOS}" >&2; \
       exit 1; \
     fi && \
@@ -20,6 +16,12 @@ RUN if [ -z "${SURGE_VERSION}" ]; then \
       arm) SURGE_ARCH="arm" ;; \
       *) echo "Unsupported target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac && \
+    if [ -z "${SURGE_VERSION}" ]; then \
+      echo "Fetching latest surge release..."; \
+      SURGE_VERSION=$(curl -fsSL https://api.github.com/repos/SurgeDM/Surge/releases/latest | jq -r .tag_name | sed 's/^v//'); \
+    else \
+      echo "Using specified surge version: ${SURGE_VERSION}"; \
+    fi && \
     echo "Downloading surge v${SURGE_VERSION} for ${TARGETOS:-linux}/${SURGE_ARCH}" && \
     curl -fsSL -o /tmp/surge.tar.gz \
       "https://github.com/SurgeDM/Surge/releases/download/v${SURGE_VERSION}/surge_${SURGE_VERSION}_linux_${SURGE_ARCH}.tar.gz" && \
@@ -29,9 +31,12 @@ RUN if [ -z "${SURGE_VERSION}" ]; then \
 
 FROM alpine:3.21
 
+ARG SURGE_UID=1000
+ARG SURGE_GID=1000
+
 RUN apk add --no-cache ca-certificates && \
-    addgroup -g 1000 -S surge && \
-    adduser -u 1000 -S -D -h /home/surge -G surge surge && \
+    addgroup -g ${SURGE_GID} -S surge && \
+    adduser -u ${SURGE_UID} -S -D -h /home/surge -G surge surge && \
     mkdir -p /downloads /var/lib/surge /home/surge && \
     chown -R surge:surge /downloads /var/lib/surge /home/surge
 
