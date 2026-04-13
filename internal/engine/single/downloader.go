@@ -188,16 +188,13 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 	start := time.Now()
 	var written int64
-
 	bufPtr := bufPool.Get().(*[]byte)
 	buf := *bufPtr
 	defer bufPool.Put(bufPtr)
 
-	if d.State == nil {
-		written, err = io.CopyBuffer(outFile, resp.Body, buf)
-	} else {
-		progressReader := newProgressReader(resp.Body, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
-		written, err = io.CopyBuffer(outFile, progressReader, buf)
+	progressReader := newProgressReader(ctx, resp.Body, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
+	written, err = io.CopyBuffer(outFile, progressReader, buf)
+	if d.State != nil {
 		progressReader.Flush()
 	}
 	if err != nil {
@@ -237,6 +234,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 }
 
 type progressReader struct {
+	ctx           context.Context
 	reader        io.Reader
 	state         *types.ProgressState
 	batchSize     int64
@@ -247,11 +245,12 @@ type progressReader struct {
 	readChecks    uint8
 }
 
-func newProgressReader(reader io.Reader, state *types.ProgressState, batchSize int64, batchInterval time.Duration) *progressReader {
+func newProgressReader(ctx context.Context, reader io.Reader, state *types.ProgressState, batchSize int64, batchInterval time.Duration) *progressReader {
 	if batchSize <= 0 {
 		batchSize = types.WorkerBatchSize
 	}
 	return &progressReader{
+		ctx:           ctx,
 		reader:        reader,
 		state:         state,
 		batchSize:     batchSize,
@@ -262,6 +261,18 @@ func newProgressReader(reader io.Reader, state *types.ProgressState, batchSize i
 
 func (w *progressReader) Read(p []byte) (int, error) {
 	n, err := w.reader.Read(p)
+
+	if n > 0 {
+		if w.state != nil && w.state.Limiter != nil {
+			if limiterErr := w.state.Limiter.WaitN(w.ctx, n); limiterErr != nil {
+				return n, limiterErr
+			}
+		}
+		if limiterErr := utils.GlobalRateLimiter.WaitN(w.ctx, n); limiterErr != nil {
+			return n, limiterErr
+		}
+	}
+
 	if n <= 0 || w.state == nil {
 		return n, err
 	}

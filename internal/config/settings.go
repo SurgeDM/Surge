@@ -66,6 +66,8 @@ type NetworkSettings struct {
 	SequentialDownload     bool   `json:"sequential_download" ui_label:"Sequential Download" ui_desc:"Download pieces in order (Streaming Mode). May be slower."`
 	MinChunkSize           int64  `json:"min_chunk_size" ui_label:"Min Chunk Size" ui_desc:"Minimum download chunk size in MB (e.g., 2)."`
 	WorkerBufferSize       int    `json:"worker_buffer_size" ui_label:"Worker Buffer Size" ui_desc:"I/O buffer size per worker in KB (e.g., 512)."`
+	GlobalRateLimit        int64  `json:"global_rate_limit" ui_label:"Global Rate Limit (KB/s)" ui_desc:"Maximum total combined download speed in KB/s. 0 for unlimited."`
+	PerTaskRateLimit       int64  `json:"per_task_rate_limit" ui_label:"Per-Task Rate Limit (KB/s)" ui_desc:"Maximum speed for each individual download in KB/s. 0 for unlimited."`
 }
 
 // PerformanceSettings contains performance tuning parameters.
@@ -218,6 +220,8 @@ func DefaultSettings() *Settings {
 			SequentialDownload:     false,
 			MinChunkSize:           2 * MB,
 			WorkerBufferSize:       512 * KB,
+			GlobalRateLimit:        0,
+			PerTaskRateLimit:       0,
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        3,
@@ -301,6 +305,8 @@ type RuntimeConfig struct {
 	SequentialDownload    bool
 	MinChunkSize          int64
 	WorkerBufferSize      int
+	GlobalRateLimit       int64
+	PerTaskRateLimit      int64
 	MaxTaskRetries        int
 	SlowWorkerThreshold   float64
 	SlowWorkerGracePeriod time.Duration
@@ -319,6 +325,8 @@ func (s *Settings) ToRuntimeConfig() *RuntimeConfig {
 		SequentialDownload:    s.Network.SequentialDownload,
 		MinChunkSize:          s.Network.MinChunkSize,
 		WorkerBufferSize:      s.Network.WorkerBufferSize,
+		GlobalRateLimit:       s.Network.GlobalRateLimit,
+		PerTaskRateLimit:      s.Network.PerTaskRateLimit,
 		MaxTaskRetries:        s.Performance.MaxTaskRetries,
 		SlowWorkerThreshold:   s.Performance.SlowWorkerThreshold,
 		SlowWorkerGracePeriod: s.Performance.SlowWorkerGracePeriod,

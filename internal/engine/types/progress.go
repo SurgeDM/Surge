@@ -9,6 +9,12 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
+// RateLimiter defines the interface for throttling IO
+type RateLimiter interface {
+	WaitN(ctx context.Context, n int) error
+	SetRate(rate int64)
+}
+
 type ProgressState struct {
 	ID            string
 	Downloaded    atomic.Int64
@@ -37,6 +43,8 @@ type ProgressState struct {
 	BitmapWidth     int     // Number of chunks tracked
 
 	mu sync.Mutex // Protects TotalSize, StartTime, SessionStartBytes, SavedElapsed, Mirrors
+
+	Limiter RateLimiter // Per-task rate limiter
 }
 
 type MirrorStatus struct {

@@ -107,8 +107,6 @@ func (m RootModel) viewSettings() string {
 	return m.renderModalWithOverlay(box)
 }
 
-
-
 func shortSettingsCategoryLabel(label string) string {
 	switch label {
 	case "General":
@@ -303,7 +301,8 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	if m.SettingsIsEditing {
 		valueStr = m.SettingsInput.View() + unitStyle.Render(unit)
 	} else {
-		if meta.Type == "auth_token" {
+		switch meta.Type {
+		case "auth_token":
 			token := GetAuthToken()
 			if token == "" {
 				valueStr = lipgloss.NewStyle().Foreground(colors.Gray).Render("(Not generated yet)")
@@ -318,9 +317,9 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 					valueStr = displayToken + lipgloss.NewStyle().Foreground(colors.Gray).Render(" [Enter to Copy]")
 				}
 			}
-		} else if meta.Type == "link" {
+		case "link":
 			valueStr = lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Open [Enter]")
-		} else {
+		default:
 			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key) + unitStyle.Render(unit)
 			if meta.Key == "max_global_connections" {
 				valueStr += " (Ignored)"

@@ -12,6 +12,8 @@ func ConvertRuntimeConfig(rc *config.RuntimeConfig) *RuntimeConfig {
 		SequentialDownload:    rc.SequentialDownload,
 		MinChunkSize:          rc.MinChunkSize,
 		WorkerBufferSize:      rc.WorkerBufferSize,
+		GlobalRateLimit:       rc.GlobalRateLimit,
+		PerTaskRateLimit:      rc.PerTaskRateLimit,
 		MaxTaskRetries:        rc.MaxTaskRetries,
 		SlowWorkerThreshold:   rc.SlowWorkerThreshold,
 		SlowWorkerGracePeriod: rc.SlowWorkerGracePeriod,

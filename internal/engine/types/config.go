@@ -76,6 +76,8 @@ type RuntimeConfig struct {
 	MinChunkSize          int64
 
 	WorkerBufferSize      int
+	GlobalRateLimit       int64
+	PerTaskRateLimit      int64
 	MaxTaskRetries        int
 	SlowWorkerThreshold   float64
 	SlowWorkerGracePeriod time.Duration

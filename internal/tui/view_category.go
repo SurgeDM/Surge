@@ -104,8 +104,6 @@ func (m RootModel) viewCategoryManager() string {
 	return m.renderModalWithOverlay(box)
 }
 
-
-
 func (m RootModel) renderCategoryHelp(width int) string {
 	if width < 1 {
 		width = 1

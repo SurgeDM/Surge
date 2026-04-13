@@ -85,6 +85,10 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 	if err != nil {
 		settings = config.DefaultSettings()
 	}
+	// Seed global rate limiter from persisted config
+	if settings != nil {
+		utils.GlobalRateLimiter.SetRate(settings.Network.GlobalRateLimit * 1024)
+	}
 
 	var activeCheck IsNameActiveFunc
 	if len(isNameActive) > 0 {
@@ -166,6 +170,15 @@ func (m *LifecycleManager) ApplySettings(s *config.Settings) {
 	m.settings = s
 	m.settingsRefreshedAt = time.Now()
 	m.settingsMu.Unlock()
+
+	// Dynamically update the global rate limit
+	utils.GlobalRateLimiter.SetRate(s.Network.GlobalRateLimit * 1024)
+	
+	// Update active per-task limiters if the hook is wired
+	hooks := m.getEngineHooks()
+	if hooks.UpdateActiveRates != nil {
+		hooks.UpdateActiveRates(s.Network.PerTaskRateLimit * 1024)
+	}
 }
 
 // SaveSettings persists and applies a new routing snapshot for future enqueue calls.

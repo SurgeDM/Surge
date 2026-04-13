@@ -39,6 +39,19 @@ func (s *LocalDownloadService) ReloadSettings() error {
 	s.settingsMu.Lock()
 	s.settings = settings
 	s.settingsMu.Unlock()
+
+	// Update global rate limiter
+	utils.GlobalRateLimiter.SetRate(settings.Network.GlobalRateLimit * 1024)
+
+	// Update active per-task limiters
+	if s.Pool != nil {
+		rate := settings.Network.PerTaskRateLimit * 1024
+		for _, cfg := range s.Pool.GetAll() {
+			if cfg.State != nil && cfg.State.Limiter != nil {
+				cfg.State.Limiter.SetRate(rate)
+			}
+		}
+	}
 	return nil
 }
 
@@ -499,6 +512,7 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 
 	state := types.NewProgressState(id, 0)
 	state.DestPath = filepath.Join(outPath, filename) // Best guess until download starts
+	state.Limiter = utils.NewTokenBucket(settings.Network.PerTaskRateLimit * 1024)
 
 	cfg := types.DownloadConfig{
 		URL:                url,
