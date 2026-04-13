@@ -63,7 +63,7 @@ func TestIsWindowsAbsPath(t *testing.T) {
 
 	for _, tt := range tests {
 		if got := IsWindowsAbsPath(tt.path); got != tt.want {
-			t.Fatalf("IsWindowsAbsPath(%q) = %v, want %v", tt.path, got, tt.want)
+			t.Errorf("IsWindowsAbsPath(%q) = %v, want %v", tt.path, got, tt.want)
 		}
 	}
 }

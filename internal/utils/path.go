@@ -29,8 +29,8 @@ func IsWindowsAbsPath(p string) bool {
 		return true
 	}
 
-	// UNC paths also need to be treated as absolute across platforms.
-	if len(p) >= 2 && ((p[0] == '\\' && p[1] == '\\') || (p[0] == '/' && p[1] == '/')) {
+	// UNC paths (Windows-only; // is POSIX-legal and must not be excluded).
+	if len(p) >= 2 && p[0] == '\\' && p[1] == '\\' {
 		return true
 	}
 
