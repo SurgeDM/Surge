@@ -342,7 +342,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				errMsg = m.Err.Error()
 				go RunPostActions(settings.General.PostDownload, PostActionContext{
 					Filename: filename,
-					FilePath: m.DestPath,
+					FilePath: destPath,
 					ID:       m.DownloadID,
 					Error:    errMsg,
 				}, true)
