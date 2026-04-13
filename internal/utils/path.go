@@ -61,6 +61,7 @@ func MapWindowsPathToDefaultDir(requestPath, defaultDir string) (string, bool) {
 	for i, part := range parts {
 		if strings.EqualFold(strings.TrimSpace(part), defaultBase) {
 			match = i
+			break
 		}
 	}
 	if match == -1 {

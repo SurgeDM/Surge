@@ -98,6 +98,13 @@ func TestMapWindowsPathToDefaultDir(t *testing.T) {
 			wantOK:     true,
 		},
 		{
+			name:       "first matching segment wins when name repeats",
+			request:    `C:/Downloads/archive/Downloads/final`,
+			defaultDir: `/downloads`,
+			want:       filepath.Join(filepath.Clean(`/downloads`), `archive`, `Downloads`, `final`),
+			wantOK:     true,
+		},
+		{
 			name:       "non matching root is not mapped",
 			request:    `C:/Users/me/Desktop`,
 			defaultDir: `/downloads`,
