@@ -1,6 +1,9 @@
 name: Build and Push Docker Images
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       surge_version:
@@ -39,6 +42,9 @@ jobs:
           if [ -n "${{ inputs.surge_version }}" ]; then
             SURGE_VERSION="${{ inputs.surge_version }}"
             echo "Using manually specified version: $SURGE_VERSION"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            SURGE_VERSION="${GITHUB_REF_NAME#v}"
+            echo "Using tag version: $SURGE_VERSION"
           else
             echo "Fetching latest Surge release..."
             SURGE_VERSION=$(curl -s https://api.github.com/repos/SurgeDM/Surge/releases/latest | jq -r .tag_name | sed 's/^v//')
