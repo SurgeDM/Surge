@@ -37,12 +37,15 @@ var statusMap = map[DownloadStatus]statusInfo{
 var (
 	statusRenderCache  [StatusError + 1][2]string // [status][0:full,1:icon]
 	queuedSpinnerStyle lipgloss.Style
+	statusOnce         sync.Once
 	cacheMu            sync.RWMutex
 )
 
-func init() {
-	rebuildStatusCache()
-	colors.RegisterThemeChangeHook(rebuildStatusCache)
+func InitializeStatusCache() {
+	statusOnce.Do(func() {
+		rebuildStatusCache()
+		colors.RegisterThemeChangeHook(rebuildStatusCache)
+	})
 }
 
 func rebuildStatusCache() {

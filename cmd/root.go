@@ -474,6 +474,7 @@ var rootCmd = &cobra.Command{
 // startTUI initializes and runs the TUI program
 func startTUI(port int, exitWhenDone bool, noResume bool) error {
 	trace.Log(context.Background(), "Startup", "startTUI_called")
+	tui.InitializeTUI()
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
