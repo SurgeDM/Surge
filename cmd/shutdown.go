@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sync"
 
+	"runtime/trace"
+
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -30,6 +32,8 @@ func defaultGlobalShutdown() error {
 	if cleanup := takeLifecycleCleanup(); cleanup != nil {
 		cleanup()
 	}
+
+	trace.Stop() // Flush any active execution trace
 
 	return err
 }

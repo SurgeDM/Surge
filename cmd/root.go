@@ -7,6 +7,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime/debug"
+	"runtime/trace"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -53,6 +54,7 @@ var pendingEnqueue int32
 var (
 	globalHost  string
 	globalToken string
+	traceFile   string
 )
 
 // Globals for Unified Backend
@@ -418,6 +420,20 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true, //errors are printed in main.go this prevents double printing
 	SilenceUsage:  true, // prevent usage text from being printed on every error
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if traceFile != "" {
+			f, err := os.Create(traceFile)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "failed to create trace file: %v\n", err)
+				os.Exit(1)
+			}
+			if err := trace.Start(f); err != nil {
+				fmt.Fprintf(os.Stderr, "failed to start trace: %v\n", err)
+				os.Exit(1)
+			}
+			// Use a finalizer or a global cleanup to stop the trace
+			// Since Cobra doesn't have a reliable PersistentPostRun for all exit paths (like signals),
+			// we'll handle it in specific exit points.
+		}
 
 		GlobalProgressCh = make(chan any, 100)
 		globalSettings = getSettings()
@@ -457,6 +473,7 @@ var rootCmd = &cobra.Command{
 
 // startTUI initializes and runs the TUI program
 func startTUI(port int, exitWhenDone bool, noResume bool) error {
+	trace.Log(context.Background(), "Startup", "startTUI_called")
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
@@ -549,6 +566,7 @@ func init() {
 	rootCmd.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
 	rootCmd.Flags().Bool("no-resume", false, "Do not auto-resume paused downloads on startup")
 	rootCmd.Flags().Bool("exit-when-done", false, "Exit when all downloads complete")
+	rootCmd.PersistentFlags().StringVar(&traceFile, "trace", "", "Path to save execution trace (e.g. surge.trace)")
 	rootCmd.SetVersionTemplate("Surge v{{.Version}}\n")
 	rootCmd.Version = Version
 }

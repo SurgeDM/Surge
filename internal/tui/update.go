@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"context"
+	"runtime/trace"
+
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/utils"
 
@@ -49,6 +52,7 @@ func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 
 // Update handles messages and updates the model
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	defer trace.StartRegion(context.Background(), "TUI.Update").End()
 
 	if m.Settings == nil {
 		m.Settings = config.DefaultSettings()
