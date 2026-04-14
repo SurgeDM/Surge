@@ -893,13 +893,11 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.Performance.SpeedEmaAlpha = defaults.Performance.SpeedEmaAlpha
 		}
 	case "Categories":
-		switch key {
-		case "category_enabled":
+		if key == "category_enabled" {
 			m.Settings.Categories.CategoryEnabled = defaults.Categories.CategoryEnabled
 		}
 	case "Extension":
-		switch key {
-		case "extension_prompt":
+		if key == "extension_prompt" {
 			m.Settings.Extension.ExtensionPrompt = defaults.Extension.ExtensionPrompt
 		}
 	}

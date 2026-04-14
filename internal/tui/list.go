@@ -32,12 +32,13 @@ func (i DownloadItem) Description() string {
 
 	// Get styled status using the shared component
 	var styledStatus string
-	if d.pausing {
+	switch {
+	case d.pausing:
 		// Custom "Pausing..." style using existing colors
 		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused).Render(i.spinnerView + " Pausing...")
-	} else if d.resuming {
+	case d.resuming:
 		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading).Render(i.spinnerView + " Resuming...")
-	} else {
+	default:
 		status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
 		styledStatus = status.RenderWithSpinner(i.spinnerView)
 	}
@@ -266,11 +267,12 @@ func (m *RootModel) UpdateListItems() {
 			for _, d := range m.downloads {
 				if d.ID == targetID {
 					var newTab int
-					if d.done {
+					switch {
+					case d.done:
 						newTab = TabDone
-					} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming) {
+					case !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming):
 						newTab = TabActive
-					} else {
+					default:
 						newTab = TabQueued
 					}
 

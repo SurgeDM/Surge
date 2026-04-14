@@ -370,10 +370,11 @@ func (p *WorkerPool) worker() {
 			ad.config.State.SetPausing(false)
 		}
 
-		if isPaused {
+		switch {
+		case isPaused:
 			utils.Debug("WorkerPool: Download %s paused cleanly", cfg.ID)
 			// If paused, we keep it in downloads map for potential resume via ExtractPausedConfig
-		} else if err != nil {
+		case err != nil:
 			if cfg.State != nil {
 				cfg.State.SetError(err)
 			}
@@ -383,7 +384,7 @@ func (p *WorkerPool) worker() {
 			delete(p.downloads, cfg.ID)
 			p.mu.Unlock()
 
-		} else {
+		default:
 			// Only mark as done if not paused
 			if cfg.State != nil {
 				cfg.State.Done.Store(true)
@@ -451,11 +452,12 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 		status.DestPath = ad.config.DestPath
 	}
 
-	if ad.config.State.IsPausing() {
+	switch {
+	case ad.config.State.IsPausing():
 		status.Status = "pausing"
-	} else if ad.config.State.IsPaused() {
+	case ad.config.State.IsPaused():
 		status.Status = "paused"
-	} else if state.Done.Load() {
+	case state.Done.Load():
 		status.Status = "completed"
 	}
 

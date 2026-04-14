@@ -568,7 +568,7 @@ func (m RootModel) View() tea.View {
 		maxSpeed = 1.0 // Default scale for empty graph
 	} else {
 		// Add headroom
-		maxSpeed = maxSpeed * GraphHeadroom
+		maxSpeed *= GraphHeadroom
 
 		if maxSpeed < 1.0 {
 			maxSpeed = 1.0
@@ -936,11 +936,12 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	// TUI owns elapsed time: compute from StartTime for active downloads,
 	// use frozen d.Elapsed for completed downloads.
 	var elapsed time.Duration
-	if d.done {
+	switch {
+	case d.done:
 		elapsed = d.Elapsed
-	} else if d.Elapsed > 0 {
+	case d.Elapsed > 0:
 		elapsed = d.Elapsed
-	} else if !d.StartTime.IsZero() {
+	case !d.StartTime.IsZero():
 		elapsed = time.Since(d.StartTime)
 	}
 
@@ -952,26 +953,28 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	}
 
 	// Speed & ETA
-	if d.done {
-		if elapsed.Seconds() >= 1 {
+	switch {
+	case d.done:
+		switch {
+		case elapsed.Seconds() >= 1:
 			avgSpeed := float64(d.Total) / float64(int(elapsed.Seconds()))
 			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(config.MB))
-		} else if d.Speed > 0 {
+		case d.Speed > 0:
 			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", d.Speed/float64(config.MB))
-		} else if elapsed.Seconds() > 0 {
+		case elapsed.Seconds() > 0:
 			avgSpeed := float64(d.Total) / elapsed.Seconds()
 			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(config.MB))
-		} else {
+		default:
 			speedStr = "N/A"
 		}
 		etaStr = "Done"
-	} else if d.resuming {
+	case d.resuming:
 		speedStr = "Resuming..."
 		etaStr = "..."
-	} else if d.paused || d.Speed == 0 {
+	case d.paused || d.Speed == 0:
 		speedStr = "Paused"
 		etaStr = "∞"
-	} else {
+	default:
 		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/float64(config.MB))
 		if d.Total > 0 {
 			remaining := d.Total - d.Downloaded
@@ -1106,11 +1109,12 @@ func (m RootModel) calcTotalSpeed() float64 {
 func (m RootModel) ComputeViewStats() ViewStats {
 	var stats ViewStats
 	for _, d := range m.downloads {
-		if d.done {
+		switch {
+		case d.done:
 			stats.DownloadedCount++
-		} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming) {
+		case !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming):
 			stats.ActiveCount++
-		} else {
+		default:
 			stats.QueuedCount++
 		}
 		stats.TotalDownloaded += d.Downloaded
