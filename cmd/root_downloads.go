@@ -324,7 +324,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 			continue
 		}
 
-		_, err := lifecycle.Enqueue(currentEnqueueContext(), &processing.DownloadRequest{
+		_, _, err := lifecycle.Enqueue(currentEnqueueContext(), &processing.DownloadRequest{
 			URL:                url,
 			Path:               outPath,
 			Mirrors:            mirrors,

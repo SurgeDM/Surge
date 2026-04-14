@@ -184,22 +184,29 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 
 	cmd := func() tea.Msg {
 		ctx := m.downloadEnqueueContext()
-		var newID string
+		var newID, finalFilename string
 		var err error
 		if requestID != "" {
-			newID, err = m.Orchestrator.EnqueueWithID(ctx, req, requestID)
+			newID, finalFilename, err = m.Orchestrator.EnqueueWithID(ctx, req, requestID)
 		} else {
-			newID, err = m.Orchestrator.Enqueue(ctx, req)
+			newID, finalFilename, err = m.Orchestrator.Enqueue(ctx, req)
 		}
 		if err != nil {
 			return enqueueErrorMsg{tempID: optimisticID, err: err}
 		}
+
+		// Use the server-resolved filename if available
+		displayFilename := finalFilename
+		if displayFilename == "" {
+			displayFilename = optimisticFilename
+		}
+
 		return enqueueSuccessMsg{
 			tempID:   optimisticID,
 			id:       newID,
 			url:      url,
 			path:     resolvedPath,
-			filename: optimisticFilename,
+			filename: displayFilename,
 		}
 	}
 
