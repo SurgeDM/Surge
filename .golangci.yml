@@ -34,3 +34,5 @@ linters:
     - gocritic
     - revive
     - goconst
+    - unparam
+    
