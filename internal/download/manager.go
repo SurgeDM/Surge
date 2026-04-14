@@ -28,10 +28,11 @@ func safeSendProgress(ch chan<- any, msg any) {
 
 // ProbeResult contains all metadata from server probe
 type ProbeResult struct {
-	FileSize      int64
-	SupportsRange bool
-	Filename      string
-	ContentType   string
+	FileSize         int64
+	SupportsRange    bool
+	Filename         string
+	DetectedFilename string
+	ContentType      string
 }
 
 // uniqueFilePath returns a unique file path by appending (1), (2), etc. if the file exists

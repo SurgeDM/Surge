@@ -300,7 +300,7 @@ async function sendToSurge(
   directory: string,
   headers: Record<string, string>,
   options?: { skipApproval?: boolean },
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; filename?: string; error?: string }> {
   const base = await getBaseUrl();
   if (!base) return { success: false, error: 'Server not running' };
 
@@ -318,7 +318,10 @@ async function sendToSurge(
       signal: AbortSignal.timeout(5000),
     });
 
-    if (resp.ok) return { success: true };
+    if (resp.ok) {
+      const data = await resp.json().catch(() => ({}));
+      return { success: true, filename: data.filename };
+    }
     return { success: false, error: await resp.text().catch(() => '') };
   } catch (error) {
     return { success: false, error: error instanceof Error ? error.message : String(error) };
@@ -418,7 +421,7 @@ async function handleDownloadCreated(downloadItem: {
   if (!await checkHealthSilent()) return;
 
   const { filename, directory } = extractPathInfo(downloadItem);
-  const displayName = filename || downloadItem.url.split('/').pop() || 'Unknown file';
+  const displayName = filename || '';
   const headers = getCapturedHeaders(downloadItem.url) ?? {};
 
   // Check for duplicates in the extension BEFORE sending to server.
@@ -448,7 +451,7 @@ async function handleDownloadCreated(downloadItem: {
         type: 'basic',
         iconUrl: 'icons/icon48.png',
         title: 'Surge',
-        message: `Download started: ${displayName}`,
+        message: `Download started: ${result.filename || displayName || 'Unknown file'}`,
       });
     }
   } else if (result.error) {
@@ -798,4 +801,5 @@ export const __test__ = {
     pendingDuplicates.clear();
     processedIds.clear();
   },
+  handleDownloadCreated,
 };

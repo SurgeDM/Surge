@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"testing"
 )
 
@@ -45,6 +46,7 @@ func TestSanitizeFilename(t *testing.T) {
 		// Security test cases
 		{"ansi escape codes", "\x1b[31mred.zip", "[31mred.zip"},
 		{"control chars", "file\x07name.zip", "filename.zip"},
+		{"extremely long filename", strings.Repeat("a", 300) + ".zip", strings.Repeat("a", 236) + ".zip"},
 	}
 
 	for _, tt := range tests {

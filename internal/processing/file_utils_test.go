@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
@@ -187,6 +188,26 @@ func TestResolveDestination_Priority(t *testing.T) {
 	_, name, _ = processing.ResolveDestination("http://example.com/some.rar", "", defaultDir, false, settings, &processing.ProbeResult{Filename: ""}, nil)
 	if name != "some.rar" {
 		t.Errorf("Expected some.rar, got %s", name)
+	}
+
+	// 5. Long candidate hint is preserved (but truncated)
+	longHint := "WrTLulKik3KpjnMuO-0gDohCI1WaybS779E_l6yr1UHGRMFfTkE7B5t5Ys5_N2qu8u6HmpGsrEZKftnkvhgxcvRqn6Pp9kceoiJRSTvPjlX8oDQW70mjRG9HlCYBmFoOYLJ7t133YpIR5xQXdPT8QWAMMUNyp6K3jeNJ3YmAez-_9MdrMBv6HlBRmDwSBwrubB895P34XJ40NUUmb6t0ITGTyZVc3kUBZ_emFeD-h8m-S--dzrdsyXdUQGI0amVV7cMetT2bifXVgzJaFn4mGZAvs7bIwe63xm1ARB2jF4hQ0V0hq8Db_6F4yH4_37XoubaVenavjGN5gW3uR2_FLFGc5JCMtlRwsBvF9wxcLTpWvn9IW61s-1aiAHnUbL9eesMzzY5DLXXgTkxTDre21UP4L6kNymwWFhjdbFzxIzBg_Z1RzzIzXVSYXu1O71Hvpu_FSW4N881BlaIZNCZPPtqqDrSwq3wdYECu_Sm1WxQ3kZOU9wjNu_03YHlpsYTm8lLK3EsxVGSgmpiLxLS4XI7lqVWI1_20Lkako4spInGKQYkq-E2S6k6opM58WLuz3-DyW0s-BTpUWPvYoazIc3eY_f4bCmy3uXsZ165iukgHvOnS6_ruKFw3kQMDuZVe"
+	_, name, _ = processing.ResolveDestination("http://example.com/"+longHint, longHint, defaultDir, false, settings, &processing.ProbeResult{DetectedFilename: "correct.rar"}, nil)
+	if name == "correct.rar" {
+		t.Errorf("Expected longHint to be used because heuristic was removed, but got correct.rar")
+	}
+	if len(name) > 240 {
+		t.Errorf("Expected truncated longHint, but length is %d", len(name))
+	}
+
+	// 6. Universal truncation in ResolveDestination
+	veryLongName := "this_is_a_very_long_filename_that_exceeds_the_limit_of_two_hundred_and_forty_characters_to_ensure_the_truncation_logic_is_working_correctly_at_the_destination_resolution_level_and_not_just_at_the_probing_utility_level_which_was_the_previous_bug.zip"
+	_, name, _ = processing.ResolveDestination("http://example.com/long", veryLongName, defaultDir, false, settings, nil, nil)
+	if len(name) > 240 {
+		t.Errorf("Expected filename to be truncated to <= 240 chars, got length %d", len(name))
+	}
+	if !strings.HasSuffix(name, ".zip") {
+		t.Errorf("Expected truncated filename to preserve .zip extension, got %s", name)
 	}
 }
 

@@ -14,6 +14,8 @@ import (
 	"github.com/vfaronov/httpheader"
 )
 
+const MaxFilenameLength = 240
+
 // DetermineFilename extracts the filename from a URL and HTTP response,
 // applying various heuristics. It returns the determined filename,
 // a new io.Reader that includes any sniffed header bytes, and an error.
@@ -48,6 +50,7 @@ func DetermineFilename(rawurl string, resp *http.Response) (string, io.Reader, e
 	// 3. URL Path
 	if candidate == "" {
 		candidate = filepath.Base(parsed.Path)
+		Debug("Filename from URL path: %s", candidate)
 	}
 
 	filename := sanitizeFilename(candidate)
@@ -109,6 +112,8 @@ func DetermineFilename(rawurl string, resp *http.Response) (string, io.Reader, e
 		Debug("Falling back to default filename: download.bin")
 	}
 
+	Debug("Final resolved filename: %s", filename)
+
 	return filename, body, nil
 }
 
@@ -154,6 +159,20 @@ func sanitizeFilename(name string) string {
 
 	if name == "" {
 		return "_"
+	}
+
+	if len(name) > MaxFilenameLength {
+		ext := filepath.Ext(name)
+		base := strings.TrimSuffix(name, ext)
+
+		maxBase := MaxFilenameLength - len(ext)
+		if maxBase < 1 {
+			// If even the extension is too long, just hard truncate
+			name = name[:MaxFilenameLength]
+		} else {
+			name = base[:maxBase] + ext
+		}
+		Debug("Truncated extremely long filename to %d characters", MaxFilenameLength)
 	}
 
 	return name

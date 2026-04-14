@@ -93,7 +93,7 @@ func TestLifecycleManager_Enqueue_PrecreatesWorkingFileBeforeDispatch(t *testing
 		IsExplicitCategory: true,
 	}
 
-	id, err := mgr.Enqueue(context.Background(), req)
+	id, _, err := mgr.Enqueue(context.Background(), req)
 	if err != nil {
 		t.Fatalf("Enqueue failed: %v", err)
 	}
@@ -151,7 +151,7 @@ func TestLifecycleManager_EnqueueWithID_PrecreatesWorkingFileBeforeDispatch(t *t
 		IsExplicitCategory: true,
 	}
 
-	id, err := mgr.EnqueueWithID(context.Background(), req, expectedID)
+	id, _, err := mgr.EnqueueWithID(context.Background(), req, expectedID)
 	if err != nil {
 		t.Fatalf("EnqueueWithID failed: %v", err)
 	}
@@ -178,7 +178,7 @@ func TestLifecycleManager_Enqueue_RemovesWorkingFileOnDispatchError(t *testing.T
 		return "", expectedErr
 	}
 
-	_, err := mgr.Enqueue(context.Background(), &DownloadRequest{
+	_, _, err := mgr.Enqueue(context.Background(), &DownloadRequest{
 		URL:                server.URL,
 		Filename:           expectedFile,
 		Path:               tempDir,
@@ -237,7 +237,7 @@ func TestLifecycleManager_Enqueue_RetriesWhenWorkingFileReservationCollides(t *t
 		return "retry-id", nil
 	}
 
-	id, err := mgr.Enqueue(context.Background(), &DownloadRequest{
+	id, _, err := mgr.Enqueue(context.Background(), &DownloadRequest{
 		URL:                server.URL,
 		Filename:           "archive.zip",
 		Path:               tempDir,
@@ -310,7 +310,7 @@ func TestLifecycleManager_EnqueueWithID_RetriesWhenWorkingFileReservationCollide
 		return gotRequestID, nil
 	}
 
-	id, err := mgr.EnqueueWithID(context.Background(), &DownloadRequest{
+	id, _, err := mgr.EnqueueWithID(context.Background(), &DownloadRequest{
 		URL:                server.URL,
 		Filename:           "archive.zip",
 		Path:               tempDir,
@@ -352,7 +352,7 @@ func TestLifecycleManager_EnqueueWithID_RemovesWorkingFileOnDispatchError(t *tes
 		return "", expectedErr
 	}
 
-	_, err := mgr.EnqueueWithID(context.Background(), &DownloadRequest{
+	_, _, err := mgr.EnqueueWithID(context.Background(), &DownloadRequest{
 		URL:                server.URL,
 		Filename:           expectedFile,
 		Path:               tempDir,
@@ -394,7 +394,7 @@ func TestLifecycleManager_Enqueue_FailsAfterReservationAttemptLimit(t *testing.T
 		return "", nil
 	}
 
-	_, err := mgr.Enqueue(context.Background(), &DownloadRequest{
+	_, _, err := mgr.Enqueue(context.Background(), &DownloadRequest{
 		URL:                server.URL,
 		Filename:           "archive.zip",
 		Path:               tempDir,
@@ -482,7 +482,7 @@ func TestLifecycleManager_Enqueue_ContextCancellationDuringProbe(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := mgr.Enqueue(ctx, &DownloadRequest{
+	_, _, err := mgr.Enqueue(ctx, &DownloadRequest{
 		URL:      server.URL,
 		Filename: "test.zip",
 		Path:     t.TempDir(),
@@ -522,7 +522,7 @@ func TestLifecycleManager_EnqueueWithID_FailsAfterReservationAttemptLimit(t *tes
 		return "", nil
 	}
 
-	_, err := mgr.EnqueueWithID(context.Background(), &DownloadRequest{
+	_, _, err := mgr.EnqueueWithID(context.Background(), &DownloadRequest{
 		URL:                server.URL,
 		Filename:           "archive.zip",
 		Path:               tempDir,
@@ -539,7 +539,7 @@ func TestLifecycleManager_EnqueueWithID_FailsAfterReservationAttemptLimit(t *tes
 
 func TestLifecycleManager_Enqueue_EmptyURL(t *testing.T) {
 	mgr := newLifecycleManagerForTest()
-	_, err := mgr.Enqueue(context.Background(), &DownloadRequest{
+	_, _, err := mgr.Enqueue(context.Background(), &DownloadRequest{
 		URL:  "",
 		Path: t.TempDir(),
 	})
@@ -552,7 +552,7 @@ func TestLifecycleManager_Enqueue_EmptyPath(t *testing.T) {
 	server := newProbeTestServer(t, 2048)
 	defer server.Close()
 	mgr := newLifecycleManagerForTest()
-	_, err := mgr.Enqueue(context.Background(), &DownloadRequest{
+	_, _, err := mgr.Enqueue(context.Background(), &DownloadRequest{
 		URL:  server.URL,
 		Path: "",
 	})
@@ -581,7 +581,7 @@ func TestLifecycleManager_Enqueue_ContextCancellationBeforeReservation(t *testin
 		return "", nil
 	}
 
-	_, err := mgr.Enqueue(ctx, &DownloadRequest{
+	_, _, err := mgr.Enqueue(ctx, &DownloadRequest{
 		URL:      server.URL,
 		Filename: "test.zip",
 		Path:     t.TempDir(),
@@ -1039,7 +1039,7 @@ func TestLifecycleManager_ProbeSemaphore_LimitsInflight(t *testing.T) {
 		wg.Add(1)
 		go func(idx int) {
 			defer wg.Done()
-			_, errs[idx] = mgr.Enqueue(context.Background(), &DownloadRequest{
+			_, _, errs[idx] = mgr.Enqueue(context.Background(), &DownloadRequest{
 				URL:      server.URL,
 				Filename: fmt.Sprintf("file%d.zip", idx),
 				Path:     tempDir,
@@ -1090,7 +1090,7 @@ func TestLifecycleManager_ProbeSemaphore_CancelledContextAbortsWait(t *testing.T
 	cancel() // already cancelled
 
 	start := time.Now()
-	_, err := mgr.Enqueue(ctx, &DownloadRequest{
+	_, _, err := mgr.Enqueue(ctx, &DownloadRequest{
 		URL:  "http://127.0.0.1:0/dummy",
 		Path: t.TempDir(),
 	})

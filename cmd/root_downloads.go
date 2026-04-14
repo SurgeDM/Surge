@@ -65,7 +65,7 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		return
 	}
 
-	newID, err := enqueueDownloadRequest(r, service, resolved)
+	newID, filename, err := enqueueDownloadRequest(r, service, resolved)
 	if err != nil {
 		recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
 		publishSystemLog(fmt.Sprintf("Error adding %s: %v", resolved.urlForAdd, err))
@@ -74,10 +74,11 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 	}
 
 	atomic.AddInt32(&activeDownloads, 1)
-	writeJSONResponse(w, http.StatusOK, map[string]string{
-		"status":  "queued",
-		"message": "Download queued successfully",
-		"id":      newID,
+	writeJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"status":   "queued",
+		"message":  "Download queued successfully",
+		"id":       newID,
+		"filename": filename,
 	})
 }
 
@@ -146,13 +147,13 @@ func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolved
 		return nil, err
 	}
 
-	utils.Debug("Received download request: URL=%s, Path=%s, Headers=%v", req.URL, req.Path, req.Headers)
+	utils.Debug("Received download request: URL=%s, Filename=%s, Path=%s, Headers=%v", req.URL, req.Filename, req.Path, req.Headers)
 
 	outPath := utils.EnsureAbsPath(resolveOutputDir(req.Path, req.RelativeToDefaultDir, defaultOutputDir, settings))
 	urlForAdd, mirrorsForAdd := normalizeDownloadTargets(req.URL, req.Mirrors)
 	isDuplicate, isActive := resolveDuplicateState(urlForAdd, settings)
 
-	utils.Debug("Download request: URL=%s, SkipApproval=%v, isDuplicate=%v, isActive=%v", urlForAdd, req.SkipApproval, isDuplicate, isActive)
+	utils.Debug("Download request: URL=%s, Filename=%s, SkipApproval=%v, isDuplicate=%v, isActive=%v", urlForAdd, req.Filename, req.SkipApproval, isDuplicate, isActive)
 
 	return &resolvedDownloadRequest{
 		request:       req,
@@ -238,10 +239,10 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 	return true
 }
 
-func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resolved *resolvedDownloadRequest) (string, error) {
+func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resolved *resolvedDownloadRequest) (string, string, error) {
 	lifecycle, err := lifecycleForLocalService(service)
 	if err != nil {
-		return "", fmt.Errorf("failed to initialize lifecycle manager: %w", err)
+		return "", "", fmt.Errorf("failed to initialize lifecycle manager: %w", err)
 	}
 
 	req := resolved.request
@@ -257,7 +258,8 @@ func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resol
 		})
 	}
 
-	return service.Add(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, 0, false)
+	id, err := service.Add(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, 0, false)
+	return id, req.Filename, err
 }
 
 // processDownloads handles the logic of adding downloads either to local pool or remote server

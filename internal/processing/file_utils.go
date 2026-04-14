@@ -44,11 +44,13 @@ func InferFilenameFromURL(rawURL string) string {
 	query := parsed.Query()
 	if name := strings.TrimSpace(query.Get("filename")); name != "" {
 		if base := strings.TrimSpace(path.Base(name)); isSafeComponent(base) {
+			utils.Debug("Inferred filename from query param 'filename': %s", base)
 			return base
 		}
 	}
 	if name := strings.TrimSpace(query.Get("file")); name != "" {
 		if base := strings.TrimSpace(path.Base(name)); isSafeComponent(base) {
+			utils.Debug("Inferred filename from query param 'file': %s", base)
 			return base
 		}
 	}
@@ -57,6 +59,7 @@ func InferFilenameFromURL(rawURL string) string {
 	if !isSafeComponent(base) {
 		return ""
 	}
+	utils.Debug("Inferred filename from URL path: %s", base)
 	return base
 }
 
@@ -155,15 +158,22 @@ func GetCategoryPath(filename, defaultDir string, settings *config.Settings) (st
 
 // getBaseFilename keeps naming deterministic across retries by preferring the
 // most authoritative source available before uniqueness is applied.
+// getBaseFilename selects the starting point for the download name.
 func getBaseFilename(url, candidate string, probe *ProbeResult) string {
 	if candidate != "" {
 		return candidate
 	}
-	if probe != nil && probe.Filename != "" {
-		return probe.Filename
+	if probe != nil {
+		if probe.DetectedFilename != "" {
+			return probe.DetectedFilename
+		}
+		if probe.Filename != "" {
+			return probe.Filename
+		}
 	}
 	return InferFilenameFromURL(url)
 }
+
 
 // ResolveDestination centralizes routing and naming so CLI, TUI, and API
 // requests all land on the same final path before the engine starts downloading.
@@ -184,7 +194,28 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 		return "", "", fmt.Errorf("could not determine a unique filename for %s", url)
 	}
 
+	// Safety: Ensure the final filename is truncated to OS limits
+	finalFilename = truncateToSafeLength(finalFilename)
+
 	return destPath, finalFilename, nil
+}
+
+func truncateToSafeLength(name string) string {
+	if len(name) <= utils.MaxFilenameLength {
+		return name
+	}
+
+	ext := filepath.Ext(name)
+	base := strings.TrimSuffix(name, ext)
+	maxBase := utils.MaxFilenameLength - len(ext)
+
+	if maxBase < 1 {
+		return name[:utils.MaxFilenameLength]
+	}
+
+	truncated := base[:maxBase] + ext
+	utils.Debug("Truncated final filename %q to %q for OS safety", name, truncated)
+	return truncated
 }
 
 // RemoveIncompleteFile drops only the reserved working file, leaving any
