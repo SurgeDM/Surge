@@ -47,6 +47,7 @@ func TestSanitizeFilename(t *testing.T) {
 		{"ansi escape codes", "\x1b[31mred.zip", "[31mred.zip"},
 		{"control chars", "file\x07name.zip", "filename.zip"},
 		{"extremely long filename", strings.Repeat("a", 300) + ".zip", strings.Repeat("a", 236) + ".zip"},
+		{"long unicode filename", strings.Repeat("文件", 150) + ".zip", string([]rune(strings.Repeat("文件", 150))[:236]) + ".zip"},
 	}
 
 	for _, tt := range tests {

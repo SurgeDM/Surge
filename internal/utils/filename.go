@@ -163,14 +163,15 @@ func sanitizeFilename(name string) string {
 
 	if len(name) > MaxFilenameLength {
 		ext := filepath.Ext(name)
-		base := strings.TrimSuffix(name, ext)
+		baseRunes := []rune(strings.TrimSuffix(name, ext))
+		extRunes := []rune(ext)
+		maxBase := MaxFilenameLength - len(extRunes)
 
-		maxBase := MaxFilenameLength - len(ext)
 		if maxBase < 1 {
-			// If even the extension is too long, just hard truncate
-			name = name[:MaxFilenameLength]
+			// If even the extension is too long, just hard truncate the runes
+			name = string([]rune(name)[:MaxFilenameLength])
 		} else {
-			name = base[:maxBase] + ext
+			name = string(baseRunes[:maxBase]) + ext
 		}
 		Debug("Truncated extremely long filename to %d characters", MaxFilenameLength)
 	}
