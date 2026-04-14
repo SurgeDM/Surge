@@ -167,13 +167,13 @@ func TestResolveDestination_Priority(t *testing.T) {
 	defaultDir := "/downloads"
 
 	// 1. User defined beats all
-	_, name, _ := processing.ResolveDestination("http://example.com/file.zip", "user.txt", defaultDir, false, settings, &processing.ProbeResult{Filename: "probe.zip"}, nil)
+	_, name, _ := processing.ResolveDestination("http://example.com/file.zip", "user.txt", defaultDir, false, settings, &processing.ProbeResult{DetectedFilename: "probe.zip"}, nil)
 	if name != "user.txt" {
 		t.Errorf("Expected user.txt as candidate priority, got %s", name)
 	}
 
 	// 2. Probe beats URL fallback
-	_, name, _ = processing.ResolveDestination("http://example.com/file.zip", "", defaultDir, false, settings, &processing.ProbeResult{Filename: "probe.zip"}, nil)
+	_, name, _ = processing.ResolveDestination("http://example.com/file.zip", "", defaultDir, false, settings, &processing.ProbeResult{DetectedFilename: "probe.zip"}, nil)
 	if name != "probe.zip" {
 		t.Errorf("Expected probe.zip, got %s", name)
 	}
@@ -185,7 +185,6 @@ func TestResolveDestination_Priority(t *testing.T) {
 	}
 
 	// 4. URL Fallback when probe has empty filename
-	_, name, _ = processing.ResolveDestination("http://example.com/some.rar", "", defaultDir, false, settings, &processing.ProbeResult{Filename: ""}, nil)
 	_, name, _ = processing.ResolveDestination("http://example.com/some.rar", "", defaultDir, false, settings, &processing.ProbeResult{DetectedFilename: ""}, nil)
 	if name != "some.rar" {
 		t.Errorf("Expected some.rar, got %s", name)

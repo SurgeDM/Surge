@@ -170,7 +170,6 @@ func getBaseFilename(url, candidate string, probe *ProbeResult) string {
 	return InferFilenameFromURL(url)
 }
 
-
 // ResolveDestination centralizes routing and naming so CLI, TUI, and API
 // requests all land on the same final path before the engine starts downloading.
 func ResolveDestination(url, candidateFilename, defaultDir string, routeToCategory bool, settings *config.Settings, probe *ProbeResult, isNameActive func(string, string) bool) (string, string, error) {
@@ -195,7 +194,6 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 
 	return destPath, finalFilename, nil
 }
-
 
 // RemoveIncompleteFile drops only the reserved working file, leaving any
 // promoted final file untouched.
