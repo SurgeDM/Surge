@@ -130,7 +130,7 @@ func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) 
 		// Linux filepath.IsAbs does not recognize Windows drive paths, so those
 		// are normalized later against the daemon's default download directory.
 		if filepath.IsAbs(req.Path) && !utils.IsWindowsAbsPath(req.Path) {
-			return req, fmt.Errorf("invalid path")
+			return req, errors.New("invalid path")
 		}
 		cleanPath := filepath.Clean(req.Path)
 		if cleanPath == ".." || strings.HasPrefix(cleanPath, ".."+string(filepath.Separator)) {
