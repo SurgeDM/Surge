@@ -25,6 +25,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.SettingsIsEditing {
 		if key.Matches(msg, m.keys.SettingsEditor.Cancel) {
 			// Cancel editing
+			m.SettingsError = ""
 			m.SettingsIsEditing = false
 			m.SettingsInput.Blur()
 			return m, nil
@@ -32,7 +33,11 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.SettingsEditor.Confirm) {
 			currentCategory := categories[m.SettingsActiveTab]
 			settingKey := m.getCurrentSettingKey()
-			_ = m.setSettingValue(currentCategory, settingKey, m.SettingsInput.Value())
+			if err := m.setSettingValue(currentCategory, settingKey, m.SettingsInput.Value()); err != nil {
+				m.SettingsError = err.Error()
+				return m, nil
+			}
+			m.SettingsError = ""
 			m.SettingsIsEditing = false
 			m.SettingsInput.Blur()
 			return m, nil
@@ -62,6 +67,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, binding) {
 			if categoryCount > i {
 				m.SettingsActiveTab = i
+				m.SettingsError = ""
 			}
 			m.SettingsSelectedRow = 0
 			return m, nil
@@ -72,11 +78,13 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Settings.NextTab) {
 		m.SettingsActiveTab = (m.SettingsActiveTab + 1) % categoryCount
 		m.SettingsSelectedRow = 0
+		m.SettingsError = ""
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Settings.PrevTab) {
 		m.SettingsActiveTab = (m.SettingsActiveTab - 1 + categoryCount) % categoryCount
 		m.SettingsSelectedRow = 0
+		m.SettingsError = ""
 		return m, nil
 	}
 
@@ -99,6 +107,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Settings.Up) {
 		if m.SettingsSelectedRow > 0 {
 			m.SettingsSelectedRow--
+			m.SettingsError = ""
 		}
 		return m, nil
 	}
@@ -106,6 +115,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		maxRow := m.getSettingsCount() - 1
 		if m.SettingsSelectedRow < maxRow {
 			m.SettingsSelectedRow++
+			m.SettingsError = ""
 		}
 		return m, nil
 	}
@@ -161,6 +171,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		currentCategory := categories[m.SettingsActiveTab]
 		if typ == "bool" {
 			_ = m.setSettingValue(currentCategory, settingKey, "")
+			m.SettingsError = ""
 		} else {
 			// Enter edit mode
 			m.SettingsIsEditing = true
@@ -185,6 +196,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if settingKey == "theme" {
 			m.ApplyTheme(m.Settings.General.Theme)
 		}
+		m.SettingsError = ""
 		return m, nil
 	}
 

@@ -340,6 +340,16 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	valueDisplay := valueLabelStyle.Render(valueLabel) + valueContentStyle.Render(valueStr)
 	valueDisplay = lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(valueDisplay)
 
+	var errorDisplay string
+	if m.SettingsError != "" {
+		errorDisplay = "\n" + lipgloss.NewStyle().
+			Foreground(colors.StateError).
+			Bold(true).
+			Width(innerWidth).
+			MaxWidth(innerWidth).
+			Render("Error: "+m.SettingsError)
+	}
+
 	divider := lipgloss.NewStyle().
 		Foreground(colors.Gray).
 		Render(strings.Repeat("─", innerWidth))
@@ -352,6 +362,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	detail := lipgloss.JoinVertical(lipgloss.Left,
 		valueDisplay,
+		errorDisplay,
 		"",
 		divider,
 		"",
@@ -602,7 +613,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 					if v, err := strconv.Atoi(value); err == nil && v >= 0 && v <= 2 {
 						theme = v
 					} else {
-						return nil // Invalid
+						return fmt.Errorf("invalid theme: %q (use system, light, or dark)", value)
 					}
 				}
 				targetField.Set(reflect.ValueOf(theme))
@@ -617,7 +628,10 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 				if value == "" {
 					targetField.SetBool(!targetField.Bool())
 				} else {
-					b, _ := strconv.ParseBool(value)
+					b, err := strconv.ParseBool(value)
+					if err != nil {
+						return fmt.Errorf("invalid boolean: %q (use true or false)", value)
+					}
 					targetField.SetBool(b)
 				}
 			case reflect.String:
@@ -625,30 +639,41 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
 				if v, err := strconv.Atoi(value); err == nil {
 					targetField.SetInt(int64(v))
+				} else {
+					return fmt.Errorf("invalid integer: %q", value)
 				}
 			case reflect.Int64:
 				if targetField.Type().String() == "time.Duration" {
+					parseVal := value
 					if _, err := strconv.ParseFloat(value, 64); err == nil {
-						value += "s"
+						parseVal += "s"
 					}
-					if v, err := time.ParseDuration(value); err == nil {
-						targetField.Set(reflect.ValueOf(v))
+					v, err := time.ParseDuration(parseVal)
+					if err != nil {
+						return fmt.Errorf("invalid duration: %q (e.g. 5, 5s, 1m)", value)
 					}
+					targetField.Set(reflect.ValueOf(v))
 				} else {
 					// Handle KB/MB scaling gracefully if specified
 					if key == "min_chunk_size" {
 						if v, err := strconv.ParseFloat(value, 64); err == nil {
 							targetField.SetInt(int64(v * float64(config.MB)))
+						} else {
+							return fmt.Errorf("invalid number: %q", value)
 						}
 					} else {
 						if v, err := strconv.ParseInt(value, 10, 64); err == nil {
 							targetField.SetInt(v)
+						} else {
+							return fmt.Errorf("invalid integer: %q", value)
 						}
 					}
 				}
 			case reflect.Float32, reflect.Float64:
 				if v, err := strconv.ParseFloat(value, 64); err == nil {
 					targetField.SetFloat(v)
+				} else {
+					return fmt.Errorf("invalid decimal: %q", value)
 				}
 			}
 
