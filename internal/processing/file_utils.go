@@ -166,9 +166,6 @@ func getBaseFilename(url, candidate string, probe *ProbeResult) string {
 		if probe.DetectedFilename != "" {
 			return probe.DetectedFilename
 		}
-		if probe.Filename != "" {
-			return probe.Filename
-		}
 	}
 	return InferFilenameFromURL(url)
 }
@@ -189,7 +186,7 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 	}
 
 	// Safety: Truncate early so GetUniqueFilename has room to append a suffix
-	filename = truncateToSafeLength(filename)
+	filename = utils.TruncateFilename(filename)
 
 	finalFilename := GetUniqueFilename(destPath, filename, isNameActive)
 	if finalFilename == "" {
@@ -199,27 +196,6 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 	return destPath, finalFilename, nil
 }
 
-func truncateToSafeLength(name string) string {
-	if len(name) <= utils.MaxFilenameLength {
-		return name
-	}
-
-	ext := filepath.Ext(name)
-	baseRunes := []rune(strings.TrimSuffix(name, ext))
-	extRunes := []rune(ext)
-	maxBase := utils.MaxFilenameLength - len(extRunes)
-
-	if maxBase < 1 {
-		// If even the extension is too long, just hard truncate the runes
-		truncated := string([]rune(name)[:utils.MaxFilenameLength])
-		utils.Debug("Truncated extremely long extension-only filename %q to %q", name, truncated)
-		return truncated
-	}
-
-	truncated := string(baseRunes[:maxBase]) + ext
-	utils.Debug("Truncated final filename %q to %q for OS safety", name, truncated)
-	return truncated
-}
 
 // RemoveIncompleteFile drops only the reserved working file, leaving any
 // promoted final file untouched.

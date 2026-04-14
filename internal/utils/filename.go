@@ -130,6 +130,25 @@ func sanitizedBecameExtensionOnly(original, sanitized string) bool {
 	return !strings.HasPrefix(originalBase, ".")
 }
 
+// TruncateFilename ensures a filename does not exceed MaxFilenameLength
+// while preserving the extension and being UTF-8 safe.
+func TruncateFilename(name string) string {
+	if len(name) <= MaxFilenameLength {
+		return name
+	}
+	ext := filepath.Ext(name)
+	baseRunes := []rune(strings.TrimSuffix(name, ext))
+	extRunes := []rune(ext)
+	maxBase := MaxFilenameLength - len(extRunes)
+
+	if maxBase < 1 {
+		// If even the extension is too long, just hard truncate the runes
+		return string([]rune(name)[:MaxFilenameLength])
+	}
+
+	return string(baseRunes[:maxBase]) + ext
+}
+
 func sanitizeFilename(name string) string {
 	name = strings.ReplaceAll(name, "\\", "/")
 	name = filepath.Base(name)
@@ -162,17 +181,7 @@ func sanitizeFilename(name string) string {
 	}
 
 	if len(name) > MaxFilenameLength {
-		ext := filepath.Ext(name)
-		baseRunes := []rune(strings.TrimSuffix(name, ext))
-		extRunes := []rune(ext)
-		maxBase := MaxFilenameLength - len(extRunes)
-
-		if maxBase < 1 {
-			// If even the extension is too long, just hard truncate the runes
-			name = string([]rune(name)[:MaxFilenameLength])
-		} else {
-			name = string(baseRunes[:maxBase]) + ext
-		}
+		name = TruncateFilename(name)
 		Debug("Truncated extremely long filename to %d characters", MaxFilenameLength)
 	}
 

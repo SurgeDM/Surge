@@ -186,6 +186,7 @@ func TestResolveDestination_Priority(t *testing.T) {
 
 	// 4. URL Fallback when probe has empty filename
 	_, name, _ = processing.ResolveDestination("http://example.com/some.rar", "", defaultDir, false, settings, &processing.ProbeResult{Filename: ""}, nil)
+	_, name, _ = processing.ResolveDestination("http://example.com/some.rar", "", defaultDir, false, settings, &processing.ProbeResult{DetectedFilename: ""}, nil)
 	if name != "some.rar" {
 		t.Errorf("Expected some.rar, got %s", name)
 	}
