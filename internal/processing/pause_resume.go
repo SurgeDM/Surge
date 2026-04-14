@@ -333,7 +333,7 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadEntry, savedS
 			dmState.SetSavedElapsed(time.Duration(savedState.Elapsed))
 		}
 		if len(savedState.Mirrors) > 0 {
-			var mirrors []types.MirrorStatus
+			mirrors := make([]types.MirrorStatus, 0, len(savedState.Mirrors))
 			for _, u := range savedState.Mirrors {
 				mirrors = append(mirrors, types.MirrorStatus{URL: u, Active: true})
 				mirrorURLs = append(mirrorURLs, u)

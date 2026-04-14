@@ -154,7 +154,7 @@ func (p *WorkerPool) GetAll() []types.DownloadConfig {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	var configs []types.DownloadConfig
+	configs := make([]types.DownloadConfig, 0, len(p.downloads)+len(p.queued))
 	for _, ad := range p.downloads {
 		cfg := ad.config
 		syncConfigFromState(&cfg)
