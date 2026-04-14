@@ -27,7 +27,8 @@ const (
 
 // Connection limits
 const (
-	PerHostMax = 64 // Max concurrent connections per host
+	PerHostMax     = 64 // Max concurrent connections per host
+	DialHedgeCount = 4  // Extra connections to dial pre-emptively
 )
 
 // HTTP Client Tuning
@@ -77,6 +78,7 @@ type RuntimeConfig struct {
 
 	WorkerBufferSize      int
 	MaxTaskRetries        int
+	DialHedgeCount        int
 	SlowWorkerThreshold   float64
 	SlowWorkerGracePeriod time.Duration
 	StallTimeout          time.Duration
@@ -133,6 +135,18 @@ func (r *RuntimeConfig) GetMaxTaskRetries() int {
 		return MaxTaskRetries
 	}
 	return r.MaxTaskRetries
+}
+
+// GetDialHedgeCount returns configured value or default
+func (r *RuntimeConfig) GetDialHedgeCount() int {
+	if r == nil {
+		return DialHedgeCount
+	}
+	// Note: 0 is a valid value meaning "disabled"
+	if r.DialHedgeCount < 0 {
+		return DialHedgeCount
+	}
+	return r.DialHedgeCount
 }
 
 // GetSlowWorkerThreshold returns configured value or default
