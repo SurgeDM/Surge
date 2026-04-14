@@ -53,13 +53,21 @@ jobs:
       - name: Build and Package
         run: |
           npm run zip -- -b ${{ matrix.browser }}
-          mv output/*-${{ matrix.browser }}.zip output/extension-${{ matrix.browser }}.zip
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: extension-${{ matrix.browser }}
-          path: extension/output/extension-${{ matrix.browser }}.zip
+          path: extension/output/*.zip
           if-no-files-found: error
+      - name: Submit to AMO
+        if: matrix.browser == 'firefox' && startsWith(github.ref, 'refs/tags/ext-v')
+        run: |
+          npx wxt submit \
+            --firefox-zip output/*-firefox.zip \
+            --firefox-sources-zip output/*-sources.zip
+        env:
+          FIREFOX_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          FIREFOX_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
 
   release:
     name: Create Release
