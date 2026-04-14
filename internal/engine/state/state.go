@@ -814,6 +814,8 @@ func ValidateIntegrity() (int, error) {
 		return 0, errors.New("database not initialized")
 	}
 
+	defer db.Close()
+
 	// Load all paused/queued downloads
 	rows, err := db.Query(`
 		SELECT id, dest_path, file_hash, status, downloaded
@@ -876,7 +878,6 @@ func ValidateIntegrity() (int, error) {
 		var dest string
 		var status string
 		if err := allRows.Scan(&dest, &status); err != nil {
-			_ = allRows.Close()
 			return 0, fmt.Errorf("failed to scan download path: %w", err)
 		}
 		candidateDirs[filepath.Dir(dest)] = struct{}{}
@@ -885,10 +886,8 @@ func ValidateIntegrity() (int, error) {
 		}
 	}
 	if err := allRows.Err(); err != nil {
-		_ = allRows.Close()
 		return 0, fmt.Errorf("failed to iterate download paths: %w", err)
 	}
-	_ = allRows.Close()
 
 	for _, e := range entries {
 		surgePath := e.destPath + types.IncompleteSuffix
