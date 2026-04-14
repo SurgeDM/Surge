@@ -13,7 +13,7 @@ describe('download interception naming', () => {
     __test__.resetState();
 
     // Mock browser APIs
-    (globalThis as any).browser = {
+    vi.stubGlobal('browser', {
       storage: {
         local: {
           get: vi.fn().mockImplementation((key: string) => {
@@ -40,7 +40,7 @@ describe('download interception naming', () => {
       notifications: {
         create: vi.fn(),
       },
-    };
+    });
 
     // Pre-hydrate state so we don't wait for discovery
     return __test__.ensurePersistedStateLoaded();
@@ -107,6 +107,6 @@ describe('download interception naming', () => {
 
     const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
     const body = JSON.parse(downloadCall?.[1].body);
-    expect(body.filename).toBe('authoritative.zip');
+    expect(body.filename).toBe('');
   });
 });

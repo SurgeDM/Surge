@@ -421,7 +421,7 @@ async function handleDownloadCreated(downloadItem: {
   if (!await checkHealthSilent()) return;
 
   const { filename, directory } = extractPathInfo(downloadItem);
-  const displayName = filename || '';
+  const duplicateDisplayName = filename || downloadItem.url.split('/').pop()?.split('?')[0] || 'Unknown file';
   const headers = getCapturedHeaders(downloadItem.url) ?? {};
 
   // Check for duplicates in the extension BEFORE sending to server.
@@ -431,7 +431,7 @@ async function handleDownloadCreated(downloadItem: {
       pendingDuplicates,
       pendingDuplicateCounter,
       url: downloadItem.url,
-      filename: displayName,
+      filename: duplicateDisplayName,
       directory,
       cleanupStaleDuplicates,
       persistPendingDuplicates,
@@ -442,7 +442,8 @@ async function handleDownloadCreated(downloadItem: {
     return;
   }
 
-  const result = await sendToSurge(downloadItem.url, displayName, directory, headers);
+  // Force empty filename hint for backend - rely on backend prober.
+  const result = await sendToSurge(downloadItem.url, '', directory, headers);
 
   if (result.success) {
     await tryOpenPopup();
@@ -655,7 +656,7 @@ async function handleConfirmDuplicate(id: string): Promise<{ success: boolean; e
 
   const result = await sendToSurge(
     pending.url,
-    pending.filename,
+    '', // Force empty - rely on backend prober
     pending.directory,
     {},
     { skipApproval: true },

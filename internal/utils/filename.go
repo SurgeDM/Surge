@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/h2non/filetype"
 	"github.com/vfaronov/httpheader"
@@ -133,21 +134,30 @@ func sanitizedBecameExtensionOnly(original, sanitized string) bool {
 // TruncateFilename ensures a filename does not exceed MaxFilenameLength
 // while preserving the extension and being UTF-8 safe.
 func TruncateFilename(name string) string {
-	runes := []rune(name)
-	if len(runes) <= MaxFilenameLength {
+	if len(name) <= MaxFilenameLength {
 		return name
 	}
 	ext := filepath.Ext(name)
-	extRunes := []rune(ext)
-	maxBase := MaxFilenameLength - len(extRunes)
+	extBytes := len(ext)
+	maxBase := MaxFilenameLength - extBytes
 
 	if maxBase < 1 {
-		// If even the extension is too long, just hard truncate the runes
-		return string(runes[:MaxFilenameLength])
+		// Extension alone is too long — hard-truncate by rune so we don't split mid-char
+		b := []byte(name)
+		for len(b) > MaxFilenameLength {
+			_, size := utf8.DecodeLastRune(b)
+			b = b[:len(b)-size]
+		}
+		return string(b)
 	}
 
-	baseRunes := []rune(strings.TrimSuffix(name, ext))
-	return string(baseRunes[:maxBase]) + ext
+	base := strings.TrimSuffix(name, ext)
+	b := []byte(base)
+	for len(b) > maxBase {
+		_, size := utf8.DecodeLastRune(b)
+		b = b[:len(b)-size]
+	}
+	return string(b) + ext
 }
 
 func sanitizeFilename(name string) string {
@@ -183,7 +193,7 @@ func sanitizeFilename(name string) string {
 
 	if len(name) > MaxFilenameLength {
 		name = TruncateFilename(name)
-		Debug("Truncated extremely long filename to %d characters", MaxFilenameLength)
+		Debug("Truncated extremely long filename to %d bytes", MaxFilenameLength)
 	}
 
 	return name
