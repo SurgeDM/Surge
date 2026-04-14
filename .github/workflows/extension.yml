@@ -44,6 +44,12 @@ jobs:
           cache: "npm"
           cache-dependency-path: extension/package-lock.json
       - run: npm ci
+      - name: Update Version
+        if: startsWith(github.ref, 'refs/tags/ext-v')
+        run: |
+          VERSION=${GITHUB_REF_NAME#ext-v}
+          echo "Setting version to $VERSION"
+          npm version $VERSION --no-git-tag-version
       - name: Build and Package
         run: |
           npm run zip -- -b ${{ matrix.browser }}
