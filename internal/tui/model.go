@@ -130,6 +130,7 @@ type RootModel struct {
 	SettingsFileBrowsing  bool             // Whether browsing for a directory
 	ExtensionFileBrowsing bool             // Whether browsing for extension prompt path
 	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
+	SettingsError         string           // Current validation error message for settings
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download
