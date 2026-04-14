@@ -814,7 +814,6 @@ func ValidateIntegrity() (int, error) {
 		return 0, errors.New("database not initialized")
 	}
 
-	defer db.Close()
 
 	// Load all paused/queued downloads
 	rows, err := db.Query(`
@@ -874,6 +873,7 @@ func ValidateIntegrity() (int, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to query known download paths: %w", err)
 	}
+	defer func() { _ = allRows.Close() }()
 	for allRows.Next() {
 		var dest string
 		var status string
