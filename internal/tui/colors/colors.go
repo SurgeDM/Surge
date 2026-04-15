@@ -20,6 +20,14 @@ func (c themeColor) RGBA() (r, g, b, a uint32) {
 	return lipgloss.Color(chosen).RGBA()
 }
 
+// TODO: Load custom colour scheme like Alacritty
+
+// TODO: Rename to use X11/Alacritty colour names
+
+// TODO: Use a TOML spec similar to Alacritty's
+
+// Support either [colors] is_dark = true/false (single colour scheme in fiile) or [colors.dark.] and [colors.light.] in the same file
+
 // === Color Palette ===
 // Vibrant "Cyberpunk" Neon Colors (Dark Mode) + High Contrast (Light Mode)
 var (

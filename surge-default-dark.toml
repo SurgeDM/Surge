@@ -1,0 +1,47 @@
+# Vibrant "Cyberpunk" Neon Colors (Dark Mode)
+
+[colors]
+name = "Cyberpunk"
+is_dark = true
+
+[colors.primary]
+# base 00 - DarkGray.dark
+background = '#282a36'
+# base 05 - White.dark (Standard Text)
+foreground = '#f8f8f2'
+
+[colors.normal]
+# base 01 - Gray.dark (Selection/Borders)
+black =   '#44475a'
+# base 08 - StateError.dark
+red =     '#ff5555'
+# base 0B - StateDownloading.dark
+green =   '#50fa7b'
+# base 0A - StatePaused.dark
+yellow =  '#ffb86c'
+# base 0D - 
+blue =    ''
+# base 0E - NeonPurple.dark (or StateDone)
+magenta = '#bd93f9'
+# base 0C - NeonCyan.dark
+cyan =    '#8be9fd' 
+# base 07 - White.dark (Brightest)
+white =   '#f8f8f2'
+
+[colors.bright]
+# base 03 - LightGray.dark (Comments/Secondary Info)
+black =   '#a9b1d6'
+# base 09 - ProgressStart.dark (Neon Pink)
+red =     '#ff79c6'
+# base 0B - StateDownloading.dark
+green =   '#50fa7b'
+# base 0A - StatePaused.dark
+yellow =  '#ffb86c'
+# base 0D - 
+blue =    ''
+# base 0F - ProgressEnd.dark (Neon Purple)
+magenta = '#bd93f9'
+# base 0C - NeonCyan.dark
+cyan =    '#8be9fd' 
+# base 07 - 
+white =   ''
