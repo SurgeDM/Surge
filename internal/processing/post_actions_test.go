@@ -24,6 +24,7 @@ func TestExpandTemplate(t *testing.T) {
 	filename := shellEscape("test.zip")
 	filepath := shellEscape("/downloads/test.zip")
 	id := shellEscape("abc123")
+	duration := shellEscape("2s")
 
 	tests := []struct {
 		name     string
@@ -32,7 +33,7 @@ func TestExpandTemplate(t *testing.T) {
 	}{
 		{"filename", "echo {filename}", "echo " + filename},
 		{"filepath", "mv {filepath} /done/", "mv " + filepath + " /done/"},
-		{"all vars", "{id}: {filename} ({size} bytes, {speed} B/s, {duration})", id + ": " + filename + " (1048576 bytes, 524288.00 B/s, 2s)"},
+		{"all vars", "{id}: {filename} ({size} bytes, {speed} B/s, {duration})", id + ": " + filename + " (1048576 bytes, 524288.00 B/s, " + duration + ")"},
 		{"no vars", "echo done", "echo done"},
 		{"empty", "", ""},
 	}
@@ -40,6 +41,47 @@ func TestExpandTemplate(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := expandTemplate(tt.template, ctx)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestExpandTemplate_ShellEscapeEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		template string
+		ctx      PostActionContext
+		want     string
+	}{
+		{
+			"filename with spaces and quotes",
+			"echo {filename}",
+			PostActionContext{Filename: "my file's (1).zip"},
+			"echo " + shellEscape("my file's (1).zip"),
+		},
+		{
+			"filename with semicolon (injection attempt)",
+			"echo {filename}",
+			PostActionContext{Filename: "test; rm -rf /"},
+			"echo " + shellEscape("test; rm -rf /"),
+		},
+		{
+			"filepath with dollar sign (env var expansion attempt)",
+			"mv {filepath} /out/",
+			PostActionContext{FilePath: "/downloads/$HOME/.ssh"},
+			"mv " + shellEscape("/downloads/$HOME/.ssh") + " /out/",
+		},
+		{
+			"error with backtick (command substitution attempt)",
+			"notify {error}",
+			PostActionContext{Error: "failed: `id`"},
+			"notify " + shellEscape("failed: `id`"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := expandTemplate(tt.template, tt.ctx)
 			assert.Equal(t, tt.want, got)
 		})
 	}

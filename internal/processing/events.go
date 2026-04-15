@@ -290,7 +290,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				}
 			}
 			if settings != nil {
-				// Run post-download actions
+				// Goroutine keeps slow shell commands off the serialized event
+				// worker so lifecycle events don't back up.
 				go RunPostActions(settings.General.PostDownload, PostActionContext{
 					Filename: filename,
 					FilePath: destPath,
@@ -336,10 +337,15 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 
 				notify(fmt.Sprintf("Download failed: %s", filename), msg)
 			}
-			// Run post-download error action
-			if settings != nil && m.Err != nil && settings.General.PostDownload.OnErrorCommand != "" {
+			// Fire the on-error hook whenever the notification fires, even when
+			// m.Err is nil. The notification block above defaults to "Download
+			// failed" when Err is nil, so users configuring on_error_command
+			// expect their hook to run on that same event.
+			if settings != nil && settings.General.PostDownload.OnErrorCommand != "" {
 				errMsg := ""
-				errMsg = m.Err.Error()
+				if m.Err != nil {
+					errMsg = m.Err.Error()
+				}
 				go RunPostActions(settings.General.PostDownload, PostActionContext{
 					Filename: filename,
 					FilePath: destPath,

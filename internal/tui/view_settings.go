@@ -277,6 +277,9 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 		values["speed_ema_alpha"] = m.Settings.Performance.SpeedEmaAlpha
 	case "Categories":
 		values["category_enabled"] = m.Settings.General.CategoryEnabled
+	case "Post-Download":
+		values["on_complete_command"] = m.Settings.General.PostDownload.OnCompleteCommand
+		values["on_error_command"] = m.Settings.General.PostDownload.OnErrorCommand
 	}
 
 	return values
@@ -305,6 +308,13 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 	case "Categories":
 		if key == "category_enabled" {
 			m.Settings.General.CategoryEnabled = !m.Settings.General.CategoryEnabled
+		}
+	case "Post-Download":
+		switch key {
+		case "on_complete_command":
+			m.Settings.General.PostDownload.OnCompleteCommand = value
+		case "on_error_command":
+			m.Settings.General.PostDownload.OnErrorCommand = value
 		}
 	}
 
@@ -686,6 +696,13 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 		switch key {
 		case "category_enabled":
 			m.Settings.General.CategoryEnabled = defaults.General.CategoryEnabled
+		}
+	case "Post-Download":
+		switch key {
+		case "on_complete_command":
+			m.Settings.General.PostDownload.OnCompleteCommand = defaults.General.PostDownload.OnCompleteCommand
+		case "on_error_command":
+			m.Settings.General.PostDownload.OnErrorCommand = defaults.General.PostDownload.OnErrorCommand
 		}
 	}
 }

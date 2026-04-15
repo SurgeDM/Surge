@@ -1,6 +1,7 @@
 package processing
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"runtime"
@@ -10,6 +11,10 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
+
+// postActionTimeout caps shell-command runtime so a hung user command can't
+// leak goroutines on headless deployments.
+const postActionTimeout = 30 * time.Second
 
 // PostActionContext holds information about a completed download for template substitution.
 type PostActionContext struct {
@@ -64,14 +69,22 @@ func RunPostActions(settings config.PostDownloadActions, ctx PostActionContext, 
 	expanded := expandTemplate(cmd, ctx)
 	utils.Debug("PostAction: executing %q", expanded)
 
+	ctxTimeout, cancel := context.WithTimeout(context.Background(), postActionTimeout)
+	defer cancel()
+
 	var c *exec.Cmd
 	if runtime.GOOS == "windows" {
-		c = exec.Command("cmd", "/C", expanded)
+		c = exec.CommandContext(ctxTimeout, "cmd", "/C", expanded)
 	} else {
-		c = exec.Command("sh", "-c", expanded)
+		c = exec.CommandContext(ctxTimeout, "sh", "-c", expanded)
 	}
 
-	if output, err := c.CombinedOutput(); err != nil {
+	output, err := c.CombinedOutput()
+	if ctxTimeout.Err() == context.DeadlineExceeded {
+		utils.Debug("PostAction: command timed out after %s (output: %s)", postActionTimeout, string(output))
+		return
+	}
+	if err != nil {
 		utils.Debug("PostAction: command failed: %v (output: %s)", err, string(output))
 	} else {
 		utils.Debug("PostAction: command succeeded (output: %s)", string(output))
