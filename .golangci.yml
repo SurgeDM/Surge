@@ -32,7 +32,8 @@ linters:
 
     # style / quality
     - gocritic
-    - revive
     - goconst
     - unparam
-    
+    - nestif
+    - dupword
+    - gocognit
