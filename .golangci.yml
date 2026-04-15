@@ -37,3 +37,27 @@ linters:
     - nestif
     - dupword
     - gocognit
+
+settings:
+  govet:
+    enable:
+      - shadow
+      - fieldalignment
+      - copylocks
+      - unusedresult
+
+  unparam:
+    check-exported: false
+
+  gosec:
+    excludes:
+      - G304
+
+  gocritic:
+    enabled-tags:
+      - performance
+      - diagnostic
+      - style
+
+  errorlint:
+    check-type-assertions: true
