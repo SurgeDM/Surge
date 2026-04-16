@@ -333,6 +333,18 @@ func (m RootModel) View() tea.View {
 		bitmap, bitmapWidth, totalSize, chunkSize, chunkProgress = selected.state.GetBitmap()
 	}
 
+	// Pre-compute details content to avoid double-computation and width mismatches
+	var detailContent string
+	detailWidth := layout.RightWidth
+	if layout.HideRightColumn {
+		detailWidth = layout.LeftWidth
+	}
+	if selected != nil {
+		detailContent = renderFocusedDetails(selected, detailWidth-2, m.spinner.View())
+	} else {
+		detailContent = renderEmptyMessage(detailWidth-2, layout.DetailHeight-2, "No download selected")
+	}
+
 	// Render Components
 	logoColumn := m.renderHeaderBox(layout.LogoWidth, layout.HeaderHeight)
 	logBox := m.renderLogBox(layout.LogWidth, layout.HeaderHeight)
@@ -344,7 +356,7 @@ func (m RootModel) View() tea.View {
 	var rightColumn string
 	if !layout.HideRightColumn {
 		graphBox := m.renderGraphBox(layout.RightWidth, layout.GraphHeight, stats)
-		detailBox := m.renderDetailsBox(layout.RightWidth, layout.DetailHeight, selected)
+		detailBox := m.renderDetailsBox(layout.RightWidth, layout.DetailHeight, detailContent)
 
 		var rightParts []string
 		if layout.GraphHeight >= layout.MinGraphHeight {
@@ -365,9 +377,10 @@ func (m RootModel) View() tea.View {
 	var body string
 	if layout.HideRightColumn {
 		if layout.VerticalLayout {
-			detailBox := m.renderDetailsBox(layout.LeftWidth, layout.DetailHeight, selected)
+			detailBox := m.renderDetailsBox(layout.LeftWidth, layout.DetailHeight, detailContent)
 			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox, detailBox)
 		} else {
+
 			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
 		}
 	} else {
