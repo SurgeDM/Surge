@@ -23,6 +23,7 @@ func TestConvertRuntimeConfig_AllFieldsCopied(t *testing.T) {
 		SlowWorkerGracePeriod: 10 * time.Second,
 		StallTimeout:          7 * time.Second,
 		SpeedEmaAlpha:         0.4,
+		DialHedgeCount:        12,
 	}
 
 	result := ConvertRuntimeConfig(input)
@@ -63,6 +64,9 @@ func TestConvertRuntimeConfig_AllFieldsCopied(t *testing.T) {
 	}
 	if result.SpeedEmaAlpha != input.SpeedEmaAlpha {
 		t.Errorf("SpeedEmaAlpha: got %f, want %f", result.SpeedEmaAlpha, input.SpeedEmaAlpha)
+	}
+	if result.DialHedgeCount != input.DialHedgeCount {
+		t.Errorf("DialHedgeCount: got %d, want %d", result.DialHedgeCount, input.DialHedgeCount)
 	}
 }
 

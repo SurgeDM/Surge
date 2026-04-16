@@ -40,6 +40,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 			MaxConnectionsPerHost: types.PerHostMax,
 			MinChunkSize:          types.MinChunk,
 			WorkerBufferSize:      types.WorkerBuffer,
+			DialHedgeCount:        types.DialHedgeCount,
 		}
 	}
 

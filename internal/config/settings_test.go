@@ -49,6 +49,9 @@ func TestDefaultSettings(t *testing.T) {
 		if settings.Network.SequentialDownload {
 			t.Error("SequentialDownload should be false by default")
 		}
+		if settings.Network.DialHedgeCount != 4 {
+			t.Errorf("DialHedgeCount should be 4 by default, got: %d", settings.Network.DialHedgeCount)
+		}
 	})
 
 	// Verify Chunk settings
@@ -161,6 +164,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 			UserAgent:              "TestAgent/1.0",
 			MinChunkSize:           1 * MB,
 			WorkerBufferSize:       256 * KB,
+			DialHedgeCount:         6,
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        5,
@@ -213,6 +217,9 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 	if loaded.Network.UserAgent != original.Network.UserAgent {
 		t.Error("UserAgent mismatch")
+	}
+	if loaded.Network.DialHedgeCount != original.Network.DialHedgeCount {
+		t.Errorf("DialHedgeCount mismatch: got %d, want %d", loaded.Network.DialHedgeCount, original.Network.DialHedgeCount)
 	}
 	if loaded.Network.MinChunkSize != original.Network.MinChunkSize {
 		t.Error("MinChunkSize mismatch")
@@ -399,6 +406,9 @@ func TestToRuntimeConfig(t *testing.T) {
 	}
 	if runtime.WorkerBufferSize != settings.Network.WorkerBufferSize {
 		t.Error("WorkerBufferSize not correctly mapped")
+	}
+	if runtime.DialHedgeCount != settings.Network.DialHedgeCount {
+		t.Error("DialHedgeCount not correctly mapped")
 	}
 	if runtime.MaxTaskRetries != settings.Performance.MaxTaskRetries {
 		t.Error("MaxTaskRetries not correctly mapped")
