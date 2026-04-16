@@ -355,6 +355,15 @@ func (m RootModel) View() tea.View {
 	// Right column
 	var rightColumn string
 	if !layout.HideRightColumn {
+		// Show chunk map only if we have actual data to visualize
+		hasChunks := len(bitmap) > 0 && bitmapWidth > 0
+		showActualChunkMap := layout.ShowChunkMap && hasChunks && selected != nil && !selected.done
+
+		// If we reserved space for chunk map but aren't showing it, give it to details
+		if !showActualChunkMap && layout.ShowChunkMap {
+			layout.DetailHeight += layout.ChunkMapHeight
+		}
+
 		graphBox := m.renderGraphBox(layout.RightWidth, layout.GraphHeight, stats)
 		detailBox := m.renderDetailsBox(layout.RightWidth, layout.DetailHeight, detailContent)
 
@@ -364,9 +373,7 @@ func (m RootModel) View() tea.View {
 		}
 		rightParts = append(rightParts, detailBox)
 
-		// Show chunk map only if we have actual data to visualize
-		hasChunks := len(bitmap) > 0 && bitmapWidth > 0
-		if layout.ShowChunkMap && hasChunks && selected != nil && !selected.done {
+		if showActualChunkMap {
 			chunkBox := m.renderChunkMapBox(layout.RightWidth, layout.ChunkMapHeight, selected, bitmap, bitmapWidth, totalSize, chunkSize, chunkProgress)
 			rightParts = append(rightParts, chunkBox)
 		}

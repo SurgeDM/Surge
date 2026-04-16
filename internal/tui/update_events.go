@@ -155,8 +155,9 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.pausing = false
 			// Keep resuming=true for resumed downloads until real transfer starts.
 			// Update progress bar
+			var progressCmd tea.Cmd
 			if d.Total > 0 {
-				return m, d.progress.SetPercent(0)
+				progressCmd = d.progress.SetPercent(0)
 			}
 			if d.state == nil && msg.State != nil {
 				d.state = msg.State
@@ -165,6 +166,9 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 				d.state.SetTotalSize(msg.Total) // Keep state updated for verification if needed
 			}
 			found = true
+			m.UpdateListItems()
+			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
+			return m, tea.Batch(progressCmd, m.spinner.Tick)
 		}
 
 		if !found {
@@ -174,12 +178,12 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 				newDownload.state = msg.State
 			}
 			m.downloads = append(m.downloads, newDownload)
+			m.UpdateListItems()
+			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
+			return m, m.spinner.Tick
 		}
 
-		m.UpdateListItems()
-		m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
-		return m, m.spinner.Tick
-
+		return m, nil
 	case events.ProgressMsg:
 		cmd := m.processProgressMsg(msg)
 		return m, cmd

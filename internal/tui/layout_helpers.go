@@ -244,7 +244,7 @@ func CalculateDashboardLayout(termW, termH int) DashboardLayout {
 	if l.ListHeight < 4 {
 		l.ListHeight = 4
 	}
-	l.TabBarHeight = 2 // standard height
+	l.TabBarHeight = 1 // standard height
 
 	return l
 }
