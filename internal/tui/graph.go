@@ -46,9 +46,9 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 		for j := range rows[i] {
 			if i == height-1 {
 				// Bottom row: solid baseline
-				rows[i][j] = gridStyle.Render("─")
+				rows[i][j] = gridStyle.Render("\u2500")
 			} else if i%2 == 0 {
-				rows[i][j] = gridStyle.Render("╌")
+				rows[i][j] = gridStyle.Render("\u254c")
 			} else {
 				rows[i][j] = " "
 			}
@@ -56,7 +56,7 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 	}
 
 	// Block characters for partial fills
-	blocks := []string{" ", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
+	blocks := []string{" ", "\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2588"}
 
 	// Pre-calculate styles for every row to avoid re-creating them in the loop
 	// Optimization: Pre-render all possible block characters for each row style
@@ -109,7 +109,7 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 					if rowValue <= 0 {
 						charIndex = 0 // Space
 					} else if rowValue >= 8 {
-						charIndex = 7 // Full block (█)
+						charIndex = 7 // Full block (\u2588)
 					} else {
 						charIndex = int(rowValue) // Partial block
 					}
@@ -156,18 +156,18 @@ func overlayStatsBox(graph string, stats *GraphStats, width, height int) string 
 	statsLines := []string{
 		headerStyle.Render("download"),
 		fmt.Sprintf("%s %s  %s",
-			valueStyle.Render("▼"),
+			valueStyle.Render("\u25bc"),
 			valueStyle.Render(fmt.Sprintf("%.2f MB/s", stats.DownloadSpeed)),
 			dimStyle.Render(fmt.Sprintf("(%.0f Mbps)", speedMbps)),
 		),
 		fmt.Sprintf("%s %s %s  %s",
-			labelStyle.Render("▼"),
+			labelStyle.Render("\u25bc"),
 			labelStyle.Render("Top:"),
 			valueStyle.Render(fmt.Sprintf("%.2f MB/s", stats.DownloadTop)),
 			dimStyle.Render(fmt.Sprintf("(%.0f Mbps)", topMbps)),
 		),
 		fmt.Sprintf("%s %s %s",
-			labelStyle.Render("▼"),
+			labelStyle.Render("\u25bc"),
 			labelStyle.Render("Total:"),
 			valueStyle.Render(utils.ConvertBytesToHumanReadable(stats.DownloadTotal)),
 		),

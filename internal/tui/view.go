@@ -25,7 +25,7 @@ func formatDurationForUI(d time.Duration) string {
 		d = 0
 	}
 	if d >= maxUIDuration {
-		return "∞"
+		return "\u221e"
 	}
 
 	totalSec := int(d.Seconds())
@@ -145,7 +145,7 @@ func (m RootModel) View() tea.View {
 
 	if m.state == DuplicateWarningState {
 		modal := components.ConfirmationModal{
-			Title:       "⚠ Duplicate Detected",
+			Title:       "\u26a0 Duplicate Detected",
 			Message:     "A download with this URL already exists",
 			Detail:      truncateString(m.duplicateInfo, 50),
 			Keys:        m.keys.Duplicate,
@@ -244,7 +244,7 @@ func (m RootModel) View() tea.View {
 
 	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
 		modal := components.ConfirmationModal{
-			Title:       "⬆ Update Available",
+			Title:       "\u2b06 Update Available",
 			Message:     fmt.Sprintf("A new version of Surge is available: %s", m.UpdateInfo.LatestVersion),
 			Detail:      fmt.Sprintf("Current: %s", m.UpdateInfo.CurrentVersion),
 			Keys:        m.keys.Update,
@@ -304,7 +304,7 @@ func (m RootModel) View() tea.View {
 	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
 	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
 
-	// Hide help text at very narrow widths — version is more important
+	// Hide help text at very narrow widths \u2014 version is more important
 	var footerContent string
 	if layout.AvailableWidth < 60 {
 		footerContent = versionText
@@ -403,7 +403,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	divider := lipgloss.NewStyle().
 		Foreground(colors.Gray).
 		Width(contentWidth).
-		Render("\n" + strings.Repeat("─", contentWidth) + "\n")
+		Render("\n" + strings.Repeat("\u2500", contentWidth) + "\n")
 
 	// Padding Style for sections
 	sectionStyle := lipgloss.NewStyle().
@@ -491,7 +491,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		etaStr = "..."
 	} else if d.paused || d.Speed == 0 {
 		speedStr = "Paused"
-		etaStr = "∞"
+		etaStr = "\u221e"
 	} else {
 		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/float64(config.MB))
 		if d.Total > 0 {
@@ -500,7 +500,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 			// Clamp ETA to 24 hours max to prevent bonkers values
 			const maxETASeconds = 24 * 60 * 60
 			if etaSeconds > maxETASeconds || etaSeconds < 0 {
-				etaStr = "∞"
+				etaStr = "\u221e"
 			} else {
 				etaDuration := time.Duration(etaSeconds) * time.Second
 				// EMA smooth ETA to prevent jitter from speed fluctuations
@@ -512,7 +512,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 				etaStr = formatDurationForUI(etaDuration)
 			}
 		} else {
-			etaStr = "∞"
+			etaStr = "\u221e"
 		}
 	}
 
@@ -647,9 +647,9 @@ func truncateString(s string, i int) string {
 		return s
 	}
 	if i <= 1 {
-		return "…"
+		return "\u2026"
 	}
-	return lipgloss.NewStyle().MaxWidth(i-1).Render(s) + "…"
+	return lipgloss.NewStyle().MaxWidth(i-1).Render(s) + "\u2026"
 }
 
 func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
@@ -745,6 +745,6 @@ func (m RootModel) viewQuitConfirm() string {
 // renderBtopBox creates a btop-style box with title embedded in the top border
 // Supports left and right titles (e.g., search on left, pane name on right)
 // Accepts pre-styled title strings
-// Example: ╭─ 🔍 Search... ─────────── Downloads ─╮
+// Example: \u256d\u2500 \U0001f50d Search... \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Downloads \u2500\u256e
 // Delegates to components.RenderBtopBox for the actual rendering
 var renderBtopBox = components.RenderBtopBox

@@ -59,7 +59,7 @@ func TestChunkMap_Basic(t *testing.T) {
 	out := model.View()
 
 	// Just verify connection mostly.
-	if !strings.Contains(out, "■") {
+	if !strings.Contains(out, "\u25a0") {
 		t.Error("Output should contain blocks")
 	}
 }
@@ -131,7 +131,7 @@ func TestChunkMap_LogicVerify(t *testing.T) {
 	out := model.View()
 
 	pinkStyle := lipgloss.NewStyle().Foreground(colors.NeonPink)
-	if strings.Contains(out, pinkStyle.Render("■")) {
+	if strings.Contains(out, pinkStyle.Render("\u25a0")) {
 		t.Error("Mixed state (Completed+Pending) should NOT render as Downloading (Pink)")
 	}
 }
@@ -153,7 +153,7 @@ func TestChunkMap_DownloadingPriority(t *testing.T) {
 
 	// Dynamic check to avoid hardcoded color codes
 	pinkStyle := lipgloss.NewStyle().Foreground(colors.NeonPink)
-	expectedPink := pinkStyle.Render("■")
+	expectedPink := pinkStyle.Render("\u25a0")
 
 	if !strings.Contains(out, expectedPink) {
 		t.Errorf("Block containing a Downloading chunk with bytes SHOULD render as Downloading")
@@ -199,10 +199,10 @@ func TestChunkMap_GranularProgress(t *testing.T) {
 	}
 
 	pinkStyle := lipgloss.NewStyle().Foreground(colors.NeonPink)
-	pinkBlock := pinkStyle.Render("■")
+	pinkBlock := pinkStyle.Render("\u25a0")
 
 	pendingStyle := lipgloss.NewStyle().Foreground(colors.DarkGray)
-	grayBlock := pendingStyle.Render("■")
+	grayBlock := pendingStyle.Render("\u25a0")
 
 	// Row 0 should be Pink
 	if !strings.Contains(rows[0], pinkBlock) {
@@ -235,9 +235,9 @@ func TestChunkMap_BlockTurnsCompletedWhenItsByteRangeIsFullyDownloaded(t *testin
 	}
 
 	completedStyle := lipgloss.NewStyle().Foreground(colors.StateDownloading)
-	completedBlock := completedStyle.Render("■")
+	completedBlock := completedStyle.Render("\u25a0")
 	downloadingStyle := lipgloss.NewStyle().Foreground(colors.NeonPink)
-	downloadingBlock := downloadingStyle.Render("■")
+	downloadingBlock := downloadingStyle.Render("\u25a0")
 
 	if !strings.Contains(rows[0], completedBlock) {
 		t.Errorf("Row 0 should be Completed (green/cyan) when fully covered by downloaded bytes")

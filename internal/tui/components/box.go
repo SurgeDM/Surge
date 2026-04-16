@@ -15,16 +15,16 @@ type BoxRenderer func(leftTitle, rightTitle, content string, width, height int, 
 // RenderBtopBox creates a btop-style box with title embedded in the top border.
 // Supports left and right titles (e.g., search on left, pane name on right).
 // Accepts pre-styled title strings.
-// Example: ╭─ 🔍 Search... ─────────── Downloads ─╮
+// Example: \u256d\u2500 \U0001f50d Search... \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Downloads \u2500\u256e
 func RenderBtopBox(leftTitle, rightTitle string, content string, width, height int, borderColor color.Color) string {
 	// Border characters
 	const (
-		topLeft     = "╭"
-		topRight    = "╮"
-		bottomLeft  = "╰"
-		bottomRight = "╯"
-		horizontal  = "─"
-		vertical    = "│"
+		topLeft     = "\u256d"
+		topRight    = "\u256e"
+		bottomLeft  = "\u256f"
+		bottomRight = "\u2570"
+		horizontal  = "\u2500"
+		vertical    = "\u2502"
 	)
 	innerWidth := width - 2
 	if innerWidth < 1 {
@@ -35,10 +35,10 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	rightTitleWidth := lipgloss.Width(rightTitle)
 
 	// Calculate remaining horizontal space for the border
-	// Structure: ╭ + horizontal*? + leftTitle + horizontal*? + rightTitle + horizontal*? + ╮
+	// Structure: \u256d + horizontal*? + leftTitle + horizontal*? + rightTitle + horizontal*? + \u256e
 	// Basic structure we want:
-	// If leftTitle exists: ╭─ leftTitle ──...
-	// If rightTitle exists: ...── rightTitle ─╮
+	// If leftTitle exists: \u256d\u2500 leftTitle \u2500\u2500...
+	// If rightTitle exists: ...\u2500\u2500 rightTitle \u2500\u256e
 
 	borderStyler := lipgloss.NewStyle().Foreground(borderColor)
 	var topBorder string
@@ -83,7 +83,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 		topBorder = borderStyler.Render(topLeft + strings.Repeat(horizontal, innerWidth) + topRight)
 	}
 
-	// Build bottom border: ╰───────────────────╯
+	// Build bottom border: \u256f\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2570
 	bottomBorder := borderStyler.Render(
 		bottomLeft + strings.Repeat(horizontal, innerWidth) + bottomRight,
 	)

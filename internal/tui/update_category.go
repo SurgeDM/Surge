@@ -139,7 +139,7 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		if key.Matches(msg, m.keys.CategoryMgr.Edit) {
 			// Save edits
 			if m.catMgrCursor < 0 || m.catMgrCursor >= len(m.Settings.Categories.Categories) {
-				m.addLogEntry(LogStyleError.Render("✖ Invalid category selection"))
+				m.addLogEntry(LogStyleError.Render("\u2716 Invalid category selection"))
 				return m, nil
 			}
 
@@ -149,19 +149,19 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 			path := strings.TrimSpace(m.catMgrInputs[3].Value())
 
 			if name == "" {
-				m.addLogEntry(LogStyleError.Render("✖ Category name cannot be empty"))
+				m.addLogEntry(LogStyleError.Render("\u2716 Category name cannot be empty"))
 				return m, nil
 			}
 			if pattern == "" {
-				m.addLogEntry(LogStyleError.Render("✖ Category pattern cannot be empty"))
+				m.addLogEntry(LogStyleError.Render("\u2716 Category pattern cannot be empty"))
 				return m, nil
 			}
 			if _, err := regexp.Compile(pattern); err != nil {
-				m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Invalid category pattern: %v", err)))
+				m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Invalid category pattern: %v", err)))
 				return m, nil
 			}
 			if path == "" {
-				m.addLogEntry(LogStyleError.Render("✖ Category path cannot be empty"))
+				m.addLogEntry(LogStyleError.Render("\u2716 Category path cannot be empty"))
 				return m, nil
 			}
 

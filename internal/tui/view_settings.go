@@ -248,7 +248,7 @@ func renderSettingsListViewport(settingsMeta []config.SettingMeta, selectedRow, 
 		prefix := "  "
 		style := lipgloss.NewStyle().Foreground(colors.LightGray)
 		if idx == selectedRow {
-			prefix = "▸ "
+			prefix = "\u25b8 "
 			style = lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
 		}
 
@@ -342,7 +342,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	divider := lipgloss.NewStyle().
 		Foreground(colors.Gray).
-		Render(strings.Repeat("─", innerWidth))
+		Render(strings.Repeat("\u2500", innerWidth))
 
 	descDisplay := lipgloss.NewStyle().
 		Foreground(colors.LightGray).
@@ -398,7 +398,7 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 	}
 	divider := lipgloss.NewStyle().
 		Foreground(colors.Gray).
-		Render(strings.Repeat("│\n", dividerHeight-1) + "│")
+		Render(strings.Repeat("\u2502\n", dividerHeight-1) + "\u2502")
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
 	return formatSettingsBlock(content, modalWidth-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
@@ -430,7 +430,7 @@ func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, sele
 
 	list := renderSettingsListViewport(settingsMeta, selectedRow, listRows, innerWidth)
 	detail := m.renderSettingsDetailBlock(settingsMeta, selectedRow, settingsValues, innerWidth, detailRows)
-	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("─", innerWidth))
+	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("\u2500", innerWidth))
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		list,

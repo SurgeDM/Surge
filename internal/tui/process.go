@@ -77,7 +77,7 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) {
 // startDownload initiates a new download
 func (m RootModel) startDownload(url string, mirrors []string, headers map[string]string, path string, isDefaultPath bool, filename, id string) (RootModel, tea.Cmd) {
 	if m.Service == nil {
-		m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
+		m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
 		return m, nil
 	}
 
@@ -168,7 +168,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		if err != nil {
 			m.removeDownloadByID(optimisticID)
 			m.UpdateListItems()
-			m.addLogEntry(LogStyleError.Render("✖ Failed to add download: " + err.Error()))
+			m.addLogEntry(LogStyleError.Render("\u2716 Failed to add download: " + err.Error()))
 			return m, nil
 		}
 

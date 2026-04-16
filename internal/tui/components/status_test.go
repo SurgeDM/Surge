@@ -23,7 +23,7 @@ func TestStatusRender_ReflectsThemeChanges(t *testing.T) {
 }
 
 func TestStatusRenderWithSpinner(t *testing.T) {
-	spinnerFrame := "⠋"
+	spinnerFrame := "\u280b"
 
 	queuedStr := StatusQueued.RenderWithSpinner(spinnerFrame)
 	if !strings.Contains(queuedStr, spinnerFrame+" Queued") {

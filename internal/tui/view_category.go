@@ -173,7 +173,7 @@ func renderCategoryListViewport(cats []config.Category, cursor int, editing bool
 			prefix := "  "
 			style := lipgloss.NewStyle().Foreground(colors.LightGray)
 			if idx == cursor && !editing {
-				prefix = "▸ "
+				prefix = "\u25b8 "
 				style = lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
 			}
 			lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+label))
@@ -183,7 +183,7 @@ func renderCategoryListViewport(cats []config.Category, cursor int, editing bool
 		addPrefix := "  "
 		addStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan)
 		if idx == cursor && !editing {
-			addPrefix = "▸ "
+			addPrefix = "\u25b8 "
 			addStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
 		}
 		lines = append(lines, addStyle.Width(innerWidth).MaxWidth(innerWidth).Render(addPrefix+"+ Add Category"))
@@ -213,7 +213,7 @@ func (m RootModel) renderCategoryDetailView(cats []config.Category, cursor, inne
 	labelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
 	valueStyle := lipgloss.NewStyle().Foreground(colors.White)
 	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
-	divider := dimStyle.Render(strings.Repeat("─", innerWidth))
+	divider := dimStyle.Render(strings.Repeat("\u2500", innerWidth))
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		labelStyle.Render("Name: ")+valueStyle.Width(innerWidth-6).Render(cat.Name),
@@ -315,7 +315,7 @@ func (m RootModel) renderCategoryTwoColumn(cats []config.Category, cursor, modal
 	}
 	divider := lipgloss.NewStyle().
 		Foreground(colors.Gray).
-		Render(strings.Repeat("│\n", dividerHeight-1) + "│")
+		Render(strings.Repeat("\u2502\n", dividerHeight-1) + "\u2502")
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
 	return formatSettingsBlock(content, modalWidth-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
@@ -354,7 +354,7 @@ func (m RootModel) renderCategoryCompact(cats []config.Category, cursor, modalWi
 		detail = m.renderCategoryDetailView(cats, cursor, innerWidth, detailRows)
 	}
 
-	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("─", innerWidth))
+	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("\u2500", innerWidth))
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		list,
 		divider,

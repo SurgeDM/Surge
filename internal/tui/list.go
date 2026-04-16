@@ -48,17 +48,17 @@ func (i DownloadItem) Description() string {
 		pct = float64(d.Downloaded) / float64(d.Total) * 100
 	}
 
-	// Format: "⬇ Downloading • 45% • 2.5 MB/s • 50 MB / 100 MB"
+	// Format: "\u2b07 Downloading \u2022 45% \u2022 2.5 MB/s \u2022 50 MB / 100 MB"
 	sizeInfo := fmt.Sprintf("%s / %s",
 		utils.ConvertBytesToHumanReadable(d.Downloaded),
 		utils.ConvertBytesToHumanReadable(d.Total))
 
 	speedInfo := ""
 	if d.Speed > 0 {
-		speedInfo = fmt.Sprintf(" • %.2f MB/s", d.Speed/float64(MB))
+		speedInfo = fmt.Sprintf(" \u2022 %.2f MB/s", d.Speed/float64(MB))
 	}
 
-	return fmt.Sprintf("%s • %.0f%%%s • %s", styledStatus, pct, speedInfo, sizeInfo)
+	return fmt.Sprintf("%s \u2022 %.0f%%%s \u2022 %s", styledStatus, pct, speedInfo, sizeInfo)
 }
 
 func (i DownloadItem) FilterValue() string {
@@ -111,7 +111,7 @@ func newDownloadDelegate() downloadDelegate {
 		selTitleStyle:  selTitle,
 		selDescStyle:   selDesc,
 		prefixNormal:   "  ",
-		prefixSelected: lipgloss.NewStyle().Foreground(colors.NeonPink).Render("▌ "),
+		prefixSelected: lipgloss.NewStyle().Foreground(colors.NeonPink).Render("\u258c "),
 	}
 }
 

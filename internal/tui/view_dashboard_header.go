@@ -31,7 +31,7 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 /____/`
 
 	// Server info part
-	greenDot := lipgloss.NewStyle().Foreground(colors.StateDownloading).Render("●")
+	greenDot := lipgloss.NewStyle().Foreground(colors.StateDownloading).Render("\u25cf")
 	host := m.ServerHost
 	if host == "" {
 		host = "127.0.0.1"

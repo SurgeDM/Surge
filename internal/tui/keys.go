@@ -214,19 +214,19 @@ var Keys = KeyMap{
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "up"),
+			key.WithHelp("\u2191/k", "up"),
 		),
 		Down: key.NewBinding(
 			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "down"),
+			key.WithHelp("\u2193/j", "down"),
 		),
 		LogUp: key.NewBinding(
 			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "scroll up"),
+			key.WithHelp("\u2191/k", "scroll up"),
 		),
 		LogDown: key.NewBinding(
 			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "scroll down"),
+			key.WithHelp("\u2193/j", "scroll down"),
 		),
 		LogTop: key.NewBinding(
 			key.WithKeys("g"),
@@ -256,11 +256,11 @@ var Keys = KeyMap{
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up"),
-			key.WithHelp("↑", "previous"),
+			key.WithHelp("\u2191", "previous"),
 		),
 		Down: key.NewBinding(
 			key.WithKeys("down"),
-			key.WithHelp("↓", "next"),
+			key.WithHelp("\u2193", "next"),
 		),
 		Cancel: key.NewBinding(
 			key.WithKeys("esc"),
@@ -278,11 +278,11 @@ var Keys = KeyMap{
 		),
 		Back: key.NewBinding(
 			key.WithKeys("left"),
-			key.WithHelp("←", "back"),
+			key.WithHelp("\u2190", "back"),
 		),
 		Forward: key.NewBinding(
 			key.WithKeys("right"),
-			key.WithHelp("→", "open"),
+			key.WithHelp("\u2192", "open"),
 		),
 		Open: key.NewBinding(
 			key.WithKeys("."),
@@ -318,11 +318,11 @@ var Keys = KeyMap{
 		),
 		Next: key.NewBinding(
 			key.WithKeys("down"),
-			key.WithHelp("↓", "next field"),
+			key.WithHelp("\u2193", "next field"),
 		),
 		Prev: key.NewBinding(
 			key.WithKeys("up"),
-			key.WithHelp("↑", "prev field"),
+			key.WithHelp("\u2191", "prev field"),
 		),
 		Cancel: key.NewBinding(
 			key.WithKeys("esc"),
@@ -352,11 +352,11 @@ var Keys = KeyMap{
 		),
 		NextTab: key.NewBinding(
 			key.WithKeys("right"),
-			key.WithHelp("→", "next tab"),
+			key.WithHelp("\u2192", "next tab"),
 		),
 		PrevTab: key.NewBinding(
 			key.WithKeys("left"),
-			key.WithHelp("←", "prev tab"),
+			key.WithHelp("\u2190", "prev tab"),
 		),
 		Browse: key.NewBinding(
 			key.WithKeys("tab"),
@@ -368,11 +368,11 @@ var Keys = KeyMap{
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
-			key.WithHelp("↑/k", "up"),
+			key.WithHelp("\u2191/k", "up"),
 		),
 		Down: key.NewBinding(
 			key.WithKeys("down", "j"),
-			key.WithHelp("↓/j", "down"),
+			key.WithHelp("\u2193/j", "down"),
 		),
 		Reset: key.NewBinding(
 			key.WithKeys("r", "R"),
@@ -418,8 +418,8 @@ var Keys = KeyMap{
 		),
 	},
 	CategoryMgr: CategoryManagerKeyMap{
-		Up:     key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
-		Down:   key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
+		Up:     key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("\u2191/k", "up")),
+		Down:   key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("\u2193/j", "down")),
 		Edit:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "edit")),
 		Add:    key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add")),
 		Delete: key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),

@@ -237,7 +237,7 @@ func TestConnectCmd_NoServerRunning(t *testing.T) {
 		t.Fatalf("Failed to ensure dirs: %v", err)
 	}
 
-	// No port file exists — should return 0
+	// No port file exists \u2014 should return 0
 	port := readActivePort()
 	if port != 0 {
 		t.Fatalf("Expected port 0 (no server), got %d", port)
@@ -575,7 +575,7 @@ func TestRootCmd_Version(t *testing.T) {
 
 func TestRootCmd_VersionMatchesPackageVar(t *testing.T) {
 	if rootCmd.Version != Version {
-		t.Errorf("rootCmd.Version %q does not match Version %q — init() must sync them", rootCmd.Version, Version)
+		t.Errorf("rootCmd.Version %q does not match Version %q \u2014 init() must sync them", rootCmd.Version, Version)
 	}
 }
 
