@@ -63,13 +63,13 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		return
 	}
 
-	if maybeRequireDownloadApproval(w, service, resolved) {
+	if maybeRequireDownloadApproval(r.Context(), w, service, resolved) {
 		return
 	}
 
 	newID, filename, err := enqueueDownloadRequest(r, service, resolved)
 	if err != nil {
-		recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
+		recordPreflightDownloadError(r.Context(), resolved.urlForAdd, resolved.outPath, err)
 		publishSystemLog(fmt.Sprintf("Error adding %s: %v", resolved.urlForAdd, err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -192,7 +192,7 @@ func resolveDuplicateState(ctx context.Context, urlForAdd string, settings *conf
 	return dupResult.Exists, dupResult.IsActive
 }
 
-func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadService, resolved *resolvedDownloadRequest) bool {
+func maybeRequireDownloadApproval(ctx context.Context, w http.ResponseWriter, service core.DownloadService, resolved *resolvedDownloadRequest) bool {
 	req := resolved.request
 
 	// EXTENSION VETTING SHORTCUT:
@@ -220,7 +220,7 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 			Mirrors:  resolved.mirrorsForAdd,
 			Headers:  req.Headers,
 		}); err != nil {
-			recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
+			recordPreflightDownloadError(ctx, resolved.urlForAdd, resolved.outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", resolved.urlForAdd, err))
 			http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
 			return true
@@ -266,7 +266,7 @@ func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resol
 
 // processDownloads handles the logic of adding downloads either to local pool or remote server
 // Returns the number of successfully added downloads
-func processDownloads(urls []string, outputDir string, port int) int {
+func processDownloads(ctx context.Context, urls []string, outputDir string, port int) int {
 	successCount := 0
 
 	// If port > 0, we are sending to a remote server
@@ -321,7 +321,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		isExplicit := isExplicitOutputPath(outPath, settings.General.DefaultDownloadDir)
 		if lifecycle == nil {
 			err := errors.New("lifecycle manager unavailable")
-			recordPreflightDownloadError(url, outPath, err)
+			recordPreflightDownloadError(ctx, url, outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", url, err))
 			continue
 		}
@@ -333,7 +333,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 			IsExplicitCategory: isExplicit,
 		})
 		if err != nil {
-			recordPreflightDownloadError(url, outPath, err)
+			recordPreflightDownloadError(ctx, url, outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", url, err))
 			continue
 		}

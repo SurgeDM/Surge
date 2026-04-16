@@ -149,7 +149,7 @@ func TestEnsureLocalLifecycle_StartsEventWorker(t *testing.T) {
 	defer server.Close()
 
 	outDir := t.TempDir()
-	count := processDownloads([]string{server.URL + "/local.bin"}, outDir, 0)
+	count := processDownloads(context.Background(), []string{server.URL + "/local.bin"}, outDir, 0)
 	if count != 1 {
 		t.Fatalf("expected 1 successful local add, got %d", count)
 	}
@@ -263,7 +263,7 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 	)
 	defer server.Close()
 
-	count := processDownloads([]string{server.URL() + "/" + filename}, defaultDir, 0)
+	count := processDownloads(context.Background(), []string{server.URL() + "/" + filename}, defaultDir, 0)
 	if count != 1 {
 		t.Fatalf("expected 1 successful add, got %d", count)
 	}
@@ -367,7 +367,7 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 	)
 	defer server.Close()
 
-	count := processDownloads([]string{server.URL() + "/" + filename}, defaultDir, 0)
+	count := processDownloads(context.Background(), []string{server.URL() + "/" + filename}, defaultDir, 0)
 	if count != 1 {
 		t.Fatalf("expected 1 successful add, got %d", count)
 	}
@@ -478,7 +478,7 @@ func TestProcessDownloads_UsesSharedEnqueueContext(t *testing.T) {
 	)
 
 	cancelGlobalEnqueue()
-	count := processDownloads([]string{server.URL + "/shared-context.bin"}, t.TempDir(), 0)
+	count := processDownloads(context.Background(), []string{server.URL + "/shared-context.bin"}, t.TempDir(), 0)
 	if count != 0 {
 		t.Fatalf("count = %d, want 0 after canceled enqueue context", count)
 	}

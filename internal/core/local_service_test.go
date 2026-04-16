@@ -40,7 +40,7 @@ func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 	destPath := filepath.Join(tempDir, "file.bin")
 	incompletePath := destPath + types.IncompleteSuffix
 
-	if err := os.WriteFile(incompletePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(incompletePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create partial file: %v", err)
 	}
 
@@ -143,7 +143,7 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 
 	// Ensure the partial file exists before delete to validate cleanup logic deterministically.
 	if _, err := os.Stat(incompletePath); os.IsNotExist(err) {
-		if err := os.WriteFile(incompletePath, []byte("partial"), 0o644); err != nil {
+		if err := os.WriteFile(incompletePath, []byte("partial"), 0o600); err != nil {
 			t.Fatalf("failed to create partial file before delete: %v", err)
 		}
 	} else if err != nil {

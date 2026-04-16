@@ -76,12 +76,12 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	id := "paused-delete-test-id"
 	url := "https://example.com/file.bin"
 	downloadDir := filepath.Join(tempDir, "downloads")
-	if err := os.MkdirAll(downloadDir, 0o755); err != nil {
+	if err := os.MkdirAll(downloadDir, 0o750); err != nil {
 		t.Fatalf("failed to create download dir: %v", err)
 	}
 	destPath := filepath.Join(downloadDir, "file.bin")
 	incompletePath := destPath + types.IncompleteSuffix
-	if err := os.WriteFile(incompletePath, []byte("partial-data"), 0o644); err != nil {
+	if err := os.WriteFile(incompletePath, []byte("partial-data"), 0o600); err != nil {
 		t.Fatalf("failed to create partial file: %v", err)
 	}
 

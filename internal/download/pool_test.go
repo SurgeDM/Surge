@@ -313,6 +313,7 @@ func TestWorkerPool_Cancel_CallsCancelFunc(t *testing.T) {
 	pool := NewWorkerPool(ch, 3)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	state := types.NewProgressState("test-id", 1000)
 
 	pool.mu.Lock()
@@ -379,7 +380,7 @@ func TestWorkerPool_Cancel_DoesNotRemoveIncompleteFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	destPath := filepath.Join(tmpDir, "cancel.bin")
 	incompletePath := destPath + types.IncompleteSuffix
-	if err := os.WriteFile(incompletePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(incompletePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create .surge file: %v", err)
 	}
 

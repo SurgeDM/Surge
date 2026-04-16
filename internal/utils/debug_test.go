@@ -18,7 +18,7 @@ func TestDebug_CreatesLogFile(t *testing.T) {
 
 	// Ensure logs directory exists
 	logsDir := config.GetLogsDir()
-	if err := os.MkdirAll(logsDir, 0o755); err != nil {
+	if err := os.MkdirAll(logsDir, 0o750); err != nil {
 		t.Fatalf("Failed to create logs directory: %v", err)
 	}
 
@@ -114,7 +114,7 @@ func TestCleanupLogs(t *testing.T) {
 		filename := fmt.Sprintf("debug-%s.log", ts.Format("20060102-150405"))
 		path := filepath.Join(tempDir, filename)
 
-		err := os.WriteFile(path, []byte("dummy log"), 0o644)
+		err := os.WriteFile(path, []byte("dummy log"), 0o600)
 		if err != nil {
 			t.Fatalf("Failed to write dummy log: %v", err)
 		}

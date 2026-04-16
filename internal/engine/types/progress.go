@@ -339,7 +339,7 @@ func (ps *ProgressState) setChunkState(index int, status ChunkStatus) {
 	ps.ChunkBitmap[byteIndex] &= ^mask
 
 	// Set new value
-	val := byte(status) << bitOffset
+	val := byte(status) << bitOffset //nolint:gosec // status is validated range 0-3
 	ps.ChunkBitmap[byteIndex] |= val
 }
 

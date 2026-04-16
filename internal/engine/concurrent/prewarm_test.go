@@ -35,7 +35,6 @@ func TestConcurrentDownloader_PrewarmConnections(t *testing.T) {
 			rng := r.Header.Get("Range")
 			if rng == "bytes=0-0" {
 				prewarmSeen = true
-			} else if rng != "" {
 			}
 			mu.Unlock()
 
@@ -45,10 +44,10 @@ func TestConcurrentDownloader_PrewarmConnections(t *testing.T) {
 				w.WriteHeader(http.StatusPartialContent)
 				// We don't strictly need to serve the whole chunk for this test to pass pre-warm check,
 				// but we must not hang the client.
-				w.Write([]byte{0})
+				_, _ = w.Write([]byte{0})
 			} else {
 				w.WriteHeader(http.StatusOK)
-				w.Write(dummyData)
+				_, _ = w.Write(dummyData)
 			}
 		}),
 	)

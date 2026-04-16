@@ -148,7 +148,7 @@ func TestGetDownloadsDir_FallbackBehavior(t *testing.T) {
 	}
 
 	downloadsDir := filepath.Join(tmp, "Downloads")
-	if err := os.MkdirAll(downloadsDir, 0o755); err != nil {
+	if err := os.MkdirAll(downloadsDir, 0o750); err != nil {
 		t.Fatalf("failed to create fallback downloads dir: %v", err)
 	}
 

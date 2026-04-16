@@ -143,7 +143,7 @@ func TestSaveStateWithOptions_ComputesHashForSmallFile(t *testing.T) {
 	testDestPath := filepath.Join(tmpDir, "hash-small.zip")
 	surgePath := testDestPath + types.IncompleteSuffix
 	content := []byte("small paused content")
-	if err := os.WriteFile(surgePath, content, 0o644); err != nil {
+	if err := os.WriteFile(surgePath, content, 0o600); err != nil {
 		t.Fatalf("failed to write .surge file: %v", err)
 	}
 	expectedHash, timedOut, err := computeFileHashMD5WithTimeout(surgePath, time.Second)
@@ -191,7 +191,7 @@ func TestSaveStateWithOptions_SkipsHashOnTimeoutButPersistsState(t *testing.T) {
 	testDestPath := filepath.Join(tmpDir, "hash-large.zip")
 	surgePath := testDestPath + types.IncompleteSuffix
 	content := make([]byte, 256*1024)
-	if err := os.WriteFile(surgePath, content, 0o644); err != nil {
+	if err := os.WriteFile(surgePath, content, 0o600); err != nil {
 		t.Fatalf("failed to write .surge file: %v", err)
 	}
 
@@ -741,7 +741,7 @@ func TestValidateIntegrity_MissingFile(t *testing.T) {
 
 	d := getDBHelper(context.Background())
 	var taskCount int
-	if err := d.QueryRow("SELECT COUNT(*) FROM tasks WHERE download_id = ?", entry.ID).Scan(&taskCount); err != nil {
+	if err := d.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM tasks WHERE download_id = ?", entry.ID).Scan(&taskCount); err != nil {
 		t.Fatalf("failed to count tasks: %v", err)
 	}
 	if taskCount != 0 {
@@ -759,7 +759,7 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 
 	// Create a .surge file with known content
 	content := []byte("hello world test content")
-	if err := os.WriteFile(surgePath, content, 0o644); err != nil {
+	if err := os.WriteFile(surgePath, content, 0o600); err != nil {
 		t.Fatalf("Failed to create .surge file: %v", err)
 	}
 
@@ -817,7 +817,7 @@ func TestValidateIntegrity_TamperedFile(t *testing.T) {
 	surgePath := destPath + types.IncompleteSuffix
 
 	// Create a .surge file
-	if err := os.WriteFile(surgePath, []byte("original content"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("original content"), 0o600); err != nil {
 		t.Fatalf("Failed to create .surge file: %v", err)
 	}
 
@@ -834,7 +834,7 @@ func TestValidateIntegrity_TamperedFile(t *testing.T) {
 
 	// Set a fake hash that won't match the file content
 	d := getDBHelper(context.Background())
-	_, _ = d.Exec("UPDATE downloads SET file_hash = ? WHERE id = ?", "0000000000000000000000000000000000000000000000000000000000000000", "integrity-tampered")
+	_, _ = d.ExecContext(context.Background(), "UPDATE downloads SET file_hash = ? WHERE id = ?", "0000000000000000000000000000000000000000000000000000000000000000", "integrity-tampered")
 
 	// Run integrity check — hash mismatch, entry AND file should be removed
 	removed, err := ValidateIntegrity(context.Background())
@@ -943,7 +943,7 @@ func TestValidateIntegrity_DeletesOrphanSurgeFile(t *testing.T) {
 	}
 
 	orphanPath := filepath.Join(tmpDir, "orphan.bin"+types.IncompleteSuffix)
-	if err := os.WriteFile(orphanPath, []byte("orphan"), 0o644); err != nil {
+	if err := os.WriteFile(orphanPath, []byte("orphan"), 0o600); err != nil {
 		t.Fatalf("failed to create orphan .surge file: %v", err)
 	}
 
@@ -978,7 +978,7 @@ func TestValidateIntegrity_PreservesNonCompletedSurgeFile(t *testing.T) {
 		t.Fatalf("AddToMasterList failed: %v", err)
 	}
 
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create active .surge file: %v", err)
 	}
 

@@ -184,7 +184,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 
 	// Write to temp file
 	testPath := filepath.Join(tmpDir, "test_settings.json")
-	if err := os.WriteFile(testPath, data, 0o644); err != nil {
+	if err := os.WriteFile(testPath, data, 0o600); err != nil {
 		t.Fatalf("Failed to write settings file: %v", err)
 	}
 
@@ -255,7 +255,7 @@ func TestLoadSettings_CorruptedJSON(t *testing.T) {
 
 	// Write corrupted JSON
 	testPath := filepath.Join(tmpDir, "corrupt.json")
-	if err := os.WriteFile(testPath, []byte("{invalid json"), 0o644); err != nil {
+	if err := os.WriteFile(testPath, []byte("{invalid json"), 0o600); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
 	}
 
@@ -275,11 +275,11 @@ func TestLoadSettings_CorruptedJSON_FallsBackToDefaults(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	surgeDir := filepath.Join(tmpDir, "surge")
-	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
+	if err := os.MkdirAll(surgeDir, 0o750); err != nil {
 		t.Fatalf("Failed to create surge dir: %v", err)
 	}
 	corruptPath := filepath.Join(surgeDir, "settings.json")
-	if err := os.WriteFile(corruptPath, []byte("{not valid json!!!"), 0o644); err != nil {
+	if err := os.WriteFile(corruptPath, []byte("{not valid json!!!"), 0o600); err != nil {
 		t.Fatalf("Failed to write corrupt settings: %v", err)
 	}
 
@@ -311,13 +311,13 @@ func TestLoadSettings_TruncatedJSON_FallsBackToDefaults(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	surgeDir := filepath.Join(tmpDir, "surge")
-	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
+	if err := os.MkdirAll(surgeDir, 0o750); err != nil {
 		t.Fatalf("Failed to create surge dir: %v", err)
 	}
 	// Simula crash durante SaveSettings — arquivo truncado
 	truncated := `{"general": {"default_download_dir": "/home/user/Downloads", "warn_on_duplicate": tr`
 	corruptPath := filepath.Join(surgeDir, "settings.json")
-	if err := os.WriteFile(corruptPath, []byte(truncated), 0o644); err != nil {
+	if err := os.WriteFile(corruptPath, []byte(truncated), 0o600); err != nil {
 		t.Fatalf("Failed to write truncated settings: %v", err)
 	}
 
@@ -342,11 +342,11 @@ func TestLoadSettings_EmptyFile_FallsBackToDefaults(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	surgeDir := filepath.Join(tmpDir, "surge")
-	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
+	if err := os.MkdirAll(surgeDir, 0o750); err != nil {
 		t.Fatalf("Failed to create surge dir: %v", err)
 	}
 	emptyPath := filepath.Join(surgeDir, "settings.json")
-	if err := os.WriteFile(emptyPath, []byte(""), 0o644); err != nil {
+	if err := os.WriteFile(emptyPath, []byte(""), 0o600); err != nil {
 		t.Fatalf("Failed to write empty settings: %v", err)
 	}
 

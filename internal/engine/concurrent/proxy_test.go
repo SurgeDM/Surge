@@ -29,7 +29,7 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 		// For this test, the client will send an absolute URL to the proxy.
 
 		// Create request to target
-		req, err := http.NewRequestWithContext(context.Background(), r.Method, r.RequestURI, r.Body)
+		req, err := http.NewRequestWithContext( /*nolint:gosec*/ context.Background(), r.Method, r.RequestURI, r.Body)
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -43,7 +43,7 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 		// Execute
 		client := &http.Client{}
 		defer client.CloseIdleConnections()
-		resp, err := client.Do(req)
+		resp, err := client.Do(req) /*nolint:gosec*/ 
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return

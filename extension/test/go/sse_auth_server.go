@@ -1,6 +1,7 @@
 package main
 
 import (
+	"time"
 	"context"
 	"fmt"
 	"net"
@@ -47,7 +48,7 @@ func main() {
 		}
 	})
 
-	server := &http.Server{Handler: mux}
+	server := &http.Server{Handler: mux, ReadHeaderTimeout: 5 * time.Second}
 
 	go func() {
 		sigCh := make(chan os.Signal, 1)

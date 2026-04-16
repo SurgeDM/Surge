@@ -232,7 +232,7 @@ func TestReadURLsFromFile_ParsesAndFilters(t *testing.T) {
 		"#another-comment",
 		"https://example.com/c.zip",
 	}, "\n")
-	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(urlFile, []byte(content), 0o600); err != nil {
 		t.Fatalf("failed to write url file: %v", err)
 	}
 
@@ -257,7 +257,7 @@ func TestReadURLsFromFile_ParsesAndFilters(t *testing.T) {
 
 	// Test empty / comment-only file
 	emptyFile := filepath.Join(tmpDir, "empty.txt")
-	if err := os.WriteFile(emptyFile, []byte("# just a comment\n\n  "), 0o644); err != nil {
+	if err := os.WriteFile(emptyFile, []byte("# just a comment\n\n  "), 0o600); err != nil {
 		t.Fatalf("failed to write empty url file: %v", err)
 	}
 	_, err = utils.ReadURLsFromFile(emptyFile)
@@ -276,7 +276,7 @@ func TestReadURLsFromFile_WhitespaceAndInlineComments(t *testing.T) {
 		"# full comment",
 		"https://example.com/d.zip\thttps://example.com/e.zip",
 	}, "\n")
-	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(urlFile, []byte(content), 0o600); err != nil {
 		t.Fatalf("failed to write url file: %v", err)
 	}
 
@@ -311,7 +311,7 @@ func TestReadURLsFromFile_DedupesTrailingSlashVariants(t *testing.T) {
 		"https://example.com/file.bin///",
 		"https://example.com/other.bin",
 	}, "\n")
-	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(urlFile, []byte(content), 0o600); err != nil {
 		t.Fatalf("failed to write url file: %v", err)
 	}
 
@@ -339,7 +339,7 @@ func TestReadURLsFromFile_LongLine(t *testing.T) {
 	urlFile := filepath.Join(tmpDir, "urls.txt")
 	longToken := strings.Repeat("a", 70*1024)
 	longURL := "https://example.com/" + longToken
-	if err := os.WriteFile(urlFile, []byte(longURL+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(urlFile, []byte(longURL+"\n"), 0o600); err != nil {
 		t.Fatalf("failed to write url file: %v", err)
 	}
 
@@ -974,7 +974,7 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 		t.Cleanup(func() { _ = server.Close() })
 
 		port := ln.Addr().(*net.TCPAddr).Port
-		count := processDownloads([]string{
+		count := processDownloads(context.Background(), []string{
 			"https://example.com/a.zip,https://mirror.example.com/a.zip",
 			"",
 			"https://example.com/b.zip",
@@ -1006,7 +1006,7 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 		}))
 		defer probeServer.Close()
 
-		count := processDownloads([]string{
+		count := processDownloads(context.Background(), []string{
 			probeServer.URL + "/local.zip",
 			"",
 		}, t.TempDir(), 0)

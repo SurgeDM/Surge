@@ -31,8 +31,8 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	// Create two distinct "default" directories
 	dirA := filepath.Join(tmpDir, "DirA")
 	dirB := filepath.Join(tmpDir, "DirB")
-	_ = os.MkdirAll(dirA, 0o755)
-	_ = os.MkdirAll(dirB, 0o755)
+	_ = os.MkdirAll(dirA, 0o750)
+	_ = os.MkdirAll(dirB, 0o750)
 
 	// Setup a temporary DB for state
 	state.CloseDB()

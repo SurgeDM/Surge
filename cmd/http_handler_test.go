@@ -60,13 +60,13 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 
 	// Create surge config directory
 	surgeConfigDir := filepath.Join(tempDir, "surge")
-	if err := os.MkdirAll(surgeConfigDir, 0o755); err != nil {
+	if err := os.MkdirAll(surgeConfigDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
 	// Setup default download directory
 	defaultDownloadDir := filepath.Join(tempDir, "Downloads")
-	if err := os.MkdirAll(defaultDownloadDir, 0o755); err != nil {
+	if err := os.MkdirAll(defaultDownloadDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
@@ -168,7 +168,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body, _ := json.Marshal(tt.request)
-			req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBuffer(body))
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBuffer(body))
 			w := httptest.NewRecorder()
 			svc := core.NewLocalDownloadService(GlobalPool)
 
@@ -334,7 +334,7 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 		"headers": {"Authorization": "Bearer test"}
 	}`, probeServer.URL, expectedFile, tempDir)
 
-	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	handleDownload(rec, req, "", svc)
@@ -386,7 +386,7 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 
 	// Use a URL with an invalid scheme so ProbeServer fails immediately.
 	body := `{"url": "badscheme://example.com/file.bin", "path": "/tmp", "skip_approval": true}`
-	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	handleDownload(rec, req, "", svc)
@@ -450,7 +450,7 @@ func TestHandleDownload_PublishError_RecordsPreflightError(t *testing.T) {
 
 	outDir := t.TempDir()
 	body := fmt.Sprintf(`{"url": %q, "path": %q}`, "http://example.com/file.bin", outDir)
-	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	handleDownload(rec, req, "", svc)

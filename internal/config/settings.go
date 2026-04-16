@@ -274,7 +274,7 @@ func SaveSettings(s *Settings) error {
 	path := GetSettingsPath()
 
 	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
 
@@ -285,7 +285,7 @@ func SaveSettings(s *Settings) error {
 
 	// Atomic write: write to temp file, then rename
 	tempPath := path + ".tmp"
-	if err := os.WriteFile(tempPath, data, 0o644); err != nil {
+	if err := os.WriteFile(tempPath, data, 0o600); err != nil {
 		return err
 	}
 

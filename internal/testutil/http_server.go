@@ -2,6 +2,7 @@ package testutil
 
 import (
 	"context"
+	"time"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -19,6 +20,7 @@ func NewHTTPServer(handler http.Handler) *httptest.Server {
 		Listener: ln,
 		Config: &http.Server{
 			Handler: handler,
+			ReadHeaderTimeout: 5 * time.Second,
 		},
 	}
 	srv.Start()
@@ -38,6 +40,7 @@ func NewHTTPServerT(t *testing.T, handler http.Handler) *httptest.Server {
 		Listener: ln,
 		Config: &http.Server{
 			Handler: handler,
+			ReadHeaderTimeout: 5 * time.Second,
 		},
 	}
 	srv.Start()

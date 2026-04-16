@@ -57,8 +57,8 @@ func colorToRGB(c color.Color) rgb {
 	}
 	r, g, b, _ := c.RGBA()
 	return rgb{
-		r: uint8(r >> 8),
-		g: uint8(g >> 8),
+		r: uint8(r >> 8), //nolint:gosec
+		g: uint8(g >> 8), //nolint:gosec
 		b: uint8(b >> 8),
 	}
 }

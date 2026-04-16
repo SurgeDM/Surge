@@ -163,6 +163,7 @@ func TestHealth_StallDetection(t *testing.T) {
 
 	// Worker with last activity 2 seconds ago (exceeds 1s StallTimeout)
 	stalledCtx, stalledCancel := context.WithCancel(ctx)
+	defer stalledCancel()
 	active := &ActiveTask{
 		StartTime: now.Add(-10 * time.Second),
 		Cancel:    stalledCancel,

@@ -28,7 +28,7 @@ func setChunk(bitmap []byte, index int, status int) {
 	bitmap[byteIndex] &= ^mask
 
 	// Set bits
-	val := byte(status) << bitOffset
+	val := byte(status) << bitOffset //nolint:gosec // status is validated range 0-3
 	bitmap[byteIndex] |= val
 }
 

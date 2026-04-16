@@ -210,10 +210,10 @@ func TestLifecycleManager_Enqueue_RetriesWhenWorkingFileReservationCollides(t *t
 		reserveCalls++
 		if reserveCalls == 1 {
 			surgePath := filepath.Join(destPath, filename) + types.IncompleteSuffix
-			if err := os.MkdirAll(destPath, 0o755); err != nil {
+			if err := os.MkdirAll(destPath, 0o750); err != nil {
 				t.Fatalf("failed to create temp dir for collision: %v", err)
 			}
-			if err := os.WriteFile(surgePath, []byte("occupied"), 0o644); err != nil {
+			if err := os.WriteFile(surgePath, []byte("occupied"), 0o600); err != nil {
 				t.Fatalf("failed to seed colliding working file: %v", err)
 			}
 			return fmt.Errorf("collision: %w", os.ErrExist)
@@ -283,10 +283,10 @@ func TestLifecycleManager_EnqueueWithID_RetriesWhenWorkingFileReservationCollide
 		reserveCalls++
 		if reserveCalls == 1 {
 			surgePath := filepath.Join(destPath, filename) + types.IncompleteSuffix
-			if err := os.MkdirAll(destPath, 0o755); err != nil {
+			if err := os.MkdirAll(destPath, 0o750); err != nil {
 				t.Fatalf("failed to create temp dir for collision: %v", err)
 			}
-			if err := os.WriteFile(surgePath, []byte("occupied"), 0o644); err != nil {
+			if err := os.WriteFile(surgePath, []byte("occupied"), 0o600); err != nil {
 				t.Fatalf("failed to seed colliding working file: %v", err)
 			}
 			return fmt.Errorf("collision: %w", os.ErrExist)
@@ -451,7 +451,7 @@ func TestLifecycleManager_GetSettings_KeepsCachedSnapshotWhenReloadFails(t *test
 	mgr := NewLifecycleManager(nil, nil)
 
 	badConfigHome := filepath.Join(tmpDir, "bad-config-home")
-	if err := os.WriteFile(badConfigHome, []byte("not a directory"), 0o644); err != nil {
+	if err := os.WriteFile(badConfigHome, []byte("not a directory"), 0o600); err != nil {
 		t.Fatalf("WriteFile(badConfigHome) failed: %v", err)
 	}
 	t.Setenv("XDG_CONFIG_HOME", badConfigHome)

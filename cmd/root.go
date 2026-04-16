@@ -247,7 +247,7 @@ func publishSystemLog(message string) {
 	fmt.Fprintln(os.Stderr, message)
 }
 
-func recordPreflightDownloadError(url, outPath string, err error) {
+func recordPreflightDownloadError(ctx context.Context, url, outPath string, err error) {
 	if err == nil || strings.TrimSpace(url) == "" {
 		return
 	}
@@ -266,7 +266,7 @@ func recordPreflightDownloadError(url, outPath string, err error) {
 		Filename: filename,
 		Status:   "error",
 	}
-	if addErr := state.AddToMasterList(context.Background(), entry); addErr != nil {
+	if addErr := state.AddToMasterList(ctx, entry); addErr != nil {
 		utils.Debug("Failed to persist preflight download error for %s: %v", url, addErr)
 	}
 	if GlobalService != nil {
@@ -403,7 +403,7 @@ func queueInitialRootDownloads(args []string, opts rootRunOptions) {
 
 		if len(urls) > 0 {
 			resolvedOutputDir := resolveClientOutputPath(opts.outputDir)
-			processDownloads(urls, resolvedOutputDir, 0) // 0 port = internal direct add
+			processDownloads(context.Background(), urls, resolvedOutputDir, 0) // 0 port = internal direct add
 		}
 	}()
 }

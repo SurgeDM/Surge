@@ -145,12 +145,12 @@ func init() {
 
 func savePID() {
 	pid := os.Getpid()
-	if err := os.MkdirAll(config.GetRuntimeDir(), 0o755); err != nil {
+	if err := os.MkdirAll(config.GetRuntimeDir(), 0o750); err != nil {
 		utils.Debug("Error creating runtime directory for PID file: %v", err)
 		return
 	}
 	pidFile := filepath.Join(config.GetRuntimeDir(), "pid")
-	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0o644); err != nil {
+	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0o600); err != nil {
 		utils.Debug("Error writing PID file: %v", err)
 	}
 }

@@ -2,7 +2,7 @@ package state
 
 import (
 	"context"
-	"crypto/md5"
+	"crypto/md5" //nolint:gosec // non-cryptographic checksum
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -120,8 +120,8 @@ func SaveStateWithOptions(ctx context.Context, url string, destPath string, stat
 			// Prepare statement for full batches
 			placeholders := strings.Repeat("(?, ?, ?),", batchSize)
 			placeholders = placeholders[:len(placeholders)-1] // remove trailing comma
-			query := "INSERT INTO tasks (download_id, offset, length) VALUES " + placeholders
-			stmt, err := tx.Prepare(query)
+			query := "INSERT INTO tasks (download_id, offset, length) VALUES " + placeholders //nolint:gosec // safe concatenation of placeholders
+			stmt, err := tx.PrepareContext(ctx, query)
 			if err != nil {
 				return fmt.Errorf("failed to prepare batch insert: %w", err)
 			}
@@ -181,7 +181,7 @@ func computeFileHashMD5WithTimeout(path string, timeout time.Duration) (string, 
 	}
 	defer func() { _ = f.Close() }()
 
-	h := md5.New() //nolint:gosec // MD5 used for non-cryptographic file integrity check
+	h := md5.New() //nolint:gosec // non-cryptographic checksum //nolint:gosec // MD5 used for non-cryptographic file integrity check
 	buf := make([]byte, types.MB)
 	deadline := time.Now().Add(timeout)
 

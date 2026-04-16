@@ -20,7 +20,7 @@ func TestFinalizeCompletedFile_CopiesAcrossDevicesOnEXDEV(t *testing.T) {
 	tempDir := t.TempDir()
 	finalPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := finalPath + types.IncompleteSuffix
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create working file: %v", err)
 	}
 
@@ -41,7 +41,7 @@ func TestFinalizeCompletedFile_CopiesAcrossDevicesOnEXDEV(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(dst, data, 0o644)
+		return os.WriteFile(dst, data, 0o600)
 	}
 
 	if err := finalizeCompletedFile(finalPath); err != nil {
@@ -68,7 +68,7 @@ func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing
 
 	finalPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := finalPath + types.IncompleteSuffix
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create working file: %v", err)
 	}
 
@@ -154,7 +154,7 @@ func TestStartEventWorker_RemovesIncompleteFileOnErrorWithoutDBEntry(t *testing.
 	tempDir := t.TempDir()
 	destPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := destPath + types.IncompleteSuffix
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create working file: %v", err)
 	}
 
@@ -180,7 +180,7 @@ func TestStartEventWorker_SuppressesNotificationWhenSettingDisabled(t *testing.T
 
 	finalPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := finalPath + types.IncompleteSuffix
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create working file: %v", err)
 	}
 
@@ -230,7 +230,7 @@ func TestStartEventWorker_CompletionNotificationUsesGenericMessageWhenElapsedZer
 
 	finalPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := finalPath + types.IncompleteSuffix
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create working file: %v", err)
 	}
 

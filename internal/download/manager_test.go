@@ -27,8 +27,8 @@ func TestUniqueFilePath(t *testing.T) {
 	// Helper to create a dummy file
 	createFile := func(name string) {
 		path := filepath.Join(tmpDir, name)
-		_ = os.MkdirAll(filepath.Dir(path), 0o755)
-		if err := os.WriteFile(path, []byte("test"), 0o644); err != nil {
+		_ = os.MkdirAll(filepath.Dir(path), 0o750)
+		if err := os.WriteFile(path, []byte("test"), 0o600); err != nil {
 			t.Fatalf("Failed to create file %s: %v", path, err)
 		}
 	}
@@ -107,7 +107,7 @@ func TestUniqueFilePath_NoExtension(t *testing.T) {
 
 	// Create a file without extension
 	existingFile := filepath.Join(tmpDir, "README")
-	if err := os.WriteFile(existingFile, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(existingFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -128,7 +128,7 @@ func TestUniqueFilePath_MultipleExtensions(t *testing.T) {
 
 	// Create file with multiple dots
 	existingFile := filepath.Join(tmpDir, "archive.tar.gz")
-	if err := os.WriteFile(existingFile, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(existingFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -211,7 +211,7 @@ func TestUniqueFilePath_IncompleteFileConflict(t *testing.T) {
 
 	// Create an incomplete download file
 	incompleteFile := filepath.Join(tmpDir, "download.bin"+types.IncompleteSuffix)
-	if err := os.WriteFile(incompleteFile, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(incompleteFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -235,10 +235,10 @@ func TestUniqueFilePath_BothFileAndIncompleteExist(t *testing.T) {
 	// Create both the file and its incomplete version
 	originalFile := filepath.Join(tmpDir, "video.mp4")
 	incompleteFile := filepath.Join(tmpDir, "video(1).mp4"+types.IncompleteSuffix)
-	if err := os.WriteFile(originalFile, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(originalFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(incompleteFile, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(incompleteFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -262,7 +262,7 @@ func TestUniqueFilePath_HiddenFile(t *testing.T) {
 	// Note: filepath.Ext(".gitignore") returns ".gitignore" (entire name is extension)
 	// So the unique path becomes "(1).gitignore"
 	existingFile := filepath.Join(tmpDir, ".gitignore")
-	if err := os.WriteFile(existingFile, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(existingFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -290,7 +290,7 @@ func TestUniqueFilePath_ManyConflicts(t *testing.T) {
 		} else {
 			fileName = filepath.Join(tmpDir, fmt.Sprintf("doc(%d).pdf", i))
 		}
-		if err := os.WriteFile(fileName, []byte("test"), 0o644); err != nil {
+		if err := os.WriteFile(fileName, []byte("test"), 0o600); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -312,7 +312,7 @@ func TestUniqueFilePath_SpecialCharactersInName(t *testing.T) {
 
 	// Create file with special characters
 	existingFile := filepath.Join(tmpDir, "file [2024].txt")
-	if err := os.WriteFile(existingFile, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(existingFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -629,7 +629,7 @@ func TestUniqueFilePath_EmptyFilename(t *testing.T) {
 
 	// Edge case: just extension
 	existingFile := filepath.Join(tmpDir, ".txt")
-	if err := os.WriteFile(existingFile, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(existingFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -657,7 +657,7 @@ func TestUniqueFilePath_LongFilename(t *testing.T) {
 	longName += ".txt"
 
 	existingFile := filepath.Join(tmpDir, longName)
-	if err := os.WriteFile(existingFile, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(existingFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -676,7 +676,7 @@ func TestUniqueFilePath_ParenInMiddle(t *testing.T) {
 
 	// File with parentheses in middle (not numbering)
 	existingFile := filepath.Join(tmpDir, "file (copy).txt")
-	if err := os.WriteFile(existingFile, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(existingFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -697,12 +697,12 @@ func TestUniqueFilePath_DeepNestedDirectory(t *testing.T) {
 
 	// Create deeply nested structure
 	deepPath := filepath.Join(tmpDir, "a", "b", "c", "d", "e")
-	if err := os.MkdirAll(deepPath, 0o755); err != nil {
+	if err := os.MkdirAll(deepPath, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
 	existingFile := filepath.Join(deepPath, "file.txt")
-	if err := os.WriteFile(existingFile, []byte("test"), 0o644); err != nil {
+	if err := os.WriteFile(existingFile, []byte("test"), 0o600); err != nil {
 		t.Fatal(err)
 	}
 
@@ -744,7 +744,7 @@ func BenchmarkUniqueFilePath_WithConflict(b *testing.B) {
 		} else {
 			name = filepath.Join(tmpDir, fmt.Sprintf("file(%d).txt", i))
 		}
-		_ = os.WriteFile(name, []byte("test"), 0o644)
+		_ = os.WriteFile(name, []byte("test"), 0o600)
 	}
 
 	b.ResetTimer()

@@ -42,7 +42,7 @@ func TestGetUniqueFilename(t *testing.T) {
 	}
 
 	// 2. Exists on disk
-	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("data"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "test.txt"), []byte("data"), 0o600); err != nil {
 		t.Fatalf("failed to create test file: %v", err)
 	}
 	if name := processing.GetUniqueFilename(tmpDir, "test.txt", nil); name != "test(1).txt" {
@@ -50,7 +50,7 @@ func TestGetUniqueFilename(t *testing.T) {
 	}
 
 	// 3. Exists on disk with .surge
-	if err := os.WriteFile(filepath.Join(tmpDir, "partial.zip"+types.IncompleteSuffix), []byte("data"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(tmpDir, "partial.zip"+types.IncompleteSuffix), []byte("data"), 0o600); err != nil {
 		t.Fatalf("failed to create partial file: %v", err)
 	}
 	if name := processing.GetUniqueFilename(tmpDir, "partial.zip", nil); name != "partial(1).zip" {
@@ -67,7 +67,7 @@ func TestGetUniqueFilename(t *testing.T) {
 
 	// 5. Same filename in a different directory should not conflict
 	otherDir := filepath.Join(tmpDir, "other")
-	if err := os.MkdirAll(otherDir, 0o755); err != nil {
+	if err := os.MkdirAll(otherDir, 0o750); err != nil {
 		t.Fatalf("failed to create other dir: %v", err)
 	}
 	dirAwareActive := func(dir, name string) bool {

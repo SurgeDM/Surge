@@ -122,7 +122,7 @@ func setupTestEnv(t *testing.T, tmpDir string) {
 	})
 
 	surgeDir := config.GetSurgeDir()
-	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
+	if err := os.MkdirAll(surgeDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
@@ -135,7 +135,7 @@ func setupTestEnv(t *testing.T, tmpDir string) {
 
 	// Configure DB
 	dbPath := filepath.Join(surgeDir, "state", "surge.db")
-	_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
+	_ = os.MkdirAll(filepath.Dir(dbPath), 0o750)
 	state.CloseDB()
 	state.Configure(dbPath)
 }

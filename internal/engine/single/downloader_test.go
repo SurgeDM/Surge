@@ -632,11 +632,11 @@ func TestSingleDownloader_PreallocateFailure_ReleasesFileHandle(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = f.Close()
-	if err := os.Chmod(surgePath, 0o444); err != nil {
+	if err := os.Chmod(surgePath, 0o400); err != nil {
 		t.Fatal(err)
 	}
 	// Restaurar permissões no cleanup para que TempDir possa remover
-	defer func() { _ = os.Chmod(surgePath, 0o644) }()
+	defer func() { _ = os.Chmod(surgePath, 0o600) }()
 
 	// Ação
 	err = downloader.Download(ctx, server.URL(), destPath, fileSize, "prealloc_fail.bin")
@@ -650,7 +650,7 @@ func TestSingleDownloader_PreallocateFailure_ReleasesFileHandle(t *testing.T) {
 	}
 
 	// Verificar que o file handle foi liberado: o arquivo pode ser removido
-	_ = os.Chmod(surgePath, 0o644)
+	_ = os.Chmod(surgePath, 0o600)
 	if err := os.Remove(surgePath); err != nil {
 		t.Errorf("Failed to remove .surge file after preallocate failure — possible file handle leak: %v", err)
 	}

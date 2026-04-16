@@ -94,6 +94,7 @@ func TestActiveTask_RemainingBytesWithStolenWork(t *testing.T) {
 
 func TestActiveTask_Cancel(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	at := &ActiveTask{
 		Task:   types.Task{Offset: 0, Length: 1000},
 		Cancel: cancel,

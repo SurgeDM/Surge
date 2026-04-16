@@ -19,7 +19,7 @@ func TestStartEventWorker_FinalizesCompletedFileUsingDestPath(t *testing.T) {
 
 	finalPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := finalPath + types.IncompleteSuffix
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create incomplete file: %v", err)
 	}
 

@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -65,11 +66,11 @@ func openWithSystem(path string) error {
 func buildOpenCommand(path string) *exec.Cmd {
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.Command("open", path)
+		return exec.CommandContext(context.Background(),  /*nolint:gosec*/ "open", path)
 	case "windows":
-		return exec.Command("cmd", "/c", "start", "", path)
+		return exec.CommandContext(context.Background(),  /*nolint:gosec*/ "cmd", "/c", "start", "", path)
 	default:
-		return exec.Command("xdg-open", path)
+		return exec.CommandContext(context.Background(),  /*nolint:gosec*/ "xdg-open", path)
 	}
 }
 
