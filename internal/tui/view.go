@@ -60,7 +60,7 @@ func (m RootModel) renderModalWithOverlay(modal string) string {
 
 func (m RootModel) wrapView(content string) tea.View {
 	v := tea.NewView(content)
-	// AltScreen should be handled at the program level, not per-frame
+	v.AltScreen = true
 	return v
 }
 

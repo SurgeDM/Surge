@@ -98,7 +98,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if logHeight < 1 {
 			logHeight = 1
 		}
-		m.logViewport.SetWidth(layout.LogWidth)
+		m.logViewport.SetWidth(layout.LogWidth - BoxStyle.GetHorizontalFrameSize())
 		m.logViewport.SetHeight(logHeight)
 		m.refreshLogViewportContent()
 
