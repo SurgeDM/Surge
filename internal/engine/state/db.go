@@ -103,6 +103,7 @@ func initDB() error {
 }
 
 // ensureDownloadsSchema checks if required columns exist in the downloads table and adds them if missing.
+//
 //nolint:contextcheck // DB initialization doesn't require a runtime context
 func ensureDownloadsSchema() error {
 	rows, err := db.QueryContext(context.Background(), "PRAGMA table_info(downloads)")

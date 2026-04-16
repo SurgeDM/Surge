@@ -467,90 +467,65 @@ func TestUpdateStatus_NotFound(t *testing.T) {
 	}
 }
 
-// =============================================================================
-// PauseAllDownloads Tests
-// =============================================================================
-
-func TestPauseAllDownloads(t *testing.T) {
-	tmpDir := setupTestDB(t)
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-	defer CloseDB()
-
-	// Add downloads with various statuses
-	entries := []types.DownloadEntry{
-		{ID: "dl-1", URL: "https://a.com/1", DestPath: "/tmp/1", Status: "downloading"},
-		{ID: "dl-2", URL: "https://a.com/2", DestPath: "/tmp/2", Status: "queued"},
-		{ID: "dl-3", URL: "https://a.com/3", DestPath: "/tmp/3", Status: "completed"},
-	}
-
+func seedTestDownloads(t *testing.T, entries []types.DownloadEntry) {
+	t.Helper()
 	for _, e := range entries {
 		if err := AddToMasterList(e); err != nil {
 			t.Fatalf("AddToMasterList failed: %v", err)
 		}
-	}
-
-	// Pause all
-	if err := PauseAllDownloads(); err != nil {
-		t.Fatalf("PauseAllDownloads failed: %v", err)
-	}
-
-	// Verify non-completed are paused
-	dl1, _ := GetDownload("dl-1")
-	dl2, _ := GetDownload("dl-2")
-	dl3, _ := GetDownload("dl-3")
-
-	if dl1.Status != "paused" {
-		t.Errorf("dl-1 status = %s, want 'paused'", dl1.Status)
-	}
-	if dl2.Status != "paused" {
-		t.Errorf("dl-2 status = %s, want 'paused'", dl2.Status)
-	}
-	if dl3.Status != "completed" {
-		t.Errorf("dl-3 status = %s, want 'completed' (should not change)", dl3.Status)
 	}
 }
 
 // =============================================================================
-// ResumeAllDownloads Tests
+// PauseAllDownloads Tests
 // =============================================================================
 
-func TestResumeAllDownloads(t *testing.T) {
+func runBatchStatusTest(t *testing.T, initialEntries []types.DownloadEntry, action func() error, expectedStatus map[string]string) {
+	t.Helper()
 	tmpDir := setupTestDB(t)
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 	defer CloseDB()
 
-	// Add paused and other downloads
-	entries := []types.DownloadEntry{
-		{ID: "dl-1", URL: "https://b.com/1", DestPath: "/tmp/1", Status: "paused"},
-		{ID: "dl-2", URL: "https://b.com/2", DestPath: "/tmp/2", Status: "paused"},
-		{ID: "dl-3", URL: "https://b.com/3", DestPath: "/tmp/3", Status: "completed"},
+	seedTestDownloads(t, initialEntries)
+
+	if err := action(); err != nil {
+		t.Fatalf("Action failed: %v", err)
 	}
 
-	for _, e := range entries {
-		if err := AddToMasterList(e); err != nil {
-			t.Fatalf("AddToMasterList failed: %v", err)
+	for id, expected := range expectedStatus {
+		dl, err := GetDownload(id)
+		if err != nil {
+			t.Errorf("GetDownload(%s) failed: %v", id, err)
+			continue
+		}
+		if dl.Status != expected {
+			t.Errorf("%s status = %s, want %s", id, dl.Status, expected)
 		}
 	}
+}
 
-	// Resume all
-	if err := ResumeAllDownloads(); err != nil {
-		t.Fatalf("ResumeAllDownloads failed: %v", err)
-	}
+func TestPauseAllDownloads(t *testing.T) {
+	runBatchStatusTest(t,
+		[]types.DownloadEntry{
+			{ID: "dl-1", URL: "https://a.com/1", DestPath: "/tmp/1", Status: "downloading"},
+			{ID: "dl-2", URL: "https://a.com/2", DestPath: "/tmp/2", Status: "queued"},
+			{ID: "dl-3", URL: "https://a.com/3", DestPath: "/tmp/3", Status: "completed"},
+		},
+		PauseAllDownloads,
+		map[string]string{"dl-1": "paused", "dl-2": "paused", "dl-3": "completed"},
+	)
+}
 
-	// Verify paused are now queued
-	dl1, _ := GetDownload("dl-1")
-	dl2, _ := GetDownload("dl-2")
-	dl3, _ := GetDownload("dl-3")
-
-	if dl1.Status != "queued" {
-		t.Errorf("dl-1 status = %s, want 'queued'", dl1.Status)
-	}
-	if dl2.Status != "queued" {
-		t.Errorf("dl-2 status = %s, want 'queued'", dl2.Status)
-	}
-	if dl3.Status != "completed" {
-		t.Errorf("dl-3 status = %s, want 'completed' (should not change)", dl3.Status)
-	}
+func TestResumeAllDownloads(t *testing.T) {
+	runBatchStatusTest(t,
+		[]types.DownloadEntry{
+			{ID: "dl-1", URL: "https://b.com/1", DestPath: "/tmp/1", Status: "paused"},
+			{ID: "dl-2", URL: "https://b.com/2", DestPath: "/tmp/2", Status: "paused"},
+			{ID: "dl-3", URL: "https://b.com/3", DestPath: "/tmp/3", Status: "completed"},
+		},
+		ResumeAllDownloads,
+		map[string]string{"dl-1": "queued", "dl-2": "queued", "dl-3": "completed"},
+	)
 }
 
 // =============================================================================

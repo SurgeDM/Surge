@@ -827,7 +827,6 @@ func ValidateIntegrity() (int, error) {
 		return 0, errors.New("database not initialized")
 	}
 
-
 	// Load all paused/queued downloads
 	rows, err := db.QueryContext(context.Background(), `
 		SELECT id, dest_path, file_hash, status, downloaded

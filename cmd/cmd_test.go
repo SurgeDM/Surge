@@ -839,20 +839,25 @@ func TestStartHTTPServer_DownloadEndpoint_MethodNotAllowed(t *testing.T) {
 	}
 }
 
-func TestStartHTTPServer_DownloadEndpoint_BadRequest(t *testing.T) {
+func setupTestServer(t *testing.T) (port int, svc *core.LocalDownloadService) {
+	t.Helper()
 	requireTCPListener(t)
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("Failed to create listener: %v", err)
 	}
-	port := ln.Addr().(*net.TCPAddr).Port
-
-	svc := core.NewLocalDownloadService(nil)
+	port = ln.Addr().(*net.TCPAddr).Port
+	svc = core.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
+	return port, svc
+}
 
-	// POST with invalid JSON
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/download", port), bytes.NewBufferString("not json"))
+func runDownloadEndpointBadRequestTest(t *testing.T, payload string) {
+	t.Helper()
+	port, _ := setupTestServer(t)
+
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/download", port), bytes.NewBufferString(payload))
 	req.Header.Set("Authorization", "Bearer "+ensureAuthToken())
 	req.Header.Set("Content-Type", "application/json")
 
@@ -867,32 +872,12 @@ func TestStartHTTPServer_DownloadEndpoint_BadRequest(t *testing.T) {
 	}
 }
 
+func TestStartHTTPServer_DownloadEndpoint_BadRequest(t *testing.T) {
+	runDownloadEndpointBadRequestTest(t, "not json")
+}
+
 func TestStartHTTPServer_DownloadEndpoint_MissingURL(t *testing.T) {
-	requireTCPListener(t)
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("Failed to create listener: %v", err)
-	}
-	port := ln.Addr().(*net.TCPAddr).Port
-
-	svc := core.NewLocalDownloadService(nil)
-	go startHTTPServer(ln, port, "", svc, "")
-	time.Sleep(50 * time.Millisecond)
-
-	// POST with missing URL
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/download", port), bytes.NewBufferString(`{"path": "/downloads"}`))
-	req.Header.Set("Authorization", "Bearer "+ensureAuthToken())
-	req.Header.Set("Content-Type", "application/json")
-
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		t.Fatalf("Request failed: %v", err)
-	}
-	defer func() { _ = resp.Body.Close() }()
-
-	if resp.StatusCode != http.StatusBadRequest {
-		t.Errorf("Expected 400, got %d", resp.StatusCode)
-	}
+	runDownloadEndpointBadRequestTest(t, `{"path": "/downloads"}`)
 }
 
 func TestStartHTTPServer_NotFoundEndpoint(t *testing.T) {

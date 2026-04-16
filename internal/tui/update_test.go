@@ -488,7 +488,8 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 	}
 }
 
-func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *testing.T) {
+func setupRootModelForStartDownload(t *testing.T) (RootModel, string) {
+	t.Helper()
 	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
 	t.Cleanup(func() {
 		_ = svc.Shutdown()
@@ -509,6 +510,11 @@ func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *te
 		list:         NewDownloadList(80, 20),
 		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
+	return m, targetDir
+}
+
+func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *testing.T) {
+	m, targetDir := setupRootModelForStartDownload(t)
 
 	updated, _ := m.startDownload("https://example.com/100MB.bin", nil, nil, targetDir, true, "", "")
 
@@ -525,26 +531,7 @@ func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *te
 }
 
 func TestStartDownload_UsesGenericQueuedNameForExplicitFilenameUntilLifecycleConfirms(t *testing.T) {
-	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
-	t.Cleanup(func() {
-		_ = svc.Shutdown()
-	})
-
-	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
-			return "real-id", nil
-		},
-		nil,
-	)
-
-	targetDir := t.TempDir()
-	m := RootModel{
-		Settings:     config.DefaultSettings(),
-		Service:      svc,
-		Orchestrator: orchestrator,
-		list:         NewDownloadList(80, 20),
-		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
-	}
+	m, targetDir := setupRootModelForStartDownload(t)
 
 	updated, _ := m.startDownload("https://example.com/archive.zip", nil, nil, targetDir, false, "archive.zip", "")
 

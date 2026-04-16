@@ -863,88 +863,48 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 	}
 }
 
-// resetSettingToDefault resets a specific setting to its default value
 func (m *RootModel) resetSettingToDefault(category, key string, defaults *config.Settings) {
-	switch category {
-	case "General":
-		switch key {
-		case "default_download_dir":
-			m.Settings.General.DefaultDownloadDir = defaults.General.DefaultDownloadDir
-		case "warn_on_duplicate":
-			m.Settings.General.WarnOnDuplicate = defaults.General.WarnOnDuplicate
-		case "download_complete_notification":
-			m.Settings.General.DownloadCompleteNotification = defaults.General.DownloadCompleteNotification
-		case "auto_resume":
-			m.Settings.General.AutoResume = defaults.General.AutoResume
-		case "skip_update_check":
-			m.Settings.General.SkipUpdateCheck = defaults.General.SkipUpdateCheck
+	val := reflect.ValueOf(m.Settings).Elem()
+	defVal := reflect.ValueOf(defaults).Elem()
+	typ := val.Type()
 
-		case "clipboard_monitor":
-			m.Settings.General.ClipboardMonitor = defaults.General.ClipboardMonitor
-		case "allow_remote_open_actions":
-			m.Settings.General.AllowRemoteOpenActions = defaults.General.AllowRemoteOpenActions
-		case "live_speed_graph":
-			m.Settings.General.LiveSpeedGraph = defaults.General.LiveSpeedGraph
-		case "theme":
-			m.Settings.General.Theme = defaults.General.Theme
-		case "log_retention_count":
-			m.Settings.General.LogRetentionCount = defaults.General.LogRetentionCount
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		categoryLabel := field.Tag.Get("ui_label")
+		if categoryLabel == "" {
+			categoryLabel = field.Name
 		}
 
-	case "Network":
-		// Handle Network-related keys
-		switch key {
-		case "max_connections_per_host":
-			m.Settings.Network.MaxConnectionsPerHost = defaults.Network.MaxConnectionsPerHost
+		if categoryLabel == category {
+			catField := val.Field(i)
+			defCatField := defVal.Field(i)
+			if catField.Kind() != reflect.Struct {
+				continue
+			}
 
-		case "max_concurrent_downloads":
-			m.Settings.Network.MaxConcurrentDownloads = defaults.Network.MaxConcurrentDownloads
-		case "max_concurrent_probes":
-			m.Settings.Network.MaxConcurrentProbes = defaults.Network.MaxConcurrentProbes
-		case "user_agent":
-			m.Settings.Network.UserAgent = defaults.Network.UserAgent
-		case "proxy_url":
-			m.Settings.Network.ProxyURL = defaults.Network.ProxyURL
-		case "custom_dns":
-			m.Settings.Network.CustomDNS = defaults.Network.CustomDNS
-		case "sequential_download":
-			m.Settings.Network.SequentialDownload = defaults.Network.SequentialDownload
-		case "min_chunk_size":
-			m.Settings.Network.MinChunkSize = defaults.Network.MinChunkSize
-		case "worker_buffer_size":
-			m.Settings.Network.WorkerBufferSize = defaults.Network.WorkerBufferSize
-		case "dial_hedge_count":
-			m.Settings.Network.DialHedgeCount = defaults.Network.DialHedgeCount
-		}
-	case "Performance":
-		switch key {
-		case "max_task_retries":
-			m.Settings.Performance.MaxTaskRetries = defaults.Performance.MaxTaskRetries
-		case "slow_worker_threshold":
-			m.Settings.Performance.SlowWorkerThreshold = defaults.Performance.SlowWorkerThreshold
-		case "slow_worker_grace_period":
-			m.Settings.Performance.SlowWorkerGracePeriod = defaults.Performance.SlowWorkerGracePeriod
-		case "stall_timeout":
-			m.Settings.Performance.StallTimeout = defaults.Performance.StallTimeout
-		case "speed_ema_alpha":
-			m.Settings.Performance.SpeedEmaAlpha = defaults.Performance.SpeedEmaAlpha
-		}
-	case "Categories":
-		if key == "category_enabled" {
-			m.Settings.Categories.CategoryEnabled = defaults.Categories.CategoryEnabled
-		}
-	case "Extension":
-		switch key {
-		case "extension_prompt":
-			m.Settings.Extension.ExtensionPrompt = defaults.Extension.ExtensionPrompt
-		case "chrome_extension_url":
-			m.Settings.Extension.ChromeExtensionURL = defaults.Extension.ChromeExtensionURL
-		case "firefox_extension_url":
-			m.Settings.Extension.FirefoxExtensionURL = defaults.Extension.FirefoxExtensionURL
-		case "instructions_url":
-			m.Settings.Extension.InstructionsURL = defaults.Extension.InstructionsURL
-		case "-":
-			m.Settings.Extension.AuthToken = defaults.Extension.AuthToken
+			catTyp := catField.Type()
+			for j := 0; j < catTyp.NumField(); j++ {
+				innerField := catTyp.Field(j)
+				fieldKey := innerField.Tag.Get("json")
+				if fieldKey == "" {
+					fieldKey = innerField.Name
+				}
+
+				if fieldKey == key {
+					targetField := catField.Field(j)
+					sourceField := defCatField.Field(j)
+					if targetField.CanSet() {
+						targetField.Set(sourceField)
+
+						// Special case: theme needs internal application to update UI
+						if fieldKey == "theme" && targetField.Kind() == reflect.Int {
+							m.ApplyTheme(int(targetField.Int()))
+						}
+					}
+					return
+				}
+			}
+			return
 		}
 	}
 }
