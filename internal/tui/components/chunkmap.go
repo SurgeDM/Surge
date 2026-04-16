@@ -202,7 +202,7 @@ func (m ChunkMapModel) View() string {
 	pausedStyle := lipgloss.NewStyle().Foreground(colors.StatePaused)         // Yellow/Gold for paused Partial
 	completedStyle := lipgloss.NewStyle().Foreground(colors.StateDownloading) // Neon Green / Cyan
 
-	block := "■"
+	block := "\u25a0"
 
 	for i, status := range visualChunks {
 		if i > 0 && i%cols == 0 {

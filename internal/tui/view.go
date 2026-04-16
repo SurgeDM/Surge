@@ -26,7 +26,7 @@ func formatDurationForUI(d time.Duration) string {
 		d = 0
 	}
 	if d >= maxUIDuration {
-		return "∞"
+		return "\u221e"
 	}
 
 	totalSec := int(d.Seconds())
@@ -84,9 +84,8 @@ func (m RootModel) View() tea.View {
 			Keys:        components.NoKeys{},
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
-			Width:       60,
-			Height:      10,
 		}
+		modal.Width, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, 60, 10)
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
@@ -104,21 +103,32 @@ func (m RootModel) View() tea.View {
 			Help:            m.help,
 			HelpKeys:        m.keys.Input,
 			BorderColor:     colors.NeonPink,
-			Width:           80,
-			Height:          11,
 		}
+		// Resolve dynamic dimensions
+		w, _ := GetDynamicModalDimensions(m.width, m.height, 46, 8, 80, 0)
+		modal.Width = w
+		h := lipgloss.Height(modal.View()) + BoxStyle.GetVerticalFrameSize()
+		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 46, 8, w, h)
+
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == FilePickerState {
+		// Create a local copy to avoid modifying model during view (though View takes value receiver m)
+		fp := m.filepicker
 		picker := components.NewFilePickerModal(
 			" Select Directory ",
-			m.filepicker,
+			&fp,
 			m.help,
 			m.keys.FilePicker,
 			colors.NeonPink,
 		)
+		// Resolve dynamic dimensions
+		w, h := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
+		picker.Width = w
+		picker.Height = h
+
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
@@ -133,15 +143,26 @@ func (m RootModel) View() tea.View {
 
 	if m.state == DuplicateWarningState {
 		modal := components.ConfirmationModal{
-			Title:       "⚠ Duplicate Detected",
+			Title:       "\u26a0 Duplicate Detected",
 			Message:     "A download with this URL already exists",
 			Detail:      truncateString(m.duplicateInfo, 50),
 			Keys:        m.keys.Duplicate,
 			Help:        m.help,
 			BorderColor: colors.NeonPink,
-			Width:       60,
-			Height:      10,
 		}
+		// Resolve dynamic dimensions
+		w, _ := GetDynamicModalDimensions(m.width, m.height, 40, 6, 60, 0)
+		modal.Width = w
+		// ConfirmationModal's internal height calculation depends on width (for help wrap)
+		// but since it's a fixed-width confirmation message, we can approximate or call View()
+		// Note: ConfirmationModal renders itself into the height passed,
+		// so we need a reasonable estimate for 'h'.
+		h := 10 // typical height for confirmation
+		if m.duplicateInfo != "" {
+			h = 11
+		}
+		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, w, h)
+
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
@@ -163,21 +184,31 @@ func (m RootModel) View() tea.View {
 			Help:            m.help,
 			HelpKeys:        m.keys.Extension,
 			BorderColor:     colors.NeonCyan,
-			Width:           86,
-			Height:          13,
 		}
+		// Resolve dynamic dimensions
+		w, _ := GetDynamicModalDimensions(m.width, m.height, 60, 10, 86, 0)
+		modal.Width = w
+		h := lipgloss.Height(modal.View()) + BoxStyle.GetVerticalFrameSize()
+		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 60, 10, w, h)
+
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == BatchFilePickerState {
+		fp := m.filepicker
 		picker := components.NewFilePickerModal(
 			" Select URL File (.txt) ",
-			m.filepicker,
+			&fp,
 			m.help,
 			m.keys.FilePicker,
 			colors.NeonCyan,
 		)
+		// Resolve dynamic dimensions
+		w, h := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
+		picker.Width = w
+		picker.Height = h
+
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
@@ -191,9 +222,13 @@ func (m RootModel) View() tea.View {
 			Keys:        m.keys.BatchConfirm,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
-			Width:       60,
-			Height:      10,
 		}
+		// Resolve dynamic dimensions
+		w, _ := GetDynamicModalDimensions(m.width, m.height, 40, 6, 60, 0)
+		modal.Width = w
+		h := 10 // typical height for confirmation
+		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, w, h)
+
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
@@ -204,15 +239,19 @@ func (m RootModel) View() tea.View {
 
 	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
 		modal := components.ConfirmationModal{
-			Title:       "⬆ Update Available",
-			Message:     "A new version of Surge is available: " + m.UpdateInfo.LatestVersion,
-			Detail:      "Current: " + m.UpdateInfo.CurrentVersion,
+			Title:       "\u2b06 Update Available",
+			Message:     fmt.Sprintf("A new version of Surge is available: %s", m.UpdateInfo.LatestVersion),
+			Detail:      fmt.Sprintf("Current: %s", m.UpdateInfo.CurrentVersion),
 			Keys:        m.keys.Update,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
-			Width:       60,
-			Height:      12,
 		}
+		// Resolve dynamic dimensions
+		w, _ := GetDynamicModalDimensions(m.width, m.height, 50, 8, 60, 0)
+		modal.Width = w
+		h := 12 // typical height for update prompt
+		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 50, 8, w, h)
+
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
@@ -227,55 +266,48 @@ func (m RootModel) View() tea.View {
 			Help:            m.help,
 			HelpKeys:        m.keys.Input,
 			BorderColor:     colors.NeonPink,
-			Width:           80,
-			Height:          8,
 		}
+		// Resolve dynamic dimensions
+		w, _ := GetDynamicModalDimensions(m.width, m.height, 46, 6, 80, 0)
+		modal.Width = w
+		h := lipgloss.Height(modal.View()) + BoxStyle.GetVerticalFrameSize()
+		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 46, 6, w, h)
+
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == HelpModalState {
-		modalW := PopupWidth
-		if m.width < modalW {
-			modalW = m.width
-		}
-		modalH := 22 // Height for keyboard shortcuts (TODO: calculate based on key count)
-		if m.height < modalH {
-			modalH = m.height
-		}
+		w, h := GetDynamicModalDimensions(m.width, m.height, 40, 10, PopupWidth, 22)
 		modal := components.HelpModal{
 			Title:       "Keyboard Shortcuts",
 			HelpKeys:    m.keys.Dashboard,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
-			Width:       modalW,
-			Height:      modalH,
+			Width:       w,
+			Height:      h,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	// === MAIN DASHBOARD LAYOUT ===
-
-	availableWidth := m.width - WindowStyle.GetHorizontalFrameSize()
-	if availableWidth < 0 {
-		availableWidth = 0
-	}
+	layout := CalculateDashboardLayout(m.width, m.height)
 
 	// Footer - keybindings on left, version on bottom-right
 	helpText := m.help.View(m.keys.Dashboard)
 	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
-	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render("v" + m.CurrentVersion)
-	footerContentWidth := availableWidth
-	leftFooterWidth := footerContentWidth - lipgloss.Width(versionText)
-	if leftFooterWidth < 0 {
-		leftFooterWidth = 0
-	}
+	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
+
 	// Hide help text at very narrow widths — version is more important
 	var footerContent string
-	if footerContentWidth < 60 {
+	if layout.AvailableWidth < 60 {
 		footerContent = versionText
 	} else {
+		leftFooterWidth := layout.AvailableWidth - lipgloss.Width(versionText)
+		if leftFooterWidth < 0 {
+			leftFooterWidth = 0
+		}
 		footerContent = lipgloss.JoinHorizontal(
 			lipgloss.Top,
 			lipgloss.NewStyle().Width(leftFooterWidth).Render(helpText),
@@ -284,585 +316,91 @@ func (m RootModel) View() tea.View {
 	}
 	footer := footerContent
 
-	footerHeight := lipgloss.Height(footer)
-	if footerHeight < 1 {
-		footerHeight = 1
-	}
-	availableHeight := m.height - footerHeight
-	if availableHeight < 1 {
-		availableHeight = 1
-	}
-
-	// Column Widths (or full-width when right column is hidden)
-	leftWidth := GetListWidth(availableWidth)
-	rightWidth := availableWidth - leftWidth
-	if rightWidth < 0 {
-		rightWidth = 0
-	}
-
-	// Determine right column viability thresholds
-	hideRightColumn := rightWidth < MinRightColumnWidth
-	hideGraphStats := rightWidth >= MinRightColumnWidth && rightWidth < MinGraphStatsWidth
-	hideLogo := leftWidth < MinLogoWidth
-
-	if hideRightColumn {
-		leftWidth = availableWidth
-	}
-
-	// --- LEFT COLUMN HEIGHTS ---
-	headerHeight := GetHeaderHeight(availableHeight)
-	listHeight := availableHeight - headerHeight
-	if listHeight < MinListHeight {
-		listHeight = MinListHeight
-	}
-
-	// Short terminal: reduce minimum graph height
-	minGraphHeight := GetMinGraphHeight(availableHeight)
-
-	// --- RIGHT COLUMN HEIGHTS ---
-	// Priority 1: Details (Fixed content + Padding)
-	// Priority 2: ChunkMap (Dynamic / Exact needed)
-	// Priority 3: Graph (Remainder)
-
-	// Pre-calculate Detail Content to determine exact height needed
-	var detailContent string
+	// Pre-calculate data needed for sub-renders
+	stats := m.ComputeViewStats()
 	selected := m.GetSelectedDownload()
 
-	detailWidth := rightWidth - PaneStyle.GetHorizontalFrameSize()
-	if detailWidth < 0 {
-		detailWidth = 0
-	}
-
-	if selected != nil {
-		detailContent = renderFocusedDetails(selected, detailWidth, m.spinner.View())
-	} else {
-		// Default Placeholder
-		detailContent = lipgloss.Place(detailWidth, 8, lipgloss.Center, lipgloss.Center,
-			lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No Download Selected"))
-	}
-
-	// Exact height from content + borders
-	detailHeight := lipgloss.Height(detailContent) + BoxStyle.GetVerticalFrameSize()
-
-	// Calculate Available Height for Rest
-	remainingHeight := availableHeight - detailHeight
-	if remainingHeight < 0 {
-		remainingHeight = 0
-	}
-
-	// Calculate Chunk Map Needs
-	chunkMapHeight := 0
-	chunkMapNeeded := 0
-	showChunkMap := false
-
-	// Pre-fetch bitmap data if available
 	var bitmap []byte
 	var bitmapWidth int
 	var totalSize, chunkSize int64
 	var chunkProgress []int64
-
 	if selected != nil && selected.state != nil {
 		bitmap, bitmapWidth, totalSize, chunkSize, chunkProgress = selected.state.GetBitmap()
 	}
 
-	if selected != nil && selected.state != nil {
-		// Show Chunk Map only if:
-		// 1. Not Done (Completed)
-		// 2. Has Chunks (Bitmap initialized)
-		// We prioritize showing the map if data is available, even if speed is 0 (connecting/queued)
-
-		hasChunks := len(bitmap) > 0 && bitmapWidth > 0
-
-		if !selected.done && hasChunks && availableHeight >= MinChunkMapVisibleH {
-			showChunkMap = true
-		}
+	// Pre-compute details content to avoid double-computation and width mismatches
+	var detailContent string
+	detailWidth := layout.RightWidth
+	if layout.HideRightColumn {
+		detailWidth = layout.LeftWidth
 	}
-
-	if showChunkMap {
-		// Calculate available height for chunk map
-		chunkMapPadding := lipgloss.NewStyle().Padding(0, 2)
-		availableChunkHeight := remainingHeight - minGraphHeight - BoxStyle.GetVerticalFrameSize() - LayoutGapStyle.GetVerticalFrameSize() - LayoutGapStyle.GetVerticalFrameSize()
-		if availableChunkHeight < 1 {
-			availableChunkHeight = 1
-		}
-		contentLines := components.CalculateHeight(bitmapWidth, rightWidth-BoxStyle.GetHorizontalFrameSize()-chunkMapPadding.GetHorizontalFrameSize(), availableChunkHeight)
-		if contentLines > 0 {
-			// top/bottom borders
-			chunkMapNeeded = contentLines + BoxStyle.GetVerticalFrameSize()
-		} else {
-			// Minimum for message "Chunk visualization not available"
-			chunkMapNeeded = 6
-		}
-	}
-
-	// Define Minimum Graph Height
-	var graphHeight int
-
-	// Determine Layout
-	if remainingHeight-chunkMapNeeded >= minGraphHeight {
-		// Sufficient space for everything
-		chunkMapHeight = chunkMapNeeded
-		if !showChunkMap {
-			// User wants target ratio for Graph:Details
-			targetGraphHeight := int(float64(availableHeight) * GraphTargetHeightRatio)
-			targetDetailHeight := availableHeight - targetGraphHeight
-
-			// Ensure Graph meets minimum
-			if targetGraphHeight < minGraphHeight {
-				targetGraphHeight = minGraphHeight
-				targetDetailHeight = availableHeight - targetGraphHeight
-			}
-
-			// Assign
-			graphHeight = targetGraphHeight
-			detailHeight = targetDetailHeight
-			chunkMapHeight = 0
-		} else {
-			graphHeight = remainingHeight - chunkMapHeight
-		}
+	if selected != nil {
+		detailContent = renderFocusedDetails(selected, detailWidth-components.BorderFrameWidth, m.spinner.View())
 	} else {
-		// Not enough space, prioritize Graph Min Height, then squeeze ChunkMap
-		graphHeight = minGraphHeight
-		chunkMapHeight = remainingHeight - graphHeight
-
-		// If ChunkMap gets squeezed too much, we might need to squeeze Graph purely to survive
-		if chunkMapHeight < MinChunkMapHeight {
-			// Check if we can start eating into Graph's minimum?
-			// Let's enforce a hard floor for ChunkMap
-			chunkMapHeight = MinChunkMapHeight
-			graphHeight = remainingHeight - chunkMapHeight
-			// If graphHeight becomes negative, the whole UI is too small,
-			// renderBtopBox will handle truncation, but visual will be broken.
-			if graphHeight < 2 {
-				graphHeight = 2
-			}
-		}
+		detailContent = renderEmptyMessage(detailWidth-components.BorderFrameWidth, layout.DetailHeight-components.BorderFrameHeight, "No download selected")
 	}
 
-	// Recalculate Graph Area for rendering usage later
-	// graphHeight is now set vertically.
-
-	// --- SECTION 1: HEADER & LOGO (Top Left) + LOG BOX (Top Right) ---
-	logoText := `
-   _______  ___________ ____ 
-  / ___/ / / / ___/ __ '/ _ \
- (__  ) /_/ / /  / /_/ /  __/
-/____/\__,_/_/   \__, /\___/ 
-                /____/       `
-
-	// Calculate stats for tab bar
-	stats := m.ComputeViewStats()
-	active := stats.ActiveCount
-	queued := stats.QueuedCount
-	downloaded := stats.DownloadedCount
-
-	// Logo takes ~45% of header width
-	logoWidth := int(float64(leftWidth) * LogoWidthRatio)
-	logWidth := leftWidth - logoWidth - BoxStyle.GetHorizontalFrameSize() // Rest for log box
-
-	if logoWidth < 4 {
-		logoWidth = 4 // Minimum for server box content
-	}
-	if logWidth < 4 {
-		logWidth = 4 // Minimum for viewport
-	}
-
-	// Server info vars
-	greenDot := lipgloss.NewStyle().Foreground(colors.StateDownloading).Render("●")
-	host := m.ServerHost
-	if host == "" {
-		host = "127.0.0.1"
-	}
-	serverAddr := fmt.Sprintf("%s:%d", host, m.ServerPort)
-
-	var statusLine string
-	if m.IsRemote {
-		statusLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render(" Connected to " + serverAddr)
-	} else {
-		statusLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render(" Serving at " + serverAddr)
-	}
-
-	serverContentWidth := logoWidth - (BoxStyle.GetHorizontalFrameSize() * 2)
-	if serverContentWidth < 0 {
-		serverContentWidth = 0
-	}
-	serverPortContent := lipgloss.NewStyle().
-		Width(serverContentWidth).
-		Align(lipgloss.Center).
-		Render(greenDot + statusLine)
-	serverBoxHeight := lipgloss.Height(serverPortContent) + 2
-	if serverBoxHeight < 3 {
-		serverBoxHeight = 3
-	}
-
-	// Render logo column (or just server info when too narrow)
-	var logoColumn string
-	if hideLogo {
-		logoColumn = renderBtopBox("", PaneTitleStyle.Render(" Server "), serverPortContent, logoWidth, serverBoxHeight, colors.Gray)
-	} else {
-		var logoContent string
-		if m.logoCache != "" {
-			logoContent = m.logoCache
-		} else {
-			gradientLogo := ApplyGradient(logoText, colors.NeonPink, colors.NeonPurple)
-			m.logoCache = lipgloss.NewStyle().Render(gradientLogo)
-			logoContent = m.logoCache
-		}
-
-		logoBoxHeight := headerHeight - serverBoxHeight
-		if logoBoxHeight < 1 {
-			logoBoxHeight = 1
-		}
-		logoBox := lipgloss.Place(logoWidth, logoBoxHeight, lipgloss.Center, lipgloss.Center, logoContent)
-		serverBox := renderBtopBox("", PaneTitleStyle.Render(" Server "), serverPortContent, logoWidth, serverBoxHeight, colors.Gray)
-		logoColumn = lipgloss.JoinVertical(lipgloss.Left, logoBox, serverBox)
-	}
-
-	// Render log viewport
-	vpWidth := logWidth - (BoxStyle.GetHorizontalFrameSize() * 2)
-	if vpWidth < 0 {
-		vpWidth = 0
-	}
-	vpHeight := headerHeight - (BoxStyle.GetVerticalFrameSize() * 2)
-	if vpHeight < 1 {
-		vpHeight = 1
-	}
-	m.logViewport.SetWidth(vpWidth)
-	m.logViewport.SetHeight(vpHeight)
-	logContent := m.logViewport.View()
-
-	// Use different border color when focused
-	logBorderColor := colors.Gray
-	if m.logFocused {
-		logBorderColor = colors.NeonPink
-	}
-	logBox := renderBtopBox(PaneTitleStyle.Render(" Activity Log "), "", logContent, logWidth, headerHeight, logBorderColor)
-
-	// Combine logo column and log box horizontally
+	// Render Components
+	logoColumn := m.renderHeaderBox(layout.LogoWidth, layout.HeaderHeight)
+	logBox := m.renderLogBox(layout.LogWidth, layout.HeaderHeight)
 	headerBox := lipgloss.JoinHorizontal(lipgloss.Top, logoColumn, logBox)
 
-	// --- SECTION 2: SPEED GRAPH (Top Right) ---
-	// Use GraphHistoryPoints from config (30 seconds of history)
+	listBox := m.renderDownloadsBox(layout.LeftWidth, layout.ListHeight, stats)
 
-	// Get the last 60 data points for the graph
-	var graphData []float64
-	if len(m.SpeedHistory) > GraphHistoryPoints {
-		graphData = m.SpeedHistory[len(m.SpeedHistory)-GraphHistoryPoints:]
-	} else {
-		graphData = m.SpeedHistory
-	}
+	// Right column
+	var rightColumn string
+	if !layout.HideRightColumn {
+		// Show chunk map only if we have actual data to visualize
+		hasChunks := len(bitmap) > 0 && bitmapWidth > 0
+		showActualChunkMap := layout.ShowChunkMap && hasChunks && selected != nil && !selected.done
 
-	// Determine Max Speed for scaling
-	maxSpeed := 0.0
-	topSpeed := 0.0
-	for _, v := range graphData {
-		if v > maxSpeed {
-			maxSpeed = v
-		}
-		if v > topSpeed {
-			topSpeed = v
-		}
-	}
-
-	if maxSpeed == 0 {
-		maxSpeed = 1.0 // Default scale for empty graph
-	} else {
-		// Add headroom
-		maxSpeed *= GraphHeadroom
-
-		if maxSpeed < 1.0 {
-			maxSpeed = 1.0
+		// If we reserved space for chunk map but aren't showing it, give it to details
+		if !showActualChunkMap && layout.ShowChunkMap {
+			layout.DetailHeight += layout.ChunkMapHeight
 		}
 
-		if maxSpeed >= 5 {
-			maxSpeed = float64(int((maxSpeed+4.99)/5) * 5)
-		} else {
-			maxSpeed = float64(int(maxSpeed + 0.99))
-		}
-	}
+		graphBox := m.renderGraphBox(layout.RightWidth, layout.GraphHeight, stats)
+		detailBox := m.renderDetailsBox(layout.RightWidth, layout.DetailHeight, detailContent)
 
-	// Calculate Available Height for the Graph
-	graphContentHeight := graphHeight - BoxStyle.GetVerticalFrameSize() - LayoutGapStyle.GetVerticalFrameSize() - 2 // remaining padding
-	if graphContentHeight < 3 {
-		graphContentHeight = 3
-	}
-
-	// Stats box width inside the Network Activity box
-	statsBoxWidth := GraphStatsWidth
-
-	// Graph width calculation: hide stats box when too narrow
-	buildAxisLines := func(height int, axisStyle lipgloss.Style) []string {
-		label := func(v float64) string {
-			if v <= 0 {
-				return "0 MB/s"
-			}
-			return fmt.Sprintf("%.1f MB/s", v)
-		}
-
-		axisLines := make([]string, height)
-		for i := range axisLines {
-			axisLines[i] = axisStyle.Render("")
-		}
-
-		type axisMark struct {
-			num int
-			den int
-		}
-
-		marks := []axisMark{
-			{num: 1, den: 1},
-			{num: 1, den: 2},
-			{num: 0, den: 1},
-		}
-		if height >= 9 {
-			marks = []axisMark{
-				{num: 1, den: 1},
-				{num: 4, den: 5},
-				{num: 3, den: 5},
-				{num: 2, den: 5},
-				{num: 1, den: 5},
-				{num: 0, den: 1},
-			}
-		}
-
-		for _, mark := range marks {
-			row := 0
-			if height > 1 {
-				row = ((mark.den-mark.num)*(height-1) + mark.den/2) / mark.den
-			}
-			value := maxSpeed * float64(mark.num) / float64(mark.den)
-			axisLines[row] = axisStyle.Render(label(value))
-		}
-
-		return axisLines
-	}
-	var graphWithAxis string
-	if hideGraphStats {
-		// No stats box — graph gets almost full width
-		graphAreaWidth, axisWidth := GetGraphAreaDimensions(rightWidth, true)
-
-		graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
-
-		// Y-axis labels
-		axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)
-		axisLines := buildAxisLines(graphContentHeight, axisStyle)
-		axisColumn := lipgloss.NewStyle().
-			Height(graphContentHeight).
-			Align(lipgloss.Right).
-			Render(strings.Join(axisLines, "\n"))
-
-		graphWithAxis = lipgloss.JoinHorizontal(lipgloss.Top,
-			graphVisual,
-			axisColumn,
-		)
-	} else {
-		// Get current speed and calculate total downloaded
-		currentSpeed := 0.0
-		if len(m.SpeedHistory) > 0 {
-			currentSpeed = m.SpeedHistory[len(m.SpeedHistory)-1]
-		}
-
-		// Calculate total downloaded across all downloads
-		totalDownloaded := stats.TotalDownloaded
-
-		// Create stats content (left side inside box)
-		speedMbps := currentSpeed * 8
-		topMbps := topSpeed * 8
-
-		valueStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
-		labelStyleStats := lipgloss.NewStyle().Foreground(colors.LightGray)
-		dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
-
-		statsContent := lipgloss.JoinVertical(lipgloss.Left,
-			fmt.Sprintf("%s %s", valueStyle.Render("▼"), valueStyle.Render(fmt.Sprintf("%.2f MB/s", currentSpeed))),
-			dimStyle.Render(fmt.Sprintf("  (%.0f Mbps)", speedMbps)),
-			"",
-			fmt.Sprintf("%s %s", labelStyleStats.Render("Top:"), valueStyle.Render(fmt.Sprintf("%.2f", topSpeed))),
-			dimStyle.Render(fmt.Sprintf("  (%.0f Mbps)", topMbps)),
-			"",
-			fmt.Sprintf("%s %s", labelStyleStats.Render("Total:"), valueStyle.Render(utils.ConvertBytesToHumanReadable(totalDownloaded))),
-		)
-
-		// Style stats with a border box
-		statsBoxStyle := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colors.Gray).
-			Padding(0, 1).
-			Width(statsBoxWidth).
-			Height(graphContentHeight)
-		statsBox := statsBoxStyle.Render(statsContent)
-
-		// Graph takes remaining width after stats box
-		graphAreaWidth, axisWidth := GetGraphAreaDimensions(rightWidth, false)
-
-		graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
-
-		// Create Y-axis (right side of graph)
-		axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)
-		axisLines := buildAxisLines(graphContentHeight, axisStyle)
-
-		axisColumn := lipgloss.NewStyle().
-			Height(graphContentHeight).
-			Align(lipgloss.Right).
-			Render(strings.Join(axisLines, "\n"))
-
-		graphWithAxis = lipgloss.JoinHorizontal(lipgloss.Top,
-			statsBox,
-			graphVisual,
-			axisColumn,
-		)
-	}
-
-	// Add top and bottom padding inside the Network Activity box
-	graphWithPadding := lipgloss.JoinVertical(lipgloss.Left,
-		"", // Top padding
-		graphWithAxis,
-		"", // Bottom padding
-	)
-
-	// Render single network activity box containing stats + graph
-	graphBox := renderBtopBox(PaneTitleStyle.Render(" Network Activity "), "", graphWithPadding, rightWidth, graphHeight, colors.NeonCyan)
-
-	// Don't include graph box when too small to render
-	renderGraphBox := graphHeight >= minGraphHeight
-
-	// --- SECTION 3: DOWNLOAD LIST (Bottom Left) ---
-	// Tab Bar
-	tabBar := renderTabs(m.activeTab, active, queued, downloaded)
-
-	// Search bar (shown when search is active or has a query)
-	var leftTitle string
-	if m.searchActive || m.searchQuery != "" {
-		searchIcon := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("> ")
-		var searchDisplay string
-		if m.searchActive {
-			searchDisplay = m.searchInput.View() +
-				lipgloss.NewStyle().Foreground(colors.Gray).Render(" [esc exit]")
-		} else {
-			// Show query with clear hint
-			searchDisplay = lipgloss.NewStyle().Foreground(colors.NeonPink).Render(m.searchQuery) +
-				lipgloss.NewStyle().Foreground(colors.Gray).Render(" [f to clear]")
-		}
-		// Pad the search bar to look like a title block
-		leftTitle = " " + lipgloss.JoinHorizontal(lipgloss.Left, searchIcon, searchDisplay) + " "
-	}
-
-	// Render the bubbles list or centered empty message
-	var listContent string
-	if len(m.list.Items()) == 0 {
-		listContentHeight := listHeight - BoxStyle.GetVerticalFrameSize() - ModalPaddingStyle.GetVerticalFrameSize()
-
-		listContentWidth := leftWidth - (BoxStyle.GetHorizontalFrameSize() * 4)
-		if listContentWidth < 0 {
-			listContentWidth = 0
-		}
-
-		if m.searchQuery != "" {
-			listContent = lipgloss.Place(listContentWidth, listContentHeight, lipgloss.Center, lipgloss.Center,
-				lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No matching downloads"))
-		} else {
-			listContent = lipgloss.Place(listContentWidth, listContentHeight, lipgloss.Center, lipgloss.Center,
-				lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No downloads"))
-		}
-	} else {
-		// ensure list fills the height
-		m.list.SetHeight(listHeight - BoxStyle.GetVerticalFrameSize() - ModalPaddingStyle.GetVerticalFrameSize()) // adjust for padding/tabs
-		listContent = m.list.View()
-	}
-
-	// Build list inner content - No search bar inside
-	listInnerContent := lipgloss.JoinVertical(lipgloss.Left, tabBar, listContent)
-	listInner := lipgloss.NewStyle().Padding(1, 2).Render(listInnerContent)
-
-	// Determine border color for downloads box based on focus
-	downloadsBorderColor := colors.NeonPink
-	if m.logFocused {
-		downloadsBorderColor = colors.Gray
-	}
-	listBox := renderBtopBox(leftTitle, PaneTitleStyle.Render(" Downloads "), listInner, leftWidth, listHeight, downloadsBorderColor)
-
-	// --- SECTION 4: DETAILS PANE (Middle Right) ---
-	// detailContent and selected are already calculated in the layout section
-
-	detailBox := renderBtopBox("", PaneTitleStyle.Render(" File Details "), detailContent, rightWidth, detailHeight, colors.Gray)
-
-	// --- SECTION 5: CHUNK MAP PANE (Bottom Right) ---
-	var chunkBox string
-	if showChunkMap {
-		var chunkContent string
-		// Bitmap data already fetched above
-		if len(bitmap) > 0 {
-			// New chunk map component
-			// Calculate target rows based on available height (minus borders)
-			targetRows := chunkMapHeight - 2
-			if targetRows < 3 {
-				targetRows = 3 // Minimum 3 rows
-			}
-			if targetRows > 5 {
-				targetRows = 5 // Maximum 5 rows for compact look
-			}
-			chunkMapPadding := lipgloss.NewStyle().Padding(0, 2)
-			chunkMapWidth := rightWidth - BoxStyle.GetHorizontalFrameSize() - chunkMapPadding.GetHorizontalFrameSize()
-			if chunkMapWidth < 4 {
-				chunkMapWidth = 4
-			}
-			chunkMap := components.NewChunkMapModel(bitmap, bitmapWidth, chunkMapWidth, targetRows, selected.paused, totalSize, chunkSize, chunkProgress)
-			chunkContent = chunkMapPadding.Render(chunkMap.View()) // No bottom padding
-
-			// If no chunks (not initialized or small file), show message
-			if bitmapWidth == 0 {
-				msg := "Chunk visualization not available"
-
-				placeholderWidth := rightWidth - BoxStyle.GetHorizontalFrameSize()
-				if placeholderWidth < 0 {
-					placeholderWidth = 0
-				}
-
-				chunkContent = lipgloss.Place(placeholderWidth, chunkMapHeight-2, lipgloss.Center, lipgloss.Center,
-					lipgloss.NewStyle().Foreground(colors.Gray).Render(msg))
-			}
-		}
-
-		chunkBox = renderBtopBox("", PaneTitleStyle.Render(" Chunk Map "), chunkContent, rightWidth, chunkMapHeight, colors.Gray)
-	}
-
-	// --- ASSEMBLY ---
-
-	var body string
-	if hideRightColumn {
-		// Terminal too narrow for two-column layout — list-only mode
-		body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
-	} else {
-		// Left Column
-		leftColumn := lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
-
-		// Right Column (Graph + Detail + Chunk)
 		var rightParts []string
-		if renderGraphBox {
+		if layout.GraphHeight >= layout.MinGraphHeight {
 			rightParts = append(rightParts, graphBox)
 		}
-		rightParts = append(rightParts, detailBox, chunkBox)
-		rightColumn := lipgloss.JoinVertical(lipgloss.Left, rightParts...)
+		rightParts = append(rightParts, detailBox)
 
+		if showActualChunkMap {
+			chunkBox := m.renderChunkMapBox(layout.RightWidth, layout.ChunkMapHeight, selected, bitmap, bitmapWidth, totalSize, chunkSize, chunkProgress)
+			rightParts = append(rightParts, chunkBox)
+		}
+		rightColumn = lipgloss.JoinVertical(lipgloss.Left, rightParts...)
+	}
+
+	// Assembly
+	var body string
+	if layout.HideRightColumn {
+		if layout.VerticalLayout {
+			detailBox := m.renderDetailsBox(layout.LeftWidth, layout.DetailHeight, detailContent)
+			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox, detailBox)
+		} else {
+
+			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
+		}
+	} else {
+
+		leftColumn := lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
 		body = lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
 	}
+
 	body = lipgloss.NewStyle().
-		Width(availableWidth).
-		Height(availableHeight).
-		MaxWidth(availableWidth).
-		MaxHeight(availableHeight).
+		Width(layout.AvailableWidth).
+		Height(layout.AvailableHeight).
+		MaxWidth(layout.AvailableWidth).
+		MaxHeight(layout.AvailableHeight).
 		Render(body)
 
-	fullView := lipgloss.JoinVertical(lipgloss.Left,
-		body,
-		footer,
-	)
-	fullView = lipgloss.NewStyle().
-		Width(availableWidth).
-		MaxWidth(availableWidth).
-		MaxHeight(m.height).
-		Render(fullView)
-	return m.wrapView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Top, fullView))
+	fullView := lipgloss.JoinVertical(lipgloss.Left, body, footer)
+	// Place content into available space, then wrap with WindowStyle margins
+	return m.wrapView(lipgloss.Place(layout.AvailableWidth, m.height, lipgloss.Center, lipgloss.Top, fullView))
 }
 
 // Helper to render the detailed info pane
@@ -873,7 +411,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	}
 
 	// Consistent content width for centering
-	contentWidth := w - 4
+	contentWidth := w - (components.BorderFrameWidth * 2)
 	if contentWidth < 0 {
 		contentWidth = 0
 	}
@@ -882,7 +420,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	divider := lipgloss.NewStyle().
 		Foreground(colors.Gray).
 		Width(contentWidth).
-		Render("\n" + strings.Repeat("─", contentWidth) + "\n")
+		Render("\n" + strings.Repeat("\u2500", contentWidth) + "\n")
 
 	// Padding Style for sections
 	sectionStyle := lipgloss.NewStyle().
@@ -910,26 +448,60 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		displayPath = d.URL
 	}
 
+	// Calculate inner width accounting for sectionStyle padding (0, 1)
+	innerWidth := contentWidth - components.BorderFrameWidth
+	if innerWidth < 0 {
+		innerWidth = 0
+	}
+	valueWidth := innerWidth - 12
+	if valueWidth < 5 {
+		valueWidth = 5 // Minimum reasonable width
+	}
+
 	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("File: "), StatsValueStyle.Render(truncateString(displayFilename, contentWidth-12))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Path: "), StatsValueStyle.Render(truncateString(displayPath, contentWidth-12))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray).Render(truncateString(d.ID, contentWidth-12))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("URL: "), StatsValueStyle.Render(truncateMiddle(d.URL, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("File: "), StatsValueStyle.Render(truncateString(displayFilename, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Path: "), StatsValueStyle.Render(truncateMiddle(displayPath, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray).Render(truncateString(d.ID, valueWidth))),
 	)
 	fileSection := sectionStyle.Render(fileInfoContent)
 
 	// --- 3. Progress Section ---
-	progressWidth := w - 4
-	if progressWidth < 20 {
-		progressWidth = 20
+	labelStr := "Progress: "
+	progLabelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan)
+
+	var progContent string
+	if contentWidth > 45 { // Enough space for "Progress: " (10) + some bar + padding
+		// Horizontal layout: Progress: [████████      ]
+		maxProgWidth := contentWidth - lipgloss.Width(labelStr) - components.SingleLineHeight
+		if maxProgWidth < 10 {
+			maxProgWidth = 10
+		}
+		d.progress.SetWidth(maxProgWidth)
+		progView := d.progress.ViewAs(pct)
+		progContent = lipgloss.JoinHorizontal(lipgloss.Center, progLabelStyle.Render(labelStr), progView)
+	} else {
+		// Vertical layout for narrow terminals:
+		// Progress:
+		// [███████]
+		maxProgWidth := contentWidth
+		if maxProgWidth < 10 {
+			maxProgWidth = 10 // Still clamp to a readable minimum, but we'll allow wrapping if term is REALLY tiny
+		}
+		// If contentWidth is actually smaller than 10, we must NOT exceed it to avoid "broken" look
+		if maxProgWidth > contentWidth && contentWidth > 5 {
+			maxProgWidth = contentWidth
+		}
+
+		d.progress.SetWidth(maxProgWidth)
+		progView := d.progress.ViewAs(pct)
+
+		centeredLabel := lipgloss.NewStyle().Width(contentWidth).Align(lipgloss.Center).Render(progLabelStyle.Render(labelStr))
+		centeredBar := lipgloss.NewStyle().Width(contentWidth).Align(lipgloss.Center).Render(progView)
+		progContent = lipgloss.JoinVertical(lipgloss.Left, centeredLabel, centeredBar)
 	}
-	d.progress.SetWidth(progressWidth)
-	progView := d.progress.ViewAs(pct)
 
-	progLabel := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Progress: ")
-	progContent := lipgloss.JoinVertical(lipgloss.Left, progLabel, progView)
-
-	// Progress bar has its own width handling usually, but let's wrap it to be sure
-	progSection := lipgloss.NewStyle().Width(contentWidth).Align(lipgloss.Center).Render(progContent)
+	progSection := lipgloss.NewStyle().Width(contentWidth).Render(progContent)
 
 	// --- 4. Stats Grid Section ---
 	var speedStr, etaStr, sizeStr, timeStr string
@@ -973,7 +545,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		etaStr = "..."
 	case d.paused || d.Speed == 0:
 		speedStr = "Paused"
-		etaStr = "∞"
+		etaStr = "\u221e"
 	default:
 		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/float64(config.MB))
 		if d.Total > 0 {
@@ -982,7 +554,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 			// Clamp ETA to 24 hours max to prevent bonkers values
 			const maxETASeconds = 24 * 60 * 60
 			if etaSeconds > maxETASeconds || etaSeconds < 0 {
-				etaStr = "∞"
+				etaStr = "\u221e"
 			} else {
 				etaDuration := time.Duration(etaSeconds) * time.Second
 				// EMA smooth ETA to prevent jitter from speed fluctuations
@@ -994,14 +566,14 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 				etaStr = formatDurationForUI(etaDuration)
 			}
 		} else {
-			etaStr = "∞"
+			etaStr = "\u221e"
 		}
 	}
 
 	timeStr = formatDurationForUI(elapsed)
 
 	// Stats Layout
-	colWidth := (contentWidth - 4) / 2
+	colWidth := (contentWidth - (components.BorderFrameWidth * 2)) / 2
 	leftColItems := []string{
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Size:"), StatsValueStyle.Render(sizeStr)),
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Speed:"), StatsValueStyle.Render(speedStr)),
@@ -1130,9 +702,32 @@ func truncateString(s string, i int) string {
 		return s
 	}
 	if i <= 1 {
-		return "…"
+		return "\u2026"
 	}
-	return lipgloss.NewStyle().MaxWidth(i-1).Render(s) + "…"
+	return lipgloss.NewStyle().MaxWidth(i-1).Render(s) + "\u2026"
+}
+
+func truncateMiddle(s string, i int) string {
+	if i <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= i {
+		return s
+	}
+	if i <= 5 {
+		return truncateString(s, i)
+	}
+
+	runes := []rune(s)
+	// We use i-1 because \u2026 is one character
+	start := (i - 1) / 2
+	end := i - 1 - start
+
+	if start+end+1 > len(runes) {
+		return s
+	}
+
+	return string(runes[:start]) + "\u2026" + string(runes[len(runes)-end:])
 }
 
 func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
@@ -1145,9 +740,8 @@ func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
 }
 
 func (m RootModel) viewQuitConfirm() string {
-	const width = 60
-	const height = 10
-	innerWidth := width - 4
+	w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 60, 10)
+	innerWidth := w - (components.BorderFrameWidth * 2)
 
 	messageStyle := lipgloss.NewStyle().
 		Foreground(colors.White).
@@ -1205,7 +799,7 @@ func (m RootModel) viewQuitConfirm() string {
 	lines = append(lines, "")
 	lines = append(lines, centeredButtons)
 
-	innerHeight := height - 2
+	innerHeight := h - components.BorderFrameHeight
 	contentHeight := lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, lines...))
 	helpHeight := lipgloss.Height(helpText)
 	spacing := innerHeight - contentHeight - helpHeight
@@ -1215,10 +809,15 @@ func (m RootModel) viewQuitConfirm() string {
 	for i := 0; i < spacing; i++ {
 		lines = append(lines, "")
 	}
-	lines = append(lines, helpText)
+	// Replace last line with help text if there was space, otherwise just append
+	if len(lines) > 0 && spacing > 0 {
+		lines[len(lines)-1] = helpText
+	} else {
+		lines = append(lines, helpText)
+	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	return renderBtopBox(PaneTitleStyle.Render(" Quit Surge "), "", content, width, height, colors.NeonPink)
+	return renderBtopBox(PaneTitleStyle.Render(" Quit Surge "), "", content, w, h, colors.NeonPink)
 }
 
 // renderBtopBox creates a btop-style box with title embedded in the top border

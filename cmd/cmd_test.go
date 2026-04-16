@@ -576,7 +576,7 @@ func TestRootCmd_Version(t *testing.T) {
 
 func TestRootCmd_VersionMatchesPackageVar(t *testing.T) {
 	if rootCmd.Version != Version {
-		t.Errorf("rootCmd.Version %q does not match Version %q — init() must sync them", rootCmd.Version, Version)
+		t.Errorf("rootCmd.Version %q does not match Version %q \u2014 init() must sync them", rootCmd.Version, Version)
 	}
 }
 

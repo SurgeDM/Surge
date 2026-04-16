@@ -248,7 +248,7 @@ func renderSettingsListViewport(settingsMeta []config.SettingMeta, selectedRow, 
 		prefix := "  "
 		style := lipgloss.NewStyle().Foreground(colors.LightGray)
 		if idx == selectedRow {
-			prefix = "▸ "
+			prefix = "\u25b8 "
 			style = lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
 		}
 
@@ -320,7 +320,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		case "link":
 			valueStr = lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Open [Enter]")
 		default:
-			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key) + unitStyle.Render(unit)
+			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key, true) + unitStyle.Render(unit)
 			if meta.Key == "max_global_connections" {
 				valueStr += " (Ignored)"
 			}
@@ -352,7 +352,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	divider := lipgloss.NewStyle().
 		Foreground(colors.Gray).
-		Render(strings.Repeat("─", innerWidth))
+		Render(strings.Repeat("\u2500", innerWidth))
 
 	descDisplay := lipgloss.NewStyle().
 		Foreground(colors.LightGray).
@@ -379,7 +379,8 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 		return m.renderSettingsCompact(settingsMeta, selectedRow, settingsValues, modalWidth, bodyHeight)
 	}
 
-	listRows := bodyHeight - (BoxStyle.GetVerticalFrameSize() * 2)
+	// Account for both border and internal padding
+	listRows := bodyHeight - BoxStyle.GetVerticalFrameSize() - InternalPaddingHeight
 	if listRows < 1 {
 		listRows = 1
 	}
@@ -409,7 +410,7 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 	}
 	divider := lipgloss.NewStyle().
 		Foreground(colors.Gray).
-		Render(strings.Repeat("│\n", dividerHeight-1) + "│")
+		Render(strings.Repeat("\u2502\n", dividerHeight-1) + "\u2502")
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
 	return formatSettingsBlock(content, modalWidth-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
@@ -430,7 +431,7 @@ func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, sele
 		listRows = 1
 	}
 
-	detailRows := bodyHeight - listRows - 1 // -1 for the divider line
+	detailRows := bodyHeight - listRows - DividerHeight // line for the divider line
 	if detailRows < 1 {
 		detailRows = 1
 		listRows = bodyHeight - detailRows
@@ -441,7 +442,7 @@ func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, sele
 
 	list := renderSettingsListViewport(settingsMeta, selectedRow, listRows, innerWidth)
 	detail := m.renderSettingsDetailBlock(settingsMeta, selectedRow, settingsValues, innerWidth, detailRows)
-	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("─", innerWidth))
+	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("\u2500", innerWidth))
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		list,
@@ -492,13 +493,12 @@ func (m *RootModel) normalizeSettingsSelection() {
 
 func (m *RootModel) updateSettingsInputWidthForViewport() {
 	modalWidth, _ := GetSettingsDimensions(m.width, m.height)
-
 	var targetWidth int
 	if modalWidth >= 72 {
 		_, rightWidth := CalculateTwoColumnWidths(modalWidth, 32, 22)
-		targetWidth = rightWidth - 10
+		targetWidth = rightWidth - 10 // Fixed offset for labels
 	} else {
-		targetWidth = modalWidth - 16
+		targetWidth = modalWidth - 16 // Fixed offset for labels
 	}
 
 	if targetWidth < MinSettingsInputW {
@@ -766,7 +766,7 @@ func (m RootModel) getSettingUnit() string {
 }
 
 // formatSettingValueForEdit returns a plain value without units for editing
-func formatSettingValueForEdit(value interface{}, typ, key string) string {
+func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool) string {
 	switch key {
 	case "min_chunk_size":
 		if v, ok := value.(int64); ok {
@@ -800,11 +800,11 @@ func formatSettingValueForEdit(value interface{}, typ, key string) string {
 	}
 
 	// Default: use standard format
-	return formatSettingValue(value, typ)
+	return formatSettingValue(value, typ, truncate)
 }
 
 // formatSettingValue formats a setting value for display
-func formatSettingValue(value interface{}, typ string) string {
+func formatSettingValue(value interface{}, typ string, truncate bool) string {
 	if value == nil {
 		return "-"
 	}
@@ -840,7 +840,7 @@ func formatSettingValue(value interface{}, typ string) string {
 			if s == "" {
 				return "(default)"
 			}
-			if len(s) > 30 {
+			if truncate && len(s) > 30 {
 				return s[:27] + "..."
 			}
 			return s

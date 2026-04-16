@@ -56,10 +56,10 @@ func (i DownloadItem) Description() string {
 
 	speedInfo := ""
 	if d.Speed > 0 {
-		speedInfo = fmt.Sprintf(" • %.2f MB/s", d.Speed/float64(MB))
+		speedInfo = fmt.Sprintf(" \u2022 %.2f MB/s", d.Speed/float64(MB))
 	}
 
-	return fmt.Sprintf("%s • %.0f%%%s • %s", styledStatus, pct, speedInfo, sizeInfo)
+	return fmt.Sprintf("%s \u2022 %.0f%%%s \u2022 %s", styledStatus, pct, speedInfo, sizeInfo)
 }
 
 func (i DownloadItem) FilterValue() string {
@@ -112,7 +112,7 @@ func newDownloadDelegate() downloadDelegate {
 		selTitleStyle:  selTitle,
 		selDescStyle:   selDesc,
 		prefixNormal:   "  ",
-		prefixSelected: lipgloss.NewStyle().Foreground(colors.NeonPink).Render("▌ "),
+		prefixSelected: lipgloss.NewStyle().Foreground(colors.NeonPink).Render("\u258c "),
 	}
 }
 
@@ -145,7 +145,7 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 
 	// Truncate title and description if needed
 	// m.Width() is the available space for the list item
-	availableWidth := m.Width() - 4 // Account for prefix and some padding
+	availableWidth := m.Width() - (components.BorderFrameWidth * 2) // Account for prefix and some padding
 	if availableWidth < 10 {
 		availableWidth = 10
 	}

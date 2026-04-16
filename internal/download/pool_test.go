@@ -1026,7 +1026,7 @@ func TestWorkerPool_GracefulShutdown_WorkerSkipsQueuedAfterShutdown(t *testing.T
 	select {
 	case <-done:
 	case <-time.After(2 * time.Second):
-		t.Fatal("GracefulShutdown timed out — worker may have started a download it should have skipped")
+		t.Fatal("GracefulShutdown timed out \u2014 worker may have started a download it should have skipped")
 	}
 
 	// The queued map must be empty.

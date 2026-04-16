@@ -9,6 +9,7 @@ import (
 
 	"charm.land/bubbles/v2/filepicker"
 	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
@@ -93,7 +94,8 @@ type RootModel struct {
 	Orchestrator *processing.LifecycleManager
 
 	// File picker for directory selection
-	filepicker filepicker.Model
+	filepicker             filepicker.Model
+	filepickerOriginalPath string
 
 	// Bubbles help component
 	help help.Model
@@ -194,8 +196,12 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 		FilenameLower: strings.ToLower(filename),
 		Total:         total,
 		StartTime:     time.Now(),
-		progress:      progress.New(progress.WithSpringOptions(0.5, 0.1)),
-		state:         state,
+		progress: progress.New(
+			progress.WithSpringOptions(0.5, 0.1),
+			progress.WithColors(colors.ProgressStart, colors.ProgressEnd),
+			progress.WithScaled(true),
+		),
+		state: state,
 	}
 }
 
@@ -550,6 +556,12 @@ func newFilepicker(currentDir string) filepicker.Model {
 	fp.ShowSize = true
 	fp.ShowPermissions = true
 	fp.SetHeight(FilePickerHeight)
+
+	// Re-bind Select and Open to '.' per user preference.
+	// We also keep 'right' for Open to allow directory navigation.
+	fp.KeyMap.Select = key.NewBinding(key.WithKeys("."))
+	fp.KeyMap.Open = key.NewBinding(key.WithKeys(".", "right"))
+
 	return fp
 }
 

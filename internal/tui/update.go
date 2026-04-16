@@ -90,17 +90,33 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// View() handles the actual dynamic layout math; we supply available bounds.
-		listInnerPadding := lipgloss.NewStyle().Padding(1, 2)
-		availableWidth := msg.Width - WindowStyle.GetHorizontalFrameSize() - BoxStyle.GetHorizontalFrameSize()
+		// Sync layout calculations with DashboardLayout to set dimensions correctly
+		layout := CalculateDashboardLayout(msg.Width, msg.Height)
 
-		// Give bubbles/list roughly the right dimensions for word-wrapping, exact styling is handled in view.
-		approxHeaderHeight := 11
-		approxTabBarHeight := 2
-		m.list.SetSize(availableWidth-listInnerPadding.GetHorizontalFrameSize(), msg.Height-approxHeaderHeight-approxTabBarHeight-BoxStyle.GetVerticalFrameSize())
+		// Update viewport width and re-wrap content to new bounds
+		logHeight := layout.HeaderHeight - BoxStyle.GetVerticalFrameSize()
+		if logHeight < 1 {
+			logHeight = 1
+		}
+		m.logViewport.SetWidth(layout.LogWidth - BoxStyle.GetHorizontalFrameSize())
+		m.logViewport.SetHeight(logHeight)
+		m.refreshLogViewportContent()
+
+		// Setup download list dimensions
+		listInnerPadding := lipgloss.NewStyle().Padding(1, 2)
+		m.list.SetSize(
+			layout.ListWidth-listInnerPadding.GetHorizontalFrameSize()-BoxStyle.GetHorizontalFrameSize(),
+			layout.ListHeight-layout.TabBarHeight-BoxStyle.GetVerticalFrameSize()-listInnerPadding.GetVerticalFrameSize(),
+		)
 
 		// Update list based on active tab
 		m.UpdateListItems()
+
+		// Update filepicker height (Account for 2 borders, 1 title, 1 path line, 2 padding, 2 help)
+		const pickerChromeHeight = 8
+		_, fpHeight := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
+		m.filepicker.SetHeight(fpHeight - pickerChromeHeight)
+
 		return m, nil
 
 	case notificationTickMsg:
