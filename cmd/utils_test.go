@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/SurgeDM/Surge/internal/config"
 )
 
 func TestResolveClientOutputPath(t *testing.T) {
@@ -100,6 +102,58 @@ func TestResolveClientOutputPath(t *testing.T) {
 				if err != nil || strings.HasPrefix(rel, "..") {
 					t.Errorf("resolveClientOutputPath(%q) = %q, want prefix %q", tt.outputDir, got, tt.wantPrefix)
 				}
+			}
+		})
+	}
+}
+
+func TestResolveOutputDir(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.General.DefaultDownloadDir = "/downloads"
+
+	tests := []struct {
+		name                string
+		reqPath             string
+		relativeToDefault   bool
+		defaultOutputDir    string
+		want                string
+	}{
+		{
+			name:              "WSL Windows path with relativeToDefaultDir",
+			reqPath:           "C:/Users/me/Downloads",
+			relativeToDefault: true,
+			defaultOutputDir:  "/downloads",
+			want:              "/downloads",
+		},
+		{
+			name:              "WSL Windows path backslash with relativeToDefaultDir",
+			reqPath:           `C:\Users\me\Downloads`,
+			relativeToDefault: true,
+			defaultOutputDir:  "/downloads",
+			want:              "/downloads",
+		},
+		{
+			name:              "normal relative subdir",
+			reqPath:           "subdir",
+			relativeToDefault: true,
+			defaultOutputDir:  "/downloads",
+			want:              "/downloads/subdir",
+		},
+		{
+			name:              "empty path uses default",
+			reqPath:           "",
+			relativeToDefault: false,
+			defaultOutputDir:  "/downloads",
+			want:              "/downloads",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveOutputDir(tt.reqPath, tt.relativeToDefault, tt.defaultOutputDir, settings)
+			if got != tt.want {
+				t.Errorf("resolveOutputDir(%q, %v, %q) = %q, want %q",
+					tt.reqPath, tt.relativeToDefault, tt.defaultOutputDir, got, tt.want)
 			}
 		})
 	}

@@ -18,23 +18,13 @@ func EnsureAbsPath(path string) string {
 	return path
 }
 
-// IsWindowsAbsPath reports whether p looks like a Windows absolute path even
-// when running on a non-Windows host (for example inside Docker on Linux).
+// IsWindowsAbsPath reports whether p is a Windows-style absolute path (e.g. C:/ or C:\).
 func IsWindowsAbsPath(p string) bool {
-	p = strings.TrimSpace(p)
-	if len(p) >= 3 &&
-		((p[0] >= 'A' && p[0] <= 'Z') || (p[0] >= 'a' && p[0] <= 'z')) &&
-		p[1] == ':' &&
-		(p[2] == '/' || p[2] == '\\') {
-		return true
+	if len(p) < 3 {
+		return false
 	}
-
-	// UNC paths (Windows-only; // is POSIX-legal and must not be excluded).
-	if len(p) >= 2 && p[0] == '\\' && p[1] == '\\' {
-		return true
-	}
-
-	return false
+	c := p[0]
+	return (c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z') && p[1] == ':' && (p[2] == '/' || p[2] == '\\')
 }
 
 // MapWindowsPathToDefaultDir projects a Windows absolute client path onto a

@@ -6,6 +6,30 @@ import (
 	"testing"
 )
 
+func TestIsWindowsAbsPath(t *testing.T) {
+	tests := []struct {
+		in   string
+		want bool
+	}{
+		{"C:/Users/me/Downloads", true},
+		{"C:\\Users\\me\\Downloads", true},
+		{"c:/users/me", true},
+		{"D:/foo", true},
+		{"/downloads", false},
+		{"relative/path", false},
+		{"C:", false},
+		{"C", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		got := IsWindowsAbsPath(tt.in)
+		if got != tt.want {
+			t.Errorf("IsWindowsAbsPath(%q) = %v, want %v", tt.in, got, tt.want)
+		}
+	}
+}
+
 func TestEnsureAbsPath(t *testing.T) {
 	wd, err := os.Getwd()
 	if err != nil {

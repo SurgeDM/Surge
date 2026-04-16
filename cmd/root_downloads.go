@@ -356,6 +356,11 @@ func resolveOutputDir(reqPath string, relativeToDefaultDir bool, defaultOutputDi
 		if baseDir == "" {
 			baseDir = "."
 		}
+		// Windows absolute path from browser extension on Linux/Docker host:
+		// treat it as the default dir to avoid joining it as a subdirectory.
+		if utils.IsWindowsAbsPath(reqPath) {
+			return baseDir
+		}
 		outPath = filepath.Join(baseDir, reqPath)
 	} else if outPath == "" {
 		if defaultOutputDir != "" {
