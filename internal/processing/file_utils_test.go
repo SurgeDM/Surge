@@ -95,6 +95,7 @@ func TestGetUniqueFilename(t *testing.T) {
 	if name := processing.GetUniqueFilename(tmpDir, "overflow.bin", overflowActive); name != "" {
 		t.Errorf("Expected empty result after exhaustion, got %s", name)
 	}
+
 }
 
 func TestGetCategoryPath(t *testing.T) {

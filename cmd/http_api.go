@@ -143,6 +143,8 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "updated", "id": id, "url": newURL})
 	})))
+
+	registerTransferRoutes(mux, service)
 }
 
 func eventsHandler(service core.DownloadService) http.HandlerFunc {

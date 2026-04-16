@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"github.com/SurgeDM/Surge/internal/backup"
 	"github.com/SurgeDM/Surge/internal/version"
 )
 
@@ -32,4 +33,19 @@ type enqueueErrorMsg struct {
 type resumeResultMsg struct {
 	id  string
 	err error
+}
+
+type transferExportResultMsg struct {
+	path string
+	err  error
+}
+
+type transferPreviewResultMsg struct {
+	preview *backup.ImportPreview
+	err     error
+}
+
+type transferApplyResultMsg struct {
+	result *backup.ImportResult
+	err    error
 }

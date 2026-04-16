@@ -14,6 +14,39 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
+func safeReservationPath(dir, name string) (string, error) {
+	dir = utils.EnsureAbsPath(strings.TrimSpace(dir))
+	if dir == "" {
+		return "", fmt.Errorf("invalid reservation directory")
+	}
+
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return "", fmt.Errorf("invalid reservation name")
+	}
+	baseName := filepath.Base(name)
+	if baseName != name || strings.Contains(name, "/") || strings.Contains(name, "\\") || name == "." || name == ".." {
+		return "", fmt.Errorf("invalid reservation name")
+	}
+
+	cleanDir, err := filepath.Abs(filepath.Clean(dir))
+	if err != nil {
+		return "", err
+	}
+	targetPath, err := filepath.Abs(filepath.Join(cleanDir, name))
+	if err != nil {
+		return "", err
+	}
+	rel, err := filepath.Rel(cleanDir, targetPath)
+	if err != nil {
+		return "", err
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("reservation path escapes directory")
+	}
+	return targetPath, nil
+}
+
 // InferFilenameFromURL is the final naming fallback when neither the user nor
 // the probe produced a trustworthy filename.
 func InferFilenameFromURL(rawURL string) string {
@@ -82,22 +115,34 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string, string) b
 	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || filename == "." || filename == ".." {
 		return ""
 	}
+	cleanDir, err := safeReservationPath(dir, filename)
+	if err != nil {
+		return ""
+	}
+	cleanDir = filepath.Dir(cleanDir)
 
 	existsOnDisk := func(name string) bool {
-		targetPath := filepath.Join(dir, name)
+		targetPath, err := safeReservationPath(cleanDir, name)
+		if err != nil {
+			return true
+		}
 		if _, err := os.Stat(targetPath); !os.IsNotExist(err) {
 			return true
 		}
 		// A .surge sibling means another active or recoverable download already
 		// claimed this filename, so we must not hand it out again.
-		if _, err := os.Stat(targetPath + types.IncompleteSuffix); !os.IsNotExist(err) {
+		incompletePath, err := safeReservationPath(cleanDir, name+types.IncompleteSuffix)
+		if err != nil {
+			return true
+		}
+		if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
 			return true
 		}
 		return false
 	}
 
 	existsAnywhere := func(name string) bool {
-		if isNameActive != nil && isNameActive(dir, name) {
+		if isNameActive != nil && isNameActive(cleanDir, name) {
 			return true
 		}
 		return existsOnDisk(name)

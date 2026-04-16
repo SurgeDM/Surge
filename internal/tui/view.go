@@ -233,6 +233,46 @@ func (m RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
+	if m.state == DataTransferState {
+		return m.wrapView(m.renderModalWithOverlay(m.viewTransfer()))
+	}
+
+	if m.state == TransferExportPickerState {
+		picker := components.NewFilePickerModal(
+			" Export Destination ",
+			m.filepicker,
+			m.help,
+			m.keys.FilePicker,
+			colors.NeonCyan,
+		)
+		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		return m.wrapView(m.renderModalWithOverlay(box))
+	}
+
+	if m.state == TransferImportPickerState {
+		picker := components.NewFilePickerModal(
+			" Select Bundle ",
+			m.filepicker,
+			m.help,
+			m.keys.FilePicker,
+			colors.NeonCyan,
+		)
+		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		return m.wrapView(m.renderModalWithOverlay(box))
+	}
+
+	if m.state == TransferRootPickerState {
+		picker := components.NewFilePickerModal(
+			" Import Root ",
+			m.filepicker,
+			m.help,
+			m.keys.FilePicker,
+			colors.NeonCyan,
+		)
+		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		return m.wrapView(m.renderModalWithOverlay(box))
+	}
+
 	if m.state == HelpModalState {
 		modalW := PopupWidth
 		if m.width < modalW {

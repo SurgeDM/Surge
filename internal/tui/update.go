@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"fmt"
+
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/utils"
 
@@ -124,6 +126,36 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Quit
 
+	case transferExportResultMsg:
+		if msg.err != nil {
+			m.transferStatus = "Export failed: " + msg.err.Error()
+		} else {
+			m.transferStatus = "Exported: " + msg.path
+		}
+		m.state = DataTransferState
+		return m, nil
+
+	case transferPreviewResultMsg:
+		if msg.err != nil {
+			m.transferStatus = "Import preview failed: " + msg.err.Error()
+		} else {
+			m.transferPreview = msg.preview
+			m.transferStatus = "Preview loaded"
+		}
+		m.state = DataTransferState
+		return m, nil
+
+	case transferApplyResultMsg:
+		if msg.err != nil {
+			m.transferStatus = "Import apply failed: " + msg.err.Error()
+		} else {
+			m.transferPreview = msg.result.Preview
+			m.transferStatus = fmt.Sprintf("Imported items: %d", msg.result.Imported)
+			m.UpdateListItems()
+		}
+		m.state = DataTransferState
+		return m, nil
+
 	case tea.PasteMsg:
 		return m.updatePaste(msg)
 
@@ -153,6 +185,17 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.filepicker, cmd = m.filepicker.Update(msg)
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
 				model, selCmd := m.handleBatchFileSelection(path)
+				return model, tea.Batch(append(cmds, selCmd)...)
+			}
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
+		}
+
+		if m.state == TransferExportPickerState || m.state == TransferImportPickerState || m.state == TransferRootPickerState {
+			var cmd tea.Cmd
+			m.filepicker, cmd = m.filepicker.Update(msg)
+			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
+				model, selCmd := m.handleTransferFileSelection(path)
 				return model, tea.Batch(append(cmds, selCmd)...)
 			}
 			cmds = append(cmds, cmd)
@@ -213,6 +256,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			return m, nil
+
+		case DataTransferState:
+			return m.updateTransfer(msg)
+
+		case TransferExportPickerState, TransferImportPickerState, TransferRootPickerState:
+			return m.updateTransferPicker(msg)
 
 		default:
 			return m, nil
