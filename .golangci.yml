@@ -35,7 +35,6 @@ linters:
     - unparam
     - nestif
     - dupword
-    - gocognit
 
 settings:
   govet:
