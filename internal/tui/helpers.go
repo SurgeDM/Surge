@@ -24,7 +24,9 @@ func (m *RootModel) addLogEntry(msg string) {
 		m.logEntries = m.logEntries[len(m.logEntries)-100:]
 	}
 
-	// Re-wrap and update viewport content
+	// Optimization: If width hasn't changed, we can just append a wrapped version of the new entry
+	// to the existing viewport content instead of re-rendering everything.
+	// But let's keep it simple and correct first, then optimize.
 	m.refreshLogViewportContent()
 	// Auto-scroll to bottom
 	m.logViewport.GotoBottom()
@@ -37,10 +39,12 @@ func (m *RootModel) refreshLogViewportContent() {
 		return
 	}
 
+	// Correctly wrap entries using lipgloss MaxWidth + Align(Left)
+	wrapStyle := lipgloss.NewStyle().Width(width).Align(lipgloss.Left)
+
 	var wrappedEntries []string
 	for _, entry := range m.logEntries {
-		// Wrap each entry to the current viewport width
-		wrapped := lipgloss.NewStyle().Width(width).Render(entry)
+		wrapped := wrapStyle.Render(entry)
 		wrappedEntries = append(wrappedEntries, strings.Split(wrapped, "\n")...)
 	}
 
@@ -52,6 +56,7 @@ func (m *RootModel) refreshLogViewportContent() {
 	}
 
 	m.logViewport.SetContent(strings.Join(wrappedEntries, "\n"))
+	m.lastWrappedLogWidth = width
 }
 
 // removeDownloadByID removes a download from the in-memory list.

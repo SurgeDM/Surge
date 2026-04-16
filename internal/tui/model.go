@@ -119,9 +119,10 @@ type RootModel struct {
 	lastSpeedHistoryUpdate time.Time // Last time SpeedHistory was updated (for 0.5s sampling)
 
 	// Notification log system
-	logViewport viewport.Model // Scrollable log viewport
-	logEntries  []string       // Log entries for download events
-	logFocused  bool           // Whether the log viewport is focused
+	logViewport         viewport.Model // Scrollable log viewport
+	logEntries          []string       // Log entries for download events
+	logFocused          bool           // Whether the log viewport is focused
+	lastWrappedLogWidth int            // Optimization: last width used for wrapping logs
 
 	// Settings
 	Settings              *config.Settings // Application settings

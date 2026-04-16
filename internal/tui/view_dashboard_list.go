@@ -67,8 +67,8 @@ func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) strin
 				lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No downloads"))
 		}
 	} else {
-		// Update list dimensions to fill available box space tightly
-		m.list.SetHeight(listContentHeight)
+		// Ensure list is sized correctly for its container
+		m.list.SetSize(listContentWidth, listContentHeight)
 		listContent = m.list.View()
 	}
 

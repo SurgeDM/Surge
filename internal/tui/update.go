@@ -90,35 +90,24 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// Sync layout calculations with View() to set viewport widths correctly
-		availableWidth := m.width - WindowStyle.GetHorizontalFrameSize()
-		if availableWidth < 0 {
-			availableWidth = 0
-		}
-
-		leftWidth := GetListWidth(availableWidth)
-		logoWidth := int(float64(leftWidth) * LogoWidthRatio)
-		if logoWidth < 4 {
-			logoWidth = 4
-		}
-		logWidth := leftWidth - logoWidth - BoxStyle.GetHorizontalFrameSize()
-		if logWidth < 4 {
-			logWidth = 4
-		}
+		// Sync layout calculations with DashboardLayout to set dimensions correctly
+		layout := CalculateDashboardLayout(msg.Width, msg.Height)
 
 		// Update viewport width and re-wrap content to new bounds
-		m.logViewport.SetWidth(logWidth)
+		logHeight := layout.HeaderHeight - (BoxStyle.GetVerticalFrameSize() * 2)
+		if logHeight < 1 {
+			logHeight = 1
+		}
+		m.logViewport.SetWidth(layout.LogWidth)
+		m.logViewport.SetHeight(logHeight)
 		m.refreshLogViewportContent()
 
 		// Setup download list dimensions
 		listInnerPadding := lipgloss.NewStyle().Padding(1, 2)
-		listWidth := availableWidth
-		if availableWidth > leftWidth {
-			listWidth = leftWidth
-		}
-		approxHeaderHeight := 11
-		approxTabBarHeight := 2
-		m.list.SetSize(listWidth-listInnerPadding.GetHorizontalFrameSize(), msg.Height-approxHeaderHeight-approxTabBarHeight-BoxStyle.GetVerticalFrameSize())
+		m.list.SetSize(
+			layout.ListWidth-listInnerPadding.GetHorizontalFrameSize()-BoxStyle.GetHorizontalFrameSize(),
+			layout.ListHeight-layout.TabBarHeight-BoxStyle.GetVerticalFrameSize()-listInnerPadding.GetVerticalFrameSize(),
+		)
 
 		// Update list based on active tab
 		m.UpdateListItems()

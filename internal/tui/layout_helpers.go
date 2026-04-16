@@ -142,3 +142,104 @@ func GetDynamicModalDimensions(termW, termH, minW, minH, prefW, contentH int) (i
 
 	return w, h
 }
+
+// DashboardLayout holds all calculated dimensions for the dashboard components.
+type DashboardLayout struct {
+	AvailableWidth  int
+	AvailableHeight int
+
+	// Columns
+	LeftWidth  int
+	RightWidth int
+
+	// Header
+	LogoWidth    int
+	LogWidth     int
+	HeaderHeight int
+
+	// Download List
+	ListWidth    int
+	ListHeight   int
+	TabBarHeight int
+
+	// Right Column components
+	GraphHeight     int
+	GraphAreaWidth  int
+	AxisWidth       int
+	HideGraphStats  bool
+	MinGraphHeight  int
+	DetailHeight    int
+	ChunkMapHeight  int
+	ShowChunkMap    bool
+	HideRightColumn bool
+}
+
+// CalculateDashboardLayout computes the layout mapping for all dashboard components based on terminal size.
+func CalculateDashboardLayout(termW, termH int) DashboardLayout {
+	l := DashboardLayout{}
+
+	l.AvailableWidth = termW - WindowStyle.GetHorizontalFrameSize()
+	l.AvailableHeight = termH - WindowStyle.GetVerticalFrameSize() - 1 // Account for 1-line footer
+	l.ShowChunkMap = termH >= MinChunkMapVisibleH
+
+	if l.AvailableWidth < 0 {
+		l.AvailableWidth = 0
+	}
+	if l.AvailableHeight < 0 {
+		l.AvailableHeight = 0
+	}
+
+	// 1. Column widths
+	l.LeftWidth = GetListWidth(l.AvailableWidth)
+	l.RightWidth = l.AvailableWidth - l.LeftWidth
+	l.HideRightColumn = l.RightWidth < MinRightColumnWidth
+
+	if l.HideRightColumn {
+		l.LeftWidth = l.AvailableWidth
+	}
+
+	// 2. Header Dimensions
+	l.HeaderHeight = GetHeaderHeight(termH)
+	l.LogoWidth = int(float64(l.LeftWidth) * LogoWidthRatio)
+	if l.LogoWidth < 4 {
+		l.LogoWidth = 4
+	}
+	l.LogWidth = l.LeftWidth - l.LogoWidth - BoxStyle.GetHorizontalFrameSize()
+	if l.LogWidth < 4 {
+		l.LogWidth = 4
+	}
+
+	// 3. Right Column Heights
+	if !l.HideRightColumn {
+		l.MinGraphHeight = GetMinGraphHeight(termH)
+		targetGraphH := int(float64(l.AvailableHeight) * GraphTargetHeightRatio)
+		if targetGraphH < l.MinGraphHeight {
+			targetGraphH = l.MinGraphHeight
+		}
+
+		// Adjust heights for detail and chunk map
+		if l.ShowChunkMap {
+			l.ChunkMapHeight = 7 // 5 rows of content + 2 for borders
+			l.GraphHeight = targetGraphH
+
+			l.DetailHeight = l.AvailableHeight - l.GraphHeight - l.ChunkMapHeight
+		} else {
+			l.GraphHeight = targetGraphH
+			l.DetailHeight = l.AvailableHeight - l.GraphHeight
+		}
+
+		// Graph internals
+		l.HideGraphStats = l.RightWidth < MinGraphStatsWidth
+		l.GraphAreaWidth, l.AxisWidth = GetGraphAreaDimensions(l.RightWidth, l.HideGraphStats)
+	}
+
+	// 4. Download List Dimensions
+	l.ListHeight = l.AvailableHeight - l.HeaderHeight
+	if l.ListHeight < 4 {
+		l.ListHeight = 4
+	}
+	l.ListWidth = l.LeftWidth
+	l.TabBarHeight = 2 // standard height
+
+	return l
+}

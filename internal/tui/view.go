@@ -60,7 +60,7 @@ func (m RootModel) renderModalWithOverlay(modal string) string {
 
 func (m RootModel) wrapView(content string) tea.View {
 	v := tea.NewView(content)
-	v.AltScreen = true
+	// AltScreen should be handled at the program level, not per-frame
 	return v
 }
 
@@ -127,8 +127,9 @@ func (m RootModel) View() tea.View {
 		w, h := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
 		picker.Width = w
 		picker.Height = h
-		// Update inner picker height to fit
-		picker.Picker.SetHeight(h - 8) // Account for borders, path display, help
+		// Update inner picker height to fit (Account for 2 borders, 1 title, 1 path line, 2 padding, 2 help)
+		const pickerChromeHeight = 8
+		picker.Picker.SetHeight(h - pickerChromeHeight)
 
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
@@ -209,8 +210,9 @@ func (m RootModel) View() tea.View {
 		w, h := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
 		picker.Width = w
 		picker.Height = h
-		// Update inner picker height to fit
-		picker.Picker.SetHeight(h - 8)
+		// Update inner picker height to fit (Account for 2 borders, 1 title, 1 path line, 2 padding, 2 help)
+		const pickerChromeHeight = 8
+		picker.Picker.SetHeight(h - pickerChromeHeight)
 
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
@@ -295,26 +297,22 @@ func (m RootModel) View() tea.View {
 	}
 
 	// === MAIN DASHBOARD LAYOUT ===
-
-	availableWidth := m.width - WindowStyle.GetHorizontalFrameSize()
-	if availableWidth < 0 {
-		availableWidth = 0
-	}
+	layout := CalculateDashboardLayout(m.width, m.height)
 
 	// Footer - keybindings on left, version on bottom-right
 	helpText := m.help.View(m.keys.Dashboard)
 	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
 	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
-	footerContentWidth := availableWidth
-	leftFooterWidth := footerContentWidth - lipgloss.Width(versionText)
-	if leftFooterWidth < 0 {
-		leftFooterWidth = 0
-	}
+
 	// Hide help text at very narrow widths — version is more important
 	var footerContent string
-	if footerContentWidth < 60 {
+	if layout.AvailableWidth < 60 {
 		footerContent = versionText
 	} else {
+		leftFooterWidth := layout.AvailableWidth - lipgloss.Width(versionText)
+		if leftFooterWidth < 0 {
+			leftFooterWidth = 0
+		}
 		footerContent = lipgloss.JoinHorizontal(
 			lipgloss.Top,
 			lipgloss.NewStyle().Width(leftFooterWidth).Render(helpText),
@@ -323,233 +321,63 @@ func (m RootModel) View() tea.View {
 	}
 	footer := footerContent
 
-	footerHeight := lipgloss.Height(footer)
-	if footerHeight < 1 {
-		footerHeight = 1
-	}
-	availableHeight := m.height - footerHeight
-	if availableHeight < 1 {
-		availableHeight = 1
-	}
-
-	// Column Widths (or full-width when right column is hidden)
-	leftWidth := GetListWidth(availableWidth)
-	rightWidth := availableWidth - leftWidth
-	if rightWidth < 0 {
-		rightWidth = 0
-	}
-
-	// Determine right column viability thresholds
-	hideRightColumn := rightWidth < MinRightColumnWidth
-
-	if hideRightColumn {
-		leftWidth = availableWidth
-	}
-
-	// --- LEFT COLUMN HEIGHTS ---
-	headerHeight := GetHeaderHeight(availableHeight)
-	listHeight := availableHeight - headerHeight
-	if listHeight < MinListHeight {
-		listHeight = MinListHeight
-	}
-
-	// Short terminal: reduce minimum graph height
-	minGraphHeight := GetMinGraphHeight(availableHeight)
-
-	// --- RIGHT COLUMN HEIGHTS ---
-	// Priority 1: Details (Fixed content + Padding)
-	// Priority 2: ChunkMap (Dynamic / Exact needed)
-	// Priority 3: Graph (Remainder)
-
-	// Pre-calculate Detail Content to determine exact height needed
-	var detailContent string
+	// Pre-calculate data needed for sub-renders
+	stats := m.ComputeViewStats()
 	selected := m.GetSelectedDownload()
 
-	detailWidth := rightWidth - PaneStyle.GetHorizontalFrameSize()
-	if detailWidth < 0 {
-		detailWidth = 0
-	}
-
-	if selected != nil {
-		detailContent = renderFocusedDetails(selected, detailWidth, m.spinner.View())
-	} else {
-		// Default Placeholder
-		detailContent = lipgloss.Place(detailWidth, 8, lipgloss.Center, lipgloss.Center,
-			lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No Download Selected"))
-	}
-
-	// Exact height from content + borders
-	detailHeight := lipgloss.Height(detailContent) + BoxStyle.GetVerticalFrameSize()
-
-	// Calculate Available Height for Rest
-	remainingHeight := availableHeight - detailHeight
-	if remainingHeight < 0 {
-		remainingHeight = 0
-	}
-
-	// Calculate Chunk Map Needs
-	chunkMapHeight := 0
-	chunkMapNeeded := 0
-	showChunkMap := false
-
-	// Pre-fetch bitmap data if available
 	var bitmap []byte
 	var bitmapWidth int
 	var totalSize, chunkSize int64
 	var chunkProgress []int64
-
 	if selected != nil && selected.state != nil {
 		bitmap, bitmapWidth, totalSize, chunkSize, chunkProgress = selected.state.GetBitmap()
 	}
 
-	if selected != nil && selected.state != nil {
-		// Show Chunk Map only if:
-		// 1. Not Done (Completed)
-		// 2. Has Chunks (Bitmap initialized)
-		// We prioritize showing the map if data is available, even if speed is 0 (connecting/queued)
-
-		hasChunks := len(bitmap) > 0 && bitmapWidth > 0
-
-		if !selected.done && hasChunks && availableHeight >= MinChunkMapVisibleH {
-			showChunkMap = true
-		}
-	}
-
-	if showChunkMap {
-		// Calculate available height for chunk map
-		chunkMapPadding := lipgloss.NewStyle().Padding(0, 2)
-		availableChunkHeight := remainingHeight - minGraphHeight - BoxStyle.GetVerticalFrameSize() - LayoutGapStyle.GetVerticalFrameSize() - LayoutGapStyle.GetVerticalFrameSize()
-		if availableChunkHeight < 1 {
-			availableChunkHeight = 1
-		}
-		contentLines := components.CalculateHeight(bitmapWidth, rightWidth-BoxStyle.GetHorizontalFrameSize()-chunkMapPadding.GetHorizontalFrameSize(), availableChunkHeight)
-		if contentLines > 0 {
-			// top/bottom borders
-			chunkMapNeeded = contentLines + BoxStyle.GetVerticalFrameSize()
-		} else {
-			// Minimum for message "Chunk visualization not available"
-			chunkMapNeeded = 6
-		}
-	}
-
-	// Define Minimum Graph Height
-	var graphHeight int
-
-	// Determine Layout
-	if remainingHeight-chunkMapNeeded >= minGraphHeight {
-		// Sufficient space for everything
-		chunkMapHeight = chunkMapNeeded
-		if !showChunkMap {
-			// User wants target ratio for Graph:Details
-			targetGraphHeight := int(float64(availableHeight) * GraphTargetHeightRatio)
-			targetDetailHeight := availableHeight - targetGraphHeight
-
-			// Ensure Graph meets minimum
-			if targetGraphHeight < minGraphHeight {
-				targetGraphHeight = minGraphHeight
-				targetDetailHeight = availableHeight - targetGraphHeight
-			}
-
-			// Assign
-			graphHeight = targetGraphHeight
-			detailHeight = targetDetailHeight
-			chunkMapHeight = 0
-		} else {
-			graphHeight = remainingHeight - chunkMapHeight
-		}
-	} else {
-		// Not enough space, prioritize Graph Min Height, then squeeze ChunkMap
-		graphHeight = minGraphHeight
-		chunkMapHeight = remainingHeight - graphHeight
-
-		// If ChunkMap gets squeezed too much, we might need to squeeze Graph purely to survive
-		if chunkMapHeight < MinChunkMapHeight {
-			// Check if we can start eating into Graph's minimum?
-			// Let's enforce a hard floor for ChunkMap
-			chunkMapHeight = MinChunkMapHeight
-			graphHeight = remainingHeight - chunkMapHeight
-			// If graphHeight becomes negative, the whole UI is too small,
-			// renderBtopBox will handle truncation, but visual will be broken.
-			if graphHeight < 2 {
-				graphHeight = 2
-			}
-		}
-	}
-
-	// Recalculate Graph Area for rendering usage later
-	// graphHeight is now set vertically.
-
-	// --- SECTION 1: HEADER & LOGO (Top Left) + LOG BOX (Top Right) ---
-	stats := m.ComputeViewStats()
-
-	logoWidth := int(float64(leftWidth) * LogoWidthRatio)
-	logWidth := leftWidth - logoWidth - BoxStyle.GetHorizontalFrameSize()
-
-	if logoWidth < 4 {
-		logoWidth = 4
-	}
-	if logWidth < 4 {
-		logWidth = 4
-	}
-
-	logoColumn := m.renderHeaderBox(logoWidth, headerHeight)
-	logBox := m.renderLogBox(logWidth, headerHeight)
-
+	// Render Components
+	logoColumn := m.renderHeaderBox(layout.LogoWidth, layout.HeaderHeight)
+	logBox := m.renderLogBox(layout.LogWidth, layout.HeaderHeight)
 	headerBox := lipgloss.JoinHorizontal(lipgloss.Top, logoColumn, logBox)
 
-	// --- SECTION 2: SPEED GRAPH (Top Right) ---
-	graphBox := m.renderGraphBox(rightWidth, graphHeight, stats)
-	shouldRenderGraphBox := graphHeight >= minGraphHeight
+	listBox := m.renderDownloadsBox(layout.LeftWidth, layout.ListHeight, stats)
 
-	// --- SECTION 3: DOWNLOAD LIST (Bottom Left) ---
-	listBox := m.renderDownloadsBox(leftWidth, listHeight, stats)
+	// Right column
+	var rightColumn string
+	if !layout.HideRightColumn {
+		graphBox := m.renderGraphBox(layout.RightWidth, layout.GraphHeight, stats)
+		detailBox := m.renderDetailsBox(layout.RightWidth, layout.DetailHeight, selected)
 
-	// --- SECTION 4: DETAILS PANE (Middle Right) ---
-	detailBox := m.renderDetailsBox(rightWidth, detailHeight, selected)
-
-	// --- SECTION 5: CHUNK MAP PANE (Bottom Right) ---
-	var chunkBox string
-	if showChunkMap {
-		chunkBox = m.renderChunkMapBox(rightWidth, chunkMapHeight, selected, bitmap, bitmapWidth, totalSize, chunkSize, chunkProgress)
-	}
-
-	// --- ASSEMBLY ---
-
-	var body string
-	if hideRightColumn {
-		// Terminal too narrow for two-column layout — list-only mode
-		body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
-	} else {
-		// Left Column
-		leftColumn := lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
-
-		// Right Column (Graph + Detail + Chunk)
 		var rightParts []string
-		if shouldRenderGraphBox {
+		if layout.GraphHeight >= layout.MinGraphHeight {
 			rightParts = append(rightParts, graphBox)
 		}
-		rightParts = append(rightParts, detailBox, chunkBox)
-		rightColumn := lipgloss.JoinVertical(lipgloss.Left, rightParts...)
+		rightParts = append(rightParts, detailBox)
 
+		// Show chunk map only if we have actual data to visualize
+		hasChunks := len(bitmap) > 0 && bitmapWidth > 0
+		if layout.ShowChunkMap && hasChunks && selected != nil && !selected.done {
+			chunkBox := m.renderChunkMapBox(layout.RightWidth, layout.ChunkMapHeight, selected, bitmap, bitmapWidth, totalSize, chunkSize, chunkProgress)
+			rightParts = append(rightParts, chunkBox)
+		}
+		rightColumn = lipgloss.JoinVertical(lipgloss.Left, rightParts...)
+	}
+
+	// Assembly
+	var body string
+	if layout.HideRightColumn {
+		body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
+	} else {
+		leftColumn := lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
 		body = lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
 	}
+
 	body = lipgloss.NewStyle().
-		Width(availableWidth).
-		Height(availableHeight).
-		MaxWidth(availableWidth).
-		MaxHeight(availableHeight).
+		Width(layout.AvailableWidth).
+		Height(layout.AvailableHeight).
 		Render(body)
 
-	fullView := lipgloss.JoinVertical(lipgloss.Left,
-		body,
-		footer,
-	)
-	fullView = lipgloss.NewStyle().
-		Width(availableWidth).
-		MaxWidth(availableWidth).
-		MaxHeight(m.height).
-		Render(fullView)
-	return m.wrapView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Top, fullView))
+	fullView := lipgloss.JoinVertical(lipgloss.Left, body, footer)
+	// Place content into available space, then wrap with WindowStyle margins
+	return m.wrapView(lipgloss.Place(layout.AvailableWidth, m.height, lipgloss.Center, lipgloss.Top, fullView))
 }
 
 // Helper to render the detailed info pane
