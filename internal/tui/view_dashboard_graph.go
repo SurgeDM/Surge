@@ -17,12 +17,8 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 		return ""
 	}
 
-	contentWidth := width - components.BorderFrameWidth
 	contentHeight := height - components.BorderFrameHeight
 
-	if contentWidth < 0 {
-		contentWidth = 0
-	}
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
