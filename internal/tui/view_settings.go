@@ -856,6 +856,10 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 
 		case "clipboard_monitor":
 			m.Settings.General.ClipboardMonitor = defaults.General.ClipboardMonitor
+		case "allow_remote_open_actions":
+			m.Settings.General.AllowRemoteOpenActions = defaults.General.AllowRemoteOpenActions
+		case "live_speed_graph":
+			m.Settings.General.LiveSpeedGraph = defaults.General.LiveSpeedGraph
 		case "theme":
 			m.Settings.General.Theme = defaults.General.Theme
 		case "log_retention_count":
@@ -870,6 +874,8 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 
 		case "max_concurrent_downloads":
 			m.Settings.Network.MaxConcurrentDownloads = defaults.Network.MaxConcurrentDownloads
+		case "max_concurrent_probes":
+			m.Settings.Network.MaxConcurrentProbes = defaults.Network.MaxConcurrentProbes
 		case "user_agent":
 			m.Settings.Network.UserAgent = defaults.Network.UserAgent
 		case "proxy_url":
@@ -907,6 +913,14 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 		switch key {
 		case "extension_prompt":
 			m.Settings.Extension.ExtensionPrompt = defaults.Extension.ExtensionPrompt
+		case "chrome_extension_url":
+			m.Settings.Extension.ChromeExtensionURL = defaults.Extension.ChromeExtensionURL
+		case "firefox_extension_url":
+			m.Settings.Extension.FirefoxExtensionURL = defaults.Extension.FirefoxExtensionURL
+		case "instructions_url":
+			m.Settings.Extension.InstructionsURL = defaults.Extension.InstructionsURL
+		case "-":
+			m.Settings.Extension.AuthToken = defaults.Extension.AuthToken
 		}
 	}
 }
