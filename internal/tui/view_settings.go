@@ -320,7 +320,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		case "link":
 			valueStr = lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Open [Enter]")
 		default:
-			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key) + unitStyle.Render(unit)
+			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key, true) + unitStyle.Render(unit)
 			if meta.Key == "max_global_connections" {
 				valueStr += " (Ignored)"
 			}
@@ -741,7 +741,7 @@ func (m RootModel) getSettingUnit() string {
 }
 
 // formatSettingValueForEdit returns a plain value without units for editing
-func formatSettingValueForEdit(value interface{}, typ, key string) string {
+func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool) string {
 	switch key {
 	case "min_chunk_size":
 		if v, ok := value.(int64); ok {
@@ -775,11 +775,11 @@ func formatSettingValueForEdit(value interface{}, typ, key string) string {
 	}
 
 	// Default: use standard format
-	return formatSettingValue(value, typ)
+	return formatSettingValue(value, typ, truncate)
 }
 
 // formatSettingValue formats a setting value for display
-func formatSettingValue(value interface{}, typ string) string {
+func formatSettingValue(value interface{}, typ string, truncate bool) string {
 	if value == nil {
 		return "-"
 	}
@@ -815,7 +815,7 @@ func formatSettingValue(value interface{}, typ string) string {
 			if s == "" {
 				return "(default)"
 			}
-			if len(s) > 30 {
+			if truncate && len(s) > 30 {
 				return s[:27] + "..."
 			}
 			return s

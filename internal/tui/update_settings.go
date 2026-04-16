@@ -167,7 +167,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.SettingsIsEditing = true
 			// Pre-fill with current value (without units)
 			values := m.getSettingsValues(currentCategory)
-			m.SettingsInput.SetValue(formatSettingValueForEdit(values[settingKey], typ, settingKey))
+			m.SettingsInput.SetValue(formatSettingValueForEdit(values[settingKey], typ, settingKey, false))
 			m.updateSettingsInputWidthForViewport()
 			m.SettingsInput.Focus()
 		}
