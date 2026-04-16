@@ -353,6 +353,36 @@ func TestUpdate_DashboardDelete_RemovesStaleRowWhenBackendNotFound(t *testing.T)
 	}
 }
 
+func TestUpdate_DashboardDelete_KeepsRowOnNonNotFoundError(t *testing.T) {
+	svc := &deleteErrorService{deleteErr: errors.New("permission denied")}
+	dm := NewDownloadModel("id-1", "http://example.com/file.bin", "file.bin", 100)
+
+	m := RootModel{
+		state:     DashboardState,
+		keys:      Keys,
+		Settings:  config.DefaultSettings(),
+		Service:   svc,
+		downloads: []*DownloadModel{dm},
+		list:      NewDownloadList(80, 20),
+		logViewport: viewport.New(
+			viewport.WithWidth(40),
+			viewport.WithHeight(5),
+		),
+	}
+	m.UpdateListItems()
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	m2 := updated.(RootModel)
+
+	if len(svc.deletedIDs) != 1 || svc.deletedIDs[0] != "id-1" {
+		t.Fatalf("delete should target id-1 once, got %#v", svc.deletedIDs)
+	}
+
+	if len(m2.downloads) != 1 {
+		t.Fatalf("expected row to remain on non-notfound delete error, got %d entries", len(m2.downloads))
+	}
+}
+
 func TestProcessProgressMsg_UpdatesElapsed(t *testing.T) {
 	dm := NewDownloadModel("id-1", "http://example.com/file", "file", 1000)
 	m := RootModel{

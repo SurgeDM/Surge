@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -8,6 +10,13 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 )
+
+func isDeleteNotFoundError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(strings.ToLower(err.Error()), "download not found")
+}
 
 func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
@@ -122,7 +131,12 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 			// Call Service Delete
 			if err := m.Service.Delete(targetID); err != nil {
-				m.addLogEntry(LogStyleError.Render("✖ Delete failed: " + err.Error()))
+				if isDeleteNotFoundError(err) {
+					m.removeDownloadByID(targetID)
+					m.addLogEntry(LogStyleStarted.Render("Removed stale entry from list"))
+				} else {
+					m.addLogEntry(LogStyleError.Render("Delete failed: " + err.Error()))
+				}
 			} else {
 				m.removeDownloadByID(targetID)
 			}
