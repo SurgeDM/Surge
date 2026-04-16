@@ -109,3 +109,36 @@ func CalculateTwoColumnWidths(modalWidth, preferredLeft, minRight int) (int, int
 
 	return leftWidth, rightWidth
 }
+
+// GetDynamicModalDimensions calculates safe dimensions for a modal based on content and terminal size.
+func GetDynamicModalDimensions(termW, termH, minW, minH, prefW, contentH int) (int, int) {
+	w := prefW
+	// Ensure width doesn't exceed terminal
+	maxW := termW - 4
+	if maxW < minW {
+		maxW = minW
+	}
+	if w > maxW {
+		w = maxW
+	}
+	// Final safety check against absolute terminal bounds
+	if termW > 0 && w > termW {
+		w = termW
+	}
+
+	h := contentH
+	// Ensure height doesn't exceed terminal
+	maxH := termH - 2
+	if maxH < minH {
+		maxH = minH
+	}
+	if h > maxH {
+		h = maxH
+	}
+	// Final safety check against absolute terminal bounds
+	if termH > 0 && h > termH {
+		h = termH
+	}
+
+	return w, h
+}

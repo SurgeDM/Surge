@@ -13,7 +13,7 @@ import (
 // FilePickerModal represents a styled file picker modal
 type FilePickerModal struct {
 	Title       string
-	Picker      filepicker.Model
+	Picker      *filepicker.Model
 	Help        help.Model
 	HelpKeys    help.KeyMap
 	BorderColor color.Color
@@ -22,7 +22,7 @@ type FilePickerModal struct {
 }
 
 // NewFilePickerModal creates a file picker modal with default styling
-func NewFilePickerModal(title string, picker filepicker.Model, helpModel help.Model, helpKeys help.KeyMap, borderColor color.Color) FilePickerModal {
+func NewFilePickerModal(title string, picker *filepicker.Model, helpModel help.Model, helpKeys help.KeyMap, borderColor color.Color) FilePickerModal {
 	return FilePickerModal{
 		Title:       title,
 		Picker:      picker,

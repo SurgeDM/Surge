@@ -83,9 +83,8 @@ func (m RootModel) View() tea.View {
 			Keys:        components.NoKeys{},
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
-			Width:       60,
-			Height:      10,
 		}
+		modal.Width, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, 60, 10)
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
@@ -103,21 +102,34 @@ func (m RootModel) View() tea.View {
 			Help:            m.help,
 			HelpKeys:        m.keys.Input,
 			BorderColor:     colors.NeonPink,
-			Width:           80,
-			Height:          11,
 		}
+		// Resolve dynamic dimensions
+		w, _ := GetDynamicModalDimensions(m.width, m.height, 46, 8, 80, 0)
+		modal.Width = w
+		h := lipgloss.Height(modal.View()) + BoxStyle.GetVerticalFrameSize()
+		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 46, 8, w, h)
+
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == FilePickerState {
+		// Create a local copy to avoid modifying model during view (though View takes value receiver m)
+		fp := m.filepicker
 		picker := components.NewFilePickerModal(
 			" Select Directory ",
-			m.filepicker,
+			&fp,
 			m.help,
 			m.keys.FilePicker,
 			colors.NeonPink,
 		)
+		// Resolve dynamic dimensions
+		w, h := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
+		picker.Width = w
+		picker.Height = h
+		// Update inner picker height to fit
+		picker.Picker.SetHeight(h - 8) // Account for borders, path display, help
+
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
@@ -138,9 +150,20 @@ func (m RootModel) View() tea.View {
 			Keys:        m.keys.Duplicate,
 			Help:        m.help,
 			BorderColor: colors.NeonPink,
-			Width:       60,
-			Height:      10,
 		}
+		// Resolve dynamic dimensions
+		w, _ := GetDynamicModalDimensions(m.width, m.height, 40, 6, 60, 0)
+		modal.Width = w
+		// ConfirmationModal's internal height calculation depends on width (for help wrap)
+		// but since it's a fixed-width confirmation message, we can approximate or call View()
+		// Note: ConfirmationModal renders itself into the height passed,
+		// so we need a reasonable estimate for 'h'.
+		h := 10 // typical height for confirmation
+		if m.duplicateInfo != "" {
+			h = 11
+		}
+		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, w, h)
+
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
@@ -162,21 +185,33 @@ func (m RootModel) View() tea.View {
 			Help:            m.help,
 			HelpKeys:        m.keys.Extension,
 			BorderColor:     colors.NeonCyan,
-			Width:           86,
-			Height:          13,
 		}
+		// Resolve dynamic dimensions
+		w, _ := GetDynamicModalDimensions(m.width, m.height, 60, 10, 86, 0)
+		modal.Width = w
+		h := lipgloss.Height(modal.View()) + BoxStyle.GetVerticalFrameSize()
+		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 60, 10, w, h)
+
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == BatchFilePickerState {
+		fp := m.filepicker
 		picker := components.NewFilePickerModal(
 			" Select URL File (.txt) ",
-			m.filepicker,
+			&fp,
 			m.help,
 			m.keys.FilePicker,
 			colors.NeonCyan,
 		)
+		// Resolve dynamic dimensions
+		w, h := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
+		picker.Width = w
+		picker.Height = h
+		// Update inner picker height to fit
+		picker.Picker.SetHeight(h - 8)
+
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
@@ -190,9 +225,13 @@ func (m RootModel) View() tea.View {
 			Keys:        m.keys.BatchConfirm,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
-			Width:       60,
-			Height:      10,
 		}
+		// Resolve dynamic dimensions
+		w, _ := GetDynamicModalDimensions(m.width, m.height, 40, 6, 60, 0)
+		modal.Width = w
+		h := 10 // typical height for confirmation
+		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, w, h)
+
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
@@ -209,9 +248,13 @@ func (m RootModel) View() tea.View {
 			Keys:        m.keys.Update,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
-			Width:       60,
-			Height:      12,
 		}
+		// Resolve dynamic dimensions
+		w, _ := GetDynamicModalDimensions(m.width, m.height, 50, 8, 60, 0)
+		modal.Width = w
+		h := 12 // typical height for update prompt
+		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 50, 8, w, h)
+
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
@@ -226,29 +269,26 @@ func (m RootModel) View() tea.View {
 			Help:            m.help,
 			HelpKeys:        m.keys.Input,
 			BorderColor:     colors.NeonPink,
-			Width:           80,
-			Height:          8,
 		}
+		// Resolve dynamic dimensions
+		w, _ := GetDynamicModalDimensions(m.width, m.height, 46, 6, 80, 0)
+		modal.Width = w
+		h := lipgloss.Height(modal.View()) + BoxStyle.GetVerticalFrameSize()
+		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 46, 6, w, h)
+
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == HelpModalState {
-		modalW := PopupWidth
-		if m.width < modalW {
-			modalW = m.width
-		}
-		modalH := 22 // Height for keyboard shortcuts (TODO: calculate based on key count)
-		if m.height < modalH {
-			modalH = m.height
-		}
+		w, h := GetDynamicModalDimensions(m.width, m.height, 40, 10, PopupWidth, 22)
 		modal := components.HelpModal{
 			Title:       "Keyboard Shortcuts",
 			HelpKeys:    m.keys.Dashboard,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
-			Width:       modalW,
-			Height:      modalH,
+			Width:       w,
+			Height:      h,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
@@ -788,9 +828,8 @@ func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
 }
 
 func (m RootModel) viewQuitConfirm() string {
-	const width = 60
-	const height = 10
-	innerWidth := width - 4
+	w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 60, 10)
+	innerWidth := w - 4
 
 	messageStyle := lipgloss.NewStyle().
 		Foreground(colors.White).
@@ -848,7 +887,7 @@ func (m RootModel) viewQuitConfirm() string {
 	lines = append(lines, "")
 	lines = append(lines, centeredButtons)
 
-	innerHeight := height - 2
+	innerHeight := h - 2
 	contentHeight := lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, lines...))
 	helpHeight := lipgloss.Height(helpText)
 	spacing := innerHeight - contentHeight - helpHeight
@@ -858,10 +897,15 @@ func (m RootModel) viewQuitConfirm() string {
 	for i := 0; i < spacing; i++ {
 		lines = append(lines, "")
 	}
-	lines = append(lines, helpText)
+	// Replace last line with help text if there was space, otherwise just append
+	if len(lines) > 0 && spacing > 0 {
+		lines[len(lines)-1] = helpText
+	} else {
+		lines = append(lines, helpText)
+	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	return renderBtopBox(PaneTitleStyle.Render(" Quit Surge "), "", content, width, height, colors.NeonPink)
+	return renderBtopBox(PaneTitleStyle.Render(" Quit Surge "), "", content, w, h, colors.NeonPink)
 }
 
 // renderBtopBox creates a btop-style box with title embedded in the top border
