@@ -156,7 +156,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Keep resuming=true for resumed downloads until real transfer starts.
 			// Update progress bar
 			if d.Total > 0 {
-				d.progress.SetPercent(0)
+				return m, d.progress.SetPercent(0)
 			}
 			if d.state == nil && msg.State != nil {
 				d.state = msg.State
@@ -181,15 +181,16 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.spinner.Tick
 
 	case events.ProgressMsg:
-		m.processProgressMsg(msg)
-		return m, nil
+		cmd := m.processProgressMsg(msg)
+		return m, cmd
 
 	case events.BatchProgressMsg:
-		for _, msg := range msg {
-			m.processProgressMsg(msg)
+		var cmds []tea.Cmd
+		for _, bm := range msg {
+			cmds = append(cmds, m.processProgressMsg(bm))
 		}
 		// Only update UI once per batch
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case events.DownloadCompleteMsg:
 

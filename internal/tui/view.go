@@ -439,18 +439,41 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	fileSection := sectionStyle.Render(fileInfoContent)
 
 	// --- 3. Progress Section ---
-	progressWidth := w - 4
-	if progressWidth < 20 {
-		progressWidth = 20
+	labelStr := "Progress: "
+	progLabelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan)
+
+	var progContent string
+	if contentWidth > 45 { // Enough space for "Progress: " (10) + some bar + padding
+		// Horizontal layout: Progress: [████████      ]
+		maxProgWidth := contentWidth - lipgloss.Width(labelStr) - 1
+		if maxProgWidth < 10 {
+			maxProgWidth = 10
+		}
+		d.progress.SetWidth(maxProgWidth)
+		progView := d.progress.ViewAs(pct)
+		progContent = lipgloss.JoinHorizontal(lipgloss.Center, progLabelStyle.Render(labelStr), progView)
+	} else {
+		// Vertical layout for narrow terminals:
+		// Progress:
+		// [███████]
+		maxProgWidth := contentWidth
+		if maxProgWidth < 10 {
+			maxProgWidth = 10 // Still clamp to a readable minimum, but we'll allow wrapping if term is REALLY tiny
+		}
+		// If contentWidth is actually smaller than 10, we must NOT exceed it to avoid "broken" look
+		if maxProgWidth > contentWidth && contentWidth > 5 {
+			maxProgWidth = contentWidth
+		}
+
+		d.progress.SetWidth(maxProgWidth)
+		progView := d.progress.ViewAs(pct)
+
+		centeredLabel := lipgloss.NewStyle().Width(contentWidth).Align(lipgloss.Center).Render(progLabelStyle.Render(labelStr))
+		centeredBar := lipgloss.NewStyle().Width(contentWidth).Align(lipgloss.Center).Render(progView)
+		progContent = lipgloss.JoinVertical(lipgloss.Left, centeredLabel, centeredBar)
 	}
-	d.progress.SetWidth(progressWidth)
-	progView := d.progress.ViewAs(pct)
 
-	progLabel := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Progress: ")
-	progContent := lipgloss.JoinVertical(lipgloss.Left, progLabel, progView)
-
-	// Progress bar has its own width handling usually, but let's wrap it to be sure
-	progSection := lipgloss.NewStyle().Width(contentWidth).Align(lipgloss.Center).Render(progContent)
+	progSection := lipgloss.NewStyle().Width(contentWidth).Render(progContent)
 
 	// --- 4. Stats Grid Section ---
 	var speedStr, etaStr, sizeStr, timeStr string

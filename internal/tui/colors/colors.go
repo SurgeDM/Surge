@@ -42,8 +42,8 @@ var (
 
 // === Progress Bar Colors ===
 var (
-	ProgressStart color.Color = themeColor{light: "#d10074", dark: "#ff79c6"} // Pink
-	ProgressEnd   color.Color = themeColor{light: "#7b1fa2", dark: "#bd93f9"} // Purple
+	ProgressStart color.Color = themeColor{light: "#950053", dark: "#fa70bc"} // Muted Pink
+	ProgressEnd   color.Color = themeColor{light: "#5a1376", dark: "#b472ff"} // Muted Purple
 )
 
 var (

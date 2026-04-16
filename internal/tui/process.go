@@ -13,10 +13,10 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-func (m *RootModel) processProgressMsg(msg events.ProgressMsg) {
+func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 	d := m.FindDownloadByID(msg.DownloadID)
 	if d == nil || d.done || d.paused {
-		return
+		return nil
 	}
 
 	prevDownloaded := d.Downloaded
@@ -46,9 +46,10 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) {
 		}
 	}
 
+	var cmd tea.Cmd
 	if d.Total > 0 {
 		percentage := float64(d.Downloaded) / float64(d.Total)
-		d.progress.SetPercent(percentage)
+		cmd = d.progress.SetPercent(percentage)
 	}
 
 	// Update speed graph history with EMA smoothing for smooth transitions
@@ -72,6 +73,7 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) {
 	}
 
 	m.UpdateListItems()
+	return cmd
 }
 
 // startDownload initiates a new download
