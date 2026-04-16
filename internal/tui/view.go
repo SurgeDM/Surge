@@ -446,10 +446,21 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		displayPath = d.URL
 	}
 
+	// Calculate inner width accounting for sectionStyle padding (0, 1)
+	innerWidth := contentWidth - 2
+	if innerWidth < 0 {
+		innerWidth = 0
+	}
+	valueWidth := innerWidth - 12
+	if valueWidth < 5 {
+		valueWidth = 5 // Minimum reasonable width
+	}
+
 	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("File: "), StatsValueStyle.Render(truncateString(displayFilename, contentWidth-12))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Path: "), StatsValueStyle.Render(truncateString(displayPath, contentWidth-12))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray).Render(truncateString(d.ID, contentWidth-12))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("URL: "), StatsValueStyle.Render(truncateMiddle(d.URL, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("File: "), StatsValueStyle.Render(truncateString(displayFilename, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Path: "), StatsValueStyle.Render(truncateMiddle(displayPath, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray).Render(truncateString(d.ID, valueWidth))),
 	)
 	fileSection := sectionStyle.Render(fileInfoContent)
 
@@ -688,6 +699,29 @@ func truncateString(s string, i int) string {
 		return "\u2026"
 	}
 	return lipgloss.NewStyle().MaxWidth(i-1).Render(s) + "\u2026"
+}
+
+func truncateMiddle(s string, i int) string {
+	if i <= 0 {
+		return ""
+	}
+	if lipgloss.Width(s) <= i {
+		return s
+	}
+	if i <= 5 {
+		return truncateString(s, i)
+	}
+
+	runes := []rune(s)
+	// We use i-1 because \u2026 is one character
+	start := (i - 1) / 2
+	end := i - 1 - start
+
+	if start+end+1 > len(runes) {
+		return s
+	}
+
+	return string(runes[:start]) + "\u2026" + string(runes[len(runes)-end:])
 }
 
 func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
