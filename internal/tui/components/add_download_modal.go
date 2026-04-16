@@ -41,10 +41,13 @@ func (m AddDownloadModal) View() string {
 
 	for i := 0; i < len(m.Inputs) && i < len(m.Labels); i++ {
 		// Calculate available width for inputs
-		// Width - padding (4) - label (10) - (optional browse hint (13))
-		inputW := m.Width - 14 // 4 padding + 10 label
+		// Accounts for: horizontal padding (4), label (10), and box borders (2)
+		const labelWidth = 10
+		horizontalPadding := lipgloss.NewStyle().Padding(0, 2).GetHorizontalFrameSize()
+		inputW := m.Width - BorderFrameWidth - horizontalPadding - labelWidth
+
 		if m.BrowseHintIndex == i {
-			inputW -= 13
+			inputW -= 13 // Margin (1) + "[Tab] Browse" (12)
 		}
 		if inputW < 10 {
 			inputW = 10
