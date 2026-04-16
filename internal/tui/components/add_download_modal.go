@@ -27,7 +27,7 @@ type AddDownloadModal struct {
 }
 
 // View renders the inner content (without border box).
-func (m AddDownloadModal) View() string {
+func (m *AddDownloadModal) View() string {
 	labelStyle := lipgloss.NewStyle().Width(10).Foreground(colors.LightGray)
 	hintBase := lipgloss.NewStyle().MarginLeft(1).Foreground(colors.LightGray)
 	content := []string{""}
@@ -71,9 +71,9 @@ func (m AddDownloadModal) View() string {
 }
 
 // RenderWithBtopBox renders the modal with btop-style border.
-func (m AddDownloadModal) RenderWithBtopBox(
+func (m *AddDownloadModal) RenderWithBtopBox(
 	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
-	titleStyle lipgloss.Style,
+	titleStyle *lipgloss.Style,
 ) string {
 	return renderBox(titleStyle.Render(" "+m.Title+" "), "", m.View(), m.Width, m.Height, m.BorderColor)
 }

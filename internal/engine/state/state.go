@@ -534,9 +534,10 @@ func LoadPausedDownloads(ctx context.Context) ([]types.DownloadEntry, error) {
 	}
 
 	var paused []types.DownloadEntry
-	for _, e := range list.Downloads {
+	for i := range list.Downloads {
+		e := &list.Downloads[i]
 		if e.Status == "paused" || e.Status == "queued" {
-			paused = append(paused, e)
+			paused = append(paused, *e)
 		}
 	}
 	return paused, nil
@@ -550,9 +551,10 @@ func LoadCompletedDownloads(ctx context.Context) ([]types.DownloadEntry, error) 
 	}
 
 	var completed []types.DownloadEntry
-	for _, e := range list.Downloads {
+	for i := range list.Downloads {
+		e := &list.Downloads[i]
 		if e.Status == "completed" {
-			completed = append(completed, e)
+			completed = append(completed, *e)
 		}
 	}
 	return completed, nil

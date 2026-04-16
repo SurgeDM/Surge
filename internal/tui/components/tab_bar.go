@@ -15,7 +15,7 @@ type Tab struct {
 // RenderTabBar renders a horizontal tab bar with the given tabs
 // Each tab is wrapped in a rounded border box for consistent styling
 // activeIndex specifies which tab is currently active (0-indexed)
-func RenderTabBar(tabs []Tab, activeIndex int, activeStyle, inactiveStyle lipgloss.Style) string {
+func RenderTabBar(tabs []Tab, activeIndex int, activeStyle, inactiveStyle *lipgloss.Style) string {
 	rendered := make([]string, 0, len(tabs))
 	for i, t := range tabs {
 		var label string
@@ -48,7 +48,7 @@ func RenderTabBar(tabs []Tab, activeIndex int, activeStyle, inactiveStyle lipglo
 
 // RenderNumberedTabBar renders tabs with number prefixes like "[1] General"
 // Each tab is wrapped in a rounded border box
-func RenderNumberedTabBar(tabs []Tab, activeIndex int, activeStyle, inactiveStyle lipgloss.Style) string {
+func RenderNumberedTabBar(tabs []Tab, activeIndex int, activeStyle, inactiveStyle *lipgloss.Style) string {
 	rendered := make([]string, 0, len(tabs))
 	for i, t := range tabs {
 		var label string

@@ -13,7 +13,6 @@ import (
 
 // TestStartDownload_EnforcesAbsolutePath verifies that startDownload forces the path to be absolute.
 func TestStartDownload_EnforcesAbsolutePath(t *testing.T) {
-	// wd, _ := os.Getwd()
 	tmpDir, _ := os.MkdirTemp("", "surge-test")
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 

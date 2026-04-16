@@ -79,7 +79,8 @@ func printDownloads(ctx context.Context, jsonOutput bool, baseURL string, token 
 				return fmt.Errorf("error listing remote downloads: %w", err)
 			}
 		} else {
-			for _, s := range serverDownloads {
+			for i := range serverDownloads {
+				s := &serverDownloads[i]
 				downloads = append(downloads, downloadInfo{
 					ID:         s.ID,
 					Filename:   s.Filename,

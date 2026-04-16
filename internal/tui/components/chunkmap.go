@@ -34,7 +34,7 @@ func NewChunkMapModel(bitmap []byte, bitmapWidth int, width, height int, paused 
 	}
 }
 
-func (m ChunkMapModel) getChunkState(index int) types.ChunkStatus {
+func (m *ChunkMapModel) getChunkState(index int) types.ChunkStatus {
 	if index < 0 || index >= m.BitmapWidth {
 		return types.ChunkPending
 	}
@@ -48,7 +48,7 @@ func (m ChunkMapModel) getChunkState(index int) types.ChunkStatus {
 }
 
 // View renders the chunk grid
-func (m ChunkMapModel) View() string {
+func (m *ChunkMapModel) View() string {
 	if m.BitmapWidth == 0 || len(m.Bitmap) == 0 {
 		return ""
 	}

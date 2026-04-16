@@ -653,7 +653,7 @@ func TestLifecycleManager_Resume_ColdPath(t *testing.T) {
 	tempDir := testutil.SetupStateDB(t)
 	destPath := filepath.Join(tempDir, "cold-file.zip")
 
-	testutil.SeedMasterList(t, types.DownloadEntry{
+	testutil.SeedMasterList(t, &types.DownloadEntry{
 		ID:         "cold-id",
 		URL:        "http://example.com/cold.zip",
 		URLHash:    state.URLHash("http://example.com/cold.zip"),
@@ -704,7 +704,7 @@ func TestLifecycleManager_Resume_NotFound(t *testing.T) {
 func TestLifecycleManager_Resume_Completed(t *testing.T) {
 	tempDir := testutil.SetupStateDB(t)
 
-	testutil.SeedMasterList(t, types.DownloadEntry{
+	testutil.SeedMasterList(t, &types.DownloadEntry{
 		ID:       "done-id",
 		URL:      "http://example.com/done.zip",
 		URLHash:  state.URLHash("http://example.com/done.zip"),
@@ -750,7 +750,7 @@ func TestLifecycleManager_Resume_HydratesFromDisk(t *testing.T) {
 	tempDir := testutil.SetupStateDB(t)
 	destPath := filepath.Join(tempDir, "hydrated.zip")
 
-	testutil.SeedMasterList(t, types.DownloadEntry{
+	testutil.SeedMasterList(t, &types.DownloadEntry{
 		ID:       "hydrate-id",
 		URL:      "http://example.com/hydrated.zip",
 		URLHash:  state.URLHash("http://example.com/hydrated.zip"),
@@ -794,7 +794,7 @@ func TestLifecycleManager_Resume_HydratesFromDisk(t *testing.T) {
 func TestLifecycleManager_Cancel_FromPool(t *testing.T) {
 	tempDir := testutil.SetupStateDB(t)
 
-	testutil.SeedMasterList(t, types.DownloadEntry{
+	testutil.SeedMasterList(t, &types.DownloadEntry{
 		ID:       "active-cancel",
 		URL:      "http://example.com/active.zip",
 		URLHash:  state.URLHash("http://example.com/active.zip"),
@@ -834,7 +834,7 @@ func TestLifecycleManager_Cancel_DBOnly(t *testing.T) {
 	tempDir := testutil.SetupStateDB(t)
 	destPath := filepath.Join(tempDir, "db-only.zip")
 
-	testutil.SeedMasterList(t, types.DownloadEntry{
+	testutil.SeedMasterList(t, &types.DownloadEntry{
 		ID:       "db-only",
 		URL:      "http://example.com/db-only.zip",
 		URLHash:  state.URLHash("http://example.com/db-only.zip"),
@@ -871,7 +871,7 @@ func TestLifecycleManager_Cancel_Completed(t *testing.T) {
 	tempDir := testutil.SetupStateDB(t)
 	destPath := filepath.Join(tempDir, "completed.zip")
 
-	testutil.SeedMasterList(t, types.DownloadEntry{
+	testutil.SeedMasterList(t, &types.DownloadEntry{
 		ID:       "completed-cancel",
 		URL:      "http://example.com/completed.zip",
 		URLHash:  state.URLHash("http://example.com/completed.zip"),
@@ -921,7 +921,7 @@ func TestLifecycleManager_Cancel_NotFound(t *testing.T) {
 func TestLifecycleManager_UpdateURL_Success(t *testing.T) {
 	tempDir := testutil.SetupStateDB(t)
 
-	testutil.SeedMasterList(t, types.DownloadEntry{
+	testutil.SeedMasterList(t, &types.DownloadEntry{
 		ID:       "update-id",
 		URL:      "http://example.com/old.zip",
 		URLHash:  state.URLHash("http://example.com/old.zip"),

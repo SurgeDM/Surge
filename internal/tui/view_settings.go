@@ -143,9 +143,9 @@ func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxW
 
 	settingsActiveTab := lipgloss.NewStyle().Foreground(colors.NeonPurple)
 	tryBars := []string{
-		components.RenderNumberedTabBar(makeTabs(false), activeTab, settingsActiveTab, TabStyle),
-		components.RenderTabBar(makeTabs(false), activeTab, settingsActiveTab, TabStyle),
-		components.RenderTabBar(makeTabs(true), activeTab, settingsActiveTab, TabStyle),
+		components.RenderNumberedTabBar(makeTabs(false), activeTab, &settingsActiveTab, &TabStyle),
+		components.RenderTabBar(makeTabs(false), activeTab, &settingsActiveTab, &TabStyle),
+		components.RenderTabBar(makeTabs(true), activeTab, &settingsActiveTab, &TabStyle),
 	}
 
 	for _, candidate := range tryBars {

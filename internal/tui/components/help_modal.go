@@ -19,9 +19,9 @@ type HelpModal struct {
 }
 
 // RenderWithBtopBox renders the help modal using a btop-style box with title in border
-func (m HelpModal) RenderWithBtopBox(
+func (m *HelpModal) RenderWithBtopBox(
 	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
-	titleStyle lipgloss.Style,
+	titleStyle *lipgloss.Style,
 ) string {
 	boxFrameX := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).GetHorizontalFrameSize()
 	paddingX := lipgloss.NewStyle().Padding(0, 1).GetHorizontalFrameSize()

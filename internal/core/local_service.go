@@ -417,11 +417,13 @@ func (s *LocalDownloadService) List(ctx context.Context) ([]types.DownloadStatus
 	if err == nil {
 		// Create a map of existing IDs to avoid duplicates
 		existingIDs := make(map[string]bool)
-		for _, s := range statuses {
+		for i := range statuses {
+			s := &statuses[i]
 			existingIDs[s.ID] = true
 		}
 
-		for _, d := range dbDownloads {
+		for i := range dbDownloads {
+			d := &dbDownloads[i]
 			// Skip if already present (active)
 			if existingIDs[d.ID] {
 				continue
@@ -443,7 +445,7 @@ func (s *LocalDownloadService) List(ctx context.Context) ([]types.DownloadStatus
 				TotalSize:   d.TotalSize,
 				Downloaded:  d.Downloaded,
 				Progress:    progress,
-				Speed:       completedSpeedMBps(&d),
+				Speed:       completedSpeedMBps(d),
 				Connections: 0,
 				TimeTaken:   d.TimeTaken,
 				AvgSpeed:    d.AvgSpeed,

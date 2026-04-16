@@ -29,7 +29,7 @@ func (NoKeys) ShortHelp() []key.Binding  { return nil }
 func (NoKeys) FullHelp() [][]key.Binding { return nil }
 
 // View renders the confirmation modal content (without the box wrapper or help text)
-func (m ConfirmationModal) view() string {
+func (m *ConfirmationModal) view() string {
 	detailStyle := lipgloss.NewStyle().
 		Foreground(colors.NeonPurple).
 		Bold(true)
@@ -50,9 +50,9 @@ func (m ConfirmationModal) view() string {
 
 // RenderWithBtopBox renders the modal using the btop-style box with title in border
 // Help text is pushed to the last line of the modal
-func (m ConfirmationModal) RenderWithBtopBox(
+func (m *ConfirmationModal) RenderWithBtopBox(
 	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
-	titleStyle lipgloss.Style,
+	titleStyle *lipgloss.Style,
 ) string {
 	boxFrameX := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).GetHorizontalFrameSize()
 	paddingX := lipgloss.NewStyle().Padding(0, 1).GetHorizontalFrameSize()
@@ -108,7 +108,7 @@ func (m ConfirmationModal) RenderWithBtopBox(
 
 // Centered returns the modal centered in the given dimensions (for standalone use)
 // Help text is pushed to the last line
-func (m ConfirmationModal) Centered(width, height int) string {
+func (m *ConfirmationModal) Centered(width, height int) string {
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.DoubleBorder()).
 		BorderForeground(m.BorderColor).

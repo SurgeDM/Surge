@@ -86,7 +86,7 @@ func (m RootModel) View() tea.View {
 			BorderColor: colors.NeonCyan,
 		}
 		modal.Width, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, 60, 10)
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
@@ -110,7 +110,7 @@ func (m RootModel) View() tea.View {
 		h := lipgloss.Height(modal.View()) + BoxStyle.GetVerticalFrameSize()
 		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 46, 8, w, h)
 
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
@@ -120,7 +120,7 @@ func (m RootModel) View() tea.View {
 		picker := components.NewFilePickerModal(
 			" Select Directory ",
 			&fp,
-			m.help,
+			&m.help,
 			m.keys.FilePicker,
 			colors.NeonPink,
 		)
@@ -129,7 +129,7 @@ func (m RootModel) View() tea.View {
 		picker.Width = w
 		picker.Height = h
 
-		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := picker.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
@@ -163,7 +163,7 @@ func (m RootModel) View() tea.View {
 		}
 		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, w, h)
 
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
@@ -191,7 +191,7 @@ func (m RootModel) View() tea.View {
 		h := lipgloss.Height(modal.View()) + BoxStyle.GetVerticalFrameSize()
 		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 60, 10, w, h)
 
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
@@ -200,7 +200,7 @@ func (m RootModel) View() tea.View {
 		picker := components.NewFilePickerModal(
 			" Select URL File (.txt) ",
 			&fp,
-			m.help,
+			&m.help,
 			m.keys.FilePicker,
 			colors.NeonCyan,
 		)
@@ -209,7 +209,7 @@ func (m RootModel) View() tea.View {
 		picker.Width = w
 		picker.Height = h
 
-		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := picker.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
@@ -229,7 +229,7 @@ func (m RootModel) View() tea.View {
 		h := 10 // typical height for confirmation
 		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, w, h)
 
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
@@ -252,7 +252,7 @@ func (m RootModel) View() tea.View {
 		h := 12 // typical height for update prompt
 		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 50, 8, w, h)
 
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
@@ -273,7 +273,7 @@ func (m RootModel) View() tea.View {
 		h := lipgloss.Height(modal.View()) + BoxStyle.GetVerticalFrameSize()
 		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 46, 6, w, h)
 
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
@@ -287,7 +287,7 @@ func (m RootModel) View() tea.View {
 			Width:       w,
 			Height:      h,
 		}
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
@@ -736,7 +736,7 @@ func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
 		{Label: "Active", Count: activeCount},
 		{Label: "Done", Count: doneCount},
 	}
-	return components.RenderTabBar(tabs, activeTab, ActiveTabStyle, TabStyle)
+	return components.RenderTabBar(tabs, activeTab, &ActiveTabStyle, &TabStyle)
 }
 
 func (m RootModel) viewQuitConfirm() string {

@@ -22,11 +22,11 @@ type FilePickerModal struct {
 }
 
 // NewFilePickerModal creates a file picker modal with default styling
-func NewFilePickerModal(title string, picker *filepicker.Model, helpModel help.Model, helpKeys help.KeyMap, borderColor color.Color) FilePickerModal {
+func NewFilePickerModal(title string, picker *filepicker.Model, helpModel *help.Model, helpKeys help.KeyMap, borderColor color.Color) FilePickerModal {
 	return FilePickerModal{
 		Title:       title,
 		Picker:      picker,
-		Help:        helpModel,
+		Help:        *helpModel,
 		HelpKeys:    helpKeys,
 		BorderColor: borderColor,
 		Width:       90,
@@ -35,7 +35,7 @@ func NewFilePickerModal(title string, picker *filepicker.Model, helpModel help.M
 }
 
 // View returns the inner content of the file picker (without the box)
-func (m FilePickerModal) View() string {
+func (m *FilePickerModal) View() string {
 	pathStyle := lipgloss.NewStyle().Foreground(colors.LightGray)
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
@@ -51,9 +51,9 @@ func (m FilePickerModal) View() string {
 }
 
 // RenderWithBtopBox renders the modal using the btop-style box
-func (m FilePickerModal) RenderWithBtopBox(
+func (m *FilePickerModal) RenderWithBtopBox(
 	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
-	titleStyle lipgloss.Style,
+	titleStyle *lipgloss.Style,
 ) string {
 	return renderBox(titleStyle.Render(m.Title), "", m.View(), m.Width, m.Height, m.BorderColor)
 }

@@ -23,8 +23,8 @@ type activeDownload struct {
 type WorkerPool struct {
 	taskChan     chan *types.DownloadConfig
 	progressCh   chan<- any
-	progressDone chan struct{}                   // closed when progressCh must no longer be sent to
-	downloads    map[string]*activeDownload      // Track active downloads for pause/resume
+	progressDone chan struct{}                    // closed when progressCh must no longer be sent to
+	downloads    map[string]*activeDownload       // Track active downloads for pause/resume
 	queued       map[string]*types.DownloadConfig // Track queued downloads
 	mu           sync.RWMutex
 	wg           sync.WaitGroup // We use this to wait for all active downloads to pause before exiting the program

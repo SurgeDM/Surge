@@ -35,9 +35,9 @@ func SetupStateDB(t *testing.T) string {
 }
 
 // SeedMasterList inserts a DownloadEntry into the master list for test setups.
-func SeedMasterList(t *testing.T, entry types.DownloadEntry) {
+func SeedMasterList(t *testing.T, entry *types.DownloadEntry) {
 	t.Helper()
-	if err := state.AddToMasterList(context.Background(), &entry); err != nil {
+	if err := state.AddToMasterList(context.Background(), entry); err != nil {
 		t.Fatalf("SeedMasterList failed: %v", err)
 	}
 }
