@@ -66,6 +66,7 @@ type NetworkSettings struct {
 	SequentialDownload     bool   `json:"sequential_download" ui_label:"Sequential Download" ui_desc:"Download pieces in order (Streaming Mode). May be slower."`
 	MinChunkSize           int64  `json:"min_chunk_size" ui_label:"Min Chunk Size" ui_desc:"Minimum download chunk size in MB (e.g., 2)."`
 	WorkerBufferSize       int    `json:"worker_buffer_size" ui_label:"Worker Buffer Size" ui_desc:"I/O buffer size per worker in KB (e.g., 512)."`
+	DialHedgeCount         int    `json:"dial_hedge_count" ui_label:"Dial Hedge Count" ui_desc:"Number of extra connections to dial pre-emptively to avoid slow connects (0-16)."`
 }
 
 // PerformanceSettings contains performance tuning parameters.
@@ -218,6 +219,7 @@ func DefaultSettings() *Settings {
 			SequentialDownload:     false,
 			MinChunkSize:           2 * MB,
 			WorkerBufferSize:       512 * KB,
+			DialHedgeCount:         4,
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        3,
@@ -301,6 +303,7 @@ type RuntimeConfig struct {
 	SequentialDownload    bool
 	MinChunkSize          int64
 	WorkerBufferSize      int
+	DialHedgeCount        int
 	MaxTaskRetries        int
 	SlowWorkerThreshold   float64
 	SlowWorkerGracePeriod time.Duration
@@ -319,6 +322,7 @@ func (s *Settings) ToRuntimeConfig() *RuntimeConfig {
 		SequentialDownload:    s.Network.SequentialDownload,
 		MinChunkSize:          s.Network.MinChunkSize,
 		WorkerBufferSize:      s.Network.WorkerBufferSize,
+		DialHedgeCount:        s.Network.DialHedgeCount,
 		MaxTaskRetries:        s.Performance.MaxTaskRetries,
 		SlowWorkerThreshold:   s.Performance.SlowWorkerThreshold,
 		SlowWorkerGracePeriod: s.Performance.SlowWorkerGracePeriod,

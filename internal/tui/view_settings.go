@@ -729,6 +729,8 @@ func (m RootModel) getSettingUnit() string {
 		return " MB"
 	case "worker_buffer_size":
 		return " KB"
+	case "dial_hedge_count":
+		return " conns"
 	case "max_task_retries":
 		return " retries"
 	case "slow_worker_grace_period", "stall_timeout":
@@ -872,12 +874,16 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.Network.UserAgent = defaults.Network.UserAgent
 		case "proxy_url":
 			m.Settings.Network.ProxyURL = defaults.Network.ProxyURL
+		case "custom_dns":
+			m.Settings.Network.CustomDNS = defaults.Network.CustomDNS
 		case "sequential_download":
 			m.Settings.Network.SequentialDownload = defaults.Network.SequentialDownload
 		case "min_chunk_size":
 			m.Settings.Network.MinChunkSize = defaults.Network.MinChunkSize
 		case "worker_buffer_size":
 			m.Settings.Network.WorkerBufferSize = defaults.Network.WorkerBufferSize
+		case "dial_hedge_count":
+			m.Settings.Network.DialHedgeCount = defaults.Network.DialHedgeCount
 		}
 	case "Performance":
 		switch key {
