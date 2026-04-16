@@ -7,7 +7,6 @@ import (
 	"net"
 	"net/http"
 	"path/filepath"
-	"sort"
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/core"
@@ -22,127 +21,17 @@ var (
 )
 
 func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service core.DownloadService) {
-	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
-		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-			"status": "ok",
-			"port":   port,
-		})
-	})
-
+	mux.HandleFunc("/health", handleHealth(port))
 	mux.HandleFunc("/events", eventsHandler(service))
-
-	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
-		handleDownload(w, r, defaultOutputDir, service)
-	})
-
-	mux.HandleFunc("/pause", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
-		if err := service.Pause(id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "paused", "id": id})
-	})))
-
-	mux.HandleFunc("/resume", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
-		if err := service.Resume(id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "resumed", "id": id})
-	})))
-
-	mux.HandleFunc("/delete", requireMethods(withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
-		if err := service.Delete(id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "deleted", "id": id})
-	}), http.MethodDelete, http.MethodPost))
-
-	mux.HandleFunc("/list", requireMethod(http.MethodGet, func(w http.ResponseWriter, _ *http.Request) {
-		statuses, err := service.List()
-		if err != nil {
-			http.Error(w, "Failed to list downloads: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		writeJSONResponse(w, http.StatusOK, statuses)
-	}))
-
-	mux.HandleFunc("/history", requireMethod(http.MethodGet, func(w http.ResponseWriter, _ *http.Request) {
-		history, err := service.History()
-		if err != nil {
-			http.Error(w, "Failed to retrieve history: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-		sort.Slice(history, func(left, right int) bool {
-			if history[left].CompletedAt == history[right].CompletedAt {
-				return history[left].ID > history[right].ID
-			}
-			return history[left].CompletedAt > history[right].CompletedAt
-		})
-		writeJSONResponse(w, http.StatusOK, history)
-	}))
-
-	mux.HandleFunc("/open-file", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, r *http.Request, id string) {
-		if err := ensureOpenActionRequestAllowed(r); err != nil {
-			http.Error(w, err.Error(), http.StatusForbidden)
-			return
-		}
-
-		destPath, err := resolveDownloadDestPath(service, id)
-		if err != nil {
-			http.Error(w, err.Error(), statusCodeForResolveDownloadError(err))
-			return
-		}
-
-		if err := utils.OpenFile(destPath); err != nil {
-			http.Error(w, "Failed to open file: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "ok", "id": id})
-	})))
-
-	mux.HandleFunc("/open-folder", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, r *http.Request, id string) {
-		if err := ensureOpenActionRequestAllowed(r); err != nil {
-			http.Error(w, err.Error(), http.StatusForbidden)
-			return
-		}
-
-		destPath, err := resolveDownloadDestPath(service, id)
-		if err != nil {
-			http.Error(w, err.Error(), statusCodeForResolveDownloadError(err))
-			return
-		}
-
-		if err := utils.OpenContainingFolder(destPath); err != nil {
-			http.Error(w, "Failed to open folder: "+err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "ok", "id": id})
-	})))
-
-	mux.HandleFunc("/update-url", requireMethod(http.MethodPut, withRequiredID(func(w http.ResponseWriter, r *http.Request, id string) {
-		var req map[string]string
-		if err := decodeJSONBody(r, &req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
-			return
-		}
-
-		newURL := req["url"]
-		if newURL == "" {
-			http.Error(w, "Missing url parameter in body", http.StatusBadRequest)
-			return
-		}
-
-		if err := service.UpdateURL(id, newURL); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
-		}
-
-		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "updated", "id": id, "url": newURL})
-	})))
+	mux.HandleFunc("/download", handleDownloadRoute(defaultOutputDir, service))
+	mux.HandleFunc("/pause", requireMethod(http.MethodPost, withRequiredID(handlePause(service))))
+	mux.HandleFunc("/resume", requireMethod(http.MethodPost, withRequiredID(handleResume(service))))
+	mux.HandleFunc("/delete", requireMethods(withRequiredID(handleDelete(service)), http.MethodDelete, http.MethodPost))
+	mux.HandleFunc("/list", requireMethod(http.MethodGet, handleList(service)))
+	mux.HandleFunc("/history", requireMethod(http.MethodGet, handleHistory(service)))
+	mux.HandleFunc("/open-file", requireMethod(http.MethodPost, withRequiredID(handleOpenFile(service))))
+	mux.HandleFunc("/open-folder", requireMethod(http.MethodPost, withRequiredID(handleOpenFolder(service))))
+	mux.HandleFunc("/update-url", requireMethod(http.MethodPut, withRequiredID(handleUpdateURL(service))))
 }
 
 func eventsHandler(service core.DownloadService) http.HandlerFunc {
