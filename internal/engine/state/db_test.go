@@ -1,6 +1,7 @@
 package state
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"os"
@@ -52,17 +53,17 @@ func TestDBLifecycle(t *testing.T) {
 	}
 
 	// Test tables exist
-	tx, err := d3.Begin()
+	tx, err := d3.BeginTx(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("Failed to begin tx: %v", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	_, err = tx.Exec("SELECT * FROM downloads LIMIT 1")
+	_, err = tx.ExecContext(context.Background(), "SELECT * FROM downloads LIMIT 1")
 	if err != nil {
 		t.Errorf("Table 'downloads' check failed: %v", err)
 	}
-	_, err = tx.Exec("SELECT * FROM tasks LIMIT 1")
+	_, err = tx.ExecContext(context.Background(), "SELECT * FROM tasks LIMIT 1")
 	if err != nil {
 		t.Errorf("Table 'tasks' check failed: %v", err)
 	}
@@ -74,7 +75,7 @@ func TestWithTx_Commit(t *testing.T) {
 	defer CloseDB()
 
 	err := withTx(func(tx *sql.Tx) error {
-		_, err := tx.Exec("INSERT INTO downloads (id, url, dest_path) VALUES (?, ?, ?)", "tx-test-1", "http://tx.com/1", "/tmp/1")
+		_, err := tx.ExecContext(context.Background(), "INSERT INTO downloads (id, url, dest_path) VALUES (?, ?, ?)", "tx-test-1", "http://tx.com/1", "/tmp/1")
 		return err
 	})
 	if err != nil {
@@ -84,7 +85,7 @@ func TestWithTx_Commit(t *testing.T) {
 	// Verify data persisted
 	d, _ := GetDB()
 	var url string
-	err = d.QueryRow("SELECT url FROM downloads WHERE id = ?", "tx-test-1").Scan(&url)
+	err = d.QueryRowContext(context.Background(), "SELECT url FROM downloads WHERE id = ?", "tx-test-1").Scan(&url)
 	if err != nil {
 		t.Fatalf("Query failed: %v", err)
 	}
@@ -100,13 +101,13 @@ func TestWithTx_Rollback(t *testing.T) {
 
 	// Ensure DB is clean
 	d, _ := GetDB()
-	if _, err := d.Exec("DELETE FROM downloads"); err != nil {
+	if _, err := d.ExecContext(context.Background(), "DELETE FROM downloads"); err != nil {
 		t.Fatal(err)
 	}
 
 	expectedErr := errors.New("intentional error")
 	err := withTx(func(tx *sql.Tx) error {
-		_, err := tx.Exec("INSERT INTO downloads (id, url, dest_path) VALUES (?, ?, ?)", "tx-test-2", "http://tx.com/2", "/tmp/2")
+		_, err := tx.ExecContext(context.Background(), "INSERT INTO downloads (id, url, dest_path) VALUES (?, ?, ?)", "tx-test-2", "http://tx.com/2", "/tmp/2")
 		if err != nil {
 			return err
 		}
@@ -120,7 +121,7 @@ func TestWithTx_Rollback(t *testing.T) {
 
 	// Verify data NOT persisted
 	var count int
-	err = d.QueryRow("SELECT count(*) FROM downloads WHERE id = ?", "tx-test-2").Scan(&count)
+	err = d.QueryRowContext(context.Background(), "SELECT count(*) FROM downloads WHERE id = ?", "tx-test-2").Scan(&count)
 	if err != nil {
 		t.Fatalf("Query failed: %v", err)
 	}
@@ -174,7 +175,7 @@ func TestInitDB_CreatesTasksDownloadIDIndex(t *testing.T) {
 	}
 
 	var indexName string
-	err = d.QueryRow(`
+	err = d.QueryRowContext(context.Background(), `
 		SELECT name
 		FROM sqlite_master
 		WHERE type = 'index'

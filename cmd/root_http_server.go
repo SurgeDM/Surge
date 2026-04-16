@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"crypto/subtle"
 	"errors"
 	"fmt"
@@ -23,7 +24,7 @@ const serverBindHost = "0.0.0.0"
 func findAvailablePort(start int) (int, net.Listener) {
 	bindHost := serverBindHost
 	for port := start; port < start+100; port++ {
-		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindHost, port))
+		ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", fmt.Sprintf("%s:%d", bindHost, port))
 		if err == nil {
 			return port, ln
 		}
@@ -34,7 +35,7 @@ func findAvailablePort(start int) (int, net.Listener) {
 func bindServerListener(portFlag int) (int, net.Listener, error) {
 	bindHost := serverBindHost
 	if portFlag > 0 {
-		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindHost, portFlag))
+		ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", fmt.Sprintf("%s:%d", bindHost, portFlag))
 		if err != nil {
 			return 0, nil, fmt.Errorf("could not bind to port %d: %w", portFlag, err)
 		}

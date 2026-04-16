@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"io"
 	"net/http"
 	"strconv"
@@ -16,7 +17,11 @@ func TestMockServer_BasicDownload(t *testing.T) {
 	defer server.Close()
 
 	// Full download
-	resp, err := http.Get(server.URL())
+	getReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL(), nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(getReq)
 	if err != nil {
 		t.Fatalf("Failed to connect: %v", err)
 	}
@@ -53,7 +58,7 @@ func TestMockServer_RangeRequest(t *testing.T) {
 
 	// Range request for first 1024 bytes
 	client := &http.Client{}
-	req, _ := http.NewRequest(http.MethodGet, server.URL(), nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL(), nil)
 	req.Header.Set("Range", "bytes=0-1023")
 
 	resp, err := client.Do(req)
@@ -97,7 +102,7 @@ func TestMockServer_MultipleRangeRequests(t *testing.T) {
 			end = fileSize - 1
 		}
 
-		req, _ := http.NewRequest(http.MethodGet, server.URL(), nil)
+		req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL(), nil)
 		req.Header.Set("Range", "bytes="+formatRange(offset, end))
 
 		resp, err := client.Do(req)
@@ -135,7 +140,7 @@ func TestMockServer_HeadRequest(t *testing.T) {
 	defer server.Close()
 
 	client := &http.Client{}
-	req, _ := http.NewRequest(http.MethodHead, server.URL(), nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodHead, server.URL(), nil)
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -165,7 +170,7 @@ func TestMockServer_NoRangeSupport(t *testing.T) {
 	defer server.Close()
 
 	client := &http.Client{}
-	req, _ := http.NewRequest(http.MethodGet, server.URL(), nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL(), nil)
 	req.Header.Set("Range", "bytes=0-511")
 
 	resp, err := client.Do(req)
@@ -194,21 +199,24 @@ func TestMockServer_FailOnNthRequest(t *testing.T) {
 	defer server.Close()
 
 	// First request should succeed
-	resp1, _ := http.Get(server.URL())
+	req1, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL(), nil)
+	resp1, _ := http.DefaultClient.Do(req1)
 	if resp1.StatusCode != http.StatusOK {
 		t.Errorf("First request should succeed, got %d", resp1.StatusCode)
 	}
 	_ = resp1.Body.Close()
 
 	// Second request should fail
-	resp2, _ := http.Get(server.URL())
+	req2, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL(), nil)
+	resp2, _ := http.DefaultClient.Do(req2)
 	if resp2.StatusCode != http.StatusInternalServerError {
 		t.Errorf("Second request should fail, got %d", resp2.StatusCode)
 	}
 	_ = resp2.Body.Close()
 
 	// Third request should succeed
-	resp3, _ := http.Get(server.URL())
+	req3, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL(), nil)
+	resp3, _ := http.DefaultClient.Do(req3)
 	if resp3.StatusCode != http.StatusOK {
 		t.Errorf("Third request should succeed, got %d", resp3.StatusCode)
 	}
@@ -229,7 +237,8 @@ func TestMockServer_Latency(t *testing.T) {
 	defer server.Close()
 
 	start := time.Now()
-	resp, _ := http.Get(server.URL())
+	latReq, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL(), nil)
+	resp, _ := http.DefaultClient.Do(latReq)
 	_ = resp.Body.Close()
 	elapsed := time.Since(start)
 
@@ -243,7 +252,8 @@ func TestMockServer_Reset(t *testing.T) {
 	defer server.Close()
 
 	// Make a request
-	resp, _ := http.Get(server.URL())
+	rstReq, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL(), nil)
+	resp, _ := http.DefaultClient.Do(rstReq)
 	_ = resp.Body.Close()
 
 	if server.Stats().TotalRequests != 1 {
@@ -266,7 +276,7 @@ func TestStreamingMockServer_LargeFile(t *testing.T) {
 
 	// Just request a small range to verify it works
 	client := &http.Client{}
-	req, _ := http.NewRequest(http.MethodGet, server.URL(), nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL(), nil)
 	req.Header.Set("Range", "bytes=0-1023")
 
 	resp, err := client.Do(req)

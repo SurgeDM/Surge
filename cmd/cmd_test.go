@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -145,7 +146,7 @@ func TestCorsMiddleware_SetsCORSHeaders(t *testing.T) {
 
 	corsHandler := corsMiddleware(handler)
 
-	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/test", nil)
 	rec := httptest.NewRecorder()
 	corsHandler.ServeHTTP(rec, req)
 
@@ -162,7 +163,7 @@ func TestCorsMiddleware_OptionsHandledByMiddleware(t *testing.T) {
 
 	corsHandler := corsMiddleware(handler)
 
-	req := httptest.NewRequest(http.MethodOptions, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodOptions, "/test", nil)
 	rec := httptest.NewRecorder()
 	corsHandler.ServeHTTP(rec, req)
 
@@ -184,7 +185,7 @@ func TestCorsMiddleware_PassesThrough(t *testing.T) {
 
 	corsHandler := corsMiddleware(handler)
 
-	req := httptest.NewRequest(http.MethodPost, "/test", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/test", nil)
 	rec := httptest.NewRecorder()
 	corsHandler.ServeHTTP(rec, req)
 
@@ -340,7 +341,7 @@ func TestGetServerBindHost(t *testing.T) {
 // =============================================================================
 
 func TestHandleDownload_MethodNotAllowed(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPut, "/download", nil)
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPut, "/download", nil)
 	rec := httptest.NewRecorder()
 
 	svc := core.NewLocalDownloadService(nil)
@@ -352,7 +353,7 @@ func TestHandleDownload_MethodNotAllowed(t *testing.T) {
 }
 
 func TestHandleDownload_InvalidJSON(t *testing.T) {
-	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString("not json"))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString("not json"))
 	rec := httptest.NewRecorder()
 
 	svc := core.NewLocalDownloadService(nil)
@@ -368,7 +369,7 @@ func TestHandleDownload_InvalidJSON(t *testing.T) {
 
 func TestHandleDownload_MissingURL(t *testing.T) {
 	body := `{"filename": "test.bin"}`
-	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	svc := core.NewLocalDownloadService(nil)
@@ -597,7 +598,11 @@ func TestHealthEndpoint(t *testing.T) {
 	server := testutil.NewHTTPServerT(t, mux)
 	defer server.Close()
 
-	resp, err := http.Get(server.URL + "/health")
+	healthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/health", nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(healthReq)
 	if err != nil {
 		t.Fatalf("Failed to get health: %v", err)
 	}
@@ -727,7 +732,11 @@ func TestStartHTTPServer_HealthEndpoint(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Test health endpoint
-	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
+	healthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/health", port), nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(healthReq)
 	if err != nil {
 		t.Fatalf("Failed to get health: %v", err)
 	}
@@ -762,7 +771,11 @@ func TestStartHTTPServer_HasCORSHeaders(t *testing.T) {
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
 
-	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
+	healthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/health", port), nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	resp, err := http.DefaultClient.Do(healthReq)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
 	}
@@ -785,7 +798,7 @@ func TestStartHTTPServer_OptionsRequest(t *testing.T) {
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
 
-	req, _ := http.NewRequest(http.MethodOptions, fmt.Sprintf("http://127.0.0.1:%d/download", port), nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodOptions, fmt.Sprintf("http://127.0.0.1:%d/download", port), nil)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
@@ -812,7 +825,7 @@ func TestStartHTTPServer_DownloadEndpoint_MethodNotAllowed(t *testing.T) {
 
 	token := ensureAuthToken()
 
-	req, _ := http.NewRequest(http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/download", port), nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/download", port), nil)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -839,7 +852,7 @@ func TestStartHTTPServer_DownloadEndpoint_BadRequest(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// POST with invalid JSON
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/download", port), bytes.NewBufferString("not json"))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/download", port), bytes.NewBufferString("not json"))
 	req.Header.Set("Authorization", "Bearer "+ensureAuthToken())
 	req.Header.Set("Content-Type", "application/json")
 
@@ -867,7 +880,7 @@ func TestStartHTTPServer_DownloadEndpoint_MissingURL(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// POST with missing URL
-	req, _ := http.NewRequest(http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/download", port), bytes.NewBufferString(`{"path": "/downloads"}`))
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPost, fmt.Sprintf("http://127.0.0.1:%d/download", port), bytes.NewBufferString(`{"path": "/downloads"}`))
 	req.Header.Set("Authorization", "Bearer "+ensureAuthToken())
 	req.Header.Set("Content-Type", "application/json")
 

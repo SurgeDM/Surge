@@ -1,6 +1,7 @@
 package state
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"os"
@@ -436,7 +437,7 @@ func TestUpdateStatus(t *testing.T) {
 		t.Fatalf("AddToMasterList failed: %v", err)
 	}
 	d := getDBHelper()
-	if _, err := d.Exec("INSERT INTO tasks (download_id, offset, length) VALUES (?, ?, ?)", entry.ID, 0, 100); err != nil {
+	if _, err := d.ExecContext(context.Background(), "INSERT INTO tasks (download_id, offset, length) VALUES (?, ?, ?)", entry.ID, 0, 100); err != nil {
 		t.Fatalf("failed to seed task row: %v", err)
 	}
 
@@ -806,7 +807,7 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 
 	// Set file_hash directly in DB (simulating SaveState having computed it)
 	d := getDBHelper()
-	_, err = d.Exec("UPDATE downloads SET file_hash = ? WHERE id = ?", expectedHash, "integrity-valid")
+	_, err = d.ExecContext(context.Background(), "UPDATE downloads SET file_hash = ? WHERE id = ?", expectedHash, "integrity-valid")
 	if err != nil {
 		t.Fatalf("Failed to set file_hash: %v", err)
 	}

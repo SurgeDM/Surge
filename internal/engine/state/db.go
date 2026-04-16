@@ -1,6 +1,7 @@
 package state
 
 import (
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -44,10 +45,10 @@ func initDBLocked() error {
 
 	// Enable WAL mode and busy_timeout for concurrent reader-writer access
 	// (required now that the processing layer's event worker writes from a goroutine)
-	if _, err := db.Exec("PRAGMA journal_mode=WAL"); err != nil {
+	if _, err := db.ExecContext(context.Background(), "PRAGMA journal_mode=WAL"); err != nil {
 		return fmt.Errorf("failed to set WAL mode: %w", err)
 	}
-	if _, err := db.Exec("PRAGMA busy_timeout=5000"); err != nil {
+	if _, err := db.ExecContext(context.Background(), "PRAGMA busy_timeout=5000"); err != nil {
 		return fmt.Errorf("failed to set busy_timeout: %w", err)
 	}
 
@@ -84,7 +85,7 @@ func initDBLocked() error {
 	CREATE INDEX IF NOT EXISTS idx_tasks_download_id ON tasks(download_id);
 	`
 
-	if _, err := db.Exec(query); err != nil {
+	if _, err := db.ExecContext(context.Background(), query); err != nil {
 		return fmt.Errorf("failed to create tables: %w", err)
 	}
 
@@ -102,8 +103,9 @@ func initDB() error {
 }
 
 // ensureDownloadsSchema checks if required columns exist in the downloads table and adds them if missing.
+//nolint:contextcheck // DB initialization doesn't require a runtime context
 func ensureDownloadsSchema() error {
-	rows, err := db.Query("PRAGMA table_info(downloads)")
+	rows, err := db.QueryContext(context.Background(), "PRAGMA table_info(downloads)")
 	if err != nil {
 		return err
 	}
@@ -121,6 +123,9 @@ func ensureDownloadsSchema() error {
 		}
 		existingColumns[name] = true
 	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
 
 	columnsToAdd := []struct {
 		name string
@@ -136,7 +141,7 @@ func ensureDownloadsSchema() error {
 	for _, col := range columnsToAdd {
 		if !existingColumns[col.name] {
 			alterQuery := fmt.Sprintf("ALTER TABLE downloads ADD COLUMN %s %s", col.name, col.def)
-			if _, err := db.Exec(alterQuery); err != nil {
+			if _, err := db.ExecContext(context.Background(), alterQuery); err != nil {
 				log.Printf("Failed to add column %s: %v", col.name, err)
 			}
 		}
@@ -186,7 +191,7 @@ func withTx(fn func(*sql.Tx) error) error {
 		return errors.New("database not initialized")
 	}
 
-	tx, err := d.Begin()
+	tx, err := d.BeginTx(context.Background(), nil)
 	if err != nil {
 		return err
 	}

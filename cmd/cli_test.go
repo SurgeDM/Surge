@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -805,7 +806,7 @@ func TestSendToServer_SuccessAndServerError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ln, err := net.Listen("tcp", "127.0.0.1:0")
+			ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 			if err != nil {
 				t.Fatalf("listen failed: %v", err)
 			}
@@ -845,7 +846,7 @@ func TestSendToServer_SuccessAndServerError(t *testing.T) {
 func TestSendToServer_UsesBearerTokenFromEnv(t *testing.T) {
 	t.Setenv("SURGE_TOKEN", "env-token-123")
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen failed: %v", err)
 	}
@@ -875,7 +876,7 @@ func TestSendToServer_UsesBearerTokenFromEnv(t *testing.T) {
 func TestGetRemoteDownloads_UsesBearerTokenFromEnv(t *testing.T) {
 	t.Setenv("SURGE_TOKEN", "env-token-123")
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen failed: %v", err)
 	}
