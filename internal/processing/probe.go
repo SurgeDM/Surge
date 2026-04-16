@@ -225,7 +225,7 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 }
 
 func newProbeRequest(ctx context.Context, rawurl string, headers map[string]string, includeRange bool) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, http.NoBody)
 	if err != nil {
 		return nil, err
 	}

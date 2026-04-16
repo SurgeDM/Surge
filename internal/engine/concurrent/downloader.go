@@ -628,7 +628,7 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 			mirror := mirrors[idx%len(mirrors)]
 
 			// Use a fast Range request to ensure the handshake completes
-			req, err := http.NewRequestWithContext(pingCtx, http.MethodGet, mirror, nil)
+			req, err := http.NewRequestWithContext(pingCtx, http.MethodGet, mirror, http.NoBody)
 			if err != nil {
 				return
 			}

@@ -168,7 +168,7 @@ func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	noAuthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/events", nil)
+	noAuthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/events", http.NoBody)
 	if err != nil {
 		t.Fatalf("failed to create request: %v", err)
 	}
@@ -181,7 +181,7 @@ func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 		t.Fatalf("expected 401 without auth, got %d", noAuthResp.StatusCode)
 	}
 
-	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/events", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/events", http.NoBody)
 	if err != nil {
 		t.Fatalf("failed to create authed request: %v", err)
 	}

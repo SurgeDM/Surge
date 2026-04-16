@@ -598,7 +598,7 @@ func TestHealthEndpoint(t *testing.T) {
 	server := testutil.NewHTTPServerT(t, mux)
 	defer server.Close()
 
-	healthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/health", nil)
+	healthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/health", http.NoBody)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -732,7 +732,7 @@ func TestStartHTTPServer_HealthEndpoint(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 
 	// Test health endpoint
-	healthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/health", port), nil)
+	healthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/health", port), http.NoBody)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -771,7 +771,7 @@ func TestStartHTTPServer_HasCORSHeaders(t *testing.T) {
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
 
-	healthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/health", port), nil)
+	healthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/health", port), http.NoBody)
 	if err != nil {
 		t.Fatalf("Failed to create request: %v", err)
 	}
@@ -798,7 +798,7 @@ func TestStartHTTPServer_OptionsRequest(t *testing.T) {
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodOptions, fmt.Sprintf("http://127.0.0.1:%d/download", port), nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodOptions, fmt.Sprintf("http://127.0.0.1:%d/download", port), http.NoBody)
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("Request failed: %v", err)
@@ -825,7 +825,7 @@ func TestStartHTTPServer_DownloadEndpoint_MethodNotAllowed(t *testing.T) {
 
 	token := ensureAuthToken()
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/download", port), nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodPut, fmt.Sprintf("http://127.0.0.1:%d/download", port), http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := http.DefaultClient.Do(req)
@@ -892,7 +892,7 @@ func TestStartHTTPServer_NotFoundEndpoint(t *testing.T) {
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
 
-	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/nonexistent", port), nil)
+	req, _ := http.NewRequestWithContext(context.Background(), http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/nonexistent", port), http.NoBody)
 	req.Header.Set("Authorization", "Bearer "+ensureAuthToken())
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {

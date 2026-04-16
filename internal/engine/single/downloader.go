@@ -143,7 +143,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		d.State.SetDestPath(destPath)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, http.NoBody)
 	if err != nil {
 		return err
 	}

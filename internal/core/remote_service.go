@@ -281,7 +281,7 @@ func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan
 }
 
 func (s *RemoteDownloadService) connectSSE(ctx context.Context, ch chan interface{}) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.BaseURL+"/events", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, s.BaseURL+"/events", http.NoBody)
 	if err != nil {
 		return err
 	}

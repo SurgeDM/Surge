@@ -182,7 +182,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 // downloadTask downloads a single byte range and writes to file at offset
 func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, file *os.File, activeTask *ActiveTask, buf []byte, client *http.Client, totalSize int64) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, http.NoBody)
 	if err != nil {
 		return err
 	}
