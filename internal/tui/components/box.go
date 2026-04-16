@@ -15,7 +15,7 @@ type BoxRenderer func(leftTitle, rightTitle, content string, width, height int, 
 // RenderBtopBox creates a btop-style box with title embedded in the top border.
 // Supports left and right titles (e.g., search on left, pane name on right).
 // Accepts pre-styled title strings.
-// Example: \u256d\u2500 \U0001f50d Search... \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Downloads \u2500\u256e
+// Example: ╭─ 🔍 Search... ─────────── Downloads ─╮
 func RenderBtopBox(leftTitle, rightTitle string, content string, width, height int, borderColor color.Color) string {
 	// Border characters
 	const (
@@ -35,10 +35,10 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	rightTitleWidth := lipgloss.Width(rightTitle)
 
 	// Calculate remaining horizontal space for the border
-	// Structure: \u256d + horizontal*? + leftTitle + horizontal*? + rightTitle + horizontal*? + \u256e
+	// Structure: ╭ + horizontal*? + leftTitle + horizontal*? + rightTitle + horizontal*? + ╮
 	// Basic structure we want:
-	// If leftTitle exists: \u256d\u2500 leftTitle \u2500\u2500...
-	// If rightTitle exists: ...\u2500\u2500 rightTitle \u2500\u256e
+	// If leftTitle exists: ╭─ leftTitle ──...
+	// If rightTitle exists: ...── rightTitle ─╮
 
 	borderStyler := lipgloss.NewStyle().Foreground(borderColor)
 	var topBorder string
@@ -83,7 +83,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 		topBorder = borderStyler.Render(topLeft + strings.Repeat(horizontal, innerWidth) + topRight)
 	}
 
-	// Build bottom border: \u256f\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2570
+	// Build bottom border: ╰───────────────────╯
 	bottomBorder := borderStyler.Render(
 		bottomLeft + strings.Repeat(horizontal, innerWidth) + bottomRight,
 	)

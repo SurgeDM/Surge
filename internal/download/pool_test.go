@@ -291,7 +291,7 @@ func TestWorkerPool_Cancel_RemovesFromMap(t *testing.T) {
 		t.Error("Expected CancelResult.Found to be true")
 	}
 
-	// Pool must NOT emit any event \u2014 that's the caller's responsibility
+	// Pool must NOT emit any event — that's the caller's responsibility
 	select {
 	case msg := <-ch:
 		t.Errorf("Pool should not emit events on cancel, got %T", msg)
@@ -437,7 +437,7 @@ func TestWorkerPool_Cancel_QueuedDownload_RemovesFromQueueAndReturnsResult(t *te
 		t.Fatalf("result.Filename = %q, want queued.bin", result.Filename)
 	}
 
-	// Pool must NOT emit events \u2014 caller handles that
+	// Pool must NOT emit events — caller handles that
 	select {
 	case msg := <-ch:
 		t.Fatalf("pool should not emit events on cancel, got %T", msg)
@@ -695,7 +695,7 @@ func TestWorkerPool_ExtractPausedConfig_WhilePausing(t *testing.T) {
 	}
 	pool.mu.Unlock()
 
-	// Should return nil \u2014 still pausing (not safe to extract)
+	// Should return nil — still pausing (not safe to extract)
 	if cfg := pool.ExtractPausedConfig("test-id"); cfg != nil {
 		t.Fatal("Expected nil while still pausing")
 	}
@@ -824,7 +824,7 @@ func TestWorkerPool_PauseResume_Idempotency(t *testing.T) {
 		t.Error("Expected state to be cleared after extract")
 	}
 
-	// 4. Second ExtractPausedConfig (idempotent \u2014 already extracted)
+	// 4. Second ExtractPausedConfig (idempotent — already extracted)
 	if cfg2 := pool.ExtractPausedConfig("idempotent-test"); cfg2 != nil {
 		t.Error("Expected nil on second extract (already removed from pool)")
 	}
@@ -874,13 +874,13 @@ func TestWorkerPool_UpdateURL(t *testing.T) {
 	pool.downloads["active-id"] = ad
 	pool.mu.Unlock()
 
-	// 1. Try updating a running download \u2014 should fail
+	// 1. Try updating a running download — should fail
 	err := pool.UpdateURL("active-id", "http://example.com/new.zip")
 	if err == nil {
 		t.Error("Expected error when updating URL for active download")
 	}
 
-	// 2. Try updating a paused download \u2014 pool only updates in-memory (no DB)
+	// 2. Try updating a paused download — pool only updates in-memory (no DB)
 	activeState.Paused.Store(true)
 	ad.running.Store(false)
 
@@ -897,7 +897,7 @@ func TestWorkerPool_UpdateURL(t *testing.T) {
 		t.Errorf("in-memory URL not updated: got %q", gotURL)
 	}
 
-	// 3. Try updating a queued download \u2014 should fail
+	// 3. Try updating a queued download — should fail
 	pool.mu.Lock()
 	pool.queued["queued-id"] = types.DownloadConfig{ID: "queued-id"}
 	pool.mu.Unlock()

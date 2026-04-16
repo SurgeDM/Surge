@@ -109,7 +109,7 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 					if rowValue <= 0 {
 						charIndex = 0 // Space
 					} else if rowValue >= 8 {
-						charIndex = 7 // Full block (\u2588)
+						charIndex = 7 // Full block (█)
 					} else {
 						charIndex = int(rowValue) // Partial block
 					}

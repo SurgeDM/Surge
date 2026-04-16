@@ -304,7 +304,7 @@ func (m RootModel) View() tea.View {
 	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
 	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
 
-	// Hide help text at very narrow widths \u2014 version is more important
+	// Hide help text at very narrow widths — version is more important
 	var footerContent string
 	if layout.AvailableWidth < 60 {
 		footerContent = versionText
@@ -781,6 +781,6 @@ func (m RootModel) viewQuitConfirm() string {
 // renderBtopBox creates a btop-style box with title embedded in the top border
 // Supports left and right titles (e.g., search on left, pane name on right)
 // Accepts pre-styled title strings
-// Example: \u256d\u2500 \U0001f50d Search... \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500 Downloads \u2500\u256e
+// Example: ╭─ 🔍 Search... ─────────── Downloads ─╮
 // Delegates to components.RenderBtopBox for the actual rendering
 var renderBtopBox = components.RenderBtopBox

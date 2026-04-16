@@ -237,7 +237,7 @@ func TestConnectCmd_NoServerRunning(t *testing.T) {
 		t.Fatalf("Failed to ensure dirs: %v", err)
 	}
 
-	// No port file exists \u2014 should return 0
+	// No port file exists — should return 0
 	port := readActivePort()
 	if port != 0 {
 		t.Fatalf("Expected port 0 (no server), got %d", port)
