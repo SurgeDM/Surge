@@ -10,7 +10,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"runtime/trace"
 	"sync"
 	"time"
 
@@ -259,7 +258,6 @@ func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 // Download downloads a file using multiple concurrent connections
 // Uses pre-probed metadata (file size already known)
 func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, candidateMirrors []string, activeMirrors []string, destPath string, fileSize int64) error {
-	defer trace.StartRegion(ctx, "ConcurrentDownloader.Download").End()
 	utils.Debug("ConcurrentDownloader.Download: %s -> %s (size: %d, mirrors: %d)", rawurl, destPath, fileSize, len(activeMirrors))
 
 	// Store URL and path for pause/resume (final path without .surge)
@@ -425,7 +423,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 			case <-balancerCtx.Done():
 				return
 			case <-ticker.C:
-				region := trace.StartRegion(balancerCtx, "BalancerTick")
 				// Aggressively fill idle workers
 				// Continue splitting/stealing as long as we have idle workers and are making progress
 				for queue.IdleWorkers() > 0 {
@@ -433,7 +430,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 					if queue.Len() == 0 {
 						// Try to steal from an active worker
 						if d.StealWork(queue) {
-							trace.Log(balancerCtx, "BalancerWork", "stole_work")
 							didWork = true
 						}
 					}
@@ -442,7 +438,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 					// Duplicate a task so an idle worker races on a fresh connection
 					if !didWork && queue.Len() == 0 {
 						if d.HedgeWork(queue) {
-							trace.Log(balancerCtx, "BalancerWork", "hedged_work")
 							didWork = true
 						}
 					}
@@ -452,7 +447,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 						break
 					}
 				}
-				region.End()
 			}
 		}
 	}()

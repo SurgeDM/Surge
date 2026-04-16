@@ -6,7 +6,6 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"runtime/trace"
 	"sync/atomic"
 	"time"
 
@@ -174,7 +173,6 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			// Log failed task but continue with next task
 			// If we modified StopAt we should probably reset it or push the remaining part?
 			// TODO: Could optimize by pushing only remaining part if we track that.
-			trace.Log(ctx, "TaskFailure", lastErr.Error())
 			queue.Push(task)
 			utils.Debug("task at offset %d failed after %d retries: %v", task.Offset, maxRetries, lastErr)
 		}
@@ -183,7 +181,6 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 // downloadTask downloads a single byte range and writes to file at offset
 func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, file *os.File, activeTask *ActiveTask, buf []byte, client *http.Client, totalSize int64) error {
-	defer trace.StartRegion(ctx, "worker.downloadTask").End()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
 	if err != nil {
 		return err

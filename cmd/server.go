@@ -1,9 +1,7 @@
 package cmd
 
 import (
-	"context"
 	"fmt"
-	"runtime/trace"
 
 	"os"
 	"os/signal"
@@ -174,7 +172,6 @@ func readPID() int {
 }
 
 func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile string, outputDir string, exitWhenDone bool, noResume bool, tokenOverride string) error {
-	trace.Log(context.Background(), "Startup", "startServerLogic_called")
 	port, listener, err := bindServerListener(portFlag)
 	if err != nil {
 		return err

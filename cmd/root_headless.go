@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"runtime/trace"
 	"sync/atomic"
 
 	"github.com/SurgeDM/Surge/internal/engine/events"
@@ -12,7 +11,6 @@ import (
 
 // StartHeadlessConsumer starts a goroutine to consume progress messages and log to stdout
 func StartHeadlessConsumer() {
-	trace.Log(context.Background(), "Startup", "StartHeadlessConsumer_called")
 	go func() {
 		if GlobalService == nil {
 			return
