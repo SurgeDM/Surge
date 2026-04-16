@@ -20,6 +20,17 @@ import (
 
 var errTest = errors.New("test error")
 
+type deleteErrorService struct {
+	core.DownloadService
+	deleteErr  error
+	deletedIDs []string
+}
+
+func (s *deleteErrorService) Delete(id string) error {
+	s.deletedIDs = append(s.deletedIDs, id)
+	return s.deleteErr
+}
+
 func TestUpdate_ResumeResultSetsResuming(t *testing.T) {
 	m := RootModel{
 		downloads: []*DownloadModel{
@@ -309,6 +320,36 @@ func TestUpdate_DownloadRemoved_NoOpWhenUnknownID(t *testing.T) {
 
 	if len(m2.downloads) != 1 {
 		t.Fatalf("expected unknown remove to keep entries, got %d", len(m2.downloads))
+	}
+}
+
+func TestUpdate_DashboardDelete_RemovesStaleRowWhenBackendNotFound(t *testing.T) {
+	svc := &deleteErrorService{deleteErr: errors.New("download not found")}
+	dm := NewDownloadModel("stale-id", "http://example.com/stale.bin", "stale.bin", 100)
+
+	m := RootModel{
+		state:     DashboardState,
+		keys:      Keys,
+		Settings:  config.DefaultSettings(),
+		Service:   svc,
+		downloads: []*DownloadModel{dm},
+		list:      NewDownloadList(80, 20),
+		logViewport: viewport.New(
+			viewport.WithWidth(40),
+			viewport.WithHeight(5),
+		),
+	}
+	m.UpdateListItems()
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	m2 := updated.(RootModel)
+
+	if len(svc.deletedIDs) != 1 || svc.deletedIDs[0] != "stale-id" {
+		t.Fatalf("delete should target stale-id once, got %#v", svc.deletedIDs)
+	}
+
+	if len(m2.downloads) != 0 {
+		t.Fatalf("expected stale row to be removed even when backend reports not found, got %d entries", len(m2.downloads))
 	}
 }
 
