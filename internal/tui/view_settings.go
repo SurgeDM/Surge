@@ -368,7 +368,8 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 		return m.renderSettingsCompact(settingsMeta, selectedRow, settingsValues, modalWidth, bodyHeight)
 	}
 
-	listRows := bodyHeight - BoxStyle.GetVerticalFrameSize()
+	// Account for both border (2) and internal padding (2)
+	listRows := bodyHeight - BoxStyle.GetVerticalFrameSize() - 2
 	if listRows < 1 {
 		listRows = 1
 	}
