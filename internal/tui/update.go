@@ -94,7 +94,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		layout := CalculateDashboardLayout(msg.Width, msg.Height)
 
 		// Update viewport width and re-wrap content to new bounds
-		logHeight := layout.HeaderHeight - (BoxStyle.GetVerticalFrameSize() * 2)
+		logHeight := layout.HeaderHeight - BoxStyle.GetVerticalFrameSize()
 		if logHeight < 1 {
 			logHeight = 1
 		}
