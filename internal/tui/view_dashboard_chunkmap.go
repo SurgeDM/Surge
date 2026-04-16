@@ -20,9 +20,9 @@ func (m *RootModel) renderChunkMapBox(width, height int, selected *DownloadModel
 
 	var innerContent string
 	if len(bitmap) == 0 || bitmapWidth == 0 {
-		innerContent = lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center,
-			lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Chunk visualization not available"))
+		innerContent = renderEmptyMessage(contentWidth, contentHeight, "Chunk visualization not available")
 	} else {
+
 		targetRows := contentHeight
 		if targetRows < 3 {
 			targetRows = 3

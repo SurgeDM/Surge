@@ -364,8 +364,14 @@ func (m RootModel) View() tea.View {
 	// Assembly
 	var body string
 	if layout.HideRightColumn {
-		body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
+		if layout.VerticalLayout {
+			detailBox := m.renderDetailsBox(layout.LeftWidth, layout.DetailHeight, selected)
+			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox, detailBox)
+		} else {
+			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
+		}
 	} else {
+
 		leftColumn := lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
 		body = lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
 	}

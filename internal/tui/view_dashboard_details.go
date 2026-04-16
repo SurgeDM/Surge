@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"charm.land/lipgloss/v2"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
 
@@ -23,8 +22,7 @@ func (m *RootModel) renderDetailsBox(width, height int, selected *DownloadModel)
 		innerContent = renderFocusedDetails(selected, contentWidth, m.spinner.View())
 	} else {
 		// Default Placeholder
-		innerContent = lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center,
-			lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No Download Selected"))
+		innerContent = renderEmptyMessage(contentWidth, contentHeight, "No download selected")
 	}
 
 	return renderBtopBox("", PaneTitleStyle.Render(" File Details "), innerContent, width, height, colors.Gray)

@@ -10,7 +10,12 @@ func (m *RootModel) renderLogBox(width, height int) string {
 		return ""
 	}
 
-	innerContent := m.logViewport.View()
+	var innerContent string
+	if len(m.logEntries) == 0 {
+		innerContent = renderEmptyMessage(width-2, height-2, "Activity log is empty")
+	} else {
+		innerContent = m.logViewport.View()
+	}
 
 	logBorderColor := colors.Gray
 	if m.logFocused {

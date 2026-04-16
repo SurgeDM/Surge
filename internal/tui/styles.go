@@ -29,6 +29,7 @@ var (
 	BoxStyle          lipgloss.Style
 	ModalPaddingStyle lipgloss.Style
 	LayoutGapStyle    lipgloss.Style
+	EmptyMessageStyle lipgloss.Style
 )
 
 func init() {
@@ -75,4 +76,6 @@ func rebuildStyles() {
 	LogStyleComplete = lipgloss.NewStyle().Foreground(colors.StateDone)
 	LogStyleError = lipgloss.NewStyle().Foreground(colors.StateError)
 	LogStylePaused = lipgloss.NewStyle().Foreground(colors.StatePaused)
+
+	EmptyMessageStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(false).Italic(true)
 }

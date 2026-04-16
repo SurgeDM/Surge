@@ -60,13 +60,12 @@ func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) strin
 	var listContent string
 	if len(m.list.Items()) == 0 {
 		if m.searchQuery != "" {
-			listContent = lipgloss.Place(listContentWidth, listContentHeight, lipgloss.Center, lipgloss.Center,
-				lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No matching downloads"))
+			listContent = renderEmptyMessage(listContentWidth, listContentHeight, "No matching downloads")
 		} else {
-			listContent = lipgloss.Place(listContentWidth, listContentHeight, lipgloss.Center, lipgloss.Center,
-				lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("No downloads"))
+			listContent = renderEmptyMessage(listContentWidth, listContentHeight, "No downloads yet")
 		}
 	} else {
+
 		// Ensure list is sized correctly for its container
 		m.list.SetSize(listContentWidth, listContentHeight)
 		listContent = m.list.View()

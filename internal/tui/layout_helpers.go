@@ -172,6 +172,7 @@ type DashboardLayout struct {
 	ChunkMapHeight  int
 	ShowChunkMap    bool
 	HideRightColumn bool
+	VerticalLayout  bool
 }
 
 // CalculateDashboardLayout computes the layout mapping for all dashboard components based on terminal size.
@@ -235,10 +236,20 @@ func CalculateDashboardLayout(termW, termH int) DashboardLayout {
 
 	// 4. Download List Dimensions
 	l.ListHeight = l.AvailableHeight - l.HeaderHeight
+	l.ListWidth = l.LeftWidth
+
+	// Handle Vertical Layout for narrow but tall terminals
+	// Only show details if we can maintain at least 10 lines for the downloads list
+	remainingH := l.AvailableHeight - l.HeaderHeight
+	if l.HideRightColumn && remainingH >= 20 {
+		l.VerticalLayout = true
+		l.ListHeight = remainingH / 2
+		l.DetailHeight = remainingH - l.ListHeight
+	}
+
 	if l.ListHeight < 4 {
 		l.ListHeight = 4
 	}
-	l.ListWidth = l.LeftWidth
 	l.TabBarHeight = 2 // standard height
 
 	return l

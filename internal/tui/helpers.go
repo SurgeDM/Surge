@@ -130,3 +130,12 @@ func (m RootModel) checkForDuplicate(url string) *processing.DuplicateResult {
 	}
 	return processing.CheckForDuplicate(url, m.Settings, activeDownloads)
 }
+
+// renderEmptyMessage provides a consistent visual for "no data" states in dashboard panes.
+func renderEmptyMessage(width, height int, message string) string {
+	if width < 1 || height < 1 {
+		return ""
+	}
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center,
+		EmptyMessageStyle.Render(message))
+}
