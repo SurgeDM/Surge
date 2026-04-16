@@ -50,11 +50,11 @@ var activeDownloads int32
 // pendingEnqueue tracks the number of pending batch enqueues to avoid premature exit
 var pendingEnqueue int32
 
-// Command line flags
 var (
-	globalHost  string
-	globalToken string
-	traceFile   string
+	globalHost      string
+	globalToken     string
+	traceFile       string
+	traceFileHandle *os.File
 )
 
 // Globals for Unified Backend
@@ -426,6 +426,7 @@ var rootCmd = &cobra.Command{
 				fmt.Fprintf(os.Stderr, "failed to create trace file: %v\n", err)
 				os.Exit(1)
 			}
+			traceFileHandle = f
 			if err := trace.Start(f); err != nil {
 				fmt.Fprintf(os.Stderr, "failed to start trace: %v\n", err)
 				os.Exit(1)

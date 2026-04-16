@@ -625,11 +625,8 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 	pingCtx, cancelPings := context.WithCancel(ctx)
 	defer cancelPings()
 
-	var wg sync.WaitGroup
 	for i := 0; i < totalToStart; i++ {
-		wg.Add(1)
 		go func(idx int) {
-			defer wg.Done()
 
 			// Round-robin mirrors
 			mirror := mirrors[idx%len(mirrors)]

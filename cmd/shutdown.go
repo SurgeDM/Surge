@@ -34,6 +34,12 @@ func defaultGlobalShutdown() error {
 	}
 
 	trace.Stop() // Flush any active execution trace
+	if traceFileHandle != nil {
+		if err := traceFileHandle.Close(); err != nil {
+			utils.Debug("Failed to close trace file: %v", err)
+		}
+		traceFileHandle = nil
+	}
 
 	return err
 }
