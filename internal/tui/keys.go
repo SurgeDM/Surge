@@ -269,8 +269,8 @@ var Keys = KeyMap{
 	},
 	FilePicker: FilePickerKeyMap{
 		UseDir: key.NewBinding(
-			key.WithKeys("."),
-			key.WithHelp(".", "use current"),
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "use current"),
 		),
 		GotoHome: key.NewBinding(
 			key.WithKeys("h", "H"),
@@ -285,8 +285,12 @@ var Keys = KeyMap{
 			key.WithHelp("→", "open"),
 		),
 		Open: key.NewBinding(
-			key.WithKeys("enter"),
-			key.WithHelp("enter", "select"),
+			key.WithKeys("."),
+			key.WithHelp(".", "select highlighted"),
+		),
+		Cancel: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "cancel"),
 		),
 	},
 	Duplicate: DuplicateKeyMap{

@@ -117,7 +117,8 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		if key.Matches(msg, m.keys.CategoryMgr.Tab) {
 			// On Path field, open file picker for directory browsing
 			if m.catMgrEditField == 3 {
-				browseDir := strings.TrimSpace(m.catMgrInputs[3].Value())
+				m.filepickerOriginalPath = m.catMgrInputs[3].Value()
+				browseDir := strings.TrimSpace(m.filepickerOriginalPath)
 				if browseDir == "" {
 					browseDir = m.Settings.General.DefaultDownloadDir
 				}

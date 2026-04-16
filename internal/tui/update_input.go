@@ -28,6 +28,7 @@ func (m RootModel) updateInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg, m.keys.Input.Tab) && m.focusedInput == 2 {
 		m.state = FilePickerState
+		m.filepickerOriginalPath = m.inputs[2].Value()
 		m.filepicker = newFilepicker(m.PWD)
 		return m, m.filepicker.Init()
 	}
@@ -130,7 +131,8 @@ func parseURLInput(input string) (url string, mirrors []string) {
 func (m RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Extension.Browse) && m.focusedInput == 2 {
 		m.ExtensionFileBrowsing = true
-		browseDir := strings.TrimSpace(m.inputs[2].Value())
+		m.filepickerOriginalPath = m.inputs[2].Value()
+		browseDir := strings.TrimSpace(m.filepickerOriginalPath)
 		if browseDir == "" {
 			browseDir = m.PWD
 		}
