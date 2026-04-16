@@ -27,6 +27,9 @@ func (m *RootModel) renderChunkMapBox(width, height int, selected *DownloadModel
 		if targetRows < 3 {
 			targetRows = 3
 		}
+		if targetRows > 5 {
+			targetRows = 5 // Maximum 5 rows for compact look
+		}
 
 		chunkMapPadding := lipgloss.NewStyle().Padding(0, 2)
 		chunkMapContentWidth := contentWidth - chunkMapPadding.GetHorizontalFrameSize()

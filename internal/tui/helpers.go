@@ -36,7 +36,8 @@ func (m *RootModel) refreshLogViewportContent() {
 		return
 	}
 
-	// Correctly wrap entries using lipgloss MaxWidth + Align(Left)
+	// Render each entry at the viewport width so the content fills the pane.
+	// Lines wider than the viewport will be clipped during rendering.
 	wrapStyle := lipgloss.NewStyle().Width(width).Align(lipgloss.Left)
 
 	var wrappedEntries []string

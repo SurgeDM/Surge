@@ -164,9 +164,6 @@ type DashboardLayout struct {
 
 	// Right Column components
 	GraphHeight     int
-	GraphAreaWidth  int
-	AxisWidth       int
-	HideGraphStats  bool
 	MinGraphHeight  int
 	DetailHeight    int
 	ChunkMapHeight  int
@@ -229,9 +226,6 @@ func CalculateDashboardLayout(termW, termH int) DashboardLayout {
 			l.DetailHeight = l.AvailableHeight - l.GraphHeight
 		}
 
-		// Graph internals
-		l.HideGraphStats = l.RightWidth < MinGraphStatsWidth
-		l.GraphAreaWidth, l.AxisWidth = GetGraphAreaDimensions(l.RightWidth, l.HideGraphStats)
 	}
 
 	// 4. Download List Dimensions

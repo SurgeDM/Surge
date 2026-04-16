@@ -147,7 +147,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 		dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
 
 		statsContent := lipgloss.JoinVertical(lipgloss.Left,
-			fmt.Sprintf("%s %s", valueStyle.Render("▼"), valueStyle.Render(fmt.Sprintf("%.2f MB/s", currentSpeed))),
+			fmt.Sprintf("%s %s", valueStyle.Render("\u25bc"), valueStyle.Render(fmt.Sprintf("%.2f MB/s", currentSpeed))),
 			dimStyle.Render(fmt.Sprintf("  (%.0f Mbps)", speedMbps)),
 			"",
 			fmt.Sprintf("%s %s", labelStyleStats.Render("Top:"), valueStyle.Render(fmt.Sprintf("%.2f", topSpeed))),
