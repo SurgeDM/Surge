@@ -41,6 +41,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 			MaxConnectionsPerHost: types.PerHostMax,
 			MinChunkSize:          types.MinChunk,
 			WorkerBufferSize:      types.WorkerBuffer,
+			DialHedgeCount:        types.DialHedgeCount,
 		}
 	}
 
@@ -208,7 +209,7 @@ func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 	transport := &http.Transport{
 		// Connection pooling
 		MaxIdleConns:        types.DefaultMaxIdleConns,
-		MaxIdleConnsPerHost: maxConns + 2, // Slightly more than max to handle bursts
+		MaxIdleConnsPerHost: maxConns + d.Runtime.GetDialHedgeCount() + 2, // Host buffer for hedges
 		MaxConnsPerHost:     maxConns,
 		Proxy:               proxyFunc,
 
@@ -321,6 +322,25 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	// Initialize chunk visualization
 	if d.State != nil {
 		d.State.InitBitmap(fileSize, chunkSize)
+	}
+
+	// Prepare list of targets for workers AND pre-warming
+	var workerMirrors []string
+	workerMirrors = append(workerMirrors, rawurl)
+	for _, v := range activeMirrors {
+		if v != rawurl {
+			workerMirrors = append(workerMirrors, v)
+		}
+	}
+	if len(workerMirrors) == 0 {
+		workerMirrors = []string{rawurl}
+	}
+
+	// HEDGED DIALING: Pre-warm connections to bypass slow dials
+	hedgeCount := d.Runtime.GetDialHedgeCount()
+	if hedgeCount > 0 {
+		utils.Debug("Pre-warming %d connections (hedge=%d)", numConns, hedgeCount)
+		d.prewarmConnections(downloadCtx, client, numConns, hedgeCount, workerMirrors)
 	}
 
 	// Open existing output file with .surge suffix (must be created by processing layer)
@@ -480,27 +500,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	var wg sync.WaitGroup
 	workerErrors := make(chan error, numConns)
 
-	// Combine primary + secondary for workers
-	// We want to ensure the primary is included if it was valid (it should be, otherwise TUIDownload would have failed)
-	var workerMirrors []string
-
-	// Add primary if compatible (check active map or assume yes since we are here)
-	// TUIDownload checks primary support before calling us.
-	workerMirrors = append(workerMirrors, rawurl)
-
-	// Add other valid mirrors
-	for _, v := range activeMirrors {
-		if v != rawurl {
-			workerMirrors = append(workerMirrors, v)
-		}
-	}
-
-	// Double check we have at least one mirror
-	if len(workerMirrors) == 0 {
-		// Should have been caught by early check but safe fallback
-		workerMirrors = []string{rawurl}
-	}
-
 	for i := 0; i < numConns; i++ {
 		wg.Add(1)
 		go func(workerID int) {
@@ -606,4 +605,76 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
 	return finalizeCompletedDownload()
+}
+
+// prewarmConnections fires off concurrent pings to the mirrors to populate the connection pool
+func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *http.Client, numRequired, hedgeCount int, mirrors []string) {
+	totalToStart := numRequired + hedgeCount
+	if totalToStart > 128 { // Safety cap
+		totalToStart = 128
+	}
+
+	// Channel to signal when a connection is ready (handshake complete)
+	ready := make(chan struct{}, totalToStart)
+
+	// Create a sub-context for the pings so we can stop them once we have enough
+	pingCtx, cancelPings := context.WithCancel(ctx)
+	defer cancelPings()
+
+	for i := 0; i < totalToStart; i++ {
+		go func(idx int) {
+
+			// Round-robin mirrors
+			mirror := mirrors[idx%len(mirrors)]
+
+			// Use a fast Range request to ensure the handshake completes
+			req, err := http.NewRequestWithContext(pingCtx, http.MethodGet, mirror, nil)
+			if err != nil {
+				return
+			}
+
+			// Forward custom headers (essential for authenticated mirrors)
+			for key, val := range d.Headers {
+				if key != "Range" {
+					req.Header.Set(key, val)
+				}
+			}
+
+			// Ensure User-Agent and Range are set
+			if req.Header.Get("User-Agent") == "" {
+				req.Header.Set("User-Agent", d.Runtime.GetUserAgent())
+			}
+			req.Header.Set("Range", "bytes=0-0")
+
+			// Perform dial + request
+			resp, err := client.Do(req)
+			if err != nil {
+				return
+			}
+
+			// Connection is now hot in the pool.
+			// Signal readiness and IMMEDIATELY close body to release to IdleConn pool.
+			ready <- struct{}{}
+			_ = resp.Body.Close()
+		}(i)
+	}
+
+	// Wait until we have enough ready connections OR we hit a timeout
+	completed := 0
+	timeout := time.After(types.DialTimeout) // Use standard dial timeout for the whole batch
+
+	for completed < numRequired {
+		select {
+		case <-ready:
+			completed++
+		case <-timeout:
+			utils.Debug("Pre-warming timed out after %d/%d connections", completed, numRequired)
+			return
+		case <-ctx.Done():
+			return
+		}
+	}
+
+	utils.Debug("Pre-warming complete: %d connections hot", completed)
+	// Remaining pings will be cancelled by defer cancelPings()
 }

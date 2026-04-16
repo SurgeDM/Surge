@@ -240,8 +240,8 @@ func (m RootModel) View() tea.View {
 	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
 		modal := components.ConfirmationModal{
 			Title:       "\u2b06 Update Available",
-			Message:     "A new version of Surge is available: " + m.UpdateInfo.LatestVersion,
-			Detail:      "Current: " + m.UpdateInfo.CurrentVersion,
+			Message:     fmt.Sprintf("A new version of Surge is available: %s", m.UpdateInfo.LatestVersion),
+			Detail:      fmt.Sprintf("Current: %s", m.UpdateInfo.CurrentVersion),
 			Keys:        m.keys.Update,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
@@ -297,7 +297,7 @@ func (m RootModel) View() tea.View {
 	// Footer - keybindings on left, version on bottom-right
 	helpText := m.help.View(m.keys.Dashboard)
 	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
-	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render("v" + m.CurrentVersion)
+	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
 
 	// Hide help text at very narrow widths — version is more important
 	var footerContent string

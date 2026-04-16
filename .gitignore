@@ -1,8 +1,9 @@
-# binary
+# surge stuff
 surge
 *.surge
 Surge
 surge_bin
+*.trace
 
 # python + uv stuff
 .python-version

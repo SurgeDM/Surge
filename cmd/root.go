@@ -50,7 +50,6 @@ var activeDownloads int32
 // pendingEnqueue tracks the number of pending batch enqueues to avoid premature exit
 var pendingEnqueue int32
 
-// Command line flags
 var (
 	globalHost  string
 	globalToken string
@@ -419,7 +418,6 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true, // errors are printed in main.go this prevents double printing
 	SilenceUsage:  true, // prevent usage text from being printed on every error
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-
 		GlobalProgressCh = make(chan any, 100)
 		globalSettings = getSettings()
 		GlobalPool = download.NewWorkerPool(GlobalProgressCh, globalSettings.Network.MaxConcurrentDownloads)
@@ -458,6 +456,7 @@ var rootCmd = &cobra.Command{
 
 // startTUI initializes and runs the TUI program
 func startTUI(port int, exitWhenDone bool, noResume bool) error {
+	tui.InitializeTUI()
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 

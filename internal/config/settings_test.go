@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -48,6 +49,9 @@ func TestDefaultSettings(t *testing.T) {
 		// UserAgent can be empty (means use default)
 		if settings.Network.SequentialDownload {
 			t.Error("SequentialDownload should be false by default")
+		}
+		if settings.Network.DialHedgeCount != 4 {
+			t.Errorf("DialHedgeCount should be 4 by default, got: %d", settings.Network.DialHedgeCount)
 		}
 	})
 
@@ -161,6 +165,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 			UserAgent:              "TestAgent/1.0",
 			MinChunkSize:           1 * MB,
 			WorkerBufferSize:       256 * KB,
+			DialHedgeCount:         6,
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        5,
@@ -213,6 +218,9 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 	if loaded.Network.UserAgent != original.Network.UserAgent {
 		t.Error("UserAgent mismatch")
+	}
+	if loaded.Network.DialHedgeCount != original.Network.DialHedgeCount {
+		t.Errorf("DialHedgeCount mismatch: got %d, want %d", loaded.Network.DialHedgeCount, original.Network.DialHedgeCount)
 	}
 	if loaded.Network.MinChunkSize != original.Network.MinChunkSize {
 		t.Error("MinChunkSize mismatch")
@@ -400,6 +408,9 @@ func TestToRuntimeConfig(t *testing.T) {
 	if runtime.WorkerBufferSize != settings.Network.WorkerBufferSize {
 		t.Error("WorkerBufferSize not correctly mapped")
 	}
+	if runtime.DialHedgeCount != settings.Network.DialHedgeCount {
+		t.Error("DialHedgeCount not correctly mapped")
+	}
 	if runtime.MaxTaskRetries != settings.Performance.MaxTaskRetries {
 		t.Error("MaxTaskRetries not correctly mapped")
 	}
@@ -414,6 +425,46 @@ func TestToRuntimeConfig(t *testing.T) {
 	}
 	if runtime.SpeedEmaAlpha != settings.Performance.SpeedEmaAlpha {
 		t.Error("SpeedEmaAlpha not correctly mapped")
+	}
+}
+
+// TestToRuntimeConfig_Exhaustive uses reflection to ensure that EVERY field
+// in the target RuntimeConfig struct is populated by ToRuntimeConfig.
+// This prevents "propagation gaps" when new fields are added to settings.
+func TestToRuntimeConfig_Exhaustive(t *testing.T) {
+	settings := DefaultSettings()
+
+	// Fill ALL network and performance settings with non-zero values
+	settings.Network.MaxConnectionsPerHost = 1
+	settings.Network.MaxConcurrentDownloads = 1
+	settings.Network.MaxConcurrentProbes = 1
+	settings.Network.UserAgent = "f"
+	settings.Network.ProxyURL = "g"
+	settings.Network.CustomDNS = "h"
+	settings.Network.SequentialDownload = true
+	settings.Network.MinChunkSize = 1
+	settings.Network.WorkerBufferSize = 1
+	settings.Network.DialHedgeCount = 1
+
+	settings.Performance.MaxTaskRetries = 1
+	settings.Performance.SlowWorkerThreshold = 0.1
+	settings.Performance.SlowWorkerGracePeriod = 1 * time.Second
+	settings.Performance.StallTimeout = 1 * time.Second
+	settings.Performance.SpeedEmaAlpha = 0.1
+
+	runtime := settings.ToRuntimeConfig()
+
+	v := reflect.ValueOf(*runtime)
+	typeOfS := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldName := typeOfS.Field(i).Name
+
+		// Ensure no field is zero-valued
+		if field.IsZero() {
+			t.Errorf("Field %q is zero in resulting RuntimeConfig. Did you forget to map it in Settings.ToRuntimeConfig?", fieldName)
+		}
 	}
 }
 

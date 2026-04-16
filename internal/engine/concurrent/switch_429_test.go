@@ -46,6 +46,7 @@ func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
 		MaxConnectionsPerHost: 1, // Single worker to trace behavior easily
 		MaxTaskRetries:        5,
 		MinChunkSize:          64 * types.KB,
+		DialHedgeCount:        0, // Disable hedging for deterministic failover test
 	}
 
 	downloader := NewConcurrentDownloader("switch429-id", nil, state, runtime)
@@ -114,6 +115,7 @@ func TestConcurrentDownloader_BackoffOnSingleMirror(t *testing.T) {
 		MaxConnectionsPerHost: 1,
 		MaxTaskRetries:        5,
 		MinChunkSize:          64 * types.KB,
+		DialHedgeCount:        0, // Disable hedging for deterministic backoff timing
 	}
 
 	downloader := NewConcurrentDownloader("backoff-id", nil, state, runtime)

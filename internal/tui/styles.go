@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"sync"
+
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 
 	"charm.land/lipgloss/v2"
@@ -32,9 +34,13 @@ var (
 	EmptyMessageStyle lipgloss.Style
 )
 
-func init() {
-	colors.RegisterThemeChangeHook(rebuildStyles)
-	rebuildStyles()
+var styleOnce sync.Once
+
+func InitializeStyles() {
+	styleOnce.Do(func() {
+		colors.RegisterThemeChangeHook(rebuildStyles)
+		rebuildStyles()
+	})
 }
 
 func rebuildStyles() {

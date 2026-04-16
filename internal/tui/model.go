@@ -23,8 +23,16 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/version"
 )
+
+// InitializeTUI prepares global TUI state like styles and component caches.
+// This should be called exactly once before any TUI elements are rendered.
+func InitializeTUI() {
+	InitializeStyles()
+	components.InitializeStatusCache()
+}
 
 type UIState int // Defines UIState as int to be used in rootModel
 
