@@ -34,7 +34,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 	}
 
 	// Determine if we should hide stats box
-	hideGraphStats := contentWidth < MinGraphStatsWidth
+	hideGraphStats := width < MinGraphStatsWidth
 
 	// Get the last data points for the graph
 	var graphData []float64

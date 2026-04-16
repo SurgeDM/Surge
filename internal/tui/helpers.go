@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 )
@@ -23,10 +24,34 @@ func (m *RootModel) addLogEntry(msg string) {
 		m.logEntries = m.logEntries[len(m.logEntries)-100:]
 	}
 
-	// Update viewport content
-	m.logViewport.SetContent(strings.Join(m.logEntries, "\n"))
+	// Re-wrap and update viewport content
+	m.refreshLogViewportContent()
 	// Auto-scroll to bottom
 	m.logViewport.GotoBottom()
+}
+
+// refreshLogViewportContent re-renders log entries with current viewport wrapping.
+func (m *RootModel) refreshLogViewportContent() {
+	width := m.logViewport.Width()
+	if width <= 0 {
+		return
+	}
+
+	var wrappedEntries []string
+	for _, entry := range m.logEntries {
+		// Wrap each entry to the current viewport width
+		wrapped := lipgloss.NewStyle().Width(width).Render(entry)
+		wrappedEntries = append(wrappedEntries, strings.Split(wrapped, "\n")...)
+	}
+
+	// Bottom-align entries if they don't fill the viewport
+	height := m.logViewport.Height()
+	if height > 0 && len(wrappedEntries) < height {
+		padding := make([]string, height-len(wrappedEntries))
+		wrappedEntries = append(padding, wrappedEntries...)
+	}
+
+	m.logViewport.SetContent(strings.Join(wrappedEntries, "\n"))
 }
 
 // removeDownloadByID removes a download from the in-memory list.

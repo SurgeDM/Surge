@@ -1,8 +1,6 @@
 package tui
 
 import (
-	"strings"
-
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
 
@@ -22,20 +20,9 @@ func (m *RootModel) renderLogBox(width, height int) string {
 		contentHeight = 1
 	}
 
+	// Update viewport dimensions (content and padding are handled in helpers.go)
 	m.logViewport.SetWidth(contentWidth)
 	m.logViewport.SetHeight(contentHeight)
-
-	// Pad log entries to bottom-align them conditionally based on current viewport height
-	var paddedEntries []string
-	if len(m.logEntries) < contentHeight {
-		paddedEntries = make([]string, contentHeight-len(m.logEntries))
-		paddedEntries = append(paddedEntries, m.logEntries...)
-	} else {
-		paddedEntries = m.logEntries
-	}
-
-	m.logViewport.SetContent(strings.Join(paddedEntries, "\n"))
-	m.logViewport.GotoBottom()
 
 	innerContent := m.logViewport.View()
 

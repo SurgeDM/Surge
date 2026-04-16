@@ -90,14 +90,35 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 
-		// View() handles the actual dynamic layout math; we supply available bounds.
-		listInnerPadding := lipgloss.NewStyle().Padding(1, 2)
-		availableWidth := msg.Width - WindowStyle.GetHorizontalFrameSize() - BoxStyle.GetHorizontalFrameSize()
+		// Sync layout calculations with View() to set viewport widths correctly
+		availableWidth := m.width - WindowStyle.GetHorizontalFrameSize()
+		if availableWidth < 0 {
+			availableWidth = 0
+		}
 
-		// Give bubbles/list roughly the right dimensions for word-wrapping, exact styling is handled in view.
+		leftWidth := GetListWidth(availableWidth)
+		logoWidth := int(float64(leftWidth) * LogoWidthRatio)
+		if logoWidth < 4 {
+			logoWidth = 4
+		}
+		logWidth := leftWidth - logoWidth - BoxStyle.GetHorizontalFrameSize()
+		if logWidth < 4 {
+			logWidth = 4
+		}
+
+		// Update viewport width and re-wrap content to new bounds
+		m.logViewport.SetWidth(logWidth)
+		m.refreshLogViewportContent()
+
+		// Setup download list dimensions
+		listInnerPadding := lipgloss.NewStyle().Padding(1, 2)
+		listWidth := availableWidth
+		if availableWidth > leftWidth {
+			listWidth = leftWidth
+		}
 		approxHeaderHeight := 11
 		approxTabBarHeight := 2
-		m.list.SetSize(availableWidth-listInnerPadding.GetHorizontalFrameSize(), msg.Height-approxHeaderHeight-approxTabBarHeight-BoxStyle.GetVerticalFrameSize())
+		m.list.SetSize(listWidth-listInnerPadding.GetHorizontalFrameSize(), msg.Height-approxHeaderHeight-approxTabBarHeight-BoxStyle.GetVerticalFrameSize())
 
 		// Update list based on active tab
 		m.UpdateListItems()

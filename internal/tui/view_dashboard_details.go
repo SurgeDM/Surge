@@ -7,7 +7,7 @@ import (
 
 // renderDetailsBox returns the file details pane as a btop box.
 func (m *RootModel) renderDetailsBox(width, height int, selected *DownloadModel) string {
-	contentWidth := width - 2
+	contentWidth := width - 4
 	contentHeight := height - 2
 
 	if contentWidth < 0 {
