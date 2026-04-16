@@ -165,7 +165,6 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if d.state != nil {
 				d.state.SetTotalSize(msg.Total) // Keep state updated for verification if needed
 			}
-			found = true
 			m.UpdateListItems()
 			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
 			return m, tea.Batch(progressCmd, m.spinner.Tick)
