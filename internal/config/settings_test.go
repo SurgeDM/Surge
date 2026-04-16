@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -424,6 +425,46 @@ func TestToRuntimeConfig(t *testing.T) {
 	}
 	if runtime.SpeedEmaAlpha != settings.Performance.SpeedEmaAlpha {
 		t.Error("SpeedEmaAlpha not correctly mapped")
+	}
+}
+
+// TestToRuntimeConfig_Exhaustive uses reflection to ensure that EVERY field
+// in the target RuntimeConfig struct is populated by ToRuntimeConfig.
+// This prevents "propagation gaps" when new fields are added to settings.
+func TestToRuntimeConfig_Exhaustive(t *testing.T) {
+	settings := DefaultSettings()
+
+	// Fill ALL network and performance settings with non-zero values
+	settings.Network.MaxConnectionsPerHost = 1
+	settings.Network.MaxConcurrentDownloads = 1
+	settings.Network.MaxConcurrentProbes = 1
+	settings.Network.UserAgent = "f"
+	settings.Network.ProxyURL = "g"
+	settings.Network.CustomDNS = "h"
+	settings.Network.SequentialDownload = true
+	settings.Network.MinChunkSize = 1
+	settings.Network.WorkerBufferSize = 1
+	settings.Network.DialHedgeCount = 1
+
+	settings.Performance.MaxTaskRetries = 1
+	settings.Performance.SlowWorkerThreshold = 0.1
+	settings.Performance.SlowWorkerGracePeriod = 1 * time.Second
+	settings.Performance.StallTimeout = 1 * time.Second
+	settings.Performance.SpeedEmaAlpha = 0.1
+
+	runtime := settings.ToRuntimeConfig()
+
+	v := reflect.ValueOf(*runtime)
+	typeOfS := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldName := typeOfS.Field(i).Name
+
+		// Ensure no field is zero-valued
+		if field.IsZero() {
+			t.Errorf("Field %q is zero in resulting RuntimeConfig. Did you forget to map it in Settings.ToRuntimeConfig?", fieldName)
+		}
 	}
 }
 

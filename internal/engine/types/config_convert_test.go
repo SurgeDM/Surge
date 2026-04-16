@@ -1,6 +1,7 @@
 package types
 
 import (
+	"reflect"
 	"testing"
 	"time"
 
@@ -81,5 +82,42 @@ func TestConvertRuntimeConfig_EmptyProxyURL(t *testing.T) {
 
 	if result.ProxyURL != "" {
 		t.Errorf("ProxyURL: got %q, want empty", result.ProxyURL)
+	}
+}
+
+// TestConvertRuntimeConfig_Exhaustive uses reflection to ensure that EVERY field
+// in config.RuntimeConfig is mapped to something in types.RuntimeConfig.
+// This prevents "propagation gaps" when new fields are added to the config.
+func TestConvertRuntimeConfig_Exhaustive(t *testing.T) {
+	input := &config.RuntimeConfig{
+		MaxConnectionsPerHost: 1,
+		MaxConcurrentProbes:   1,
+		UserAgent:             "a",
+		ProxyURL:              "b",
+		CustomDNS:             "c",
+		SequentialDownload:    true,
+		MinChunkSize:          1,
+		WorkerBufferSize:      1,
+		DialHedgeCount:        1,
+		MaxTaskRetries:        1,
+		SlowWorkerThreshold:   0.1,
+		SlowWorkerGracePeriod: 1 * time.Second,
+		StallTimeout:          1 * time.Second,
+		SpeedEmaAlpha:         0.1,
+	}
+
+	result := ConvertRuntimeConfig(input)
+
+	v := reflect.ValueOf(*result)
+	typeOfS := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldName := typeOfS.Field(i).Name
+
+		// Ensure no field is zero-valued
+		if field.IsZero() {
+			t.Errorf("Field %q is zero in converted RuntimeConfig. Did you forget to map it in ConvertRuntimeConfig?", fieldName)
+		}
 	}
 }
