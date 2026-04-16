@@ -65,9 +65,6 @@ func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) strin
 			listContent = renderEmptyMessage(listContentWidth, listContentHeight, "No downloads yet")
 		}
 	} else {
-
-		// Ensure list is sized correctly for its container
-		m.list.SetSize(listContentWidth, listContentHeight)
 		listContent = m.list.View()
 	}
 

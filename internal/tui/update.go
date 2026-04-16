@@ -111,6 +111,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Update list based on active tab
 		m.UpdateListItems()
+
+		// Update filepicker height (Account for 2 borders, 1 title, 1 path line, 2 padding, 2 help)
+		const pickerChromeHeight = 8
+		_, fpHeight := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
+		m.filepicker.SetHeight(fpHeight - pickerChromeHeight)
+
 		return m, nil
 
 	case notificationTickMsg:

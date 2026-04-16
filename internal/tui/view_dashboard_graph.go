@@ -121,7 +121,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 
 	if hideGraphStats {
 		// No stats box — graph gets almost full width
-		graphAreaWidth, axisWidth := GetGraphAreaDimensions(contentWidth+BoxStyle.GetHorizontalFrameSize()*2, true)
+		graphAreaWidth, axisWidth := GetGraphAreaDimensions(width, true)
 		graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
 
 		axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)
@@ -164,7 +164,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 			Height(graphContentHeight)
 		statsBox := statsBoxStyle.Render(statsContent)
 
-		graphAreaWidth, axisWidth := GetGraphAreaDimensions(contentWidth+BoxStyle.GetHorizontalFrameSize()*2, false)
+		graphAreaWidth, axisWidth := GetGraphAreaDimensions(width, false)
 		graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
 
 		axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)

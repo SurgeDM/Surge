@@ -127,9 +127,6 @@ func (m RootModel) View() tea.View {
 		w, h := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
 		picker.Width = w
 		picker.Height = h
-		// Update inner picker height to fit (Account for 2 borders, 1 title, 1 path line, 2 padding, 2 help)
-		const pickerChromeHeight = 8
-		picker.Picker.SetHeight(h - pickerChromeHeight)
 
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
@@ -210,9 +207,6 @@ func (m RootModel) View() tea.View {
 		w, h := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
 		picker.Width = w
 		picker.Height = h
-		// Update inner picker height to fit (Account for 2 borders, 1 title, 1 path line, 2 padding, 2 help)
-		const pickerChromeHeight = 8
-		picker.Picker.SetHeight(h - pickerChromeHeight)
 
 		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))

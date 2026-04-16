@@ -57,7 +57,7 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 	// If the height is too short for both logo and server text, just return server text centered vertically
 	if contentHeight < 4 {
 		innerContent = lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center, serverPortContent)
-	} else if contentWidth < 28 {
+	} else if width < MinLogoWidth {
 		// Show compact logo for medium-short headers or narrow terminals
 		logoContent := ApplyGradient(compactLogoText, colors.NeonPink, colors.NeonPurple)
 		logoBoxHeight := contentHeight - 1

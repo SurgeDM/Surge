@@ -181,8 +181,6 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
 			return m, m.spinner.Tick
 		}
-
-		return m, nil
 	case events.ProgressMsg:
 		cmd := m.processProgressMsg(msg)
 		return m, cmd
