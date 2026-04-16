@@ -83,7 +83,7 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge") //nolint:gosec // mock file; err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -129,7 +129,7 @@ func TestConcurrentDownloader_InvalidProxy(t *testing.T) {
 	// The key is that it shouldn't panic.
 	// Since we log error and fallback, it should succeed if direct connection works.
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge") //nolint:gosec // mock file; err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 

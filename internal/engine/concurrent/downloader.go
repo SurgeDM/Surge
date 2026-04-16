@@ -344,7 +344,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	}
 
 	// Open existing output file with .surge suffix (must be created by processing layer)
-	outFile, err := os.OpenFile(workingPath, os.O_RDWR, 0)
+	outFile, err := os.OpenFile(workingPath, os.O_RDWR, 0) //nolint:gosec // internal download path
 	if err != nil {
 		return fmt.Errorf("failed to open working file: %w", err)
 	}

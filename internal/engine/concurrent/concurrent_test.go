@@ -53,7 +53,7 @@ func TestConcurrentDownloader_Download(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -94,7 +94,7 @@ func TestConcurrentDownloader_WithLatency(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -138,7 +138,7 @@ func TestConcurrentDownloader_SlowDownload(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -183,7 +183,7 @@ func TestConcurrentDownloader_RespectServerConnectionLimit(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -230,7 +230,7 @@ func TestConcurrentDownloader_ContentIntegrity(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -305,7 +305,7 @@ func TestConcurrentDownloader_SmallFile(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -346,7 +346,7 @@ func TestConcurrentDownloader_MediumFile(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -388,7 +388,7 @@ func TestConcurrentDownloader_Cancellation(t *testing.T) {
 	done := make(chan error)
 	go func() {
 		// Pre-create incomplete file (simulating processing layer)
-		if f, err := os.Create(destPath + ".surge"); err == nil {
+		if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 			_ = f.Close()
 		}
 
@@ -432,7 +432,7 @@ func TestConcurrentDownloader_PauseAtCompletionFinalizesAsCompleted(t *testing.T
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -474,7 +474,7 @@ func TestConcurrentDownloader_ProgressTracking(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -517,7 +517,7 @@ func TestConcurrentDownloader_RetryOnFailure(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -563,7 +563,7 @@ func TestConcurrentDownloader_FailOnNthRequest(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -631,7 +631,7 @@ func TestConcurrentDownloader_ResumePartialDownload(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 

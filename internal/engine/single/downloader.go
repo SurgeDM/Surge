@@ -169,7 +169,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 	// Use .surge extension for incomplete file (must be pre-created by processing layer)
 	workingPath := destPath + types.IncompleteSuffix
-	outFile, err := os.OpenFile(workingPath, os.O_RDWR, 0)
+	outFile, err := os.OpenFile(workingPath, os.O_RDWR, 0) //nolint:gosec // internal download path
 	if err != nil {
 		return err
 	}
