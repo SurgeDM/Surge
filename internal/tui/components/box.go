@@ -21,8 +21,8 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	const (
 		topLeft     = "\u256d"
 		topRight    = "\u256e"
-		bottomLeft  = "\u256f"
-		bottomRight = "\u2570"
+		bottomLeft  = "\u2570"
+		bottomRight = "\u256f"
 		horizontal  = "\u2500"
 		vertical    = "\u2502"
 	)
