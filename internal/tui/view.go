@@ -443,13 +443,13 @@ func (m RootModel) View() tea.View {
 	stats := m.ComputeViewStats()
 
 	logoWidth := int(float64(leftWidth) * LogoWidthRatio)
-	logWidth := leftWidth - logoWidth - BoxStyle.GetHorizontalFrameSize() 
+	logWidth := leftWidth - logoWidth - BoxStyle.GetHorizontalFrameSize()
 
 	if logoWidth < 4 {
-		logoWidth = 4 
+		logoWidth = 4
 	}
 	if logWidth < 4 {
-		logWidth = 4 
+		logWidth = 4
 	}
 
 	logoColumn := m.renderHeaderBox(logoWidth, headerHeight)

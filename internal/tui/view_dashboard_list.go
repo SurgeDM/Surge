@@ -42,7 +42,7 @@ func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) strin
 	listPadding := lipgloss.NewStyle().Padding(1, 2)
 	padTopBottom := listPadding.GetVerticalFrameSize()   // 2
 	padLeftRight := listPadding.GetHorizontalFrameSize() // 4
-	
+
 	// tabBar is effectively 1 line (plus padding below if any, usually 1 or 2 lines)
 	tabBarHeight := lipgloss.Height(tabBar)
 
@@ -75,7 +75,7 @@ func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) strin
 	// Build list inner content - No search bar inside
 	listInnerContent := lipgloss.JoinVertical(lipgloss.Left, tabBar, listContent)
 	innerContent := listPadding.Render(listInnerContent)
-	
+
 	downloadsBorderColor := colors.NeonPink
 	if m.logFocused {
 		downloadsBorderColor = colors.Gray

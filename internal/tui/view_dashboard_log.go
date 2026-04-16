@@ -24,7 +24,7 @@ func (m *RootModel) renderLogBox(width, height int) string {
 
 	m.logViewport.SetWidth(contentWidth)
 	m.logViewport.SetHeight(contentHeight)
-	
+
 	// Pad log entries to bottom-align them conditionally based on current viewport height
 	var paddedEntries []string
 	if len(m.logEntries) < contentHeight {
@@ -36,7 +36,7 @@ func (m *RootModel) renderLogBox(width, height int) string {
 
 	m.logViewport.SetContent(strings.Join(paddedEntries, "\n"))
 	m.logViewport.GotoBottom()
-	
+
 	innerContent := m.logViewport.View()
 
 	logBorderColor := colors.Gray

@@ -25,10 +25,10 @@ func (m *RootModel) renderChunkMapBox(width, height int, selected *DownloadModel
 	} else {
 		targetRows := contentHeight
 		if targetRows < 3 {
-			targetRows = 3 
+			targetRows = 3
 		}
 		if targetRows > 5 {
-			targetRows = 5 
+			targetRows = 5
 		}
 
 		chunkMapPadding := lipgloss.NewStyle().Padding(0, 2)
@@ -44,7 +44,7 @@ func (m *RootModel) renderChunkMapBox(width, height int, selected *DownloadModel
 
 		chunkMap := components.NewChunkMapModel(bitmap, bitmapWidth, chunkMapContentWidth, targetRows, paused, totalSize, chunkSize, chunkProgress)
 		chunkContentWrapper := chunkMapPadding.Render(chunkMap.View())
-		
+
 		innerContent = lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center, chunkContentWrapper)
 	}
 
