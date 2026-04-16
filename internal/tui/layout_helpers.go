@@ -1,5 +1,7 @@
 package tui
 
+import "github.com/SurgeDM/Surge/internal/tui/components"
+
 // GetHeaderHeight returns the appropriate header height based on terminal height
 func GetHeaderHeight(termHeight int) int {
 	if termHeight < ShortTermHeightThreshold {
@@ -114,7 +116,7 @@ func CalculateTwoColumnWidths(modalWidth, preferredLeft, minRight int) (int, int
 func GetDynamicModalDimensions(termW, termH, minW, minH, prefW, contentH int) (int, int) {
 	w := prefW
 	// Ensure width doesn't exceed terminal
-	maxW := termW - 4
+	maxW := termW - (components.BorderFrameWidth * 2)
 	if maxW < minW {
 		maxW = minW
 	}
@@ -128,7 +130,7 @@ func GetDynamicModalDimensions(termW, termH, minW, minH, prefW, contentH int) (i
 
 	h := contentH
 	// Ensure height doesn't exceed terminal
-	maxH := termH - 2
+	maxH := termH - components.BorderFrameHeight
 	if maxH < minH {
 		maxH = minH
 	}
@@ -177,7 +179,7 @@ func CalculateDashboardLayout(termW, termH int) DashboardLayout {
 	l := DashboardLayout{}
 
 	l.AvailableWidth = termW - WindowStyle.GetHorizontalFrameSize()
-	l.AvailableHeight = termH - WindowStyle.GetVerticalFrameSize() - 1 // Account for 1-line footer
+	l.AvailableHeight = termH - WindowStyle.GetVerticalFrameSize() - FooterHeight // Account for 1-line footer
 	l.ShowChunkMap = l.AvailableHeight >= MinChunkMapVisibleH
 
 	if l.AvailableWidth < 0 {
@@ -217,7 +219,7 @@ func CalculateDashboardLayout(termW, termH int) DashboardLayout {
 
 		// Adjust heights for detail and chunk map
 		if l.ShowChunkMap {
-			l.ChunkMapHeight = 7 // 5 rows of content + 2 for borders
+			l.ChunkMapHeight = 5 + components.BorderFrameHeight // 5 rows of content + 2 for borders
 			l.GraphHeight = targetGraphH
 
 			l.DetailHeight = l.AvailableHeight - l.GraphHeight - l.ChunkMapHeight

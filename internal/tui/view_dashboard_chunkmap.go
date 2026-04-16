@@ -8,8 +8,8 @@ import (
 
 // renderChunkMapBox returns the visual chunk map layout inside a btop box.
 func (m *RootModel) renderChunkMapBox(width, height int, selected *DownloadModel, bitmap []byte, bitmapWidth int, totalSize, chunkSize int64, chunkProgress []int64) string {
-	contentWidth := width - 2
-	contentHeight := height - 2
+	contentWidth := width - components.BorderFrameWidth
+	contentHeight := height - components.BorderFrameHeight
 
 	if contentWidth < 0 {
 		contentWidth = 0

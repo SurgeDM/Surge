@@ -28,7 +28,7 @@ const (
 
 	MinRightColumnWidth = 50 // Hide right column if narrow
 	MinGraphStatsWidth  = 70 // Hide inline graph stats if narrow
-	MinLogoWidth        = 60 // Hide ASCII logo if narrow
+	MinLogoWidth        = 40 // Hide ASCII logo if narrow
 
 	MinGraphHeight      = 9
 	MinGraphHeightShort = 5
@@ -44,14 +44,19 @@ const (
 	CardHeight         = 2 // Compact rows for downloads list
 
 	// === Padding and Offsets ===
-	DefaultPaddingX = 1
-	DefaultPaddingY = 0
-	PopupPaddingX   = 2
-	PopupPaddingY   = 1
-	PopupWidth      = 70 // Consistent width for small popup dialogs
-
+	DefaultPaddingX        = 1
+	DefaultPaddingY        = 0
+	PopupPaddingX          = 2
+	PopupPaddingY          = 1
+	PopupWidth             = 70 // Consistent width for small popup dialogs
 	HeaderWidthOffset      = 2
 	ProgressBarWidthOffset = 4
+
+	// === Layout Offsets (Clean Math) ===
+	InternalPaddingHeight = 2 // Standard internal vertical padding
+	InternalPaddingWidth  = 2 // Standard internal horizontal padding
+	FooterHeight          = 1 // Application-wide footer height (keybindings)
+	DividerHeight         = 1 // Horizontal/Vertical divider line
 
 	// === Graph Configuration ===
 	GraphAxisWidth  = 10

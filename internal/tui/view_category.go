@@ -336,7 +336,7 @@ func (m RootModel) renderCategoryCompact(cats []config.Category, cursor, modalWi
 		listRows = 1
 	}
 
-	detailRows := bodyHeight - listRows - 1 // -1 for the divider line
+	detailRows := bodyHeight - listRows - DividerHeight // line for the divider line
 	if detailRows < 1 {
 		detailRows = 1
 		listRows = bodyHeight - detailRows

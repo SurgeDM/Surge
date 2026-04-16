@@ -334,9 +334,9 @@ func (m RootModel) View() tea.View {
 		detailWidth = layout.LeftWidth
 	}
 	if selected != nil {
-		detailContent = renderFocusedDetails(selected, detailWidth-2, m.spinner.View())
+		detailContent = renderFocusedDetails(selected, detailWidth-components.BorderFrameWidth, m.spinner.View())
 	} else {
-		detailContent = renderEmptyMessage(detailWidth-2, layout.DetailHeight-2, "No download selected")
+		detailContent = renderEmptyMessage(detailWidth-components.BorderFrameWidth, layout.DetailHeight-components.BorderFrameHeight, "No download selected")
 	}
 
 	// Render Components
@@ -410,7 +410,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	}
 
 	// Consistent content width for centering
-	contentWidth := w - 4
+	contentWidth := w - (components.BorderFrameWidth * 2)
 	if contentWidth < 0 {
 		contentWidth = 0
 	}
@@ -448,7 +448,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	}
 
 	// Calculate inner width accounting for sectionStyle padding (0, 1)
-	innerWidth := contentWidth - 2
+	innerWidth := contentWidth - components.BorderFrameWidth
 	if innerWidth < 0 {
 		innerWidth = 0
 	}
@@ -472,7 +472,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	var progContent string
 	if contentWidth > 45 { // Enough space for "Progress: " (10) + some bar + padding
 		// Horizontal layout: Progress: [████████      ]
-		maxProgWidth := contentWidth - lipgloss.Width(labelStr) - 1
+		maxProgWidth := contentWidth - lipgloss.Width(labelStr) - components.SingleLineHeight
 		if maxProgWidth < 10 {
 			maxProgWidth = 10
 		}
@@ -569,7 +569,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	timeStr = formatDurationForUI(elapsed)
 
 	// Stats Layout
-	colWidth := (contentWidth - 4) / 2
+	colWidth := (contentWidth - (components.BorderFrameWidth * 2)) / 2
 	leftColItems := []string{
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Size:"), StatsValueStyle.Render(sizeStr)),
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Speed:"), StatsValueStyle.Render(speedStr)),
@@ -736,7 +736,7 @@ func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
 
 func (m RootModel) viewQuitConfirm() string {
 	w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 60, 10)
-	innerWidth := w - 4
+	innerWidth := w - (components.BorderFrameWidth * 2)
 
 	messageStyle := lipgloss.NewStyle().
 		Foreground(colors.White).
@@ -794,7 +794,7 @@ func (m RootModel) viewQuitConfirm() string {
 	lines = append(lines, "")
 	lines = append(lines, centeredButtons)
 
-	innerHeight := h - 2
+	innerHeight := h - components.BorderFrameHeight
 	contentHeight := lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, lines...))
 	helpHeight := lipgloss.Height(helpText)
 	spacing := innerHeight - contentHeight - helpHeight

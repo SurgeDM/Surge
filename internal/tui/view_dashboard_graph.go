@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -16,8 +17,8 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 		return ""
 	}
 
-	contentWidth := width - 2
-	contentHeight := height - 2
+	contentWidth := width - components.BorderFrameWidth
+	contentHeight := height - components.BorderFrameHeight
 
 	if contentWidth < 0 {
 		contentWidth = 0
@@ -28,7 +29,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 
 	// Calculate Available Height for the Graph
 	// Let's leave 2 lines for top/bottom padding as previous design.
-	graphContentHeight := contentHeight - 2
+	graphContentHeight := contentHeight - InternalPaddingHeight
 	if graphContentHeight < 3 {
 		graphContentHeight = 3
 	}

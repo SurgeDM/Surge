@@ -189,7 +189,7 @@ func overlayStatsBox(graph string, stats *GraphStats, width, height int) string 
 		graphLineWidth := lipgloss.Width(graphLines[i])
 		statsLineWidth := lipgloss.Width(statsBoxLines[i])
 
-		keepWidth := graphLineWidth - statsLineWidth - 1
+		keepWidth := graphLineWidth - statsLineWidth - DividerHeight
 		if keepWidth < 0 {
 			keepWidth = 0
 		}

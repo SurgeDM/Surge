@@ -144,7 +144,7 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 
 	// Truncate title and description if needed
 	// m.Width() is the available space for the list item
-	availableWidth := m.Width() - 4 // Account for prefix and some padding
+	availableWidth := m.Width() - (components.BorderFrameWidth * 2) // Account for prefix and some padding
 	if availableWidth < 10 {
 		availableWidth = 10
 	}

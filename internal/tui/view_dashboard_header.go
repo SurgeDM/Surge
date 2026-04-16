@@ -5,12 +5,13 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/tui/components"
 )
 
 // renderHeaderBox displays the Surge logo and the server connection status within a box.
 func (m *RootModel) renderHeaderBox(width, height int) string {
-	contentWidth := width - 2
-	contentHeight := height - 2
+	contentWidth := width - components.BorderFrameWidth
+	contentHeight := height - components.BorderFrameHeight
 
 	if contentWidth < 0 {
 		contentWidth = 0
@@ -60,7 +61,7 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 	} else if width < MinLogoWidth {
 		// Show compact logo for medium-short headers or narrow terminals
 		logoContent := ApplyGradient(compactLogoText, colors.NeonPink, colors.NeonPurple)
-		logoBoxHeight := contentHeight - 1
+		logoBoxHeight := contentHeight - components.SingleLineHeight // 1 line for the server text at the bottom
 		logoBox := lipgloss.Place(contentWidth, logoBoxHeight, lipgloss.Center, lipgloss.Center, logoContent)
 		innerContent = lipgloss.JoinVertical(lipgloss.Center, logoBox, serverPortContent)
 	} else {
@@ -73,7 +74,7 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 			logoContent = m.logoCache
 		}
 
-		logoBoxHeight := contentHeight - 1 // 1 line for the server text at the bottom
+		logoBoxHeight := contentHeight - components.SingleLineHeight // 1 line for the server text at the bottom
 		logoBox := lipgloss.Place(contentWidth, logoBoxHeight, lipgloss.Center, lipgloss.Center, logoContent)
 		innerContent = lipgloss.JoinVertical(lipgloss.Center, logoBox, serverPortContent)
 	}

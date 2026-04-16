@@ -368,8 +368,8 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 		return m.renderSettingsCompact(settingsMeta, selectedRow, settingsValues, modalWidth, bodyHeight)
 	}
 
-	// Account for both border (2) and internal padding (2)
-	listRows := bodyHeight - BoxStyle.GetVerticalFrameSize() - 2
+	// Account for both border and internal padding
+	listRows := bodyHeight - BoxStyle.GetVerticalFrameSize() - InternalPaddingHeight
 	if listRows < 1 {
 		listRows = 1
 	}
@@ -420,7 +420,7 @@ func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, sele
 		listRows = 1
 	}
 
-	detailRows := bodyHeight - listRows - 1 // -1 for the divider line
+	detailRows := bodyHeight - listRows - DividerHeight // line for the divider line
 	if detailRows < 1 {
 		detailRows = 1
 		listRows = bodyHeight - detailRows
@@ -482,13 +482,12 @@ func (m *RootModel) normalizeSettingsSelection() {
 
 func (m *RootModel) updateSettingsInputWidthForViewport() {
 	modalWidth, _ := GetSettingsDimensions(m.width, m.height)
-
 	var targetWidth int
 	if modalWidth >= 72 {
 		_, rightWidth := CalculateTwoColumnWidths(modalWidth, 32, 22)
-		targetWidth = rightWidth - 10
+		targetWidth = rightWidth - 10 // Fixed offset for labels
 	} else {
-		targetWidth = modalWidth - 16
+		targetWidth = modalWidth - 16 // Fixed offset for labels
 	}
 
 	if targetWidth < MinSettingsInputW {

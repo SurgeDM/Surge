@@ -2,13 +2,15 @@ package tui
 
 import (
 	"charm.land/lipgloss/v2"
+
 	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/tui/components"
 )
 
 // renderDownloadsBox generates the download list box with the top-left corner search bar string.
 func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) string {
-	contentWidth := width - 2
-	contentHeight := height - 2
+	contentWidth := width - components.BorderFrameWidth
+	contentHeight := height - components.BorderFrameHeight
 
 	if contentWidth < 0 {
 		contentWidth = 0
