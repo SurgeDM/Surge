@@ -98,14 +98,14 @@ func newDelegateKeyMap() *delegateKeyMap {
 	}
 }
 
-func newDownloadDelegate() downloadDelegate {
+func newDownloadDelegate() *downloadDelegate {
 	baseTitle := lipgloss.NewStyle().Foreground(colors.White).Bold(true)
 	baseDesc := lipgloss.NewStyle().Foreground(colors.LightGray)
 
 	selTitle := lipgloss.NewStyle().Foreground(colors.NeonPink).Bold(true)
 	selDesc := lipgloss.NewStyle().Foreground(colors.NeonCyan)
 
-	return downloadDelegate{
+	return &downloadDelegate{
 		keys:           newDelegateKeyMap(),
 		baseTitleStyle: baseTitle,
 		baseDescStyle:  baseDesc,
@@ -116,14 +116,14 @@ func newDownloadDelegate() downloadDelegate {
 	}
 }
 
-func (d downloadDelegate) Height() int  { return 2 }
-func (d downloadDelegate) Spacing() int { return 1 }
+func (d *downloadDelegate) Height() int  { return 2 }
+func (d *downloadDelegate) Spacing() int { return 1 }
 
-func (d downloadDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
+func (d *downloadDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 	return nil
 }
 
-func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+func (d *downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
 	i, ok := listItem.(DownloadItem)
 	if !ok {
 		return
@@ -161,12 +161,12 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 }
 
 // ShortHelp returns keybindings to show in the mini help view
-func (d downloadDelegate) ShortHelp() []key.Binding {
+func (d *downloadDelegate) ShortHelp() []key.Binding {
 	return []key.Binding{d.keys.pause, d.keys.delete}
 }
 
 // FullHelp returns keybindings for the expanded help view
-func (d downloadDelegate) FullHelp() [][]key.Binding {
+func (d *downloadDelegate) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{d.keys.pause, d.keys.delete},
 	}
