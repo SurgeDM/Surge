@@ -115,7 +115,7 @@ func (ps *ProgressState) GetError() error {
 	return nil
 }
 
-func (ps *ProgressState) GetProgress() (downloaded int64, total int64, totalElapsed time.Duration, sessionElapsed time.Duration, connections int32, sessionStartBytes int64) {
+func (ps *ProgressState) GetProgress() (downloaded, total int64, totalElapsed time.Duration, sessionElapsed time.Duration, connections int32, sessionStartBytes int64) {
 	downloaded = ps.VerifiedProgress.Load()
 	connections = ps.ActiveWorkers.Load()
 	paused := ps.Paused.Load()
@@ -253,7 +253,7 @@ const (
 )
 
 // InitBitmap initializes the chunk bitmap
-func (ps *ProgressState) InitBitmap(totalSize int64, chunkSize int64) {
+func (ps *ProgressState) InitBitmap(totalSize, chunkSize int64) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 

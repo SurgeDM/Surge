@@ -68,7 +68,7 @@ type downloadInfo struct {
 	Speed      float64 `json:"speed,omitempty"`
 }
 
-func printDownloads(ctx context.Context, jsonOutput bool, baseURL string, token string, strictRemote bool) error {
+func printDownloads(ctx context.Context, jsonOutput bool, baseURL, token string, strictRemote bool) error {
 	var downloads []downloadInfo
 
 	// Try to get from running server first

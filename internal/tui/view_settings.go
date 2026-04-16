@@ -124,7 +124,7 @@ func shortSettingsCategoryLabel(label string) string {
 	}
 }
 
-func (m *RootModel) renderSettingsTabBar(categories []string, activeTab int, maxWidth int) string {
+func (m *RootModel) renderSettingsTabBar(categories []string, activeTab, maxWidth int) string {
 	if maxWidth < 1 {
 		maxWidth = 1
 	}

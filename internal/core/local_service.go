@@ -457,17 +457,17 @@ func (s *LocalDownloadService) List(ctx context.Context) ([]types.DownloadStatus
 }
 
 // Add queues a new download on the local pool without TUI confirmation.
-func (s *LocalDownloadService) Add(ctx context.Context, url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+func (s *LocalDownloadService) Add(ctx context.Context, url, path, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
 	return s.add(ctx, url, path, filename, mirrors, headers, "", isExplicitCategory, totalSize, supportsRange)
 }
 
 // AddWithID queues a new download using a caller-provided id when non-empty.
-func (s *LocalDownloadService) AddWithID(ctx context.Context, url string, path string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
+func (s *LocalDownloadService) AddWithID(ctx context.Context, url, path, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
 	// Remote or RPC-driven calls use preset IDs and should bypass interactive category routing.
 	return s.add(ctx, url, path, filename, mirrors, headers, id, false, totalSize, supportsRange)
 }
 
-func (s *LocalDownloadService) add(ctx context.Context, url string, path string, filename string, mirrors []string, headers map[string]string, requestedID string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+func (s *LocalDownloadService) add(ctx context.Context, url, path, filename string, mirrors []string, headers map[string]string, requestedID string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
 	if s.Pool == nil {
 		return "", errors.New("worker pool not initialized")
 	}
@@ -557,7 +557,7 @@ func (s *LocalDownloadService) SetLifecycleHooks(hooks LifecycleHooks) {
 }
 
 // UpdateURL updates the URL of a paused or errored download
-func (s *LocalDownloadService) UpdateURL(ctx context.Context, id string, newURL string) error {
+func (s *LocalDownloadService) UpdateURL(ctx context.Context, id, newURL string) error {
 	if s.lifecycleHooks.UpdateURL != nil {
 		return s.lifecycleHooks.UpdateURL(ctx, id, newURL)
 	}

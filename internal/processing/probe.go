@@ -56,7 +56,7 @@ func resolveRuntimeConfig() *config.RuntimeConfig {
 // ProbeServer is the convenience entry point for callers that do not already
 // hold a settings snapshot; it reloads persisted settings so probe traffic can
 // honor the saved proxy configuration.
-func ProbeServer(ctx context.Context, rawurl string, filenameHint string, headers map[string]string) (*ProbeResult, error) {
+func ProbeServer(ctx context.Context, rawurl, filenameHint string, headers map[string]string) (*ProbeResult, error) {
 	return ProbeServerWithProxy(ctx, rawurl, filenameHint, headers, resolveRuntimeConfig())
 }
 
@@ -79,7 +79,7 @@ func getProbeHostLock(rawurl string) *sync.Mutex {
 // ProbeServerWithProxy is the hot-path variant for callers that already know
 // the effective proxy and want probe traffic to match the eventual download path
 // without re-reading settings from disk.
-func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint string, headers map[string]string, runCfg *config.RuntimeConfig) (*ProbeResult, error) {
+func ProbeServerWithProxy(ctx context.Context, rawurl, filenameHint string, headers map[string]string, runCfg *config.RuntimeConfig) (*ProbeResult, error) {
 	utils.Debug("Probing server: %s", rawurl)
 
 	// Embed custom headers in context so CheckRedirect can use them

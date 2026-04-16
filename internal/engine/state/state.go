@@ -45,12 +45,12 @@ func URLHash(url string) string {
 }
 
 // SaveState saves download state to SQLite
-func SaveState(ctx context.Context, url string, destPath string, state *types.DownloadState) error {
+func SaveState(ctx context.Context, url, destPath string, state *types.DownloadState) error {
 	return SaveStateWithOptions(ctx, url, destPath, state, SaveStateOptions{})
 }
 
 // SaveStateWithOptions saves download state to SQLite with custom persistence options.
-func SaveStateWithOptions(ctx context.Context, url string, destPath string, state *types.DownloadState, opts SaveStateOptions) error {
+func SaveStateWithOptions(ctx context.Context, url, destPath string, state *types.DownloadState, opts SaveStateOptions) error {
 	// Ensure ID is set
 	if state.ID == "" {
 		state.ID = uuid.New().String()
@@ -206,7 +206,7 @@ func computeFileHashMD5WithTimeout(path string, timeout time.Duration) (string, 
 	return hashPrefixMD5 + hex.EncodeToString(h.Sum(nil)), false, nil
 }
 
-func compareAgainstStoredFileHash(path string, storedHash string) (bool, error) {
+func compareAgainstStoredFileHash(path, storedHash string) (bool, error) {
 	algo, expected := parseStoredHash(storedHash)
 	switch algo {
 	case "md5":
@@ -248,7 +248,7 @@ func parseStoredHash(storedHash string) (algo, value string) {
 }
 
 // LoadState loads download state from SQLite
-func LoadState(ctx context.Context, url string, destPath string) (*types.DownloadState, error) {
+func LoadState(ctx context.Context, url, destPath string) (*types.DownloadState, error) {
 
 	db := getDBHelper(ctx)
 	if db == nil {
@@ -578,7 +578,7 @@ func CheckDownloadExists(ctx context.Context, url string) (bool, error) {
 }
 
 // UpdateStatus updates the status of a download by ID
-func UpdateStatus(ctx context.Context, id string, status string) error {
+func UpdateStatus(ctx context.Context, id, status string) error {
 	db := getDBHelper(ctx)
 	if db == nil {
 		return errors.New("database not initialized")
@@ -598,7 +598,7 @@ func UpdateStatus(ctx context.Context, id string, status string) error {
 }
 
 // UpdateURL updates the URL of a download by ID
-func UpdateURL(ctx context.Context, id string, newURL string) error {
+func UpdateURL(ctx context.Context, id, newURL string) error {
 	db := getDBHelper(ctx)
 	if db == nil {
 		return errors.New("database not initialized")

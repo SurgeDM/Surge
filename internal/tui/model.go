@@ -194,7 +194,7 @@ type RootModel struct {
 }
 
 // NewDownloadModel creates a new download model
-func NewDownloadModel(id string, url string, filename string, total int64) *DownloadModel {
+func NewDownloadModel(id, url, filename string, total int64) *DownloadModel {
 	// Create dummy state container for compatibility if needed
 	state := types.NewProgressState(id, total)
 	return &DownloadModel{

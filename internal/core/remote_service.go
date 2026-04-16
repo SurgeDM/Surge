@@ -29,7 +29,7 @@ type RemoteDownloadService struct {
 }
 
 // NewRemoteDownloadService creates a new remote service instance.
-func NewRemoteDownloadService(baseURL string, token string) *RemoteDownloadService {
+func NewRemoteDownloadService(baseURL, token string) *RemoteDownloadService {
 	ctx, cancel := context.WithCancel(context.Background())
 	return &RemoteDownloadService{
 		BaseURL:   baseURL,
@@ -122,7 +122,7 @@ func (s *RemoteDownloadService) GetStatus(ctx context.Context, id string) (*type
 }
 
 // Add queues a new download.
-func (s *RemoteDownloadService) Add(ctx context.Context, url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+func (s *RemoteDownloadService) Add(ctx context.Context, url, path, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
 	req := map[string]interface{}{
 		"url":                  url,
 		"path":                 path,
@@ -149,7 +149,7 @@ func (s *RemoteDownloadService) Add(ctx context.Context, url string, path string
 }
 
 // AddWithID queues a new download with a caller-provided id.
-func (s *RemoteDownloadService) AddWithID(ctx context.Context, url string, path string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
+func (s *RemoteDownloadService) AddWithID(ctx context.Context, url, path, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
 	req := map[string]interface{}{
 		"url":            url,
 		"path":           path,
@@ -205,7 +205,7 @@ func (s *RemoteDownloadService) ResumeBatch(ctx context.Context, ids []string) [
 }
 
 // UpdateURL updates the URL of a paused or errored download via the remote API.
-func (s *RemoteDownloadService) UpdateURL(ctx context.Context, id string, newURL string) error {
+func (s *RemoteDownloadService) UpdateURL(ctx context.Context, id, newURL string) error {
 	req := map[string]string{
 		"url": newURL,
 	}
