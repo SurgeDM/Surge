@@ -170,6 +170,7 @@ type RootModel struct {
 	// Update check
 	UpdateInfo     *version.UpdateInfo // Update information (nil if no update available)
 	CurrentVersion string              // Current version of Surge
+	CurrentCommit  string              // Current commit hash of Surge
 
 	InitialDarkBackground bool // Captured at startup for "System" theme
 
@@ -198,8 +199,14 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 	}
 }
 
-func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, orchestrator *processing.LifecycleManager, noResume bool) RootModel {
+func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, orchestrator *processing.LifecycleManager, noResume bool, currentCommit ...string) RootModel {
 	initialDarkBackground := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	commitValue := "unknown"
+	if len(currentCommit) > 0 {
+		if trimmed := strings.TrimSpace(currentCommit[0]); trimmed != "" {
+			commitValue = trimmed
+		}
+	}
 
 	// Initialize inputs
 	urlInput := textinput.New()
@@ -386,6 +393,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		keys:                  Keys,
 		ServerPort:            serverPort,
 		CurrentVersion:        currentVersion,
+		CurrentCommit:         commitValue,
 		InitialDarkBackground: initialDarkBackground,
 		enqueueCtx:            enqueueCtx,
 		cancelEnqueue:         cancelEnqueue,
