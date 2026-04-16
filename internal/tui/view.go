@@ -392,6 +392,8 @@ func (m RootModel) View() tea.View {
 	body = lipgloss.NewStyle().
 		Width(layout.AvailableWidth).
 		Height(layout.AvailableHeight).
+		MaxWidth(layout.AvailableWidth).
+		MaxHeight(layout.AvailableHeight).
 		Render(body)
 
 	fullView := lipgloss.JoinVertical(lipgloss.Left, body, footer)

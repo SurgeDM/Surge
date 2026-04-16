@@ -181,7 +181,7 @@ func CalculateDashboardLayout(termW, termH int) DashboardLayout {
 
 	l.AvailableWidth = termW - WindowStyle.GetHorizontalFrameSize()
 	l.AvailableHeight = termH - WindowStyle.GetVerticalFrameSize() - 1 // Account for 1-line footer
-	l.ShowChunkMap = termH >= MinChunkMapVisibleH
+	l.ShowChunkMap = l.AvailableHeight >= MinChunkMapVisibleH
 
 	if l.AvailableWidth < 0 {
 		l.AvailableWidth = 0
@@ -200,7 +200,7 @@ func CalculateDashboardLayout(termW, termH int) DashboardLayout {
 	}
 
 	// 2. Header Dimensions
-	l.HeaderHeight = GetHeaderHeight(termH)
+	l.HeaderHeight = GetHeaderHeight(l.AvailableHeight)
 	l.LogoWidth = int(float64(l.LeftWidth) * LogoWidthRatio)
 	if l.LogoWidth < 4 {
 		l.LogoWidth = 4
@@ -212,7 +212,7 @@ func CalculateDashboardLayout(termW, termH int) DashboardLayout {
 
 	// 3. Right Column Heights
 	if !l.HideRightColumn {
-		l.MinGraphHeight = GetMinGraphHeight(termH)
+		l.MinGraphHeight = GetMinGraphHeight(l.AvailableHeight)
 		targetGraphH := int(float64(l.AvailableHeight) * GraphTargetHeightRatio)
 		if targetGraphH < l.MinGraphHeight {
 			targetGraphH = l.MinGraphHeight
