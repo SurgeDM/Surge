@@ -165,7 +165,7 @@ func persistAuthToken(token string) {
 }
 
 func readTokenFromFile(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // internal settings file //nolint:gosec // internal settings file
 	if err != nil {
 		return "", err
 	}

@@ -37,7 +37,7 @@ var rmCmd = &cobra.Command{
 			return nil
 		}
 
-		return ExecuteAPIAction(args[0], "/delete", http.MethodPost, "Removed download")
+		return ExecuteAPIAction(cmd.Context(), args[0], "/delete", http.MethodPost, "Removed download")
 	},
 }
 

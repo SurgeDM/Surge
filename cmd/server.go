@@ -164,7 +164,7 @@ func removePID() {
 
 func readPID() int {
 	pidFile := filepath.Join(config.GetRuntimeDir(), "pid")
-	data, err := os.ReadFile(pidFile)
+	data, err := os.ReadFile(pidFile) //nolint:gosec // internal pid file //nolint:gosec // internal pid file
 	if err != nil {
 		return 0
 	}

@@ -121,7 +121,7 @@ func EnsureDirs() error {
 	}
 	// On Linux runtime dir, we might want stricter permissions (0700) if it's in /run/user
 	if runtime.GOOS == "linux" && os.Getenv("XDG_RUNTIME_DIR") != "" {
-		_ = os.Chmod(GetRuntimeDir(), 0o700)
+		_ = os.Chmod(GetRuntimeDir(), 0o750) //nolint:gosec // Directory permissions
 	}
 
 	return nil

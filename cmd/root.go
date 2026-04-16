@@ -150,12 +150,12 @@ func resetGlobalEnqueueContext() {
 	if globalEnqueueCancel != nil {
 		globalEnqueueCancel()
 	}
-	globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background())
+	globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background()) //nolint:gosec // global context managed by resetGlobalEnqueueContext //nolint:gosec // global context managed by resetGlobalEnqueueContext
 }
 
 func ensureEnqueueContextLocked() {
 	if globalEnqueueCtx == nil || globalEnqueueCancel == nil {
-		globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background())
+		globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background()) //nolint:gosec // global context managed by resetGlobalEnqueueContext //nolint:gosec // global context managed by resetGlobalEnqueueContext
 	}
 }
 

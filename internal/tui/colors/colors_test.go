@@ -9,7 +9,7 @@ import (
 
 func colorHex(c color.Color) string {
 	r, g, b, _ := c.RGBA()
-	return fmt.Sprintf("#%02x%02x%02x", uint8(r>>8) /*nolint:gosec*/, uint8(g>>8), uint8(b>>8))
+	return fmt.Sprintf("#%02x%02x%02x", uint8(r>>8), uint8(g>>8), uint8(b>>8)) //nolint:gosec
 }
 
 func TestThemeColor_RespectsDarkMode(t *testing.T) {

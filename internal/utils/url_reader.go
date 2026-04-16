@@ -13,7 +13,7 @@ import (
 // Trailing-slash-only variants are treated as the same URL so batch imports
 // behave consistently across CLI and TUI entry points.
 func ReadURLsFromFile(filepath string) ([]string, error) {
-	file, err := os.Open(filepath)
+	file, err := os.Open(filepath) //nolint:gosec // internal batch file
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}

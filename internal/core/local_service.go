@@ -108,6 +108,7 @@ func NewLocalDownloadServiceWithInput(pool *download.WorkerPool, inputCh chan in
 
 	// Lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	s.ctx = ctx
 	s.cancel = cancel
 

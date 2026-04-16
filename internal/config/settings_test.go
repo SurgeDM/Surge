@@ -189,7 +189,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 
 	// Read back
-	readData, err := os.ReadFile(testPath)
+	readData, err := os.ReadFile(testPath) //nolint:gosec // internal settings test file
 	if err != nil {
 		t.Fatalf("Failed to read settings file: %v", err)
 	}

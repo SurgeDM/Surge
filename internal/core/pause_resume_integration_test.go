@@ -175,7 +175,7 @@ func TestIntegration_PauseResume_HotPath_Aggregates(t *testing.T) {
 	const filename = "hot-aggregate.bin"
 	destPath := filepath.Join(outputDir, filename)
 
-	if f, err := os.Create( /*nolint:gosec*/ destPath + ".surge"); err == nil {
+	if f, err := os.Create( destPath + ".surge"); err == nil {
 		_ = f.Close()
 	}
 	id, err := svc.Add(context.Background(), server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
@@ -335,7 +335,7 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	forceSingleConnectionRuntime(svc1)
 	evCleanup1 := startEventWorkerForTest(t, svc1)
 
-	if f, err := os.Create( /*nolint:gosec*/ destPath + ".surge"); err == nil {
+	if f, err := os.Create( destPath + ".surge"); err == nil {
 		_ = f.Close()
 	}
 	id, err := svc1.Add(context.Background(), server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
@@ -482,7 +482,7 @@ func TestIntegration_PauseResume_ResumeBatchRejectsPausing(t *testing.T) {
 	ps.SetPausing(true)
 
 	destPath := filepath.Join(t.TempDir(), "file.bin")
-	if f, err := os.Create( /*nolint:gosec*/ destPath + ".surge"); err == nil {
+	if f, err := os.Create( destPath + ".surge"); err == nil {
 		_ = f.Close()
 	}
 	pool.Add(types.DownloadConfig{

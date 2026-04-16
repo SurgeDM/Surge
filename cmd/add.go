@@ -54,7 +54,7 @@ var addCmd = &cobra.Command{
 				continue
 			}
 			attempted++
-			if err := sendToServer(url, mirrors, resolvedOutput, baseURL, token); err != nil {
+			if err := sendToServer(cmd.Context(), url, mirrors, resolvedOutput, baseURL, token); err != nil {
 				fmt.Printf("Error adding %s: %v\n", url, err)
 				continue
 			}

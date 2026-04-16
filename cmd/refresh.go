@@ -30,7 +30,7 @@ var refreshCmd = &cobra.Command{
 		}
 
 		// Resolve partial ID to full ID
-		id, err = resolveDownloadID(id)
+		id, err = resolveDownloadID(cmd.Context(), id)
 		if err != nil {
 			return err
 		}
@@ -46,7 +46,7 @@ var refreshCmd = &cobra.Command{
 
 		// Send to running server
 		path := "/update-url?id=" + url.QueryEscape(id)
-		resp, err := doAPIRequest(http.MethodPut, baseURL, token, path, bytes.NewBuffer(jsonData))
+		resp, err := doAPIRequest(cmd.Context(), http.MethodPut, baseURL, token, path, bytes.NewBuffer(jsonData))
 		if err != nil {
 			return fmt.Errorf("error connecting to server: %w", err)
 		}

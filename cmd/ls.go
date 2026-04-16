@@ -37,7 +37,7 @@ var lsCmd = &cobra.Command{
 
 		// If ID provided, show details for that download
 		if len(args) == 1 {
-			return showDownloadDetails(args[0], jsonOutput, baseURL, token)
+			return showDownloadDetails(cmd.Context(), args[0], jsonOutput, baseURL, token)
 		}
 
 		strictRemote := resolveHostTarget() != ""
@@ -46,13 +46,13 @@ var lsCmd = &cobra.Command{
 			for {
 				// Clear screen first for watch mode
 				fmt.Print("\033[H\033[2J")
-				if err := printDownloads(jsonOutput, baseURL, token, strictRemote); err != nil {
+				if err := printDownloads(cmd.Context(), jsonOutput, baseURL, token, strictRemote); err != nil {
 					return err
 				}
 				time.Sleep(1 * time.Second)
 			}
 		}
-		return printDownloads(jsonOutput, baseURL, token, strictRemote)
+		return printDownloads(cmd.Context(), jsonOutput, baseURL, token, strictRemote)
 	},
 }
 
@@ -68,12 +68,12 @@ type downloadInfo struct {
 	Speed      float64 `json:"speed,omitempty"`
 }
 
-func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote bool) error {
+func printDownloads(ctx context.Context, jsonOutput bool, baseURL string, token string, strictRemote bool) error {
 	var downloads []downloadInfo
 
 	// Try to get from running server first
 	if baseURL != "" {
-		serverDownloads, err := GetRemoteDownloads(baseURL, token)
+		serverDownloads, err := GetRemoteDownloads(ctx, baseURL, token)
 		if err != nil {
 			if strictRemote {
 				return fmt.Errorf("error listing remote downloads: %w", err)
@@ -95,7 +95,7 @@ func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote 
 
 	// Fall back to database only when not explicitly targeting a remote host.
 	if len(downloads) == 0 && (!strictRemote || baseURL == "") {
-		dbDownloads, err := state.ListAllDownloads(context.Background())
+		dbDownloads, err := state.ListAllDownloads(ctx)
 		if err != nil {
 			return fmt.Errorf("error listing downloads: %w", err)
 		}
@@ -166,11 +166,11 @@ func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote 
 	return nil
 }
 
-func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, token string) error {
+func showDownloadDetails(ctx context.Context, partialID string, jsonOutput bool, baseURL string, token string) error {
 	strictRemote := resolveHostTarget() != ""
 
 	// Resolve partial ID
-	fullID, err := resolveDownloadID(partialID)
+	fullID, err := resolveDownloadID(ctx, partialID)
 	if err != nil {
 		return err
 	}
@@ -178,7 +178,7 @@ func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, toke
 	// Try to get from running server first
 	if baseURL != "" {
 		path := "/download?id=" + url.QueryEscape(fullID)
-		resp, err := doAPIRequest(http.MethodGet, baseURL, token, path, nil)
+		resp, err := doAPIRequest(ctx, http.MethodGet, baseURL, token, path, nil)
 		if err != nil {
 			if strictRemote {
 				return fmt.Errorf("error fetching remote download details: %w", err)
@@ -207,7 +207,7 @@ func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, toke
 	}
 
 	// Fall back to database - search through all downloads
-	downloads, err := state.ListAllDownloads(context.Background())
+	downloads, err := state.ListAllDownloads(ctx)
 	if err != nil {
 		return fmt.Errorf("error listing downloads: %w", err)
 	}

@@ -29,7 +29,7 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 		// For this test, the client will send an absolute URL to the proxy.
 
 		// Create request to target
-		req, err := http.NewRequestWithContext( /*nolint:gosec*/ context.Background(), r.Method, r.RequestURI, r.Body)
+		req, err := http.NewRequestWithContext(r.Context(), r.Method, r.RequestURI, r.Body) //nolint:gosec // SSRF is expected in a mock proxy test
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
@@ -43,7 +43,7 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 		// Execute
 		client := &http.Client{}
 		defer client.CloseIdleConnections()
-		resp, err := client.Do(req) /*nolint:gosec*/ 
+		resp, err := client.Do(req.WithContext(r.Context())) //nolint:gosec // SSRF is expected in a mock proxy test
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusBadGateway)
 			return
@@ -83,7 +83,7 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge") //nolint:gosec // mock file; err == nil {
 		_ = f.Close()
 	}
 
@@ -129,7 +129,7 @@ func TestConcurrentDownloader_InvalidProxy(t *testing.T) {
 	// The key is that it shouldn't panic.
 	// Since we log error and fallback, it should succeed if direct connection works.
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge") //nolint:gosec // mock file; err == nil {
 		_ = f.Close()
 	}
 

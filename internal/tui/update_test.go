@@ -584,6 +584,7 @@ func TestUpdate_EnqueueErrorKeepsFailedDownloadVisibleInDoneTab(t *testing.T) {
 
 func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
 	m := RootModel{
 		state:         DashboardState,
@@ -678,7 +679,7 @@ func TestQuitConfirm_NShortcutCancels(t *testing.T) {
 }
 
 func TestQuitConfirm_YShortcutConfirms(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background()); defer cancel()
 	m := newQuitConfirmModel()
 	m.enqueueCtx = ctx
 	m.cancelEnqueue = cancel
@@ -712,7 +713,7 @@ func TestQuitConfirm_EnterWithNoFocusedCancels(t *testing.T) {
 }
 
 func TestQuitConfirm_SpaceWithYesFocusedConfirms(t *testing.T) {
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background()); defer cancel()
 	m := newQuitConfirmModel()
 	m.enqueueCtx = ctx
 	m.cancelEnqueue = cancel

@@ -252,7 +252,7 @@ func GetSettingsPath() string {
 func LoadSettings() (*Settings, error) {
 	path := GetSettingsPath()
 
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // internal settings file
 	if err != nil {
 		if os.IsNotExist(err) {
 			return DefaultSettings(), nil

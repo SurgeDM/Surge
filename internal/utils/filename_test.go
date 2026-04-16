@@ -68,7 +68,7 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 	makeZipHeader := func(internalName string) []byte {
 		h := make([]byte, 30+len(internalName))
 		copy(h[0:4], []byte{0x50, 0x4B, 0x03, 0x04}) // Signature
-		h[26] = byte(len(internalName))              // Filename length //nolint:gosec // length of filename is small
+		h[26] = byte(len(internalName)) //nolint:gosec // length of filename is small
 		copy(h[30:], internalName)                   // Filename
 		return h
 	}

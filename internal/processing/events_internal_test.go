@@ -41,7 +41,7 @@ func TestFinalizeCompletedFile_CopiesAcrossDevicesOnEXDEV(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(dst, data, 0o600)
+		return os.WriteFile(dst, data, 0o600) //nolint:gosec // test file
 	}
 
 	if err := finalizeCompletedFile(finalPath); err != nil {

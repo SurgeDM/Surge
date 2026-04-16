@@ -21,7 +21,7 @@ import (
 // readActivePort reads the port from the port file
 func readActivePort() int {
 	portFile := filepath.Join(config.GetRuntimeDir(), "port")
-	data, err := os.ReadFile(portFile)
+	data, err := os.ReadFile(portFile) //nolint:gosec // internal port file //nolint:gosec // internal port file
 	if err != nil {
 		return 0
 	}
@@ -104,9 +104,9 @@ func resolveAPIConnection(requireServer bool) (string, string, error) {
 	return baseURL, token, nil
 }
 
-func doAPIRequest(method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
+func doAPIRequest(ctx context.Context, method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
 	reqURL := fmt.Sprintf("%s%s", strings.TrimRight(baseURL, "/"), path)
-	req, err := http.NewRequestWithContext(context.Background(), method, reqURL, body)
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
 	if err != nil {
 		return nil, err
 	}
@@ -122,7 +122,7 @@ func doAPIRequest(method string, baseURL string, token string, path string, body
 	return client.Do(req)
 }
 
-func sendToServer(url string, mirrors []string, outPath string, baseURL string, token string) error {
+func sendToServer(ctx context.Context, url string, mirrors []string, outPath string, baseURL string, token string) error {
 	reqBody := DownloadRequest{
 		URL:     url,
 		Mirrors: mirrors,
@@ -133,7 +133,7 @@ func sendToServer(url string, mirrors []string, outPath string, baseURL string, 
 		return fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	resp, err := doAPIRequest(http.MethodPost, baseURL, token, "/download", bytes.NewBuffer(jsonData))
+	resp, err := doAPIRequest(ctx, http.MethodPost, baseURL, token, "/download", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to connect to server: %w", err)
 	}
@@ -151,9 +151,9 @@ func sendToServer(url string, mirrors []string, outPath string, baseURL string, 
 	return nil
 }
 
-// GetRemoteDownloads fetches all downloads from the running server
-func GetRemoteDownloads(baseURL string, token string) ([]types.DownloadStatus, error) {
-	resp, err := doAPIRequest(http.MethodGet, baseURL, token, "/list", nil)
+// GetRemoteDownloads fetches the list of downloads from a remote Surge server
+func GetRemoteDownloads(ctx context.Context, baseURL string, token string) ([]types.DownloadStatus, error) {
+	resp, err := doAPIRequest(ctx, http.MethodGet, baseURL, token, "/downloads", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -176,18 +176,18 @@ func GetRemoteDownloads(baseURL string, token string) ([]types.DownloadStatus, e
 }
 
 // ExecuteAPIAction connects to the server, resolves the ID, and sends a request.
-func ExecuteAPIAction(rawID, endpoint, method, successMsg string) error {
+func ExecuteAPIAction(ctx context.Context, rawID, endpoint, method, successMsg string) error {
 	baseURL, token, err := resolveAPIConnection(true)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Surge server: %w", err)
 	}
 
-	id, err := resolveDownloadID(rawID)
+	id, err := resolveDownloadID(ctx, rawID)
 	if err != nil {
 		return fmt.Errorf("failed to resolve download ID: %w", err)
 	}
 
-	resp, err := doAPIRequest(method, baseURL, token, fmt.Sprintf("%s/%s", endpoint, id), nil)
+	resp, err := doAPIRequest(ctx, method, baseURL, token, fmt.Sprintf("%s/%s", endpoint, id), nil)
 	if err != nil {
 		return fmt.Errorf("failed to send request to server: %w", err)
 	}
@@ -206,12 +206,10 @@ func ExecuteAPIAction(rawID, endpoint, method, successMsg string) error {
 	return nil
 }
 
-// resolveDownloadID resolves a partial ID (prefix) to a full download ID.
-// If the input is at least 8 characters and matches a single download, returns the full ID.
-// Returns the original ID if no match found or if it's already a full ID.
-func resolveDownloadID(partialID string) (string, error) {
-	if len(partialID) >= 32 {
-		return partialID, nil // Already a full UUID
+// resolveDownloadID simplifies a partial ID or returns the full ID if it exists
+func resolveDownloadID(ctx context.Context, partialID string) (string, error) {
+	if len(partialID) == 36 { // Already a full UUID
+		return partialID, nil
 	}
 
 	strictRemote := resolveHostTarget() != ""
@@ -219,11 +217,8 @@ func resolveDownloadID(partialID string) (string, error) {
 
 	// 1. Try to get candidates from running server
 	baseURL, token, err := resolveAPIConnection(false)
-	if err != nil {
-		return "", err
-	}
-	if baseURL != "" {
-		remoteDownloads, err := GetRemoteDownloads(baseURL, token)
+	if err == nil && baseURL != "" {
+		remoteDownloads, err := GetRemoteDownloads(ctx, baseURL, token)
 		if err != nil {
 			if strictRemote {
 				return "", fmt.Errorf("failed to list remote downloads: %w", err)
@@ -237,8 +232,8 @@ func resolveDownloadID(partialID string) (string, error) {
 		return resolveIDFromCandidates(partialID, candidates)
 	}
 
-	// 2. Get all downloads from database
-	downloads, err := state.ListAllDownloads(context.Background())
+	// 2. Try DB
+	downloads, err := state.ListAllDownloads(ctx)
 	if err == nil {
 		for _, d := range downloads {
 			candidates = append(candidates, d.ID)

@@ -278,7 +278,7 @@ func processDownloads(ctx context.Context, urls []string, outputDir string, port
 			if url == "" {
 				continue
 			}
-			err := sendToServer(url, mirrors, outputDir, baseURL, token)
+			err := sendToServer(ctx, url, mirrors, outputDir, baseURL, token)
 			if err != nil {
 				fmt.Printf("Error adding %s: %v\n", url, err)
 			} else {
@@ -296,7 +296,7 @@ func processDownloads(ctx context.Context, urls []string, outputDir string, port
 
 	settings := getSettings()
 
-	lifecycle, err := lifecycleForLocalService(currentEnqueueContext(), GlobalService)
+	lifecycle, err := lifecycleForLocalService(ctx, GlobalService)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error: unable to initialize lifecycle manager:", err)
 		return 0
@@ -326,7 +326,7 @@ func processDownloads(ctx context.Context, urls []string, outputDir string, port
 			continue
 		}
 
-		_, _, err := lifecycle.Enqueue(currentEnqueueContext(), &processing.DownloadRequest{
+		_, _, err := lifecycle.Enqueue(ctx, &processing.DownloadRequest{
 			URL:                url,
 			Path:               outPath,
 			Mirrors:            mirrors,

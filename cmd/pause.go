@@ -30,7 +30,7 @@ var pauseCmd = &cobra.Command{
 			return nil
 		}
 
-		return ExecuteAPIAction(args[0], "/pause", http.MethodPost, "Paused download")
+		return ExecuteAPIAction(cmd.Context(), args[0], "/pause", http.MethodPost, "Paused download")
 	},
 }
 

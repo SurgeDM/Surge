@@ -52,7 +52,7 @@ func Debug(format string, args ...any) {
 	// Ensure file is open (still needs once, but fast after first time)
 	debugOnce.Do(func() {
 		_ = os.MkdirAll(dir, 0o750)
-		debugFile, _ = os.Create( /*nolint:gosec*/ filepath.Join(dir, fmt.Sprintf("debug-%s.log", time.Now().Format("20060102-150405"))))
+		debugFile, _ = os.Create(filepath.Join(dir, fmt.Sprintf("debug-%s.log", time.Now().Format("20060102-150405")))) //nolint:gosec // internal debug log
 	})
 
 	if debugFile != nil {
