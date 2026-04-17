@@ -235,8 +235,8 @@ func resolveDownloadID(ctx context.Context, partialID string) (string, error) {
 	// 2. Try DB
 	downloads, err := state.ListAllDownloads(ctx)
 	if err == nil {
-		for i := range downloads { 
-		d := &downloads[i]
+		for i := range downloads {
+			d := &downloads[i]
 			candidates = append(candidates, d.ID)
 		}
 	} else if len(candidates) == 0 {
@@ -248,7 +248,7 @@ func resolveDownloadID(ctx context.Context, partialID string) (string, error) {
 }
 
 func appendCandidateIDs(candidates *[]string, downloads []types.DownloadStatus) {
-	for i := range downloads { 
+	for i := range downloads {
 		d := &downloads[i]
 		*candidates = append(*candidates, d.ID)
 	}

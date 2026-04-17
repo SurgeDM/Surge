@@ -352,7 +352,6 @@ func parseRange(rangeHeader string, fileSize int64) (start, end int64, err error
 		return 0, 0, errors.New("invalid range format")
 	}
 
-
 	if parts[0] == "" {
 		// Suffix range: -500 means last 500 bytes
 		end = fileSize - 1

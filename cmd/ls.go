@@ -101,7 +101,7 @@ func printDownloads(ctx context.Context, jsonOutput bool, baseURL, token string,
 			return fmt.Errorf("error listing downloads: %w", err)
 		}
 
-		for i := range dbDownloads { 
+		for i := range dbDownloads {
 			d := &dbDownloads[i]
 			var progress float64
 			if d.TotalSize > 0 {
@@ -138,7 +138,7 @@ func printDownloads(ctx context.Context, jsonOutput bool, baseURL, token string,
 	_, _ = fmt.Fprintln(w, "ID\tFILENAME\tSTATUS\tPROGRESS\tSPEED\tSIZE")
 	_, _ = fmt.Fprintln(w, "--\t--------\t------\t--------\t-----\t----")
 
-	for i := range downloads { 
+	for i := range downloads {
 		d := &downloads[i]
 		progress := fmt.Sprintf("%.1f%%", d.Progress)
 		size := utils.ConvertBytesToHumanReadable(d.TotalSize)
@@ -216,7 +216,7 @@ func showDownloadDetails(ctx context.Context, partialID string, jsonOutput bool,
 	}
 
 	var found *types.DownloadEntry
-	for i := range downloads { 
+	for i := range downloads {
 		d := &downloads[i]
 		if d.ID == fullID {
 			found = d

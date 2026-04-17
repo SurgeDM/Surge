@@ -267,7 +267,7 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 		}
 
 		var finalPath string
-	finalPath, filename, err = ResolveDestination(
+		finalPath, filename, err = ResolveDestination(
 			req.URL,
 			req.Filename,
 			req.Path,

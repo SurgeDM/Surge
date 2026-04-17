@@ -144,7 +144,7 @@ func TestUpdate_CategoryManagerEscRemovesNewPlaceholder(t *testing.T) {
 	}
 
 	m := &RootModel{
-		uiState:         CategoryManagerState,
+		uiState:       CategoryManagerState,
 		Settings:      settings,
 		keys:          Keys,
 		catMgrCursor:  1,

@@ -236,7 +236,7 @@ func TestUpdate_DownloadComplete_UsesAverageSpeed(t *testing.T) {
 
 func TestUpdate_SettingsIgnoresMissingFourthTab(t *testing.T) {
 	m := &RootModel{
-		uiState:    SettingsState,
+		uiState:  SettingsState,
 		Settings: config.DefaultSettings(),
 	}
 
@@ -258,7 +258,7 @@ func TestUpdate_SettingsIgnoresMissingFourthTab(t *testing.T) {
 func TestUpdate_DashboardWithNilSettingsDoesNotPanic(t *testing.T) {
 	m := &RootModel{
 		uiState: DashboardState,
-		list:  NewDownloadList(80, 20),
+		list:    NewDownloadList(80, 20),
 	}
 
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
@@ -589,7 +589,7 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 	defer cancel()
 
 	m := &RootModel{
-		uiState:         DashboardState,
+		uiState:       DashboardState,
 		keys:          Keys,
 		enqueueCtx:    ctx,
 		cancelEnqueue: cancel,
@@ -623,7 +623,7 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 func newQuitConfirmModel() *RootModel {
 	return &RootModel{
 		uiState: QuitConfirmState,
-		keys:  Keys,
+		keys:    Keys,
 	}
 }
 
@@ -837,7 +837,7 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 	m := &RootModel{
 		downloads:      []*DownloadModel{dm},
 		list:           NewDownloadList(40, 10),
-		uiState:          DashboardState,
+		uiState:        DashboardState,
 		keys:           Keys,
 		urlUpdateInput: textinput.New(),
 		Service:        core.NewLocalDownloadServiceWithInput(nil, nil),
@@ -869,7 +869,7 @@ func TestUpdate_InputStatePasteRoutesToFocusedField(t *testing.T) {
 	}
 
 	m := &RootModel{
-		uiState:        InputState,
+		uiState:      InputState,
 		focusedInput: 0,
 		inputs:       makeInputs(),
 	}
@@ -907,7 +907,7 @@ func TestUpdate_DashboardSearchPasteRoutesToSearchInput(t *testing.T) {
 	search := textinput.New()
 	search.Focus()
 	m := &RootModel{
-		uiState:        DashboardState,
+		uiState:      DashboardState,
 		searchActive: true,
 		searchInput:  search,
 		Settings:     config.DefaultSettings(),
@@ -929,7 +929,7 @@ func TestUpdate_URLUpdateStatePasteRoutesToURLInput(t *testing.T) {
 	urlInput := textinput.New()
 	urlInput.Focus()
 	m := &RootModel{
-		uiState:          URLUpdateState,
+		uiState:        URLUpdateState,
 		urlUpdateInput: urlInput,
 	}
 
@@ -944,7 +944,7 @@ func TestUpdate_SettingsEditingPasteRoutesToSettingsInput(t *testing.T) {
 	settingsInput := textinput.New()
 	settingsInput.Focus()
 	m := &RootModel{
-		uiState:             SettingsState,
+		uiState:           SettingsState,
 		SettingsIsEditing: true,
 		SettingsInput:     settingsInput,
 	}
@@ -964,7 +964,7 @@ func TestUpdate_CategoryEditorPasteRoutesToCategoryInput(t *testing.T) {
 	catInputs[1].Focus()
 
 	m := &RootModel{
-		uiState:           CategoryManagerState,
+		uiState:         CategoryManagerState,
 		catMgrEditing:   true,
 		catMgrEditField: 1,
 		catMgrInputs:    catInputs,
@@ -982,7 +982,7 @@ func TestUpdate_DashboardInactivePasteIsIgnored(t *testing.T) {
 	search.SetValue("existing")
 
 	m := &RootModel{
-		uiState:        DashboardState,
+		uiState:      DashboardState,
 		searchActive: false,
 		searchInput:  search,
 		Settings:     config.DefaultSettings(),
@@ -1002,7 +1002,7 @@ func TestUpdate_SettingsNotEditingPasteIsIgnored(t *testing.T) {
 	settingsInput.SetValue("keep")
 
 	m := &RootModel{
-		uiState:             SettingsState,
+		uiState:           SettingsState,
 		SettingsIsEditing: false,
 		SettingsInput:     settingsInput,
 	}
@@ -1023,7 +1023,7 @@ func TestUpdate_CategoryManagerNotEditingPasteIsIgnored(t *testing.T) {
 	catInputs[2].SetValue("keep-pattern")
 
 	m := &RootModel{
-		uiState:           CategoryManagerState,
+		uiState:         CategoryManagerState,
 		catMgrEditing:   false,
 		catMgrEditField: 2,
 		catMgrInputs:    catInputs,
@@ -1049,7 +1049,7 @@ func TestUpdate_WindowSizeNormalizesCategoryManagerSelection(t *testing.T) {
 	}
 
 	m := &RootModel{
-		uiState:           CategoryManagerState,
+		uiState:         CategoryManagerState,
 		Settings:        settings,
 		catMgrCursor:    99,
 		catMgrEditing:   true,
@@ -1074,7 +1074,7 @@ func TestUpdate_UnlistedStatePasteIsIgnored(t *testing.T) {
 	urlInput.SetValue("https://example.com/original")
 
 	m := &RootModel{
-		uiState:          DetailState,
+		uiState:        DetailState,
 		urlUpdateInput: urlInput,
 		searchActive:   true,
 	}
