@@ -131,7 +131,7 @@ func resolveThemePath(path string) string {
 
 	if !strings.HasSuffix(path, ".toml") {
 		pathWithExt := path + ".toml"
-		if _, err := os.Stat(path); err == nil {
+		if _, err := os.Stat(pathWithExt); err == nil {
 			return pathWithExt
 		}
 	}
