@@ -94,7 +94,7 @@ func handleOpenFile(service core.DownloadService) func(http.ResponseWriter, *htt
 			return
 		}
 
-		if err := utils.OpenFile(destPath); err != nil {
+		if err := utils.OpenFile(r.Context(), destPath); err != nil {
 			http.Error(w, "Failed to open file: "+err.Error(), http.StatusInternalServerError)
 			return
 		}
@@ -116,7 +116,7 @@ func handleOpenFolder(service core.DownloadService) func(http.ResponseWriter, *h
 			return
 		}
 
-		if err := utils.OpenContainingFolder(destPath); err != nil {
+		if err := utils.OpenContainingFolder(r.Context(), destPath); err != nil {
 			http.Error(w, "Failed to open folder: "+err.Error(), http.StatusInternalServerError)
 			return
 		}

@@ -150,7 +150,7 @@ func (m *RootModel) updateUpdateAvailable(msg tea.KeyPressMsg) (tea.Model, tea.C
 	if key.Matches(msg, m.keys.Update.OpenGitHub) {
 		// Open the release page in browser
 		if m.UpdateInfo != nil && m.UpdateInfo.ReleaseURL != "" {
-			_ = openWithSystem(m.UpdateInfo.ReleaseURL)
+			_ = openWithSystem(m.enqueueCtx, m.UpdateInfo.ReleaseURL)
 		}
 		m.uiState = DashboardState
 		m.UpdateInfo = nil

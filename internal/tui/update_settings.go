@@ -164,7 +164,7 @@ func (m *RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			currentCategory := categories[m.SettingsActiveTab]
 			values := m.getSettingsValues(currentCategory)
 			if url, ok := values[settingKey].(string); ok && url != "" {
-				_ = utils.OpenBrowser(url)
+				_ = utils.OpenBrowser(m.enqueueCtx, url)
 			}
 			return m, nil
 		}

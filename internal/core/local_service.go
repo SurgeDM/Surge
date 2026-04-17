@@ -98,7 +98,7 @@ func NewLocalDownloadServiceWithInput(pool *download.WorkerPool, inputCh chan in
 	}
 
 	// Lifecycle
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := context.WithCancel(context.Background()) //nolint:gosec // cancel called in Shutdown
 	s.ctx = ctx
 	s.cancel = cancel
 

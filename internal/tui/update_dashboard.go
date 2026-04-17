@@ -173,7 +173,7 @@ func (m *RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				if !d.done {
 					filePath = d.Destination + types.IncompleteSuffix
 				}
-				_ = openWithSystem(filePath)
+				_ = openWithSystem(m.enqueueCtx, filePath)
 			}
 		}
 		return m, nil

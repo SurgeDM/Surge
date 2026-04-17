@@ -180,9 +180,6 @@ func GetRemoteDownloads(ctx context.Context, baseURL, token string) ([]types.Dow
 
 // ExecuteAPIAction connects to the server, resolves the ID, and sends a request.
 func ExecuteAPIAction(ctx context.Context, rawID, endpoint, method, successMsg string) error {
-	if ctx == nil {
-		ctx = context.Background()
-	}
 	baseURL, token, err := resolveAPIConnection(true)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Surge server: %w", err)
