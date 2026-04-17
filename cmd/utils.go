@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/state"
@@ -118,7 +119,9 @@ func doAPIRequest(ctx context.Context, method, baseURL, token, path string, body
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	client := &http.Client{}
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+	}
 	return client.Do(req)
 }
 
@@ -177,6 +180,9 @@ func GetRemoteDownloads(ctx context.Context, baseURL, token string) ([]types.Dow
 
 // ExecuteAPIAction connects to the server, resolves the ID, and sends a request.
 func ExecuteAPIAction(ctx context.Context, rawID, endpoint, method, successMsg string) error {
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	baseURL, token, err := resolveAPIConnection(true)
 	if err != nil {
 		return fmt.Errorf("failed to connect to Surge server: %w", err)

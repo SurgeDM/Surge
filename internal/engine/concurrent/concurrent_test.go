@@ -18,7 +18,7 @@ import (
 func initTestState(t *testing.T) (tmpDir string, cleanup func()) {
 	state.CloseDB() // Ensure any previous DB is closed
 
-	tmpDir, cleanup, err := testutil.TempDir("surge-test")
+	tmpDir, tmpCleanup, err := testutil.TempDir("surge-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
@@ -28,7 +28,7 @@ func initTestState(t *testing.T) (tmpDir string, cleanup func()) {
 
 	return tmpDir, func() {
 		state.CloseDB() // Close DB before removing dir
-		cleanup()
+		tmpCleanup()
 	}
 }
 
