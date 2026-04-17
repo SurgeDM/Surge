@@ -19,21 +19,21 @@ var ansiEscapeRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 func TestFormatDurationForUI(t *testing.T) {
 	tests := []struct {
 		name string
-		dur  time.Duration
 		want string
+		dur  time.Duration
 	}{
-		{"zero", 0, "0:00"},
-		{"negative", -5 * time.Second, "0:00"},
-		{"30 seconds", 30 * time.Second, "0:30"},
-		{"1 minute", 60 * time.Second, "1:00"},
-		{"5m30s", 5*time.Minute + 30*time.Second, "5:30"},
-		{"59m59s", 59*time.Minute + 59*time.Second, "59:59"},
-		{"1 hour", time.Hour, "1:00:00"},
-		{"1h2m3s", time.Hour + 2*time.Minute + 3*time.Second, "1:02:03"},
-		{"23h59m59s", 23*time.Hour + 59*time.Minute + 59*time.Second, "23:59:59"},
-		{"1 day", 24 * time.Hour, "1d"},
-		{"1d 5h", 29 * time.Hour, "1d 5h"},
-		{"30+ days", 31 * 24 * time.Hour, "∞"},
+		{name: "zero", dur: 0, want: "0:00"},
+		{name: "negative", dur: -5 * time.Second, want: "0:00"},
+		{name: "30 seconds", dur: 30 * time.Second, want: "0:30"},
+		{name: "1 minute", dur: 60 * time.Second, want: "1:00"},
+		{name: "5m30s", dur: 5*time.Minute + 30*time.Second, want: "5:30"},
+		{name: "59m59s", dur: 59*time.Minute + 59*time.Second, want: "59:59"},
+		{name: "1 hour", dur: time.Hour, want: "1:00:00"},
+		{name: "1h2m3s", dur: time.Hour + 2*time.Minute + 3*time.Second, want: "1:02:03"},
+		{name: "23h59m59s", dur: 23*time.Hour + 59*time.Minute + 59*time.Second, want: "23:59:59"},
+		{name: "1 day", dur: 24 * time.Hour, want: "1d"},
+		{name: "1d 5h", dur: 29 * time.Hour, want: "1d 5h"},
+		{name: "30+ days", dur: 31 * 24 * time.Hour, want: "∞"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -131,7 +131,7 @@ func TestView_DashboardFitsViewportWithoutTopCutoff(t *testing.T) {
 
 func TestView_QuitConfirmContainsButtons(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
-	m.state = QuitConfirmState
+	m.uiState = QuitConfirmState
 	m.width = 120
 	m.height = 35
 
@@ -149,7 +149,7 @@ func TestView_QuitConfirmContainsButtons(t *testing.T) {
 
 func TestView_QuitConfirmShowsActiveDownloadDetail(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
-	m.state = QuitConfirmState
+	m.uiState = QuitConfirmState
 	m.width = 120
 	m.height = 35
 	m.downloads = []*DownloadModel{
@@ -164,7 +164,7 @@ func TestView_QuitConfirmShowsActiveDownloadDetail(t *testing.T) {
 
 func TestView_QuitConfirmNoFocusedRendersCorrectly(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
-	m.state = QuitConfirmState
+	m.uiState = QuitConfirmState
 	m.quitConfirmFocused = 1
 	m.width = 120
 	m.height = 35
@@ -177,7 +177,7 @@ func TestView_QuitConfirmNoFocusedRendersCorrectly(t *testing.T) {
 
 func TestView_QuitConfirmTinyTerminalDoesNotPanic(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
-	m.state = QuitConfirmState
+	m.uiState = QuitConfirmState
 	m.width = 10
 	m.height = 5
 	_ = m.View()
@@ -185,7 +185,7 @@ func TestView_QuitConfirmTinyTerminalDoesNotPanic(t *testing.T) {
 
 func TestView_SettingsTinyTerminalDoesNotPanic(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
-	m.state = SettingsState
+	m.uiState = SettingsState
 	m.width = 20
 	m.height = 8
 
@@ -197,7 +197,7 @@ func TestView_SettingsTinyTerminalDoesNotPanic(t *testing.T) {
 
 func TestView_SettingsNoLineExceedsTerminalWidth(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
-	m.state = SettingsState
+	m.uiState = SettingsState
 
 	sizes := []struct{ width, height int }{
 		{120, 35},
@@ -229,7 +229,7 @@ func TestView_SettingsResizeSequenceKeepsSelectedVisible(t *testing.T) {
 	selectedLabel := metadata[selectedRow].Label
 
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
-	m.state = SettingsState
+	m.uiState = SettingsState
 	m.SettingsActiveTab = 0
 	m.SettingsSelectedRow = selectedRow
 
@@ -242,8 +242,8 @@ func TestView_SettingsResizeSequenceKeepsSelectedVisible(t *testing.T) {
 
 	for _, tc := range sequence {
 		updated, _ := m.Update(tea.WindowSizeMsg{Width: tc.width, Height: tc.height})
-		m = updated.(RootModel)
-		m.state = SettingsState
+		m = updated.(*RootModel)
+		m.uiState = SettingsState
 
 		plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
 		if strings.TrimSpace(plain) == "" {
@@ -257,7 +257,7 @@ func TestView_SettingsResizeSequenceKeepsSelectedVisible(t *testing.T) {
 
 func TestView_SettingsEditModeNarrowWidthNoOverflow(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
-	m.state = SettingsState
+	m.uiState = SettingsState
 	m.width = 55
 	m.height = 16
 	m.SettingsActiveTab = 0
@@ -275,7 +275,7 @@ func TestView_SettingsEditModeNarrowWidthNoOverflow(t *testing.T) {
 
 func TestView_CategoryManagerNoLineExceedsTerminalWidth(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
-	m.state = CategoryManagerState
+	m.uiState = CategoryManagerState
 
 	sizes := []struct{ width, height int }{
 		{120, 35},
@@ -307,7 +307,7 @@ func TestView_CategoryManagerResizeSequenceKeepsSelectedVisible(t *testing.T) {
 	selectedLabel := settings.Categories.Categories[selectedCursor].Name
 
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
-	m.state = CategoryManagerState
+	m.uiState = CategoryManagerState
 	m.Settings = settings
 	m.catMgrCursor = selectedCursor
 
@@ -320,8 +320,8 @@ func TestView_CategoryManagerResizeSequenceKeepsSelectedVisible(t *testing.T) {
 
 	for _, tc := range sequence {
 		updated, _ := m.Update(tea.WindowSizeMsg{Width: tc.width, Height: tc.height})
-		m = updated.(RootModel)
-		m.state = CategoryManagerState
+		m = updated.(*RootModel)
+		m.uiState = CategoryManagerState
 
 		plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
 		if strings.TrimSpace(plain) == "" {
@@ -335,7 +335,7 @@ func TestView_CategoryManagerResizeSequenceKeepsSelectedVisible(t *testing.T) {
 
 func TestView_CategoryManagerEditModeNarrowWidthNoOverflow(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
-	m.state = CategoryManagerState
+	m.uiState = CategoryManagerState
 	m.width = 55
 	m.height = 16
 	m.catMgrEditing = true
@@ -536,7 +536,7 @@ func TestHelpModal_RendersAndClosesOnEsc(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
 	m.width = 120
 	m.height = 40
-	m.state = HelpModalState
+	m.uiState = HelpModalState
 
 	// Should render without panic
 	view := m.View()
@@ -547,9 +547,9 @@ func TestHelpModal_RendersAndClosesOnEsc(t *testing.T) {
 
 	// Esc should transition back to DashboardState
 	newModel, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	updated := newModel.(RootModel)
-	if updated.state != DashboardState {
-		t.Errorf("expected DashboardState after esc, got %d", updated.state)
+	updated := newModel.(*RootModel)
+	if updated.uiState != DashboardState {
+		t.Errorf("expected DashboardState after esc, got %d", updated.uiState)
 	}
 }
 

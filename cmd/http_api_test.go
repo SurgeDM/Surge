@@ -24,46 +24,46 @@ type httpAPITestService struct {
 	streamMsgs   []interface{}
 }
 
-func (s *httpAPITestService) List() ([]types.DownloadStatus, error) {
+func (s *httpAPITestService) List(ctx context.Context) ([]types.DownloadStatus, error) {
 	return nil, nil
 }
 
-func (s *httpAPITestService) History() ([]types.DownloadEntry, error) {
+func (s *httpAPITestService) History(ctx context.Context) ([]types.DownloadEntry, error) {
 	if s.historyErr != nil {
 		return nil, s.historyErr
 	}
 	return s.history, nil
 }
 
-func (s *httpAPITestService) Add(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+func (s *httpAPITestService) Add(context.Context, string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
 	return "", errors.New("not implemented")
 }
 
-func (s *httpAPITestService) AddWithID(string, string, string, []string, map[string]string, string, int64, bool) (string, error) {
+func (s *httpAPITestService) AddWithID(context.Context, string, string, string, []string, map[string]string, string, int64, bool) (string, error) {
 	return "", errors.New("not implemented")
 }
 
-func (s *httpAPITestService) Pause(string) error {
+func (s *httpAPITestService) Pause(context.Context, string) error {
 	return nil
 }
 
-func (s *httpAPITestService) Resume(string) error {
+func (s *httpAPITestService) Resume(context.Context, string) error {
 	return nil
 }
 
-func (s *httpAPITestService) ResumeBatch([]string) []error {
+func (s *httpAPITestService) ResumeBatch(context.Context, []string) []error {
 	return nil
 }
 
-func (s *httpAPITestService) UpdateURL(string, string) error {
+func (s *httpAPITestService) UpdateURL(context.Context, string, string) error {
 	return nil
 }
 
-func (s *httpAPITestService) Delete(string) error {
+func (s *httpAPITestService) Delete(context.Context, string) error {
 	return nil
 }
 
-func (s *httpAPITestService) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
+func (s *httpAPITestService) StreamEvents(ctx context.Context) (eventCh <-chan interface{}, cleanupFn func(), err error) {
 	channel := make(chan interface{}, len(s.streamMsgs))
 	for _, msg := range s.streamMsgs {
 		channel <- msg
@@ -77,7 +77,7 @@ func (s *httpAPITestService) Publish(interface{}) error {
 	return nil
 }
 
-func (s *httpAPITestService) GetStatus(id string) (*types.DownloadStatus, error) {
+func (s *httpAPITestService) GetStatus(ctx context.Context, id string) (*types.DownloadStatus, error) {
 	if s.getStatusErr != nil {
 		return nil, s.getStatusErr
 	}
@@ -101,7 +101,7 @@ func TestEnsureOpenActionRequestAllowed_RemoteToggle(t *testing.T) {
 		globalSettings = original
 	})
 
-	request := httptest.NewRequest(http.MethodPost, "/open-file?id=example", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/open-file?id=example", nil)
 	request.RemoteAddr = "203.0.113.8:12345"
 
 	globalSettings = config.DefaultSettings()
@@ -128,7 +128,7 @@ func TestHistoryEndpoint_SortsMostRecentFirst(t *testing.T) {
 	mux := http.NewServeMux()
 	registerHTTPRoutes(mux, 0, "", service)
 
-	request := httptest.NewRequest(http.MethodGet, "/history", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodGet, "/history", nil)
 	recorder := httptest.NewRecorder()
 	mux.ServeHTTP(recorder, request)
 
@@ -168,7 +168,11 @@ func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 	server := httptest.NewServer(handler)
 	defer server.Close()
 
-	noAuthResp, err := server.Client().Get(server.URL + "/events")
+	noAuthReq, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/events", http.NoBody)
+	if err != nil {
+		t.Fatalf("failed to create request: %v", err)
+	}
+	noAuthResp, err := server.Client().Do(noAuthReq)
 	if err != nil {
 		t.Fatalf("request without auth failed: %v", err)
 	}
@@ -177,7 +181,7 @@ func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 		t.Fatalf("expected 401 without auth, got %d", noAuthResp.StatusCode)
 	}
 
-	req, err := http.NewRequest(http.MethodGet, server.URL+"/events", nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, server.URL+"/events", http.NoBody)
 	if err != nil {
 		t.Fatalf("failed to create authed request: %v", err)
 	}
@@ -211,13 +215,13 @@ func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 
 func TestResolveDownloadDestPath(t *testing.T) {
 	tests := []struct {
-		name           string
-		useNilService  bool
+		wantErrIs      error
 		service        *httpAPITestService
+		name           string
 		id             string
 		wantPath       string
-		wantErrIs      error
 		wantErrContain string
+		useNilService  bool
 	}{
 		{
 			name:          "service unavailable",
@@ -279,7 +283,7 @@ func TestResolveDownloadDestPath(t *testing.T) {
 				service = test.service
 			}
 
-			gotPath, err := resolveDownloadDestPath(service, test.id)
+			gotPath, err := resolveDownloadDestPath(context.Background(), service, test.id)
 
 			if test.wantErrIs == nil && test.wantErrContain == "" {
 				if err != nil {
@@ -312,11 +316,11 @@ func TestOpenEndpoints_ReturnMappedResolveStatuses(t *testing.T) {
 	globalSettings = config.DefaultSettings()
 
 	tests := []struct {
+		service    *httpAPITestService
 		name       string
 		path       string
-		useNil     bool
-		service    *httpAPITestService
 		statusCode int
+		useNil     bool
 	}{
 		{
 			name:       "service unavailable returns 503",
@@ -351,7 +355,7 @@ func TestOpenEndpoints_ReturnMappedResolveStatuses(t *testing.T) {
 			}
 			registerHTTPRoutes(mux, 0, "", service)
 
-			request := httptest.NewRequest(http.MethodPost, test.path, nil)
+			request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, test.path, nil)
 			request.RemoteAddr = "127.0.0.1:12345"
 			recorder := httptest.NewRecorder()
 
@@ -370,7 +374,7 @@ func TestEnsureOpenActionRequestAllowed_ForwardedLoopbackDenied(t *testing.T) {
 		globalSettings = original
 	})
 
-	request := httptest.NewRequest(http.MethodPost, "/open-file?id=example", nil)
+	request := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/open-file?id=example", nil)
 	request.RemoteAddr = "127.0.0.1:23456"
 	request.Header.Set("X-Forwarded-For", "198.51.100.10")
 

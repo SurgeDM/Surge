@@ -86,7 +86,7 @@ func TestWorkerPool_Add_QueuesToChannel(t *testing.T) {
 	// Add should not block (buffered channel)
 	done := make(chan bool)
 	go func() {
-		pool.Add(cfg)
+		pool.Add(&cfg)
 		done <- true
 	}()
 
@@ -103,7 +103,7 @@ func TestWorkerPool_Pause_NonExistentDownload(t *testing.T) {
 	pool := NewWorkerPool(ch, 3)
 
 	// Should not panic when pausing non-existent download
-	pool.Pause("non-existent-id")
+	pool.Pause(context.Background(), "non-existent-id")
 
 	// No message should be sent
 	select {
@@ -126,14 +126,14 @@ func TestWorkerPool_Pause_ActiveDownload(t *testing.T) {
 	// Manually add an active download
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "test-id",
 			State: state,
 		},
 	}
 	pool.mu.Unlock()
 
-	pool.Pause("test-id")
+	pool.Pause(context.Background(), "test-id")
 
 	// Check that state is paused
 	if !state.IsPaused() {
@@ -149,7 +149,7 @@ func TestWorkerPool_Pause_NilState(t *testing.T) {
 	// Add download with nil state
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "test-id",
 			State: nil,
 		},
@@ -163,7 +163,7 @@ func TestWorkerPool_Pause_NilState(t *testing.T) {
 	pool.mu.Unlock()
 
 	// Should not panic with nil state
-	pool.Pause("test-id")
+	pool.Pause(context.Background(), "test-id")
 
 	select {
 	case <-canceled:
@@ -200,7 +200,7 @@ func TestWorkerPool_PauseAll_MultipleDownloads(t *testing.T) {
 		states[i] = types.NewProgressState(id, 1000)
 		pool.mu.Lock()
 		pool.downloads[id] = &activeDownload{
-			config: types.DownloadConfig{
+			config: &types.DownloadConfig{
 				ID:    id,
 				State: states[i],
 			},
@@ -229,10 +229,10 @@ func TestWorkerPool_PauseAll_SkipsAlreadyPaused(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads["active"] = &activeDownload{
-		config: types.DownloadConfig{ID: "active", State: activeState},
+		config: &types.DownloadConfig{ID: "active", State: activeState},
 	}
 	pool.downloads["paused"] = &activeDownload{
-		config: types.DownloadConfig{ID: "paused", State: pausedState},
+		config: &types.DownloadConfig{ID: "paused", State: pausedState},
 	}
 	pool.mu.Unlock()
 
@@ -250,10 +250,10 @@ func TestWorkerPool_PauseAll_SkipsCompletedDownloads(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads["active"] = &activeDownload{
-		config: types.DownloadConfig{ID: "active", State: activeState},
+		config: &types.DownloadConfig{ID: "active", State: activeState},
 	}
 	pool.downloads["done"] = &activeDownload{
-		config: types.DownloadConfig{ID: "done", State: doneState},
+		config: &types.DownloadConfig{ID: "done", State: doneState},
 	}
 	pool.mu.Unlock()
 
@@ -265,7 +265,7 @@ func TestWorkerPool_Cancel_NonExistentDownload(t *testing.T) {
 	pool := NewWorkerPool(ch, 3)
 
 	// Should not panic
-	pool.Cancel("non-existent-id")
+	pool.Cancel(context.Background(), "non-existent-id")
 }
 
 func TestWorkerPool_Cancel_RemovesFromMap(t *testing.T) {
@@ -276,7 +276,7 @@ func TestWorkerPool_Cancel_RemovesFromMap(t *testing.T) {
 
 	pool.mu.Lock()
 	ad := &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "test-id",
 			State: state,
 		},
@@ -285,7 +285,7 @@ func TestWorkerPool_Cancel_RemovesFromMap(t *testing.T) {
 	pool.downloads["test-id"] = ad
 	pool.mu.Unlock()
 
-	result := pool.Cancel("test-id")
+	result := pool.Cancel(context.Background(), "test-id")
 
 	if !result.Found {
 		t.Error("Expected CancelResult.Found to be true")
@@ -313,11 +313,12 @@ func TestWorkerPool_Cancel_CallsCancelFunc(t *testing.T) {
 	pool := NewWorkerPool(ch, 3)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	state := types.NewProgressState("test-id", 1000)
 
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "test-id",
 			State: state,
 		},
@@ -325,7 +326,7 @@ func TestWorkerPool_Cancel_CallsCancelFunc(t *testing.T) {
 	}
 	pool.mu.Unlock()
 
-	result := pool.Cancel("test-id")
+	result := pool.Cancel(context.Background(), "test-id")
 	if !result.Found {
 		t.Error("Expected CancelResult.Found")
 	}
@@ -355,14 +356,14 @@ func TestWorkerPool_Cancel_MarksDone(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "test-id",
 			State: state,
 		},
 	}
 	pool.mu.Unlock()
 
-	result := pool.Cancel("test-id")
+	result := pool.Cancel(context.Background(), "test-id")
 	if !result.Found {
 		t.Error("Expected CancelResult.Found")
 	}
@@ -379,7 +380,7 @@ func TestWorkerPool_Cancel_DoesNotRemoveIncompleteFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	destPath := filepath.Join(tmpDir, "cancel.bin")
 	incompletePath := destPath + types.IncompleteSuffix
-	if err := os.WriteFile(incompletePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(incompletePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create .surge file: %v", err)
 	}
 
@@ -388,14 +389,14 @@ func TestWorkerPool_Cancel_DoesNotRemoveIncompleteFile(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "test-id",
 			State: state,
 		},
 	}
 	pool.mu.Unlock()
 
-	result := pool.Cancel("test-id")
+	result := pool.Cancel(context.Background(), "test-id")
 	if !result.Found {
 		t.Fatal("expected cancel to find download")
 	}
@@ -410,7 +411,7 @@ func TestWorkerPool_Cancel_QueuedDownload_RemovesFromQueueAndReturnsResult(t *te
 	pool := &WorkerPool{
 		progressCh: ch,
 		downloads:  make(map[string]*activeDownload),
-		queued: map[string]types.DownloadConfig{
+		queued: map[string]*types.DownloadConfig{
 			"queued-id": {
 				ID:       "queued-id",
 				Filename: "queued.bin",
@@ -418,7 +419,7 @@ func TestWorkerPool_Cancel_QueuedDownload_RemovesFromQueueAndReturnsResult(t *te
 		},
 	}
 
-	result := pool.Cancel("queued-id")
+	result := pool.Cancel(context.Background(), "queued-id")
 
 	pool.mu.RLock()
 	_, exists := pool.queued["queued-id"]
@@ -459,7 +460,7 @@ func TestWorkerPool_GracefulShutdown_PausesAll(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "test-id",
 			State: state,
 		},
@@ -467,7 +468,7 @@ func TestWorkerPool_GracefulShutdown_PausesAll(t *testing.T) {
 	pool.mu.Unlock()
 
 	// GracefulShutdown should call PauseAll
-	// PauseAll will set IsPausing() = true
+	// which will set IsPausing() = true
 	// GracefulShutdown waits for IsPausing() = false
 	// We verify that PauseAll was called by checking state.IsPausing()
 	// Then we clear it to unblock shutdown
@@ -506,7 +507,7 @@ func TestWorkerPool_GracefulShutdown_WaitsPastSoftTimeout(t *testing.T) {
 	ps := types.NewProgressState("wait-test-id", 1000)
 	pool.mu.Lock()
 	ad := &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "wait-test-id",
 			State: ps,
 		},
@@ -567,7 +568,7 @@ func TestWorkerPool_GracefulShutdown_ClearsStalePausingWithoutWorker(t *testing.
 
 	pool.mu.Lock()
 	pool.downloads["stale-pausing-id"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "stale-pausing-id",
 			State: ps,
 		},
@@ -610,7 +611,7 @@ func TestWorkerPool_ConcurrentPauseCancel(t *testing.T) {
 		state := types.NewProgressState(id, 1000)
 		pool.mu.Lock()
 		pool.downloads[id] = &activeDownload{
-			config: types.DownloadConfig{ID: id, State: state},
+			config: &types.DownloadConfig{ID: id, State: state},
 		}
 		pool.mu.Unlock()
 	}
@@ -622,8 +623,8 @@ func TestWorkerPool_ConcurrentPauseCancel(t *testing.T) {
 		id := string(rune('a' + i))
 		go func(id string) {
 			defer wg.Done()
-			pool.Pause(id)
-			pool.Cancel(id)
+			pool.Pause(context.Background(), id)
+			pool.Cancel(context.Background(), id)
 		}(id)
 	}
 
@@ -647,7 +648,7 @@ func TestWorkerPool_HasDownload(t *testing.T) {
 	activeURL := "http://example.com/active.zip"
 	pool.mu.Lock()
 	pool.downloads["active"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:  "active",
 			URL: activeURL,
 		},
@@ -688,7 +689,7 @@ func TestWorkerPool_ExtractPausedConfig_WhilePausing(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "test-id",
 			State: state,
 		},
@@ -718,7 +719,7 @@ func TestWorkerPool_ExtractPausedConfig_NotPaused(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "test-id",
 			State: state,
 		},
@@ -741,7 +742,7 @@ func TestWorkerPool_ExtractPausedConfig_Success(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:       "test-id",
 			URL:      "http://example.com/file.zip",
 			Filename: "stale.bin",
@@ -793,7 +794,7 @@ func TestWorkerPool_PauseResume_Idempotency(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads["idempotent-test"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "idempotent-test",
 			State: state,
 		},
@@ -801,7 +802,7 @@ func TestWorkerPool_PauseResume_Idempotency(t *testing.T) {
 	pool.mu.Unlock()
 
 	// 1. First Pause
-	pool.Pause("idempotent-test")
+	pool.Pause(context.Background(), "idempotent-test")
 
 	// Should be Pausing
 	if !state.IsPausing() {
@@ -809,7 +810,7 @@ func TestWorkerPool_PauseResume_Idempotency(t *testing.T) {
 	}
 
 	// 2. Second Pause (Idempotent)
-	pool.Pause("idempotent-test")
+	pool.Pause(context.Background(), "idempotent-test")
 
 	// Manually transition to Paused (simulating worker finish)
 	state.SetPausing(false)
@@ -840,7 +841,7 @@ func TestWorkerPool_GetStatus_IncludesDestPath(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads["status-id"] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "status-id",
 			URL:   "https://example.com/file.bin",
 			State: st,
@@ -864,7 +865,7 @@ func TestWorkerPool_UpdateURL(t *testing.T) {
 	activeState := types.NewProgressState("active-id", 1000)
 	pool.mu.Lock()
 	ad := &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:    "active-id",
 			URL:   "http://example.com/old.zip",
 			State: activeState,
@@ -875,7 +876,7 @@ func TestWorkerPool_UpdateURL(t *testing.T) {
 	pool.mu.Unlock()
 
 	// 1. Try updating a running download — should fail
-	err := pool.UpdateURL("active-id", "http://example.com/new.zip")
+	err := pool.UpdateURL(context.Background(), "active-id", "http://example.com/new.zip")
 	if err == nil {
 		t.Error("Expected error when updating URL for active download")
 	}
@@ -884,7 +885,7 @@ func TestWorkerPool_UpdateURL(t *testing.T) {
 	activeState.Paused.Store(true)
 	ad.running.Store(false)
 
-	err = pool.UpdateURL("active-id", "http://example.com/new.zip")
+	err = pool.UpdateURL(context.Background(), "active-id", "http://example.com/new.zip")
 	if err != nil {
 		t.Errorf("Expected no error for paused download, got %v", err)
 	}
@@ -899,10 +900,10 @@ func TestWorkerPool_UpdateURL(t *testing.T) {
 
 	// 3. Try updating a queued download — should fail
 	pool.mu.Lock()
-	pool.queued["queued-id"] = types.DownloadConfig{ID: "queued-id"}
+	pool.queued["queued-id"] = &types.DownloadConfig{ID: "queued-id"}
 	pool.mu.Unlock()
 
-	err = pool.UpdateURL("queued-id", "http://example.com/new.zip")
+	err = pool.UpdateURL(context.Background(), "queued-id", "http://example.com/new.zip")
 	if err == nil || err.Error() != "cannot update URL for a queued download, please cancel or wait for it to start" {
 		t.Errorf("Expected queued error, got %v", err)
 	}
@@ -922,9 +923,9 @@ func TestWorkerPool_GracefulShutdown_ClearsQueuedMap(t *testing.T) {
 	pool := &WorkerPool{
 		progressCh:   ch,
 		progressDone: make(chan struct{}),
-		taskChan:     make(chan types.DownloadConfig, 10),
+		taskChan:     make(chan *types.DownloadConfig, 10),
 		downloads:    make(map[string]*activeDownload),
-		queued:       make(map[string]types.DownloadConfig),
+		queued:       make(map[string]*types.DownloadConfig),
 		maxDownloads: 0,
 	}
 
@@ -932,7 +933,7 @@ func TestWorkerPool_GracefulShutdown_ClearsQueuedMap(t *testing.T) {
 	pool.mu.Lock()
 	for i := 0; i < 5; i++ {
 		id := fmt.Sprintf("queued-%d", i)
-		pool.queued[id] = types.DownloadConfig{ID: id, URL: "http://example.com/file.zip"}
+		pool.queued[id] = &types.DownloadConfig{ID: id, URL: "http://example.com/file.zip"}
 	}
 	pool.mu.Unlock()
 
@@ -964,15 +965,15 @@ func TestWorkerPool_GracefulShutdown_DrainsTaskChan(t *testing.T) {
 	pool := &WorkerPool{
 		progressCh:   ch,
 		progressDone: make(chan struct{}),
-		taskChan:     make(chan types.DownloadConfig, 10),
+		taskChan:     make(chan *types.DownloadConfig, 10),
 		downloads:    make(map[string]*activeDownload),
-		queued:       make(map[string]types.DownloadConfig),
+		queued:       make(map[string]*types.DownloadConfig),
 		maxDownloads: 0,
 	}
 
 	// Write items directly to taskChan (simulating Add() with no worker to consume).
 	for i := 0; i < 5; i++ {
-		pool.taskChan <- types.DownloadConfig{ID: fmt.Sprintf("buffered-%d", i)}
+		pool.taskChan <- &types.DownloadConfig{ID: fmt.Sprintf("buffered-%d", i)}
 	}
 	if len(pool.taskChan) != 5 {
 		t.Fatalf("pre-condition: expected 5 items in taskChan, got %d", len(pool.taskChan))
@@ -1012,9 +1013,9 @@ func TestWorkerPool_GracefulShutdown_WorkerSkipsQueuedAfterShutdown(t *testing.T
 	// then immediately shut down before the worker gets to process it.
 	id := "skip-me"
 	pool.mu.Lock()
-	pool.queued[id] = types.DownloadConfig{ID: id}
+	pool.queued[id] = &types.DownloadConfig{ID: id}
 	pool.mu.Unlock()
-	pool.taskChan <- types.DownloadConfig{ID: id}
+	pool.taskChan <- &types.DownloadConfig{ID: id}
 
 	// Shutdown should drain the queue and close taskChan.
 	done := make(chan struct{})

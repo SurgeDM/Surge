@@ -21,14 +21,14 @@ import (
 var errTest = errors.New("test error")
 
 func TestUpdate_ResumeResultSetsResuming(t *testing.T) {
-	m := RootModel{
+	m := &RootModel{
 		downloads: []*DownloadModel{
 			{ID: "id-1", paused: true, pausing: true, resuming: true},
 		},
 	}
 
 	updated, _ := m.Update(resumeResultMsg{id: "id-1", err: nil})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 
 	if len(m2.downloads) != 1 {
 		t.Fatalf("Expected 1 download, got %d", len(m2.downloads))
@@ -40,14 +40,14 @@ func TestUpdate_ResumeResultSetsResuming(t *testing.T) {
 }
 
 func TestUpdate_ResumeResultErrorKeepsFlags(t *testing.T) {
-	m := RootModel{
+	m := &RootModel{
 		downloads: []*DownloadModel{
 			{ID: "id-1", paused: true, pausing: true, resuming: true},
 		},
 	}
 
 	updated, _ := m.Update(resumeResultMsg{id: "id-1", err: errTest})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	d := m2.downloads[0]
 	if !d.paused || !d.pausing || !d.resuming {
 		t.Fatalf("Expected flags unchanged on resumeResultMsg error, got paused=%v pausing=%v resuming=%v", d.paused, d.pausing, d.resuming)
@@ -59,7 +59,7 @@ func TestUpdate_DownloadStartedKeepsResuming(t *testing.T) {
 	dm.paused = true
 	dm.pausing = true
 	dm.resuming = true
-	m := RootModel{
+	m := &RootModel{
 		downloads:   []*DownloadModel{dm},
 		list:        NewDownloadList(80, 20),
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
@@ -75,7 +75,7 @@ func TestUpdate_DownloadStartedKeepsResuming(t *testing.T) {
 	}
 
 	updated, _ := m.Update(msg)
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	var d *DownloadModel
 	for _, dl := range m2.downloads {
 		if dl.ID == "id-1" {
@@ -95,7 +95,7 @@ func TestUpdate_EnqueueSuccessMergesOptimisticEntryAfterStart(t *testing.T) {
 	optimistic := NewDownloadModel("pending-1", "http://example.com/file", "file.bin", 0)
 	optimistic.Destination = "/tmp/file.bin"
 
-	m := RootModel{
+	m := &RootModel{
 		downloads:          []*DownloadModel{optimistic},
 		SelectedDownloadID: "pending-1",
 		list:               NewDownloadList(80, 20),
@@ -110,7 +110,7 @@ func TestUpdate_EnqueueSuccessMergesOptimisticEntryAfterStart(t *testing.T) {
 		DestPath:   "/tmp/file.bin",
 		State:      types.NewProgressState("real-1", 100),
 	})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if len(m2.downloads) != 2 {
 		t.Fatalf("expected optimistic and real entries before enqueue success, got %d", len(m2.downloads))
 	}
@@ -122,7 +122,7 @@ func TestUpdate_EnqueueSuccessMergesOptimisticEntryAfterStart(t *testing.T) {
 		path:     "/tmp",
 		filename: "file.bin",
 	})
-	m3 := updated.(RootModel)
+	m3 := updated.(*RootModel)
 
 	if len(m3.downloads) != 1 {
 		t.Fatalf("expected optimistic duplicate to be removed, got %d entries", len(m3.downloads))
@@ -137,7 +137,7 @@ func TestUpdate_EnqueueSuccessMergesOptimisticEntryAfterStart(t *testing.T) {
 }
 
 func TestUpdate_PauseResumeEventsNormalizeFlags(t *testing.T) {
-	m := RootModel{
+	m := &RootModel{
 		downloads: []*DownloadModel{
 			{ID: "id-1", paused: false, pausing: true, resuming: true},
 		},
@@ -150,7 +150,7 @@ func TestUpdate_PauseResumeEventsNormalizeFlags(t *testing.T) {
 		Filename:   "file",
 		Downloaded: 50,
 	})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	d := m2.downloads[0]
 	if !d.paused || d.pausing || d.resuming {
 		t.Fatalf("Expected paused=true and others false after DownloadPausedMsg, got paused=%v pausing=%v resuming=%v", d.paused, d.pausing, d.resuming)
@@ -160,7 +160,7 @@ func TestUpdate_PauseResumeEventsNormalizeFlags(t *testing.T) {
 		DownloadID: "id-1",
 		Filename:   "file",
 	})
-	m3 := updated.(RootModel)
+	m3 := updated.(*RootModel)
 	d = m3.downloads[0]
 	if d.paused || d.pausing || !d.resuming {
 		t.Fatalf("Expected paused/pausing cleared and resuming=true after DownloadResumedMsg, got paused=%v pausing=%v resuming=%v", d.paused, d.pausing, d.resuming)
@@ -171,13 +171,13 @@ func TestProcessProgressMsg_ClearsResumingOnTransfer(t *testing.T) {
 	dm := NewDownloadModel("id-1", "http://example.com/file", "file", 100)
 	dm.resuming = true
 	dm.Downloaded = 50
-	m := RootModel{
+	m := &RootModel{
 		downloads: []*DownloadModel{dm},
 		list:      NewDownloadList(80, 20),
 	}
 
 	// No transfer yet: keep resuming.
-	m.processProgressMsg(events.ProgressMsg{
+	m.processProgressMsg(&events.ProgressMsg{
 		DownloadID: "id-1",
 		Downloaded: 50,
 		Total:      100,
@@ -188,7 +188,7 @@ func TestProcessProgressMsg_ClearsResumingOnTransfer(t *testing.T) {
 	}
 
 	// Transfer observed: clear resuming.
-	m.processProgressMsg(events.ProgressMsg{
+	m.processProgressMsg(&events.ProgressMsg{
 		DownloadID: "id-1",
 		Downloaded: 60,
 		Total:      100,
@@ -202,7 +202,7 @@ func TestProcessProgressMsg_ClearsResumingOnTransfer(t *testing.T) {
 func TestUpdate_DownloadComplete_UsesAverageSpeed(t *testing.T) {
 	dm := NewDownloadModel("id-1", "http://example.com/file", "file.bin", 100)
 	dm.Speed = 12345 // Simulate last instantaneous speed before completion.
-	m := RootModel{
+	m := &RootModel{
 		downloads:   []*DownloadModel{dm},
 		list:        NewDownloadList(80, 20),
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
@@ -217,7 +217,7 @@ func TestUpdate_DownloadComplete_UsesAverageSpeed(t *testing.T) {
 		Total:      26400000,
 		AvgSpeed:   avgSpeed,
 	})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	d := m2.downloads[0]
 
 	if !d.done {
@@ -235,13 +235,13 @@ func TestUpdate_DownloadComplete_UsesAverageSpeed(t *testing.T) {
 }
 
 func TestUpdate_SettingsIgnoresMissingFourthTab(t *testing.T) {
-	m := RootModel{
-		state:    SettingsState,
+	m := &RootModel{
+		uiState:  SettingsState,
 		Settings: config.DefaultSettings(),
 	}
 
 	updated, _ := m.Update(tea.KeyPressMsg{Code: '4', Text: "4"})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 
 	if m2.SettingsActiveTab >= len(config.CategoryOrder()) {
 		t.Fatalf("invalid settings tab index: %d", m2.SettingsActiveTab)
@@ -249,20 +249,20 @@ func TestUpdate_SettingsIgnoresMissingFourthTab(t *testing.T) {
 
 	// Ensure subsequent navigation does not panic with this state.
 	updated, _ = m2.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	m3 := updated.(RootModel)
+	m3 := updated.(*RootModel)
 	if m3.SettingsActiveTab >= len(config.CategoryOrder()) {
 		t.Fatalf("invalid settings tab index after down: %d", m3.SettingsActiveTab)
 	}
 }
 
 func TestUpdate_DashboardWithNilSettingsDoesNotPanic(t *testing.T) {
-	m := RootModel{
-		state: DashboardState,
-		list:  NewDownloadList(80, 20),
+	m := &RootModel{
+		uiState: DashboardState,
+		list:    NewDownloadList(80, 20),
 	}
 
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if m2.Settings == nil {
 		t.Fatal("expected default settings to be initialized")
 	}
@@ -270,7 +270,7 @@ func TestUpdate_DashboardWithNilSettingsDoesNotPanic(t *testing.T) {
 
 func TestUpdate_DownloadRemovedRemovesFromModelAndList(t *testing.T) {
 	dm := NewDownloadModel("id-1", "http://example.com/file", "file", 100)
-	m := RootModel{
+	m := &RootModel{
 		downloads:   []*DownloadModel{dm},
 		list:        NewDownloadList(80, 20),
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
@@ -281,7 +281,7 @@ func TestUpdate_DownloadRemovedRemovesFromModelAndList(t *testing.T) {
 		DownloadID: "id-1",
 		Filename:   "file",
 	})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 
 	if len(m2.downloads) != 0 {
 		t.Fatalf("expected removed download to be absent, got %d entries", len(m2.downloads))
@@ -294,7 +294,7 @@ func TestUpdate_DownloadRemovedRemovesFromModelAndList(t *testing.T) {
 
 func TestUpdate_DownloadRemoved_NoOpWhenUnknownID(t *testing.T) {
 	dm := NewDownloadModel("id-1", "http://example.com/file", "file", 100)
-	m := RootModel{
+	m := &RootModel{
 		downloads:   []*DownloadModel{dm},
 		list:        NewDownloadList(80, 20),
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
@@ -305,7 +305,7 @@ func TestUpdate_DownloadRemoved_NoOpWhenUnknownID(t *testing.T) {
 		DownloadID: "id-unknown",
 		Filename:   "file",
 	})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 
 	if len(m2.downloads) != 1 {
 		t.Fatalf("expected unknown remove to keep entries, got %d", len(m2.downloads))
@@ -314,13 +314,13 @@ func TestUpdate_DownloadRemoved_NoOpWhenUnknownID(t *testing.T) {
 
 func TestProcessProgressMsg_UpdatesElapsed(t *testing.T) {
 	dm := NewDownloadModel("id-1", "http://example.com/file", "file", 1000)
-	m := RootModel{
+	m := &RootModel{
 		downloads: []*DownloadModel{dm},
 		list:      NewDownloadList(80, 20),
 	}
 
 	elapsed := 12 * time.Second
-	m.processProgressMsg(events.ProgressMsg{
+	m.processProgressMsg(&events.ProgressMsg{
 		DownloadID: "id-1",
 		Downloaded: 400,
 		Total:      1000,
@@ -347,7 +347,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	svc := core.NewLocalDownloadServiceWithInput(pool, ch)
 	t.Cleanup(func() { _ = svc.Shutdown() })
 
-	m := RootModel{
+	m := &RootModel{
 		Settings:    config.DefaultSettings(),
 		Service:     svc,
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
@@ -365,11 +365,11 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 		Path:     "/tmp/downloads",
 	}
 
-	newM, _ := m.Update(msg)
-	newRoot := newM.(RootModel)
+	newModel, _ := m.Update(msg)
+	newRoot := newModel.(*RootModel)
 
-	if newRoot.state != ExtensionConfirmationState {
-		t.Errorf("Expected ExtensionConfirmationState, got %v", newRoot.state)
+	if newRoot.uiState != ExtensionConfirmationState {
+		t.Errorf("Expected ExtensionConfirmationState, got %v", newRoot.uiState)
 	}
 	if newRoot.pendingURL != msg.URL {
 		t.Errorf("Expected pendingURL=%s, got %s", msg.URL, newRoot.pendingURL)
@@ -382,6 +382,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 2. Test Duplicate Warning (when prompt disabled but duplicate exists)
+	m.uiState = DashboardState
 	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = true
 
@@ -391,14 +392,15 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 		Filename: "test.zip",
 	})
 
-	newM, _ = m.Update(msg)
-	newRoot = newM.(RootModel)
+	newModel, _ = m.Update(msg)
+	newRoot = newModel.(*RootModel)
 
-	if newRoot.state != DuplicateWarningState {
-		t.Errorf("Expected DuplicateWarningState, got %v", newRoot.state)
+	if newRoot.uiState != DuplicateWarningState {
+		t.Errorf("Expected DuplicateWarningState, got %v", newRoot.uiState)
 	}
 
 	// 3. Test No Prompt (Direct Download)
+	m.uiState = DashboardState
 	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = true
 	m.downloads = nil // Clear downloads
@@ -407,12 +409,12 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	// Since startDownload also does TUI side effects (addLogEntry), we might just check that
 	// it DOESN'T enter a confirmation state.
 
-	newM, _ = m.Update(msg)
-	newRoot = newM.(RootModel)
+	newModel, _ = m.Update(msg)
+	newRoot = newModel.(*RootModel)
 
 	// Should remain in DashboardState (default) or whatever it was
-	if newRoot.state == ExtensionConfirmationState || newRoot.state == DuplicateWarningState {
-		t.Errorf("Expected no prompt state, got %v", newRoot.state)
+	if newRoot.uiState == ExtensionConfirmationState || newRoot.uiState == DuplicateWarningState {
+		t.Errorf("Expected no prompt state, got %v", newRoot.uiState)
 	}
 }
 
@@ -424,7 +426,7 @@ func TestStartDownload_UsesProvidedIDWhenServiceSupportsIt(t *testing.T) {
 		_ = svc.Shutdown()
 	})
 
-	m := RootModel{
+	m := &RootModel{
 		Settings: config.DefaultSettings(),
 		Service:  svc,
 		list:     NewDownloadList(80, 20),
@@ -453,14 +455,14 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 	cancel()
 
 	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		func(_ context.Context, _ string, _ string, _ string, _ []string, _ map[string]string, _ bool, _ int64, _ bool) (string, error) {
 			t.Fatal("enqueue dispatch should not run after context cancellation")
 			return "", nil
 		},
 		nil,
 	)
 
-	m := RootModel{
+	m := &RootModel{
 		Settings:      config.DefaultSettings(),
 		Service:       svc,
 		Orchestrator:  orchestrator,
@@ -488,27 +490,33 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 	}
 }
 
-func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *testing.T) {
+func setupRootModelForStartDownload(t *testing.T) (m *RootModel, tmpDir string) {
+	t.Helper()
 	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
 	t.Cleanup(func() {
 		_ = svc.Shutdown()
 	})
 
 	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		func(_ context.Context, _ string, _ string, _ string, _ []string, _ map[string]string, _ bool, _ int64, _ bool) (string, error) {
 			return "real-id", nil
 		},
 		nil,
 	)
 
-	targetDir := t.TempDir()
-	m := RootModel{
+	tmpDir = t.TempDir()
+	m = &RootModel{
 		Settings:     config.DefaultSettings(),
 		Service:      svc,
 		Orchestrator: orchestrator,
 		list:         NewDownloadList(80, 20),
 		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
+	return m, tmpDir
+}
+
+func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *testing.T) {
+	m, targetDir := setupRootModelForStartDownload(t)
 
 	updated, _ := m.startDownload("https://example.com/100MB.bin", nil, nil, targetDir, true, "", "")
 
@@ -525,26 +533,7 @@ func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *te
 }
 
 func TestStartDownload_UsesGenericQueuedNameForExplicitFilenameUntilLifecycleConfirms(t *testing.T) {
-	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
-	t.Cleanup(func() {
-		_ = svc.Shutdown()
-	})
-
-	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
-			return "real-id", nil
-		},
-		nil,
-	)
-
-	targetDir := t.TempDir()
-	m := RootModel{
-		Settings:     config.DefaultSettings(),
-		Service:      svc,
-		Orchestrator: orchestrator,
-		list:         NewDownloadList(80, 20),
-		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
-	}
+	m, targetDir := setupRootModelForStartDownload(t)
 
 	updated, _ := m.startDownload("https://example.com/archive.zip", nil, nil, targetDir, false, "archive.zip", "")
 
@@ -564,7 +553,7 @@ func TestUpdate_EnqueueErrorKeepsFailedDownloadVisibleInDoneTab(t *testing.T) {
 	optimistic := NewDownloadModel("pending-1", "http://example.com/file", "file.bin", 0)
 	optimistic.Destination = "/tmp/file.bin"
 
-	m := RootModel{
+	m := &RootModel{
 		activeTab:      TabDone,
 		downloads:      []*DownloadModel{optimistic},
 		list:           NewDownloadList(80, 20),
@@ -575,7 +564,7 @@ func TestUpdate_EnqueueErrorKeepsFailedDownloadVisibleInDoneTab(t *testing.T) {
 	}
 
 	updated, _ := m.Update(enqueueErrorMsg{tempID: "pending-1", err: errTest})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 
 	if len(m2.downloads) != 1 {
 		t.Fatalf("expected failed optimistic entry to remain, got %d entries", len(m2.downloads))
@@ -597,9 +586,10 @@ func TestUpdate_EnqueueErrorKeepsFailedDownloadVisibleInDoneTab(t *testing.T) {
 
 func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	m := RootModel{
-		state:         DashboardState,
+	m := &RootModel{
+		uiState:       DashboardState,
 		keys:          Keys,
 		enqueueCtx:    ctx,
 		cancelEnqueue: cancel,
@@ -607,9 +597,9 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 
 	// ctrl+c should open the quit confirmation modal, not shut down immediately
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 
-	if m2.state != QuitConfirmState {
+	if m2.uiState != QuitConfirmState {
 		t.Fatal("expected model to enter quit confirmation state")
 	}
 	if m2.shuttingDown {
@@ -618,7 +608,7 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 
 	// confirming with enter (Yes button focused by default) should cancel the context and begin shutdown
 	updated, _ = m2.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	m3 := updated.(RootModel)
+	m3 := updated.(*RootModel)
 
 	if !m3.shuttingDown {
 		t.Fatal("expected model to enter shutdown state after confirmation")
@@ -630,17 +620,17 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 	}
 }
 
-func newQuitConfirmModel() RootModel {
-	return RootModel{
-		state: QuitConfirmState,
-		keys:  Keys,
+func newQuitConfirmModel() *RootModel {
+	return &RootModel{
+		uiState: QuitConfirmState,
+		keys:    Keys,
 	}
 }
 
 func TestQuitConfirm_RightMovesToNo(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if m2.quitConfirmFocused != 1 {
 		t.Fatal("expected focus to move to No button")
 	}
@@ -650,7 +640,7 @@ func TestQuitConfirm_LeftMovesToYes(t *testing.T) {
 	m := newQuitConfirmModel()
 	m.quitConfirmFocused = 1
 	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if m2.quitConfirmFocused != 0 {
 		t.Fatal("expected focus to move to Yes button")
 	}
@@ -660,7 +650,7 @@ func TestQuitConfirm_TabWrapsFromNoToYes(t *testing.T) {
 	m := newQuitConfirmModel()
 	m.quitConfirmFocused = 1
 	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if m2.quitConfirmFocused != 0 {
 		t.Fatal("expected tab on Nope to wrap back to Yep!")
 	}
@@ -669,8 +659,8 @@ func TestQuitConfirm_TabWrapsFromNoToYes(t *testing.T) {
 func TestQuitConfirm_EscCancels(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	m2 := updated.(RootModel)
-	if m2.state != DashboardState {
+	m2 := updated.(*RootModel)
+	if m2.uiState != DashboardState {
 		t.Fatal("expected esc to return to dashboard")
 	}
 	if m2.shuttingDown {
@@ -681,8 +671,8 @@ func TestQuitConfirm_EscCancels(t *testing.T) {
 func TestQuitConfirm_NShortcutCancels(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'n'})
-	m2 := updated.(RootModel)
-	if m2.state != DashboardState {
+	m2 := updated.(*RootModel)
+	if m2.uiState != DashboardState {
 		t.Fatal("expected n to return to dashboard")
 	}
 	if m2.shuttingDown {
@@ -692,12 +682,13 @@ func TestQuitConfirm_NShortcutCancels(t *testing.T) {
 
 func TestQuitConfirm_YShortcutConfirms(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	m := newQuitConfirmModel()
 	m.enqueueCtx = ctx
 	m.cancelEnqueue = cancel
 
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'y'})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if !m2.shuttingDown {
 		t.Fatal("expected y to begin shutdown")
 	}
@@ -712,8 +703,8 @@ func TestQuitConfirm_EnterWithNoFocusedCancels(t *testing.T) {
 	m := newQuitConfirmModel()
 	m.quitConfirmFocused = 1
 	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
-	m2 := updated.(RootModel)
-	if m2.state != DashboardState {
+	m2 := updated.(*RootModel)
+	if m2.uiState != DashboardState {
 		t.Fatal("expected enter on No button to return to dashboard")
 	}
 	if m2.shuttingDown {
@@ -726,12 +717,13 @@ func TestQuitConfirm_EnterWithNoFocusedCancels(t *testing.T) {
 
 func TestQuitConfirm_SpaceWithYesFocusedConfirms(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	m := newQuitConfirmModel()
 	m.enqueueCtx = ctx
 	m.cancelEnqueue = cancel
 
 	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if !m2.shuttingDown {
 		t.Fatal("expected space on Yes button to begin shutdown")
 	}
@@ -745,7 +737,7 @@ func TestQuitConfirm_SpaceWithYesFocusedConfirms(t *testing.T) {
 func TestQuitConfirm_TabMovesToNo(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if m2.quitConfirmFocused != 1 {
 		t.Fatal("expected tab to move focus to No button")
 	}
@@ -755,7 +747,7 @@ func TestQuitConfirm_HMovesToYes(t *testing.T) {
 	m := newQuitConfirmModel()
 	m.quitConfirmFocused = 1
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'h'})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if m2.quitConfirmFocused != 0 {
 		t.Fatal("expected h to move focus to Yes button")
 	}
@@ -764,7 +756,7 @@ func TestQuitConfirm_HMovesToYes(t *testing.T) {
 func TestQuitConfirm_LMovesToNo(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'l'})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if m2.quitConfirmFocused != 1 {
 		t.Fatal("expected l to move focus to No button")
 	}
@@ -773,8 +765,8 @@ func TestQuitConfirm_LMovesToNo(t *testing.T) {
 func TestQuitConfirm_CtrlCCancels(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
-	m2 := updated.(RootModel)
-	if m2.state != DashboardState {
+	m2 := updated.(*RootModel)
+	if m2.uiState != DashboardState {
 		t.Fatal("expected ctrl+c to return to dashboard from quit confirm modal")
 	}
 	if m2.shuttingDown {
@@ -785,8 +777,8 @@ func TestQuitConfirm_CtrlCCancels(t *testing.T) {
 func TestQuitConfirm_CtrlQCancels(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl})
-	m2 := updated.(RootModel)
-	if m2.state != DashboardState {
+	m2 := updated.(*RootModel)
+	if m2.uiState != DashboardState {
 		t.Fatal("expected ctrl+q to return to dashboard from quit confirm modal")
 	}
 	if m2.shuttingDown {
@@ -797,8 +789,8 @@ func TestQuitConfirm_CtrlQCancels(t *testing.T) {
 func TestQuitConfirm_UnrelatedKeyIgnored(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'x'})
-	m2 := updated.(RootModel)
-	if m2.state != QuitConfirmState {
+	m2 := updated.(*RootModel)
+	if m2.uiState != QuitConfirmState {
 		t.Fatal("expected unrelated key to keep modal open")
 	}
 }
@@ -813,7 +805,7 @@ func TestWithEnqueueContext_OverridesStartDownloadContext(t *testing.T) {
 	cancel()
 
 	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		func(_ context.Context, _ string, _ string, _ string, _ []string, _ map[string]string, _ bool, _ int64, _ bool) (string, error) {
 			t.Fatal("enqueue dispatch should not run after shared context cancellation")
 			return "", nil
 		},
@@ -842,10 +834,10 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 	dm := NewDownloadModel("id-1", "http://example.com/file", "file", 100)
 	dm.paused = true
 
-	m := RootModel{
+	m := &RootModel{
 		downloads:      []*DownloadModel{dm},
 		list:           NewDownloadList(40, 10),
-		state:          DashboardState,
+		uiState:        DashboardState,
 		keys:           Keys,
 		urlUpdateInput: textinput.New(),
 		Service:        core.NewLocalDownloadServiceWithInput(nil, nil),
@@ -857,10 +849,10 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 	msg := tea.KeyPressMsg{Code: 'r', Text: "r"}
 
 	updated, _ := m.Update(msg)
-	newRoot := updated.(RootModel)
+	newRoot := updated.(*RootModel)
 
-	if newRoot.state != URLUpdateState {
-		t.Errorf("Expected state to change to URLUpdateState, got %v", newRoot.state)
+	if newRoot.uiState != URLUpdateState {
+		t.Errorf("Expected state to change to URLUpdateState, got %v", newRoot.uiState)
 	}
 	if newRoot.urlUpdateInput.Value() != "http://example.com/file" {
 		t.Errorf("Expected urlUpdateInput to be pre-filled with 'http://example.com/file', got '%s'", newRoot.urlUpdateInput.Value())
@@ -876,15 +868,15 @@ func TestUpdate_InputStatePasteRoutesToFocusedField(t *testing.T) {
 		return in
 	}
 
-	m := RootModel{
-		state:        InputState,
+	m := &RootModel{
+		uiState:      InputState,
 		focusedInput: 0,
 		inputs:       makeInputs(),
 	}
 	m.inputs[0].Focus()
 
 	updated, _ := m.Update(tea.PasteMsg{Content: "https://example.com/file.zip"})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if got := m2.inputs[0].Value(); got != "https://example.com/file.zip" {
 		t.Fatalf("url input paste = %q, want %q", got, "https://example.com/file.zip")
 	}
@@ -894,18 +886,18 @@ func TestUpdate_InputStatePasteRoutesToFocusedField(t *testing.T) {
 	m2.inputs[3].Focus()
 
 	updated, _ = m2.Update(tea.PasteMsg{Content: "custom-name.zip"})
-	m3 := updated.(RootModel)
+	m3 := updated.(*RootModel)
 	if got := m3.inputs[3].Value(); got != "custom-name.zip" {
 		t.Fatalf("filename input paste = %q, want %q", got, "custom-name.zip")
 	}
 
 	m3.inputs[3].Blur()
-	m3.state = ExtensionConfirmationState
+	m3.uiState = ExtensionConfirmationState
 	m3.focusedInput = 2
 	m3.inputs[2].Focus()
 
 	updated, _ = m3.Update(tea.PasteMsg{Content: "/tmp/downloads"})
-	m4 := updated.(RootModel)
+	m4 := updated.(*RootModel)
 	if got := m4.inputs[2].Value(); got != "/tmp/downloads" {
 		t.Fatalf("extension path input paste = %q, want %q", got, "/tmp/downloads")
 	}
@@ -914,8 +906,8 @@ func TestUpdate_InputStatePasteRoutesToFocusedField(t *testing.T) {
 func TestUpdate_DashboardSearchPasteRoutesToSearchInput(t *testing.T) {
 	search := textinput.New()
 	search.Focus()
-	m := RootModel{
-		state:        DashboardState,
+	m := &RootModel{
+		uiState:      DashboardState,
 		searchActive: true,
 		searchInput:  search,
 		Settings:     config.DefaultSettings(),
@@ -923,7 +915,7 @@ func TestUpdate_DashboardSearchPasteRoutesToSearchInput(t *testing.T) {
 	}
 
 	updated, _ := m.Update(tea.PasteMsg{Content: "ubuntu"})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 
 	if got := m2.searchInput.Value(); got != "ubuntu" {
 		t.Fatalf("search input paste = %q, want %q", got, "ubuntu")
@@ -936,13 +928,13 @@ func TestUpdate_DashboardSearchPasteRoutesToSearchInput(t *testing.T) {
 func TestUpdate_URLUpdateStatePasteRoutesToURLInput(t *testing.T) {
 	urlInput := textinput.New()
 	urlInput.Focus()
-	m := RootModel{
-		state:          URLUpdateState,
+	m := &RootModel{
+		uiState:        URLUpdateState,
 		urlUpdateInput: urlInput,
 	}
 
 	updated, _ := m.Update(tea.PasteMsg{Content: "https://mirror.example/new.zip"})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if got := m2.urlUpdateInput.Value(); got != "https://mirror.example/new.zip" {
 		t.Fatalf("url update paste = %q, want %q", got, "https://mirror.example/new.zip")
 	}
@@ -951,14 +943,14 @@ func TestUpdate_URLUpdateStatePasteRoutesToURLInput(t *testing.T) {
 func TestUpdate_SettingsEditingPasteRoutesToSettingsInput(t *testing.T) {
 	settingsInput := textinput.New()
 	settingsInput.Focus()
-	m := RootModel{
-		state:             SettingsState,
+	m := &RootModel{
+		uiState:           SettingsState,
 		SettingsIsEditing: true,
 		SettingsInput:     settingsInput,
 	}
 
 	updated, _ := m.Update(tea.PasteMsg{Content: "/mnt/storage"})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if got := m2.SettingsInput.Value(); got != "/mnt/storage" {
 		t.Fatalf("settings input paste = %q, want %q", got, "/mnt/storage")
 	}
@@ -971,15 +963,15 @@ func TestUpdate_CategoryEditorPasteRoutesToCategoryInput(t *testing.T) {
 	}
 	catInputs[1].Focus()
 
-	m := RootModel{
-		state:           CategoryManagerState,
+	m := &RootModel{
+		uiState:         CategoryManagerState,
 		catMgrEditing:   true,
 		catMgrEditField: 1,
 		catMgrInputs:    catInputs,
 	}
 
 	updated, _ := m.Update(tea.PasteMsg{Content: "Audio files"})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 	if got := m2.catMgrInputs[1].Value(); got != "Audio files" {
 		t.Fatalf("category editor paste = %q, want %q", got, "Audio files")
 	}
@@ -989,8 +981,8 @@ func TestUpdate_DashboardInactivePasteIsIgnored(t *testing.T) {
 	search := textinput.New()
 	search.SetValue("existing")
 
-	m := RootModel{
-		state:        DashboardState,
+	m := &RootModel{
+		uiState:      DashboardState,
 		searchActive: false,
 		searchInput:  search,
 		Settings:     config.DefaultSettings(),
@@ -998,7 +990,7 @@ func TestUpdate_DashboardInactivePasteIsIgnored(t *testing.T) {
 	}
 
 	updated, _ := m.Update(tea.PasteMsg{Content: "ubuntu"})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 
 	if got := m2.searchInput.Value(); got != "existing" {
 		t.Fatalf("expected no paste when search inactive, got %q", got)
@@ -1009,14 +1001,14 @@ func TestUpdate_SettingsNotEditingPasteIsIgnored(t *testing.T) {
 	settingsInput := textinput.New()
 	settingsInput.SetValue("keep")
 
-	m := RootModel{
-		state:             SettingsState,
+	m := &RootModel{
+		uiState:           SettingsState,
 		SettingsIsEditing: false,
 		SettingsInput:     settingsInput,
 	}
 
 	updated, _ := m.Update(tea.PasteMsg{Content: "/tmp/new"})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 
 	if got := m2.SettingsInput.Value(); got != "keep" {
 		t.Fatalf("expected no paste when settings editor inactive, got %q", got)
@@ -1030,15 +1022,15 @@ func TestUpdate_CategoryManagerNotEditingPasteIsIgnored(t *testing.T) {
 	}
 	catInputs[2].SetValue("keep-pattern")
 
-	m := RootModel{
-		state:           CategoryManagerState,
+	m := &RootModel{
+		uiState:         CategoryManagerState,
 		catMgrEditing:   false,
 		catMgrEditField: 2,
 		catMgrInputs:    catInputs,
 	}
 
 	updated, _ := m.Update(tea.PasteMsg{Content: "new-pattern"})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 
 	if got := m2.catMgrInputs[2].Value(); got != "keep-pattern" {
 		t.Fatalf("expected no paste when category editor inactive, got %q", got)
@@ -1056,8 +1048,8 @@ func TestUpdate_WindowSizeNormalizesCategoryManagerSelection(t *testing.T) {
 		catInputs[i] = textinput.New()
 	}
 
-	m := RootModel{
-		state:           CategoryManagerState,
+	m := &RootModel{
+		uiState:         CategoryManagerState,
 		Settings:        settings,
 		catMgrCursor:    99,
 		catMgrEditing:   true,
@@ -1067,7 +1059,7 @@ func TestUpdate_WindowSizeNormalizesCategoryManagerSelection(t *testing.T) {
 	}
 
 	updated, _ := m.Update(tea.WindowSizeMsg{Width: 58, Height: 16})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 
 	if got, want := m2.catMgrCursor, 0; got != want {
 		t.Fatalf("catMgrCursor = %d, want %d", got, want)
@@ -1081,17 +1073,17 @@ func TestUpdate_UnlistedStatePasteIsIgnored(t *testing.T) {
 	urlInput := textinput.New()
 	urlInput.SetValue("https://example.com/original")
 
-	m := RootModel{
-		state:          DetailState,
+	m := &RootModel{
+		uiState:        DetailState,
 		urlUpdateInput: urlInput,
 		searchActive:   true,
 	}
 
 	updated, _ := m.Update(tea.PasteMsg{Content: "https://example.com/new"})
-	m2 := updated.(RootModel)
+	m2 := updated.(*RootModel)
 
-	if m2.state != DetailState {
-		t.Fatalf("state changed on ignored paste: got %v", m2.state)
+	if m2.uiState != DetailState {
+		t.Fatalf("state changed on ignored paste: got %v", m2.uiState)
 	}
 	if got := m2.urlUpdateInput.Value(); got != "https://example.com/original" {
 		t.Fatalf("expected unlisted state paste to be ignored, got %q", got)

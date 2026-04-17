@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os/exec"
 	"runtime"
 
@@ -26,15 +27,15 @@ func shutdownCmd(service interface{ Shutdown() error }) tea.Cmd {
 }
 
 // openWithSystem opens a file or URL with the system's default application
-func openWithSystem(path string) error {
+func openWithSystem(ctx context.Context, path string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", path)
+		cmd = exec.CommandContext(ctx, "open", path) //nolint:gosec // Opening user-selected path or URL
 	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", "", path)
+		cmd = exec.CommandContext(ctx, "cmd", "/c", "start", "", path) //nolint:gosec // Opening user-selected path or URL
 	default: // linux and others
-		cmd = exec.Command("xdg-open", path)
+		cmd = exec.CommandContext(ctx, "xdg-open", path) //nolint:gosec // Opening user-selected path or URL
 	}
 	err := cmd.Start()
 	if err == nil {

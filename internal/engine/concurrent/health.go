@@ -34,7 +34,8 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 		// so "workerSpeed < mean * threshold" will never trigger.
 		// Fallback to GLOBAL session speed in this case.
 		if speedCount < 2 && d.State != nil {
-			downloaded, _, _, sessionElapsed, _, sessionStartBytes := d.State.GetProgress()
+			p := d.State.GetProgress()
+			downloaded, sessionElapsed, sessionStartBytes := p.Downloaded, p.SessionElapsed, p.SessionStartBytes
 			elapsedSeconds := sessionElapsed.Seconds()
 			if elapsedSeconds > 5.0 { // Ensure we have some history
 				globalSpeed := float64(downloaded-sessionStartBytes) / elapsedSeconds
@@ -56,7 +57,6 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 	stallTimeout := d.Runtime.GetStallTimeout()
 	for workerID, active := range d.activeTasks {
 
-		// timeSinceActivity := now.Sub(lastTime)
 		taskDuration := now.Sub(active.StartTime)
 
 		// Skip workers that are still in their grace period

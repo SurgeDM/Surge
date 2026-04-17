@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -12,7 +13,7 @@ import (
 // Trailing-slash-only variants are treated as the same URL so batch imports
 // behave consistently across CLI and TUI entry points.
 func ReadURLsFromFile(filepath string) ([]string, error) {
-	file, err := os.Open(filepath)
+	file, err := os.Open(filepath) //nolint:gosec // internal batch file
 	if err != nil {
 		return nil, fmt.Errorf("failed to open file: %w", err)
 	}
@@ -55,7 +56,7 @@ func ReadURLsFromFile(filepath string) ([]string, error) {
 		return nil, err
 	}
 	if len(urls) == 0 {
-		return nil, fmt.Errorf("no valid URLs found in file")
+		return nil, errors.New("no valid URLs found in file")
 	}
 	return urls, nil
 }

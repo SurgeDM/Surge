@@ -2,6 +2,7 @@ package processing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -31,11 +32,11 @@ const maxProbeClients = 8
 
 // ProbeResult contains all metadata from server probe
 type ProbeResult struct {
-	FileSize         int64
-	SupportsRange    bool
 	Filename         string
 	DetectedFilename string
 	ContentType      string
+	FileSize         int64
+	SupportsRange    bool
 }
 
 // probeHeadersContextKey is used to pass custom headers to the HTTP client's CheckRedirect function
@@ -55,7 +56,7 @@ func resolveRuntimeConfig() *config.RuntimeConfig {
 // ProbeServer is the convenience entry point for callers that do not already
 // hold a settings snapshot; it reloads persisted settings so probe traffic can
 // honor the saved proxy configuration.
-func ProbeServer(ctx context.Context, rawurl string, filenameHint string, headers map[string]string) (*ProbeResult, error) {
+func ProbeServer(ctx context.Context, rawurl, filenameHint string, headers map[string]string) (*ProbeResult, error) {
 	return ProbeServerWithProxy(ctx, rawurl, filenameHint, headers, resolveRuntimeConfig())
 }
 
@@ -78,7 +79,7 @@ func getProbeHostLock(rawurl string) *sync.Mutex {
 // ProbeServerWithProxy is the hot-path variant for callers that already know
 // the effective proxy and want probe traffic to match the eventual download path
 // without re-reading settings from disk.
-func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint string, headers map[string]string, runCfg *config.RuntimeConfig) (*ProbeResult, error) {
+func ProbeServerWithProxy(ctx context.Context, rawurl, filenameHint string, headers map[string]string, runCfg *config.RuntimeConfig) (*ProbeResult, error) {
 	utils.Debug("Probing server: %s", rawurl)
 
 	// Embed custom headers in context so CheckRedirect can use them
@@ -224,7 +225,7 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 }
 
 func newProbeRequest(ctx context.Context, rawurl string, headers map[string]string, includeRange bool) (*http.Request, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -270,7 +271,7 @@ func getProbeClient(runCfg *config.RuntimeConfig) *http.Client {
 		Transport: newProbeTransport(runCfg),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
+				return errors.New("stopped after 10 redirects")
 			}
 			if len(via) > 0 {
 				copyProbeRedirectHeaders(req, via[0])
@@ -388,8 +389,8 @@ func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, runCfg *config
 	errs = make(map[string]error)
 
 	type mirrorProbeResult struct {
-		valid bool
 		err   error
+		valid bool
 	}
 
 	results := make([]mirrorProbeResult, len(candidates))
@@ -413,7 +414,7 @@ func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, runCfg *config
 			} else {
 				outcome.valid = result.SupportsRange
 				if !result.SupportsRange {
-					outcome.err = fmt.Errorf("does not support ranges")
+					outcome.err = errors.New("does not support ranges")
 				}
 			}
 			results[idx] = outcome

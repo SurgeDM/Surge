@@ -9,34 +9,47 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
+type ProgressSnapshot struct {
+	Downloaded        int64
+	Total             int64
+	TotalElapsed      time.Duration
+	SessionElapsed    time.Duration
+	Connections       int32
+	SessionStartBytes int64
+}
+
 type ProgressState struct {
-	ID            string
-	Downloaded    atomic.Int64
-	TotalSize     int64
-	DestPath      string // Initial destination path
-	Filename      string // Initial filename
-	URL           string // Source URL
-	StartTime     time.Time
-	ActiveWorkers atomic.Int32
-	Done          atomic.Bool
+	// Identification
+	ID       string
+	URL      string
+	Filename string
+	DestPath string
+
+	// Status & State
 	Error         atomic.Pointer[error]
+	Mirrors       []MirrorStatus
+	Pausing       atomic.Bool
 	Paused        atomic.Bool
-	Pausing       atomic.Bool // Intermediate state: Pause requested but workers not yet exited
-	cancelFunc    context.CancelFunc
+	Done          atomic.Bool
+	ActiveWorkers atomic.Int32
 
-	VerifiedProgress  atomic.Int64  // Verified bytes written to disk (for UI progress)
-	SessionStartBytes int64         // SessionStartBytes tracks how many bytes were already downloaded when the current session started
-	SavedElapsed      time.Duration // Time spent in previous sessions
+	// Timing
+	StartTime    time.Time
+	SavedElapsed time.Duration
+	cancelFunc   context.CancelFunc
 
-	Mirrors []MirrorStatus // Status of each mirror
+	// Progress Data
+	TotalSize         int64
+	Downloaded        atomic.Int64
+	VerifiedProgress  atomic.Int64
+	SessionStartBytes int64
+	ActualChunkSize   int64
+	BitmapWidth       int
+	ChunkBitmap       []byte
+	ChunkProgress     []int64
 
-	// Chunk Visualization (Bitmap)
-	ChunkBitmap     []byte  // 2 bits per chunk
-	ChunkProgress   []int64 // Bytes downloaded per chunk (runtime only, not persisted)
-	ActualChunkSize int64   // Size of each actual chunk in bytes
-	BitmapWidth     int     // Number of chunks tracked
-
-	mu sync.Mutex // Protects TotalSize, StartTime, SessionStartBytes, SavedElapsed, Mirrors
+	// Concurrency
+	mu sync.Mutex
 }
 
 type MirrorStatus struct {
@@ -115,18 +128,19 @@ func (ps *ProgressState) GetError() error {
 	return nil
 }
 
-func (ps *ProgressState) GetProgress() (downloaded int64, total int64, totalElapsed time.Duration, sessionElapsed time.Duration, connections int32, sessionStartBytes int64) {
-	downloaded = ps.VerifiedProgress.Load()
-	connections = ps.ActiveWorkers.Load()
+func (ps *ProgressState) GetProgress() ProgressSnapshot {
+	downloaded := ps.VerifiedProgress.Load()
+	connections := ps.ActiveWorkers.Load()
 	paused := ps.Paused.Load()
 
 	ps.mu.Lock()
-	total = ps.TotalSize
+	total := ps.TotalSize
 	savedElapsed := ps.SavedElapsed
 	startTime := ps.StartTime
-	sessionStartBytes = ps.SessionStartBytes
+	sessionStartBytes := ps.SessionStartBytes
 	ps.mu.Unlock()
 
+	var totalElapsed, sessionElapsed time.Duration
 	// Elapsed time excludes paused duration.
 	if paused {
 		sessionElapsed = 0
@@ -142,7 +156,14 @@ func (ps *ProgressState) GetProgress() (downloaded int64, total int64, totalElap
 		totalElapsed = 0
 	}
 
-	return
+	return ProgressSnapshot{
+		Downloaded:        downloaded,
+		Total:             total,
+		TotalElapsed:      totalElapsed,
+		SessionElapsed:    sessionElapsed,
+		Connections:       connections,
+		SessionStartBytes: sessionStartBytes,
+	}
 }
 
 func (ps *ProgressState) Pause() {
@@ -190,14 +211,14 @@ func (ps *ProgressState) GetSavedElapsed() time.Duration {
 
 // FinalizeSession closes the current session and accumulates its elapsed time into total elapsed.
 // It returns (sessionElapsed, totalElapsedAfterFinalize).
-func (ps *ProgressState) FinalizeSession(downloaded int64) (time.Duration, time.Duration) {
+func (ps *ProgressState) FinalizeSession(downloaded int64) (sessionElapsed, totalElapsed time.Duration) {
 	if downloaded < 0 {
 		downloaded = ps.VerifiedProgress.Load()
 	}
 
 	now := time.Now()
 	ps.mu.Lock()
-	sessionElapsed := now.Sub(ps.StartTime)
+	sessionElapsed = now.Sub(ps.StartTime)
 	if sessionElapsed < 0 {
 		sessionElapsed = 0
 	}
@@ -207,7 +228,7 @@ func (ps *ProgressState) FinalizeSession(downloaded int64) (time.Duration, time.
 	}
 	ps.SessionStartBytes = downloaded
 	ps.StartTime = now
-	totalElapsed := ps.SavedElapsed
+	totalElapsed = ps.SavedElapsed
 	ps.mu.Unlock()
 
 	ps.Downloaded.Store(downloaded)
@@ -253,7 +274,7 @@ const (
 )
 
 // InitBitmap initializes the chunk bitmap
-func (ps *ProgressState) InitBitmap(totalSize int64, chunkSize int64) {
+func (ps *ProgressState) InitBitmap(totalSize, chunkSize int64) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -288,8 +309,6 @@ func (ps *ProgressState) RestoreBitmap(bitmap []byte, actualChunkSize int64) {
 	if len(bitmap) == 0 || actualChunkSize <= 0 {
 		return
 	}
-
-	//utils.Debug("RestoreBitmap: Len=%d, ChunkSize=%d", len(bitmap), actualChunkSize)
 
 	ps.ChunkBitmap = bitmap
 	ps.ActualChunkSize = actualChunkSize
@@ -339,7 +358,7 @@ func (ps *ProgressState) setChunkState(index int, status ChunkStatus) {
 	ps.ChunkBitmap[byteIndex] &= ^mask
 
 	// Set new value
-	val := byte(status) << bitOffset
+	val := byte(status) << bitOffset //nolint:gosec // status is validated range 0-3
 	ps.ChunkBitmap[byteIndex] |= val
 }
 
@@ -433,12 +452,9 @@ func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkSta
 			if ps.ChunkProgress[i] >= (chunkEnd - chunkStart) {
 				ps.ChunkProgress[i] = chunkEnd - chunkStart // clamp
 				ps.setChunkState(i, ChunkCompleted)
-				// utils.Debug("Chunk %d completed (size=%d)", i, ps.ChunkProgress[i])
-			} else {
+			} else if ps.getChunkState(i) != ChunkCompleted {
 				// Partial progress -> Downloading
-				if ps.getChunkState(i) != ChunkCompleted {
-					ps.setChunkState(i, ChunkDownloading)
-				}
+				ps.setChunkState(i, ChunkDownloading)
 			}
 		case ChunkDownloading:
 			current := ps.getChunkState(i)
@@ -529,13 +545,14 @@ func (ps *ProgressState) RecalculateProgress(remainingTasks []Task) {
 		}
 		chunkSize := chunkEnd - chunkStart
 
-		if ps.ChunkProgress[i] >= chunkSize {
+		switch {
+		case ps.ChunkProgress[i] >= chunkSize:
 			ps.ChunkProgress[i] = chunkSize // clamp
 			ps.setChunkState(i, ChunkCompleted)
-		} else if ps.ChunkProgress[i] > 0 {
+		case ps.ChunkProgress[i] > 0:
 			// Even if saved bitmap said Pending, if we have bytes, it's actually partial
 			ps.setChunkState(i, ChunkDownloading)
-		} else {
+		default:
 			ps.ChunkProgress[i] = 0 // clamp
 			ps.setChunkState(i, ChunkPending)
 		}
@@ -543,12 +560,12 @@ func (ps *ProgressState) RecalculateProgress(remainingTasks []Task) {
 }
 
 // GetBitmap returns a copy of the bitmap and metadata
-func (ps *ProgressState) GetBitmap() ([]byte, int, int64, int64, []int64) {
+func (ps *ProgressState) GetBitmap() (bitmap []byte, width int, totalSize, chunkSize int64, chunkProgress []int64) {
 	return ps.GetBitmapSnapshot(true)
 }
 
 // GetBitmapSnapshot returns a copy of bitmap metadata and optionally chunk progress.
-func (ps *ProgressState) GetBitmapSnapshot(includeProgress bool) ([]byte, int, int64, int64, []int64) {
+func (ps *ProgressState) GetBitmapSnapshot(includeProgress bool) (bitmap []byte, width int, totalSize, chunkSize int64, chunkProgress []int64) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 

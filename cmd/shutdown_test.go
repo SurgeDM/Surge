@@ -35,16 +35,16 @@ func TestExecuteGlobalShutdown_Once(t *testing.T) {
 }
 
 type fakeShutdownService struct {
-	fakeRemoteDownloadService
 	onShutdown func()
+	fakeRemoteDownloadService
 }
 
-func (f *fakeShutdownService) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
+func (f *fakeShutdownService) StreamEvents(ctx context.Context) (eventCh <-chan interface{}, cleanupFn func(), err error) {
 	ch := make(chan interface{})
 	return ch, func() { close(ch) }, nil
 }
 
-func (f *fakeShutdownService) GetStatus(string) (*types.DownloadStatus, error) {
+func (f *fakeShutdownService) GetStatus(context.Context, string) (*types.DownloadStatus, error) {
 	return nil, nil
 }
 

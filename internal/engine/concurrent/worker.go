@@ -2,6 +2,7 @@ package concurrent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -181,7 +182,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 // downloadTask downloads a single byte range and writes to file at offset
 func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, file *os.File, activeTask *ActiveTask, buf []byte, client *http.Client, totalSize int64) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, http.NoBody)
 	if err != nil {
 		return err
 	}
@@ -215,7 +216,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 
 	// Handle rate limiting explicitly
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return fmt.Errorf("rate limited (429)")
+		return errors.New("rate limited (429)")
 	}
 
 	// Validate status code
@@ -223,7 +224,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 		// Valid only if we requested the full file
 		// If we wanted a partial range but got the whole file (200), that's an error because we can't handle the full stream at a non-zero offset
 		if task.Offset != 0 || task.Length != totalSize {
-			return fmt.Errorf("server indicated success (200) but ignored range request (expected 206)")
+			return errors.New("server indicated success (200) but ignored range request (expected 206)")
 		}
 	} else if resp.StatusCode != http.StatusPartialContent {
 		return fmt.Errorf("unexpected status: %d", resp.StatusCode)

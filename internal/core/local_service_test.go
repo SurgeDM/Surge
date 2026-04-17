@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -21,7 +20,7 @@ import (
 func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 	tempDir := t.TempDir()
 	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	state.Configure(filepath.Join(tempDir, t.Name()+"-surge.db"))
 	defer state.CloseDB()
 
 	ch := make(chan interface{}, 20)
@@ -41,11 +40,11 @@ func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 	destPath := filepath.Join(tempDir, "file.bin")
 	incompletePath := destPath + types.IncompleteSuffix
 
-	if err := os.WriteFile(incompletePath, []byte("partial"), 0o644); err != nil {
-		t.Fatalf("failed to create partial file: %v", err)
+	if wrErr := os.WriteFile(incompletePath, []byte("partial"), 0o600); wrErr != nil {
+		t.Fatalf("failed to create partial file: %v", wrErr)
 	}
 
-	if err := state.SaveState(url, destPath, &types.DownloadState{
+	if saveErr := state.SaveState(context.Background(), url, destPath, &types.DownloadState{
 		ID:         id,
 		URL:        url,
 		DestPath:   destPath,
@@ -55,12 +54,12 @@ func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 		Tasks: []types.Task{
 			{Offset: 200, Length: 800},
 		},
-	}); err != nil {
-		t.Fatalf("failed to seed state: %v", err)
+	}); saveErr != nil {
+		t.Fatalf("failed to seed state: %v", saveErr)
 	}
 
-	if err := svc.Delete(id); err != nil {
-		t.Fatalf("delete failed: %v", err)
+	if delErr := svc.Delete(context.Background(), id); delErr != nil {
+		t.Fatalf("delete failed: %v", delErr)
 	}
 
 	gotRemoved := false
@@ -79,14 +78,14 @@ func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 	// Wait briefly for event worker to actually apply the DB deletion after emitting the event
 	deletionDeadline := time.Now().Add(500 * time.Millisecond)
 	for time.Now().Before(deletionDeadline) {
-		entry, _ := state.GetDownload(id)
+		entry, _ := state.GetDownload(context.Background(), id)
 		if entry == nil {
 			return // Success, it is gone
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	entry, err := state.GetDownload(id)
+	entry, err := state.GetDownload(context.Background(), id)
 	if err != nil {
 		t.Fatalf("failed querying deleted entry: %v", err)
 	}
@@ -98,7 +97,7 @@ func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testing.T) {
 	tempDir := t.TempDir()
 	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	state.Configure(filepath.Join(tempDir, t.Name()+"-surge.db"))
 	defer state.CloseDB()
 
 	ch := make(chan interface{}, 100)
@@ -120,7 +119,7 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 	if f, err := os.Create(filepath.Join(outputDir, filename) + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, 0, false)
+	id, err := svc.Add(context.Background(), server.URL(), outputDir, filename, nil, nil, false, 0, false)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)
 	}
@@ -130,7 +129,7 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 	var st *types.DownloadStatus
 	var runtimeDestPath string
 	for time.Now().Before(deadline) {
-		st, _ = svc.GetStatus(id)
+		st, _ = svc.GetStatus(context.Background(), id)
 		if st != nil && st.DestPath != "" && st.Status == "downloading" {
 			runtimeDestPath = st.DestPath
 			break
@@ -143,19 +142,19 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 	incompletePath := runtimeDestPath + types.IncompleteSuffix
 
 	// Ensure the partial file exists before delete to validate cleanup logic deterministically.
-	if _, err := os.Stat(incompletePath); os.IsNotExist(err) {
-		if err := os.WriteFile(incompletePath, []byte("partial"), 0o644); err != nil {
-			t.Fatalf("failed to create partial file before delete: %v", err)
+	if _, statErr := os.Stat(incompletePath); os.IsNotExist(statErr) {
+		if wrErr := os.WriteFile(incompletePath, []byte("partial"), 0o600); wrErr != nil {
+			t.Fatalf("failed to create partial file before delete: %v", wrErr)
 		}
-	} else if err != nil {
-		t.Fatalf("failed to stat partial file before delete: %v", err)
+	} else if statErr != nil {
+		t.Fatalf("failed to stat partial file before delete: %v", statErr)
 	}
 
 	// Simulate delete-before-persist path: no DB entry available.
-	_ = state.RemoveFromMasterList(id)
+	_ = state.RemoveFromMasterList(context.Background(), id)
 
-	if err := svc.Delete(id); err != nil {
-		t.Fatalf("delete failed: %v", err)
+	if delErr := svc.Delete(context.Background(), id); delErr != nil {
+		t.Fatalf("delete failed: %v", delErr)
 	}
 
 	deadline = time.Now().Add(2 * time.Second)
@@ -277,7 +276,7 @@ func TestLocalDownloadService_AddWithID_UsesProvidedID(t *testing.T) {
 
 	requestID := "provided-id-001"
 	outputDir := t.TempDir()
-	gotID, err := svc.AddWithID("https://example.com/file.bin", outputDir, "file.bin", nil, nil, requestID, 0, false)
+	gotID, err := svc.AddWithID(context.Background(), "https://example.com/file.bin", outputDir, "file.bin", nil, nil, requestID, 0, false)
 	if err != nil {
 		t.Fatalf("AddWithID failed: %v", err)
 	}
@@ -293,7 +292,7 @@ func TestLocalDownloadService_AddWithID_UsesProvidedID(t *testing.T) {
 func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	tempDir := t.TempDir()
 	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	state.Configure(filepath.Join(tempDir, t.Name()+"-surge.db"))
 	defer state.CloseDB()
 
 	ch := make(chan interface{}, 100)
@@ -314,7 +313,7 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	if f, err := os.Create(filepath.Join(outputDir, filename) + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
+	id, err := svc.Add(context.Background(), server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)
 	}
@@ -322,8 +321,8 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	deadline := time.Now().Add(8 * time.Second)
 	progressed := false
 	for time.Now().Before(deadline) {
-		st, err := svc.GetStatus(id)
-		if err == nil && st != nil && st.Downloaded > 0 {
+		st, sErr := svc.GetStatus(context.Background(), id)
+		if sErr == nil && st != nil && st.Downloaded > 0 {
 			progressed = true
 			break
 		}
@@ -333,18 +332,18 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 		t.Fatal("download did not make progress before shutdown")
 	}
 
-	if err := svc.Shutdown(); err != nil {
-		t.Fatalf("shutdown failed: %v", err)
+	if shErr := svc.Shutdown(); shErr != nil {
+		t.Fatalf("shutdown failed: %v", shErr)
 	}
 	// Wait for event worker to drain all buffered events and finish DB writes
 	evWait()
 
 	deadline = time.Now().Add(500 * time.Millisecond)
 	for {
-		entry, err := state.GetDownload(id)
-		if err == nil || !strings.Contains(err.Error(), "locked") {
-			if err != nil {
-				t.Fatalf("failed to fetch persisted download: %v", err)
+		entry, getErr := state.GetDownload(context.Background(), id)
+		if getErr == nil || !strings.Contains(getErr.Error(), "locked") {
+			if getErr != nil {
+				t.Fatalf("failed to fetch persisted download: %v", getErr)
 			}
 			if entry == nil {
 				t.Fatal("expected persisted download entry after shutdown")
@@ -363,7 +362,7 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
-	statuses, err := svc.List()
+	statuses, err := svc.List(context.Background())
 	if err != nil {
 		t.Fatalf("failed to list downloads after shutdown: %v", err)
 	}
@@ -382,7 +381,7 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	}
 
 	destPath := filepath.Join(outputDir, filename)
-	saved, err := state.LoadState(server.URL(), destPath)
+	saved, err := state.LoadState(context.Background(), server.URL(), destPath)
 	if err != nil {
 		t.Fatalf("failed to load saved state: %v", err)
 	}
@@ -398,7 +397,7 @@ func TestLocalDownloadService_BatchProgress(t *testing.T) {
 	// Start a local test server
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		// 1. Probe request (HEAD or GET with Range: bytes=0-0)
-		if r.Method == "HEAD" || r.Header.Get("Range") == "bytes=0-0" {
+		if r.Method == http.MethodHead || r.Header.Get("Range") == "bytes=0-0" {
 			w.Header().Set("Content-Length", "1000")
 			w.Header().Set("Accept-Ranges", "bytes")
 			w.WriteHeader(http.StatusOK)
@@ -426,7 +425,7 @@ func TestLocalDownloadService_BatchProgress(t *testing.T) {
 	// Create temporary directory for downloads
 	tempDir := t.TempDir()
 	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	state.Configure(filepath.Join(tempDir, t.Name()+"-surge.db"))
 	defer state.CloseDB()
 
 	pool := download.NewWorkerPool(ch, 1)
@@ -441,10 +440,10 @@ func TestLocalDownloadService_BatchProgress(t *testing.T) {
 
 	// Add download using test server URL
 
-	if f, err := os.Create(filepath.Join(tempDir, "test-file") + ".surge"); err == nil {
+	if f, crErr := os.Create(filepath.Join(tempDir, "test-file") + ".surge"); crErr == nil {
 		_ = f.Close()
 	}
-	_, err = svc.Add(ts.URL, tempDir, "test-file", nil, nil, false, 0, false)
+	_, err = svc.Add(context.Background(), ts.URL, tempDir, "test-file", nil, nil, false, 0, false)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)
 	}
@@ -469,7 +468,7 @@ func TestLocalDownloadService_BatchProgress(t *testing.T) {
 func TestLocalDownloadService_ResumeRejectedWhilePausing(t *testing.T) {
 	tempDir := t.TempDir()
 	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	state.Configure(filepath.Join(tempDir, t.Name()+"-surge.db"))
 	defer state.CloseDB()
 
 	ch := make(chan interface{}, 100)
@@ -490,7 +489,7 @@ func TestLocalDownloadService_ResumeRejectedWhilePausing(t *testing.T) {
 	if f, err := os.Create(filepath.Join(outputDir, "resume-race.bin") + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id, err := svc.Add(server.URL(), outputDir, "resume-race.bin", nil, nil, false, 0, false)
+	id, err := svc.Add(context.Background(), server.URL(), outputDir, "resume-race.bin", nil, nil, false, 0, false)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)
 	}
@@ -498,24 +497,24 @@ func TestLocalDownloadService_ResumeRejectedWhilePausing(t *testing.T) {
 	// Wait until download starts moving.
 	deadline := time.Now().Add(6 * time.Second)
 	for time.Now().Before(deadline) {
-		st, _ := svc.GetStatus(id)
+		st, _ := svc.GetStatus(context.Background(), id)
 		if st != nil && st.Downloaded > 0 {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
 
-	if err := svc.Pause(id); err != nil {
+	if err := svc.Pause(context.Background(), id); err != nil {
 		t.Fatalf("pause failed: %v", err)
 	}
 
 	// If pause finalized too fast on this machine, skip this race-specific assertion.
-	st, _ := svc.GetStatus(id)
+	st, _ := svc.GetStatus(context.Background(), id)
 	if st == nil || st.Status != "pausing" {
 		t.Skip("download transitioned out of pausing before resume-race assertion")
 	}
 
-	if err := svc.Resume(id); err == nil {
+	if err := svc.Resume(context.Background(), id); err == nil {
 		t.Fatal("expected resume to fail while download is still pausing")
 	}
 }

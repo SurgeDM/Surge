@@ -47,7 +47,7 @@ func TestMirrors_HappyPath(t *testing.T) {
 	// Primary URL is server1.URL()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -108,7 +108,7 @@ func TestMirrors_Failover(t *testing.T) {
 	mirrors := []string{badServer.URL, goodServer.URL()}
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 

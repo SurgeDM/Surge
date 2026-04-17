@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -82,7 +83,7 @@ func TestTUI_Startup_LoadsCompletedTiming(t *testing.T) {
 	const timeTakenMs = int64(2500)
 	const avgSpeed = float64(2 * 1024 * 1024) // 2 MB/s
 
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := state.AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:         testID,
 		URL:        testURL,
 		URLHash:    state.URLHash(testURL),
@@ -134,7 +135,7 @@ func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
 	testID := "tui-error-id"
 	testURL := "http://example.com/error.bin"
 	testDest := filepath.Join(tmpDir, "error.bin")
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := state.AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:       testID,
 		URL:      testURL,
 		URLHash:  state.URLHash(testURL),
@@ -177,7 +178,7 @@ func setupTestEnv(t *testing.T, tmpDir string) {
 	})
 
 	surgeDir := config.GetSurgeDir()
-	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
+	if err := os.MkdirAll(surgeDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
@@ -190,7 +191,7 @@ func setupTestEnv(t *testing.T, tmpDir string) {
 
 	// Configure DB
 	dbPath := filepath.Join(surgeDir, "state", "surge.db")
-	_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
+	_ = os.MkdirAll(filepath.Dir(dbPath), 0o750)
 	state.CloseDB()
 	state.Configure(dbPath)
 }
@@ -206,10 +207,10 @@ func seedDownload(t *testing.T, id, url, dest, status string) {
 		PausedAt:   0,
 		CreatedAt:  time.Now().Unix(),
 	}
-	if err := state.SaveState(url, dest, manualState); err != nil {
+	if err := state.SaveState(context.Background(), url, dest, manualState); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.UpdateStatus(id, status); err != nil {
+	if err := state.UpdateStatus(context.Background(), id, status); err != nil {
 		t.Fatal(err)
 	}
 }

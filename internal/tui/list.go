@@ -32,12 +32,13 @@ func (i DownloadItem) Description() string {
 
 	// Get styled status using the shared component
 	var styledStatus string
-	if d.pausing {
+	switch {
+	case d.pausing:
 		// Custom "Pausing..." style using existing colors
 		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused).Render(i.spinnerView + " Pausing...")
-	} else if d.resuming {
+	case d.resuming:
 		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading).Render(i.spinnerView + " Resuming...")
-	} else {
+	default:
 		status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
 		styledStatus = status.RenderWithSpinner(i.spinnerView)
 	}
@@ -97,14 +98,14 @@ func newDelegateKeyMap() *delegateKeyMap {
 	}
 }
 
-func newDownloadDelegate() downloadDelegate {
+func newDownloadDelegate() *downloadDelegate {
 	baseTitle := lipgloss.NewStyle().Foreground(colors.White).Bold(true)
 	baseDesc := lipgloss.NewStyle().Foreground(colors.LightGray)
 
 	selTitle := lipgloss.NewStyle().Foreground(colors.NeonPink).Bold(true)
 	selDesc := lipgloss.NewStyle().Foreground(colors.NeonCyan)
 
-	return downloadDelegate{
+	return &downloadDelegate{
 		keys:           newDelegateKeyMap(),
 		baseTitleStyle: baseTitle,
 		baseDescStyle:  baseDesc,
@@ -115,14 +116,14 @@ func newDownloadDelegate() downloadDelegate {
 	}
 }
 
-func (d downloadDelegate) Height() int  { return 2 }
-func (d downloadDelegate) Spacing() int { return 1 }
+func (d *downloadDelegate) Height() int  { return 2 }
+func (d *downloadDelegate) Spacing() int { return 1 }
 
-func (d downloadDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
+func (d *downloadDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 	return nil
 }
 
-func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+func (d *downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) { //nolint:gocritic // interface requirement) {
 	i, ok := listItem.(DownloadItem)
 	if !ok {
 		return
@@ -160,12 +161,12 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 }
 
 // ShortHelp returns keybindings to show in the mini help view
-func (d downloadDelegate) ShortHelp() []key.Binding {
+func (d *downloadDelegate) ShortHelp() []key.Binding {
 	return []key.Binding{d.keys.pause, d.keys.delete}
 }
 
 // FullHelp returns keybindings for the expanded help view
-func (d downloadDelegate) FullHelp() [][]key.Binding {
+func (d *downloadDelegate) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{d.keys.pause, d.keys.delete},
 	}
@@ -266,11 +267,12 @@ func (m *RootModel) UpdateListItems() {
 			for _, d := range m.downloads {
 				if d.ID == targetID {
 					var newTab int
-					if d.done {
+					switch {
+					case d.done:
 						newTab = TabDone
-					} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming) {
+					case !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming):
 						newTab = TabActive
-					} else {
+					default:
 						newTab = TabQueued
 					}
 

@@ -59,7 +59,7 @@ func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
 
 	// Pass server1 as primary, but provide both in mirrors list
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -100,7 +100,6 @@ func TestConcurrentDownloader_BackoffOnSingleMirror(t *testing.T) {
 	// This forces a retry.
 	server := testutil.NewMockServerT(t,
 		testutil.WithFileSize(fileSize),
-		testutil.WithFileSize(fileSize),
 		testutil.WithRangeSupport(true),
 		testutil.WithFailOnNthRequest(1), // Fail 1st request (Worker's 1st try)
 	)
@@ -129,7 +128,7 @@ func TestConcurrentDownloader_BackoffOnSingleMirror(t *testing.T) {
 
 	// Only 1 URL (server.URL) is valid
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 

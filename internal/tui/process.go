@@ -13,7 +13,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
+func (m *RootModel) processProgressMsg(msg *events.ProgressMsg) tea.Cmd {
 	d := m.FindDownloadByID(msg.DownloadID)
 	if d == nil || d.done || d.paused {
 		return nil
@@ -33,16 +33,16 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 
 	// Update Chunk State if provided
 	if msg.BitmapWidth > 0 && len(msg.ChunkBitmap) > 0 {
-		if d.state != nil && msg.Total > 0 {
-			d.state.SetTotalSize(msg.Total)
+		if d.progState != nil && msg.Total > 0 {
+			d.progState.SetTotalSize(msg.Total)
 		}
 		// We only get bitmap, no progress array (to save bandwidth)
 		// State needs to be updated carefully
-		if d.state != nil {
-			d.state.RestoreBitmap(msg.ChunkBitmap, msg.ActualChunkSize)
+		if d.progState != nil {
+			d.progState.RestoreBitmap(msg.ChunkBitmap, msg.ActualChunkSize)
 		}
-		if d.state != nil && len(msg.ChunkProgress) > 0 {
-			d.state.SetChunkProgress(msg.ChunkProgress)
+		if d.progState != nil && len(msg.ChunkProgress) > 0 {
+			d.progState.SetChunkProgress(msg.ChunkProgress)
 		}
 	}
 
@@ -57,13 +57,14 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 		totalSpeed := m.calcTotalSpeed()
 		// EMA smooth against previous graph point for visual continuity
 		var smoothed float64
-		if m.Settings != nil && m.Settings.General.LiveSpeedGraph {
+		switch {
+		case m.Settings != nil && m.Settings.General.LiveSpeedGraph:
 			smoothed = totalSpeed
-		} else if len(m.SpeedHistory) > 0 {
+		case len(m.SpeedHistory) > 0:
 			prev := m.SpeedHistory[len(m.SpeedHistory)-1]
 			const graphAlpha = 0.3 // Graph smoothing factor
 			smoothed = graphAlpha*totalSpeed + (1-graphAlpha)*prev
-		} else {
+		default:
 			smoothed = totalSpeed
 		}
 		if len(m.SpeedHistory) > 0 {
@@ -77,7 +78,7 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 }
 
 // startDownload initiates a new download
-func (m RootModel) startDownload(url string, mirrors []string, headers map[string]string, path string, isDefaultPath bool, filename, id string) (RootModel, tea.Cmd) {
+func (m *RootModel) startDownload(url string, mirrors []string, headers map[string]string, path string, isDefaultPath bool, filename, id string) (*RootModel, tea.Cmd) {
 	if m.Service == nil {
 		m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
 		return m, nil
@@ -145,7 +146,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 			err   error
 		)
 		if requestID != "" {
-			newID, err = m.Service.AddWithID(
+			newID, err = m.Service.AddWithID(context.Background(),
 				url,
 				resolvedPath,
 				resolvedFilename,
@@ -156,7 +157,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 				false,
 			)
 		} else {
-			newID, err = m.Service.Add(
+			newID, err = m.Service.Add(context.Background(),
 				url,
 				resolvedPath,
 				resolvedFilename,
@@ -216,7 +217,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	return m, cmd
 }
 
-func (m RootModel) defaultDownloadPath() string {
+func (m *RootModel) defaultDownloadPath() string {
 	if m.Settings != nil {
 		if path := strings.TrimSpace(m.Settings.General.DefaultDownloadDir); path != "" {
 			return path
@@ -225,13 +226,13 @@ func (m RootModel) defaultDownloadPath() string {
 	return "."
 }
 
-func (m RootModel) downloadEnqueueContext() context.Context {
+func (m *RootModel) downloadEnqueueContext() context.Context {
 	if m.enqueueCtx != nil {
 		return m.enqueueCtx
 	}
 	return context.Background()
 }
 
-func (m RootModel) isDefaultDownloadPath(path string) bool {
+func (m *RootModel) isDefaultDownloadPath(path string) bool {
 	return utils.EnsureAbsPath(path) == utils.EnsureAbsPath(m.defaultDownloadPath())
 }

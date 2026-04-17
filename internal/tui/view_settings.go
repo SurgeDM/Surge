@@ -15,7 +15,7 @@ import (
 )
 
 // viewSettings renders the Btop-style settings page
-func (m RootModel) viewSettings() string {
+func (m *RootModel) viewSettings() string {
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
@@ -124,7 +124,7 @@ func shortSettingsCategoryLabel(label string) string {
 	}
 }
 
-func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxWidth int) string {
+func (m *RootModel) renderSettingsTabBar(categories []string, activeTab, maxWidth int) string {
 	if maxWidth < 1 {
 		maxWidth = 1
 	}
@@ -143,9 +143,9 @@ func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxW
 
 	settingsActiveTab := lipgloss.NewStyle().Foreground(colors.NeonPurple)
 	tryBars := []string{
-		components.RenderNumberedTabBar(makeTabs(false), activeTab, settingsActiveTab, TabStyle),
-		components.RenderTabBar(makeTabs(false), activeTab, settingsActiveTab, TabStyle),
-		components.RenderTabBar(makeTabs(true), activeTab, settingsActiveTab, TabStyle),
+		components.RenderNumberedTabBar(makeTabs(false), activeTab, &settingsActiveTab, &TabStyle),
+		components.RenderTabBar(makeTabs(false), activeTab, &settingsActiveTab, &TabStyle),
+		components.RenderTabBar(makeTabs(true), activeTab, &settingsActiveTab, &TabStyle),
 	}
 
 	for _, candidate := range tryBars {
@@ -162,12 +162,12 @@ func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxW
 		Render(fallback)
 }
 
-func (m RootModel) renderSettingsHelp(width int) string {
+func (m *RootModel) renderSettingsHelp(width int) string {
 	if width < 1 {
 		width = 1
 	}
 
-	helpText := m.help.View(m.keys.Settings)
+	helpText := m.help.View(&m.keys.Settings)
 	if width < 60 {
 		helpText = "esc: save/close  tab: next tab  enter: edit"
 	}
@@ -281,7 +281,7 @@ func renderSettingsListViewport(settingsMeta []config.SettingMeta, selectedRow, 
 	return strings.Join(lines, "\n")
 }
 
-func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, innerWidth, rows int) string {
+func (m *RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, innerWidth, rows int) string {
 	if innerWidth < 1 {
 		innerWidth = 1
 	}
@@ -340,6 +340,16 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	valueDisplay := valueLabelStyle.Render(valueLabel) + valueContentStyle.Render(valueStr)
 	valueDisplay = lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(valueDisplay)
 
+	var errorDisplay string
+	if m.SettingsError != "" {
+		errorDisplay = "\n" + lipgloss.NewStyle().
+			Foreground(colors.StateError).
+			Bold(true).
+			Width(innerWidth).
+			MaxWidth(innerWidth).
+			Render("Error: "+m.SettingsError)
+	}
+
 	divider := lipgloss.NewStyle().
 		Foreground(colors.Gray).
 		Render(strings.Repeat("\u2500", innerWidth))
@@ -352,6 +362,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	detail := lipgloss.JoinVertical(lipgloss.Left,
 		valueDisplay,
+		errorDisplay,
 		"",
 		divider,
 		"",
@@ -361,7 +372,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	return formatSettingsBlock(detail, innerWidth, rows)
 }
 
-func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
+func (m *RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
 	leftWidth, rightWidth := CalculateTwoColumnWidths(modalWidth, 32, 22)
 
 	if leftWidth < 12 || rightWidth < 14 {
@@ -405,7 +416,7 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 	return formatSettingsBlock(content, modalWidth-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
 }
 
-func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
+func (m *RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
 	innerWidth := modalWidth - BoxStyle.GetHorizontalFrameSize()
 	if innerWidth < 1 {
 		innerWidth = 1
@@ -501,7 +512,7 @@ func (m *RootModel) updateSettingsInputWidthForViewport() {
 }
 
 // getSettingsValues returns a map of setting key -> value for a category
-func (m RootModel) getSettingsValues(category string) map[string]interface{} {
+func (m *RootModel) getSettingsValues(category string) map[string]interface{} {
 	values := make(map[string]interface{})
 
 	val := reflect.ValueOf(m.Settings).Elem()
@@ -602,7 +613,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 					if v, err := strconv.Atoi(value); err == nil && v >= 0 && v <= 2 {
 						theme = v
 					} else {
-						return nil // Invalid
+						return fmt.Errorf("invalid theme: %q (use system, light, or dark)", value)
 					}
 				}
 				targetField.Set(reflect.ValueOf(theme))
@@ -617,7 +628,10 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 				if value == "" {
 					targetField.SetBool(!targetField.Bool())
 				} else {
-					b, _ := strconv.ParseBool(value)
+					b, err := strconv.ParseBool(value)
+					if err != nil {
+						return fmt.Errorf("invalid boolean: %q (use true or false)", value)
+					}
 					targetField.SetBool(b)
 				}
 			case reflect.String:
@@ -625,30 +639,41 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
 				if v, err := strconv.Atoi(value); err == nil {
 					targetField.SetInt(int64(v))
+				} else {
+					return fmt.Errorf("invalid integer: %q", value)
 				}
 			case reflect.Int64:
 				if targetField.Type().String() == "time.Duration" {
+					parseVal := value
 					if _, err := strconv.ParseFloat(value, 64); err == nil {
-						value += "s"
+						parseVal += "s"
 					}
-					if v, err := time.ParseDuration(value); err == nil {
-						targetField.Set(reflect.ValueOf(v))
+					v, err := time.ParseDuration(parseVal)
+					if err != nil {
+						return fmt.Errorf("invalid duration: %q (e.g. 5, 5s, 1m)", value)
 					}
+					targetField.Set(reflect.ValueOf(v))
 				} else {
 					// Handle KB/MB scaling gracefully if specified
 					if key == "min_chunk_size" {
 						if v, err := strconv.ParseFloat(value, 64); err == nil {
-							targetField.SetInt(int64(v * float64(config.MB)))
+							targetField.SetInt(int64(v * float64(config.MB))) //nolint:gosec // Controlled setting conversion
+						} else {
+							return fmt.Errorf("invalid number: %q", value)
 						}
 					} else {
 						if v, err := strconv.ParseInt(value, 10, 64); err == nil {
 							targetField.SetInt(v)
+						} else {
+							return fmt.Errorf("invalid integer: %q", value)
 						}
 					}
 				}
 			case reflect.Float32, reflect.Float64:
 				if v, err := strconv.ParseFloat(value, 64); err == nil {
 					targetField.SetFloat(v)
+				} else {
+					return fmt.Errorf("invalid decimal: %q", value)
 				}
 			}
 
@@ -674,7 +699,7 @@ func (m *RootModel) persistSettings() error {
 }
 
 // getCurrentSettingKey returns the key of the currently selected setting
-func (m RootModel) getCurrentSettingKey() string {
+func (m *RootModel) getCurrentSettingKey() string {
 	meta := m.getCurrentSettingMeta()
 	if meta != nil {
 		return meta.Key
@@ -683,7 +708,7 @@ func (m RootModel) getCurrentSettingKey() string {
 }
 
 // getCurrentSettingMeta returns the metadata for the currently selected setting
-func (m RootModel) getCurrentSettingMeta() *config.SettingMeta {
+func (m *RootModel) getCurrentSettingMeta() *config.SettingMeta {
 	categories := config.CategoryOrder()
 	if m.SettingsActiveTab < 0 || m.SettingsActiveTab >= len(categories) {
 		return nil
@@ -699,7 +724,7 @@ func (m RootModel) getCurrentSettingMeta() *config.SettingMeta {
 }
 
 // getCurrentSettingType returns the type of the currently selected setting
-func (m RootModel) getCurrentSettingType() string {
+func (m *RootModel) getCurrentSettingType() string {
 	meta := m.getCurrentSettingMeta()
 	if meta != nil {
 		return meta.Type
@@ -708,7 +733,7 @@ func (m RootModel) getCurrentSettingType() string {
 }
 
 // getSettingsCount returns the number of settings in the current category
-func (m RootModel) getSettingsCount() int {
+func (m *RootModel) getSettingsCount() int {
 	categories := config.CategoryOrder()
 	if m.SettingsActiveTab >= 0 && m.SettingsActiveTab < len(categories) {
 		activeCategory := categories[m.SettingsActiveTab]
@@ -722,7 +747,7 @@ func (m RootModel) getSettingsCount() int {
 }
 
 // getSettingUnit returns the unit suffix for the currently selected setting
-func (m RootModel) getSettingUnit() string {
+func (m *RootModel) getSettingUnit() string {
 	key := m.getCurrentSettingKey()
 	switch key {
 	case "min_chunk_size":
@@ -801,12 +826,12 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 	case "int64":
 		if v, ok := value.(int64); ok {
 			// Just display the raw number - units handled by getSettingUnit
-			return fmt.Sprintf("%d", v)
+			return strconv.FormatInt(v, 10)
 		}
 	case "int":
 		v := reflect.ValueOf(value)
 		if v.Kind() == reflect.Int {
-			return fmt.Sprintf("%d", v.Int())
+			return strconv.FormatInt(v.Int(), 10)
 		}
 	case "float64":
 		if v, ok := value.(float64); ok {
@@ -830,7 +855,7 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 	v := reflect.ValueOf(value)
 	switch v.Kind() {
 	case reflect.Int, reflect.Int64:
-		return fmt.Sprintf("%d", v.Int())
+		return strconv.FormatInt(v.Int(), 10)
 	case reflect.Float64:
 		return fmt.Sprintf("%.2f", v.Float())
 	default:
@@ -838,89 +863,48 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 	}
 }
 
-// resetSettingToDefault resets a specific setting to its default value
 func (m *RootModel) resetSettingToDefault(category, key string, defaults *config.Settings) {
-	switch category {
-	case "General":
-		switch key {
-		case "default_download_dir":
-			m.Settings.General.DefaultDownloadDir = defaults.General.DefaultDownloadDir
-		case "warn_on_duplicate":
-			m.Settings.General.WarnOnDuplicate = defaults.General.WarnOnDuplicate
-		case "download_complete_notification":
-			m.Settings.General.DownloadCompleteNotification = defaults.General.DownloadCompleteNotification
-		case "auto_resume":
-			m.Settings.General.AutoResume = defaults.General.AutoResume
-		case "skip_update_check":
-			m.Settings.General.SkipUpdateCheck = defaults.General.SkipUpdateCheck
+	val := reflect.ValueOf(m.Settings).Elem()
+	defVal := reflect.ValueOf(defaults).Elem()
+	typ := val.Type()
 
-		case "clipboard_monitor":
-			m.Settings.General.ClipboardMonitor = defaults.General.ClipboardMonitor
-		case "allow_remote_open_actions":
-			m.Settings.General.AllowRemoteOpenActions = defaults.General.AllowRemoteOpenActions
-		case "live_speed_graph":
-			m.Settings.General.LiveSpeedGraph = defaults.General.LiveSpeedGraph
-		case "theme":
-			m.Settings.General.Theme = defaults.General.Theme
-		case "log_retention_count":
-			m.Settings.General.LogRetentionCount = defaults.General.LogRetentionCount
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		categoryLabel := field.Tag.Get("ui_label")
+		if categoryLabel == "" {
+			categoryLabel = field.Name
 		}
 
-	case "Network":
-		// Handle Network-related keys
-		switch key {
-		case "max_connections_per_host":
-			m.Settings.Network.MaxConnectionsPerHost = defaults.Network.MaxConnectionsPerHost
+		if categoryLabel == category {
+			catField := val.Field(i)
+			defCatField := defVal.Field(i)
+			if catField.Kind() != reflect.Struct {
+				continue
+			}
 
-		case "max_concurrent_downloads":
-			m.Settings.Network.MaxConcurrentDownloads = defaults.Network.MaxConcurrentDownloads
-		case "max_concurrent_probes":
-			m.Settings.Network.MaxConcurrentProbes = defaults.Network.MaxConcurrentProbes
-		case "user_agent":
-			m.Settings.Network.UserAgent = defaults.Network.UserAgent
-		case "proxy_url":
-			m.Settings.Network.ProxyURL = defaults.Network.ProxyURL
-		case "custom_dns":
-			m.Settings.Network.CustomDNS = defaults.Network.CustomDNS
-		case "sequential_download":
-			m.Settings.Network.SequentialDownload = defaults.Network.SequentialDownload
-		case "min_chunk_size":
-			m.Settings.Network.MinChunkSize = defaults.Network.MinChunkSize
-		case "worker_buffer_size":
-			m.Settings.Network.WorkerBufferSize = defaults.Network.WorkerBufferSize
-		case "dial_hedge_count":
-			m.Settings.Network.DialHedgeCount = defaults.Network.DialHedgeCount
-		}
-	case "Performance":
-		switch key {
-		case "max_task_retries":
-			m.Settings.Performance.MaxTaskRetries = defaults.Performance.MaxTaskRetries
-		case "slow_worker_threshold":
-			m.Settings.Performance.SlowWorkerThreshold = defaults.Performance.SlowWorkerThreshold
-		case "slow_worker_grace_period":
-			m.Settings.Performance.SlowWorkerGracePeriod = defaults.Performance.SlowWorkerGracePeriod
-		case "stall_timeout":
-			m.Settings.Performance.StallTimeout = defaults.Performance.StallTimeout
-		case "speed_ema_alpha":
-			m.Settings.Performance.SpeedEmaAlpha = defaults.Performance.SpeedEmaAlpha
-		}
-	case "Categories":
-		switch key {
-		case "category_enabled":
-			m.Settings.Categories.CategoryEnabled = defaults.Categories.CategoryEnabled
-		}
-	case "Extension":
-		switch key {
-		case "extension_prompt":
-			m.Settings.Extension.ExtensionPrompt = defaults.Extension.ExtensionPrompt
-		case "chrome_extension_url":
-			m.Settings.Extension.ChromeExtensionURL = defaults.Extension.ChromeExtensionURL
-		case "firefox_extension_url":
-			m.Settings.Extension.FirefoxExtensionURL = defaults.Extension.FirefoxExtensionURL
-		case "instructions_url":
-			m.Settings.Extension.InstructionsURL = defaults.Extension.InstructionsURL
-		case "-":
-			m.Settings.Extension.AuthToken = defaults.Extension.AuthToken
+			catTyp := catField.Type()
+			for j := 0; j < catTyp.NumField(); j++ {
+				innerField := catTyp.Field(j)
+				fieldKey := innerField.Tag.Get("json")
+				if fieldKey == "" {
+					fieldKey = innerField.Name
+				}
+
+				if fieldKey == key {
+					targetField := catField.Field(j)
+					sourceField := defCatField.Field(j)
+					if targetField.CanSet() {
+						targetField.Set(sourceField)
+
+						// Special case: theme needs internal application to update UI
+						if fieldKey == "theme" && targetField.Kind() == reflect.Int {
+							m.ApplyTheme(int(targetField.Int()))
+						}
+					}
+					return
+				}
+			}
+			return
 		}
 	}
 }

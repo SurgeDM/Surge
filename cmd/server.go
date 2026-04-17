@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"os"
@@ -37,7 +38,7 @@ var serverStartCmd = &cobra.Command{
 		}
 
 		if !isMaster {
-			return fmt.Errorf("surge server is already running")
+			return errors.New("surge server is already running")
 		}
 		defer func() {
 			if err := ReleaseLock(); err != nil {
@@ -67,7 +68,7 @@ var serverStartCmd = &cobra.Command{
 
 		// Get token flag
 		tokenFlag := resolveServerToken(cmd)
-		return startServerLogic(cmd, args, portFlag, batchFile, outputDir, exitWhenDone, noResume, tokenFlag)
+		return startServerLogic(args, portFlag, batchFile, outputDir, exitWhenDone, noResume, tokenFlag)
 	},
 }
 
@@ -144,12 +145,12 @@ func init() {
 
 func savePID() {
 	pid := os.Getpid()
-	if err := os.MkdirAll(config.GetRuntimeDir(), 0o755); err != nil {
+	if err := os.MkdirAll(config.GetRuntimeDir(), 0o750); err != nil {
 		utils.Debug("Error creating runtime directory for PID file: %v", err)
 		return
 	}
 	pidFile := filepath.Join(config.GetRuntimeDir(), "pid")
-	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", pid)), 0o644); err != nil {
+	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0o600); err != nil {
 		utils.Debug("Error writing PID file: %v", err)
 	}
 }
@@ -163,7 +164,7 @@ func removePID() {
 
 func readPID() int {
 	pidFile := filepath.Join(config.GetRuntimeDir(), "pid")
-	data, err := os.ReadFile(pidFile)
+	data, err := os.ReadFile(pidFile) //nolint:gosec // internal pid file //nolint:gosec // internal pid file
 	if err != nil {
 		return 0
 	}
@@ -171,7 +172,7 @@ func readPID() int {
 	return pid
 }
 
-func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile string, outputDir string, exitWhenDone bool, noResume bool, tokenOverride string) error {
+func startServerLogic(args []string, portFlag int, batchFile, outputDir string, exitWhenDone, noResume bool, tokenOverride string) error {
 	port, listener, err := bindServerListener(portFlag)
 	if err != nil {
 		return err

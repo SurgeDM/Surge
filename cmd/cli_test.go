@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
@@ -58,7 +60,7 @@ func TestResolveDownloadID_Remote(t *testing.T) {
 
 	// 3. Test resolveDownloadID
 	partial := "aabbcc"
-	full, err := resolveDownloadID(partial)
+	full, err := resolveDownloadID(context.Background(), partial)
 	if err != nil {
 		t.Fatalf("Failed to resolve ID: %v", err)
 	}
@@ -95,7 +97,7 @@ func TestResolveDownloadID_RemoteStillWorksWhenDBUnavailable(t *testing.T) {
 	state.CloseDB()
 	state.Configure(filepath.Join(t.TempDir(), "missing", "surge.db")) // Intentionally invalid path
 
-	full, err := resolveDownloadID("ddeeff")
+	full, err := resolveDownloadID(context.Background(), "ddeeff")
 	if err != nil {
 		t.Fatalf("resolveDownloadID failed: %v", err)
 	}
@@ -111,7 +113,7 @@ func TestResolveDownloadID_StrictRemoteDoesNotFallbackToDBOnRemoteError(t *testi
 		ID:       "11223344-1234-5678-90ab-cdef12345678",
 		Filename: "db-only.bin",
 	}
-	if err := state.AddToMasterList(entry); err != nil {
+	if err := state.AddToMasterList(context.Background(), &entry); err != nil {
 		t.Fatalf("failed to seed db entry: %v", err)
 	}
 
@@ -134,7 +136,7 @@ func TestResolveDownloadID_StrictRemoteDoesNotFallbackToDBOnRemoteError(t *testi
 		globalToken = origToken
 	})
 
-	_, err := resolveDownloadID("112233")
+	_, err := resolveDownloadID(context.Background(), "112233")
 	if err == nil {
 		t.Fatal("expected remote list error, got nil")
 	}
@@ -150,7 +152,7 @@ func TestResolveDownloadID_LocalModeFallsBackToDBWhenRemoteListFails(t *testing.
 		ID:       "99aabbcc-1234-5678-90ab-cdef12345678",
 		Filename: "fallback.bin",
 	}
-	if err := state.AddToMasterList(entry); err != nil {
+	if err := state.AddToMasterList(context.Background(), &entry); err != nil {
 		t.Fatalf("failed to seed db entry: %v", err)
 	}
 
@@ -169,7 +171,7 @@ func TestResolveDownloadID_LocalModeFallsBackToDBWhenRemoteListFails(t *testing.
 	saveActivePort(port)
 	t.Cleanup(removeActivePort)
 
-	full, err := resolveDownloadID("99aabb")
+	full, err := resolveDownloadID(context.Background(), "99aabb")
 	if err != nil {
 		t.Fatalf("resolveDownloadID failed: %v", err)
 	}
@@ -204,7 +206,7 @@ func TestGetRemoteDownloads(t *testing.T) {
 	var port int
 	_, _ = fmt.Sscanf(portStr, "%d", &port)
 
-	downloads, err := GetRemoteDownloads(fmt.Sprintf("http://127.0.0.1:%d", port), "")
+	downloads, err := GetRemoteDownloads(context.Background(), fmt.Sprintf("http://127.0.0.1:%d", port), "")
 	if err != nil {
 		t.Fatalf("Failed to get downloads: %v", err)
 	}
@@ -230,7 +232,7 @@ func TestReadURLsFromFile_ParsesAndFilters(t *testing.T) {
 		"#another-comment",
 		"https://example.com/c.zip",
 	}, "\n")
-	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(urlFile, []byte(content), 0o600); err != nil {
 		t.Fatalf("failed to write url file: %v", err)
 	}
 
@@ -255,7 +257,8 @@ func TestReadURLsFromFile_ParsesAndFilters(t *testing.T) {
 
 	// Test empty / comment-only file
 	emptyFile := filepath.Join(tmpDir, "empty.txt")
-	if err := os.WriteFile(emptyFile, []byte("# just a comment\n\n  "), 0o644); err != nil {
+	err = os.WriteFile(emptyFile, []byte("# just a comment\n\n  "), 0o600)
+	if err != nil {
 		t.Fatalf("failed to write empty url file: %v", err)
 	}
 	_, err = utils.ReadURLsFromFile(emptyFile)
@@ -274,7 +277,7 @@ func TestReadURLsFromFile_WhitespaceAndInlineComments(t *testing.T) {
 		"# full comment",
 		"https://example.com/d.zip\thttps://example.com/e.zip",
 	}, "\n")
-	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(urlFile, []byte(content), 0o600); err != nil {
 		t.Fatalf("failed to write url file: %v", err)
 	}
 
@@ -309,7 +312,7 @@ func TestReadURLsFromFile_DedupesTrailingSlashVariants(t *testing.T) {
 		"https://example.com/file.bin///",
 		"https://example.com/other.bin",
 	}, "\n")
-	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+	if err := os.WriteFile(urlFile, []byte(content), 0o600); err != nil {
 		t.Fatalf("failed to write url file: %v", err)
 	}
 
@@ -337,7 +340,7 @@ func TestReadURLsFromFile_LongLine(t *testing.T) {
 	urlFile := filepath.Join(tmpDir, "urls.txt")
 	longToken := strings.Repeat("a", 70*1024)
 	longURL := "https://example.com/" + longToken
-	if err := os.WriteFile(urlFile, []byte(longURL+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(urlFile, []byte(longURL+"\n"), 0o600); err != nil {
 		t.Fatalf("failed to write url file: %v", err)
 	}
 
@@ -379,8 +382,8 @@ func TestServerPIDLifecycle(t *testing.T) {
 func TestFormatSize_Table(t *testing.T) {
 	tests := []struct {
 		name  string
-		bytes int64
 		want  string
+		bytes int64
 	}{
 		{name: "zero", bytes: 0, want: "0 B"},
 		{name: "bytes", bytes: 512, want: "512 B"},
@@ -412,7 +415,7 @@ func TestPrintDownloadDetail_TextAndJSON(t *testing.T) {
 	}
 
 	textOut := captureStdout(t, func() {
-		printDownloadDetail(status, false)
+		printDownloadDetail(&status, false)
 	})
 	if !strings.Contains(textOut, "ID:         "+status.ID) {
 		t.Fatalf("expected text output to contain ID, got: %s", textOut)
@@ -425,7 +428,7 @@ func TestPrintDownloadDetail_TextAndJSON(t *testing.T) {
 	}
 
 	jsonOut := captureStdout(t, func() {
-		printDownloadDetail(status, true)
+		printDownloadDetail(&status, true)
 	})
 	var decoded types.DownloadStatus
 	if err := json.Unmarshal([]byte(jsonOut), &decoded); err != nil {
@@ -450,7 +453,7 @@ func TestRmClean_Offline_Works(t *testing.T) {
 		Downloaded:  100,
 		CompletedAt: 1,
 	}
-	if err := state.AddToMasterList(completed); err != nil {
+	if err := state.AddToMasterList(context.Background(), &completed); err != nil {
 		t.Fatalf("failed to seed completed download: %v", err)
 	}
 
@@ -465,7 +468,7 @@ func TestRmClean_Offline_Works(t *testing.T) {
 		}
 	})
 
-	entry, err := state.GetDownload(completed.ID)
+	entry, err := state.GetDownload(context.Background(), completed.ID)
 	if err != nil {
 		t.Fatalf("failed to query completed entry after clean: %v", err)
 	}
@@ -516,8 +519,8 @@ func TestAddCmdRunE_ReturnsExpectedErrors(t *testing.T) {
 
 func TestActionCommandsRunE_ReturnNoServerErrors(t *testing.T) {
 	tests := []struct {
-		name string
 		run  func() error
+		name string
 	}{
 		{
 			name: "pause",
@@ -583,8 +586,8 @@ func TestActionCommandsRunE_ReturnNoServerErrors(t *testing.T) {
 
 func TestActionCommandsRunE_ReturnAmbiguousIDErrors(t *testing.T) {
 	tests := []struct {
-		name string
 		run  func() error
+		name string
 	}{
 		{
 			name: "pause",
@@ -640,7 +643,7 @@ func TestActionCommandsRunE_ReturnAmbiguousIDErrors(t *testing.T) {
 				{ID: "deadbead-1234-5678-90ab-cdef12345678", Filename: "second.bin"},
 			}
 			for _, entry := range entries {
-				if err := state.AddToMasterList(entry); err != nil {
+				if err := state.AddToMasterList(context.Background(), &entry); err != nil {
 					t.Fatalf("failed to seed db entry %s: %v", entry.ID, err)
 				}
 			}
@@ -668,12 +671,12 @@ func TestPrintDownloads_FromDatabase_TableAndJSON(t *testing.T) {
 		Downloaded: 512,
 		TotalSize:  1024,
 	}
-	if err := state.AddToMasterList(entry); err != nil {
+	if err := state.AddToMasterList(context.Background(), &entry); err != nil {
 		t.Fatalf("failed to seed db entry: %v", err)
 	}
 
 	tableOut := captureStdout(t, func() {
-		if err := printDownloads(false, "", "", false); err != nil {
+		if err := printDownloads(context.Background(), false, "", "", false); err != nil {
 			t.Fatalf("printDownloads table failed: %v", err)
 		}
 	})
@@ -691,7 +694,7 @@ func TestPrintDownloads_FromDatabase_TableAndJSON(t *testing.T) {
 	}
 
 	jsonOut := captureStdout(t, func() {
-		if err := printDownloads(true, "", "", false); err != nil {
+		if err := printDownloads(context.Background(), true, "", "", false); err != nil {
 			t.Fatalf("printDownloads json failed: %v", err)
 		}
 	})
@@ -713,7 +716,7 @@ func TestPrintDownloads_JSONEmpty(t *testing.T) {
 	removeActivePort()
 
 	out := captureStdout(t, func() {
-		if err := printDownloads(true, "", "", false); err != nil {
+		if err := printDownloads(context.Background(), true, "", "", false); err != nil {
 			t.Fatalf("printDownloads empty json failed: %v", err)
 		}
 	})
@@ -734,7 +737,7 @@ func TestPrintDownloads_StrictRemoteEmpty_DoesNotFallbackToDB(t *testing.T) {
 		Filename: "local-only.bin",
 		Status:   "completed",
 	}
-	if err := state.AddToMasterList(entry); err != nil {
+	if err := state.AddToMasterList(context.Background(), &entry); err != nil {
 		t.Fatalf("failed to seed local db entry: %v", err)
 	}
 
@@ -749,7 +752,7 @@ func TestPrintDownloads_StrictRemoteEmpty_DoesNotFallbackToDB(t *testing.T) {
 	defer server.Close()
 
 	out := captureStdout(t, func() {
-		if err := printDownloads(true, server.URL, "", true); err != nil {
+		if err := printDownloads(context.Background(), true, server.URL, "", true); err != nil {
 			t.Fatalf("printDownloads strict remote failed: %v", err)
 		}
 	})
@@ -770,12 +773,12 @@ func TestShowDownloadDetails_UsesDatabaseFallback(t *testing.T) {
 		Downloaded: 250,
 		TotalSize:  500,
 	}
-	if err := state.AddToMasterList(entry); err != nil {
+	if err := state.AddToMasterList(context.Background(), &entry); err != nil {
 		t.Fatalf("failed to seed db entry: %v", err)
 	}
 
 	out := captureStdout(t, func() {
-		if err := showDownloadDetails("87654321", true, "", ""); err != nil {
+		if err := showDownloadDetails(context.Background(), "87654321", true, "", ""); err != nil {
 			t.Fatalf("showDownloadDetails fallback failed: %v", err)
 		}
 	})
@@ -795,8 +798,8 @@ func TestShowDownloadDetails_UsesDatabaseFallback(t *testing.T) {
 func TestSendToServer_SuccessAndServerError(t *testing.T) {
 	tests := []struct {
 		name       string
-		statusCode int
 		body       string
+		statusCode int
 		wantErr    bool
 	}{
 		{name: "success accepted", statusCode: http.StatusAccepted, body: `{"id":"abc"}`},
@@ -805,7 +808,7 @@ func TestSendToServer_SuccessAndServerError(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			ln, err := net.Listen("tcp", "127.0.0.1:0")
+			ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 			if err != nil {
 				t.Fatalf("listen failed: %v", err)
 			}
@@ -824,14 +827,17 @@ func TestSendToServer_SuccessAndServerError(t *testing.T) {
 				_, _ = w.Write([]byte(tt.body))
 			})
 
-			server := &http.Server{Handler: mux}
+			server := &http.Server{
+				Handler:           mux,
+				ReadHeaderTimeout: 5 * time.Second,
+			}
 			go func() { _ = server.Serve(ln) }()
 			t.Cleanup(func() {
 				_ = server.Close()
 			})
 
 			port := ln.Addr().(*net.TCPAddr).Port
-			err = sendToServer("https://example.com/file.zip", nil, "", fmt.Sprintf("http://127.0.0.1:%d", port), "")
+			err = sendToServer(context.Background(), "https://example.com/file.zip", nil, "", fmt.Sprintf("http://127.0.0.1:%d", port), "")
 			if tt.wantErr && err == nil {
 				t.Fatal("expected error, got nil")
 			}
@@ -845,7 +851,7 @@ func TestSendToServer_SuccessAndServerError(t *testing.T) {
 func TestSendToServer_UsesBearerTokenFromEnv(t *testing.T) {
 	t.Setenv("SURGE_TOKEN", "env-token-123")
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen failed: %v", err)
 	}
@@ -861,12 +867,15 @@ func TestSendToServer_UsesBearerTokenFromEnv(t *testing.T) {
 		_, _ = w.Write([]byte(`{"id":"ok"}`))
 	})
 
-	server := &http.Server{Handler: mux}
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 	go func() { _ = server.Serve(ln) }()
 	t.Cleanup(func() { _ = server.Close() })
 
 	port := ln.Addr().(*net.TCPAddr).Port
-	err = sendToServer("https://example.com/file.zip", nil, "", fmt.Sprintf("http://127.0.0.1:%d", port), resolveLocalToken())
+	err = sendToServer(context.Background(), "https://example.com/file.zip", nil, "", fmt.Sprintf("http://127.0.0.1:%d", port), resolveLocalToken())
 	if err != nil {
 		t.Fatalf("expected authenticated request to succeed, got error: %v", err)
 	}
@@ -875,7 +884,7 @@ func TestSendToServer_UsesBearerTokenFromEnv(t *testing.T) {
 func TestGetRemoteDownloads_UsesBearerTokenFromEnv(t *testing.T) {
 	t.Setenv("SURGE_TOKEN", "env-token-123")
 
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatalf("listen failed: %v", err)
 	}
@@ -891,12 +900,15 @@ func TestGetRemoteDownloads_UsesBearerTokenFromEnv(t *testing.T) {
 		_, _ = w.Write([]byte(`[{"id":"123","filename":"foo.bin","status":"downloading"}]`))
 	})
 
-	server := &http.Server{Handler: mux}
+	server := &http.Server{
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 	go func() { _ = server.Serve(ln) }()
 	t.Cleanup(func() { _ = server.Close() })
 
 	port := ln.Addr().(*net.TCPAddr).Port
-	downloads, err := GetRemoteDownloads(fmt.Sprintf("http://127.0.0.1:%d", port), resolveLocalToken())
+	downloads, err := GetRemoteDownloads(context.Background(), fmt.Sprintf("http://127.0.0.1:%d", port), resolveLocalToken())
 	if err != nil {
 		t.Fatalf("expected authenticated request to succeed, got error: %v", err)
 	}
@@ -916,7 +928,7 @@ func TestGetRemoteDownloads_NonOKAndInvalidJSON(t *testing.T) {
 		var port int
 		_, _ = fmt.Sscanf(portStr, "%d", &port)
 
-		_, err := GetRemoteDownloads(fmt.Sprintf("http://127.0.0.1:%d", port), "")
+		_, err := GetRemoteDownloads(context.Background(), fmt.Sprintf("http://127.0.0.1:%d", port), "")
 		if err == nil {
 			t.Fatal("expected error for non-200 response")
 		}
@@ -933,7 +945,7 @@ func TestGetRemoteDownloads_NonOKAndInvalidJSON(t *testing.T) {
 		var port int
 		_, _ = fmt.Sscanf(portStr, "%d", &port)
 
-		_, err := GetRemoteDownloads(fmt.Sprintf("http://127.0.0.1:%d", port), "")
+		_, err := GetRemoteDownloads(context.Background(), fmt.Sprintf("http://127.0.0.1:%d", port), "")
 		if err == nil {
 			t.Fatal("expected json decode error")
 		}
@@ -942,7 +954,7 @@ func TestGetRemoteDownloads_NonOKAndInvalidJSON(t *testing.T) {
 
 func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 	t.Run("remote-mode", func(t *testing.T) {
-		ln, err := net.Listen("tcp", "127.0.0.1:0")
+		ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", "127.0.0.1:0")
 		if err != nil {
 			t.Fatalf("listen failed: %v", err)
 		}
@@ -955,12 +967,15 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 			w.WriteHeader(http.StatusAccepted)
 			_, _ = w.Write([]byte(`{"id":"ok"}`))
 		})
-		server := &http.Server{Handler: mux}
+		server := &http.Server{
+			Handler:           mux,
+			ReadHeaderTimeout: 5 * time.Second,
+		}
 		go func() { _ = server.Serve(ln) }()
 		t.Cleanup(func() { _ = server.Close() })
 
 		port := ln.Addr().(*net.TCPAddr).Port
-		count := processDownloads([]string{
+		count := processDownloads(context.Background(), []string{
 			"https://example.com/a.zip,https://mirror.example.com/a.zip",
 			"",
 			"https://example.com/b.zip",
@@ -992,7 +1007,7 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 		}))
 		defer probeServer.Close()
 
-		count := processDownloads([]string{
+		count := processDownloads(context.Background(), []string{
 			probeServer.URL + "/local.zip",
 			"",
 		}, t.TempDir(), 0)
@@ -1038,22 +1053,22 @@ func resetCommandConnectionState(t *testing.T) {
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe failed: %v", err)
+	r, w, pErr := os.Pipe()
+	if pErr != nil {
+		t.Fatalf("os.Pipe failed: %v", pErr)
 	}
 	os.Stdout = w
 
 	fn()
 
-	if err := w.Close(); err != nil {
-		t.Fatalf("close writer failed: %v", err)
+	if cErr := w.Close(); cErr != nil {
+		t.Fatalf("close writer failed: %v", cErr)
 	}
 	os.Stdout = old
 
-	data, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("read stdout failed: %v", err)
+	data, readErr := io.ReadAll(r)
+	if readErr != nil {
+		t.Fatalf("read stdout failed: %v", readErr)
 	}
 	_ = r.Close()
 	return string(data)

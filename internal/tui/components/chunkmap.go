@@ -11,17 +11,17 @@ import (
 // ChunkMapModel visualizes download chunks as a grid using a bitmap
 type ChunkMapModel struct {
 	Bitmap          []byte
-	BitmapWidth     int // Total number of chunks in bitmap
-	Width           int // UI render width (columns * 2)
-	Height          int // Available height in rows (0 = auto)
-	Paused          bool
+	ChunkProgress   []int64
+	BitmapWidth     int
+	Width           int
+	Height          int
 	TotalSize       int64
 	ActualChunkSize int64
-	ChunkProgress   []int64
+	Paused          bool
 }
 
 // NewChunkMapModel creates a new chunk map visualization
-func NewChunkMapModel(bitmap []byte, bitmapWidth int, width, height int, paused bool, totalSize int64, actualChunkSize int64, chunkProgress []int64) ChunkMapModel {
+func NewChunkMapModel(bitmap []byte, bitmapWidth, width, height int, paused bool, totalSize, actualChunkSize int64, chunkProgress []int64) ChunkMapModel {
 	return ChunkMapModel{
 		Bitmap:          bitmap,
 		BitmapWidth:     bitmapWidth,
@@ -34,7 +34,7 @@ func NewChunkMapModel(bitmap []byte, bitmapWidth int, width, height int, paused 
 	}
 }
 
-func (m ChunkMapModel) getChunkState(index int) types.ChunkStatus {
+func (m *ChunkMapModel) getChunkState(index int) types.ChunkStatus {
 	if index < 0 || index >= m.BitmapWidth {
 		return types.ChunkPending
 	}
@@ -48,7 +48,7 @@ func (m ChunkMapModel) getChunkState(index int) types.ChunkStatus {
 }
 
 // View renders the chunk grid
-func (m ChunkMapModel) View() string {
+func (m *ChunkMapModel) View() string {
 	if m.BitmapWidth == 0 || len(m.Bitmap) == 0 {
 		return ""
 	}
@@ -182,13 +182,14 @@ func (m ChunkMapModel) View() string {
 		}
 
 		// Determine Status
-		if allCompleted || (!hasApproximateProgress && downloadedInBlock >= blockSize) {
+		switch {
+		case allCompleted || (!hasApproximateProgress && downloadedInBlock >= blockSize):
 			visualChunks[i] = types.ChunkCompleted
-		} else if downloadedInBlock > 0 {
+		case downloadedInBlock > 0:
 			// If we have ANY bytes in this visual block, it is "Downloading" (or Paused Partial)
 			// This creates the "granular progress" we want.
 			visualChunks[i] = types.ChunkDownloading
-		} else {
+		default:
 			visualChunks[i] = types.ChunkPending
 		}
 	}
@@ -229,7 +230,7 @@ func (m ChunkMapModel) View() string {
 
 // CalculateHeight returns the number of lines needed to render the chunks
 // Takes available height to support dynamic sizing
-func CalculateHeight(count int, width int, availableHeight int) int {
+func CalculateHeight(count, width, availableHeight int) int {
 	if count == 0 {
 		return 0
 	}

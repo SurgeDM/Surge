@@ -28,7 +28,7 @@ func startEventWorkerForTest(t *testing.T, svc *LocalDownloadService) func() {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		mgr.StartEventWorker(stream)
+		mgr.StartEventWorker(context.Background(), stream)
 	}()
 
 	svc.SetLifecycleHooks(LifecycleHooks{

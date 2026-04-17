@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -22,12 +24,12 @@ var rmCmd = &cobra.Command{
 		clean, _ := cmd.Flags().GetBool("clean")
 
 		if !clean && len(args) == 0 {
-			return fmt.Errorf("provide a download ID or use --clean")
+			return errors.New("provide a download ID or use --clean")
 		}
 
 		if clean {
 			// Remove completed downloads from DB
-			count, err := state.RemoveCompletedDownloads()
+			count, err := state.RemoveCompletedDownloads(context.Background())
 			if err != nil {
 				return fmt.Errorf("error cleaning downloads: %w", err)
 			}
@@ -35,7 +37,7 @@ var rmCmd = &cobra.Command{
 			return nil
 		}
 
-		return ExecuteAPIAction(args[0], "/delete", http.MethodPost, "Removed download")
+		return ExecuteAPIAction(cmd.Context(), args[0], "/delete", http.MethodPost, "Removed download")
 	},
 }
 

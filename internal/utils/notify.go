@@ -35,13 +35,13 @@ func ensureIcon() string {
 			cacheDir = os.TempDir()
 		}
 		surgeCache := filepath.Join(cacheDir, "surge")
-		if err := os.MkdirAll(surgeCache, 0o755); err != nil {
+		if err := os.MkdirAll(surgeCache, 0o750); err != nil {
 			Debug("Failed to create icon cache dir: %v", err)
 			return
 		}
 		path := filepath.Join(surgeCache, "surge_logo.png")
 		if _, statErr := os.Stat(path); os.IsNotExist(statErr) {
-			if err := os.WriteFile(path, assets.LogoData, 0o644); err != nil {
+			if err := os.WriteFile(path, assets.LogoData, 0o600); err != nil {
 				Debug("Failed to write notification icon: %v", err)
 				return
 			}

@@ -27,7 +27,7 @@ func TestWorkerPool_GetStatus_Active(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads[id] = &activeDownload{
-		config: types.DownloadConfig{
+		config: &types.DownloadConfig{
 			ID:       id,
 			URL:      "http://example.com/file",
 			Filename: "file",
@@ -70,7 +70,7 @@ func TestWorkerPool_GetStatus_Paused(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads[id] = &activeDownload{
-		config: types.DownloadConfig{ID: id, State: state},
+		config: &types.DownloadConfig{ID: id, State: state},
 	}
 	pool.mu.Unlock()
 
@@ -97,7 +97,7 @@ func TestWorkerPool_GetStatus_Completed(t *testing.T) {
 
 	pool.mu.Lock()
 	pool.downloads[id] = &activeDownload{
-		config: types.DownloadConfig{ID: id, State: state},
+		config: &types.DownloadConfig{ID: id, State: state},
 	}
 	pool.mu.Unlock()
 

@@ -1,0 +1,67 @@
+# .golangci.yml
+version: "2"
+
+run:
+  tests: true
+
+linters:
+  default: none
+  enable:
+    # correctness
+    - staticcheck
+    - govet
+    - errcheck
+    - unused
+    - ineffassign
+    - makezero
+    - nilerr
+    - errorlint
+    - contextcheck
+
+    # performance
+    - prealloc
+    - perfsprint
+    - usestdlibvars
+
+    # resource safety
+    - bodyclose
+    - noctx
+    - sqlclosecheck
+    - rowserrcheck
+    - gosec
+
+    # style / quality
+    - gocritic
+    - unparam
+    # - nestif
+    - dupword
+    - dupl
+
+  settings:
+    govet:
+      enable:
+        - shadow
+        - copylocks
+        - unusedresult
+
+    gosec:
+      excludes:
+        - G304
+
+    gocritic:
+      enabled-tags:
+        - performance
+        - diagnostic
+        - style
+
+    errorlint:
+      asserts: true
+
+  exclusions:
+    rules:
+      # Disable specific linters just for test files
+      - path: _test\.go
+        linters:
+          - gosec     # Tests often have hardcoded credentials or weak rand sources
+          - errcheck  # (Optional) If you don't care about unhandled errors in test setup
+          - dupl      # If you enable the dupl linter later, table-driven tests often trigger it

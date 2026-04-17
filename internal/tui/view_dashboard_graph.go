@@ -57,7 +57,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 		maxSpeed = 1.0 // Default scale for empty graph
 	} else {
 		// Add headroom
-		maxSpeed = maxSpeed * GraphHeadroom
+		maxSpeed *= GraphHeadroom
 		if maxSpeed < 1.0 {
 			maxSpeed = 1.0
 		}

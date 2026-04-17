@@ -77,7 +77,7 @@ func TestConcurrentDownloader_CustomHeaders(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -155,7 +155,7 @@ func TestConcurrentDownloader_DefaultUserAgent(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -216,7 +216,7 @@ func TestConcurrentDownloader_RangeHeaderNotOverridden(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -297,7 +297,7 @@ func TestConcurrentDownloader_HeadersForwardedOnRedirect(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 

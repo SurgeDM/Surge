@@ -136,7 +136,7 @@ func TestValidator_ExtractURL(t *testing.T) {
 		},
 		{
 			name:     "Max length exactly",
-			input:    "https://" + strings.Repeat("a", 2048-8), // 8 + 2040 = 2048
+			input:    "https://" + strings.Repeat("a", 2048-8), // 8 + 2040 equals 2048
 			expected: "https://" + strings.Repeat("a", 2040),
 		},
 		{

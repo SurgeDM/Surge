@@ -12,7 +12,7 @@ import (
 
 type extensionTokenFlashFadeMsg struct{}
 
-func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	m.normalizeSettingsSelection()
 
 	categories := config.CategoryOrder()
@@ -25,6 +25,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.SettingsIsEditing {
 		if key.Matches(msg, m.keys.SettingsEditor.Cancel) {
 			// Cancel editing
+			m.SettingsError = ""
 			m.SettingsIsEditing = false
 			m.SettingsInput.Blur()
 			return m, nil
@@ -32,7 +33,11 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.SettingsEditor.Confirm) {
 			currentCategory := categories[m.SettingsActiveTab]
 			settingKey := m.getCurrentSettingKey()
-			_ = m.setSettingValue(currentCategory, settingKey, m.SettingsInput.Value())
+			if err := m.setSettingValue(currentCategory, settingKey, m.SettingsInput.Value()); err != nil {
+				m.SettingsError = err.Error()
+				return m, nil
+			}
+			m.SettingsError = ""
 			m.SettingsIsEditing = false
 			m.SettingsInput.Blur()
 			return m, nil
@@ -48,7 +53,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Settings.Close) {
 		// Save settings and exit
 		_ = m.persistSettings()
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, nil
 	}
 	tabBindings := []key.Binding{
@@ -62,6 +67,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, binding) {
 			if categoryCount > i {
 				m.SettingsActiveTab = i
+				m.SettingsError = ""
 			}
 			m.SettingsSelectedRow = 0
 			return m, nil
@@ -72,11 +78,13 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Settings.NextTab) {
 		m.SettingsActiveTab = (m.SettingsActiveTab + 1) % categoryCount
 		m.SettingsSelectedRow = 0
+		m.SettingsError = ""
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Settings.PrevTab) {
 		m.SettingsActiveTab = (m.SettingsActiveTab - 1 + categoryCount) % categoryCount
 		m.SettingsSelectedRow = 0
+		m.SettingsError = ""
 		return m, nil
 	}
 
@@ -86,7 +94,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if settingKey == "default_download_dir" {
 			m.SettingsFileBrowsing = true
 			m.filepickerOriginalPath = m.Settings.General.DefaultDownloadDir
-			m.state = FilePickerState
+			m.uiState = FilePickerState
 			m.filepicker = newFilepicker(m.filepickerOriginalPath)
 			return m, m.filepicker.Init()
 		}
@@ -100,6 +108,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Settings.Up) {
 		if m.SettingsSelectedRow > 0 {
 			m.SettingsSelectedRow--
+			m.SettingsError = ""
 		}
 		return m, nil
 	}
@@ -107,6 +116,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		maxRow := m.getSettingsCount() - 1
 		if m.SettingsSelectedRow < maxRow {
 			m.SettingsSelectedRow++
+			m.SettingsError = ""
 		}
 		return m, nil
 	}
@@ -116,7 +126,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Categories tab → open Category Manager
 		if m.SettingsActiveTab < len(categories) && categories[m.SettingsActiveTab] == "Categories" {
 			m.catMgrCursor = 0
-			m.state = CategoryManagerState
+			m.uiState = CategoryManagerState
 			return m, nil
 		}
 
@@ -154,7 +164,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			currentCategory := categories[m.SettingsActiveTab]
 			values := m.getSettingsValues(currentCategory)
 			if url, ok := values[settingKey].(string); ok && url != "" {
-				_ = utils.OpenBrowser(url)
+				_ = utils.OpenBrowser(m.enqueueCtx, url)
 			}
 			return m, nil
 		}
@@ -162,6 +172,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		currentCategory := categories[m.SettingsActiveTab]
 		if typ == "bool" {
 			_ = m.setSettingValue(currentCategory, settingKey, "")
+			m.SettingsError = ""
 		} else {
 			// Enter edit mode
 			m.SettingsIsEditing = true
@@ -186,6 +197,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if settingKey == "theme" {
 			m.ApplyTheme(m.Settings.General.Theme)
 		}
+		m.SettingsError = ""
 		return m, nil
 	}
 

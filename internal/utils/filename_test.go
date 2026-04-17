@@ -68,7 +68,7 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 	makeZipHeader := func(internalName string) []byte {
 		h := make([]byte, 30+len(internalName))
 		copy(h[0:4], []byte{0x50, 0x4B, 0x03, 0x04}) // Signature
-		h[26] = byte(len(internalName))              // Filename length
+		h[26] = byte(len(internalName))              //nolint:gosec // length of filename is small
 		copy(h[30:], internalName)                   // Filename
 		return h
 	}
@@ -77,11 +77,11 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 	pdfContent := []byte("%PDF-1.4\n") // Magic bytes for PDF
 
 	tests := []struct {
+		headers  http.Header
 		name     string
 		url      string
-		headers  http.Header
-		body     []byte
 		expected string
+		body     []byte
 	}{
 		{
 			name: "Priority 1: Content-Disposition beats all",

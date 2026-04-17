@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 	"sync/atomic"
@@ -14,7 +15,7 @@ func runStartupIntegrityCheck() string {
 	// Normalize downloads stuck in "downloading" status from a prior crash/kill.
 	// This must happen before ValidateIntegrity so the newly-paused entries
 	// are included in the integrity check and eligible for auto-resume.
-	if normalized, err := state.NormalizeStaleDownloads(); err != nil {
+	if normalized, err := state.NormalizeStaleDownloads(context.Background()); err != nil {
 		msg := fmt.Sprintf("Startup: failed to normalize stale downloads: %v", err)
 		utils.Debug("%s", msg)
 	} else if normalized > 0 {
@@ -24,7 +25,7 @@ func runStartupIntegrityCheck() string {
 	// Validate integrity of paused/queued downloads before auto-resume.
 	// This removes entries whose .surge files are missing/tampered and
 	// also cleans orphan .surge files that no longer have DB entries.
-	if removed, err := state.ValidateIntegrity(); err != nil {
+	if removed, err := state.ValidateIntegrity(context.Background()); err != nil {
 		msg := fmt.Sprintf("Startup integrity check failed: %v", err)
 		return msg
 	} else if removed > 0 {
@@ -75,12 +76,13 @@ func getSettings() *config.Settings {
 func resumePausedDownloads() {
 	settings := getSettings()
 
-	pausedEntries, err := state.LoadPausedDownloads()
+	pausedEntries, err := state.LoadPausedDownloads(context.Background())
 	if err != nil {
 		return
 	}
 
-	for _, entry := range pausedEntries {
+	for i := range pausedEntries {
+		entry := &pausedEntries[i]
 		// If entry is explicitly queued, we should start it regardless of AutoResume setting
 		// If entry is paused, we only start it if AutoResume is enabled
 		if entry.Status == "paused" && !settings.General.AutoResume {
@@ -89,7 +91,7 @@ func resumePausedDownloads() {
 		if GlobalService == nil || entry.ID == "" {
 			continue
 		}
-		if err := GlobalService.Resume(entry.ID); err == nil {
+		if err := GlobalService.Resume(context.Background(), entry.ID); err == nil {
 			atomic.AddInt32(&activeDownloads, 1)
 		}
 	}

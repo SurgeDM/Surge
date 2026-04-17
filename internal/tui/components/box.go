@@ -27,7 +27,7 @@ type BoxRenderer func(leftTitle, rightTitle, content string, width, height int, 
 // Supports left and right titles (e.g., search on left, pane name on right).
 // Accepts pre-styled title strings.
 // Example: ╭─ 🔍 Search... ─────────── Downloads ─╮
-func RenderBtopBox(leftTitle, rightTitle string, content string, width, height int, borderColor color.Color) string {
+func RenderBtopBox(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string {
 	// Border characters
 	const (
 		topLeft     = "\u256d"
@@ -55,7 +55,8 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	var topBorder string
 
 	// Case 1: Both Titles
-	if leftTitle != "" && rightTitle != "" {
+	switch {
+	case leftTitle != "" && rightTitle != "":
 		remainingWidth := innerWidth - leftTitleWidth - rightTitleWidth - lipgloss.Width(horizontal)
 		if remainingWidth < 1 {
 			remainingWidth = 1 // overflow mitigation (might break layout but prevents crash)
@@ -67,7 +68,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 			rightTitle +
 			borderStyler.Render(topRight)
 
-	} else if leftTitle != "" {
+	case leftTitle != "":
 		// Case 2: Only Left Title
 		remainingWidth := innerWidth - leftTitleWidth - lipgloss.Width(horizontal)
 		if remainingWidth < 0 {
@@ -78,7 +79,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 			leftTitle +
 			borderStyler.Render(strings.Repeat(horizontal, remainingWidth)+topRight)
 
-	} else if rightTitle != "" {
+	case rightTitle != "":
 		// Case 3: Only Right Title
 		remainingWidth := innerWidth - rightTitleWidth - lipgloss.Width(horizontal)
 		if remainingWidth < 0 {
@@ -89,7 +90,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 			rightTitle +
 			borderStyler.Render(horizontal+topRight)
 
-	} else {
+	default:
 		// Case 4: No Title
 		topBorder = borderStyler.Render(topLeft + strings.Repeat(horizontal, innerWidth) + topRight)
 	}
@@ -117,7 +118,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 		// Pad or truncate line to fit innerWidth
 		lineWidth := lipgloss.Width(line)
 		if lineWidth < innerWidth {
-			line = line + strings.Repeat(" ", innerWidth-lineWidth)
+			line += strings.Repeat(" ", innerWidth-lineWidth)
 		} else if lineWidth > innerWidth {
 			line = truncStyle.Render(line)
 		}

@@ -2,7 +2,7 @@ package download
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -14,18 +14,18 @@ import (
 
 // activeDownload tracks a download that's currently running
 type activeDownload struct {
-	config types.DownloadConfig
+	config *types.DownloadConfig
 	cancel context.CancelFunc
 	// running is true while the worker goroutine is executing TUIDownload for this config.
 	running atomic.Bool
 }
 
 type WorkerPool struct {
-	taskChan     chan types.DownloadConfig
+	taskChan     chan *types.DownloadConfig
 	progressCh   chan<- any
-	progressDone chan struct{}                   // closed when progressCh must no longer be sent to
-	downloads    map[string]*activeDownload      // Track active downloads for pause/resume
-	queued       map[string]types.DownloadConfig // Track queued downloads
+	progressDone chan struct{}                    // closed when progressCh must no longer be sent to
+	downloads    map[string]*activeDownload       // Track active downloads for pause/resume
+	queued       map[string]*types.DownloadConfig // Track queued downloads
 	mu           sync.RWMutex
 	wg           sync.WaitGroup // We use this to wait for all active downloads to pause before exiting the program
 	maxDownloads int
@@ -51,11 +51,11 @@ func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
 		maxDownloads = 3 // Default to 3 if invalid
 	}
 	pool := &WorkerPool{
-		taskChan:     make(chan types.DownloadConfig, 100), // We make it buffered to avoid blocking add
+		taskChan:     make(chan *types.DownloadConfig, 100), // We make it buffered to avoid blocking add
 		progressCh:   progressCh,
 		progressDone: make(chan struct{}),
 		downloads:    make(map[string]*activeDownload),
-		queued:       make(map[string]types.DownloadConfig),
+		queued:       make(map[string]*types.DownloadConfig),
 		maxDownloads: maxDownloads,
 	}
 	for i := 0; i < maxDownloads; i++ {
@@ -101,7 +101,7 @@ func resolveDestPath(cfg *types.DownloadConfig) string {
 
 // Add adds a new download task to the pool. The caller (LifecycleManager) is
 // responsible for emitting any lifecycle events (e.g. DownloadQueuedMsg).
-func (p *WorkerPool) Add(cfg types.DownloadConfig) {
+func (p *WorkerPool) Add(cfg *types.DownloadConfig) {
 	if cfg.ProgressCh == nil {
 		cfg.ProgressCh = p.progressCh
 	}
@@ -150,14 +150,14 @@ func (p *WorkerPool) ActiveCount() int {
 }
 
 // GetAll returns all active download configs (for listing)
-func (p *WorkerPool) GetAll() []types.DownloadConfig {
+func (p *WorkerPool) GetAll() []*types.DownloadConfig {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	var configs []types.DownloadConfig
+	configs := make([]*types.DownloadConfig, 0, len(p.downloads)+len(p.queued))
 	for _, ad := range p.downloads {
 		cfg := ad.config
-		syncConfigFromState(&cfg)
+		syncConfigFromState(cfg)
 		configs = append(configs, cfg)
 	}
 	for _, cfg := range p.queued {
@@ -168,7 +168,7 @@ func (p *WorkerPool) GetAll() []types.DownloadConfig {
 
 // Pause pauses a specific download by ID. Returns true if found and pause initiated
 // (or already paused), false otherwise. Pure mechanical operation — no events emitted.
-func (p *WorkerPool) Pause(downloadID string) bool {
+func (p *WorkerPool) Pause(ctx context.Context, downloadID string) bool {
 	p.mu.RLock()
 	ad, exists := p.downloads[downloadID]
 	p.mu.RUnlock()
@@ -216,14 +216,14 @@ func (p *WorkerPool) PauseAll() {
 	p.mu.RUnlock()
 
 	for _, id := range ids {
-		p.Pause(id)
+		p.Pause(context.Background(), id)
 	}
 }
 
 // Cancel cancels and removes a download by ID. Returns metadata about what was
 // removed so the caller (LifecycleManager) can emit events and handle cleanup.
 // No events are emitted by the pool itself.
-func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
+func (p *WorkerPool) Cancel(ctx context.Context, downloadID string) types.CancelResult {
 	p.mu.Lock()
 	ad, activeExists := p.downloads[downloadID]
 	qCfg, queuedExists := p.queued[downloadID]
@@ -243,7 +243,7 @@ func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
 
 	if activeExists && ad != nil {
 		result.Filename = ad.config.Filename
-		result.DestPath = resolveDestPath(&ad.config)
+		result.DestPath = resolveDestPath(ad.config)
 		result.Completed = ad.config.State != nil && ad.config.State.Done.Load()
 
 		// Cancel the context to stop workers
@@ -264,7 +264,7 @@ func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
 		}
 	} else if queuedExists {
 		result.Filename = qCfg.Filename
-		result.DestPath = resolveDestPath(&qCfg)
+		result.DestPath = resolveDestPath(qCfg)
 	}
 
 	return result
@@ -288,34 +288,34 @@ func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfi
 	}
 
 	// Sync latest filename/path/mirrors from live state before handing off
-	syncConfigFromState(&ad.config)
+	syncConfigFromState(ad.config)
 
 	cfg := ad.config
 	delete(p.downloads, downloadID)
 	if ad.config.State != nil {
 		ad.config.State.Resume()
 	}
-	return &cfg
+	return cfg
 }
 
 // UpdateURL updates the in-memory URL of a download by ID.
 // The caller (LifecycleManager) is responsible for persisting the change to the DB.
 // It fails if the download is actively downloading (not paused or errored).
-func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
+func (p *WorkerPool) UpdateURL(ctx context.Context, downloadID, newURL string) error {
 	p.mu.Lock()
 	ad, exists := p.downloads[downloadID]
 	_, qExists := p.queued[downloadID]
 
 	if qExists {
 		p.mu.Unlock()
-		return fmt.Errorf("cannot update URL for a queued download, please cancel or wait for it to start")
+		return errors.New("cannot update URL for a queued download, please cancel or wait for it to start")
 	}
 
 	if exists && ad != nil {
 		if ad.config.State != nil && !ad.config.State.IsPaused() {
 			if ad.running.Load() {
 				p.mu.Unlock()
-				return fmt.Errorf("download is currently active, please pause it before updating the URL")
+				return errors.New("download is currently active, please pause it before updating the URL")
 			}
 		}
 		ad.config.URL = newURL
@@ -356,7 +356,7 @@ func (p *WorkerPool) worker() {
 		p.downloads[cfg.ID] = ad
 		p.mu.Unlock()
 
-		err := TUIDownload(ctx, &ad.config)
+		err := TUIDownload(ctx, ad.config)
 		ad.running.Store(false)
 
 		// Logic:
@@ -370,10 +370,11 @@ func (p *WorkerPool) worker() {
 			ad.config.State.SetPausing(false)
 		}
 
-		if isPaused {
+		switch {
+		case isPaused:
 			utils.Debug("WorkerPool: Download %s paused cleanly", cfg.ID)
 			// If paused, we keep it in downloads map for potential resume via ExtractPausedConfig
-		} else if err != nil {
+		case err != nil:
 			if cfg.State != nil {
 				cfg.State.SetError(err)
 			}
@@ -383,7 +384,7 @@ func (p *WorkerPool) worker() {
 			delete(p.downloads, cfg.ID)
 			p.mu.Unlock()
 
-		} else {
+		default:
 			// Only mark as done if not paused
 			if cfg.State != nil {
 				cfg.State.Done.Store(true)
@@ -416,7 +417,7 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 			ID:         id,
 			URL:        qCfg.URL,
 			Filename:   qCfg.Filename,
-			DestPath:   resolveDestPath(&qCfg),
+			DestPath:   resolveDestPath(qCfg),
 			Status:     "queued",
 			Downloaded: 0,
 			TotalSize:  0, // Metadata not yet fetched
@@ -435,7 +436,8 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 	}
 
 	// Calculate progress and speed (thread-safe)
-	downloaded, totalSize, _, sessionElapsed, _, sessionStart := state.GetProgress()
+	snapshot := state.GetProgress()
+	downloaded, totalSize, sessionElapsed, sessionStart := snapshot.Downloaded, snapshot.Total, snapshot.SessionElapsed, snapshot.SessionStartBytes
 
 	status := &types.DownloadStatus{
 		ID:         id,
@@ -451,11 +453,12 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 		status.DestPath = ad.config.DestPath
 	}
 
-	if ad.config.State.IsPausing() {
+	switch {
+	case ad.config.State.IsPausing():
 		status.Status = "pausing"
-	} else if ad.config.State.IsPaused() {
+	case ad.config.State.IsPaused():
 		status.Status = "paused"
-	} else if state.Done.Load() {
+	case state.Done.Load():
 		status.Status = "completed"
 	}
 

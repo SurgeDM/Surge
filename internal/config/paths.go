@@ -115,13 +115,13 @@ func GetLogsDir() string {
 func EnsureDirs() error {
 	dirs := []string{GetSurgeDir(), GetStateDir(), GetRuntimeDir(), GetLogsDir()}
 	for _, dir := range dirs {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
+		if err := os.MkdirAll(dir, 0o750); err != nil {
 			return err
 		}
 	}
 	// On Linux runtime dir, we might want stricter permissions (0700) if it's in /run/user
 	if runtime.GOOS == "linux" && os.Getenv("XDG_RUNTIME_DIR") != "" {
-		_ = os.Chmod(GetRuntimeDir(), 0o700)
+		_ = os.Chmod(GetRuntimeDir(), 0o750) //nolint:gosec // Directory permissions
 	}
 
 	return nil

@@ -20,14 +20,14 @@ func (m *RootModel) blurAllInputs() {
 	}
 }
 
-func (m RootModel) updateInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *RootModel) updateInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Input.Esc) {
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, nil
 	}
 
 	if key.Matches(msg, m.keys.Input.Tab) && m.focusedInput == 2 {
-		m.state = FilePickerState
+		m.uiState = FilePickerState
 		m.filepickerOriginalPath = m.inputs[2].Value()
 		m.filepicker = newFilepicker(m.PWD)
 		return m, m.filepicker.Init()
@@ -56,7 +56,7 @@ func (m RootModel) updateInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m RootModel) submitInputForm() (tea.Model, tea.Cmd) {
+func (m *RootModel) submitInputForm() (tea.Model, tea.Cmd) {
 	inputVal := m.inputs[0].Value()
 	if inputVal == "" {
 		m.blurAllInputs()
@@ -99,11 +99,11 @@ func (m RootModel) submitInputForm() (tea.Model, tea.Cmd) {
 		m.pendingIsDefaultPath = isDefaultPath
 		m.pendingFilename = filename
 		m.duplicateInfo = d.Filename
-		m.state = DuplicateWarningState
+		m.uiState = DuplicateWarningState
 		return m, nil
 	}
 
-	m.state = DashboardState
+	m.uiState = DashboardState
 	m.inputs[0].SetValue("")
 	m.inputs[1].SetValue("")
 	m.inputs[2].SetValue(path) // Keep path for next download
@@ -128,7 +128,7 @@ func parseURLInput(input string) (url string, mirrors []string) {
 	return
 }
 
-func (m RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Extension.Browse) && m.focusedInput == 2 {
 		m.ExtensionFileBrowsing = true
 		m.filepickerOriginalPath = m.inputs[2].Value()
@@ -136,7 +136,7 @@ func (m RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, 
 		if browseDir == "" {
 			browseDir = m.PWD
 		}
-		m.state = FilePickerState
+		m.uiState = FilePickerState
 		m.filepicker = newFilepicker(browseDir)
 		return m, m.filepicker.Init()
 	}
@@ -164,18 +164,18 @@ func (m RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, 
 		if d := m.checkForDuplicate(m.pendingURL); d != nil {
 			utils.Debug("Duplicate download detected after confirmation: %s", m.pendingURL)
 			m.duplicateInfo = d.Filename
-			m.state = DuplicateWarningState
+			m.uiState = DuplicateWarningState
 			return m, nil
 		}
 
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
 	}
 
 	if key.Matches(msg, m.keys.Extension.Cancel) {
 		m.ExtensionFileBrowsing = false
 		m.blurAllInputs()
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, nil
 	}
 

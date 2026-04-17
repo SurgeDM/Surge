@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -50,7 +51,7 @@ func formatDurationForUI(d time.Duration) string {
 }
 
 // renderModalWithOverlay renders a modal centered on screen with a dark overlay effect
-func (m RootModel) renderModalWithOverlay(modal string) string {
+func (m *RootModel) renderModalWithOverlay(modal string) string {
 	// Place modal centered with dark gray background fill for overlay effect
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal,
 		lipgloss.WithWhitespaceChars(" "), // Changed from "░" to avoid terminal rendering glitches
@@ -58,13 +59,13 @@ func (m RootModel) renderModalWithOverlay(modal string) string {
 	)
 }
 
-func (m RootModel) wrapView(content string) tea.View {
+func (m *RootModel) wrapView(content string) tea.View {
 	v := tea.NewView(content)
 	v.AltScreen = true
 	return v
 }
 
-func (m RootModel) View() tea.View {
+func (m *RootModel) View() tea.View {
 	if m.width == 0 {
 		return m.wrapView("Loading...")
 	}
@@ -85,14 +86,14 @@ func (m RootModel) View() tea.View {
 			BorderColor: colors.NeonCyan,
 		}
 		modal.Width, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, 60, 10)
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	// === Handle Modal States First ===
 	// These overlays sit on top of the dashboard or replace it
 
-	if m.state == InputState {
+	if m.uiState == InputState {
 		modal := components.AddDownloadModal{
 			Title:           "Add Download",
 			Inputs:          []textinput.Model{m.inputs[0], m.inputs[1], m.inputs[2], m.inputs[3]},
@@ -100,7 +101,7 @@ func (m RootModel) View() tea.View {
 			FocusedInput:    m.focusedInput,
 			BrowseHintIndex: 2,
 			Help:            m.help,
-			HelpKeys:        m.keys.Input,
+			HelpKeys:        &m.keys.Input,
 			BorderColor:     colors.NeonPink,
 		}
 		// Resolve dynamic dimensions
@@ -109,18 +110,18 @@ func (m RootModel) View() tea.View {
 		h := lipgloss.Height(modal.View()) + BoxStyle.GetVerticalFrameSize()
 		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 46, 8, w, h)
 
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == FilePickerState {
+	if m.uiState == FilePickerState {
 		// Create a local copy to avoid modifying model during view (though View takes value receiver m)
 		fp := m.filepicker
 		picker := components.NewFilePickerModal(
 			" Select Directory ",
 			&fp,
-			m.help,
-			m.keys.FilePicker,
+			&m.help,
+			&m.keys.FilePicker,
 			colors.NeonPink,
 		)
 		// Resolve dynamic dimensions
@@ -128,24 +129,24 @@ func (m RootModel) View() tea.View {
 		picker.Width = w
 		picker.Height = h
 
-		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := picker.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == SettingsState {
+	if m.uiState == SettingsState {
 		return m.wrapView(m.viewSettings())
 	}
 
-	if m.state == CategoryManagerState {
+	if m.uiState == CategoryManagerState {
 		return m.wrapView(m.viewCategoryManager())
 	}
 
-	if m.state == DuplicateWarningState {
+	if m.uiState == DuplicateWarningState {
 		modal := components.ConfirmationModal{
 			Title:       "\u26a0 Duplicate Detected",
 			Message:     "A download with this URL already exists",
 			Detail:      truncateString(m.duplicateInfo, 50),
-			Keys:        m.keys.Duplicate,
+			Keys:        &m.keys.Duplicate,
 			Help:        m.help,
 			BorderColor: colors.NeonPink,
 		}
@@ -162,11 +163,11 @@ func (m RootModel) View() tea.View {
 		}
 		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, w, h)
 
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == ExtensionConfirmationState {
+	if m.uiState == ExtensionConfirmationState {
 		extInputs := []textinput.Model{m.inputs[2], m.inputs[3]}
 		focused := 0
 		if m.focusedInput == 3 {
@@ -181,7 +182,7 @@ func (m RootModel) View() tea.View {
 			URL:             truncateString(m.pendingURL, 68),
 			BrowseHintIndex: 0,
 			Help:            m.help,
-			HelpKeys:        m.keys.Extension,
+			HelpKeys:        &m.keys.Extension,
 			BorderColor:     colors.NeonCyan,
 		}
 		// Resolve dynamic dimensions
@@ -190,17 +191,17 @@ func (m RootModel) View() tea.View {
 		h := lipgloss.Height(modal.View()) + BoxStyle.GetVerticalFrameSize()
 		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 60, 10, w, h)
 
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == BatchFilePickerState {
+	if m.uiState == BatchFilePickerState {
 		fp := m.filepicker
 		picker := components.NewFilePickerModal(
 			" Select URL File (.txt) ",
 			&fp,
-			m.help,
-			m.keys.FilePicker,
+			&m.help,
+			&m.keys.FilePicker,
 			colors.NeonCyan,
 		)
 		// Resolve dynamic dimensions
@@ -208,17 +209,17 @@ func (m RootModel) View() tea.View {
 		picker.Width = w
 		picker.Height = h
 
-		box := picker.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := picker.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == BatchConfirmState {
+	if m.uiState == BatchConfirmState {
 		urlCount := len(m.pendingBatchURLs)
 		modal := components.ConfirmationModal{
 			Title:       "Batch Import",
 			Message:     fmt.Sprintf("Add %d downloads?", urlCount),
 			Detail:      truncateString(m.batchFilePath, 50),
-			Keys:        m.keys.BatchConfirm,
+			Keys:        &m.keys.BatchConfirm,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
 		}
@@ -228,20 +229,20 @@ func (m RootModel) View() tea.View {
 		h := 10 // typical height for confirmation
 		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, w, h)
 
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == QuitConfirmState {
+	if m.uiState == QuitConfirmState {
 		return m.wrapView(m.renderModalWithOverlay(m.viewQuitConfirm()))
 	}
 
-	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
+	if m.uiState == UpdateAvailableState && m.UpdateInfo != nil {
 		modal := components.ConfirmationModal{
 			Title:       "\u2b06 Update Available",
-			Message:     fmt.Sprintf("A new version of Surge is available: %s", m.UpdateInfo.LatestVersion),
-			Detail:      fmt.Sprintf("Current: %s", m.UpdateInfo.CurrentVersion),
-			Keys:        m.keys.Update,
+			Message:     "A new version of Surge is available: " + m.UpdateInfo.LatestVersion,
+			Detail:      "Current: " + m.UpdateInfo.CurrentVersion,
+			Keys:        &m.keys.Update,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
 		}
@@ -251,11 +252,11 @@ func (m RootModel) View() tea.View {
 		h := 12 // typical height for update prompt
 		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 50, 8, w, h)
 
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == URLUpdateState {
+	if m.uiState == URLUpdateState {
 		modal := components.AddDownloadModal{
 			Title:           "Refresh URL",
 			Inputs:          []textinput.Model{m.urlUpdateInput},
@@ -263,7 +264,7 @@ func (m RootModel) View() tea.View {
 			FocusedInput:    0,
 			BrowseHintIndex: -1, // No browse hint needed
 			Help:            m.help,
-			HelpKeys:        m.keys.Input,
+			HelpKeys:        &m.keys.Input,
 			BorderColor:     colors.NeonPink,
 		}
 		// Resolve dynamic dimensions
@@ -272,21 +273,21 @@ func (m RootModel) View() tea.View {
 		h := lipgloss.Height(modal.View()) + BoxStyle.GetVerticalFrameSize()
 		_, modal.Height = GetDynamicModalDimensions(m.width, m.height, 46, 6, w, h)
 
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == HelpModalState {
+	if m.uiState == HelpModalState {
 		w, h := GetDynamicModalDimensions(m.width, m.height, 40, 10, PopupWidth, 22)
 		modal := components.HelpModal{
 			Title:       "Keyboard Shortcuts",
-			HelpKeys:    m.keys.Dashboard,
+			HelpKeys:    &m.keys.Dashboard,
 			Help:        m.help,
 			BorderColor: colors.NeonCyan,
 			Width:       w,
 			Height:      h,
 		}
-		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+		box := modal.RenderWithBtopBox(renderBtopBox, &PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
@@ -294,9 +295,9 @@ func (m RootModel) View() tea.View {
 	layout := CalculateDashboardLayout(m.width, m.height)
 
 	// Footer - keybindings on left, version on bottom-right
-	helpText := m.help.View(m.keys.Dashboard)
+	helpText := m.help.View(&m.keys.Dashboard)
 	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
-	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
+	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render("v" + m.CurrentVersion)
 
 	// Hide help text at very narrow widths — version is more important
 	var footerContent string
@@ -323,8 +324,8 @@ func (m RootModel) View() tea.View {
 	var bitmapWidth int
 	var totalSize, chunkSize int64
 	var chunkProgress []int64
-	if selected != nil && selected.state != nil {
-		bitmap, bitmapWidth, totalSize, chunkSize, chunkProgress = selected.state.GetBitmap()
+	if selected != nil && selected.progState != nil {
+		bitmap, bitmapWidth, totalSize, chunkSize, chunkProgress = selected.progState.GetBitmap()
 	}
 
 	// Pre-compute details content to avoid double-computation and width mismatches
@@ -507,11 +508,12 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	// TUI owns elapsed time: compute from StartTime for active downloads,
 	// use frozen d.Elapsed for completed downloads.
 	var elapsed time.Duration
-	if d.done {
+	switch {
+	case d.done:
 		elapsed = d.Elapsed
-	} else if d.Elapsed > 0 {
+	case d.Elapsed > 0:
 		elapsed = d.Elapsed
-	} else if !d.StartTime.IsZero() {
+	case !d.StartTime.IsZero():
 		elapsed = time.Since(d.StartTime)
 	}
 
@@ -523,26 +525,28 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	}
 
 	// Speed & ETA
-	if d.done {
-		if elapsed.Seconds() >= 1 {
+	switch {
+	case d.done:
+		switch {
+		case elapsed.Seconds() >= 1:
 			avgSpeed := float64(d.Total) / float64(int(elapsed.Seconds()))
 			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(config.MB))
-		} else if d.Speed > 0 {
+		case d.Speed > 0:
 			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", d.Speed/float64(config.MB))
-		} else if elapsed.Seconds() > 0 {
+		case elapsed.Seconds() > 0:
 			avgSpeed := float64(d.Total) / elapsed.Seconds()
 			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(config.MB))
-		} else {
+		default:
 			speedStr = "N/A"
 		}
 		etaStr = "Done"
-	} else if d.resuming {
+	case d.resuming:
 		speedStr = "Resuming..."
 		etaStr = "..."
-	} else if d.paused || d.Speed == 0 {
+	case d.paused || d.Speed == 0:
 		speedStr = "Paused"
 		etaStr = "\u221e"
-	} else {
+	default:
 		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/float64(config.MB))
 		if d.Total > 0 {
 			remaining := d.Total - d.Downloaded
@@ -580,7 +584,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		if conns == 0 {
 			conns = 1 // Single-connection download (range requests not supported)
 		}
-		connStr := fmt.Sprintf("%d", conns)
+		connStr := strconv.Itoa(conns)
 		leftColItems = append(leftColItems, lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Conns:"), StatsValueStyle.Render(connStr)))
 	}
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, leftColItems...)
@@ -597,11 +601,11 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 
 	// --- 5. Mirrors Section ---
 	var mirrorSection string
-	if d.state != nil && len(d.state.GetMirrors()) > 0 {
+	if d.progState != nil && len(d.progState.GetMirrors()) > 0 {
 		activeCount := 0
 		errorCount := 0
-		total := len(d.state.GetMirrors())
-		for _, m := range d.state.GetMirrors() {
+		total := len(d.progState.GetMirrors())
+		for _, m := range d.progState.GetMirrors() {
 			if m.Active {
 				activeCount++
 			}
@@ -627,21 +631,21 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	// Use explicit calls to insert divider only where needed
 	var parts []string
 
-	parts = append(parts, statusBox)
-	parts = append(parts, fileSection)
-	parts = append(parts, divider)
-	parts = append(parts, progSection)
-	parts = append(parts, divider)
-	parts = append(parts, statsSection)
+	parts = append(parts,
+		statusBox,
+		fileSection,
+		divider,
+		progSection,
+		divider,
+		statsSection,
+	)
 
 	if mirrorSection != "" {
-		parts = append(parts, divider)
-		parts = append(parts, mirrorSection)
+		parts = append(parts, divider, mirrorSection)
 	}
 
 	if errorSection != "" {
-		parts = append(parts, divider)
-		parts = append(parts, errorSection)
+		parts = append(parts, divider, errorSection)
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
@@ -662,7 +666,7 @@ func getDownloadStatus(d *DownloadModel, spinnerView string) string {
 	return status.RenderWithSpinner(spinnerView)
 }
 
-func (m RootModel) calcTotalSpeed() float64 {
+func (m *RootModel) calcTotalSpeed() float64 {
 	total := 0.0
 	for _, d := range m.downloads {
 		// Skip completed downloads
@@ -674,14 +678,15 @@ func (m RootModel) calcTotalSpeed() float64 {
 	return total / float64(config.MB)
 }
 
-func (m RootModel) ComputeViewStats() ViewStats {
+func (m *RootModel) ComputeViewStats() ViewStats {
 	var stats ViewStats
 	for _, d := range m.downloads {
-		if d.done {
+		switch {
+		case d.done:
 			stats.DownloadedCount++
-		} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming) {
+		case !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming):
 			stats.ActiveCount++
-		} else {
+		default:
 			stats.QueuedCount++
 		}
 		stats.TotalDownloaded += d.Downloaded
@@ -731,10 +736,10 @@ func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
 		{Label: "Active", Count: activeCount},
 		{Label: "Done", Count: doneCount},
 	}
-	return components.RenderTabBar(tabs, activeTab, ActiveTabStyle, TabStyle)
+	return components.RenderTabBar(tabs, activeTab, &ActiveTabStyle, &TabStyle)
 }
 
-func (m RootModel) viewQuitConfirm() string {
+func (m *RootModel) viewQuitConfirm() string {
 	w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 60, 10)
 	innerWidth := w - (components.BorderFrameWidth * 2)
 
@@ -783,16 +788,14 @@ func (m RootModel) viewQuitConfirm() string {
 	}
 
 	helpStyle := lipgloss.NewStyle().Foreground(colors.Gray).Width(innerWidth).Align(lipgloss.Center)
-	helpText := helpStyle.Render(m.help.View(m.keys.QuitConfirm))
+	helpText := helpStyle.Render(m.help.View(&m.keys.QuitConfirm))
 
 	var lines []string
 	lines = append(lines, messageStyle.Render("Are you sure you want to quit?"))
 	if detail != "" {
 		lines = append(lines, detailStyle.Render(detail))
 	}
-	lines = append(lines, "")
-	lines = append(lines, "")
-	lines = append(lines, centeredButtons)
+	lines = append(lines, "", "", centeredButtons)
 
 	innerHeight := h - components.BorderFrameHeight
 	contentHeight := lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, lines...))

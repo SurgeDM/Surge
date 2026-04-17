@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -20,22 +22,22 @@ import (
 
 // DownloadRequest represents a download request from the browser extension
 type DownloadRequest struct {
+	Headers              map[string]string `json:"headers,omitempty"`
 	URL                  string            `json:"url"`
 	Filename             string            `json:"filename,omitempty"`
 	Path                 string            `json:"path,omitempty"`
-	RelativeToDefaultDir bool              `json:"relative_to_default_dir,omitempty"`
 	Mirrors              []string          `json:"mirrors,omitempty"`
-	SkipApproval         bool              `json:"skip_approval,omitempty"` // Extension validated request, skip TUI prompt
-	Headers              map[string]string `json:"headers,omitempty"`       // Custom HTTP headers from browser (cookies, auth, etc.)
+	RelativeToDefaultDir bool              `json:"relative_to_default_dir,omitempty"`
+	SkipApproval         bool              `json:"skip_approval,omitempty"`
 	IsExplicitCategory   bool              `json:"is_explicit_category,omitempty"`
 }
 
 type resolvedDownloadRequest struct {
-	request       DownloadRequest
 	settings      *config.Settings
 	outPath       string
 	urlForAdd     string
 	mirrorsForAdd []string
+	request       DownloadRequest
 	isDuplicate   bool
 	isActive      bool
 }
@@ -61,13 +63,13 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		return
 	}
 
-	if maybeRequireDownloadApproval(w, service, resolved) {
+	if maybeRequireDownloadApproval(r.Context(), w, service, resolved) {
 		return
 	}
 
 	newID, filename, err := enqueueDownloadRequest(r, service, resolved)
 	if err != nil {
-		recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
+		recordPreflightDownloadError(r.Context(), resolved.urlForAdd, resolved.outPath, err)
 		publishSystemLog(fmt.Sprintf("Error adding %s: %v", resolved.urlForAdd, err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -98,7 +100,7 @@ func handleDownloadStatusRequest(w http.ResponseWriter, r *http.Request, service
 		return true
 	}
 
-	status, err := service.GetStatus(id)
+	status, err := service.GetStatus(r.Context(), id)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusNotFound)
 		return true
@@ -114,26 +116,26 @@ func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) 
 		return req, fmt.Errorf("invalid json: %w", err)
 	}
 	if req.URL == "" {
-		return req, fmt.Errorf("url is required")
+		return req, errors.New("url is required")
 	}
 	if strings.Contains(req.Filename, "..") {
-		return req, fmt.Errorf("invalid filename")
+		return req, errors.New("invalid filename")
 	}
 	if strings.Contains(req.Filename, "/") || strings.Contains(req.Filename, "\\") {
-		return req, fmt.Errorf("invalid filename")
+		return req, errors.New("invalid filename")
 	}
 	if strings.Contains(req.Path, "..") {
-		return req, fmt.Errorf("invalid path")
+		return req, errors.New("invalid path")
 	}
 	if req.RelativeToDefaultDir && req.Path != "" {
 		// Linux filepath.IsAbs does not recognize Windows drive paths, so those
 		// are normalized later against the daemon's default download directory.
 		if filepath.IsAbs(req.Path) && !utils.IsWindowsAbsPath(req.Path) {
-			return req, fmt.Errorf("invalid path")
+			return req, errors.New("invalid path")
 		}
 		cleanPath := filepath.Clean(req.Path)
 		if cleanPath == ".." || strings.HasPrefix(cleanPath, ".."+string(filepath.Separator)) {
-			return req, fmt.Errorf("invalid path")
+			return req, errors.New("invalid path")
 		}
 		req.Path = cleanPath
 	}
@@ -151,7 +153,7 @@ func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolved
 
 	outPath := utils.EnsureAbsPath(resolveOutputDir(req.Path, req.RelativeToDefaultDir, defaultOutputDir, settings))
 	urlForAdd, mirrorsForAdd := normalizeDownloadTargets(req.URL, req.Mirrors)
-	isDuplicate, isActive := resolveDuplicateState(urlForAdd, settings)
+	isDuplicate, isActive := resolveDuplicateState(r.Context(), urlForAdd, settings)
 
 	utils.Debug("Download request: URL=%s, Filename=%s, SkipApproval=%v, isDuplicate=%v, isActive=%v", urlForAdd, req.Filename, req.SkipApproval, isDuplicate, isActive)
 
@@ -166,31 +168,30 @@ func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolved
 	}, nil
 }
 
-func normalizeDownloadTargets(url string, mirrors []string) (string, []string) {
+func normalizeDownloadTargets(url string, mirrors []string) (targetURL string, targetMirrors []string) {
 	if len(mirrors) == 0 && strings.Contains(url, ",") {
 		return ParseURLArg(url)
 	}
 	return url, mirrors
 }
 
-func resolveDuplicateState(urlForAdd string, settings *config.Settings) (bool, bool) {
+func resolveDuplicateState(ctx context.Context, urlForAdd string, settings *config.Settings) (exists, isActive bool) {
 	activeDownloadsFunc := func() map[string]*types.DownloadConfig {
 		active := make(map[string]*types.DownloadConfig)
 		for _, cfg := range GlobalPool.GetAll() {
-			c := cfg
-			active[c.ID] = &c
+			active[cfg.ID] = cfg
 		}
 		return active
 	}
 
-	dupResult := processing.CheckForDuplicate(urlForAdd, settings, activeDownloadsFunc)
+	dupResult := processing.CheckForDuplicate(ctx, urlForAdd, settings, activeDownloadsFunc)
 	if dupResult == nil {
 		return false, false
 	}
 	return dupResult.Exists, dupResult.IsActive
 }
 
-func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadService, resolved *resolvedDownloadRequest) bool {
+func maybeRequireDownloadApproval(ctx context.Context, w http.ResponseWriter, service core.DownloadService, resolved *resolvedDownloadRequest) bool {
 	req := resolved.request
 
 	// EXTENSION VETTING SHORTCUT:
@@ -218,7 +219,7 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 			Mirrors:  resolved.mirrorsForAdd,
 			Headers:  req.Headers,
 		}); err != nil {
-			recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
+			recordPreflightDownloadError(ctx, resolved.urlForAdd, resolved.outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", resolved.urlForAdd, err))
 			http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
 			return true
@@ -239,8 +240,8 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 	return true
 }
 
-func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resolved *resolvedDownloadRequest) (string, string, error) {
-	lifecycle, err := lifecycleForLocalService(service)
+func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resolved *resolvedDownloadRequest) (id, filename string, err error) {
+	lifecycle, err := lifecycleForLocalService(r.Context(), service)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to initialize lifecycle manager: %w", err)
 	}
@@ -258,13 +259,13 @@ func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resol
 		})
 	}
 
-	id, err := service.Add(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, 0, false)
+	id, err = service.Add(r.Context(), resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, 0, false)
 	return id, req.Filename, err
 }
 
 // processDownloads handles the logic of adding downloads either to local pool or remote server
 // Returns the number of successfully added downloads
-func processDownloads(urls []string, outputDir string, port int) int {
+func processDownloads(ctx context.Context, urls []string, outputDir string, port int) int {
 	successCount := 0
 
 	// If port > 0, we are sending to a remote server
@@ -276,7 +277,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 			if url == "" {
 				continue
 			}
-			err := sendToServer(url, mirrors, outputDir, baseURL, token)
+			err := sendToServer(ctx, url, mirrors, outputDir, baseURL, token)
 			if err != nil {
 				fmt.Printf("Error adding %s: %v\n", url, err)
 			} else {
@@ -294,7 +295,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 
 	settings := getSettings()
 
-	lifecycle, err := lifecycleForLocalService(GlobalService)
+	lifecycle, err := lifecycleForLocalService(ctx, GlobalService)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "Error: unable to initialize lifecycle manager:", err)
 		return 0
@@ -318,20 +319,20 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		// CLI explicit arg means we do not auto-route when user provided an explicit output path.
 		isExplicit := isExplicitOutputPath(outPath, settings.General.DefaultDownloadDir)
 		if lifecycle == nil {
-			err := fmt.Errorf("lifecycle manager unavailable")
-			recordPreflightDownloadError(url, outPath, err)
+			err := errors.New("lifecycle manager unavailable")
+			recordPreflightDownloadError(ctx, url, outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", url, err))
 			continue
 		}
 
-		_, _, err := lifecycle.Enqueue(currentEnqueueContext(), &processing.DownloadRequest{
+		_, _, err := lifecycle.Enqueue(ctx, &processing.DownloadRequest{
 			URL:                url,
 			Path:               outPath,
 			Mirrors:            mirrors,
 			IsExplicitCategory: isExplicit,
 		})
 		if err != nil {
-			recordPreflightDownloadError(url, outPath, err)
+			recordPreflightDownloadError(ctx, url, outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", url, err))
 			continue
 		}
@@ -358,11 +359,12 @@ func resolveOutputDir(reqPath string, relativeToDefaultDir bool, defaultOutputDi
 		}
 		outPath = filepath.Join(baseDir, reqPath)
 	} else if outPath == "" {
-		if defaultOutputDir != "" {
+		switch {
+		case defaultOutputDir != "":
 			outPath = defaultOutputDir
-		} else if settings.General.DefaultDownloadDir != "" {
+		case settings.General.DefaultDownloadDir != "":
 			outPath = settings.General.DefaultDownloadDir
-		} else {
+		default:
 			outPath = "."
 		}
 	}

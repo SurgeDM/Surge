@@ -9,14 +9,14 @@ import (
 
 // TaskQueue is a thread-safe work-stealing queue
 type TaskQueue struct {
+	cond        *sync.Cond
 	tasks       []types.Task
 	head        int
+	idleWorkers atomic.Int64
+	waiting     atomic.Int64
+	size        atomic.Int64
 	mu          sync.Mutex
-	cond        *sync.Cond
 	done        bool
-	idleWorkers atomic.Int64 // Atomic counter for idle workers
-	waiting     atomic.Int64 // Number of workers currently waiting on cond
-	size        atomic.Int64 // Queue size to avoid lock contention in Len callers
 }
 
 func NewTaskQueue() *TaskQueue {

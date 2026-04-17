@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -55,7 +56,7 @@ func TestMirrors_CLI_Integration(t *testing.T) {
 	arg := fmt.Sprintf("%s,%s,%s", primaryURL, mirror1, mirror2)
 
 	// Simulate "surge add <arg>"
-	processDownloads([]string{arg}, ".", port)
+	processDownloads(context.Background(), []string{arg}, ".", port)
 
 	// 3. Verify the server received the correct request
 	select {

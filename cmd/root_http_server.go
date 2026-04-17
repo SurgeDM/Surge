@@ -1,13 +1,17 @@
 package cmd
 
 import (
+	"context"
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
@@ -21,7 +25,7 @@ const serverBindHost = "0.0.0.0"
 func findAvailablePort(start int) (int, net.Listener) {
 	bindHost := serverBindHost
 	for port := start; port < start+100; port++ {
-		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindHost, port))
+		ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", fmt.Sprintf("%s:%d", bindHost, port))
 		if err == nil {
 			return port, ln
 		}
@@ -32,7 +36,7 @@ func findAvailablePort(start int) (int, net.Listener) {
 func bindServerListener(portFlag int) (int, net.Listener, error) {
 	bindHost := serverBindHost
 	if portFlag > 0 {
-		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindHost, portFlag))
+		ln, err := (&net.ListenConfig{}).Listen(context.Background(), "tcp", fmt.Sprintf("%s:%d", bindHost, portFlag))
 		if err != nil {
 			return 0, nil, fmt.Errorf("could not bind to port %d: %w", portFlag, err)
 		}
@@ -40,20 +44,20 @@ func bindServerListener(portFlag int) (int, net.Listener, error) {
 	}
 	port, ln := findAvailablePort(1700)
 	if ln == nil {
-		return 0, nil, fmt.Errorf("could not find available port")
+		return 0, nil, errors.New("could not find available port")
 	}
 	return port, ln, nil
 }
 
 // saveActivePort writes the active port for local CLI and extension discovery.
 func saveActivePort(port int) {
-	if err := os.MkdirAll(config.GetRuntimeDir(), 0o755); err != nil {
+	if err := os.MkdirAll(config.GetRuntimeDir(), 0o750); err != nil {
 		utils.Debug("Error creating runtime directory for port file: %v", err)
 		return
 	}
 
 	portFile := filepath.Join(config.GetRuntimeDir(), "port")
-	if err := os.WriteFile(portFile, []byte(fmt.Sprintf("%d", port)), 0o644); err != nil {
+	if err := os.WriteFile(portFile, []byte(strconv.Itoa(port)), 0o600); err != nil {
 		utils.Debug("Error writing port file: %v", err)
 	}
 	utils.Debug("HTTP server listening on port %d", port)
@@ -82,7 +86,10 @@ func startHTTPServer(ln net.Listener, port int, defaultOutputDir string, service
 	// Wrap mux with Auth and CORS (CORS outermost to ensure 401/403 include headers)
 	handler := corsMiddleware(authMiddleware(authToken, mux))
 
-	server := &http.Server{Handler: handler}
+	server := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 5 * time.Second,
+	}
 	if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
 		utils.Debug("HTTP server error: %v", err)
 	}
@@ -97,7 +104,7 @@ func corsMiddleware(next http.Handler) http.Handler {
 		w.Header().Set("Access-Control-Allow-Private-Network", "true")
 
 		// Handle preflight requests
-		if r.Method == "OPTIONS" {
+		if r.Method == http.MethodOptions {
 			w.WriteHeader(http.StatusOK)
 			return
 		}
@@ -115,7 +122,7 @@ func authMiddleware(token string, next http.Handler) http.Handler {
 		}
 
 		// Allow OPTIONS for CORS preflight
-		if r.Method == "OPTIONS" {
+		if r.Method == http.MethodOptions {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -158,7 +165,7 @@ func persistAuthToken(token string) {
 }
 
 func readTokenFromFile(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) //nolint:gosec // internal settings file //nolint:gosec // internal settings file
 	if err != nil {
 		return "", err
 	}
@@ -169,8 +176,8 @@ func readTokenFromFile(path string) (string, error) {
 	return token, nil
 }
 
-func writeTokenToFile(path string, token string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+func writeTokenToFile(path, token string) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
 	return os.WriteFile(path, []byte(token), 0o600)

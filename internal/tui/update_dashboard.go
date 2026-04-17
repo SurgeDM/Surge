@@ -4,12 +4,13 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
+	"context"
 	"github.com/SurgeDM/Surge/internal/clipboard"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
-func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// Handle search input FIRST when active (intercepts ALL keys)
 	if m.searchActive {
@@ -71,14 +72,14 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	// Quit
 	if key.Matches(msg, m.keys.Dashboard.Quit, m.keys.Dashboard.ForceQuit) {
-		m.state = QuitConfirmState
+		m.uiState = QuitConfirmState
 		m.quitConfirmFocused = 0
 		return m, nil
 	}
 
 	// Add download
 	if key.Matches(msg, m.keys.Dashboard.Add) {
-		m.state = InputState
+		m.uiState = InputState
 		m.focusedInput = 0
 		m.inputs[0].Focus()
 		// Use default download dir from settings
@@ -121,7 +122,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			targetID := d.ID
 
 			// Call Service Delete
-			if err := m.Service.Delete(targetID); err != nil {
+			if err := m.Service.Delete(context.Background(), targetID); err != nil {
 				m.addLogEntry(LogStyleError.Render("✖ Delete failed: " + err.Error()))
 			} else {
 				m.removeDownloadByID(targetID)
@@ -143,14 +144,14 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					// Resume
 					d.paused = false
 					d.resuming = true
-					if err := m.Service.Resume(d.ID); err != nil {
+					if err := m.Service.Resume(context.Background(), d.ID); err != nil {
 						m.addLogEntry(LogStyleError.Render("✖ Resume failed: " + err.Error()))
 						d.paused = true // Revert
 						d.resuming = false
 					}
 				} else {
 					// Pause
-					if err := m.Service.Pause(d.ID); err != nil {
+					if err := m.Service.Pause(context.Background(), d.ID); err != nil {
 						m.addLogEntry(LogStyleError.Render("✖ Pause failed: " + err.Error()))
 					} else {
 						d.resuming = false
@@ -172,7 +173,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				if !d.done {
 					filePath = d.Destination + types.IncompleteSuffix
 				}
-				_ = openWithSystem(filePath)
+				_ = openWithSystem(m.enqueueCtx, filePath)
 			}
 		}
 		return m, nil
@@ -187,7 +188,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			// Only allow refresh if download is paused or errored
 			if d.paused || d.err != nil {
-				m.state = URLUpdateState
+				m.uiState = URLUpdateState
 				m.urlUpdateInput.SetValue(d.URL)
 				m.urlUpdateInput.Focus()
 			} else {
@@ -204,12 +205,12 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.ToggleHelp) {
-		m.state = HelpModalState
+		m.uiState = HelpModalState
 		return m, nil
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.Settings) {
-		m.state = SettingsState
+		m.uiState = SettingsState
 		m.SettingsActiveTab = 0
 		m.SettingsSelectedRow = 0
 		m.SettingsIsEditing = false
@@ -248,7 +249,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.BatchImport) {
-		m.state = BatchFilePickerState
+		m.uiState = BatchFilePickerState
 		m.filepicker = newFilepicker(m.PWD)
 		m.filepicker.FileAllowed = true
 		m.filepicker.DirAllowed = false

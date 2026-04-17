@@ -1,6 +1,7 @@
 package processing_test
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -18,11 +19,11 @@ func TestStartEventWorker_FinalizesCompletedFileUsingDestPath(t *testing.T) {
 
 	finalPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := finalPath + types.IncompleteSuffix
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create incomplete file: %v", err)
 	}
 
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := state.AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:       "download-1",
 		URL:      "https://example.com/video.mp4",
 		URLHash:  state.URLHash("https://example.com/video.mp4"),
@@ -32,7 +33,7 @@ func TestStartEventWorker_FinalizesCompletedFileUsingDestPath(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("failed to seed download entry: %v", err)
 	}
-	if err := state.SaveStateWithOptions("https://example.com/video.mp4", finalPath, &types.DownloadState{
+	if err := state.SaveStateWithOptions(context.Background(), "https://example.com/video.mp4", finalPath, &types.DownloadState{
 		ID:        "download-1",
 		URL:       "https://example.com/video.mp4",
 		Filename:  "video.mp4",
@@ -55,7 +56,7 @@ func TestStartEventWorker_FinalizesCompletedFileUsingDestPath(t *testing.T) {
 	}
 	close(ch)
 
-	mgr.StartEventWorker(ch)
+	mgr.StartEventWorker(context.Background(), ch)
 
 	if _, err := os.Stat(finalPath); err != nil {
 		t.Fatalf("expected finalized file at %s: %v", finalPath, err)
@@ -64,7 +65,7 @@ func TestStartEventWorker_FinalizesCompletedFileUsingDestPath(t *testing.T) {
 		t.Fatalf("expected incomplete file to be removed, stat err: %v", err)
 	}
 
-	entry, err := state.GetDownload("download-1")
+	entry, err := state.GetDownload(context.Background(), "download-1")
 	if err != nil {
 		t.Fatalf("failed to reload completed entry: %v", err)
 	}
@@ -78,7 +79,7 @@ func TestStartEventWorker_FinalizesCompletedFileUsingDestPath(t *testing.T) {
 		t.Fatalf("dest_path = %q, want %q", entry.DestPath, finalPath)
 	}
 
-	db, err := state.GetDB()
+	db, err := state.GetDB(context.Background())
 	if err != nil {
 		t.Fatalf("failed to open db: %v", err)
 	}
@@ -106,9 +107,9 @@ func TestStartEventWorker_PersistsQueuedMirrorsForResume(t *testing.T) {
 	}
 	close(ch)
 
-	mgr.StartEventWorker(ch)
+	mgr.StartEventWorker(context.Background(), ch)
 
-	queuedState, err := state.LoadState("https://example.com/video.mp4", finalPath)
+	queuedState, err := state.LoadState(context.Background(), "https://example.com/video.mp4", finalPath)
 	if err != nil {
 		t.Fatalf("failed to reload queued state: %v", err)
 	}
@@ -151,9 +152,9 @@ func TestStartEventWorker_PreservesQueuedMirrorsAcrossStartedThenError(t *testin
 	}
 	close(ch)
 
-	mgr.StartEventWorker(ch)
+	mgr.StartEventWorker(context.Background(), ch)
 
-	entry, err := state.GetDownload("download-queued")
+	entry, err := state.GetDownload(context.Background(), "download-queued")
 	if err != nil {
 		t.Fatalf("failed to reload errored entry: %v", err)
 	}

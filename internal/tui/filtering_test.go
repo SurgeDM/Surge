@@ -7,8 +7,8 @@ import (
 func TestTabFiltering(t *testing.T) {
 	tests := []struct {
 		name          string
-		activeTab     int
 		downloads     []*DownloadModel
+		activeTab     int
 		expectedCount int
 	}{
 		{
@@ -97,7 +97,7 @@ func TestTabFiltering(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := RootModel{
+			m := &RootModel{
 				activeTab: tt.activeTab,
 				downloads: tt.downloads,
 			}
@@ -120,7 +120,7 @@ func TestComputeViewStatsConsistency(t *testing.T) {
 		{ID: "done", done: true},
 	}
 
-	m := RootModel{
+	m := &RootModel{
 		downloads: downloads,
 	}
 

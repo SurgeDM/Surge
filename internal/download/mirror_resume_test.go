@@ -26,7 +26,7 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	// Set XDG_CONFIG_HOME to tmpDir so state.GetDB() creates DB there
+	// Set XDG_CONFIG_HOME to tmpDir so state.GetDB(context.Background()) creates DB there
 	// The config package uses "surge" subdirectory
 	configDir := tmpDir // XDG_CONFIG_HOME usually contains the app dir
 	t.Setenv("XDG_CONFIG_HOME", configDir)
@@ -38,8 +38,8 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	state.CloseDB()
 	dbPath := filepath.Join(tmpDir, "surge.db")
 	state.Configure(dbPath)
-	if _, err := state.GetDB(); err != nil {
-		t.Fatalf("Failed to init DB: %v", err)
+	if _, dbErr := state.GetDB(context.Background()); dbErr != nil {
+		t.Fatalf("Failed to init DB: %v", dbErr)
 	}
 	defer state.CloseDB()
 
@@ -71,7 +71,7 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	eventWG.Add(1)
 	go func() {
 		defer eventWG.Done()
-		mgr.StartEventWorker(progressCh)
+		mgr.StartEventWorker(context.Background(), progressCh)
 	}()
 	defer func() {
 		close(progressCh)
@@ -100,7 +100,7 @@ func TestIntegration_MirrorResume(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	incompletePath := destPath + types.IncompleteSuffix
-	f, err := os.Create(incompletePath)
+	f, err := os.Create(incompletePath) //nolint:gosec // internal test file
 	if err != nil {
 		t.Fatalf("Failed to pre-create partial file: %v", err)
 	}
@@ -129,9 +129,9 @@ func TestIntegration_MirrorResume(t *testing.T) {
 
 	// Wait for return
 	select {
-	case err := <-errCh:
-		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, types.ErrPaused) {
-			t.Fatalf("unexpected pause result: %v", err)
+	case eErr := <-errCh:
+		if eErr != nil && !errors.Is(eErr, context.Canceled) && !errors.Is(eErr, types.ErrPaused) {
+			t.Fatalf("unexpected pause result: %v", eErr)
 		}
 	case <-time.After(15 * time.Second):
 		t.Fatal("Download did not return")
@@ -141,7 +141,7 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	var savedState *types.DownloadState
 	deadline = time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		savedState, err = state.LoadState(primary.URL(), destPath)
+		savedState, err = state.LoadState(context.Background(), primary.URL(), destPath)
 		if err == nil && savedState != nil && len(savedState.Mirrors) > 0 {
 			break
 		}
@@ -207,9 +207,9 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	}
 	resumeState.Pause()
 	select {
-	case err := <-errCh:
-		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, types.ErrPaused) {
-			t.Fatalf("unexpected resume pause result: %v", err)
+	case eErr := <-errCh:
+		if eErr != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, types.ErrPaused) {
+			t.Fatalf("unexpected resume pause result: %v", eErr)
 		}
 	case <-time.After(15 * time.Second):
 		t.Fatal("resumed download did not return after pause")

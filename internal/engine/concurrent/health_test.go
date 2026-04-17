@@ -74,8 +74,11 @@ func TestHealth_MultipleWorkers(t *testing.T) {
 	// Mean = 7 MB/s. Threshold = 3.5 MB/s. Worker 2 < 3.5 => Cancel.
 
 	w0Ctx, w0Cancel := context.WithCancel(ctx)
+	defer w0Cancel()
 	w1Ctx, w1Cancel := context.WithCancel(ctx)
+	defer w1Cancel()
 	w2Ctx, w2Cancel := context.WithCancel(ctx)
+	defer w2Cancel()
 
 	d.activeTasks[0] = &ActiveTask{StartTime: now.Add(-10 * time.Second), Speed: 10 * 1024 * 1024, Cancel: w0Cancel}
 	d.activeTasks[1] = &ActiveTask{StartTime: now.Add(-10 * time.Second), Speed: 10 * 1024 * 1024, Cancel: w1Cancel}
@@ -122,7 +125,9 @@ func TestHealth_GracePeriod(t *testing.T) {
 	// Worker 1: 0.1 MB/s (New, within grace period) -> Should NOT cancel despite being slow
 
 	w0Ctx, w0Cancel := context.WithCancel(ctx)
+	defer w0Cancel()
 	w1Ctx, w1Cancel := context.WithCancel(ctx)
+	defer w1Cancel()
 
 	d.activeTasks[0] = &ActiveTask{StartTime: now.Add(-10 * time.Second), Speed: 10 * 1024 * 1024, Cancel: w0Cancel}
 	d.activeTasks[1] = &ActiveTask{StartTime: now.Add(-1 * time.Second), Speed: 100 * 1024, Cancel: w1Cancel}
@@ -163,6 +168,7 @@ func TestHealth_StallDetection(t *testing.T) {
 
 	// Worker with last activity 2 seconds ago (exceeds 1s StallTimeout)
 	stalledCtx, stalledCancel := context.WithCancel(ctx)
+	defer stalledCancel()
 	active := &ActiveTask{
 		StartTime: now.Add(-10 * time.Second),
 		Cancel:    stalledCancel,

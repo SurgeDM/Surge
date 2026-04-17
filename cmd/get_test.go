@@ -52,7 +52,7 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	workerDone := make(chan struct{})
 	go func() {
 		defer close(workerDone)
-		lifecycle.StartEventWorker(stream)
+		lifecycle.StartEventWorker(context.Background(), stream)
 	}()
 	t.Cleanup(func() {
 		streamCleanup()
@@ -64,28 +64,28 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	client := &http.Client{Timeout: 3 * time.Second}
 
 	doRequest := func(method, url string) (*http.Response, error) {
-		req, err := http.NewRequest(method, url, nil)
-		if err != nil {
-			return nil, err
+		r, reqErr := http.NewRequestWithContext(context.Background(), method, url, http.NoBody)
+		if reqErr != nil {
+			return nil, reqErr
 		}
-		req.Header.Set("Authorization", "Bearer "+authToken)
-		req.Header.Set("Content-Type", "application/json")
-		return client.Do(req)
+		r.Header.Set("Authorization", "Bearer "+authToken)
+		r.Header.Set("Content-Type", "application/json")
+		return client.Do(r)
 	}
 
 	id := "paused-delete-test-id"
 	url := "https://example.com/file.bin"
 	downloadDir := filepath.Join(tempDir, "downloads")
-	if err := os.MkdirAll(downloadDir, 0o755); err != nil {
-		t.Fatalf("failed to create download dir: %v", err)
+	if mkErr := os.MkdirAll(downloadDir, 0o750); mkErr != nil {
+		t.Fatalf("failed to create download dir: %v", mkErr)
 	}
 	destPath := filepath.Join(downloadDir, "file.bin")
 	incompletePath := destPath + types.IncompleteSuffix
-	if err := os.WriteFile(incompletePath, []byte("partial-data"), 0o644); err != nil {
-		t.Fatalf("failed to create partial file: %v", err)
+	if wrErr := os.WriteFile(incompletePath, []byte("partial-data"), 0o600); wrErr != nil {
+		t.Fatalf("failed to create partial file: %v", wrErr)
 	}
 
-	if err := state.SaveState(url, destPath, &types.DownloadState{
+	if saveErr := state.SaveState(context.Background(), url, destPath, &types.DownloadState{
 		ID:         id,
 		URL:        url,
 		DestPath:   destPath,
@@ -95,8 +95,8 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 		Tasks: []types.Task{
 			{Offset: 250, Length: 750},
 		},
-	}); err != nil {
-		t.Fatalf("failed to seed paused state: %v", err)
+	}); saveErr != nil {
+		t.Fatalf("failed to seed paused state: %v", saveErr)
 	}
 
 	resp, err := doRequest(http.MethodDelete, baseURL+"/delete?id="+id)
@@ -120,7 +120,7 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		_, statErr := os.Stat(incompletePath)
-		entry, dbErr := state.GetDownload(id)
+		entry, dbErr := state.GetDownload(context.Background(), id)
 		if dbErr != nil {
 			t.Fatalf("failed to query entry after delete: %v", dbErr)
 		}
@@ -130,20 +130,20 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 		time.Sleep(20 * time.Millisecond)
 	}
 
-	if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
-		t.Fatalf("expected partial file to be deleted, stat err: %v", err)
+	if _, sErr := os.Stat(incompletePath); !os.IsNotExist(sErr) {
+		t.Fatalf("expected partial file to be deleted, stat err: %v", sErr)
 	}
-	entry, err := state.GetDownload(id)
-	if err != nil {
-		t.Fatalf("failed to query entry after delete: %v", err)
+	entry, getErr := state.GetDownload(context.Background(), id)
+	if getErr != nil {
+		t.Fatalf("failed to query entry after delete: %v", getErr)
 	}
 	if entry != nil {
 		t.Fatalf("expected download entry removed from DB, found: %+v", entry)
 	}
 
-	listResp, err := doRequest(http.MethodGet, baseURL+"/list")
-	if err != nil {
-		t.Fatalf("failed to request list: %v", err)
+	listResp, listErr := doRequest(http.MethodGet, baseURL+"/list")
+	if listErr != nil {
+		t.Fatalf("failed to request list: %v", listErr)
 	}
 	defer func() { _ = listResp.Body.Close() }()
 	if listResp.StatusCode != http.StatusOK {

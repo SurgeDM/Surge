@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -20,7 +21,7 @@ var resumeCmd = &cobra.Command{
 		all, _ := cmd.Flags().GetBool("all")
 
 		if !all && len(args) == 0 {
-			return fmt.Errorf("provide a download ID or use --all")
+			return errors.New("provide a download ID or use --all")
 		}
 
 		if all {
@@ -28,7 +29,7 @@ var resumeCmd = &cobra.Command{
 			return nil
 		}
 
-		return ExecuteAPIAction(args[0], "/resume", http.MethodPost, "Resumed download")
+		return ExecuteAPIAction(cmd.Context(), args[0], "/resume", http.MethodPost, "Resumed download")
 	},
 }
 

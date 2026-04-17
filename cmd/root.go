@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -70,7 +71,7 @@ var (
 	globalEnqueueMu         sync.Mutex
 )
 
-func buildPoolIsNameActive(getAll func() []types.DownloadConfig) processing.IsNameActiveFunc {
+func buildPoolIsNameActive(getAll func() []*types.DownloadConfig) processing.IsNameActiveFunc {
 	if getAll == nil {
 		return nil
 	}
@@ -113,7 +114,7 @@ func buildPoolIsNameActive(getAll func() []types.DownloadConfig) processing.IsNa
 	}
 }
 
-func newLocalLifecycleManager(service core.DownloadService, getAll func() []types.DownloadConfig) *processing.LifecycleManager {
+func newLocalLifecycleManager(service core.DownloadService, getAll func() []*types.DownloadConfig) *processing.LifecycleManager {
 	var addFunc processing.AddDownloadFunc
 	var addWithIDFunc processing.AddDownloadWithIDFunc
 	if service != nil {
@@ -124,16 +125,16 @@ func newLocalLifecycleManager(service core.DownloadService, getAll func() []type
 	return processing.NewLifecycleManager(addFunc, addWithIDFunc, buildPoolIsNameActive(getAll))
 }
 
-func startLifecycleEventWorker(service core.DownloadService, mgr *processing.LifecycleManager) (func(), error) {
+func startLifecycleEventWorker(ctx context.Context, service core.DownloadService, mgr *processing.LifecycleManager) (func(), error) {
 	if service == nil || mgr == nil {
 		return nil, nil
 	}
 
-	managerStream, managerCleanup, err := service.StreamEvents(context.Background())
+	managerStream, managerCleanup, err := service.StreamEvents(ctx)
 	if err != nil {
 		return nil, err
 	}
-	go mgr.StartEventWorker(managerStream)
+	go mgr.StartEventWorker(ctx, managerStream)
 	return managerCleanup, nil
 }
 
@@ -149,12 +150,12 @@ func resetGlobalEnqueueContext() {
 	if globalEnqueueCancel != nil {
 		globalEnqueueCancel()
 	}
-	globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background())
+	globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background()) //nolint:gosec // global context managed by resetGlobalEnqueueContext //nolint:gosec // global context managed by resetGlobalEnqueueContext
 }
 
 func ensureEnqueueContextLocked() {
 	if globalEnqueueCtx == nil || globalEnqueueCancel == nil {
-		globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background())
+		globalEnqueueCtx, globalEnqueueCancel = context.WithCancel(context.Background()) //nolint:gosec // global context managed by resetGlobalEnqueueContext //nolint:gosec // global context managed by resetGlobalEnqueueContext
 	}
 }
 
@@ -189,19 +190,19 @@ func takeLifecycleCleanup() func() {
 	return cleanup
 }
 
-func currentPoolConfigs() []types.DownloadConfig {
+func currentPoolConfigs() []*types.DownloadConfig {
 	if GlobalPool == nil {
 		return nil
 	}
 	return GlobalPool.GetAll()
 }
 
-func lifecycleForLocalService(service core.DownloadService) (*processing.LifecycleManager, error) {
+func lifecycleForLocalService(ctx context.Context, service core.DownloadService) (*processing.LifecycleManager, error) {
 	lifecycle := currentLifecycle()
 	if service == nil || GlobalService == nil || service != GlobalService {
 		return lifecycle, nil
 	}
-	return ensureLocalLifecycle(GlobalService, currentPoolConfigs)
+	return ensureLocalLifecycle(ctx, GlobalService, currentPoolConfigs)
 }
 
 func ensureGlobalLocalServiceAndLifecycle() error {
@@ -209,7 +210,7 @@ func ensureGlobalLocalServiceAndLifecycle() error {
 		localService := core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 		GlobalService = localService
 
-		lifecycle, err := ensureLocalLifecycle(localService, currentPoolConfigs)
+		lifecycle, err := ensureLocalLifecycle(context.Background(), localService, currentPoolConfigs)
 		if err != nil {
 			return err
 		}
@@ -232,7 +233,7 @@ func ensureGlobalLocalServiceAndLifecycle() error {
 			UpdateURL:   lifecycle.UpdateURL,
 		})
 	} else {
-		_, err := ensureLocalLifecycle(GlobalService, currentPoolConfigs)
+		_, err := ensureLocalLifecycle(context.Background(), GlobalService, currentPoolConfigs)
 		return err
 	}
 	return nil
@@ -246,7 +247,7 @@ func publishSystemLog(message string) {
 	fmt.Fprintln(os.Stderr, message)
 }
 
-func recordPreflightDownloadError(url, outPath string, err error) {
+func recordPreflightDownloadError(ctx context.Context, url, outPath string, err error) {
 	if err == nil || strings.TrimSpace(url) == "" {
 		return
 	}
@@ -265,7 +266,7 @@ func recordPreflightDownloadError(url, outPath string, err error) {
 		Filename: filename,
 		Status:   "error",
 	}
-	if addErr := state.AddToMasterList(entry); addErr != nil {
+	if addErr := state.AddToMasterList(ctx, &entry); addErr != nil {
 		utils.Debug("Failed to persist preflight download error for %s: %v", url, addErr)
 	}
 	if GlobalService != nil {
@@ -278,7 +279,7 @@ func recordPreflightDownloadError(url, outPath string, err error) {
 	}
 }
 
-func ensureLocalLifecycle(service core.DownloadService, getAll func() []types.DownloadConfig) (*processing.LifecycleManager, error) {
+func ensureLocalLifecycle(ctx context.Context, service core.DownloadService, getAll func() []*types.DownloadConfig) (*processing.LifecycleManager, error) {
 	globalLifecycleMu.Lock()
 	defer globalLifecycleMu.Unlock()
 
@@ -286,7 +287,7 @@ func ensureLocalLifecycle(service core.DownloadService, getAll func() []types.Do
 		GlobalLifecycle = newLocalLifecycleManager(service, getAll)
 	}
 	if GlobalLifecycleCleanup == nil {
-		cleanup, err := startLifecycleEventWorker(service, GlobalLifecycle)
+		cleanup, err := startLifecycleEventWorker(ctx, service, GlobalLifecycle)
 		if err != nil {
 			return nil, err
 		}
@@ -300,9 +301,9 @@ func isExplicitOutputPath(outPath, defaultDir string) bool {
 }
 
 type rootRunOptions struct {
-	portFlag     int
 	batchFile    string
 	outputDir    string
+	portFlag     int
 	noResume     bool
 	exitWhenDone bool
 }
@@ -330,7 +331,7 @@ func maybeRunRemoteTUI(cmd *cobra.Command, args []string) (bool, error) {
 	}
 
 	if len(args) > 0 {
-		return false, fmt.Errorf("URLs cannot be passed when using --host. Use 'surge add <url>' after connecting")
+		return false, errors.New("URLs cannot be passed when using --host. Use 'surge add <url>' after connecting")
 	}
 
 	if err := connectAndRunTUI(cmd, hostTarget); err != nil {
@@ -346,7 +347,7 @@ func acquireRootInstanceLock() (func(), error) {
 	}
 
 	if !isMaster {
-		return nil, fmt.Errorf("surge is already running. Use 'surge add <url>' to add a download to the active instance")
+		return nil, errors.New("surge is already running. Use 'surge add <url>' to add a download to the active instance")
 	}
 
 	return func() {
@@ -370,7 +371,7 @@ func initializeRootLocalRuntime() error {
 	return nil
 }
 
-func startRootHTTPServer(opts rootRunOptions) (int, func(), error) {
+func startRootHTTPServer(opts rootRunOptions) (port int, cleanup func(), err error) {
 	port, listener, err := bindServerListener(opts.portFlag)
 	if err != nil {
 		return 0, nil, err
@@ -402,7 +403,7 @@ func queueInitialRootDownloads(args []string, opts rootRunOptions) {
 
 		if len(urls) > 0 {
 			resolvedOutputDir := resolveClientOutputPath(opts.outputDir)
-			processDownloads(urls, resolvedOutputDir, 0) // 0 port = internal direct add
+			processDownloads(context.Background(), urls, resolvedOutputDir, 0) // 0 port = internal direct add
 		}
 	}()
 }
@@ -414,7 +415,7 @@ var rootCmd = &cobra.Command{
 	Long:          `Surge is a blazing fast TUI download manager built in Go for power users. Find more info here: https://github.com/SurgeDM/Surge`,
 	Version:       Version,
 	Args:          cobra.ArbitraryArgs,
-	SilenceErrors: true, //errors are printed in main.go this prevents double printing
+	SilenceErrors: true, // errors are printed in main.go this prevents double printing
 	SilenceUsage:  true, // prevent usage text from being printed on every error
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		GlobalProgressCh = make(chan any, 100)
@@ -437,7 +438,7 @@ var rootCmd = &cobra.Command{
 		savePID()
 		defer removePID()
 
-		if err := initializeRootLocalRuntime(); err != nil {
+		if err = initializeRootLocalRuntime(); err != nil {
 			return err
 		}
 
@@ -454,7 +455,7 @@ var rootCmd = &cobra.Command{
 }
 
 // startTUI initializes and runs the TUI program
-func startTUI(port int, exitWhenDone bool, noResume bool) error {
+func startTUI(port int, exitWhenDone, noResume bool) error {
 	tui.InitializeTUI()
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run

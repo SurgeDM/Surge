@@ -36,11 +36,11 @@ func ApplyGradient(text string, startColor, endColor color.Color) string {
 
 		// Create color string
 		hexColor := fmt.Sprintf("#%02x%02x%02x", r, g, b)
-		color := lipgloss.Color(hexColor)
+		lColor := lipgloss.Color(hexColor)
 
 		// Apply style to the line
 		// Preserving Bold(true) as in the original LogoStyle
-		coloredLine := lipgloss.NewStyle().Foreground(color).Bold(true).Render(line)
+		coloredLine := lipgloss.NewStyle().Foreground(lColor).Bold(true).Render(line)
 		coloredLines = append(coloredLines, coloredLine)
 	}
 
@@ -57,9 +57,9 @@ func colorToRGB(c color.Color) rgb {
 	}
 	r, g, b, _ := c.RGBA()
 	return rgb{
-		r: uint8(r >> 8),
-		g: uint8(g >> 8),
-		b: uint8(b >> 8),
+		r: uint8(r >> 8), //nolint:gosec // internal math
+		g: uint8(g >> 8), //nolint:gosec // internal math
+		b: uint8(b >> 8), //nolint:gosec // internal math
 	}
 }
 

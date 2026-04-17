@@ -158,7 +158,7 @@ func GetCategoryPath(filename, defaultDir string, settings *config.Settings) (st
 
 // getBaseFilename keeps naming deterministic across retries by preferring the
 // most authoritative source available before uniqueness is applied.
-func getBaseFilename(url, candidate string, probe *ProbeResult) string {
+func getBaseFilename(rawURL, candidate string, probe *ProbeResult) string {
 	if candidate != "" {
 		return candidate
 	}
@@ -167,17 +167,16 @@ func getBaseFilename(url, candidate string, probe *ProbeResult) string {
 			return probe.DetectedFilename
 		}
 	}
-	return InferFilenameFromURL(url)
+	return InferFilenameFromURL(rawURL)
 }
 
 // ResolveDestination centralizes routing and naming so CLI, TUI, and API
 // requests all land on the same final path before the engine starts downloading.
-func ResolveDestination(url, candidateFilename, defaultDir string, routeToCategory bool, settings *config.Settings, probe *ProbeResult, isNameActive func(string, string) bool) (string, string, error) {
-	filename := getBaseFilename(url, candidateFilename, probe)
+func ResolveDestination(rawURL, candidateFilename, defaultDir string, routeToCategory bool, settings *config.Settings, probe *ProbeResult, isNameActive func(string, string) bool) (destPath, finalFilename string, err error) {
+	filename := getBaseFilename(rawURL, candidateFilename, probe)
 
-	destPath := defaultDir
+	destPath = defaultDir
 	if routeToCategory && settings != nil && settings.Categories.CategoryEnabled && filename != "" {
-		var err error
 		destPath, err = GetCategoryPath(filename, defaultDir, settings)
 		if err != nil {
 			return "", "", err
@@ -187,9 +186,9 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 	// Safety: Truncate early so GetUniqueFilename has room to append a suffix
 	filename = utils.TruncateFilename(filename)
 
-	finalFilename := GetUniqueFilename(destPath, filename, isNameActive)
+	finalFilename = GetUniqueFilename(destPath, filename, isNameActive)
 	if finalFilename == "" {
-		return "", "", fmt.Errorf("could not determine a unique filename for %s", url)
+		return "", "", fmt.Errorf("could not determine a unique filename for %s", rawURL)
 	}
 
 	return destPath, finalFilename, nil

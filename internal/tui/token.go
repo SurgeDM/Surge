@@ -14,7 +14,7 @@ var authTokenCache string
 // This is called once at startup to avoid re-reading from disk on every frame layout.
 func InitAuthToken() {
 	stateTokenFile := filepath.Join(config.GetStateDir(), "token")
-	data, err := os.ReadFile(stateTokenFile)
+	data, err := os.ReadFile(stateTokenFile) //nolint:gosec // internal token file
 	if err == nil {
 		authTokenCache = strings.TrimSpace(string(data))
 	}

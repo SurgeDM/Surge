@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
@@ -92,14 +93,14 @@ func TestStartupIntegrityCheck_RemovesMissingPausedEntry(t *testing.T) {
 	seedDownload(t, testID, testURL, testDest, "paused")
 
 	// Ensure .surge file is missing to simulate an orphaned paused DB entry.
-	if err := os.Remove(testDest + types.IncompleteSuffix); err != nil && !os.IsNotExist(err) {
+	if rmErr := os.Remove(testDest + types.IncompleteSuffix); rmErr != nil && !os.IsNotExist(rmErr) {
 		t.Fatalf("failed to remove test .surge file: %v", err)
 	}
 
 	msg := runStartupIntegrityCheck()
 	utils.Debug("%s", msg)
 
-	entry, err := state.GetDownload(testID)
+	entry, err := state.GetDownload(context.Background(), testID)
 	if err != nil {
 		t.Fatalf("GetDownload failed: %v", err)
 	}
@@ -121,7 +122,7 @@ func setupTestEnv(t *testing.T, tmpDir string) {
 	})
 
 	surgeDir := config.GetSurgeDir()
-	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
+	if err := os.MkdirAll(surgeDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
@@ -134,7 +135,7 @@ func setupTestEnv(t *testing.T, tmpDir string) {
 
 	// Configure DB
 	dbPath := filepath.Join(surgeDir, "state", "surge.db")
-	_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
+	_ = os.MkdirAll(filepath.Dir(dbPath), 0o750)
 	state.CloseDB()
 	state.Configure(dbPath)
 }
@@ -150,10 +151,10 @@ func seedDownload(t *testing.T, id, url, dest, status string) {
 		PausedAt:   0,
 		CreatedAt:  time.Now().Unix(),
 	}
-	if err := state.SaveState(url, dest, manualState); err != nil {
+	if err := state.SaveState(context.Background(), url, dest, manualState); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.UpdateStatus(id, status); err != nil {
+	if err := state.UpdateStatus(context.Background(), id, status); err != nil {
 		t.Fatal(err)
 	}
 }

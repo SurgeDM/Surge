@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -8,9 +10,9 @@ import (
 	"runtime"
 )
 
-func OpenFile(path string) error {
+func OpenFile(ctx context.Context, path string) error {
 	if path == "" {
-		return fmt.Errorf("path is empty")
+		return errors.New("path is empty")
 	}
 
 	info, err := os.Stat(path)
@@ -22,12 +24,12 @@ func OpenFile(path string) error {
 		return fmt.Errorf("%q is a directory", path)
 	}
 
-	return openWithSystem(path)
+	return openWithSystem(ctx, path)
 }
 
-func OpenContainingFolder(path string) error {
+func OpenContainingFolder(ctx context.Context, path string) error {
 	if path == "" {
-		return fmt.Errorf("path is empty")
+		return errors.New("path is empty")
 	}
 
 	targetPath := path
@@ -47,11 +49,11 @@ func OpenContainingFolder(path string) error {
 		return err
 	}
 
-	return openWithSystem(targetPath)
+	return openWithSystem(ctx, targetPath)
 }
 
-func openWithSystem(path string) error {
-	cmd := buildOpenCommand(path)
+func openWithSystem(ctx context.Context, path string) error {
+	cmd := buildOpenCommand(ctx, path)
 	err := cmd.Start()
 	if err == nil {
 		go func() {
@@ -61,21 +63,21 @@ func openWithSystem(path string) error {
 	return err
 }
 
-func buildOpenCommand(path string) *exec.Cmd {
+func buildOpenCommand(ctx context.Context, path string) *exec.Cmd {
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.Command("open", path)
+		return exec.CommandContext(ctx, "open", path) //nolint:gosec // internal shell command
 	case "windows":
-		return exec.Command("cmd", "/c", "start", "", path)
+		return exec.CommandContext(ctx, "cmd", "/c", "start", "", path) //nolint:gosec // internal shell command
 	default:
-		return exec.Command("xdg-open", path)
+		return exec.CommandContext(ctx, "xdg-open", path) //nolint:gosec // internal shell command
 	}
 }
 
 // OpenBrowser opens a URL in the system's default web browser.
-func OpenBrowser(url string) error {
+func OpenBrowser(ctx context.Context, url string) error {
 	if url == "" {
-		return fmt.Errorf("url is empty")
+		return errors.New("url is empty")
 	}
-	return openWithSystem(url)
+	return openWithSystem(ctx, url)
 }

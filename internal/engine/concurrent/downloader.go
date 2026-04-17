@@ -3,6 +3,7 @@ package concurrent
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -21,16 +22,16 @@ import (
 
 // ConcurrentDownloader handles multi-connection downloads
 type ConcurrentDownloader struct {
-	ProgressChan chan<- any           // Channel for events (start/complete/error)
-	ID           string               // Download ID
-	State        *types.ProgressState // Shared state for TUI polling
-	activeTasks  map[int]*ActiveTask
-	activeMu     sync.Mutex
-	URL          string // For pause/resume
-	DestPath     string // For pause/resume
-	Runtime      *types.RuntimeConfig
 	bufPool      sync.Pool
-	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
+	ProgressChan chan<- any
+	State        *types.ProgressState
+	activeTasks  map[int]*ActiveTask
+	Runtime      *types.RuntimeConfig
+	Headers      map[string]string
+	ID           string
+	URL          string
+	DestPath     string
+	activeMu     sync.Mutex
 }
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
@@ -72,7 +73,7 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 
 	// 1. Calculate ideal workers using the Square Root heuristic
 	// Convert to float first to avoid integer truncation on small files
-	sizeMB := float64(fileSize) / float64(types.MB)
+	sizeMB := float64(fileSize) //nolint:gosec // int64 to float64 is safe for size calculations / float64(types.MB)
 	calculatedWorkers := int(math.Round(math.Sqrt(sizeMB)))
 
 	// 2. Hard constraint: Don't create chunks smaller than MinChunkSize
@@ -99,7 +100,7 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 }
 
 // ReportMirrorError marks a mirror as having an error in the state
-func (d *ConcurrentDownloader) ReportMirrorError(url string) {
+func (d *ConcurrentDownloader) ReportMirrorError(rawURL string) {
 	if d.State == nil {
 		return
 	}
@@ -107,7 +108,7 @@ func (d *ConcurrentDownloader) ReportMirrorError(url string) {
 	mirrors := d.State.GetMirrors()
 	changed := false
 	for i, m := range mirrors {
-		if m.URL == url && !m.Error {
+		if m.URL == rawURL && !m.Error {
 			mirrors[i].Error = true
 			changed = true
 			break
@@ -239,7 +240,7 @@ func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 		// Since these headers were explicitly provided by the browser for this download, we forward them.
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
+				return errors.New("stopped after 10 redirects")
 			}
 			// Copy headers from original request to redirect request
 			if len(via) > 0 {
@@ -258,7 +259,7 @@ func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 
 // Download downloads a file using multiple concurrent connections
 // Uses pre-probed metadata (file size already known)
-func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, candidateMirrors []string, activeMirrors []string, destPath string, fileSize int64) error {
+func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, candidateMirrors, activeMirrors []string, destPath string, fileSize int64) error {
 	utils.Debug("ConcurrentDownloader.Download: %s -> %s (size: %d, mirrors: %d)", rawurl, destPath, fileSize, len(activeMirrors))
 
 	// Store URL and path for pause/resume (final path without .surge)
@@ -343,19 +344,19 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	}
 
 	// Open existing output file with .surge suffix (must be created by processing layer)
-	outFile, err := os.OpenFile(workingPath, os.O_RDWR, 0)
+	outFile, err := os.OpenFile(workingPath, os.O_RDWR, 0) //nolint:gosec // internal download path
 	if err != nil {
 		return fmt.Errorf("failed to open working file: %w", err)
 	}
 	defer func() {
-		if err := outFile.Close(); err != nil {
-			utils.Debug("Error closing file: %v", err)
+		if cErr := outFile.Close(); cErr != nil {
+			utils.Debug("Error closing file: %v", cErr)
 		}
 	}()
 	finalizeCompletedDownload := func() error {
 		// Final sync
-		if err := outFile.Sync(); err != nil {
-			return fmt.Errorf("failed to sync file: %w", err)
+		if sErr := outFile.Sync(); sErr != nil {
+			return fmt.Errorf("failed to sync file: %w", sErr)
 		}
 
 		// Close file before renaming
@@ -367,7 +368,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	tasks := createTasks(fileSize, chunkSize)
 
 	// Check for saved state BEFORE truncating (resume case)
-	savedState, err := state.LoadState(rawurl, destPath)
+	savedState, err := state.LoadState(ctx, rawurl, destPath)
 	isResume := err == nil && savedState != nil && len(savedState.Tasks) > 0
 
 	if isResume {
@@ -504,7 +505,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		go func(workerID int) {
 			defer wg.Done()
 			err := d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
-			if err != nil && err != context.Canceled {
+			if err != nil && !errors.Is(err, context.Canceled) {
 				workerErrors <- err
 			}
 		}(i)
@@ -627,7 +628,7 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 			mirror := mirrors[idx%len(mirrors)]
 
 			// Use a fast Range request to ensure the handshake completes
-			req, err := http.NewRequestWithContext(pingCtx, http.MethodGet, mirror, nil)
+			req, err := http.NewRequestWithContext(pingCtx, http.MethodGet, mirror, http.NoBody)
 			if err != nil {
 				return
 			}

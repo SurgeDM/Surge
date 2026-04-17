@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -49,8 +50,10 @@ func (m *RootModel) refreshLogViewportContent() {
 	// Bottom-align entries if they don't fill the viewport
 	height := m.logViewport.Height()
 	if height > 0 && len(wrappedEntries) < height {
-		padding := make([]string, height-len(wrappedEntries))
-		wrappedEntries = append(padding, wrappedEntries...)
+		paddingCount := height - len(wrappedEntries)
+		paddedEntries := make([]string, height)
+		copy(paddedEntries[paddingCount:], wrappedEntries)
+		wrappedEntries = paddedEntries
 	}
 
 	m.logViewport.SetContent(strings.Join(wrappedEntries, "\n"))
@@ -72,23 +75,23 @@ func (m *RootModel) handleFilePickerSelection(path string) (tea.Model, tea.Cmd) 
 	if m.SettingsFileBrowsing {
 		m.Settings.General.DefaultDownloadDir = path
 		m.SettingsFileBrowsing = false
-		m.state = SettingsState
+		m.uiState = SettingsState
 		return m, nil
 	}
 	if m.ExtensionFileBrowsing {
 		m.inputs[2].SetValue(path)
 		m.ExtensionFileBrowsing = false
-		m.state = ExtensionConfirmationState
+		m.uiState = ExtensionConfirmationState
 		return m, nil
 	}
 	if m.catMgrFileBrowsing {
 		m.catMgrInputs[3].SetValue(path)
 		m.catMgrFileBrowsing = false
-		m.state = CategoryManagerState
+		m.uiState = CategoryManagerState
 		return m, nil
 	}
 	m.inputs[2].SetValue(path)
-	m.state = InputState
+	m.uiState = InputState
 	return m, nil
 }
 
@@ -109,7 +112,7 @@ func (m *RootModel) resetFilepickerToDirMode() {
 }
 
 // checkForDuplicate checks if a compatible download already exists
-func (m RootModel) checkForDuplicate(url string) *processing.DuplicateResult {
+func (m *RootModel) checkForDuplicate(url string) *processing.DuplicateResult {
 	activeDownloads := func() map[string]*types.DownloadConfig {
 		active := make(map[string]*types.DownloadConfig)
 		for _, d := range m.downloads {
@@ -125,7 +128,7 @@ func (m RootModel) checkForDuplicate(url string) *processing.DuplicateResult {
 		}
 		return active
 	}
-	return processing.CheckForDuplicate(url, m.Settings, activeDownloads)
+	return processing.CheckForDuplicate(context.Background(), url, m.Settings, activeDownloads)
 }
 
 // renderEmptyMessage provides a consistent visual for "no data" states in dashboard panes.

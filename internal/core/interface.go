@@ -11,31 +11,31 @@ import (
 // and a remote daemon connection.
 type DownloadService interface {
 	// List returns the status of all active and completed downloads.
-	List() ([]types.DownloadStatus, error)
+	List(ctx context.Context) ([]types.DownloadStatus, error)
 
 	// History returns completed downloads
-	History() ([]types.DownloadEntry, error)
+	History(ctx context.Context) ([]types.DownloadEntry, error)
 
 	// Add queues a new download.
-	Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error)
+	Add(ctx context.Context, url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error)
 
 	// AddWithID queues a new download with a caller-provided ID.
-	AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error)
+	AddWithID(ctx context.Context, url string, path string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error)
 
 	// Pause pauses an active download.
-	Pause(id string) error
+	Pause(ctx context.Context, id string) error
 
 	// Resume resumes a paused download.
-	Resume(id string) error
+	Resume(ctx context.Context, id string) error
 
 	// ResumeBatch resumes multiple paused downloads efficiently.
-	ResumeBatch(ids []string) []error
+	ResumeBatch(ctx context.Context, ids []string) []error
 
 	// UpdateURL updates the URL of a paused or errored download
-	UpdateURL(id string, newURL string) error
+	UpdateURL(ctx context.Context, id string, newURL string) error
 
 	// Delete cancels and removes a download.
-	Delete(id string) error
+	Delete(ctx context.Context, id string) error
 
 	// StreamEvents returns a channel that receives real-time download events.
 	// For local mode, this is a direct channel.
@@ -46,7 +46,7 @@ type DownloadService interface {
 	Publish(msg interface{}) error
 
 	// GetStatus returns a status for a single download by id.
-	GetStatus(id string) (*types.DownloadStatus, error)
+	GetStatus(ctx context.Context, id string) (*types.DownloadStatus, error)
 
 	// Shutdown handles graceful shutdown of the service
 	Shutdown() error

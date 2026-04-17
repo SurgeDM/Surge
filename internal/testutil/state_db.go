@@ -1,6 +1,7 @@
 package testutil
 
 import (
+	"context"
 	"path/filepath"
 	"testing"
 
@@ -26,7 +27,7 @@ func SetupStateDB(t *testing.T) string {
 	tempDir := t.TempDir()
 	state.CloseDB()
 	state.Configure(filepath.Join(tempDir, "surge.db"))
-	if _, err := state.GetDB(); err != nil {
+	if _, err := state.GetDB(context.Background()); err != nil {
 		t.Fatalf("failed to initialize db: %v", err)
 	}
 	t.Cleanup(state.CloseDB)
@@ -34,9 +35,9 @@ func SetupStateDB(t *testing.T) string {
 }
 
 // SeedMasterList inserts a DownloadEntry into the master list for test setups.
-func SeedMasterList(t *testing.T, entry types.DownloadEntry) {
+func SeedMasterList(t *testing.T, entry *types.DownloadEntry) {
 	t.Helper()
-	if err := state.AddToMasterList(entry); err != nil {
+	if err := state.AddToMasterList(context.Background(), entry); err != nil {
 		t.Fatalf("SeedMasterList failed: %v", err)
 	}
 }

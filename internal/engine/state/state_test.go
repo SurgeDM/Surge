@@ -1,7 +1,9 @@
 package state
 
 import (
+	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,7 +34,7 @@ func setupTestDB(t *testing.T) string {
 	Configure(dbPath)
 
 	// Initialize DB
-	if err := initDB(); err != nil {
+	if err := initDB(context.Background()); err != nil {
 		t.Fatalf("Failed to init DB: %v", err)
 	}
 
@@ -96,12 +98,12 @@ func TestSaveLoadState(t *testing.T) {
 	}
 
 	// Save state
-	if err := SaveState(testURL, testDestPath, originalState); err != nil {
+	if err := SaveState(context.Background(), testURL, testDestPath, originalState); err != nil {
 		t.Fatalf("SaveState failed: %v", err)
 	}
 
 	// Load state
-	loadedState, err := LoadState(testURL, testDestPath)
+	loadedState, err := LoadState(context.Background(), testURL, testDestPath)
 	if err != nil {
 		t.Fatalf("LoadState failed: %v", err)
 	}
@@ -141,7 +143,7 @@ func TestSaveStateWithOptions_ComputesHashForSmallFile(t *testing.T) {
 	testDestPath := filepath.Join(tmpDir, "hash-small.zip")
 	surgePath := testDestPath + types.IncompleteSuffix
 	content := []byte("small paused content")
-	if err := os.WriteFile(surgePath, content, 0o644); err != nil {
+	if err := os.WriteFile(surgePath, content, 0o600); err != nil {
 		t.Fatalf("failed to write .surge file: %v", err)
 	}
 	expectedHash, timedOut, err := computeFileHashMD5WithTimeout(surgePath, time.Second)
@@ -164,14 +166,14 @@ func TestSaveStateWithOptions_ComputesHashForSmallFile(t *testing.T) {
 		},
 	}
 
-	err = SaveStateWithOptions(testURL, testDestPath, downloadState, SaveStateOptions{
+	err = SaveStateWithOptions(context.Background(), testURL, testDestPath, downloadState, SaveStateOptions{
 		InlineHashTimeout: time.Second,
 	})
 	if err != nil {
 		t.Fatalf("SaveStateWithOptions failed: %v", err)
 	}
 
-	loaded, err := LoadState(testURL, testDestPath)
+	loaded, err := LoadState(context.Background(), testURL, testDestPath)
 	if err != nil {
 		t.Fatalf("LoadState failed: %v", err)
 	}
@@ -189,7 +191,7 @@ func TestSaveStateWithOptions_SkipsHashOnTimeoutButPersistsState(t *testing.T) {
 	testDestPath := filepath.Join(tmpDir, "hash-large.zip")
 	surgePath := testDestPath + types.IncompleteSuffix
 	content := make([]byte, 256*1024)
-	if err := os.WriteFile(surgePath, content, 0o644); err != nil {
+	if err := os.WriteFile(surgePath, content, 0o600); err != nil {
 		t.Fatalf("failed to write .surge file: %v", err)
 	}
 
@@ -206,14 +208,14 @@ func TestSaveStateWithOptions_SkipsHashOnTimeoutButPersistsState(t *testing.T) {
 		},
 	}
 
-	err := SaveStateWithOptions(testURL, testDestPath, downloadState, SaveStateOptions{
+	err := SaveStateWithOptions(context.Background(), testURL, testDestPath, downloadState, SaveStateOptions{
 		InlineHashTimeout: time.Nanosecond, // force timeout/skip
 	})
 	if err != nil {
 		t.Fatalf("SaveStateWithOptions failed: %v", err)
 	}
 
-	loaded, err := LoadState(testURL, testDestPath)
+	loaded, err := LoadState(context.Background(), testURL, testDestPath)
 	if err != nil {
 		t.Fatalf("LoadState failed: %v", err)
 	}
@@ -224,7 +226,7 @@ func TestSaveStateWithOptions_SkipsHashOnTimeoutButPersistsState(t *testing.T) {
 		t.Fatalf("Tasks count = %d, want 2", len(loaded.Tasks))
 	}
 
-	entry, err := GetDownload(downloadState.ID)
+	entry, err := GetDownload(context.Background(), downloadState.ID)
 	if err != nil {
 		t.Fatalf("GetDownload failed: %v", err)
 	}
@@ -253,27 +255,26 @@ func TestDeleteState(t *testing.T) {
 	}
 
 	// Save state
-	if err := SaveState(testURL, testDestPath, state); err != nil {
+	if err := SaveState(context.Background(), testURL, testDestPath, state); err != nil {
 		t.Fatalf("SaveState failed: %v", err)
 	}
 
 	// Verify it was saved
-	if _, err := LoadState(testURL, testDestPath); err != nil {
+	if _, err := LoadState(context.Background(), testURL, testDestPath); err != nil {
 		t.Fatalf("State was not saved properly: %v", err)
 	}
 
 	// Delete state
-	if err := DeleteState(id); err != nil {
+	if err := DeleteState(context.Background(), id); err != nil {
 		t.Fatalf("DeleteState failed: %v", err)
 	}
 
 	// Verify it was deleted
-	_, err := LoadState(testURL, testDestPath)
-	switch err {
-	case nil:
+	_, err := LoadState(context.Background(), testURL, testDestPath)
+	switch {
+	case err == nil:
 		t.Error("LoadState should fail after DeleteState")
-	case sql.ErrNoRows:
-		// Acceptable error
+	case errors.Is(err, sql.ErrNoRows):
 	}
 }
 
@@ -296,7 +297,7 @@ func TestStateOverwrite(t *testing.T) {
 		Tasks:      []types.Task{{Offset: 300000, Length: 700000}},
 		Filename:   "overwrite-test.zip",
 	}
-	if err := SaveState(testURL, testDestPath, state1); err != nil {
+	if err := SaveState(context.Background(), testURL, testDestPath, state1); err != nil {
 		t.Fatalf("First SaveState failed: %v", err)
 	}
 
@@ -310,12 +311,12 @@ func TestStateOverwrite(t *testing.T) {
 		Tasks:      []types.Task{{Offset: 800000, Length: 200000}},
 		Filename:   "overwrite-test.zip",
 	}
-	if err := SaveState(testURL, testDestPath, state2); err != nil {
+	if err := SaveState(context.Background(), testURL, testDestPath, state2); err != nil {
 		t.Fatalf("Second SaveState failed: %v", err)
 	}
 
 	// Load and verify it's 80%, not 30%
-	loaded, err := LoadState(testURL, testDestPath)
+	loaded, err := LoadState(context.Background(), testURL, testDestPath)
 	if err != nil {
 		t.Fatalf("LoadState failed: %v", err)
 	}
@@ -369,18 +370,18 @@ func TestDuplicateURLStateIsolation(t *testing.T) {
 	}
 
 	// Save all three states
-	if err := SaveState(testURL, dest1, state1); err != nil {
+	if err := SaveState(context.Background(), testURL, dest1, state1); err != nil {
 		t.Fatalf("SaveState 1 failed: %v", err)
 	}
-	if err := SaveState(testURL, dest2, state2); err != nil {
+	if err := SaveState(context.Background(), testURL, dest2, state2); err != nil {
 		t.Fatalf("SaveState 2 failed: %v", err)
 	}
-	if err := SaveState(testURL, dest3, state3); err != nil {
+	if err := SaveState(context.Background(), testURL, dest3, state3); err != nil {
 		t.Fatalf("SaveState 3 failed: %v", err)
 	}
 
 	// Load and verify each has its correct state
-	loaded1, err := LoadState(testURL, dest1)
+	loaded1, err := LoadState(context.Background(), testURL, dest1)
 	if err != nil {
 		t.Fatalf("LoadState 1 failed: %v", err)
 	}
@@ -391,7 +392,7 @@ func TestDuplicateURLStateIsolation(t *testing.T) {
 		t.Errorf("State 1 DestPath = %s, want %s", loaded1.DestPath, dest1)
 	}
 
-	loaded2, err := LoadState(testURL, dest2)
+	loaded2, err := LoadState(context.Background(), testURL, dest2)
 	if err != nil {
 		t.Fatalf("LoadState 2 failed: %v", err)
 	}
@@ -402,7 +403,7 @@ func TestDuplicateURLStateIsolation(t *testing.T) {
 		t.Errorf("State 2 DestPath = %s, want %s", loaded2.DestPath, dest2)
 	}
 
-	loaded3, err := LoadState(testURL, dest3)
+	loaded3, err := LoadState(context.Background(), testURL, dest3)
 	if err != nil {
 		t.Fatalf("LoadState 3 failed: %v", err)
 	}
@@ -432,21 +433,21 @@ func TestUpdateStatus(t *testing.T) {
 		Status:   "downloading",
 	}
 
-	if err := AddToMasterList(entry); err != nil {
+	if err := AddToMasterList(context.Background(), &entry); err != nil {
 		t.Fatalf("AddToMasterList failed: %v", err)
 	}
-	d := getDBHelper()
-	if _, err := d.Exec("INSERT INTO tasks (download_id, offset, length) VALUES (?, ?, ?)", entry.ID, 0, 100); err != nil {
+	d := getDBHelper(context.Background())
+	if _, err := d.ExecContext(context.Background(), "INSERT INTO tasks (download_id, offset, length) VALUES (?, ?, ?)", entry.ID, 0, 100); err != nil {
 		t.Fatalf("failed to seed task row: %v", err)
 	}
 
 	// Update status to paused
-	if err := UpdateStatus(id, "paused"); err != nil {
+	if err := UpdateStatus(context.Background(), id, "paused"); err != nil {
 		t.Fatalf("UpdateStatus failed: %v", err)
 	}
 
 	// Verify
-	loaded, err := GetDownload(id)
+	loaded, err := GetDownload(context.Background(), id)
 	if err != nil {
 		t.Fatalf("GetDownload failed: %v", err)
 	}
@@ -460,9 +461,18 @@ func TestUpdateStatus_NotFound(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 	defer CloseDB()
 
-	err := UpdateStatus("nonexistent-id", "paused")
+	err := UpdateStatus(context.Background(), "nonexistent-id", "paused")
 	if err == nil {
 		t.Error("UpdateStatus should fail for nonexistent ID")
+	}
+}
+
+func seedTestDownloads(t *testing.T, entries []types.DownloadEntry) {
+	t.Helper()
+	for i := range entries {
+		if err := AddToMasterList(context.Background(), &entries[i]); err != nil {
+			t.Fatalf("AddToMasterList failed: %v", err)
+		}
 	}
 }
 
@@ -470,86 +480,52 @@ func TestUpdateStatus_NotFound(t *testing.T) {
 // PauseAllDownloads Tests
 // =============================================================================
 
-func TestPauseAllDownloads(t *testing.T) {
+func runBatchStatusTest(t *testing.T, initialEntries []types.DownloadEntry, action func(context.Context) error, expectedStatus map[string]string) {
+	t.Helper()
 	tmpDir := setupTestDB(t)
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 	defer CloseDB()
 
-	// Add downloads with various statuses
-	entries := []types.DownloadEntry{
-		{ID: "dl-1", URL: "https://a.com/1", DestPath: "/tmp/1", Status: "downloading"},
-		{ID: "dl-2", URL: "https://a.com/2", DestPath: "/tmp/2", Status: "queued"},
-		{ID: "dl-3", URL: "https://a.com/3", DestPath: "/tmp/3", Status: "completed"},
+	seedTestDownloads(t, initialEntries)
+
+	if err := action(context.Background()); err != nil {
+		t.Fatalf("Action failed: %v", err)
 	}
 
-	for _, e := range entries {
-		if err := AddToMasterList(e); err != nil {
-			t.Fatalf("AddToMasterList failed: %v", err)
+	for id, expected := range expectedStatus {
+		dl, err := GetDownload(context.Background(), id)
+		if err != nil {
+			t.Errorf("GetDownload(context.Background(), %s) failed: %v", id, err)
+			continue
 		}
-	}
-
-	// Pause all
-	if err := PauseAllDownloads(); err != nil {
-		t.Fatalf("PauseAllDownloads failed: %v", err)
-	}
-
-	// Verify non-completed are paused
-	dl1, _ := GetDownload("dl-1")
-	dl2, _ := GetDownload("dl-2")
-	dl3, _ := GetDownload("dl-3")
-
-	if dl1.Status != "paused" {
-		t.Errorf("dl-1 status = %s, want 'paused'", dl1.Status)
-	}
-	if dl2.Status != "paused" {
-		t.Errorf("dl-2 status = %s, want 'paused'", dl2.Status)
-	}
-	if dl3.Status != "completed" {
-		t.Errorf("dl-3 status = %s, want 'completed' (should not change)", dl3.Status)
+		if dl.Status != expected {
+			t.Errorf("%s status = %s, want %s", id, dl.Status, expected)
+		}
 	}
 }
 
-// =============================================================================
-// ResumeAllDownloads Tests
-// =============================================================================
+func TestPauseAllDownloads(t *testing.T) {
+	runBatchStatusTest(t,
+		[]types.DownloadEntry{
+			{ID: "dl-1", URL: "https://a.com/1", DestPath: "/tmp/1", Status: "downloading"},
+			{ID: "dl-2", URL: "https://a.com/2", DestPath: "/tmp/2", Status: "queued"},
+			{ID: "dl-3", URL: "https://a.com/3", DestPath: "/tmp/3", Status: "completed"},
+		},
+		PauseAllDownloads,
+		map[string]string{"dl-1": "paused", "dl-2": "paused", "dl-3": "completed"},
+	)
+}
 
 func TestResumeAllDownloads(t *testing.T) {
-	tmpDir := setupTestDB(t)
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-	defer CloseDB()
-
-	// Add paused and other downloads
-	entries := []types.DownloadEntry{
-		{ID: "dl-1", URL: "https://b.com/1", DestPath: "/tmp/1", Status: "paused"},
-		{ID: "dl-2", URL: "https://b.com/2", DestPath: "/tmp/2", Status: "paused"},
-		{ID: "dl-3", URL: "https://b.com/3", DestPath: "/tmp/3", Status: "completed"},
-	}
-
-	for _, e := range entries {
-		if err := AddToMasterList(e); err != nil {
-			t.Fatalf("AddToMasterList failed: %v", err)
-		}
-	}
-
-	// Resume all
-	if err := ResumeAllDownloads(); err != nil {
-		t.Fatalf("ResumeAllDownloads failed: %v", err)
-	}
-
-	// Verify paused are now queued
-	dl1, _ := GetDownload("dl-1")
-	dl2, _ := GetDownload("dl-2")
-	dl3, _ := GetDownload("dl-3")
-
-	if dl1.Status != "queued" {
-		t.Errorf("dl-1 status = %s, want 'queued'", dl1.Status)
-	}
-	if dl2.Status != "queued" {
-		t.Errorf("dl-2 status = %s, want 'queued'", dl2.Status)
-	}
-	if dl3.Status != "completed" {
-		t.Errorf("dl-3 status = %s, want 'completed' (should not change)", dl3.Status)
-	}
+	runBatchStatusTest(t,
+		[]types.DownloadEntry{
+			{ID: "dl-1", URL: "https://b.com/1", DestPath: "/tmp/1", Status: "paused"},
+			{ID: "dl-2", URL: "https://b.com/2", DestPath: "/tmp/2", Status: "paused"},
+			{ID: "dl-3", URL: "https://b.com/3", DestPath: "/tmp/3", Status: "completed"},
+		},
+		ResumeAllDownloads,
+		map[string]string{"dl-1": "queued", "dl-2": "queued", "dl-3": "completed"},
+	)
 }
 
 // =============================================================================
@@ -568,13 +544,13 @@ func TestListAllDownloads(t *testing.T) {
 	}
 
 	for _, e := range entries {
-		if err := AddToMasterList(e); err != nil {
+		if err := AddToMasterList(context.Background(), &e); err != nil {
 			t.Fatalf("AddToMasterList failed: %v", err)
 		}
 	}
 
 	// List all
-	downloads, err := ListAllDownloads()
+	downloads, err := ListAllDownloads(context.Background())
 	if err != nil {
 		t.Fatalf("ListAllDownloads failed: %v", err)
 	}
@@ -589,7 +565,7 @@ func TestListAllDownloads_Empty(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 	defer CloseDB()
 
-	downloads, err := ListAllDownloads()
+	downloads, err := ListAllDownloads(context.Background())
 	if err != nil {
 		t.Fatalf("ListAllDownloads failed: %v", err)
 	}
@@ -616,13 +592,13 @@ func TestRemoveCompletedDownloads(t *testing.T) {
 	}
 
 	for _, e := range entries {
-		if err := AddToMasterList(e); err != nil {
+		if err := AddToMasterList(context.Background(), &e); err != nil {
 			t.Fatalf("AddToMasterList failed: %v", err)
 		}
 	}
 
 	// Remove completed
-	count, err := RemoveCompletedDownloads()
+	count, err := RemoveCompletedDownloads(context.Background())
 	if err != nil {
 		t.Fatalf("RemoveCompletedDownloads failed: %v", err)
 	}
@@ -632,7 +608,7 @@ func TestRemoveCompletedDownloads(t *testing.T) {
 	}
 
 	// Verify only paused remains
-	downloads, _ := ListAllDownloads()
+	downloads, _ := ListAllDownloads(context.Background())
 	if len(downloads) != 1 {
 		t.Errorf("Expected 1 download remaining, got %d", len(downloads))
 	}
@@ -664,21 +640,19 @@ func TestMirrorsPersistence(t *testing.T) {
 		Mirrors:    mirrors,
 	}
 
-	if err := SaveState(testURL, testDestPath, state); err != nil {
+	if err := SaveState(context.Background(), testURL, testDestPath, state); err != nil {
 		t.Fatalf("SaveState failed: %v", err)
 	}
 
-	loadedState, err := LoadState(testURL, testDestPath)
+	loadedState, err := LoadState(context.Background(), testURL, testDestPath)
 	if err != nil {
 		t.Fatalf("LoadState failed: %v", err)
 	}
 
 	if len(loadedState.Mirrors) != 2 {
 		t.Errorf("Loaded mirrors count = %d, want 2", len(loadedState.Mirrors))
-	} else {
-		if loadedState.Mirrors[0] != mirrors[0] || loadedState.Mirrors[1] != mirrors[1] {
-			t.Errorf("Loaded mirrors mismatch: %v", loadedState.Mirrors)
-		}
+	} else if loadedState.Mirrors[0] != mirrors[0] || loadedState.Mirrors[1] != mirrors[1] {
+		t.Errorf("Loaded mirrors mismatch: %v", loadedState.Mirrors)
 	}
 
 	// 2. Test DownloadEntry (Master List / Completed)
@@ -693,12 +667,12 @@ func TestMirrorsPersistence(t *testing.T) {
 		CompletedAt: time.Now().Unix(),
 	}
 
-	if err := AddToMasterList(entry); err != nil {
-		t.Fatalf("AddToMasterList failed: %v", err)
+	if rErr := AddToMasterList(context.Background(), &entry); rErr != nil {
+		t.Fatalf("AddToMasterList failed: %v", rErr)
 	}
 
-	loadedEntries, err := LoadCompletedDownloads()
-	if err != nil {
+	loadedEntries, rErr := LoadCompletedDownloads(context.Background())
+	if rErr != nil {
 		t.Fatalf("LoadCompletedDownloads failed: %v", err)
 	}
 
@@ -708,10 +682,8 @@ func TestMirrorsPersistence(t *testing.T) {
 			foundVal = true
 			if len(e.Mirrors) != 2 {
 				t.Errorf("Entry mirrors count = %d, want 2", len(e.Mirrors))
-			} else {
-				if e.Mirrors[0] != mirrors[0] || e.Mirrors[1] != mirrors[1] {
-					t.Errorf("Entry mirrors mismatch: %v", e.Mirrors)
-				}
+			} else if e.Mirrors[0] != mirrors[0] || e.Mirrors[1] != mirrors[1] {
+				t.Errorf("Entry mirrors mismatch: %v", e.Mirrors)
 			}
 			break
 		}
@@ -739,18 +711,18 @@ func TestValidateIntegrity_MissingFile(t *testing.T) {
 		Filename: "missing.zip",
 		Status:   "paused",
 	}
-	if err := AddToMasterList(entry); err != nil {
+	if err := AddToMasterList(context.Background(), &entry); err != nil {
 		t.Fatalf("AddToMasterList failed: %v", err)
 	}
 
 	// Verify entry exists
-	dl, err := GetDownload("integrity-missing")
+	dl, err := GetDownload(context.Background(), "integrity-missing")
 	if err != nil || dl == nil {
 		t.Fatalf("Expected entry to exist before integrity check")
 	}
 
 	// Run integrity check — file is missing, entry should be removed
-	removed, err := ValidateIntegrity()
+	removed, err := ValidateIntegrity(context.Background())
 	if err != nil {
 		t.Fatalf("ValidateIntegrity failed: %v", err)
 	}
@@ -759,7 +731,7 @@ func TestValidateIntegrity_MissingFile(t *testing.T) {
 	}
 
 	// Verify entry is gone
-	dl, err = GetDownload("integrity-missing")
+	dl, err = GetDownload(context.Background(), "integrity-missing")
 	if err != nil {
 		t.Fatalf("GetDownload failed: %v", err)
 	}
@@ -767,9 +739,9 @@ func TestValidateIntegrity_MissingFile(t *testing.T) {
 		t.Error("Entry should have been removed after integrity check")
 	}
 
-	d := getDBHelper()
+	d := getDBHelper(context.Background())
 	var taskCount int
-	if err := d.QueryRow("SELECT COUNT(*) FROM tasks WHERE download_id = ?", entry.ID).Scan(&taskCount); err != nil {
+	if err := d.QueryRowContext(context.Background(), "SELECT COUNT(*) FROM tasks WHERE download_id = ?", entry.ID).Scan(&taskCount); err != nil {
 		t.Fatalf("failed to count tasks: %v", err)
 	}
 	if taskCount != 0 {
@@ -787,7 +759,7 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 
 	// Create a .surge file with known content
 	content := []byte("hello world test content")
-	if err := os.WriteFile(surgePath, content, 0o644); err != nil {
+	if err := os.WriteFile(surgePath, content, 0o600); err != nil {
 		t.Fatalf("Failed to create .surge file: %v", err)
 	}
 
@@ -798,25 +770,25 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 	}
 
 	// Insert a paused download with correct file hash
-	if err := AddToMasterList(types.DownloadEntry{
+	if cErr := AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:       "integrity-valid",
 		URL:      "https://example.com/valid.zip",
 		DestPath: destPath,
 		Filename: "valid.zip",
 		Status:   "paused",
-	}); err != nil {
-		t.Fatalf("AddToMasterList failed: %v", err)
+	}); cErr != nil {
+		t.Fatalf("AddToMasterList failed: %v", cErr)
 	}
 
 	// Set file_hash directly in DB (simulating SaveState having computed it)
-	d := getDBHelper()
-	_, err = d.Exec("UPDATE downloads SET file_hash = ? WHERE id = ?", expectedHash, "integrity-valid")
+	d := getDBHelper(context.Background())
+	_, err = d.ExecContext(context.Background(), "UPDATE downloads SET file_hash = ? WHERE id = ?", expectedHash, "integrity-valid")
 	if err != nil {
 		t.Fatalf("Failed to set file_hash: %v", err)
 	}
 
 	// Run integrity check — file exists with matching hash, should keep it
-	removed, err := ValidateIntegrity()
+	removed, err := ValidateIntegrity(context.Background())
 	if err != nil {
 		t.Fatalf("ValidateIntegrity failed: %v", err)
 	}
@@ -825,7 +797,7 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 	}
 
 	// Verify entry still exists
-	dl, _ := GetDownload("integrity-valid")
+	dl, _ := GetDownload(context.Background(), "integrity-valid")
 	if dl == nil {
 		t.Error("Valid entry should not have been removed")
 	}
@@ -845,12 +817,12 @@ func TestValidateIntegrity_TamperedFile(t *testing.T) {
 	surgePath := destPath + types.IncompleteSuffix
 
 	// Create a .surge file
-	if err := os.WriteFile(surgePath, []byte("original content"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("original content"), 0o600); err != nil {
 		t.Fatalf("Failed to create .surge file: %v", err)
 	}
 
 	// Insert entry with a WRONG hash (simulating tampering)
-	if err := AddToMasterList(types.DownloadEntry{
+	if err := AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:       "integrity-tampered",
 		URL:      "https://example.com/tampered.zip",
 		DestPath: destPath,
@@ -861,11 +833,11 @@ func TestValidateIntegrity_TamperedFile(t *testing.T) {
 	}
 
 	// Set a fake hash that won't match the file content
-	d := getDBHelper()
-	_, _ = d.Exec("UPDATE downloads SET file_hash = ? WHERE id = ?", "0000000000000000000000000000000000000000000000000000000000000000", "integrity-tampered")
+	d := getDBHelper(context.Background())
+	_, _ = d.ExecContext(context.Background(), "UPDATE downloads SET file_hash = ? WHERE id = ?", "0000000000000000000000000000000000000000000000000000000000000000", "integrity-tampered")
 
 	// Run integrity check — hash mismatch, entry AND file should be removed
-	removed, err := ValidateIntegrity()
+	removed, err := ValidateIntegrity(context.Background())
 	if err != nil {
 		t.Fatalf("ValidateIntegrity failed: %v", err)
 	}
@@ -874,7 +846,7 @@ func TestValidateIntegrity_TamperedFile(t *testing.T) {
 	}
 
 	// Verify entry is gone
-	dl, _ := GetDownload("integrity-tampered")
+	dl, _ := GetDownload(context.Background(), "integrity-tampered")
 	if dl != nil {
 		t.Error("Tampered entry should have been removed")
 	}
@@ -891,7 +863,7 @@ func TestValidateIntegrity_CompletedIgnored(t *testing.T) {
 	defer CloseDB()
 
 	// Insert a completed download — should NOT be touched by integrity check
-	if err := AddToMasterList(types.DownloadEntry{
+	if err := AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:          "integrity-completed",
 		URL:         "https://example.com/done.zip",
 		DestPath:    filepath.Join(tmpDir, "done.zip"),
@@ -902,7 +874,7 @@ func TestValidateIntegrity_CompletedIgnored(t *testing.T) {
 		t.Fatalf("AddToMasterList failed: %v", err)
 	}
 
-	removed, err := ValidateIntegrity()
+	removed, err := ValidateIntegrity(context.Background())
 	if err != nil {
 		t.Fatalf("ValidateIntegrity failed: %v", err)
 	}
@@ -911,7 +883,7 @@ func TestValidateIntegrity_CompletedIgnored(t *testing.T) {
 	}
 
 	// Verify entry still exists
-	dl, _ := GetDownload("integrity-completed")
+	dl, _ := GetDownload(context.Background(), "integrity-completed")
 	if dl == nil {
 		t.Error("Completed entry should not have been affected")
 	}
@@ -924,7 +896,7 @@ func TestValidateIntegrity_QueuedWithoutPartialFileRemoved(t *testing.T) {
 
 	destPath := filepath.Join(tmpDir, "queued-never-started.bin")
 
-	if err := AddToMasterList(types.DownloadEntry{
+	if err := AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:         "integrity-queued-fresh",
 		URL:        "https://example.com/queued-never-started.bin",
 		DestPath:   destPath,
@@ -936,7 +908,7 @@ func TestValidateIntegrity_QueuedWithoutPartialFileRemoved(t *testing.T) {
 		t.Fatalf("AddToMasterList failed: %v", err)
 	}
 
-	removed, err := ValidateIntegrity()
+	removed, err := ValidateIntegrity(context.Background())
 	if err != nil {
 		t.Fatalf("ValidateIntegrity failed: %v", err)
 	}
@@ -944,7 +916,7 @@ func TestValidateIntegrity_QueuedWithoutPartialFileRemoved(t *testing.T) {
 		t.Errorf("ValidateIntegrity removed = %d, want 1", removed)
 	}
 
-	dl, err := GetDownload("integrity-queued-fresh")
+	dl, err := GetDownload(context.Background(), "integrity-queued-fresh")
 	if err != nil {
 		t.Fatalf("GetDownload failed: %v", err)
 	}
@@ -959,7 +931,7 @@ func TestValidateIntegrity_DeletesOrphanSurgeFile(t *testing.T) {
 	defer CloseDB()
 
 	// Seed one normal completed entry so tmpDir is a known download directory.
-	if err := AddToMasterList(types.DownloadEntry{
+	if err := AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:          "integrity-known-dir",
 		URL:         "https://example.com/known.zip",
 		DestPath:    filepath.Join(tmpDir, "known.zip"),
@@ -971,11 +943,11 @@ func TestValidateIntegrity_DeletesOrphanSurgeFile(t *testing.T) {
 	}
 
 	orphanPath := filepath.Join(tmpDir, "orphan.bin"+types.IncompleteSuffix)
-	if err := os.WriteFile(orphanPath, []byte("orphan"), 0o644); err != nil {
+	if err := os.WriteFile(orphanPath, []byte("orphan"), 0o600); err != nil {
 		t.Fatalf("failed to create orphan .surge file: %v", err)
 	}
 
-	removed, err := ValidateIntegrity()
+	removed, err := ValidateIntegrity(context.Background())
 	if err != nil {
 		t.Fatalf("ValidateIntegrity failed: %v", err)
 	}
@@ -996,7 +968,7 @@ func TestValidateIntegrity_PreservesNonCompletedSurgeFile(t *testing.T) {
 	destPath := filepath.Join(tmpDir, "active.bin")
 	surgePath := destPath + types.IncompleteSuffix
 
-	if err := AddToMasterList(types.DownloadEntry{
+	if err := AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:       "integrity-active",
 		URL:      "https://example.com/active.bin",
 		DestPath: destPath,
@@ -1006,11 +978,11 @@ func TestValidateIntegrity_PreservesNonCompletedSurgeFile(t *testing.T) {
 		t.Fatalf("AddToMasterList failed: %v", err)
 	}
 
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create active .surge file: %v", err)
 	}
 
-	removed, err := ValidateIntegrity()
+	removed, err := ValidateIntegrity(context.Background())
 	if err != nil {
 		t.Fatalf("ValidateIntegrity failed: %v", err)
 	}
@@ -1045,12 +1017,12 @@ func TestAvgSpeedPersistence(t *testing.T) {
 		AvgSpeed:    10.0 * 1024.0 * 1024.0, // 10 MB/s
 	}
 
-	if err := AddToMasterList(entry); err != nil {
+	if err := AddToMasterList(context.Background(), &entry); err != nil {
 		t.Fatalf("AddToMasterList failed: %v", err)
 	}
 
 	// Verify via GetDownload
-	loaded, err := GetDownload("speed-test")
+	loaded, err := GetDownload(context.Background(), "speed-test")
 	if err != nil {
 		t.Fatalf("GetDownload failed: %v", err)
 	}
@@ -1062,7 +1034,7 @@ func TestAvgSpeedPersistence(t *testing.T) {
 	}
 
 	// Verify via LoadMasterList
-	list, err := LoadMasterList()
+	list, err := LoadMasterList(context.Background())
 	if err != nil {
 		t.Fatalf("LoadMasterList failed: %v", err)
 	}
@@ -1094,12 +1066,12 @@ func TestNormalizeStaleDownloads(t *testing.T) {
 		{ID: "ok-5", URL: "https://a.com/5", DestPath: "/tmp/5", Status: "queued"},
 	}
 	for _, e := range entries {
-		if err := AddToMasterList(e); err != nil {
+		if err := AddToMasterList(context.Background(), &e); err != nil {
 			t.Fatalf("AddToMasterList failed: %v", err)
 		}
 	}
 
-	normalized, err := NormalizeStaleDownloads()
+	normalized, err := NormalizeStaleDownloads(context.Background())
 	if err != nil {
 		t.Fatalf("NormalizeStaleDownloads failed: %v", err)
 	}
@@ -1109,21 +1081,21 @@ func TestNormalizeStaleDownloads(t *testing.T) {
 
 	// Verify downloading entries became paused
 	for _, id := range []string{"stale-1", "stale-2"} {
-		dl, _ := GetDownload(id)
+		dl, _ := GetDownload(context.Background(), id)
 		if dl.Status != "paused" {
 			t.Errorf("%s status = %q, want paused", id, dl.Status)
 		}
 	}
 	// Verify other statuses untouched
-	dl3, _ := GetDownload("ok-3")
+	dl3, _ := GetDownload(context.Background(), "ok-3")
 	if dl3.Status != "paused" {
 		t.Errorf("ok-3 status = %q, want paused", dl3.Status)
 	}
-	dl4, _ := GetDownload("ok-4")
+	dl4, _ := GetDownload(context.Background(), "ok-4")
 	if dl4.Status != "completed" {
 		t.Errorf("ok-4 status = %q, want completed", dl4.Status)
 	}
-	dl5, _ := GetDownload("ok-5")
+	dl5, _ := GetDownload(context.Background(), "ok-5")
 	if dl5.Status != "queued" {
 		t.Errorf("ok-5 status = %q, want queued", dl5.Status)
 	}

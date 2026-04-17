@@ -1,6 +1,7 @@
 package processing
 
 import (
+	"context"
 	"errors"
 	"os"
 	"path/filepath"
@@ -19,7 +20,7 @@ func TestFinalizeCompletedFile_CopiesAcrossDevicesOnEXDEV(t *testing.T) {
 	tempDir := t.TempDir()
 	finalPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := finalPath + types.IncompleteSuffix
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create working file: %v", err)
 	}
 
@@ -36,11 +37,11 @@ func TestFinalizeCompletedFile_CopiesAcrossDevicesOnEXDEV(t *testing.T) {
 	}
 	copyCompletedFile = func(src, dst string) error {
 		copied = true
-		data, err := os.ReadFile(src)
+		data, err := os.ReadFile(src) //nolint:gosec // internal test file
 		if err != nil {
 			return err
 		}
-		return os.WriteFile(dst, data, 0o644)
+		return os.WriteFile(dst, data, 0o600) //nolint:gosec // test file
 	}
 
 	if err := finalizeCompletedFile(finalPath); err != nil {
@@ -50,7 +51,7 @@ func TestFinalizeCompletedFile_CopiesAcrossDevicesOnEXDEV(t *testing.T) {
 		t.Fatal("expected copy fallback to run on EXDEV")
 	}
 
-	data, err := os.ReadFile(finalPath)
+	data, err := os.ReadFile(finalPath) //nolint:gosec // internal test file
 	if err != nil {
 		t.Fatalf("failed to read finalized file: %v", err)
 	}
@@ -67,11 +68,11 @@ func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing
 
 	finalPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := finalPath + types.IncompleteSuffix
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create working file: %v", err)
 	}
 
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := state.AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:       "download-1",
 		URL:      "https://example.com/video.mp4",
 		URLHash:  state.URLHash("https://example.com/video.mp4"),
@@ -120,9 +121,9 @@ func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing
 	}
 	close(ch)
 
-	mgr.StartEventWorker(ch)
+	mgr.StartEventWorker(context.Background(), ch)
 
-	entry, err := state.GetDownload("download-1")
+	entry, err := state.GetDownload(context.Background(), "download-1")
 	if err != nil {
 		t.Fatalf("failed to reload entry: %v", err)
 	}
@@ -153,7 +154,7 @@ func TestStartEventWorker_RemovesIncompleteFileOnErrorWithoutDBEntry(t *testing.
 	tempDir := t.TempDir()
 	destPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := destPath + types.IncompleteSuffix
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create working file: %v", err)
 	}
 
@@ -167,7 +168,7 @@ func TestStartEventWorker_RemovesIncompleteFileOnErrorWithoutDBEntry(t *testing.
 	}
 	close(ch)
 
-	mgr.StartEventWorker(ch)
+	mgr.StartEventWorker(context.Background(), ch)
 
 	if _, err := os.Stat(surgePath); !os.IsNotExist(err) {
 		t.Fatalf("expected working file to be removed even without DB entry, stat err: %v", err)
@@ -179,11 +180,11 @@ func TestStartEventWorker_SuppressesNotificationWhenSettingDisabled(t *testing.T
 
 	finalPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := finalPath + types.IncompleteSuffix
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create working file: %v", err)
 	}
 
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := state.AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:       "download-1",
 		URL:      "https://example.com/video.mp4",
 		URLHash:  state.URLHash("https://example.com/video.mp4"),
@@ -217,7 +218,7 @@ func TestStartEventWorker_SuppressesNotificationWhenSettingDisabled(t *testing.T
 	}
 	close(ch)
 
-	mgr.StartEventWorker(ch)
+	mgr.StartEventWorker(context.Background(), ch)
 
 	if calls != 0 {
 		t.Fatalf("notification calls = %d, want 0", calls)
@@ -229,11 +230,11 @@ func TestStartEventWorker_CompletionNotificationUsesGenericMessageWhenElapsedZer
 
 	finalPath := filepath.Join(tempDir, "video.mp4")
 	surgePath := finalPath + types.IncompleteSuffix
-	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o600); err != nil {
 		t.Fatalf("failed to create working file: %v", err)
 	}
 
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := state.AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:       "download-1",
 		URL:      "https://example.com/video.mp4",
 		URLHash:  state.URLHash("https://example.com/video.mp4"),
@@ -275,7 +276,7 @@ func TestStartEventWorker_CompletionNotificationUsesGenericMessageWhenElapsedZer
 	}
 	close(ch)
 
-	mgr.StartEventWorker(ch)
+	mgr.StartEventWorker(context.Background(), ch)
 
 	if len(calls) != 1 {
 		t.Fatalf("notification calls = %d, want 1", len(calls))
@@ -320,7 +321,7 @@ func TestStartEventWorker_ErrorNotificationFallsBackToDownloadID(t *testing.T) {
 	}
 	close(ch)
 
-	mgr.StartEventWorker(ch)
+	mgr.StartEventWorker(context.Background(), ch)
 
 	if len(calls) != 1 {
 		t.Fatalf("notification calls = %d, want 1", len(calls))

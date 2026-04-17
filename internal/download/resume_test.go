@@ -25,7 +25,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	// Set XDG_CONFIG_HOME to tmpDir so state.GetDB() creates DB there
+	// Set XDG_CONFIG_HOME to tmpDir so state.GetDB(context.Background()) creates DB there
 	// The config package uses "surge" subdirectory
 	configDir := tmpDir // XDG_CONFIG_HOME usually contains the app dir
 	t.Setenv("XDG_CONFIG_HOME", configDir)
@@ -36,8 +36,8 @@ func TestIntegration_PauseResume(t *testing.T) {
 	// Force DB init
 	dbPath := filepath.Join(tmpDir, "surge.db")
 	state.Configure(dbPath)
-	if _, err := state.GetDB(); err != nil {
-		t.Fatalf("Failed to init DB: %v", err)
+	if _, dbErr := state.GetDB(context.Background()); dbErr != nil {
+		t.Fatalf("Failed to init DB: %v", dbErr)
 	}
 	defer state.CloseDB()
 
@@ -66,7 +66,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	eventWG.Add(1)
 	go func() {
 		defer eventWG.Done()
-		mgr.StartEventWorker(progressCh)
+		mgr.StartEventWorker(context.Background(), progressCh)
 	}()
 	defer func() {
 		close(progressCh)
@@ -90,7 +90,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 
 	// Pre-create incomplete file (simulating processing layer)
 	incompletePath := destPath + types.IncompleteSuffix
-	f, err := os.Create(incompletePath)
+	f, err := os.Create(incompletePath) //nolint:gosec // internal test file
 	if err != nil {
 		t.Fatalf("Failed to pre-create partial file: %v", err)
 	}
@@ -121,8 +121,8 @@ func TestIntegration_PauseResume(t *testing.T) {
 
 	// Wait for download to return
 	select {
-	case err := <-errCh:
-		if err != nil && err != context.Canceled && !errors.Is(err, types.ErrPaused) {
+	case eErr := <-errCh:
+		if eErr != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, types.ErrPaused) {
 			t.Logf("Download returned error: %v", err)
 		}
 	case <-time.After(15 * time.Second):
@@ -133,7 +133,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	var savedState *types.DownloadState
 	deadline = time.Now().Add(5 * time.Second)
 	for time.Now().Before(deadline) {
-		savedState, err = state.LoadState(url, destPath)
+		savedState, err = state.LoadState(context.Background(), url, destPath)
 		if err == nil && savedState != nil && savedState.Downloaded > 0 && len(savedState.Tasks) > 0 {
 			break
 		}
@@ -190,7 +190,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	for time.Now().Before(deadline) {
 		_, surgeErr := os.Stat(incompletePath)
 		finalInfo, finalErr := os.Stat(destPath)
-		entry, _ := state.GetDownload(cfg.ID)
+		entry, _ := state.GetDownload(context.Background(), cfg.ID)
 		if os.IsNotExist(surgeErr) && finalErr == nil && finalInfo.Size() == fileSize && entry != nil && entry.Status == "completed" {
 			completed = true
 			break
@@ -201,7 +201,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 		t.Fatal("resume did not reach finalized completed state before timeout")
 	}
 
-	if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
+	if _, sErr := os.Stat(incompletePath); !os.IsNotExist(sErr) {
 		t.Error("Incomplete file still exists after resume completion")
 	}
 	finalInfo, err := os.Stat(destPath)
@@ -211,7 +211,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	if finalInfo.Size() != fileSize {
 		t.Errorf("Final file size = %d, want %d", finalInfo.Size(), fileSize)
 	}
-	entry, _ := state.GetDownload(cfg.ID)
+	entry, _ := state.GetDownload(context.Background(), cfg.ID)
 	if entry == nil || entry.Status != "completed" {
 		t.Fatalf("download entry not marked completed, got %+v", entry)
 	}

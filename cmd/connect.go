@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -27,7 +28,7 @@ var connectCmd = &cobra.Command{
 		} else {
 			port := readActivePort()
 			if port == 0 {
-				return fmt.Errorf("no local Surge server detected. Start one with 'surge' or 'surge server', or specify a target: surge connect <host:port>")
+				return errors.New("no local Surge server detected. Start one with 'surge' or 'surge server', or specify a target: surge connect <host:port>")
 			}
 			target = fmt.Sprintf("127.0.0.1:%d", port)
 			fmt.Printf("Auto-detected local server on port %d\n", port)
@@ -56,7 +57,7 @@ func connectAndRunTUI(cmd *cobra.Command, target string) error {
 	fmt.Printf("Connecting to %s...\n", baseURL)
 
 	service := core.NewRemoteDownloadService(baseURL, token)
-	_, err = service.List()
+	_, err = service.List(context.Background())
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
@@ -93,7 +94,7 @@ func connectAndRunTUI(cmd *cobra.Command, target string) error {
 	return nil
 }
 
-func newRemoteRootModel(port int, service core.DownloadService, serverHost string) tui.RootModel {
+func newRemoteRootModel(port int, service core.DownloadService, serverHost string) *tui.RootModel {
 	m := tui.InitialRootModel(port, Version, service, nil, false)
 	m.ServerHost = serverHost
 	m.IsRemote = true
@@ -122,24 +123,24 @@ func resolveTokenForTarget(target string) (string, error) {
 	if isLocalHost(host) {
 		return ensureAuthToken(), nil
 	}
-	return "", fmt.Errorf("no token provided. Use --token or set SURGE_TOKEN")
+	return "", errors.New("no token provided. Use --token or set SURGE_TOKEN")
 }
 
 func resolveConnectBaseURL(target string, allowInsecureHTTP bool) (string, error) {
 	if strings.Contains(target, "://") {
 		u, err := url.Parse(target)
 		if err != nil {
-			return "", fmt.Errorf("invalid target: %v", err)
+			return "", fmt.Errorf("invalid target: %w", err)
 		}
 		if u.Scheme != "http" && u.Scheme != "https" {
 			return "", fmt.Errorf("unsupported scheme %q (use http or https)", u.Scheme)
 		}
 		if u.Host == "" {
-			return "", fmt.Errorf("invalid target: missing host")
+			return "", errors.New("invalid target: missing host")
 		}
 		host := u.Hostname()
 		if u.Scheme == "http" && !allowInsecureHTTP && !isLoopbackHost(host) && !isPrivateIPHost(host) {
-			return "", fmt.Errorf("refusing insecure HTTP for non-loopback target. Use https:// or --insecure-http")
+			return "", errors.New("refusing insecure HTTP for non-loopback target. Use https:// or --insecure-http")
 		}
 		return fmt.Sprintf("%s://%s", u.Scheme, u.Host), nil
 	}

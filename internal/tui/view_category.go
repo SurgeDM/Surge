@@ -10,7 +10,7 @@ import (
 )
 
 // viewCategoryManager renders the category management screen.
-func (m RootModel) viewCategoryManager() string {
+func (m *RootModel) viewCategoryManager() string {
 	if m.width <= 0 || m.height <= 0 {
 		return ""
 	}
@@ -104,12 +104,12 @@ func (m RootModel) viewCategoryManager() string {
 	return m.renderModalWithOverlay(box)
 }
 
-func (m RootModel) renderCategoryHelp(width int) string {
+func (m *RootModel) renderCategoryHelp(width int) string {
 	if width < 1 {
 		width = 1
 	}
 
-	helpText := m.help.View(m.keys.CategoryMgr)
+	helpText := m.help.View(&m.keys.CategoryMgr)
 	if width < MinGraphStatsWidth-2 {
 		helpText = "esc: save/close  enter: edit/save  del: remove"
 	}
@@ -192,7 +192,7 @@ func renderCategoryListViewport(cats []config.Category, cursor int, editing bool
 	return strings.Join(lines, "\n")
 }
 
-func (m RootModel) renderCategoryDetailView(cats []config.Category, cursor, innerWidth, rows int) string {
+func (m *RootModel) renderCategoryDetailView(cats []config.Category, cursor, innerWidth, rows int) string {
 	if innerWidth < 1 {
 		innerWidth = 1
 	}
@@ -233,7 +233,7 @@ func (m RootModel) renderCategoryDetailView(cats []config.Category, cursor, inne
 	return formatSettingsBlock(content, innerWidth, rows)
 }
 
-func (m RootModel) renderCategoryEditView(innerWidth, rows int) string {
+func (m *RootModel) renderCategoryEditView(innerWidth, rows int) string {
 	if innerWidth < 1 {
 		innerWidth = 1
 	}
@@ -250,8 +250,10 @@ func (m RootModel) renderCategoryEditView(innerWidth, rows int) string {
 		if i == m.catMgrEditField {
 			value = m.catMgrInputs[i].View()
 		}
-		fieldLines = append(fieldLines, labelStyle.Width(innerWidth).MaxWidth(innerWidth).Render(label))
-		fieldLines = append(fieldLines, valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render("  "+value))
+		fieldLines = append(fieldLines,
+			labelStyle.Width(innerWidth).MaxWidth(innerWidth).Render(label),
+			valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render("  "+value),
+		)
 		if i < len(fieldLabels)-1 {
 			fieldLines = append(fieldLines, "")
 		}
@@ -267,7 +269,7 @@ func (m RootModel) renderCategoryEditView(innerWidth, rows int) string {
 	return formatSettingsBlock(strings.Join(fieldLines, "\n"), innerWidth, rows)
 }
 
-func (m RootModel) renderCategoryTwoColumn(cats []config.Category, cursor, modalWidth, bodyHeight int) string {
+func (m *RootModel) renderCategoryTwoColumn(cats []config.Category, cursor, modalWidth, bodyHeight int) string {
 	leftWidth, rightWidth := CalculateTwoColumnWidths(modalWidth, 28, 24)
 
 	if leftWidth < 14 || rightWidth < 16 {
@@ -321,7 +323,7 @@ func (m RootModel) renderCategoryTwoColumn(cats []config.Category, cursor, modal
 	return formatSettingsBlock(content, modalWidth-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
 }
 
-func (m RootModel) renderCategoryCompact(cats []config.Category, cursor, modalWidth, bodyHeight int) string {
+func (m *RootModel) renderCategoryCompact(cats []config.Category, cursor, modalWidth, bodyHeight int) string {
 	innerWidth := modalWidth - BoxStyle.GetHorizontalFrameSize()
 	if innerWidth < 1 {
 		innerWidth = 1

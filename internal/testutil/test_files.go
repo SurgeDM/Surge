@@ -9,17 +9,17 @@ import (
 )
 
 // TempDir creates a temporary directory for test files and returns a cleanup function.
-func TempDir(prefix string) (string, func(), error) {
-	dir, err := os.MkdirTemp("", prefix+"-*")
+func TempDir(prefix string) (dirPath string, cleanup func(), err error) {
+	dirPath, err = os.MkdirTemp("", prefix+"-*")
 	if err != nil {
 		return "", nil, err
 	}
 
-	cleanup := func() {
-		_ = os.RemoveAll(dir)
+	cleanup = func() {
+		_ = os.RemoveAll(dirPath)
 	}
 
-	return dir, cleanup, nil
+	return dirPath, cleanup, nil
 }
 
 // CreateTestFile creates a test file with the specified size filled
@@ -27,7 +27,7 @@ func TempDir(prefix string) (string, func(), error) {
 func CreateTestFile(dir, name string, size int64, random bool) (string, error) {
 	path := filepath.Join(dir, name)
 
-	f, err := os.Create(path)
+	f, err := os.Create(path) //nolint:gosec // test utility
 	if err != nil {
 		return "", err
 	}
@@ -64,7 +64,7 @@ func CreateTestFile(dir, name string, size int64, random bool) (string, error) {
 func CreateSurgeFile(dir, name string, totalSize, downloadedSize int64) (string, error) {
 	path := filepath.Join(dir, name+".surge")
 
-	f, err := os.Create(path)
+	f, err := os.Create(path) //nolint:gosec // test utility
 	if err != nil {
 		return "", err
 	}
@@ -128,12 +128,12 @@ func (e *FileSizeMismatchError) Error() string {
 
 // CompareFiles checks if two files have identical content.
 func CompareFiles(path1, path2 string) (bool, error) {
-	data1, err := os.ReadFile(path1)
+	data1, err := os.ReadFile(path1) //nolint:gosec // test utility
 	if err != nil {
 		return false, err
 	}
 
-	data2, err := os.ReadFile(path2)
+	data2, err := os.ReadFile(path2) //nolint:gosec // test utility
 	if err != nil {
 		return false, err
 	}
@@ -153,7 +153,7 @@ func CompareFiles(path1, path2 string) (bool, error) {
 
 // ReadFileChunk reads a specific byte range from a file.
 func ReadFileChunk(path string, offset, length int64) ([]byte, error) {
-	f, err := os.Open(path)
+	f, err := os.Open(path) //nolint:gosec // test utility
 	if err != nil {
 		return nil, err
 	}

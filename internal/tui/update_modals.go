@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -8,15 +9,15 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-func (m RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Duplicate.Continue) {
 		// Continue anyway - startDownload handles unique filename generation
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
 	}
 	if key.Matches(msg, m.keys.Duplicate.Cancel) {
 		// Cancel - don't add
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Duplicate.Focus) {
@@ -27,13 +28,13 @@ func (m RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.C
 				break
 			}
 		}
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, nil
 	}
 	return m, nil
 }
 
-func (m RootModel) updateQuitConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *RootModel) updateQuitConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	confirmQuit := func() (tea.Model, tea.Cmd) {
 		if m.cancelEnqueue != nil {
@@ -43,7 +44,7 @@ func (m RootModel) updateQuitConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, shutdownCmd(m.Service)
 	}
 	cancelQuit := func() (tea.Model, tea.Cmd) {
-		m.state = DashboardState
+		m.uiState = DashboardState
 		m.quitConfirmFocused = 0
 		return m, nil
 	}
@@ -69,7 +70,7 @@ func (m RootModel) updateQuitConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg, m.keys.BatchConfirm.Confirm) {
 		// Add all URLs as downloads, skipping duplicates
@@ -102,22 +103,22 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		}
 		m.pendingBatchURLs = nil
 		m.batchFilePath = ""
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, tea.Batch(batchCmds...)
 	}
 	if key.Matches(msg, m.keys.BatchConfirm.Cancel) {
 		m.pendingBatchURLs = nil
 		m.batchFilePath = ""
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, nil
 	}
 	return m, nil
 }
 
-func (m RootModel) updateURLUpdate(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *RootModel) updateURLUpdate(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg, m.keys.Input.Esc) {
-		m.state = DashboardState
+		m.uiState = DashboardState
 		m.urlUpdateInput.SetValue("")
 		m.urlUpdateInput.Blur()
 		return m, nil
@@ -126,15 +127,15 @@ func (m RootModel) updateURLUpdate(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		newURL := strings.TrimSpace(m.urlUpdateInput.Value())
 		if newURL != "" {
 			if d := m.GetSelectedDownload(); d != nil {
-				if err := m.Service.UpdateURL(d.ID, newURL); err != nil {
-					m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Failed to update URL: %s", err.Error())))
+				if err := m.Service.UpdateURL(context.Background(), d.ID, newURL); err != nil {
+					m.addLogEntry(LogStyleError.Render("✖ Failed to update URL: " + err.Error()))
 				} else {
-					m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 URL Updated: %s", d.Filename)))
+					m.addLogEntry(LogStyleComplete.Render("✔ URL Updated: " + d.Filename))
 					d.URL = newURL
 				}
 			}
 		}
-		m.state = DashboardState
+		m.uiState = DashboardState
 		m.urlUpdateInput.SetValue("")
 		m.urlUpdateInput.Blur()
 		return m, nil
@@ -145,19 +146,19 @@ func (m RootModel) updateURLUpdate(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m RootModel) updateUpdateAvailable(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+func (m *RootModel) updateUpdateAvailable(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Update.OpenGitHub) {
 		// Open the release page in browser
 		if m.UpdateInfo != nil && m.UpdateInfo.ReleaseURL != "" {
-			_ = openWithSystem(m.UpdateInfo.ReleaseURL)
+			_ = openWithSystem(m.enqueueCtx, m.UpdateInfo.ReleaseURL)
 		}
-		m.state = DashboardState
+		m.uiState = DashboardState
 		m.UpdateInfo = nil
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Update.IgnoreNow) {
 		// Just dismiss the modal
-		m.state = DashboardState
+		m.uiState = DashboardState
 		m.UpdateInfo = nil
 		return m, nil
 	}
@@ -165,7 +166,7 @@ func (m RootModel) updateUpdateAvailable(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		// Persist the setting and dismiss
 		m.Settings.General.SkipUpdateCheck = true
 		_ = m.persistSettings()
-		m.state = DashboardState
+		m.uiState = DashboardState
 		m.UpdateInfo = nil
 		return m, nil
 	}

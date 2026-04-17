@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"context"
 	"strings"
 	"testing"
 )
@@ -27,7 +28,7 @@ func TestOpenFile_Validation(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := OpenFile(tc.path)
+			err := OpenFile(context.Background(), tc.path)
 			if err == nil {
 				t.Fatalf("expected validation error for %q", tc.path)
 			}
@@ -64,7 +65,7 @@ func TestOpenContainingFolder_Validation(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			err := OpenContainingFolder(tc.path)
+			err := OpenContainingFolder(context.Background(), tc.path)
 			if err == nil {
 				t.Fatalf("expected validation error for %q", tc.path)
 			}

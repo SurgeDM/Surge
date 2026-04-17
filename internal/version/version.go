@@ -2,6 +2,7 @@
 package version
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -46,7 +47,7 @@ func CheckForUpdate(currentVersion string) (*UpdateInfo, error) {
 		Timeout: RequestTimeout,
 	}
 
-	req, err := http.NewRequest("GET", GitHubAPIURL, nil)
+	req, err := http.NewRequestWithContext(context.Background(), http.MethodGet, GitHubAPIURL, http.NoBody)
 	if err != nil {
 		return nil, nil // Fail silently
 	}

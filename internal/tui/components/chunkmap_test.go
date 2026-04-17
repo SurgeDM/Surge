@@ -19,7 +19,7 @@ const (
 
 // Helper to set chunk state in a bitmap
 // Index is chunk index. Status: 0=Pending, 1=Downloading, 2=Completed
-func setChunk(bitmap []byte, index int, status int) {
+func setChunk(bitmap []byte, index, status int) {
 	byteIndex := index / 4
 	bitOffset := (index % 4) * 2
 
@@ -28,7 +28,7 @@ func setChunk(bitmap []byte, index int, status int) {
 	bitmap[byteIndex] &= ^mask
 
 	// Set bits
-	val := byte(status) << bitOffset
+	val := byte(status) << bitOffset //nolint:gosec // status is validated range 0-3
 	bitmap[byteIndex] |= val
 }
 

@@ -11,24 +11,24 @@ import (
 )
 
 type fakeRemoteDownloadService struct {
-	addCalls     int
 	lastURL      string
 	lastPath     string
 	lastFile     string
+	addCalls     int
 	lastExplicit bool
 }
 
 var _ core.DownloadService = (*fakeRemoteDownloadService)(nil)
 
-func (f *fakeRemoteDownloadService) List() ([]types.DownloadStatus, error) {
+func (f *fakeRemoteDownloadService) List(ctx context.Context) ([]types.DownloadStatus, error) {
 	return nil, nil
 }
 
-func (f *fakeRemoteDownloadService) History() ([]types.DownloadEntry, error) {
+func (f *fakeRemoteDownloadService) History(ctx context.Context) ([]types.DownloadEntry, error) {
 	return nil, nil
 }
 
-func (f *fakeRemoteDownloadService) Add(url, path, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+func (f *fakeRemoteDownloadService) Add(ctx context.Context, url, path, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
 	f.addCalls++
 	f.lastURL = url
 	f.lastPath = path
@@ -37,28 +37,32 @@ func (f *fakeRemoteDownloadService) Add(url, path, filename string, mirrors []st
 	return "remote-add-id", nil
 }
 
-func (f *fakeRemoteDownloadService) AddWithID(url, path, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
+func (f *fakeRemoteDownloadService) AddWithID(ctx context.Context, url, path, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
 	return id, nil
 }
 
-func (f *fakeRemoteDownloadService) Pause(id string) error { return nil }
+func (f *fakeRemoteDownloadService) Pause(ctx context.Context, id string) error { return nil }
 
-func (f *fakeRemoteDownloadService) Resume(id string) error { return nil }
+func (f *fakeRemoteDownloadService) Resume(ctx context.Context, id string) error { return nil }
 
-func (f *fakeRemoteDownloadService) ResumeBatch(ids []string) []error { return nil }
+func (f *fakeRemoteDownloadService) ResumeBatch(ctx context.Context, ids []string) []error {
+	return nil
+}
 
-func (f *fakeRemoteDownloadService) UpdateURL(id string, newURL string) error { return nil }
+func (f *fakeRemoteDownloadService) UpdateURL(ctx context.Context, id, newURL string) error {
+	return nil
+}
 
-func (f *fakeRemoteDownloadService) Delete(id string) error { return nil }
+func (f *fakeRemoteDownloadService) Delete(ctx context.Context, id string) error { return nil }
 
-func (f *fakeRemoteDownloadService) StreamEvents(ctx context.Context) (<-chan interface{}, func(), error) {
+func (f *fakeRemoteDownloadService) StreamEvents(ctx context.Context) (eventCh <-chan interface{}, cleanupFn func(), err error) {
 	ch := make(chan interface{})
 	return ch, func() { close(ch) }, nil
 }
 
 func (f *fakeRemoteDownloadService) Publish(msg interface{}) error { return nil }
 
-func (f *fakeRemoteDownloadService) GetStatus(id string) (*types.DownloadStatus, error) {
+func (f *fakeRemoteDownloadService) GetStatus(ctx context.Context, id string) (*types.DownloadStatus, error) {
 	return nil, nil
 }
 
@@ -93,7 +97,7 @@ func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
 		t.Fatal("expected remote add path to complete synchronously without orchestration cmd")
 	}
 
-	root, ok := updated.(tui.RootModel)
+	root, ok := updated.(*tui.RootModel)
 	if !ok {
 		t.Fatalf("unexpected updated model type %T", updated)
 	}

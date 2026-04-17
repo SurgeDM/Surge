@@ -11,7 +11,7 @@ import (
 func TestSettingsResetExhaustive(t *testing.T) {
 	// Initialize a RootModel with default settings
 	defaults := config.DefaultSettings()
-	m := RootModel{
+	m := &RootModel{
 		Settings: config.DefaultSettings(),
 	}
 

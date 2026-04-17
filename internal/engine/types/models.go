@@ -4,48 +4,44 @@ import "sync/atomic"
 
 // Task represents a byte range to download
 type Task struct {
+	SharedMaxOffset *atomic.Int64 `json:"-"`
 	Offset          int64         `json:"offset"`
 	Length          int64         `json:"length"`
-	SharedMaxOffset *atomic.Int64 `json:"-"` // Used to deduplicate byte counting in hedged requests
 }
 
 // DownloadState represents persisted download state for resume
 type DownloadState struct {
-	ID         string   `json:"id"`       // Unique ID of the download
-	URLHash    string   `json:"url_hash"` // Hash of URL only (for master list compatibility)
-	URL        string   `json:"url"`
-	DestPath   string   `json:"dest_path"`
-	TotalSize  int64    `json:"total_size"`
-	Downloaded int64    `json:"downloaded"`
-	Tasks      []Task   `json:"tasks"` // Remaining tasks
-	Filename   string   `json:"filename"`
-	CreatedAt  int64    `json:"created_at"` // Unix timestamp
-	PausedAt   int64    `json:"paused_at"`  // Unix timestamp
-	Elapsed    int64    `json:"elapsed"`    // Elapsed time in nanoseconds
-	Mirrors    []string `json:"mirrors,omitempty"`
-
-	// Bitmap state
-	ChunkBitmap     []byte `json:"chunk_bitmap,omitempty"`
-	ActualChunkSize int64  `json:"actual_chunk_size,omitempty"`
-
-	// Integrity verification
-	FileHash string `json:"file_hash,omitempty"` // SHA-256 hash of the .surge file at pause time
+	ID              string   `json:"id"`
+	URLHash         string   `json:"url_hash"`
+	URL             string   `json:"url"`
+	DestPath        string   `json:"dest_path"`
+	FileHash        string   `json:"file_hash,omitempty"`
+	Filename        string   `json:"filename"`
+	Tasks           []Task   `json:"tasks"`
+	Mirrors         []string `json:"mirrors,omitempty"`
+	ChunkBitmap     []byte   `json:"chunk_bitmap,omitempty"`
+	Downloaded      int64    `json:"downloaded"`
+	CreatedAt       int64    `json:"created_at"`
+	PausedAt        int64    `json:"paused_at"`
+	Elapsed         int64    `json:"elapsed"`
+	ActualChunkSize int64    `json:"actual_chunk_size,omitempty"`
+	TotalSize       int64    `json:"total_size"`
 }
 
 // DownloadEntry represents a download in the master list
 type DownloadEntry struct {
-	ID          string   `json:"id"`       // Unique ID of the download
-	URLHash     string   `json:"url_hash"` // Hash of URL only (backward compatibility)
+	ID          string   `json:"id"`
+	URLHash     string   `json:"url_hash"`
 	URL         string   `json:"url"`
 	DestPath    string   `json:"dest_path"`
 	Filename    string   `json:"filename"`
-	Status      string   `json:"status"`       // "paused", "completed", "error"
-	TotalSize   int64    `json:"total_size"`   // File size in bytes
-	Downloaded  int64    `json:"downloaded"`   // Bytes downloaded
-	CompletedAt int64    `json:"completed_at"` // Unix timestamp when completed
-	TimeTaken   int64    `json:"time_taken"`   // Duration in milliseconds (for completed)
-	AvgSpeed    float64  `json:"avg_speed"`    // Average speed in bytes/sec (for completed)
+	Status      string   `json:"status"`
 	Mirrors     []string `json:"mirrors,omitempty"`
+	TotalSize   int64    `json:"total_size"`
+	Downloaded  int64    `json:"downloaded"`
+	CompletedAt int64    `json:"completed_at"`
+	TimeTaken   int64    `json:"time_taken"`
+	AvgSpeed    float64  `json:"avg_speed"`
 }
 
 // MasterList holds all tracked downloads
@@ -55,30 +51,30 @@ type MasterList struct {
 
 // DownloadStatus represents the transient status of an active download
 type DownloadStatus struct {
-	ID          string  `json:"id"`
+	Error       string  `json:"error,omitempty"`
 	URL         string  `json:"url"`
 	Filename    string  `json:"filename"`
-	DestPath    string  `json:"dest_path,omitempty"` // Full absolute path to file
-	TotalSize   int64   `json:"total_size"`
+	DestPath    string  `json:"dest_path,omitempty"`
+	ID          string  `json:"id"`
+	Status      string  `json:"status"`
+	ETA         int64   `json:"eta"`
 	Downloaded  int64   `json:"downloaded"`
-	Progress    float64 `json:"progress"` // Percentage 0-100
-	Speed       float64 `json:"speed"`    // MB/s
-	Status      string  `json:"status"`   // "queued", "paused", "downloading", "completed", "error"
-	Error       string  `json:"error,omitempty"`
-	ETA         int64   `json:"eta"`         // Estimated seconds remaining
-	Connections int     `json:"connections"` // Active connections
-	AddedAt     int64   `json:"added_at"`    // Unix timestamp when added
-	TimeTaken   int64   `json:"time_taken"`  // Duration in milliseconds (completed only)
-	AvgSpeed    float64 `json:"avg_speed"`   // Average speed in bytes/sec (completed only)
+	Progress    float64 `json:"progress"`
+	TotalSize   int64   `json:"total_size"`
+	Speed       float64 `json:"speed"`
+	Connections int     `json:"connections"`
+	AddedAt     int64   `json:"added_at"`
+	TimeTaken   int64   `json:"time_taken"`
+	AvgSpeed    float64 `json:"avg_speed"`
 }
 
 // CancelResult contains metadata about a cancelled download so callers
 // can handle event emission and cleanup without the pool needing to import
 // the events package (which would create an import cycle).
 type CancelResult struct {
-	Found     bool
 	Filename  string
 	DestPath  string
+	Found     bool
 	Completed bool
 	WasQueued bool
 }

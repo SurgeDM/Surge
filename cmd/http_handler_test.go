@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -59,13 +60,13 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 
 	// Create surge config directory
 	surgeConfigDir := filepath.Join(tempDir, "surge")
-	if err := os.MkdirAll(surgeConfigDir, 0o755); err != nil {
+	if err := os.MkdirAll(surgeConfigDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
 	// Setup default download directory
 	defaultDownloadDir := filepath.Join(tempDir, "Downloads")
-	if err := os.MkdirAll(defaultDownloadDir, 0o755); err != nil {
+	if err := os.MkdirAll(defaultDownloadDir, 0o750); err != nil {
 		t.Fatal(err)
 	}
 
@@ -83,8 +84,8 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 
 	tests := []struct {
 		name               string
-		request            DownloadRequest
 		expectedOutputPath string
+		request            DownloadRequest
 	}{
 		{
 			name: "Absolute Path (Explicit)",
@@ -167,7 +168,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			body, _ := json.Marshal(tt.request)
-			req := httptest.NewRequest("POST", "/download", bytes.NewBuffer(body))
+			req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBuffer(body))
 			w := httptest.NewRecorder()
 			svc := core.NewLocalDownloadService(GlobalPool)
 
@@ -183,19 +184,20 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			configs := GlobalPool.GetAll()
 			found := false
 			for _, cfg := range configs {
-				if cfg.URL == tt.request.URL {
-					found = true
-					t.Logf("OutputPath for %s: %s", tt.name, cfg.OutputPath)
-
-					if !filepath.IsAbs(cfg.OutputPath) {
-						t.Errorf("Expected absolute path, got %s", cfg.OutputPath)
-					}
-
-					if cfg.OutputPath != tt.expectedOutputPath {
-						t.Errorf("Expected path %s, got %s", tt.expectedOutputPath, cfg.OutputPath)
-					}
-					break
+				if cfg.URL != tt.request.URL {
+					continue
 				}
+				found = true
+				t.Logf("OutputPath for %s: %s", tt.name, cfg.OutputPath)
+
+				if !filepath.IsAbs(cfg.OutputPath) {
+					t.Errorf("Expected absolute path, got %s", cfg.OutputPath)
+				}
+
+				if cfg.OutputPath != tt.expectedOutputPath {
+					t.Errorf("Expected path %s, got %s", tt.expectedOutputPath, cfg.OutputPath)
+				}
+				break
 			}
 			if !found {
 				t.Errorf("Download was not queued")
@@ -207,8 +209,8 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 func TestShouldFallbackUnmappedWindowsPath(t *testing.T) {
 	tests := []struct {
 		name                 string
-		relativeToDefaultDir bool
 		hostOS               string
+		relativeToDefaultDir bool
 		want                 bool
 	}{
 		{
@@ -286,7 +288,7 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 	expectedFile := "from-extension.bin"
 
 	var addCalls int
-	GlobalLifecycle = processing.NewLifecycleManager(func(url, path, filename string, _ []string, headers map[string]string, explicit bool, totalSize int64, supportsRange bool) (string, error) {
+	GlobalLifecycle = processing.NewLifecycleManager(func(ctx context.Context, url, path, filename string, _ []string, headers map[string]string, explicit bool, totalSize int64, supportsRange bool) (string, error) {
 		addCalls++
 		if url != probeServer.URL {
 			t.Fatalf("url = %q, want %q", url, probeServer.URL)
@@ -333,7 +335,7 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 		"headers": {"Authorization": "Bearer test"}
 	}`, probeServer.URL, expectedFile, tempDir)
 
-	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	handleDownload(rec, req, "", svc)
@@ -372,7 +374,7 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 
 	// Create a lifecycle manager whose addFunc should never be reached
 	// because the probe will fail first (invalid URL scheme).
-	GlobalLifecycle = processing.NewLifecycleManager(func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+	GlobalLifecycle = processing.NewLifecycleManager(func(context.Context, string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
 		t.Fatal("addFunc should not be called when probe fails")
 		return "", nil
 	}, nil)
@@ -385,7 +387,7 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 
 	// Use a URL with an invalid scheme so ProbeServer fails immediately.
 	body := `{"url": "badscheme://example.com/file.bin", "path": "/tmp", "skip_approval": true}`
-	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	handleDownload(rec, req, "", svc)
@@ -395,7 +397,7 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 	}
 
 	// Verify that the error was persisted in the master list.
-	list, err := state.LoadMasterList()
+	list, err := state.LoadMasterList(context.Background())
 	if err != nil {
 		t.Fatalf("LoadMasterList failed: %v", err)
 	}
@@ -413,8 +415,8 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 }
 
 type failingPublishService struct {
-	fakeRemoteDownloadService
 	publishErr error
+	fakeRemoteDownloadService
 }
 
 func (f *failingPublishService) Publish(msg interface{}) error {
@@ -449,7 +451,7 @@ func TestHandleDownload_PublishError_RecordsPreflightError(t *testing.T) {
 
 	outDir := t.TempDir()
 	body := fmt.Sprintf(`{"url": %q, "path": %q}`, "http://example.com/file.bin", outDir)
-	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	req := httptest.NewRequestWithContext(context.Background(), http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
 	handleDownload(rec, req, "", svc)
@@ -458,7 +460,7 @@ func TestHandleDownload_PublishError_RecordsPreflightError(t *testing.T) {
 		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	list, err := state.LoadMasterList()
+	list, err := state.LoadMasterList(context.Background())
 	if err != nil {
 		t.Fatalf("LoadMasterList failed: %v", err)
 	}

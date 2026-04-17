@@ -81,8 +81,8 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	finalDestPath := filepath.Join(destPath, finalFilename)
 
 	// Local mirrors slice to avoid modifying config (race condition)
-	mirrors := make([]string, len(cfg.Mirrors))
-	copy(mirrors, cfg.Mirrors)
+	mirrors := make([]string, 0, len(cfg.Mirrors))
+	mirrors = append(mirrors, cfg.Mirrors...)
 
 	// Check if this is a resume (explicitly marked by TUI)
 	var savedState *types.DownloadState
@@ -239,7 +239,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 }
 
 // Download is the CLI entry point (non-TUI) - convenience wrapper
-func Download(ctx context.Context, url string, outPath string, progressCh chan<- any, id string) error {
+func Download(ctx context.Context, url, outPath string, progressCh chan<- any, id string) error {
 	cfg := types.DownloadConfig{
 		URL:        url,
 		OutputPath: outPath,

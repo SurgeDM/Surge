@@ -40,12 +40,13 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 	serverAddr := fmt.Sprintf("%s:%d", host, m.ServerPort)
 
 	var statusLine string
-	if contentWidth < 28 {
+	switch {
+	case contentWidth < 28:
 		// Just show the address when narrow
 		statusLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render(" " + serverAddr)
-	} else if m.IsRemote {
+	case m.IsRemote:
 		statusLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render(" Connected to " + serverAddr)
-	} else {
+	default:
 		statusLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render(" Serving at " + serverAddr)
 	}
 
@@ -56,15 +57,16 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 
 	var innerContent string
 	// If the height is too short for both logo and server text, just return server text centered vertically
-	if contentHeight < 4 {
+	switch {
+	case contentHeight < 4:
 		innerContent = lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center, serverPortContent)
-	} else if width < MinLogoWidth {
+	case width < MinLogoWidth:
 		// Show compact logo for medium-short headers or narrow terminals
 		logoContent := ApplyGradient(compactLogoText, colors.NeonPink, colors.NeonPurple)
 		logoBoxHeight := contentHeight - components.SingleLineHeight // 1 line for the server text at the bottom
 		logoBox := lipgloss.Place(contentWidth, logoBoxHeight, lipgloss.Center, lipgloss.Center, logoContent)
 		innerContent = lipgloss.JoinVertical(lipgloss.Center, logoBox, serverPortContent)
-	} else {
+	default:
 		var logoContent string
 		if m.logoCache != "" {
 			logoContent = m.logoCache

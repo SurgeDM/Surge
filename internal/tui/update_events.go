@@ -13,7 +13,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
+func (m *RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 
@@ -49,20 +49,20 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case enqueueSuccessMsg:
 		if msg.tempID != "" && msg.tempID != msg.id {
 			temp := m.FindDownloadByID(msg.tempID)
-			real := m.FindDownloadByID(msg.id)
-			if temp != nil && real != nil && temp != real {
-				if real.URL == "" {
-					real.URL = temp.URL
+			actualDownload := m.FindDownloadByID(msg.id)
+			if temp != nil && actualDownload != nil && temp != actualDownload {
+				if actualDownload.URL == "" {
+					actualDownload.URL = temp.URL
 				}
-				if real.Filename == "" {
-					real.Filename = msg.filename
-					if real.Filename == "" {
-						real.Filename = temp.Filename
+				if actualDownload.Filename == "" {
+					actualDownload.Filename = msg.filename
+					if actualDownload.Filename == "" {
+						actualDownload.Filename = temp.Filename
 					}
-					real.FilenameLower = strings.ToLower(real.Filename)
+					actualDownload.FilenameLower = strings.ToLower(actualDownload.Filename)
 				}
-				if real.Destination == "" {
-					real.Destination = temp.Destination
+				if actualDownload.Destination == "" {
+					actualDownload.Destination = temp.Destination
 				}
 				_ = m.removeDownloadByID(msg.tempID)
 			} else if temp != nil {
@@ -118,7 +118,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.pendingIsDefaultPath = isDefaultPath
 			m.pendingFilename = msg.Filename
 			m.duplicateInfo = duplicate.Filename
-			m.state = DuplicateWarningState
+			m.uiState = DuplicateWarningState
 			return m, nil
 		}
 
@@ -136,7 +136,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.inputs[i].Blur()
 			}
 			m.inputs[m.focusedInput].Focus()
-			m.state = ExtensionConfirmationState
+			m.uiState = ExtensionConfirmationState
 			return m, nil
 		}
 
@@ -159,11 +159,11 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if d.Total > 0 {
 				progressCmd = d.progress.SetPercent(0)
 			}
-			if d.state == nil && msg.State != nil {
-				d.state = msg.State
+			if d.progState == nil && msg.State != nil {
+				d.progState = msg.State
 			}
-			if d.state != nil {
-				d.state.SetTotalSize(msg.Total) // Keep state updated for verification if needed
+			if d.progState != nil {
+				d.progState.SetTotalSize(msg.Total) // Keep state updated for verification if needed
 			}
 			m.UpdateListItems()
 			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
@@ -174,7 +174,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newDownload := NewDownloadModel(msg.DownloadID, msg.URL, msg.Filename, msg.Total)
 			newDownload.Destination = msg.DestPath
 			if msg.State != nil {
-				newDownload.state = msg.State
+				newDownload.progState = msg.State
 			}
 			m.downloads = append(m.downloads, newDownload)
 			m.UpdateListItems()
@@ -182,13 +182,13 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.spinner.Tick
 		}
 	case events.ProgressMsg:
-		cmd := m.processProgressMsg(msg)
+		cmd := m.processProgressMsg(&msg)
 		return m, cmd
 
 	case events.BatchProgressMsg:
 		var cmds []tea.Cmd
 		for _, bm := range msg {
-			cmds = append(cmds, m.processProgressMsg(bm))
+			cmds = append(cmds, m.processProgressMsg(&bm))
 		}
 		// Only update UI once per batch
 		return m, tea.Batch(cmds...)

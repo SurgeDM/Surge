@@ -1,6 +1,7 @@
 package processing
 
 import (
+	"context"
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/config"
@@ -10,14 +11,14 @@ import (
 
 // DuplicateResult represents the outcome of a duplicate check
 type DuplicateResult struct {
-	Exists   bool
-	IsActive bool
 	Filename string
 	URL      string
+	Exists   bool
+	IsActive bool
 }
 
 // CheckForDuplicate inspects active and persisted downloads for duplicate URLs.
-func CheckForDuplicate(url string, settings *config.Settings, activeDownloads func() map[string]*types.DownloadConfig) *DuplicateResult {
+func CheckForDuplicate(ctx context.Context, url string, settings *config.Settings, activeDownloads func() map[string]*types.DownloadConfig) *DuplicateResult {
 	if !settings.General.WarnOnDuplicate {
 		return nil
 	}
@@ -46,7 +47,7 @@ func CheckForDuplicate(url string, settings *config.Settings, activeDownloads fu
 	}
 
 	// Check persisted completed/paused/queued entries in DB.
-	if exists, err := state.CheckDownloadExists(normalizedInputURL); err == nil && exists {
+	if exists, err := state.CheckDownloadExists(ctx, normalizedInputURL); err == nil && exists {
 		return &DuplicateResult{
 			Exists:   true,
 			IsActive: false,

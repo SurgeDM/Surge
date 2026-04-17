@@ -16,26 +16,24 @@ import (
 )
 
 // AddDownloadFunc is the lifecycle's handoff into the engine-facing queue layer.
-type AddDownloadFunc func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error)
+type AddDownloadFunc func(context.Context, string, string, string, []string, map[string]string, bool, int64, bool) (string, error)
 
 // AddDownloadWithIDFunc preserves caller-chosen ids when a remote/UI layer already owns them.
-type AddDownloadWithIDFunc func(string, string, string, []string, map[string]string, string, int64, bool) (string, error)
+type AddDownloadWithIDFunc func(context.Context, string, string, string, []string, map[string]string, string, int64, bool) (string, error)
 
 // IsNameActiveFunc lets routing treat in-flight downloads as filename conflicts within a directory.
 type IsNameActiveFunc func(dir, name string) bool
 
 type LifecycleManager struct {
-	settings            *config.Settings
-	settingsMu          sync.RWMutex
+	engineHooks         EngineHooks
 	settingsRefreshedAt time.Time
+	settings            *config.Settings
 	addFunc             AddDownloadFunc
 	addWithIDFunc       AddDownloadWithIDFunc
 	isNameActive        IsNameActiveFunc
-	engineHooks         EngineHooks
+	probeSem            chan struct{}
+	settingsMu          sync.RWMutex
 	hooksMu             sync.RWMutex
-	// probeSem caps the number of simultaneous server probes so adding a
-	// large batch of downloads does not flood the network with HEAD requests.
-	probeSem chan struct{}
 }
 
 const (
@@ -54,14 +52,14 @@ var settingsRefreshTTL = time.Second
 var reserveWorkingFile = precreateWorkingFile
 
 func precreateWorkingFile(destPath, filename string) error {
-	if err := os.MkdirAll(destPath, 0o755); err != nil {
+	if err := os.MkdirAll(destPath, 0o750); err != nil {
 		return fmt.Errorf("failed to create destination directory: %w", err)
 	}
 
 	surgePath := filepath.Join(destPath, filename) + types.IncompleteSuffix
 	// Exclusive create turns the .surge file into the reservation itself, so two
 	// concurrent enqueues cannot silently target the same working path.
-	file, err := os.OpenFile(surgePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	file, err := os.OpenFile(surgePath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600) //nolint:gosec // internal state file
 	if err != nil {
 		return fmt.Errorf("failed to pre-create working file: %w", err)
 	}
@@ -179,27 +177,27 @@ func (m *LifecycleManager) SaveSettings(s *config.Settings) error {
 
 // DownloadRequest carries the already-approved inputs needed to probe and reserve a file path.
 type DownloadRequest struct {
+	Headers            map[string]string
 	URL                string
 	Filename           string
 	Path               string
 	Mirrors            []string
-	Headers            map[string]string
 	IsExplicitCategory bool
 	SkipApproval       bool
 }
 
 // Enqueue probes and reserves a stable destination before dispatching to the queue layer.
-func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) (string, string, error) {
+func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) (id, filename string, err error) {
 	if mgr.addFunc == nil {
-		return "", "", fmt.Errorf("add function unavailable")
+		return "", "", errors.New("add function unavailable")
 	}
 
 	utils.Debug("Lifecycle: Enqueue %s (Filename: %s)", req.URL, req.Filename)
-	return mgr.enqueueResolved(ctx, req, func(finalPath, finalFilename string, probe *ProbeResult) (string, error) {
-		return mgr.addFunc(
+	return mgr.enqueueResolved(ctx, req, func(finalPath, filename string, probe *ProbeResult) (string, error) {
+		return mgr.addFunc(ctx,
 			req.URL,
 			finalPath,
-			finalFilename,
+			filename,
 			req.Mirrors,
 			req.Headers,
 			req.IsExplicitCategory,
@@ -210,17 +208,17 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 }
 
 // EnqueueWithID does the same lifecycle work as Enqueue while preserving a caller-owned id.
-func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadRequest, requestID string) (string, string, error) {
+func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadRequest, requestID string) (id, filename string, err error) {
 	if mgr.addWithIDFunc == nil {
-		return "", "", fmt.Errorf("addWithID function unavailable")
+		return "", "", errors.New("addWithID function unavailable")
 	}
 
 	utils.Debug("Lifecycle: EnqueueWithID %s (%s)", req.URL, requestID)
-	return mgr.enqueueResolved(ctx, req, func(finalPath, finalFilename string, probe *ProbeResult) (string, error) {
-		return mgr.addWithIDFunc(
+	return mgr.enqueueResolved(ctx, req, func(finalPath, filename string, probe *ProbeResult) (string, error) {
+		return mgr.addWithIDFunc(ctx,
 			req.URL,
 			finalPath,
-			finalFilename,
+			filename,
 			req.Mirrors,
 			req.Headers,
 			requestID,
@@ -232,12 +230,12 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 
 // enqueueResolved prepares the final path and working file before handing the
 // download to the engine, so workers and lifecycle events agree on one stable destination.
-func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadRequest, dispatch func(string, string, *ProbeResult) (string, error)) (string, string, error) {
+func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadRequest, dispatch func(string, string, *ProbeResult) (string, error)) (id, filename string, err error) {
 	if req.URL == "" {
-		return "", "", fmt.Errorf("URL is required")
+		return "", "", errors.New("URL is required")
 	}
 	if req.Path == "" {
-		return "", "", fmt.Errorf("destination path is required")
+		return "", "", errors.New("destination path is required")
 	}
 
 	settings := mgr.GetSettings()
@@ -254,7 +252,8 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 		defer func() { mgr.probeSem <- struct{}{} }()
 	}
 
-	probe, err := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
+	var probe *ProbeResult
+	probe, err = ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
 	if err != nil {
 		utils.Debug("Lifecycle: Probe failed: %v\n", err)
 		return "", "", fmt.Errorf("probe failed: %w", err)
@@ -267,7 +266,8 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 			return "", "", fmt.Errorf("enqueue aborted: %w", ctx.Err())
 		}
 
-		finalPath, finalFilename, err := ResolveDestination(
+		var finalPath string
+		finalPath, filename, err = ResolveDestination(
 			req.URL,
 			req.Filename,
 			req.Path,
@@ -282,15 +282,15 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 
 		// Reserve the working path before dispatch so a concurrent enqueue has to
 		// pick a different name instead of truncating this in-flight download.
-		if err := reserveWorkingFile(finalPath, finalFilename); err != nil {
-			if errors.Is(err, os.ErrExist) {
+		if rwfErr := reserveWorkingFile(finalPath, filename); rwfErr != nil {
+			if errors.Is(rwfErr, os.ErrExist) {
 				continue
 			}
-			return "", "", err
+			return "", "", rwfErr
 		}
 
-		surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
-		newID, err := dispatch(finalPath, finalFilename, probe)
+		surgePath := filepath.Join(finalPath, filename) + types.IncompleteSuffix
+		id, err = dispatch(finalPath, filename, probe)
 		if err != nil {
 			_ = os.Remove(surgePath)
 			return "", "", err
@@ -302,15 +302,15 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 		hooks := mgr.getEngineHooks()
 		if hooks.PublishEvent != nil {
 			_ = hooks.PublishEvent(events.DownloadQueuedMsg{
-				DownloadID: newID,
-				Filename:   finalFilename,
+				DownloadID: id,
+				Filename:   filename,
 				URL:        req.URL,
-				DestPath:   filepath.Join(finalPath, finalFilename),
+				DestPath:   filepath.Join(finalPath, filename),
 				Mirrors:    append([]string(nil), req.Mirrors...),
 			})
 		}
 
-		return newID, finalFilename, nil
+		return id, filename, nil
 	}
 
 	return "", "", fmt.Errorf("failed to reserve unique working file for %q after %d attempts", req.URL, maxWorkingFileReservationAttempts)

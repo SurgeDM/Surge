@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -30,8 +31,8 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	// Create two distinct "default" directories
 	dirA := filepath.Join(tmpDir, "DirA")
 	dirB := filepath.Join(tmpDir, "DirB")
-	_ = os.MkdirAll(dirA, 0o755)
-	_ = os.MkdirAll(dirB, 0o755)
+	_ = os.MkdirAll(dirA, 0o750)
+	_ = os.MkdirAll(dirB, 0o750)
 
 	// Setup a temporary DB for state
 	state.CloseDB()
@@ -45,7 +46,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.General.DefaultDownloadDir = dirA
 
-	m := RootModel{
+	m := &RootModel{
 		Settings:  settings,
 		Service:   core.NewLocalDownloadServiceWithInput(pool, ch),
 		downloads: []*DownloadModel{},
@@ -55,7 +56,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	// 3. Start a download (simulating "surge get <url>" or TUI add)
 	// Change CWD to DirA to simulate "running from DirA"
 	originalWd, _ := os.Getwd()
-	if err := os.Chdir(dirA); err != nil {
+	if cErr := os.Chdir(dirA); cErr != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = os.Chdir(originalWd) }()
@@ -75,7 +76,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	expectedPathA := filepath.Join(dirA, testFilename)
 	canonicalForCompare := func(p string) string {
 		p = filepath.Clean(p)
-		if eval, err := filepath.EvalSymlinks(p); err == nil {
+		if eval, evErr := filepath.EvalSymlinks(p); evErr == nil {
 			p = eval
 		} else {
 			// Files may not exist yet; resolve symlinks on parent directory if possible.
@@ -85,7 +86,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 				p = filepath.Join(evalDir, base)
 			}
 		}
-		if abs, err := filepath.Abs(p); err == nil {
+		if abs, abErr := filepath.Abs(p); abErr == nil {
 			p = abs
 		}
 		p = filepath.Clean(p)
@@ -115,21 +116,21 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 		PausedAt:   time.Now().Unix(),
 		CreatedAt:  time.Now().Unix(),
 	}
-	err = state.SaveState(dm.URL, dm.Destination, manualState)
+	err = state.SaveState(context.Background(), dm.URL, dm.Destination, manualState)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	// 6. Change Settings (Default Dir = DirB) and CWD
 	settings.General.DefaultDownloadDir = dirB
-	if err := os.Chdir(dirB); err != nil {
-		t.Fatal(err)
+	if cErr := os.Chdir(dirB); cErr != nil {
+		t.Fatal(cErr)
 	}
 
 	// 7. Simulate Resume logic
-	paused, err := state.LoadPausedDownloads()
-	if err != nil {
-		t.Fatal(err)
+	paused, lpErr := state.LoadPausedDownloads(context.Background())
+	if lpErr != nil {
+		t.Fatal(lpErr)
 	}
 
 	if len(paused) != 1 {

@@ -78,7 +78,7 @@ func TestStateSync(t *testing.T) {
 		t.Fatalf("Program failed: %v", err)
 	}
 
-	finalRoot := finalModel.(RootModel)
+	finalRoot := finalModel.(*RootModel)
 	var target *DownloadModel
 	for _, d := range finalRoot.downloads {
 		if d.ID == downloadID {
