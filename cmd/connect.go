@@ -22,8 +22,11 @@ var connectCmd = &cobra.Command{
 	Args:  cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		var target string
+		hostTarget := resolveHostTarget()
 		if len(args) > 0 {
 			target = args[0]
+		} else if hostTarget != "" {
+			target = hostTarget
 		} else {
 			port := readActivePort()
 			if port == 0 {
