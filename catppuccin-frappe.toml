@@ -1,42 +1,14 @@
 # source: https://github.com/catppuccin/alacritty/blob/main/catppuccin-frappe.toml
 
+# modified to fit the spec
+
+[colors]
+name = "Catppuccin Frappe"
+is_dark = true
+
 [colors.primary]
 background = "#303446"
 foreground = "#c6d0f5"
-dim_foreground = "#838ba7"
-bright_foreground = "#c6d0f5"
-
-[colors.cursor]
-text = "#303446"
-cursor = "#f2d5cf"
-
-[colors.vi_mode_cursor]
-text = "#303446"
-cursor = "#babbf1"
-
-[colors.search.matches]
-foreground = "#303446"
-background = "#a5adce"
-
-[colors.search.focused_match]
-foreground = "#303446"
-background = "#a6d189"
-
-[colors.footer_bar]
-foreground = "#303446"
-background = "#a5adce"
-
-[colors.hints.start]
-foreground = "#303446"
-background = "#e5c890"
-
-[colors.hints.end]
-foreground = "#303446"
-background = "#a5adce"
-
-[colors.selection]
-text = "#303446"
-background = "#f2d5cf"
 
 [colors.normal]
 black = "#51576d"
@@ -57,11 +29,3 @@ blue = "#8caaee"
 magenta = "#f4b8e4"
 cyan = "#81c8be"
 white = "#a5adce"
-
-[[colors.indexed_colors]]
-index = 16
-color = "#ef9f76"
-
-[[colors.indexed_colors]]
-index = 17
-color = "#f2d5cf"

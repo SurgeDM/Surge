@@ -2,6 +2,8 @@ package colors
 
 import (
 	"image/color"
+	"strings"
+	"path/filepath"
 	"sync"
 	"os"
 
@@ -115,6 +117,40 @@ func init() {
 	isDarkMode = true
 }
 
+func resolveThemePath(path string) string {
+	if path == "" {
+		return ""
+	}
+
+	if strings.HasPrefix(path, "~") {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			path = filepath.Join(home, path[1:])
+		}
+	}
+
+	if !strings.HasSuffix(path, ".toml") {
+		pathWithExt := path + ".toml"
+		if _, err := os.Stat(path); err == nil {
+			return pathWithExt
+		}
+	}
+
+	if _, err := os.Stat(path); err == nil {
+		return path
+	}
+
+	configDir, err := os.UserConfigDir()
+	if err == nil {
+		xdgPath := filepath.Join(configDir, "surge", "themes", path)
+		if _, err := os.Stat(xdgPath); err == nil {
+			return xdgPath
+		}
+	}
+
+	return path
+}
+
 func LoadTheme(path string, darkPreferred bool) {
 	modeMu.Lock()
 	isDarkMode = darkPreferred
@@ -123,8 +159,10 @@ func LoadTheme(path string, darkPreferred bool) {
 		newPalette = &defaultDark
 	}
 
+	resolvedPath := resolveThemePath(path)
+
 	if path != "" {
-		if data, err := os.ReadFile(path); err == nil {
+		if data, err := os.ReadFile(resolvedPath); err == nil {
 			var cfg ThemeConfig
 			if err := toml.Unmarshal(data, &cfg); err == nil {
 				// 1. Check for specific mode override in file
