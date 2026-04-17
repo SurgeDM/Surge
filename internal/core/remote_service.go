@@ -20,12 +20,12 @@ import (
 
 // RemoteDownloadService implements DownloadService for a remote daemon.
 type RemoteDownloadService struct {
-	BaseURL   string
-	Token     string
+	ctx       context.Context
 	Client    *http.Client
 	SSEClient *http.Client
-	ctx       context.Context
 	cancel    context.CancelFunc
+	BaseURL   string
+	Token     string
 }
 
 // NewRemoteDownloadService creates a new remote service instance.
@@ -122,9 +122,9 @@ func (s *RemoteDownloadService) GetStatus(ctx context.Context, id string) (*type
 }
 
 // Add queues a new download.
-func (s *RemoteDownloadService) Add(ctx context.Context, url, path, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+func (s *RemoteDownloadService) Add(ctx context.Context, rawURL, path, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
 	req := map[string]interface{}{
-		"url":                  url,
+		"url":                  rawURL,
 		"path":                 path,
 		"filename":             filename,
 		"mirrors":              mirrors,
@@ -149,9 +149,9 @@ func (s *RemoteDownloadService) Add(ctx context.Context, url, path, filename str
 }
 
 // AddWithID queues a new download with a caller-provided id.
-func (s *RemoteDownloadService) AddWithID(ctx context.Context, url, path, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
+func (s *RemoteDownloadService) AddWithID(ctx context.Context, rawURL, path, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
 	req := map[string]interface{}{
-		"url":            url,
+		"url":            rawURL,
 		"path":           path,
 		"filename":       filename,
 		"mirrors":        mirrors,
@@ -236,7 +236,7 @@ func (s *RemoteDownloadService) Shutdown() error {
 }
 
 // StreamEvents returns a channel that receives real-time download events via SSE.
-func (s *RemoteDownloadService) StreamEvents(ctx context.Context) (<-chan interface{}, func(), error) {
+func (s *RemoteDownloadService) StreamEvents(ctx context.Context) (eventCh <-chan interface{}, cleanupFn func(), err error) {
 	ch := make(chan interface{}, 100)
 	go s.streamWithReconnect(ctx, ch)
 	return ch, func() {}, nil

@@ -101,7 +101,8 @@ func printDownloads(ctx context.Context, jsonOutput bool, baseURL, token string,
 			return fmt.Errorf("error listing downloads: %w", err)
 		}
 
-		for _, d := range dbDownloads {
+		for i := range dbDownloads { 
+			d := &dbDownloads[i]
 			var progress float64
 			if d.TotalSize > 0 {
 				progress = float64(d.Downloaded) * 100 / float64(d.TotalSize)
@@ -137,7 +138,8 @@ func printDownloads(ctx context.Context, jsonOutput bool, baseURL, token string,
 	_, _ = fmt.Fprintln(w, "ID\tFILENAME\tSTATUS\tPROGRESS\tSPEED\tSIZE")
 	_, _ = fmt.Fprintln(w, "--\t--------\t------\t--------\t-----\t----")
 
-	for _, d := range downloads {
+	for i := range downloads { 
+		d := &downloads[i]
 		progress := fmt.Sprintf("%.1f%%", d.Progress)
 		size := utils.ConvertBytesToHumanReadable(d.TotalSize)
 
@@ -167,7 +169,7 @@ func printDownloads(ctx context.Context, jsonOutput bool, baseURL, token string,
 	return nil
 }
 
-func showDownloadDetails(ctx context.Context, partialID string, jsonOutput bool, baseURL string, token string) error {
+func showDownloadDetails(ctx context.Context, partialID string, jsonOutput bool, baseURL, token string) error {
 	strictRemote := resolveHostTarget() != ""
 
 	// Resolve partial ID
@@ -179,20 +181,20 @@ func showDownloadDetails(ctx context.Context, partialID string, jsonOutput bool,
 	// Try to get from running server first
 	if baseURL != "" {
 		path := "/download?id=" + url.QueryEscape(fullID)
-		resp, err := doAPIRequest(ctx, http.MethodGet, baseURL, token, path, nil)
-		if err != nil {
+		resp, apiErr := doAPIRequest(ctx, http.MethodGet, baseURL, token, path, nil)
+		if apiErr != nil {
 			if strictRemote {
-				return fmt.Errorf("error fetching remote download details: %w", err)
+				return fmt.Errorf("failed to get download details from server: %w", apiErr)
 			}
 		} else {
 			defer func() {
-				if err := resp.Body.Close(); err != nil {
+				if cErr := resp.Body.Close(); cErr != nil {
 					utils.Debug("Error closing response body: %v", err)
 				}
 			}()
 			if resp.StatusCode == http.StatusOK {
 				var status types.DownloadStatus
-				if err := json.NewDecoder(resp.Body).Decode(&status); err == nil {
+				if dErr := json.NewDecoder(resp.Body).Decode(&status); dErr == nil {
 					printDownloadDetail(&status, jsonOutput)
 					return nil
 				} else if strictRemote {
@@ -214,9 +216,10 @@ func showDownloadDetails(ctx context.Context, partialID string, jsonOutput bool,
 	}
 
 	var found *types.DownloadEntry
-	for _, d := range downloads {
+	for i := range downloads { 
+		d := &downloads[i]
 		if d.ID == fullID {
-			found = &d
+			found = d
 			break
 		}
 	}

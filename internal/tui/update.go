@@ -11,7 +11,7 @@ import (
 
 func (m *RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 
-	if m.state == DashboardState && m.searchActive {
+	if m.uiState == DashboardState && m.searchActive {
 		var cmd tea.Cmd
 		m.searchInput, cmd = m.searchInput.Update(msg)
 		m.searchQuery = m.searchInput.Value()
@@ -19,7 +19,7 @@ func (m *RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	switch m.state {
+	switch m.uiState {
 	case InputState, ExtensionConfirmationState:
 		var cmd tea.Cmd
 		m.inputs[m.focusedInput], cmd = m.inputs[m.focusedInput].Update(msg)
@@ -76,14 +76,14 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		if m.state == SettingsState {
+		if m.uiState == SettingsState {
 			m.normalizeSettingsSelection()
 			if m.SettingsIsEditing {
 				m.updateSettingsInputWidthForViewport()
 			}
 		}
 
-		if m.state == CategoryManagerState {
+		if m.uiState == CategoryManagerState {
 			m.normalizeCategoryManagerSelection()
 			if m.catMgrEditing {
 				m.updateCategoryInputWidthsForViewport()
@@ -130,7 +130,7 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case UpdateCheckResultMsg:
 		if msg.Info != nil && msg.Info.UpdateAvailable {
 			m.UpdateInfo = msg.Info
-			m.state = UpdateAvailableState
+			m.uiState = UpdateAvailableState
 		}
 		return m, nil
 
@@ -153,7 +153,7 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				cmds = append(cmds, cmd)
 			}
 		}
-		if m.state == FilePickerState {
+		if m.uiState == FilePickerState {
 			var cmd tea.Cmd
 			m.filepicker, cmd = m.filepicker.Update(msg)
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
@@ -164,7 +164,7 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, tea.Batch(cmds...)
 		}
 
-		if m.state == BatchFilePickerState {
+		if m.uiState == BatchFilePickerState {
 			var cmd tea.Cmd
 			m.filepicker, cmd = m.filepicker.Update(msg)
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
@@ -179,14 +179,14 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return model, tea.Batch(cmds...)
 
 	case tea.KeyPressMsg:
-		switch m.state {
+		switch m.uiState {
 
 		case DashboardState:
 			return m.updateDashboard(msg)
 
 		case DetailState:
 			if msg.String() == "esc" || msg.String() == "q" || msg.String() == "enter" {
-				m.state = DashboardState
+				m.uiState = DashboardState
 				return m, nil
 			}
 
@@ -225,7 +225,7 @@ func (m *RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case HelpModalState:
 			if msg.String() == "esc" {
-				m.state = DashboardState
+				m.uiState = DashboardState
 				return m, nil
 			}
 			return m, nil

@@ -9,17 +9,17 @@ import (
 )
 
 // TempDir creates a temporary directory for test files and returns a cleanup function.
-func TempDir(prefix string) (string, func(), error) {
-	dir, err := os.MkdirTemp("", prefix+"-*")
+func TempDir(prefix string) (dirPath string, cleanup func(), err error) {
+	dirPath, err = os.MkdirTemp("", prefix+"-*")
 	if err != nil {
 		return "", nil, err
 	}
 
-	cleanup := func() {
-		_ = os.RemoveAll(dir)
+	cleanup = func() {
+		_ = os.RemoveAll(dirPath)
 	}
 
-	return dir, cleanup, nil
+	return dirPath, cleanup, nil
 }
 
 // CreateTestFile creates a test file with the specified size filled

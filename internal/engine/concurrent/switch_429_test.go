@@ -100,7 +100,6 @@ func TestConcurrentDownloader_BackoffOnSingleMirror(t *testing.T) {
 	// This forces a retry.
 	server := testutil.NewMockServerT(t,
 		testutil.WithFileSize(fileSize),
-		testutil.WithFileSize(fileSize),
 		testutil.WithRangeSupport(true),
 		testutil.WithFailOnNthRequest(1), // Fail 1st request (Worker's 1st try)
 	)

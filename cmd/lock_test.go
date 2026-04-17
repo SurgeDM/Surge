@@ -32,8 +32,8 @@ func TestAcquireLock(t *testing.T) {
 
 	// Test 1: First acquisition should succeed
 	t.Run("FirstAcquisition", func(t *testing.T) {
-		locked, err := AcquireLock()
-		require.NoError(t, err)
+		locked, lErr := AcquireLock()
+		require.NoError(t, lErr)
 		assert.True(t, locked, "Should acquire lock on first try")
 	})
 
@@ -42,8 +42,8 @@ func TestAcquireLock(t *testing.T) {
 	t.Run("SecondAcquisition", func(t *testing.T) {
 		// Attempt to acquire again with a fresh call (re simulates a second instance)
 
-		locked, err := AcquireLock()
-		require.NoError(t, err)
+		locked, lErr := AcquireLock()
+		require.NoError(t, lErr)
 		// If it succeeded, it means we can re-lock.
 		// If it failed, it means strict locking.
 		if locked {

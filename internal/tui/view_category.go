@@ -250,8 +250,10 @@ func (m *RootModel) renderCategoryEditView(innerWidth, rows int) string {
 		if i == m.catMgrEditField {
 			value = m.catMgrInputs[i].View()
 		}
-		fieldLines = append(fieldLines, labelStyle.Width(innerWidth).MaxWidth(innerWidth).Render(label))
-		fieldLines = append(fieldLines, valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render("  "+value))
+		fieldLines = append(fieldLines,
+			labelStyle.Width(innerWidth).MaxWidth(innerWidth).Render(label),
+			valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render("  "+value),
+		)
 		if i < len(fieldLabels)-1 {
 			fieldLines = append(fieldLines, "")
 		}

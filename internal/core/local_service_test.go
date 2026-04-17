@@ -40,11 +40,11 @@ func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 	destPath := filepath.Join(tempDir, "file.bin")
 	incompletePath := destPath + types.IncompleteSuffix
 
-	if err := os.WriteFile(incompletePath, []byte("partial"), 0o600); err != nil {
-		t.Fatalf("failed to create partial file: %v", err)
+	if wrErr := os.WriteFile(incompletePath, []byte("partial"), 0o600); wrErr != nil {
+		t.Fatalf("failed to create partial file: %v", wrErr)
 	}
 
-	if err := state.SaveState(context.Background(), url, destPath, &types.DownloadState{
+	if saveErr := state.SaveState(context.Background(), url, destPath, &types.DownloadState{
 		ID:         id,
 		URL:        url,
 		DestPath:   destPath,
@@ -54,12 +54,12 @@ func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 		Tasks: []types.Task{
 			{Offset: 200, Length: 800},
 		},
-	}); err != nil {
-		t.Fatalf("failed to seed state: %v", err)
+	}); saveErr != nil {
+		t.Fatalf("failed to seed state: %v", saveErr)
 	}
 
-	if err := svc.Delete(context.Background(), id); err != nil {
-		t.Fatalf("delete failed: %v", err)
+	if delErr := svc.Delete(context.Background(), id); delErr != nil {
+		t.Fatalf("delete failed: %v", delErr)
 	}
 
 	gotRemoved := false
@@ -142,19 +142,19 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 	incompletePath := runtimeDestPath + types.IncompleteSuffix
 
 	// Ensure the partial file exists before delete to validate cleanup logic deterministically.
-	if _, err := os.Stat(incompletePath); os.IsNotExist(err) {
-		if err := os.WriteFile(incompletePath, []byte("partial"), 0o600); err != nil {
-			t.Fatalf("failed to create partial file before delete: %v", err)
+	if _, statErr := os.Stat(incompletePath); os.IsNotExist(statErr) {
+		if wrErr := os.WriteFile(incompletePath, []byte("partial"), 0o600); wrErr != nil {
+			t.Fatalf("failed to create partial file before delete: %v", wrErr)
 		}
-	} else if err != nil {
-		t.Fatalf("failed to stat partial file before delete: %v", err)
+	} else if statErr != nil {
+		t.Fatalf("failed to stat partial file before delete: %v", statErr)
 	}
 
 	// Simulate delete-before-persist path: no DB entry available.
 	_ = state.RemoveFromMasterList(context.Background(), id)
 
-	if err := svc.Delete(context.Background(), id); err != nil {
-		t.Fatalf("delete failed: %v", err)
+	if delErr := svc.Delete(context.Background(), id); delErr != nil {
+		t.Fatalf("delete failed: %v", delErr)
 	}
 
 	deadline = time.Now().Add(2 * time.Second)
@@ -321,8 +321,8 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	deadline := time.Now().Add(8 * time.Second)
 	progressed := false
 	for time.Now().Before(deadline) {
-		st, err := svc.GetStatus(context.Background(), id)
-		if err == nil && st != nil && st.Downloaded > 0 {
+		st, sErr := svc.GetStatus(context.Background(), id)
+		if sErr == nil && st != nil && st.Downloaded > 0 {
 			progressed = true
 			break
 		}
@@ -332,18 +332,18 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 		t.Fatal("download did not make progress before shutdown")
 	}
 
-	if err := svc.Shutdown(); err != nil {
-		t.Fatalf("shutdown failed: %v", err)
+	if shErr := svc.Shutdown(); shErr != nil {
+		t.Fatalf("shutdown failed: %v", shErr)
 	}
 	// Wait for event worker to drain all buffered events and finish DB writes
 	evWait()
 
 	deadline = time.Now().Add(500 * time.Millisecond)
 	for {
-		entry, err := state.GetDownload(context.Background(), id)
-		if err == nil || !strings.Contains(err.Error(), "locked") {
-			if err != nil {
-				t.Fatalf("failed to fetch persisted download: %v", err)
+		entry, getErr := state.GetDownload(context.Background(), id)
+		if getErr == nil || !strings.Contains(getErr.Error(), "locked") {
+			if getErr != nil {
+				t.Fatalf("failed to fetch persisted download: %v", getErr)
 			}
 			if entry == nil {
 				t.Fatal("expected persisted download entry after shutdown")
@@ -440,7 +440,7 @@ func TestLocalDownloadService_BatchProgress(t *testing.T) {
 
 	// Add download using test server URL
 
-	if f, err := os.Create(filepath.Join(tempDir, "test-file") + ".surge"); err == nil {
+	if f, crErr := os.Create(filepath.Join(tempDir, "test-file") + ".surge"); crErr == nil {
 		_ = f.Close()
 	}
 	_, err = svc.Add(context.Background(), ts.URL, tempDir, "test-file", nil, nil, false, 0, false)

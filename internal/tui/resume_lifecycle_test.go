@@ -56,7 +56,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	// 3. Start a download (simulating "surge get <url>" or TUI add)
 	// Change CWD to DirA to simulate "running from DirA"
 	originalWd, _ := os.Getwd()
-	if err := os.Chdir(dirA); err != nil {
+	if cErr := os.Chdir(dirA); cErr != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = os.Chdir(originalWd) }()
@@ -76,7 +76,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	expectedPathA := filepath.Join(dirA, testFilename)
 	canonicalForCompare := func(p string) string {
 		p = filepath.Clean(p)
-		if eval, err := filepath.EvalSymlinks(p); err == nil {
+		if eval, evErr := filepath.EvalSymlinks(p); evErr == nil {
 			p = eval
 		} else {
 			// Files may not exist yet; resolve symlinks on parent directory if possible.
@@ -86,7 +86,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 				p = filepath.Join(evalDir, base)
 			}
 		}
-		if abs, err := filepath.Abs(p); err == nil {
+		if abs, abErr := filepath.Abs(p); abErr == nil {
 			p = abs
 		}
 		p = filepath.Clean(p)
@@ -123,14 +123,14 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 
 	// 6. Change Settings (Default Dir = DirB) and CWD
 	settings.General.DefaultDownloadDir = dirB
-	if err := os.Chdir(dirB); err != nil {
-		t.Fatal(err)
+	if cErr := os.Chdir(dirB); cErr != nil {
+		t.Fatal(cErr)
 	}
 
 	// 7. Simulate Resume logic
-	paused, err := state.LoadPausedDownloads(context.Background())
-	if err != nil {
-		t.Fatal(err)
+	paused, lpErr := state.LoadPausedDownloads(context.Background())
+	if lpErr != nil {
+		t.Fatal(lpErr)
 	}
 
 	if len(paused) != 1 {

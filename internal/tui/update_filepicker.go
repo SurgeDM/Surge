@@ -11,13 +11,13 @@ func (m *RootModel) handleBatchFileSelection(path string) (tea.Model, tea.Cmd) {
 	if err != nil {
 		m.addLogEntry(LogStyleError.Render("✖ Failed to read batch file: " + err.Error()))
 		m.resetFilepickerToDirMode()
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, nil
 	}
 	m.pendingBatchURLs = urls
 	m.batchFilePath = path
 	m.resetFilepickerToDirMode()
-	m.state = BatchConfirmState
+	m.uiState = BatchConfirmState
 	return m, nil
 }
 
@@ -27,29 +27,30 @@ func (m *RootModel) updateFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.SettingsFileBrowsing {
 			m.Settings.General.DefaultDownloadDir = m.filepickerOriginalPath
 			m.SettingsFileBrowsing = false
-			m.state = SettingsState
+			m.uiState = SettingsState
 			return m, nil
 		}
 		if m.ExtensionFileBrowsing {
 			m.inputs[2].SetValue(m.filepickerOriginalPath)
 			m.ExtensionFileBrowsing = false
-			m.state = ExtensionConfirmationState
+			m.uiState = ExtensionConfirmationState
 			return m, nil
 		}
 		if m.catMgrFileBrowsing {
 			m.catMgrInputs[3].SetValue(m.filepickerOriginalPath)
 			m.catMgrFileBrowsing = false
-			m.state = CategoryManagerState
+			m.uiState = CategoryManagerState
 			return m, nil
 		}
 		m.inputs[2].SetValue(m.filepickerOriginalPath)
-		m.state = InputState
+		m.uiState = InputState
 		return m, nil
 	}
 
 	// H key to jump to default download directory
 	if key.Matches(msg, m.keys.FilePicker.GotoHome) {
-		return m, m.handleFilePickerGotoHome()
+		cmd := m.handleFilePickerGotoHome()
+		return m, cmd
 	}
 
 	// '.' to select current directory
@@ -73,7 +74,7 @@ func (m *RootModel) updateBatchFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.C
 	if key.Matches(msg, m.keys.FilePicker.Cancel) {
 		// Reset filepicker to directory mode and return
 		m.resetFilepickerToDirMode()
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, nil
 	}
 

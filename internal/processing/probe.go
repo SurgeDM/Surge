@@ -32,11 +32,11 @@ const maxProbeClients = 8
 
 // ProbeResult contains all metadata from server probe
 type ProbeResult struct {
-	FileSize         int64
-	SupportsRange    bool
 	Filename         string
 	DetectedFilename string
 	ContentType      string
+	FileSize         int64
+	SupportsRange    bool
 }
 
 // probeHeadersContextKey is used to pass custom headers to the HTTP client's CheckRedirect function
@@ -389,8 +389,8 @@ func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, runCfg *config
 	errs = make(map[string]error)
 
 	type mirrorProbeResult struct {
-		valid bool
 		err   error
+		valid bool
 	}
 
 	results := make([]mirrorProbeResult, len(candidates))

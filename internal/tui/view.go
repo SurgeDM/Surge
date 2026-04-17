@@ -93,7 +93,7 @@ func (m *RootModel) View() tea.View {
 	// === Handle Modal States First ===
 	// These overlays sit on top of the dashboard or replace it
 
-	if m.state == InputState {
+	if m.uiState == InputState {
 		modal := components.AddDownloadModal{
 			Title:           "Add Download",
 			Inputs:          []textinput.Model{m.inputs[0], m.inputs[1], m.inputs[2], m.inputs[3]},
@@ -114,7 +114,7 @@ func (m *RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == FilePickerState {
+	if m.uiState == FilePickerState {
 		// Create a local copy to avoid modifying model during view (though View takes value receiver m)
 		fp := m.filepicker
 		picker := components.NewFilePickerModal(
@@ -133,15 +133,15 @@ func (m *RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == SettingsState {
+	if m.uiState == SettingsState {
 		return m.wrapView(m.viewSettings())
 	}
 
-	if m.state == CategoryManagerState {
+	if m.uiState == CategoryManagerState {
 		return m.wrapView(m.viewCategoryManager())
 	}
 
-	if m.state == DuplicateWarningState {
+	if m.uiState == DuplicateWarningState {
 		modal := components.ConfirmationModal{
 			Title:       "\u26a0 Duplicate Detected",
 			Message:     "A download with this URL already exists",
@@ -167,7 +167,7 @@ func (m *RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == ExtensionConfirmationState {
+	if m.uiState == ExtensionConfirmationState {
 		extInputs := []textinput.Model{m.inputs[2], m.inputs[3]}
 		focused := 0
 		if m.focusedInput == 3 {
@@ -195,7 +195,7 @@ func (m *RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == BatchFilePickerState {
+	if m.uiState == BatchFilePickerState {
 		fp := m.filepicker
 		picker := components.NewFilePickerModal(
 			" Select URL File (.txt) ",
@@ -213,7 +213,7 @@ func (m *RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == BatchConfirmState {
+	if m.uiState == BatchConfirmState {
 		urlCount := len(m.pendingBatchURLs)
 		modal := components.ConfirmationModal{
 			Title:       "Batch Import",
@@ -233,11 +233,11 @@ func (m *RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == QuitConfirmState {
+	if m.uiState == QuitConfirmState {
 		return m.wrapView(m.renderModalWithOverlay(m.viewQuitConfirm()))
 	}
 
-	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
+	if m.uiState == UpdateAvailableState && m.UpdateInfo != nil {
 		modal := components.ConfirmationModal{
 			Title:       "\u2b06 Update Available",
 			Message:     "A new version of Surge is available: " + m.UpdateInfo.LatestVersion,
@@ -256,7 +256,7 @@ func (m *RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == URLUpdateState {
+	if m.uiState == URLUpdateState {
 		modal := components.AddDownloadModal{
 			Title:           "Refresh URL",
 			Inputs:          []textinput.Model{m.urlUpdateInput},
@@ -277,7 +277,7 @@ func (m *RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
-	if m.state == HelpModalState {
+	if m.uiState == HelpModalState {
 		w, h := GetDynamicModalDimensions(m.width, m.height, 40, 10, PopupWidth, 22)
 		modal := components.HelpModal{
 			Title:       "Keyboard Shortcuts",
@@ -324,8 +324,8 @@ func (m *RootModel) View() tea.View {
 	var bitmapWidth int
 	var totalSize, chunkSize int64
 	var chunkProgress []int64
-	if selected != nil && selected.state != nil {
-		bitmap, bitmapWidth, totalSize, chunkSize, chunkProgress = selected.state.GetBitmap()
+	if selected != nil && selected.progState != nil {
+		bitmap, bitmapWidth, totalSize, chunkSize, chunkProgress = selected.progState.GetBitmap()
 	}
 
 	// Pre-compute details content to avoid double-computation and width mismatches
@@ -601,11 +601,11 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 
 	// --- 5. Mirrors Section ---
 	var mirrorSection string
-	if d.state != nil && len(d.state.GetMirrors()) > 0 {
+	if d.progState != nil && len(d.progState.GetMirrors()) > 0 {
 		activeCount := 0
 		errorCount := 0
-		total := len(d.state.GetMirrors())
-		for _, m := range d.state.GetMirrors() {
+		total := len(d.progState.GetMirrors())
+		for _, m := range d.progState.GetMirrors() {
 			if m.Active {
 				activeCount++
 			}
@@ -631,21 +631,21 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	// Use explicit calls to insert divider only where needed
 	var parts []string
 
-	parts = append(parts, statusBox)
-	parts = append(parts, fileSection)
-	parts = append(parts, divider)
-	parts = append(parts, progSection)
-	parts = append(parts, divider)
-	parts = append(parts, statsSection)
+	parts = append(parts,
+		statusBox,
+		fileSection,
+		divider,
+		progSection,
+		divider,
+		statsSection,
+	)
 
 	if mirrorSection != "" {
-		parts = append(parts, divider)
-		parts = append(parts, mirrorSection)
+		parts = append(parts, divider, mirrorSection)
 	}
 
 	if errorSection != "" {
-		parts = append(parts, divider)
-		parts = append(parts, errorSection)
+		parts = append(parts, divider, errorSection)
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
@@ -795,9 +795,7 @@ func (m *RootModel) viewQuitConfirm() string {
 	if detail != "" {
 		lines = append(lines, detailStyle.Render(detail))
 	}
-	lines = append(lines, "")
-	lines = append(lines, "")
-	lines = append(lines, centeredButtons)
+	lines = append(lines, "", "", centeredButtons)
 
 	innerHeight := h - components.BorderFrameHeight
 	contentHeight := lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, lines...))

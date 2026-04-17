@@ -31,6 +31,24 @@ func completedSpeedMBps(entry *types.DownloadEntry) float64 {
 	return 0
 }
 
+// LocalDownloadService implements DownloadService for the local embedded engine.
+type LocalDownloadService struct {
+	lifecycleHooks LifecycleHooks
+	ctx            context.Context
+	shutdownErr    error
+	InputCh        chan interface{}
+	reportTicker   *time.Ticker
+	cancel         context.CancelFunc
+	Pool           *download.WorkerPool
+	settings       *config.Settings
+	listeners      []chan interface{}
+	broadcastWG    sync.WaitGroup
+	reportWG       sync.WaitGroup
+	settingsMu     sync.RWMutex
+	shutdownOnce   sync.Once
+	listenerMu     sync.Mutex
+}
+
 // ReloadSettings reloads settings from disk
 func (s *LocalDownloadService) ReloadSettings() error {
 	settings, err := config.LoadSettings()
@@ -41,33 +59,6 @@ func (s *LocalDownloadService) ReloadSettings() error {
 	s.settings = settings
 	s.settingsMu.Unlock()
 	return nil
-}
-
-// LocalDownloadService implements DownloadService for the local embedded engine.
-type LocalDownloadService struct {
-	Pool    *download.WorkerPool
-	InputCh chan interface{}
-
-	// Broadcast fields
-	listeners  []chan interface{}
-	listenerMu sync.Mutex
-
-	broadcastWG  sync.WaitGroup
-	reportTicker *time.Ticker
-	reportWG     sync.WaitGroup
-
-	// Lifecycle
-	ctx    context.Context
-	cancel context.CancelFunc
-	// shutdownOnce guarantees Shutdown is safe to call multiple times.
-	shutdownOnce sync.Once
-	shutdownErr  error
-
-	// Settings Cache
-	settings   *config.Settings
-	settingsMu sync.RWMutex
-
-	lifecycleHooks LifecycleHooks
 }
 
 // LifecycleHooks routes service-level management calls through the LifecycleManager.
@@ -209,7 +200,8 @@ func (s *LocalDownloadService) reportProgressLoop() {
 			}
 
 			// Calculate Progress
-			downloaded, total, totalElapsed, sessionElapsed, connections, sessionStart := cfg.State.GetProgress()
+			p := cfg.State.GetProgress()
+			downloaded, total, totalElapsed, sessionElapsed, connections, sessionStart := p.Downloaded, p.Total, p.TotalElapsed, p.SessionElapsed, p.Connections, p.SessionStartBytes
 
 			// Calculate Speed with EMA
 			sessionDownloaded := downloaded - sessionStart
@@ -283,7 +275,7 @@ func (s *LocalDownloadService) getSpeedEmaAlpha() float64 {
 }
 
 // StreamEvents returns a channel that receives real-time download events.
-func (s *LocalDownloadService) StreamEvents(ctx context.Context) (<-chan interface{}, func(), error) {
+func (s *LocalDownloadService) StreamEvents(ctx context.Context) (eventCh <-chan interface{}, cleanupFn func(), err error) {
 	ch := make(chan interface{}, 100)
 	s.listenerMu.Lock()
 	s.listeners = append(s.listeners, ch)
@@ -367,7 +359,8 @@ func (s *LocalDownloadService) List(ctx context.Context) ([]types.DownloadStatus
 
 			if cfg.State != nil {
 				// Calculate progress and speed (thread-safe)
-				downloaded, totalSize, _, sessionElapsed, connections, sessionStart := cfg.State.GetProgress()
+				p := cfg.State.GetProgress()
+				downloaded, totalSize, sessionElapsed, connections, sessionStart := p.Downloaded, p.Total, p.SessionElapsed, p.Connections, p.SessionStartBytes
 
 				status.TotalSize = totalSize
 				status.Downloaded = downloaded
@@ -499,8 +492,8 @@ func (s *LocalDownloadService) add(ctx context.Context, url, path, filename stri
 		return "", errors.New("download id already exists")
 	}
 
-	state := types.NewProgressState(id, 0)
-	state.DestPath = filepath.Join(outPath, filename) // Best guess until download starts
+	progState := types.NewProgressState(id, 0)
+	progState.DestPath = filepath.Join(outPath, filename) // Best guess until download starts
 
 	cfg := types.DownloadConfig{
 		URL:                url,
@@ -509,7 +502,7 @@ func (s *LocalDownloadService) add(ctx context.Context, url, path, filename stri
 		ID:                 id,
 		Filename:           filename, // If empty, will be auto-detected
 		ProgressCh:         s.InputCh,
-		State:              state,
+		State:              progState,
 		Runtime:            types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
 		Headers:            headers,
 		IsExplicitCategory: isExplicitCategory,

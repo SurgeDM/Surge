@@ -53,7 +53,7 @@ func (m *RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Settings.Close) {
 		// Save settings and exit
 		_ = m.persistSettings()
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, nil
 	}
 	tabBindings := []key.Binding{
@@ -94,7 +94,7 @@ func (m *RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if settingKey == "default_download_dir" {
 			m.SettingsFileBrowsing = true
 			m.filepickerOriginalPath = m.Settings.General.DefaultDownloadDir
-			m.state = FilePickerState
+			m.uiState = FilePickerState
 			m.filepicker = newFilepicker(m.filepickerOriginalPath)
 			return m, m.filepicker.Init()
 		}
@@ -126,7 +126,7 @@ func (m *RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Categories tab → open Category Manager
 		if m.SettingsActiveTab < len(categories) && categories[m.SettingsActiveTab] == "Categories" {
 			m.catMgrCursor = 0
-			m.state = CategoryManagerState
+			m.uiState = CategoryManagerState
 			return m, nil
 		}
 

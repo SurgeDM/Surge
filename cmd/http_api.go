@@ -140,7 +140,8 @@ func resolveDownloadDestPath(service core.DownloadService, id string) (string, e
 		return "", fmt.Errorf("failed to read history: %w", err)
 	}
 
-	for _, entry := range history {
+	for i := range history { 
+		entry := &history[i]
 		if entry.ID != id {
 			continue
 		}

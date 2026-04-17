@@ -15,7 +15,7 @@ import (
 
 // Helper to init state just for tests (avoiding global init if possible,
 // using temporary directories for each test)
-func initTestState(t *testing.T) (string, func()) {
+func initTestState(t *testing.T) (tmpDir string, cleanup func()) {
 	state.CloseDB() // Ensure any previous DB is closed
 
 	tmpDir, cleanup, err := testutil.TempDir("surge-test")
@@ -44,16 +44,16 @@ func TestConcurrentDownloader_Download(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "test_download.bin")
-	state := types.NewProgressState("test-id", fileSize)
+	pState := types.NewProgressState("test-id", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 4}
 
-	downloader := NewConcurrentDownloader("test-id", nil, state, runtime)
+	downloader := NewConcurrentDownloader("test-id", nil, pState, runtime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -84,17 +84,17 @@ func TestConcurrentDownloader_WithLatency(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "latency_test.bin")
-	state := types.NewProgressState("latency-test", fileSize)
+	pState := types.NewProgressState("latency-test", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 2}
 
-	downloader := NewConcurrentDownloader("latency-id", nil, state, runtime)
+	downloader := NewConcurrentDownloader("latency-id", nil, pState, runtime)
 
 	start := time.Now()
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -129,16 +129,16 @@ func TestConcurrentDownloader_SlowDownload(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "slow_test.bin")
-	state := types.NewProgressState("slow-test", fileSize)
+	pState := types.NewProgressState("slow-test", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 4}
 
-	downloader := NewConcurrentDownloader("slow-id", nil, state, runtime)
+	downloader := NewConcurrentDownloader("slow-id", nil, pState, runtime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -170,20 +170,20 @@ func TestConcurrentDownloader_RespectServerConnectionLimit(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "connlimit_test.bin")
-	state := types.NewProgressState("connlimit-test", fileSize)
+	pState := types.NewProgressState("connlimit-test", fileSize)
 	// Client configured for more connections than server allows
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerHost: 8, // More than server allows
 		MinChunkSize:          16 * types.KB,
 	}
 
-	downloader := NewConcurrentDownloader("connlimit-id", nil, state, runtime)
+	downloader := NewConcurrentDownloader("connlimit-id", nil, pState, runtime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -218,19 +218,19 @@ func TestConcurrentDownloader_ContentIntegrity(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "integrity_test.bin")
-	state := types.NewProgressState("integrity-test", fileSize)
+	pState := types.NewProgressState("integrity-test", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerHost: 4,
 		MinChunkSize:          16 * types.KB,
 	}
 
-	downloader := NewConcurrentDownloader("integrity-id", nil, state, runtime)
+	downloader := NewConcurrentDownloader("integrity-id", nil, pState, runtime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -240,7 +240,7 @@ func TestConcurrentDownloader_ContentIntegrity(t *testing.T) {
 	}
 
 	// Verify file size matches
-	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
+	if vErr := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); vErr != nil {
 		t.Error(err)
 	}
 
@@ -291,7 +291,7 @@ func TestConcurrentDownloader_SmallFile(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "small_test.bin")
-	state := types.NewProgressState("test-download", fileSize)
+	pState := types.NewProgressState("test-download", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerHost: 4,
 		MinChunkSize:          16 * types.KB,
@@ -299,13 +299,13 @@ func TestConcurrentDownloader_SmallFile(t *testing.T) {
 		MaxTaskRetries:        3,
 	}
 
-	downloader := NewConcurrentDownloader("test-id", nil, state, runtime)
+	downloader := NewConcurrentDownloader("test-id", nil, pState, runtime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -332,7 +332,7 @@ func TestConcurrentDownloader_MediumFile(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "medium_test.bin")
-	state := types.NewProgressState("test-download", fileSize)
+	pState := types.NewProgressState("test-download", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerHost: 8,
 		MinChunkSize:          64 * types.KB,
@@ -340,13 +340,13 @@ func TestConcurrentDownloader_MediumFile(t *testing.T) {
 		MaxTaskRetries:        3,
 	}
 
-	downloader := NewConcurrentDownloader("test-id", nil, state, runtime)
+	downloader := NewConcurrentDownloader("test-id", nil, pState, runtime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -378,17 +378,17 @@ func TestConcurrentDownloader_Cancellation(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "cancel_test.bin")
-	state := types.NewProgressState("cancel-test", fileSize)
+	pState := types.NewProgressState("cancel-test", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 4}
 
-	downloader := NewConcurrentDownloader("cancel-id", nil, state, runtime)
+	downloader := NewConcurrentDownloader("cancel-id", nil, pState, runtime)
 
 	ctx, cancel := context.WithCancel(context.Background())
 
 	done := make(chan error)
 	go func() {
 		// Pre-create incomplete file (simulating processing layer)
-		if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+		if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 			_ = f.Close()
 		}
 
@@ -432,7 +432,7 @@ func TestConcurrentDownloader_PauseAtCompletionFinalizesAsCompleted(t *testing.T
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -461,10 +461,10 @@ func TestConcurrentDownloader_ProgressTracking(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "progress_test.bin")
-	state := types.NewProgressState("progress-test", fileSize)
+	pState := types.NewProgressState("progress-test", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 4}
 
-	downloader := NewConcurrentDownloader("progress-id", nil, state, runtime)
+	downloader := NewConcurrentDownloader("progress-id", nil, pState, runtime)
 
 	// Since we can't easily access atomic counters inside the test helper without modifying imports or visibility,
 	// we will trust the progress state updates which are public.
@@ -474,7 +474,7 @@ func TestConcurrentDownloader_ProgressTracking(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -483,7 +483,7 @@ func TestConcurrentDownloader_ProgressTracking(t *testing.T) {
 		t.Fatalf("Download failed: %v", err)
 	}
 
-	finalDownloaded := state.Downloaded.Load()
+	finalDownloaded := pState.Downloaded.Load()
 	if finalDownloaded != fileSize {
 		t.Errorf("Final downloaded %d != file size %d", finalDownloaded, fileSize)
 	}
@@ -504,20 +504,20 @@ func TestConcurrentDownloader_RetryOnFailure(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "retry_test.bin")
-	state := types.NewProgressState("retry-test", fileSize)
+	pState := types.NewProgressState("retry-test", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerHost: 2,
 		MaxTaskRetries:        10,            // Need more retries since each attempt only gets 20KB
 		MinChunkSize:          64 * types.KB, // Larger chunks to ensure failures occur
 	}
 
-	downloader := NewConcurrentDownloader("retry-id", nil, state, runtime)
+	downloader := NewConcurrentDownloader("retry-id", nil, pState, runtime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -550,20 +550,20 @@ func TestConcurrentDownloader_FailOnNthRequest(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "failnth_test.bin")
-	state := types.NewProgressState("failnth-test", fileSize)
+	pState := types.NewProgressState("failnth-test", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerHost: 1, // Single connection for predictable request order
 		MaxTaskRetries:        5,
 		MinChunkSize:          64 * types.KB, // 4 chunks = 4 requests minimum
 	}
 
-	downloader := NewConcurrentDownloader("failnth-id", nil, state, runtime)
+	downloader := NewConcurrentDownloader("failnth-id", nil, pState, runtime)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 
@@ -617,7 +617,7 @@ func TestConcurrentDownloader_ResumePartialDownload(t *testing.T) {
 		Filename:   "resume_test.bin",
 		URLHash:    state.URLHash(server.URL()),
 	}
-	if err := state.SaveState(context.Background(), server.URL(), destPath, savedState); err != nil {
+	if saveErr := state.SaveState(context.Background(), server.URL(), destPath, savedState); saveErr != nil {
 		t.Fatalf("Failed to save state: %v", err)
 	}
 
@@ -631,7 +631,7 @@ func TestConcurrentDownloader_ResumePartialDownload(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 

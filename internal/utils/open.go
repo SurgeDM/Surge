@@ -66,11 +66,11 @@ func openWithSystem(path string) error {
 func buildOpenCommand(path string) *exec.Cmd {
 	switch runtime.GOOS {
 	case "darwin":
-		return exec.CommandContext(context.Background(), "open", path) //nolint:gosec
+		return exec.CommandContext(context.Background(), "open", path) //nolint:gosec // internal shell command
 	case "windows":
-		return exec.CommandContext(context.Background(), "cmd", "/c", "start", "", path) //nolint:gosec
+		return exec.CommandContext(context.Background(), "cmd", "/c", "start", "", path) //nolint:gosec // internal shell command
 	default:
-		return exec.CommandContext(context.Background(), "xdg-open", path) //nolint:gosec
+		return exec.CommandContext(context.Background(), "xdg-open", path) //nolint:gosec // internal shell command
 	}
 }
 

@@ -123,7 +123,7 @@ func (d *downloadDelegate) Update(msg tea.Msg, m *list.Model) tea.Cmd {
 	return nil
 }
 
-func (d *downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) {
+func (d *downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem list.Item) { //nolint:gocritic // interface requirement) {
 	i, ok := listItem.(DownloadItem)
 	if !ok {
 		return

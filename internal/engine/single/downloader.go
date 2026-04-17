@@ -21,17 +21,17 @@ import (
 // the server doesn't support Range headers. If interrupted, the download must restart.
 type SingleDownloader struct {
 	Client       *http.Client
-	ProgressChan chan<- any           // Channel for events (start/complete/error)
-	ID           string               // Download ID
-	State        *types.ProgressState // Shared state for TUI polling
+	ProgressChan chan<- any
+	State        *types.ProgressState
 	Runtime      *types.RuntimeConfig
-	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
+	Headers      map[string]string
+	ID           string
 }
 
 type singleTransportKey struct {
 	proxyURL  string
-	maxConns  int
 	customDNS string
+	maxConns  int
 }
 
 var singleTransportCache sync.Map // map[singleTransportKey]*http.Transport
@@ -158,7 +158,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		return err
 	}
 	defer func() {
-		if err := resp.Body.Close(); err != nil {
+		if cErr := resp.Body.Close(); cErr != nil {
 			utils.Debug("Error closing response body: %v", err)
 		}
 	}()
@@ -181,7 +181,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 	preallocated := false
 	if fileSize > 0 {
-		if err := preallocateFile(outFile, fileSize); err != nil {
+		if pErr := preallocateFile(outFile, fileSize); pErr != nil {
 			return fmt.Errorf("failed to preallocate file: %w", err)
 		}
 		preallocated = true
@@ -238,13 +238,13 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 }
 
 type progressReader struct {
+	lastFlush     time.Time
 	reader        io.Reader
 	state         *types.ProgressState
 	batchSize     int64
 	batchInterval time.Duration
 	written       int64
 	pending       int64
-	lastFlush     time.Time
 	readChecks    uint8
 }
 

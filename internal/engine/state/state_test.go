@@ -469,8 +469,8 @@ func TestUpdateStatus_NotFound(t *testing.T) {
 
 func seedTestDownloads(t *testing.T, entries []types.DownloadEntry) {
 	t.Helper()
-	for _, e := range entries {
-		if err := AddToMasterList(context.Background(), &e); err != nil {
+	for i := range entries {
+		if err := AddToMasterList(context.Background(), &entries[i]); err != nil {
 			t.Fatalf("AddToMasterList failed: %v", err)
 		}
 	}
@@ -667,12 +667,12 @@ func TestMirrorsPersistence(t *testing.T) {
 		CompletedAt: time.Now().Unix(),
 	}
 
-	if err := AddToMasterList(context.Background(), &entry); err != nil {
-		t.Fatalf("AddToMasterList failed: %v", err)
+	if rErr := AddToMasterList(context.Background(), &entry); rErr != nil {
+		t.Fatalf("AddToMasterList failed: %v", rErr)
 	}
 
-	loadedEntries, err := LoadCompletedDownloads(context.Background())
-	if err != nil {
+	loadedEntries, rErr := LoadCompletedDownloads(context.Background())
+	if rErr != nil {
 		t.Fatalf("LoadCompletedDownloads failed: %v", err)
 	}
 
@@ -770,14 +770,14 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 	}
 
 	// Insert a paused download with correct file hash
-	if err := AddToMasterList(context.Background(), &types.DownloadEntry{
+	if cErr := AddToMasterList(context.Background(), &types.DownloadEntry{
 		ID:       "integrity-valid",
 		URL:      "https://example.com/valid.zip",
 		DestPath: destPath,
 		Filename: "valid.zip",
 		Status:   "paused",
-	}); err != nil {
-		t.Fatalf("AddToMasterList failed: %v", err)
+	}); cErr != nil {
+		t.Fatalf("AddToMasterList failed: %v", cErr)
 	}
 
 	// Set file_hash directly in DB (simulating SaveState having computed it)

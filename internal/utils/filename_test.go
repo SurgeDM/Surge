@@ -77,11 +77,11 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 	pdfContent := []byte("%PDF-1.4\n") // Magic bytes for PDF
 
 	tests := []struct {
+		headers  http.Header
 		name     string
 		url      string
-		headers  http.Header
-		body     []byte
 		expected string
+		body     []byte
 	}{
 		{
 			name: "Priority 1: Content-Disposition beats all",

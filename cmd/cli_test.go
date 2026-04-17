@@ -257,7 +257,8 @@ func TestReadURLsFromFile_ParsesAndFilters(t *testing.T) {
 
 	// Test empty / comment-only file
 	emptyFile := filepath.Join(tmpDir, "empty.txt")
-	if err := os.WriteFile(emptyFile, []byte("# just a comment\n\n  "), 0o600); err != nil {
+	err = os.WriteFile(emptyFile, []byte("# just a comment\n\n  "), 0o600)
+	if err != nil {
 		t.Fatalf("failed to write empty url file: %v", err)
 	}
 	_, err = utils.ReadURLsFromFile(emptyFile)
@@ -381,8 +382,8 @@ func TestServerPIDLifecycle(t *testing.T) {
 func TestFormatSize_Table(t *testing.T) {
 	tests := []struct {
 		name  string
-		bytes int64
 		want  string
+		bytes int64
 	}{
 		{name: "zero", bytes: 0, want: "0 B"},
 		{name: "bytes", bytes: 512, want: "512 B"},
@@ -518,8 +519,8 @@ func TestAddCmdRunE_ReturnsExpectedErrors(t *testing.T) {
 
 func TestActionCommandsRunE_ReturnNoServerErrors(t *testing.T) {
 	tests := []struct {
-		name string
 		run  func() error
+		name string
 	}{
 		{
 			name: "pause",
@@ -585,8 +586,8 @@ func TestActionCommandsRunE_ReturnNoServerErrors(t *testing.T) {
 
 func TestActionCommandsRunE_ReturnAmbiguousIDErrors(t *testing.T) {
 	tests := []struct {
-		name string
 		run  func() error
+		name string
 	}{
 		{
 			name: "pause",
@@ -797,8 +798,8 @@ func TestShowDownloadDetails_UsesDatabaseFallback(t *testing.T) {
 func TestSendToServer_SuccessAndServerError(t *testing.T) {
 	tests := []struct {
 		name       string
-		statusCode int
 		body       string
+		statusCode int
 		wantErr    bool
 	}{
 		{name: "success accepted", statusCode: http.StatusAccepted, body: `{"id":"abc"}`},
@@ -1052,22 +1053,22 @@ func resetCommandConnectionState(t *testing.T) {
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	old := os.Stdout
-	r, w, err := os.Pipe()
-	if err != nil {
-		t.Fatalf("os.Pipe failed: %v", err)
+	r, w, pErr := os.Pipe()
+	if pErr != nil {
+		t.Fatalf("os.Pipe failed: %v", pErr)
 	}
 	os.Stdout = w
 
 	fn()
 
-	if err := w.Close(); err != nil {
-		t.Fatalf("close writer failed: %v", err)
+	if cErr := w.Close(); cErr != nil {
+		t.Fatalf("close writer failed: %v", cErr)
 	}
 	os.Stdout = old
 
-	data, err := io.ReadAll(r)
-	if err != nil {
-		t.Fatalf("read stdout failed: %v", err)
+	data, readErr := io.ReadAll(r)
+	if readErr != nil {
+		t.Fatalf("read stdout failed: %v", readErr)
 	}
 	_ = r.Close()
 	return string(data)

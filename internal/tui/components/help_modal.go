@@ -10,10 +10,10 @@ import (
 
 // HelpModal renders a styled help overlay showing all keyboard shortcuts
 type HelpModal struct {
-	Title       string
-	HelpKeys    help.KeyMap // Must implement FullHelp() [][]key.Binding
-	Help        help.Model  // Help model for rendering
+	HelpKeys    help.KeyMap
 	BorderColor color.Color
+	Help        help.Model
+	Title       string
 	Width       int
 	Height      int
 }

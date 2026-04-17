@@ -130,7 +130,8 @@ func TestProgressState_GetProgress(t *testing.T) {
 	ps.ActiveWorkers.Store(4)
 	ps.SessionStartBytes = 100
 
-	downloaded, total, totalElapsed, sessionElapsed, connections, sessionStart := ps.GetProgress()
+	p := ps.GetProgress()
+	downloaded, total, totalElapsed, sessionElapsed, connections, sessionStart := p.Downloaded, p.Total, p.TotalElapsed, p.SessionElapsed, p.Connections, p.SessionStartBytes
 
 	if downloaded != 500 {
 		t.Errorf("downloaded = %d, want 500", downloaded)
@@ -183,7 +184,8 @@ func TestProgressState_ElapsedCalculation(t *testing.T) {
 	// Simulate current session start 2 seconds ago
 	ps.StartTime = time.Now().Add(-2 * time.Second)
 
-	_, _, totalElapsed, sessionElapsed, _, _ := ps.GetProgress()
+	p := ps.GetProgress()
+	totalElapsed, sessionElapsed := p.TotalElapsed, p.SessionElapsed
 
 	// Verify Session Elapsed is approx 2s
 	if sessionElapsed < 1*time.Second || sessionElapsed > 3*time.Second {
@@ -203,7 +205,8 @@ func TestProgressState_GetProgress_PausedFreezesElapsed(t *testing.T) {
 	ps.StartTime = time.Now().Add(-3 * time.Second)
 	ps.Pause()
 
-	_, _, totalElapsed, sessionElapsed, _, _ := ps.GetProgress()
+	p := ps.GetProgress()
+	totalElapsed, sessionElapsed := p.TotalElapsed, p.SessionElapsed
 
 	if sessionElapsed != 0 {
 		t.Errorf("SessionElapsed = %v, want 0 while paused", sessionElapsed)

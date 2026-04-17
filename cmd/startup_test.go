@@ -93,7 +93,7 @@ func TestStartupIntegrityCheck_RemovesMissingPausedEntry(t *testing.T) {
 	seedDownload(t, testID, testURL, testDest, "paused")
 
 	// Ensure .surge file is missing to simulate an orphaned paused DB entry.
-	if err := os.Remove(testDest + types.IncompleteSuffix); err != nil && !os.IsNotExist(err) {
+	if rmErr := os.Remove(testDest + types.IncompleteSuffix); rmErr != nil && !os.IsNotExist(rmErr) {
 		t.Fatalf("failed to remove test .surge file: %v", err)
 	}
 

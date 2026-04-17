@@ -35,9 +35,9 @@ func TestUniqueFilePath(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		existing []string
 		input    string
 		want     string
+		existing []string
 	}{
 		{
 			name:     "No conflict",

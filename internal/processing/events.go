@@ -54,12 +54,12 @@ func finalizeCompletedFile(finalPath string) error {
 	surgePath := finalPath + types.IncompleteSuffix
 	if err := renameCompletedFile(surgePath, finalPath); err != nil {
 		if errors.Is(err, syscall.EXDEV) {
-			if err := copyCompletedFile(surgePath, finalPath); err != nil {
+			if cpErr := copyCompletedFile(surgePath, finalPath); cpErr != nil {
 				_ = os.Remove(finalPath)
 				return fmt.Errorf("copy completed file: %w", err)
 			}
-			if err := retryRemove(surgePath); err != nil {
-				return fmt.Errorf("remove copied working file: %w", err)
+			if rmErr := retryRemove(surgePath); rmErr != nil {
+				return fmt.Errorf("remove copied working file: %w", rmErr)
 			}
 			return nil
 		}
@@ -227,7 +227,7 @@ func (mgr *LifecycleManager) StartEventWorker(ctx context.Context, ch <-chan int
 			// finalization failure must stay retryable instead of being recorded as done.
 			if err := finalizeCompletedFile(destPath); err != nil {
 				utils.Debug("Lifecycle: Failed to finalize completed file at %s: %v", destPath, err)
-				if err := state.AddToMasterList(ctx, &types.DownloadEntry{
+				if amlErr := state.AddToMasterList(ctx, &types.DownloadEntry{
 					ID:         m.DownloadID,
 					URL:        url,
 					URLHash:    urlHash,
@@ -238,8 +238,8 @@ func (mgr *LifecycleManager) StartEventWorker(ctx context.Context, ch <-chan int
 					Downloaded: m.Total,
 					TimeTaken:  m.Elapsed.Milliseconds(),
 					AvgSpeed:   avgSpeed,
-				}); err != nil {
-					utils.Debug("Lifecycle: Failed to persist finalization error state: %v", err)
+				}); amlErr != nil {
+					utils.Debug("Lifecycle: Failed to persist finalization error state: %v", amlErr)
 				}
 				if filename == "" {
 					filename = m.DownloadID
@@ -254,7 +254,7 @@ func (mgr *LifecycleManager) StartEventWorker(ctx context.Context, ch <-chan int
 				break
 			}
 
-			if err := state.AddToMasterList(ctx, &types.DownloadEntry{
+			if amlErr := state.AddToMasterList(ctx, &types.DownloadEntry{
 				ID:          m.DownloadID,
 				URL:         url,
 				URLHash:     urlHash,
@@ -266,8 +266,8 @@ func (mgr *LifecycleManager) StartEventWorker(ctx context.Context, ch <-chan int
 				CompletedAt: time.Now().Unix(),
 				TimeTaken:   m.Elapsed.Milliseconds(),
 				AvgSpeed:    avgSpeed,
-			}); err != nil {
-				utils.Debug("Lifecycle: Failed to persist completed download: %v", err)
+			}); amlErr != nil {
+				utils.Debug("Lifecycle: Failed to persist completed download: %v", amlErr)
 			}
 			if err := state.DeleteTasks(ctx, m.DownloadID); err != nil {
 				utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)
@@ -346,7 +346,7 @@ func (mgr *LifecycleManager) StartEventWorker(ctx context.Context, ch <-chan int
 		case events.DownloadQueuedMsg:
 			// Queue persistence is what lets downloads survive shutdown before any worker
 			// has emitted a started event.
-			if err := state.AddToMasterList(ctx, &types.DownloadEntry{
+			if amlErr := state.AddToMasterList(ctx, &types.DownloadEntry{
 				ID:       m.DownloadID,
 				URL:      m.URL,
 				URLHash:  state.URLHash(m.URL),
@@ -354,8 +354,8 @@ func (mgr *LifecycleManager) StartEventWorker(ctx context.Context, ch <-chan int
 				Filename: m.Filename,
 				Mirrors:  append([]string(nil), m.Mirrors...),
 				Status:   "queued",
-			}); err != nil {
-				utils.Debug("Lifecycle: Failed to persist queued download: %v", err)
+			}); amlErr != nil {
+				utils.Debug("Lifecycle: Failed to persist queued download: %v", amlErr)
 			}
 
 		case events.BatchProgressMsg, events.ProgressMsg:

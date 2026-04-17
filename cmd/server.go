@@ -172,7 +172,7 @@ func readPID() int {
 	return pid
 }
 
-func startServerLogic(args []string, portFlag int, batchFile string, outputDir string, exitWhenDone bool, noResume bool, tokenOverride string) error {
+func startServerLogic(args []string, portFlag int, batchFile, outputDir string, exitWhenDone, noResume bool, tokenOverride string) error {
 	port, listener, err := bindServerListener(portFlag)
 	if err != nil {
 		return err

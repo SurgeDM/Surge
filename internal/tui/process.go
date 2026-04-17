@@ -13,7 +13,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
+func (m *RootModel) processProgressMsg(msg *events.ProgressMsg) tea.Cmd {
 	d := m.FindDownloadByID(msg.DownloadID)
 	if d == nil || d.done || d.paused {
 		return nil
@@ -33,16 +33,16 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 
 	// Update Chunk State if provided
 	if msg.BitmapWidth > 0 && len(msg.ChunkBitmap) > 0 {
-		if d.state != nil && msg.Total > 0 {
-			d.state.SetTotalSize(msg.Total)
+		if d.progState != nil && msg.Total > 0 {
+			d.progState.SetTotalSize(msg.Total)
 		}
 		// We only get bitmap, no progress array (to save bandwidth)
 		// State needs to be updated carefully
-		if d.state != nil {
-			d.state.RestoreBitmap(msg.ChunkBitmap, msg.ActualChunkSize)
+		if d.progState != nil {
+			d.progState.RestoreBitmap(msg.ChunkBitmap, msg.ActualChunkSize)
 		}
-		if d.state != nil && len(msg.ChunkProgress) > 0 {
-			d.state.SetChunkProgress(msg.ChunkProgress)
+		if d.progState != nil && len(msg.ChunkProgress) > 0 {
+			d.progState.SetChunkProgress(msg.ChunkProgress)
 		}
 	}
 

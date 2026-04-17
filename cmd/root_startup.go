@@ -81,7 +81,8 @@ func resumePausedDownloads() {
 		return
 	}
 
-	for _, entry := range pausedEntries {
+	for i := range pausedEntries { 
+		entry := &pausedEntries[i]
 		// If entry is explicitly queued, we should start it regardless of AutoResume setting
 		// If entry is paused, we only start it if AutoResume is enabled
 		if entry.Status == "paused" && !settings.General.AutoResume {

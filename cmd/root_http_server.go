@@ -176,7 +176,7 @@ func readTokenFromFile(path string) (string, error) {
 	return token, nil
 }
 
-func writeTokenToFile(path string, token string) error {
+func writeTokenToFile(path, token string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}

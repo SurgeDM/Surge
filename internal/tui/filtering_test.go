@@ -7,8 +7,8 @@ import (
 func TestTabFiltering(t *testing.T) {
 	tests := []struct {
 		name          string
-		activeTab     int
 		downloads     []*DownloadModel
+		activeTab     int
 		expectedCount int
 	}{
 		{

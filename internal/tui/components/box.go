@@ -27,7 +27,7 @@ type BoxRenderer func(leftTitle, rightTitle, content string, width, height int, 
 // Supports left and right titles (e.g., search on left, pane name on right).
 // Accepts pre-styled title strings.
 // Example: ╭─ 🔍 Search... ─────────── Downloads ─╮
-func RenderBtopBox(leftTitle, rightTitle string, content string, width, height int, borderColor color.Color) string {
+func RenderBtopBox(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string {
 	// Border characters
 	const (
 		topLeft     = "\u256d"

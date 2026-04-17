@@ -177,14 +177,15 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 
 	// Serialize to JSON
-	data, err := json.MarshalIndent(original, "", "  ")
+	var data []byte
+	data, err = json.MarshalIndent(original, "", "  ")
 	if err != nil {
 		t.Fatalf("Failed to marshal settings: %v", err)
 	}
 
 	// Write to temp file
 	testPath := filepath.Join(tmpDir, "test_settings.json")
-	if err := os.WriteFile(testPath, data, 0o600); err != nil {
+	if err = os.WriteFile(testPath, data, 0o600); err != nil {
 		t.Fatalf("Failed to write settings file: %v", err)
 	}
 
@@ -255,7 +256,7 @@ func TestLoadSettings_CorruptedJSON(t *testing.T) {
 
 	// Write corrupted JSON
 	testPath := filepath.Join(tmpDir, "corrupt.json")
-	if err := os.WriteFile(testPath, []byte("{invalid json"), 0o600); err != nil {
+	if err = os.WriteFile(testPath, []byte("{invalid json"), 0o600); err != nil {
 		t.Fatalf("Failed to write file: %v", err)
 	}
 
@@ -591,7 +592,7 @@ func TestSaveSettings_RealFunction(t *testing.T) {
 
 	// Verify file was created at expected path
 	settingsPath := GetSettingsPath()
-	if _, err := os.Stat(settingsPath); os.IsNotExist(err) {
+	if _, errStat := os.Stat(settingsPath); os.IsNotExist(errStat) {
 		t.Error("Settings file was not created by SaveSettings")
 	}
 

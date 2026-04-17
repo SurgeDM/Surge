@@ -23,11 +23,11 @@ import (
 )
 
 type countingLifecycleService struct {
-	streamCalls atomic.Int32
 	streamCh    chan interface{}
-	cleanupMu   sync.Mutex
-	cleaned     bool
 	logs        []string
+	cleanupMu   sync.Mutex
+	streamCalls atomic.Int32
+	cleaned     bool
 }
 
 var _ core.DownloadService = (*countingLifecycleService)(nil)
@@ -62,7 +62,7 @@ func (s *countingLifecycleService) GetStatus(context.Context, string) (*types.Do
 }
 func (s *countingLifecycleService) Shutdown() error { return nil }
 
-func (s *countingLifecycleService) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
+func (s *countingLifecycleService) StreamEvents(ctx context.Context) (eventCh <-chan interface{}, cleanupFn func(), err error) {
 	s.streamCalls.Add(1)
 	ch := make(chan interface{})
 	s.streamCh = ch

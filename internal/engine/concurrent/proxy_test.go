@@ -83,7 +83,7 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file
 		_ = f.Close()
 	}
 

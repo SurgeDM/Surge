@@ -22,22 +22,22 @@ import (
 
 // DownloadRequest represents a download request from the browser extension
 type DownloadRequest struct {
+	Headers              map[string]string `json:"headers,omitempty"`
 	URL                  string            `json:"url"`
 	Filename             string            `json:"filename,omitempty"`
 	Path                 string            `json:"path,omitempty"`
-	RelativeToDefaultDir bool              `json:"relative_to_default_dir,omitempty"`
 	Mirrors              []string          `json:"mirrors,omitempty"`
-	SkipApproval         bool              `json:"skip_approval,omitempty"` // Extension validated request, skip TUI prompt
-	Headers              map[string]string `json:"headers,omitempty"`       // Custom HTTP headers from browser (cookies, auth, etc.)
+	RelativeToDefaultDir bool              `json:"relative_to_default_dir,omitempty"`
+	SkipApproval         bool              `json:"skip_approval,omitempty"`
 	IsExplicitCategory   bool              `json:"is_explicit_category,omitempty"`
 }
 
 type resolvedDownloadRequest struct {
-	request       DownloadRequest
 	settings      *config.Settings
 	outPath       string
 	urlForAdd     string
 	mirrorsForAdd []string
+	request       DownloadRequest
 	isDuplicate   bool
 	isActive      bool
 }
@@ -168,14 +168,14 @@ func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolved
 	}, nil
 }
 
-func normalizeDownloadTargets(url string, mirrors []string) (string, []string) {
+func normalizeDownloadTargets(url string, mirrors []string) (targetURL string, targetMirrors []string) {
 	if len(mirrors) == 0 && strings.Contains(url, ",") {
 		return ParseURLArg(url)
 	}
 	return url, mirrors
 }
 
-func resolveDuplicateState(ctx context.Context, urlForAdd string, settings *config.Settings) (bool, bool) {
+func resolveDuplicateState(ctx context.Context, urlForAdd string, settings *config.Settings) (exists, isActive bool) {
 	activeDownloadsFunc := func() map[string]*types.DownloadConfig {
 		active := make(map[string]*types.DownloadConfig)
 		for _, cfg := range GlobalPool.GetAll() {
@@ -240,7 +240,7 @@ func maybeRequireDownloadApproval(ctx context.Context, w http.ResponseWriter, se
 	return true
 }
 
-func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resolved *resolvedDownloadRequest) (string, string, error) {
+func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resolved *resolvedDownloadRequest) (id, filename string, err error) {
 	lifecycle, err := lifecycleForLocalService(r.Context(), service)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to initialize lifecycle manager: %w", err)
@@ -259,7 +259,7 @@ func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resol
 		})
 	}
 
-	id, err := service.Add(r.Context(), resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, 0, false)
+	id, err = service.Add(r.Context(), resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, 0, false)
 	return id, req.Filename, err
 }
 

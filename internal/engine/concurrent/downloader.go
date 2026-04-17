@@ -22,16 +22,16 @@ import (
 
 // ConcurrentDownloader handles multi-connection downloads
 type ConcurrentDownloader struct {
-	ProgressChan chan<- any           // Channel for events (start/complete/error)
-	ID           string               // Download ID
-	State        *types.ProgressState // Shared state for TUI polling
-	activeTasks  map[int]*ActiveTask
-	activeMu     sync.Mutex
-	URL          string // For pause/resume
-	DestPath     string // For pause/resume
-	Runtime      *types.RuntimeConfig
 	bufPool      sync.Pool
-	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
+	ProgressChan chan<- any
+	State        *types.ProgressState
+	activeTasks  map[int]*ActiveTask
+	Runtime      *types.RuntimeConfig
+	Headers      map[string]string
+	ID           string
+	URL          string
+	DestPath     string
+	activeMu     sync.Mutex
 }
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
@@ -100,7 +100,7 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 }
 
 // ReportMirrorError marks a mirror as having an error in the state
-func (d *ConcurrentDownloader) ReportMirrorError(url string) {
+func (d *ConcurrentDownloader) ReportMirrorError(rawURL string) {
 	if d.State == nil {
 		return
 	}
@@ -108,7 +108,7 @@ func (d *ConcurrentDownloader) ReportMirrorError(url string) {
 	mirrors := d.State.GetMirrors()
 	changed := false
 	for i, m := range mirrors {
-		if m.URL == url && !m.Error {
+		if m.URL == rawURL && !m.Error {
 			mirrors[i].Error = true
 			changed = true
 			break
@@ -259,7 +259,7 @@ func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 
 // Download downloads a file using multiple concurrent connections
 // Uses pre-probed metadata (file size already known)
-func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, candidateMirrors []string, activeMirrors []string, destPath string, fileSize int64) error {
+func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, candidateMirrors, activeMirrors []string, destPath string, fileSize int64) error {
 	utils.Debug("ConcurrentDownloader.Download: %s -> %s (size: %d, mirrors: %d)", rawurl, destPath, fileSize, len(activeMirrors))
 
 	// Store URL and path for pause/resume (final path without .surge)
@@ -349,14 +349,14 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		return fmt.Errorf("failed to open working file: %w", err)
 	}
 	defer func() {
-		if err := outFile.Close(); err != nil {
-			utils.Debug("Error closing file: %v", err)
+		if cErr := outFile.Close(); cErr != nil {
+			utils.Debug("Error closing file: %v", cErr)
 		}
 	}()
 	finalizeCompletedDownload := func() error {
 		// Final sync
-		if err := outFile.Sync(); err != nil {
-			return fmt.Errorf("failed to sync file: %w", err)
+		if sErr := outFile.Sync(); sErr != nil {
+			return fmt.Errorf("failed to sync file: %w", sErr)
 		}
 
 		// Close file before renaming

@@ -19,8 +19,8 @@ func GetMinGraphHeight(termHeight int) int {
 }
 
 // GetSettingsDimensions calculates dimensions for settings/category modals
-func GetSettingsDimensions(termWidth, termHeight int) (int, int) {
-	width := int(float64(termWidth) * SettingsWidthRatio)
+func GetSettingsDimensions(termWidth, termHeight int) (width, height int) {
+	width = int(float64(termWidth) * SettingsWidthRatio)
 	if width < MinSettingsWidth {
 		width = MinSettingsWidth
 	}
@@ -36,7 +36,7 @@ func GetSettingsDimensions(termWidth, termHeight int) (int, int) {
 		width = maxWidth
 	}
 
-	height := DefaultSettingsHeight
+	height = DefaultSettingsHeight
 	maxHeight := termHeight - WindowStyle.GetVerticalFrameSize() - ModalHeightPadding
 	if maxHeight < 1 {
 		maxHeight = 1
@@ -66,14 +66,14 @@ func IsShortTerminal(height int) bool {
 }
 
 // GetGraphAreaDimensions calculates dimensions for the graph area
-func GetGraphAreaDimensions(rightWidth int, isStatsHidden bool) (int, int) {
-	axisWidth := GraphAxisWidth
+func GetGraphAreaDimensions(rightWidth int, isStatsHidden bool) (graphAreaWidth, axisWidth int) {
+	axisWidth = GraphAxisWidth
 
 	if isStatsHidden {
 		// No stats box — graph gets almost full width.
 		// Higher buffer (* 5) accounts for extra padding needed when axis is on the far right
 		// to maintain visual balance with the outer container borders.
-		graphAreaWidth := rightWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 5)
+		graphAreaWidth = rightWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 5)
 		if graphAreaWidth < 10 {
 			graphAreaWidth = 10
 		}
@@ -82,7 +82,7 @@ func GetGraphAreaDimensions(rightWidth int, isStatsHidden bool) (int, int) {
 
 	// Graph takes remaining width after stats box.
 	// Smaller buffer (* 3) as the stats box provides its own internal padding.
-	graphAreaWidth := rightWidth - GraphStatsWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 3)
+	graphAreaWidth = rightWidth - GraphStatsWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 3)
 	if graphAreaWidth < 10 {
 		graphAreaWidth = 10
 	}
@@ -90,10 +90,10 @@ func GetGraphAreaDimensions(rightWidth int, isStatsHidden bool) (int, int) {
 }
 
 // CalculateTwoColumnWidths calculates the distribution of widths for a two-column modal layout.
-func CalculateTwoColumnWidths(modalWidth, preferredLeft, minRight int) (int, int) {
+func CalculateTwoColumnWidths(modalWidth, preferredLeft, minRight int) (leftWidth, rightWidth int) {
 	horizontalPadding := ModalPaddingStyle.GetHorizontalFrameSize() * 2
 
-	leftWidth := preferredLeft
+	leftWidth = preferredLeft
 	if modalWidth-leftWidth-horizontalPadding < minRight {
 		leftWidth = modalWidth - minRight - horizontalPadding
 	}
@@ -101,7 +101,7 @@ func CalculateTwoColumnWidths(modalWidth, preferredLeft, minRight int) (int, int
 		leftWidth = 16
 	}
 
-	rightWidth := modalWidth - leftWidth - horizontalPadding
+	rightWidth = modalWidth - leftWidth - horizontalPadding
 	if rightWidth < minRight {
 		rightWidth = minRight
 		if modalWidth-rightWidth-horizontalPadding > 16 {
@@ -113,36 +113,38 @@ func CalculateTwoColumnWidths(modalWidth, preferredLeft, minRight int) (int, int
 }
 
 // GetDynamicModalDimensions calculates safe dimensions for a modal based on content and terminal size.
-func GetDynamicModalDimensions(termW, termH, minW, minH, prefW, contentH int) (int, int) {
-	w := prefW
+func GetDynamicModalDimensions(termW, termH, minW, minH, prefW, contentH int) (width, height int) {
+	width = prefW
 	// Ensure width doesn't exceed terminal
-	maxW := termW - (components.BorderFrameWidth * 2)
+	var maxW int
+	maxW = termW - (components.BorderFrameWidth * 2)
 	if maxW < minW {
 		maxW = minW
 	}
-	if w > maxW {
-		w = maxW
+	if width > maxW {
+		width = maxW
 	}
 	// Final safety check against absolute terminal bounds
-	if termW > 0 && w > termW {
-		w = termW
+	if termW > 0 && width > termW {
+		width = termW
 	}
 
-	h := contentH
+	height = contentH
 	// Ensure height doesn't exceed terminal
-	maxH := termH - components.BorderFrameHeight
+	var maxH int
+	maxH = termH - components.BorderFrameHeight
 	if maxH < minH {
 		maxH = minH
 	}
-	if h > maxH {
-		h = maxH
+	if height > maxH {
+		height = maxH
 	}
 	// Final safety check against absolute terminal bounds
-	if termH > 0 && h > termH {
-		h = termH
+	if termH > 0 && height > termH {
+		height = termH
 	}
 
-	return w, h
+	return width, height
 }
 
 // DashboardLayout holds all calculated dimensions for the dashboard components.

@@ -11,17 +11,17 @@ import (
 // ChunkMapModel visualizes download chunks as a grid using a bitmap
 type ChunkMapModel struct {
 	Bitmap          []byte
-	BitmapWidth     int // Total number of chunks in bitmap
-	Width           int // UI render width (columns * 2)
-	Height          int // Available height in rows (0 = auto)
-	Paused          bool
+	ChunkProgress   []int64
+	BitmapWidth     int
+	Width           int
+	Height          int
 	TotalSize       int64
 	ActualChunkSize int64
-	ChunkProgress   []int64
+	Paused          bool
 }
 
 // NewChunkMapModel creates a new chunk map visualization
-func NewChunkMapModel(bitmap []byte, bitmapWidth int, width, height int, paused bool, totalSize int64, actualChunkSize int64, chunkProgress []int64) ChunkMapModel {
+func NewChunkMapModel(bitmap []byte, bitmapWidth, width, height int, paused bool, totalSize, actualChunkSize int64, chunkProgress []int64) ChunkMapModel {
 	return ChunkMapModel{
 		Bitmap:          bitmap,
 		BitmapWidth:     bitmapWidth,
@@ -230,7 +230,7 @@ func (m *ChunkMapModel) View() string {
 
 // CalculateHeight returns the number of lines needed to render the chunks
 // Takes available height to support dynamic sizing
-func CalculateHeight(count int, width int, availableHeight int) int {
+func CalculateHeight(count, width, availableHeight int) int {
 	if count == 0 {
 		return 0
 	}

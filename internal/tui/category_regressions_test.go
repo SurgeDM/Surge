@@ -61,7 +61,7 @@ func TestUpdate_InputSubmit_BlankPathUsesDefaultPathRouting(t *testing.T) {
 	}
 
 	m := newCategoryTestModel(t, settings)
-	m.state = InputState
+	m.uiState = InputState
 	m.focusedInput = 3
 	m.inputs[0].SetValue("https://example.com/song.mp3")
 	m.inputs[2].SetValue("")
@@ -90,7 +90,7 @@ func TestUpdate_DuplicateContinuePreservesDefaultPathRouting(t *testing.T) {
 	}
 
 	m := newCategoryTestModel(t, settings)
-	m.state = DuplicateWarningState
+	m.uiState = DuplicateWarningState
 	m.pendingURL = "https://example.com/movie.mp4"
 	m.pendingPath = rootDir
 	m.pendingIsDefaultPath = true
@@ -120,7 +120,7 @@ func TestUpdate_ExtensionConfirmBlankPathUsesDefaultPathRouting(t *testing.T) {
 	}
 
 	m := newCategoryTestModel(t, settings)
-	m.state = ExtensionConfirmationState
+	m.uiState = ExtensionConfirmationState
 	m.pendingURL = "https://example.com/report.pdf"
 	m.inputs[2].SetValue("")
 	m.inputs[3].SetValue("report.pdf")
@@ -144,7 +144,7 @@ func TestUpdate_CategoryManagerEscRemovesNewPlaceholder(t *testing.T) {
 	}
 
 	m := &RootModel{
-		state:         CategoryManagerState,
+		uiState:         CategoryManagerState,
 		Settings:      settings,
 		keys:          Keys,
 		catMgrCursor:  1,

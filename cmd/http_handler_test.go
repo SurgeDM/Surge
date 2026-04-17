@@ -84,8 +84,8 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 
 	tests := []struct {
 		name               string
-		request            DownloadRequest
 		expectedOutputPath string
+		request            DownloadRequest
 	}{
 		{
 			name: "Absolute Path (Explicit)",
@@ -184,19 +184,20 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			configs := GlobalPool.GetAll()
 			found := false
 			for _, cfg := range configs {
-				if cfg.URL == tt.request.URL {
-					found = true
-					t.Logf("OutputPath for %s: %s", tt.name, cfg.OutputPath)
-
-					if !filepath.IsAbs(cfg.OutputPath) {
-						t.Errorf("Expected absolute path, got %s", cfg.OutputPath)
-					}
-
-					if cfg.OutputPath != tt.expectedOutputPath {
-						t.Errorf("Expected path %s, got %s", tt.expectedOutputPath, cfg.OutputPath)
-					}
-					break
+				if cfg.URL != tt.request.URL {
+					continue
 				}
+				found = true
+				t.Logf("OutputPath for %s: %s", tt.name, cfg.OutputPath)
+
+				if !filepath.IsAbs(cfg.OutputPath) {
+					t.Errorf("Expected absolute path, got %s", cfg.OutputPath)
+				}
+
+				if cfg.OutputPath != tt.expectedOutputPath {
+					t.Errorf("Expected path %s, got %s", tt.expectedOutputPath, cfg.OutputPath)
+				}
+				break
 			}
 			if !found {
 				t.Errorf("Download was not queued")
@@ -208,8 +209,8 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 func TestShouldFallbackUnmappedWindowsPath(t *testing.T) {
 	tests := []struct {
 		name                 string
-		relativeToDefaultDir bool
 		hostOS               string
+		relativeToDefaultDir bool
 		want                 bool
 	}{
 		{
@@ -414,8 +415,8 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 }
 
 type failingPublishService struct {
-	fakeRemoteDownloadService
 	publishErr error
+	fakeRemoteDownloadService
 }
 
 func (f *failingPublishService) Publish(msg interface{}) error {

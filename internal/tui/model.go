@@ -61,136 +61,91 @@ const (
 )
 
 type DownloadModel struct {
+	progress      progress.Model
+	StartTime     time.Time
+	err           error
+	progState     *types.ProgressState
+	Destination   string
 	ID            string
 	URL           string
 	Filename      string
 	FilenameLower string
-	Destination   string // Full path to the destination file
+	lastETA       time.Duration
+	Elapsed       time.Duration
 	Total         int64
-	Downloaded    int64
-	Speed         float64
 	Connections   int
-
-	StartTime time.Time
-	Elapsed   time.Duration
-	lastETA   time.Duration // EMA-smoothed ETA for UI stability
-
-	progress progress.Model
-
-	// Unified architecture: View Model updated by events
-	// No direct state access or polling reporter
-	state *types.ProgressState // Keep for now if needed for details view, but mostly passive
-
-	done     bool
-	err      error
-	paused   bool
-	pausing  bool // UI state: transitioning to pause
-	resuming bool // UI state: waiting for async resume
+	Speed         float64
+	Downloaded    int64
+	done          bool
+	paused        bool
+	pausing       bool
+	resuming      bool
 }
 
 type RootModel struct {
-	downloads    []*DownloadModel
-	width        int
-	height       int
-	state        UIState
-	activeTab    int // 0=Queued, 1=Active, 2=Done
-	inputs       []textinput.Model
-	focusedInput int
-	// Service Interface
-	// Core
-	Service      core.DownloadService
-	Orchestrator *processing.LifecycleManager
-
-	// File picker for directory selection
+	list                   list.Model
 	filepicker             filepicker.Model
+	lastSpeedHistoryUpdate time.Time
+	enqueueCtx             context.Context
+	Service                core.DownloadService
+	Settings               *config.Settings
+	cancelEnqueue          context.CancelFunc
+	pendingHeaders         map[string]string
+	UpdateInfo             *version.UpdateInfo
+	Orchestrator           *processing.LifecycleManager
+	help                   help.Model
+	CurrentVersion         string
+	batchFilePath          string
+	PWD                    string
+	pendingURL             string
+	pendingPath            string
+	ServerHost             string
+	pendingFilename        string
 	filepickerOriginalPath string
-
-	// Bubbles help component
-	help help.Model
-
-	// Bubbles list component for download listing
-	list list.Model
-
-	PWD string
-
-	// Duplicate detection
-	pendingURL           string // URL pending confirmation
-	pendingPath          string // Path pending confirmation
-	pendingIsDefaultPath bool
-	pendingFilename      string   // Filename pending confirmation
-	pendingMirrors       []string // Mirrors pending confirmation
-	pendingHeaders       map[string]string
-	duplicateInfo        string // Info about the duplicate
-
-	// Graph Data
-	SpeedHistory           []float64 // Stores the last ~60 ticks of speed data
-	lastSpeedHistoryUpdate time.Time // Last time SpeedHistory was updated (for 0.5s sampling)
-
-	// Notification log system
-	logViewport viewport.Model // Scrollable log viewport
-	logEntries  []string       // Log entries for download events
-	logFocused  bool           // Whether the log viewport is focused
-
-	// Settings
-	Settings              *config.Settings // Application settings
-	SettingsActiveTab     int              // Active category tab (0-3)
-	SettingsSelectedRow   int              // Selected setting within current tab
-	SettingsIsEditing     bool             // Whether currently editing a value
-	SettingsInput         textinput.Model  // Input for editing string/int values
-	SettingsFileBrowsing  bool             // Whether browsing for a directory
-	ExtensionFileBrowsing bool             // Whether browsing for extension prompt path
-	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
-	SettingsError         string           // Current validation error message for settings
-
-	// Selection persistence
-	SelectedDownloadID string // ID of the currently selected download
-	ManualTabSwitch    bool   // Whether the last tab switch was manual
-
-	// Search functionality
-	searchInput  textinput.Model // Text input for search
-	searchActive bool            // Whether search mode is active
-	searchQuery  string          // Current search query
-
-	// Batch import
-	pendingBatchURLs []string // URLs pending batch import
-	batchFilePath    string   // Path to the batch file
-
-	// URL Refresh
-	urlUpdateInput textinput.Model // Text input for updating URL
-
-	// Category manager
-	categoryFilter     string             // Dashboard filter ("" = all)
-	catMgrCursor       int                // Selected category index
-	catMgrEditing      bool               // Whether editing a category
-	catMgrEditField    int                // 0=Name, 1=Description, 2=Pattern, 3=Path
-	catMgrInputs       [4]textinput.Model // Inputs for Name, Description, Pattern, Path
-	catMgrIsNew        bool               // Whether adding a new category
-	catMgrFileBrowsing bool               // Whether browsing for a category path
-
-	// Quit confirm button focus (0 = Yep!, 1 = Nope)
-	quitConfirmFocused int
-
-	// Keybindings
-	keys KeyMap
-
-	// Server port for display
-	ServerPort int
-	ServerHost string
-	IsRemote   bool
-
-	// Update check
-	UpdateInfo     *version.UpdateInfo // Update information (nil if no update available)
-	CurrentVersion string              // Current version of Surge
-
-	InitialDarkBackground bool // Captured at startup for "System" theme
-
-	logoCache string // Cached logo with gradient applied
-
-	enqueueCtx    context.Context
-	cancelEnqueue context.CancelFunc
-	shuttingDown  bool
-
-	spinner spinner.Model
+	SettingsError          string
+	duplicateInfo          string
+	categoryFilter         string
+	logoCache              string
+	searchQuery            string
+	SelectedDownloadID     string
+	keys                   KeyMap
+	logEntries             []string
+	downloads              []*DownloadModel
+	SpeedHistory           []float64
+	pendingMirrors         []string
+	inputs                 []textinput.Model
+	pendingBatchURLs       []string
+	catMgrInputs           [4]textinput.Model
+	SettingsInput          textinput.Model
+	urlUpdateInput         textinput.Model
+	searchInput            textinput.Model
+	logViewport            viewport.Model
+	spinner                spinner.Model
+	catMgrEditField        int
+	quitConfirmFocused     int
+	width                  int
+	height                 int
+	uiState                UIState
+	activeTab              int
+	catMgrCursor           int
+	focusedInput           int
+	ServerPort             int
+	SettingsSelectedRow    int
+	SettingsActiveTab      int
+	catMgrEditing          bool
+	searchActive           bool
+	catMgrIsNew            bool
+	SettingsIsEditing      bool
+	logFocused             bool
+	IsRemote               bool
+	pendingIsDefaultPath   bool
+	catMgrFileBrowsing     bool
+	InitialDarkBackground  bool
+	SettingsFileBrowsing   bool
+	ExtensionFileBrowsing  bool
+	ExtensionTokenCopied   bool
+	shuttingDown           bool
+	ManualTabSwitch        bool
 }
 
 // NewDownloadModel creates a new download model
@@ -209,7 +164,7 @@ func NewDownloadModel(id, url, filename string, total int64) *DownloadModel {
 			progress.WithColors(colors.ProgressStart, colors.ProgressEnd),
 			progress.WithScaled(true),
 		),
-		state: state,
+		progState: state,
 	}
 }
 
@@ -277,7 +232,8 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	if service != nil {
 		statuses, err := service.List(context.Background())
 		if err == nil {
-			for _, s := range statuses {
+			for i := range statuses {
+				s := &statuses[i]
 				dm := NewDownloadModel(s.ID, s.URL, s.Filename, s.TotalSize)
 				dm.Downloaded = s.Downloaded
 				if s.DestPath != "" {
@@ -373,6 +329,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	catPathInput.Prompt = ""
 
 	enqueueCtx, cancelEnqueue := context.WithCancel(context.Background())
+	defer cancelEnqueue()
 
 	// A single root-level spinner provides a shared animation frame for rendering,
 	// avoiding the CPU and redraw overhead of independent per-item spinners on
@@ -383,7 +340,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	m := RootModel{
 		downloads:             downloads,
 		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
-		state:                 DashboardState,
+		uiState:               DashboardState,
 		filepicker:            fp,
 		help:                  helpModel,
 		list:                  downloadList,

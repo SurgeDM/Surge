@@ -12,12 +12,12 @@ import (
 
 // ConfirmationModal renders a styled confirmation dialog box
 type ConfirmationModal struct {
+	Keys        help.KeyMap
+	BorderColor color.Color
+	Help        help.Model
 	Title       string
 	Message     string
-	Detail      string      // Optional additional detail line (e.g., filename, URL)
-	Keys        help.KeyMap // Key bindings to show in help
-	Help        help.Model  // Help model for rendering keys
-	BorderColor color.Color // Border color for the box
+	Detail      string
 	Width       int
 	Height      int
 }

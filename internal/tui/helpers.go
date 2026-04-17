@@ -75,23 +75,23 @@ func (m *RootModel) handleFilePickerSelection(path string) (tea.Model, tea.Cmd) 
 	if m.SettingsFileBrowsing {
 		m.Settings.General.DefaultDownloadDir = path
 		m.SettingsFileBrowsing = false
-		m.state = SettingsState
+		m.uiState = SettingsState
 		return m, nil
 	}
 	if m.ExtensionFileBrowsing {
 		m.inputs[2].SetValue(path)
 		m.ExtensionFileBrowsing = false
-		m.state = ExtensionConfirmationState
+		m.uiState = ExtensionConfirmationState
 		return m, nil
 	}
 	if m.catMgrFileBrowsing {
 		m.catMgrInputs[3].SetValue(path)
 		m.catMgrFileBrowsing = false
-		m.state = CategoryManagerState
+		m.uiState = CategoryManagerState
 		return m, nil
 	}
 	m.inputs[2].SetValue(path)
-	m.state = InputState
+	m.uiState = InputState
 	return m, nil
 }
 

@@ -11,10 +11,10 @@ import (
 )
 
 type fakeRemoteDownloadService struct {
-	addCalls     int
 	lastURL      string
 	lastPath     string
 	lastFile     string
+	addCalls     int
 	lastExplicit bool
 }
 
@@ -49,13 +49,13 @@ func (f *fakeRemoteDownloadService) ResumeBatch(ctx context.Context, ids []strin
 	return nil
 }
 
-func (f *fakeRemoteDownloadService) UpdateURL(ctx context.Context, id string, newURL string) error {
+func (f *fakeRemoteDownloadService) UpdateURL(ctx context.Context, id, newURL string) error {
 	return nil
 }
 
 func (f *fakeRemoteDownloadService) Delete(ctx context.Context, id string) error { return nil }
 
-func (f *fakeRemoteDownloadService) StreamEvents(ctx context.Context) (<-chan interface{}, func(), error) {
+func (f *fakeRemoteDownloadService) StreamEvents(ctx context.Context) (eventCh <-chan interface{}, cleanupFn func(), err error) {
 	ch := make(chan interface{})
 	return ch, func() { close(ch) }, nil
 }

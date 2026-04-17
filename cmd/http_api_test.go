@@ -63,7 +63,7 @@ func (s *httpAPITestService) Delete(context.Context, string) error {
 	return nil
 }
 
-func (s *httpAPITestService) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
+func (s *httpAPITestService) StreamEvents(ctx context.Context) (eventCh <-chan interface{}, cleanupFn func(), err error) {
 	channel := make(chan interface{}, len(s.streamMsgs))
 	for _, msg := range s.streamMsgs {
 		channel <- msg
@@ -215,13 +215,13 @@ func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 
 func TestResolveDownloadDestPath(t *testing.T) {
 	tests := []struct {
-		name           string
-		useNilService  bool
+		wantErrIs      error
 		service        *httpAPITestService
+		name           string
 		id             string
 		wantPath       string
-		wantErrIs      error
 		wantErrContain string
+		useNilService  bool
 	}{
 		{
 			name:          "service unavailable",
@@ -316,11 +316,11 @@ func TestOpenEndpoints_ReturnMappedResolveStatuses(t *testing.T) {
 	globalSettings = config.DefaultSettings()
 
 	tests := []struct {
+		service    *httpAPITestService
 		name       string
 		path       string
-		useNil     bool
-		service    *httpAPITestService
 		statusCode int
+		useNil     bool
 	}{
 		{
 			name:       "service unavailable returns 503",

@@ -50,39 +50,38 @@ const (
 
 // DownloadConfig contains all parameters needed to start a download
 type DownloadConfig struct {
-	URL                string
-	OutputPath         string
-	DestPath           string // Full destination path (for resume state lookup)
-	ID                 string
-	Filename           string
-	IsResume           bool // True if this is explicitly a resume, not a fresh download
+	Runtime            *RuntimeConfig
 	ProgressCh         chan<- any
+	Headers            map[string]string
 	State              *ProgressState
-	SavedState         *DownloadState    // Pre-loaded state for resume optimization
-	Runtime            *RuntimeConfig    // Dynamic settings from user config
-	Mirrors            []string          // List of mirror URLs (including primary)
-	Headers            map[string]string // Custom HTTP headers to include in download requests
-	IsExplicitCategory bool              // Used to override category routing from TUI
-	TotalSize          int64             // Total size in bytes of the required download
-	SupportsRange      bool              // Indicates whether the server supports range requests for concurrency
+	SavedState         *DownloadState
+	Filename           string
+	OutputPath         string
+	URL                string
+	ID                 string
+	DestPath           string
+	Mirrors            []string
+	TotalSize          int64
+	IsResume           bool
+	IsExplicitCategory bool
+	SupportsRange      bool
 }
 
 // RuntimeConfig holds dynamic settings that can override defaults
 type RuntimeConfig struct {
-	MaxConnectionsPerHost int
+	CustomDNS             string
 	UserAgent             string
 	ProxyURL              string
-	CustomDNS             string
-	SequentialDownload    bool
-	MinChunkSize          int64
-
 	WorkerBufferSize      int
+	MinChunkSize          int64
+	MaxConnectionsPerHost int
 	MaxTaskRetries        int
 	DialHedgeCount        int
 	SlowWorkerThreshold   float64
 	SlowWorkerGracePeriod time.Duration
 	StallTimeout          time.Duration
 	SpeedEmaAlpha         float64
+	SequentialDownload    bool
 }
 
 // GetUserAgent returns the configured user agent or the default

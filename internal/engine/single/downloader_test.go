@@ -152,7 +152,7 @@ func TestPreallocateFile(t *testing.T) {
 	defer func() { _ = file.Close() }()
 
 	const size = int64(2 * types.MB)
-	if err := preallocateFile(file, size); err != nil {
+	if pErr := preallocateFile(file, size); pErr != nil {
 		t.Fatalf("preallocateFile failed: %v", err)
 	}
 
@@ -189,7 +189,7 @@ func TestSingleDownloader_StreamingServer(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file; err == nil {
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file; err == nil {
 		_ = f.Close()
 	}
 
@@ -198,7 +198,7 @@ func TestSingleDownloader_StreamingServer(t *testing.T) {
 		t.Fatalf("Streaming download failed: %v", err)
 	}
 
-	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
+	if vErr := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); vErr != nil {
 		t.Error(err)
 	}
 }
@@ -230,7 +230,7 @@ func TestSingleDownloader_FailAfterBytes(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file; err == nil {
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file; err == nil {
 		_ = f.Close()
 	}
 
@@ -272,7 +272,7 @@ func TestSingleDownloader_NilState(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file; err == nil {
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file; err == nil {
 		_ = f.Close()
 	}
 
@@ -281,7 +281,7 @@ func TestSingleDownloader_NilState(t *testing.T) {
 		t.Fatalf("Download with nil state failed: %v", err)
 	}
 
-	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
+	if vErr := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); vErr != nil {
 		t.Error(err)
 	}
 }
@@ -367,7 +367,7 @@ func TestSingleDownloader_Download_Success(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file; err == nil {
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file; err == nil {
 		_ = f.Close()
 	}
 
@@ -377,7 +377,7 @@ func TestSingleDownloader_Download_Success(t *testing.T) {
 	}
 
 	// Verify file exists and has correct size
-	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
+	if vErr := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); vErr != nil {
 		t.Error(err)
 	}
 
@@ -411,7 +411,7 @@ func TestSingleDownloader_Download_Cancellation(t *testing.T) {
 	done := make(chan error)
 	go func() {
 		// Pre-create incomplete file (simulating processing layer)
-		if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file; err == nil {
+		if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file; err == nil {
 			_ = f.Close()
 		}
 
@@ -455,7 +455,7 @@ func TestSingleDownloader_Download_ProgressTracking(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file; err == nil {
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file; err == nil {
 		_ = f.Close()
 	}
 
@@ -495,7 +495,7 @@ func TestSingleDownloader_Download_ServerError(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file; err == nil {
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file; err == nil {
 		_ = f.Close()
 	}
 
@@ -528,7 +528,7 @@ func TestSingleDownloader_Download_WithLatency(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file; err == nil {
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file; err == nil {
 		_ = f.Close()
 	}
 
@@ -543,7 +543,7 @@ func TestSingleDownloader_Download_WithLatency(t *testing.T) {
 		t.Errorf("Download completed too fast (%v), latency not applied", elapsed)
 	}
 
-	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
+	if vErr := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); vErr != nil {
 		t.Error(err)
 	}
 }
@@ -570,7 +570,7 @@ func TestSingleDownloader_Download_ContentIntegrity(t *testing.T) {
 	defer cancel()
 
 	// Pre-create incomplete file (simulating processing layer)
-	if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file; err == nil {
+	if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file; err == nil {
 		_ = f.Close()
 	}
 
@@ -579,7 +579,7 @@ func TestSingleDownloader_Download_ContentIntegrity(t *testing.T) {
 		t.Fatalf("Download failed: %v", err)
 	}
 
-	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
+	if vErr := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); vErr != nil {
 		t.Error(err)
 	}
 
@@ -632,7 +632,7 @@ func TestSingleDownloader_PreallocateFailure_ReleasesFileHandle(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = f.Close()
-	if err := os.Chmod(surgePath, 0o400); err != nil {
+	if chErr := os.Chmod(surgePath, 0o400); chErr != nil {
 		t.Fatal(err)
 	}
 	// Restaurar permissões no cleanup para que TempDir possa remover
@@ -683,7 +683,7 @@ func BenchmarkSingleDownloader(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		// Pre-create incomplete file (simulating processing layer)
-		if f, err := os.Create(destPath + ".surge"); err == nil { //nolint:gosec // mock file; err == nil {
+		if f, crErr := os.Create(destPath + ".surge"); crErr == nil { //nolint:gosec // mock file; err == nil {
 			_ = f.Close()
 		}
 

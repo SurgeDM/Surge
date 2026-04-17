@@ -126,7 +126,7 @@ func (m *RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.C
 					browseDir = m.PWD
 				}
 				m.catMgrFileBrowsing = true
-				m.state = FilePickerState
+				m.uiState = FilePickerState
 				m.filepicker = newFilepicker(browseDir)
 				return m, m.filepicker.Init()
 			}
@@ -188,7 +188,7 @@ func (m *RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.C
 	// Not editing - handle navigation
 	if key.Matches(msg, m.keys.CategoryMgr.Close) {
 		_ = m.persistSettings()
-		m.state = SettingsState
+		m.uiState = SettingsState
 		return m, nil
 	}
 

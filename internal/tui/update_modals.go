@@ -12,12 +12,12 @@ import (
 func (m *RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Duplicate.Continue) {
 		// Continue anyway - startDownload handles unique filename generation
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
 	}
 	if key.Matches(msg, m.keys.Duplicate.Cancel) {
 		// Cancel - don't add
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Duplicate.Focus) {
@@ -28,7 +28,7 @@ func (m *RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.
 				break
 			}
 		}
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, nil
 	}
 	return m, nil
@@ -44,7 +44,7 @@ func (m *RootModel) updateQuitConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		return m, shutdownCmd(m.Service)
 	}
 	cancelQuit := func() (tea.Model, tea.Cmd) {
-		m.state = DashboardState
+		m.uiState = DashboardState
 		m.quitConfirmFocused = 0
 		return m, nil
 	}
@@ -103,13 +103,13 @@ func (m *RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		}
 		m.pendingBatchURLs = nil
 		m.batchFilePath = ""
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, tea.Batch(batchCmds...)
 	}
 	if key.Matches(msg, m.keys.BatchConfirm.Cancel) {
 		m.pendingBatchURLs = nil
 		m.batchFilePath = ""
-		m.state = DashboardState
+		m.uiState = DashboardState
 		return m, nil
 	}
 	return m, nil
@@ -118,7 +118,7 @@ func (m *RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 func (m *RootModel) updateURLUpdate(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg, m.keys.Input.Esc) {
-		m.state = DashboardState
+		m.uiState = DashboardState
 		m.urlUpdateInput.SetValue("")
 		m.urlUpdateInput.Blur()
 		return m, nil
@@ -135,7 +135,7 @@ func (m *RootModel) updateURLUpdate(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		m.state = DashboardState
+		m.uiState = DashboardState
 		m.urlUpdateInput.SetValue("")
 		m.urlUpdateInput.Blur()
 		return m, nil
@@ -152,13 +152,13 @@ func (m *RootModel) updateUpdateAvailable(msg tea.KeyPressMsg) (tea.Model, tea.C
 		if m.UpdateInfo != nil && m.UpdateInfo.ReleaseURL != "" {
 			_ = openWithSystem(m.UpdateInfo.ReleaseURL)
 		}
-		m.state = DashboardState
+		m.uiState = DashboardState
 		m.UpdateInfo = nil
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Update.IgnoreNow) {
 		// Just dismiss the modal
-		m.state = DashboardState
+		m.uiState = DashboardState
 		m.UpdateInfo = nil
 		return m, nil
 	}
@@ -166,7 +166,7 @@ func (m *RootModel) updateUpdateAvailable(msg tea.KeyPressMsg) (tea.Model, tea.C
 		// Persist the setting and dismiss
 		m.Settings.General.SkipUpdateCheck = true
 		_ = m.persistSettings()
-		m.state = DashboardState
+		m.uiState = DashboardState
 		m.UpdateInfo = nil
 		return m, nil
 	}

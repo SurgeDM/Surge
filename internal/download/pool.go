@@ -301,7 +301,7 @@ func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfi
 // UpdateURL updates the in-memory URL of a download by ID.
 // The caller (LifecycleManager) is responsible for persisting the change to the DB.
 // It fails if the download is actively downloading (not paused or errored).
-func (p *WorkerPool) UpdateURL(ctx context.Context, downloadID string, newURL string) error {
+func (p *WorkerPool) UpdateURL(ctx context.Context, downloadID, newURL string) error {
 	p.mu.Lock()
 	ad, exists := p.downloads[downloadID]
 	_, qExists := p.queued[downloadID]
@@ -436,7 +436,8 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 	}
 
 	// Calculate progress and speed (thread-safe)
-	downloaded, totalSize, _, sessionElapsed, _, sessionStart := state.GetProgress()
+	snapshot := state.GetProgress()
+	downloaded, totalSize, sessionElapsed, sessionStart := snapshot.Downloaded, snapshot.Total, snapshot.SessionElapsed, snapshot.SessionStartBytes
 
 	status := &types.DownloadStatus{
 		ID:         id,

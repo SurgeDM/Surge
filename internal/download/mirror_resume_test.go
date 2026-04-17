@@ -38,8 +38,8 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	state.CloseDB()
 	dbPath := filepath.Join(tmpDir, "surge.db")
 	state.Configure(dbPath)
-	if _, err := state.GetDB(context.Background()); err != nil {
-		t.Fatalf("Failed to init DB: %v", err)
+	if _, dbErr := state.GetDB(context.Background()); dbErr != nil {
+		t.Fatalf("Failed to init DB: %v", dbErr)
 	}
 	defer state.CloseDB()
 
@@ -129,9 +129,9 @@ func TestIntegration_MirrorResume(t *testing.T) {
 
 	// Wait for return
 	select {
-	case err := <-errCh:
-		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, types.ErrPaused) {
-			t.Fatalf("unexpected pause result: %v", err)
+	case eErr := <-errCh:
+		if eErr != nil && !errors.Is(eErr, context.Canceled) && !errors.Is(eErr, types.ErrPaused) {
+			t.Fatalf("unexpected pause result: %v", eErr)
 		}
 	case <-time.After(15 * time.Second):
 		t.Fatal("Download did not return")
@@ -207,9 +207,9 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	}
 	resumeState.Pause()
 	select {
-	case err := <-errCh:
-		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, types.ErrPaused) {
-			t.Fatalf("unexpected resume pause result: %v", err)
+	case eErr := <-errCh:
+		if eErr != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, types.ErrPaused) {
+			t.Fatalf("unexpected resume pause result: %v", eErr)
 		}
 	case <-time.After(15 * time.Second):
 		t.Fatal("resumed download did not return after pause")

@@ -25,11 +25,11 @@ type enqueueSuccessMsg struct {
 }
 
 type enqueueErrorMsg struct {
-	tempID string
 	err    error
+	tempID string
 }
 
 type resumeResultMsg struct {
-	id  string
 	err error
+	id  string
 }

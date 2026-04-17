@@ -36,8 +36,8 @@ func TestIntegration_PauseResume(t *testing.T) {
 	// Force DB init
 	dbPath := filepath.Join(tmpDir, "surge.db")
 	state.Configure(dbPath)
-	if _, err := state.GetDB(context.Background()); err != nil {
-		t.Fatalf("Failed to init DB: %v", err)
+	if _, dbErr := state.GetDB(context.Background()); dbErr != nil {
+		t.Fatalf("Failed to init DB: %v", dbErr)
 	}
 	defer state.CloseDB()
 
@@ -121,8 +121,8 @@ func TestIntegration_PauseResume(t *testing.T) {
 
 	// Wait for download to return
 	select {
-	case err := <-errCh:
-		if err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, types.ErrPaused) {
+	case eErr := <-errCh:
+		if eErr != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, types.ErrPaused) {
 			t.Logf("Download returned error: %v", err)
 		}
 	case <-time.After(15 * time.Second):
@@ -201,7 +201,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 		t.Fatal("resume did not reach finalized completed state before timeout")
 	}
 
-	if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
+	if _, sErr := os.Stat(incompletePath); !os.IsNotExist(sErr) {
 		t.Error("Incomplete file still exists after resume completion")
 	}
 	finalInfo, err := os.Stat(destPath)

@@ -177,7 +177,7 @@ func TestProcessProgressMsg_ClearsResumingOnTransfer(t *testing.T) {
 	}
 
 	// No transfer yet: keep resuming.
-	m.processProgressMsg(events.ProgressMsg{
+	m.processProgressMsg(&events.ProgressMsg{
 		DownloadID: "id-1",
 		Downloaded: 50,
 		Total:      100,
@@ -188,7 +188,7 @@ func TestProcessProgressMsg_ClearsResumingOnTransfer(t *testing.T) {
 	}
 
 	// Transfer observed: clear resuming.
-	m.processProgressMsg(events.ProgressMsg{
+	m.processProgressMsg(&events.ProgressMsg{
 		DownloadID: "id-1",
 		Downloaded: 60,
 		Total:      100,
@@ -236,7 +236,7 @@ func TestUpdate_DownloadComplete_UsesAverageSpeed(t *testing.T) {
 
 func TestUpdate_SettingsIgnoresMissingFourthTab(t *testing.T) {
 	m := &RootModel{
-		state:    SettingsState,
+		uiState:    SettingsState,
 		Settings: config.DefaultSettings(),
 	}
 
@@ -257,7 +257,7 @@ func TestUpdate_SettingsIgnoresMissingFourthTab(t *testing.T) {
 
 func TestUpdate_DashboardWithNilSettingsDoesNotPanic(t *testing.T) {
 	m := &RootModel{
-		state: DashboardState,
+		uiState: DashboardState,
 		list:  NewDownloadList(80, 20),
 	}
 
@@ -320,7 +320,7 @@ func TestProcessProgressMsg_UpdatesElapsed(t *testing.T) {
 	}
 
 	elapsed := 12 * time.Second
-	m.processProgressMsg(events.ProgressMsg{
+	m.processProgressMsg(&events.ProgressMsg{
 		DownloadID: "id-1",
 		Downloaded: 400,
 		Total:      1000,
@@ -368,8 +368,8 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	newModel, _ := m.Update(msg)
 	newRoot := newModel.(*RootModel)
 
-	if newRoot.state != ExtensionConfirmationState {
-		t.Errorf("Expected ExtensionConfirmationState, got %v", newRoot.state)
+	if newRoot.uiState != ExtensionConfirmationState {
+		t.Errorf("Expected ExtensionConfirmationState, got %v", newRoot.uiState)
 	}
 	if newRoot.pendingURL != msg.URL {
 		t.Errorf("Expected pendingURL=%s, got %s", msg.URL, newRoot.pendingURL)
@@ -382,7 +382,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 2. Test Duplicate Warning (when prompt disabled but duplicate exists)
-	m.state = DashboardState
+	m.uiState = DashboardState
 	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = true
 
@@ -395,12 +395,12 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	newModel, _ = m.Update(msg)
 	newRoot = newModel.(*RootModel)
 
-	if newRoot.state != DuplicateWarningState {
-		t.Errorf("Expected DuplicateWarningState, got %v", newRoot.state)
+	if newRoot.uiState != DuplicateWarningState {
+		t.Errorf("Expected DuplicateWarningState, got %v", newRoot.uiState)
 	}
 
 	// 3. Test No Prompt (Direct Download)
-	m.state = DashboardState
+	m.uiState = DashboardState
 	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = true
 	m.downloads = nil // Clear downloads
@@ -413,8 +413,8 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	newRoot = newModel.(*RootModel)
 
 	// Should remain in DashboardState (default) or whatever it was
-	if newRoot.state == ExtensionConfirmationState || newRoot.state == DuplicateWarningState {
-		t.Errorf("Expected no prompt state, got %v", newRoot.state)
+	if newRoot.uiState == ExtensionConfirmationState || newRoot.uiState == DuplicateWarningState {
+		t.Errorf("Expected no prompt state, got %v", newRoot.uiState)
 	}
 }
 
@@ -490,7 +490,7 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 	}
 }
 
-func setupRootModelForStartDownload(t *testing.T) (*RootModel, string) {
+func setupRootModelForStartDownload(t *testing.T) (m *RootModel, tmpDir string) {
 	t.Helper()
 	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
 	t.Cleanup(func() {
@@ -504,15 +504,15 @@ func setupRootModelForStartDownload(t *testing.T) (*RootModel, string) {
 		nil,
 	)
 
-	targetDir := t.TempDir()
-	m := &RootModel{
+	tmpDir = t.TempDir()
+	m = &RootModel{
 		Settings:     config.DefaultSettings(),
 		Service:      svc,
 		Orchestrator: orchestrator,
 		list:         NewDownloadList(80, 20),
 		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
-	return m, targetDir
+	return m, tmpDir
 }
 
 func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *testing.T) {
@@ -589,7 +589,7 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 	defer cancel()
 
 	m := &RootModel{
-		state:         DashboardState,
+		uiState:         DashboardState,
 		keys:          Keys,
 		enqueueCtx:    ctx,
 		cancelEnqueue: cancel,
@@ -599,7 +599,7 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	m2 := updated.(*RootModel)
 
-	if m2.state != QuitConfirmState {
+	if m2.uiState != QuitConfirmState {
 		t.Fatal("expected model to enter quit confirmation state")
 	}
 	if m2.shuttingDown {
@@ -622,7 +622,7 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 
 func newQuitConfirmModel() *RootModel {
 	return &RootModel{
-		state: QuitConfirmState,
+		uiState: QuitConfirmState,
 		keys:  Keys,
 	}
 }
@@ -660,7 +660,7 @@ func TestQuitConfirm_EscCancels(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	m2 := updated.(*RootModel)
-	if m2.state != DashboardState {
+	if m2.uiState != DashboardState {
 		t.Fatal("expected esc to return to dashboard")
 	}
 	if m2.shuttingDown {
@@ -672,7 +672,7 @@ func TestQuitConfirm_NShortcutCancels(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'n'})
 	m2 := updated.(*RootModel)
-	if m2.state != DashboardState {
+	if m2.uiState != DashboardState {
 		t.Fatal("expected n to return to dashboard")
 	}
 	if m2.shuttingDown {
@@ -704,7 +704,7 @@ func TestQuitConfirm_EnterWithNoFocusedCancels(t *testing.T) {
 	m.quitConfirmFocused = 1
 	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m2 := updated.(*RootModel)
-	if m2.state != DashboardState {
+	if m2.uiState != DashboardState {
 		t.Fatal("expected enter on No button to return to dashboard")
 	}
 	if m2.shuttingDown {
@@ -766,7 +766,7 @@ func TestQuitConfirm_CtrlCCancels(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	m2 := updated.(*RootModel)
-	if m2.state != DashboardState {
+	if m2.uiState != DashboardState {
 		t.Fatal("expected ctrl+c to return to dashboard from quit confirm modal")
 	}
 	if m2.shuttingDown {
@@ -778,7 +778,7 @@ func TestQuitConfirm_CtrlQCancels(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl})
 	m2 := updated.(*RootModel)
-	if m2.state != DashboardState {
+	if m2.uiState != DashboardState {
 		t.Fatal("expected ctrl+q to return to dashboard from quit confirm modal")
 	}
 	if m2.shuttingDown {
@@ -790,7 +790,7 @@ func TestQuitConfirm_UnrelatedKeyIgnored(t *testing.T) {
 	m := newQuitConfirmModel()
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'x'})
 	m2 := updated.(*RootModel)
-	if m2.state != QuitConfirmState {
+	if m2.uiState != QuitConfirmState {
 		t.Fatal("expected unrelated key to keep modal open")
 	}
 }
@@ -837,7 +837,7 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 	m := &RootModel{
 		downloads:      []*DownloadModel{dm},
 		list:           NewDownloadList(40, 10),
-		state:          DashboardState,
+		uiState:          DashboardState,
 		keys:           Keys,
 		urlUpdateInput: textinput.New(),
 		Service:        core.NewLocalDownloadServiceWithInput(nil, nil),
@@ -851,8 +851,8 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 	updated, _ := m.Update(msg)
 	newRoot := updated.(*RootModel)
 
-	if newRoot.state != URLUpdateState {
-		t.Errorf("Expected state to change to URLUpdateState, got %v", newRoot.state)
+	if newRoot.uiState != URLUpdateState {
+		t.Errorf("Expected state to change to URLUpdateState, got %v", newRoot.uiState)
 	}
 	if newRoot.urlUpdateInput.Value() != "http://example.com/file" {
 		t.Errorf("Expected urlUpdateInput to be pre-filled with 'http://example.com/file', got '%s'", newRoot.urlUpdateInput.Value())
@@ -869,7 +869,7 @@ func TestUpdate_InputStatePasteRoutesToFocusedField(t *testing.T) {
 	}
 
 	m := &RootModel{
-		state:        InputState,
+		uiState:        InputState,
 		focusedInput: 0,
 		inputs:       makeInputs(),
 	}
@@ -892,7 +892,7 @@ func TestUpdate_InputStatePasteRoutesToFocusedField(t *testing.T) {
 	}
 
 	m3.inputs[3].Blur()
-	m3.state = ExtensionConfirmationState
+	m3.uiState = ExtensionConfirmationState
 	m3.focusedInput = 2
 	m3.inputs[2].Focus()
 
@@ -907,7 +907,7 @@ func TestUpdate_DashboardSearchPasteRoutesToSearchInput(t *testing.T) {
 	search := textinput.New()
 	search.Focus()
 	m := &RootModel{
-		state:        DashboardState,
+		uiState:        DashboardState,
 		searchActive: true,
 		searchInput:  search,
 		Settings:     config.DefaultSettings(),
@@ -929,7 +929,7 @@ func TestUpdate_URLUpdateStatePasteRoutesToURLInput(t *testing.T) {
 	urlInput := textinput.New()
 	urlInput.Focus()
 	m := &RootModel{
-		state:          URLUpdateState,
+		uiState:          URLUpdateState,
 		urlUpdateInput: urlInput,
 	}
 
@@ -944,7 +944,7 @@ func TestUpdate_SettingsEditingPasteRoutesToSettingsInput(t *testing.T) {
 	settingsInput := textinput.New()
 	settingsInput.Focus()
 	m := &RootModel{
-		state:             SettingsState,
+		uiState:             SettingsState,
 		SettingsIsEditing: true,
 		SettingsInput:     settingsInput,
 	}
@@ -964,7 +964,7 @@ func TestUpdate_CategoryEditorPasteRoutesToCategoryInput(t *testing.T) {
 	catInputs[1].Focus()
 
 	m := &RootModel{
-		state:           CategoryManagerState,
+		uiState:           CategoryManagerState,
 		catMgrEditing:   true,
 		catMgrEditField: 1,
 		catMgrInputs:    catInputs,
@@ -982,7 +982,7 @@ func TestUpdate_DashboardInactivePasteIsIgnored(t *testing.T) {
 	search.SetValue("existing")
 
 	m := &RootModel{
-		state:        DashboardState,
+		uiState:        DashboardState,
 		searchActive: false,
 		searchInput:  search,
 		Settings:     config.DefaultSettings(),
@@ -1002,7 +1002,7 @@ func TestUpdate_SettingsNotEditingPasteIsIgnored(t *testing.T) {
 	settingsInput.SetValue("keep")
 
 	m := &RootModel{
-		state:             SettingsState,
+		uiState:             SettingsState,
 		SettingsIsEditing: false,
 		SettingsInput:     settingsInput,
 	}
@@ -1023,7 +1023,7 @@ func TestUpdate_CategoryManagerNotEditingPasteIsIgnored(t *testing.T) {
 	catInputs[2].SetValue("keep-pattern")
 
 	m := &RootModel{
-		state:           CategoryManagerState,
+		uiState:           CategoryManagerState,
 		catMgrEditing:   false,
 		catMgrEditField: 2,
 		catMgrInputs:    catInputs,
@@ -1049,7 +1049,7 @@ func TestUpdate_WindowSizeNormalizesCategoryManagerSelection(t *testing.T) {
 	}
 
 	m := &RootModel{
-		state:           CategoryManagerState,
+		uiState:           CategoryManagerState,
 		Settings:        settings,
 		catMgrCursor:    99,
 		catMgrEditing:   true,
@@ -1074,7 +1074,7 @@ func TestUpdate_UnlistedStatePasteIsIgnored(t *testing.T) {
 	urlInput.SetValue("https://example.com/original")
 
 	m := &RootModel{
-		state:          DetailState,
+		uiState:          DetailState,
 		urlUpdateInput: urlInput,
 		searchActive:   true,
 	}
@@ -1082,8 +1082,8 @@ func TestUpdate_UnlistedStatePasteIsIgnored(t *testing.T) {
 	updated, _ := m.Update(tea.PasteMsg{Content: "https://example.com/new"})
 	m2 := updated.(*RootModel)
 
-	if m2.state != DetailState {
-		t.Fatalf("state changed on ignored paste: got %v", m2.state)
+	if m2.uiState != DetailState {
+		t.Fatalf("state changed on ignored paste: got %v", m2.uiState)
 	}
 	if got := m2.urlUpdateInput.Value(); got != "https://example.com/original" {
 		t.Fatalf("expected unlisted state paste to be ignored, got %q", got)

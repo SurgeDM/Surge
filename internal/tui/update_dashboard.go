@@ -72,14 +72,14 @@ func (m *RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	// Quit
 	if key.Matches(msg, m.keys.Dashboard.Quit, m.keys.Dashboard.ForceQuit) {
-		m.state = QuitConfirmState
+		m.uiState = QuitConfirmState
 		m.quitConfirmFocused = 0
 		return m, nil
 	}
 
 	// Add download
 	if key.Matches(msg, m.keys.Dashboard.Add) {
-		m.state = InputState
+		m.uiState = InputState
 		m.focusedInput = 0
 		m.inputs[0].Focus()
 		// Use default download dir from settings
@@ -188,7 +188,7 @@ func (m *RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			// Only allow refresh if download is paused or errored
 			if d.paused || d.err != nil {
-				m.state = URLUpdateState
+				m.uiState = URLUpdateState
 				m.urlUpdateInput.SetValue(d.URL)
 				m.urlUpdateInput.Focus()
 			} else {
@@ -205,12 +205,12 @@ func (m *RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.ToggleHelp) {
-		m.state = HelpModalState
+		m.uiState = HelpModalState
 		return m, nil
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.Settings) {
-		m.state = SettingsState
+		m.uiState = SettingsState
 		m.SettingsActiveTab = 0
 		m.SettingsSelectedRow = 0
 		m.SettingsIsEditing = false
@@ -249,7 +249,7 @@ func (m *RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.BatchImport) {
-		m.state = BatchFilePickerState
+		m.uiState = BatchFilePickerState
 		m.filepicker = newFilepicker(m.PWD)
 		m.filepicker.FileAllowed = true
 		m.filepicker.DirAllowed = false

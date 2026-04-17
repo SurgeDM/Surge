@@ -32,7 +32,7 @@ func readActivePort() int {
 
 // ParseURLArg parses a command line argument that might contain comma-separated mirrors
 // Returns the primary URL and a list of all mirrors (including the primary)
-func ParseURLArg(arg string) (string, []string) {
+func ParseURLArg(arg string) (rawURL string, mirrors []string) {
 	parts := strings.Split(arg, ",")
 	var urls []string
 	for _, p := range parts {
@@ -80,7 +80,7 @@ func resolveClientOutputPath(outputDir string) string {
 	return utils.EnsureAbsPath(outputDir)
 }
 
-func resolveAPIConnection(requireServer bool) (string, string, error) {
+func resolveAPIConnection(requireServer bool) (baseURL, token string, err error) {
 	target := resolveHostTarget()
 	if target == "" {
 		port := readActivePort()
@@ -93,18 +93,18 @@ func resolveAPIConnection(requireServer bool) (string, string, error) {
 		return "", "", errors.New("surge is not running locally. start it or pass --host (or set SURGE_HOST)")
 	}
 
-	baseURL, err := resolveConnectBaseURL(target, false)
+	baseURL, err = resolveConnectBaseURL(target, false)
 	if err != nil {
 		return "", "", err
 	}
-	token, err := resolveTokenForTarget(target)
+	token, err = resolveTokenForTarget(target)
 	if err != nil {
 		return "", "", err
 	}
 	return baseURL, token, nil
 }
 
-func doAPIRequest(ctx context.Context, method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
+func doAPIRequest(ctx context.Context, method, baseURL, token, path string, body io.Reader) (*http.Response, error) {
 	reqURL := fmt.Sprintf("%s%s", strings.TrimRight(baseURL, "/"), path)
 	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
 	if err != nil {
@@ -122,7 +122,7 @@ func doAPIRequest(ctx context.Context, method string, baseURL string, token stri
 	return client.Do(req)
 }
 
-func sendToServer(ctx context.Context, url string, mirrors []string, outPath string, baseURL string, token string) error {
+func sendToServer(ctx context.Context, url string, mirrors []string, outPath, baseURL, token string) error {
 	reqBody := DownloadRequest{
 		URL:     url,
 		Mirrors: mirrors,
@@ -152,7 +152,7 @@ func sendToServer(ctx context.Context, url string, mirrors []string, outPath str
 }
 
 // GetRemoteDownloads fetches the list of downloads from a remote Surge server
-func GetRemoteDownloads(ctx context.Context, baseURL string, token string) ([]types.DownloadStatus, error) {
+func GetRemoteDownloads(ctx context.Context, baseURL, token string) ([]types.DownloadStatus, error) {
 	resp, err := doAPIRequest(ctx, http.MethodGet, baseURL, token, "/downloads", nil)
 	if err != nil {
 		return nil, err
@@ -218,8 +218,8 @@ func resolveDownloadID(ctx context.Context, partialID string) (string, error) {
 	// 1. Try to get candidates from running server
 	baseURL, token, err := resolveAPIConnection(false)
 	if err == nil && baseURL != "" {
-		remoteDownloads, err := GetRemoteDownloads(ctx, baseURL, token)
-		if err != nil {
+		remoteDownloads, rdErr := GetRemoteDownloads(ctx, baseURL, token)
+		if rdErr != nil {
 			if strictRemote {
 				return "", fmt.Errorf("failed to list remote downloads: %w", err)
 			}
@@ -235,7 +235,8 @@ func resolveDownloadID(ctx context.Context, partialID string) (string, error) {
 	// 2. Try DB
 	downloads, err := state.ListAllDownloads(ctx)
 	if err == nil {
-		for _, d := range downloads {
+		for i := range downloads { 
+		d := &downloads[i]
 			candidates = append(candidates, d.ID)
 		}
 	} else if len(candidates) == 0 {
@@ -247,7 +248,8 @@ func resolveDownloadID(ctx context.Context, partialID string) (string, error) {
 }
 
 func appendCandidateIDs(candidates *[]string, downloads []types.DownloadStatus) {
-	for _, d := range downloads {
+	for i := range downloads { 
+		d := &downloads[i]
 		*candidates = append(*candidates, d.ID)
 	}
 }

@@ -286,7 +286,7 @@ func (mgr *LifecycleManager) Cancel(ctx context.Context, id string) error {
 }
 
 // UpdateURL updates the URL of a download in both the pool (in-memory) and the DB.
-func (mgr *LifecycleManager) UpdateURL(ctx context.Context, id string, newURL string) error {
+func (mgr *LifecycleManager) UpdateURL(ctx context.Context, id, newURL string) error {
 	hooks := mgr.getEngineHooks()
 
 	// Update in-memory state via pool (validates download state too)

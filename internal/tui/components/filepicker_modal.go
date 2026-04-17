@@ -12,11 +12,11 @@ import (
 
 // FilePickerModal represents a styled file picker modal
 type FilePickerModal struct {
-	Title       string
-	Picker      *filepicker.Model
-	Help        help.Model
 	HelpKeys    help.KeyMap
 	BorderColor color.Color
+	Picker      *filepicker.Model
+	Help        help.Model
+	Title       string
 	Width       int
 	Height      int
 }

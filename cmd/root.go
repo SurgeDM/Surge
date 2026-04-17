@@ -301,9 +301,9 @@ func isExplicitOutputPath(outPath, defaultDir string) bool {
 }
 
 type rootRunOptions struct {
-	portFlag     int
 	batchFile    string
 	outputDir    string
+	portFlag     int
 	noResume     bool
 	exitWhenDone bool
 }
@@ -371,7 +371,7 @@ func initializeRootLocalRuntime() error {
 	return nil
 }
 
-func startRootHTTPServer(opts rootRunOptions) (int, func(), error) {
+func startRootHTTPServer(opts rootRunOptions) (port int, cleanup func(), err error) {
 	port, listener, err := bindServerListener(opts.portFlag)
 	if err != nil {
 		return 0, nil, err
@@ -438,7 +438,7 @@ var rootCmd = &cobra.Command{
 		savePID()
 		defer removePID()
 
-		if err := initializeRootLocalRuntime(); err != nil {
+		if err = initializeRootLocalRuntime(); err != nil {
 			return err
 		}
 
@@ -455,7 +455,7 @@ var rootCmd = &cobra.Command{
 }
 
 // startTUI initializes and runs the TUI program
-func startTUI(port int, exitWhenDone bool, noResume bool) error {
+func startTUI(port int, exitWhenDone, noResume bool) error {
 	tui.InitializeTUI()
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run

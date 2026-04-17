@@ -12,18 +12,18 @@ import (
 
 // AddDownloadModal renders input-driven download forms (add download / extension prompt).
 type AddDownloadModal struct {
+	HelpKeys        help.KeyMap
+	BorderColor     color.Color
+	Help            help.Model
 	Title           string
+	URL             string
 	Inputs          []textinput.Model
 	Labels          []string
 	FocusedInput    int
-	ShowURL         bool
-	URL             string
 	BrowseHintIndex int
-	Help            help.Model
-	HelpKeys        help.KeyMap
-	BorderColor     color.Color
 	Width           int
 	Height          int
+	ShowURL         bool
 }
 
 // View renders the inner content (without border box).

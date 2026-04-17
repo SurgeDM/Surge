@@ -11,10 +11,10 @@ import (
 
 // DuplicateResult represents the outcome of a duplicate check
 type DuplicateResult struct {
-	Exists   bool
-	IsActive bool
 	Filename string
 	URL      string
+	Exists   bool
+	IsActive bool
 }
 
 // CheckForDuplicate inspects active and persisted downloads for duplicate URLs.
