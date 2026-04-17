@@ -32,18 +32,18 @@ func TestSetDarkMode_UpdatesExportedPalette(t *testing.T) {
 	t.Cleanup(func() { SetDarkMode(prev) })
 
 	SetDarkMode(false)
-	if got := colorHex(Pink); got != "#d10074" {
+	if got := colorHex(Pink()); got != "#d10074" {
 		t.Fatalf("light Pink = %q, want #d10074", got)
 	}
-	if got := colorHex(StateDownloading); got != "#2e7d32" {
+	if got := colorHex(StateDownloading()); got != "#2e7d32" {
 		t.Fatalf("light StateDownloading = %q, want #2e7d32", got)
 	}
 
 	SetDarkMode(true)
-	if got := colorHex(Pink); got != "#ff79c6" {
+	if got := colorHex(Pink()); got != "#ff79c6" {
 		t.Fatalf("dark Pink = %q, want #ff79c6", got)
 	}
-	if got := colorHex(StateDownloading); got != "#50fa7b" {
+	if got := colorHex(StateDownloading()); got != "#50fa7b" {
 		t.Fatalf("dark StateDownloading = %q, want #50fa7b", got)
 	}
 }
