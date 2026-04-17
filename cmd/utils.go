@@ -55,6 +55,7 @@ func resolveLocalToken() string {
 	return ensureAuthToken()
 }
 
+// resolveHostTarget returns the target host, prioritizing the --host flag over the SURGE_HOST environment variable.
 func resolveHostTarget() string {
 	if host := strings.TrimSpace(globalHost); host != "" {
 		return host
