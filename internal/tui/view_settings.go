@@ -864,6 +864,8 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.General.LiveSpeedGraph = defaults.General.LiveSpeedGraph
 		case "theme":
 			m.Settings.General.Theme = defaults.General.Theme
+		case "theme_path":
+			m.Settings.General.ThemePath = defaults.General.ThemePath
 		case "log_retention_count":
 			m.Settings.General.LogRetentionCount = defaults.General.LogRetentionCount
 		}
