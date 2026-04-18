@@ -25,15 +25,15 @@ func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) strin
 
 	// Search bar (shown when search is active or has a query)
 	if m.searchActive || m.searchQuery != "" {
-		searchIcon := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("> ")
+		searchIcon := lipgloss.NewStyle().Foreground(colors.Cyan()).Render("> ")
 		var searchDisplay string
 		if m.searchActive {
 			searchDisplay = m.searchInput.View() +
-				lipgloss.NewStyle().Foreground(colors.Gray).Render(" [esc exit]")
+				lipgloss.NewStyle().Foreground(colors.Gray()).Render(" [esc exit]")
 		} else {
 			// Show query with clear hint
-			searchDisplay = lipgloss.NewStyle().Foreground(colors.NeonPink).Render(m.searchQuery) +
-				lipgloss.NewStyle().Foreground(colors.Gray).Render(" [f to clear]")
+			searchDisplay = lipgloss.NewStyle().Foreground(colors.Pink()).Render(m.searchQuery) +
+				lipgloss.NewStyle().Foreground(colors.Gray()).Render(" [f to clear]")
 		}
 		// Pad the search bar to look like a title block
 		leftTitle = " " + lipgloss.JoinHorizontal(lipgloss.Left, searchIcon, searchDisplay) + " "
@@ -74,9 +74,9 @@ func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) strin
 	listInnerContent := lipgloss.JoinVertical(lipgloss.Left, tabBar, listContent)
 	innerContent := listPadding.Render(listInnerContent)
 
-	downloadsBorderColor := colors.NeonPink
+	downloadsBorderColor := colors.Pink()
 	if m.logFocused {
-		downloadsBorderColor = colors.Gray
+		downloadsBorderColor = colors.Gray()
 	}
 
 	return renderBtopBox(leftTitle, PaneTitleStyle.Render(" Downloads "), innerContent, width, height, downloadsBorderColor)

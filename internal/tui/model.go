@@ -205,7 +205,7 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 		StartTime:     time.Now(),
 		progress: progress.New(
 			progress.WithSpringOptions(0.5, 0.1),
-			progress.WithColors(colors.ProgressStart, colors.ProgressEnd),
+			progress.WithColors(colors.ProgressStart(), colors.ProgressEnd()),
 			progress.WithScaled(true),
 		),
 		state: state,

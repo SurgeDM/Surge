@@ -317,17 +317,10 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 					valueStr = displayToken + lipgloss.NewStyle().Foreground(colors.Gray()).Render(" [Enter to Copy]")
 				}
 			}
-<<<<<<< HEAD
 		case "link":
-			valueStr = lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Open [Enter]")
+			valueStr = lipgloss.NewStyle().Foreground(colors.Cyan()).Render("Open [Enter]")
 		default:
 			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key, true) + unitStyle.Render(unit)
-=======
-		} else if meta.Type == "link" {
-			valueStr = lipgloss.NewStyle().Foreground(colors.Cyan()).Render("Open [Enter]")
-		} else {
-			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key) + unitStyle.Render(unit)
->>>>>>> 29b8130 (feat: Removed Neon prefix for colours)
 			if meta.Key == "max_global_connections" {
 				valueStr += " (Ignored)"
 			}
@@ -347,14 +340,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	valueDisplay := valueLabelStyle.Render(valueLabel) + valueContentStyle.Render(valueStr)
 	valueDisplay = lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(valueDisplay)
 
-	divider := lipgloss.NewStyle().
-<<<<<<< HEAD
-		Foreground(colors.Gray).
-		Render(strings.Repeat("\u2500", innerWidth))
-=======
-		Foreground(colors.Gray()).
-		Render(strings.Repeat("─", innerWidth))
->>>>>>> e1c23ed (feat: Decoupled colour scheme from theme)
+	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2500", innerWidth))
 
 	descDisplay := lipgloss.NewStyle().
 		Foreground(colors.LightGray()).
@@ -409,14 +395,7 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 	if dividerHeight < 1 {
 		dividerHeight = 1
 	}
-	divider := lipgloss.NewStyle().
-<<<<<<< HEAD
-		Foreground(colors.Gray).
-		Render(strings.Repeat("\u2502\n", dividerHeight-1) + "\u2502")
-=======
-		Foreground(colors.Gray()).
-		Render(strings.Repeat("│\n", dividerHeight-1) + "│")
->>>>>>> e1c23ed (feat: Decoupled colour scheme from theme)
+	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2502\n", dividerHeight-1) + "\u2502")
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
 	return formatSettingsBlock(content, modalWidth-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
@@ -448,11 +427,7 @@ func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, sele
 
 	list := renderSettingsListViewport(settingsMeta, selectedRow, listRows, innerWidth)
 	detail := m.renderSettingsDetailBlock(settingsMeta, selectedRow, settingsValues, innerWidth, detailRows)
-<<<<<<< HEAD
-	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("\u2500", innerWidth))
-=======
-	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("─", innerWidth))
->>>>>>> e1c23ed (feat: Decoupled colour scheme from theme)
+	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2500", innerWidth))
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		list,

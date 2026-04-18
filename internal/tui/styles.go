@@ -65,7 +65,7 @@ func rebuildStyles() {
 	DetailStyle = PaneStyle
 
 	TitleStyle = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true).MarginBottom(1)
-	PaneTitleStyle = lipgloss.NewStyle().Foreground(colors.LighGray()).Bold(true)
+	PaneTitleStyle = lipgloss.NewStyle().Foreground(colors.LightGray()).Bold(true)
 	TabStyle = lipgloss.NewStyle().Foreground(colors.LightGray()).Padding(DefaultPaddingY, DefaultPaddingX)
 
 	ActiveTabStyle = lipgloss.NewStyle().
@@ -78,17 +78,9 @@ func rebuildStyles() {
 	StatsLabelStyle = lipgloss.NewStyle().Foreground(colors.Cyan()).Width(12)
 	StatsValueStyle = lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true)
 
-<<<<<<< HEAD
-	LogStyleStarted = lipgloss.NewStyle().Foreground(colors.StateDownloading)
-	LogStyleComplete = lipgloss.NewStyle().Foreground(colors.StateDone)
-	LogStyleError = lipgloss.NewStyle().Foreground(colors.StateError)
-	LogStylePaused = lipgloss.NewStyle().Foreground(colors.StatePaused)
-
-	EmptyMessageStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(false).Italic(true)
-=======
 	LogStyleStarted = lipgloss.NewStyle().Foreground(colors.StateDownloading())
 	LogStyleComplete = lipgloss.NewStyle().Foreground(colors.StateDone())
 	LogStyleError = lipgloss.NewStyle().Foreground(colors.StateError())
 	LogStylePaused = lipgloss.NewStyle().Foreground(colors.StatePaused())
->>>>>>> e1c23ed (feat: Decoupled colour scheme from theme)
+	EmptyMessageStyle = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(false).Italic(true)
 }

@@ -183,17 +183,8 @@ func renderCategoryListViewport(cats []config.Category, cursor int, editing bool
 		addPrefix := "  "
 		addStyle := lipgloss.NewStyle().Foreground(colors.Cyan())
 		if idx == cursor && !editing {
-<<<<<<< HEAD
 			addPrefix = "\u25b8 "
-			addStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
-=======
-			addPrefix = "▸ "
-<<<<<<< HEAD
-			addStyle = lipgloss.NewStyle().Foreground(colors.Cyan).Bold(true)
->>>>>>> 29b8130 (feat: Removed Neon prefix for colours)
-=======
 			addStyle = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
->>>>>>> e1c23ed (feat: Decoupled colour scheme from theme)
 		}
 		lines = append(lines, addStyle.Width(innerWidth).MaxWidth(innerWidth).Render(addPrefix+"+ Add Category"))
 	}
@@ -219,17 +210,10 @@ func (m RootModel) renderCategoryDetailView(cats []config.Category, cursor, inne
 	}
 
 	cat := cats[cursor]
-<<<<<<< HEAD
-	labelStyle := lipgloss.NewStyle().Foreground(colors.Cyan).Bold(true)
-	valueStyle := lipgloss.NewStyle().Foreground(colors.White)
-	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
-	divider := dimStyle.Render(strings.Repeat("\u2500", innerWidth))
-=======
 	labelStyle := lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
 	valueStyle := lipgloss.NewStyle().Foreground(colors.White())
 	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray())
-	divider := dimStyle.Render(strings.Repeat("─", innerWidth))
->>>>>>> e1c23ed (feat: Decoupled colour scheme from theme)
+	divider := dimStyle.Render(strings.Repeat("\u2500", innerWidth))
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		labelStyle.Render("Name: ")+valueStyle.Width(innerWidth-6).Render(cat.Name),
@@ -329,15 +313,7 @@ func (m RootModel) renderCategoryTwoColumn(cats []config.Category, cursor, modal
 	if dividerHeight < 1 {
 		dividerHeight = 1
 	}
-	divider := lipgloss.NewStyle().
-<<<<<<< HEAD
-		Foreground(colors.Gray).
-		Render(strings.Repeat("\u2502\n", dividerHeight-1) + "\u2502")
-=======
-		Foreground(colors.Gray()).
-		Render(strings.Repeat("│\n", dividerHeight-1) + "│")
->>>>>>> e1c23ed (feat: Decoupled colour scheme from theme)
-
+	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2502\n", dividerHeight-1) + "\u2502")
 	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
 	return formatSettingsBlock(content, modalWidth-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
 }
@@ -375,11 +351,7 @@ func (m RootModel) renderCategoryCompact(cats []config.Category, cursor, modalWi
 		detail = m.renderCategoryDetailView(cats, cursor, innerWidth, detailRows)
 	}
 
-<<<<<<< HEAD
-	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("\u2500", innerWidth))
-=======
-	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("─", innerWidth))
->>>>>>> e1c23ed (feat: Decoupled colour scheme from theme)
+	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2500", innerWidth))
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		list,
 		divider,

@@ -18,9 +18,9 @@ func (m *RootModel) renderLogBox(width, height int) string {
 		innerContent = m.logViewport.View()
 	}
 
-	logBorderColor := colors.Gray
+	logBorderColor := colors.Gray()
 	if m.logFocused {
-		logBorderColor = colors.NeonPink
+		logBorderColor = colors.Pink()
 	}
 
 	return renderBtopBox(PaneTitleStyle.Render(" Activity Log "), "", innerContent, width, height, logBorderColor)
