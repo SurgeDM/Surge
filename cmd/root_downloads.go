@@ -232,6 +232,15 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 		return true
 	}
 
+	// HEADLESS/SERVER MODE:
+	// If we're here, shouldPrompt must be true but we have no TUI.
+	// We auto-approve extension requests that are NOT duplicates, as there is
+	// no way to display a confirmation prompt in headless mode.
+	if !resolved.isDuplicate {
+		utils.Debug("Headless mode: auto-approving extension request (bypass ExtensionPrompt)")
+		return false
+	}
+
 	writeJSONResponse(w, http.StatusConflict, map[string]string{
 		"status":  "error",
 		"message": "Download rejected: Duplicate download or approval required (Headless mode)",
