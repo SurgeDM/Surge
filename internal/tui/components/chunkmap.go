@@ -196,10 +196,10 @@ func (m ChunkMapModel) View() string {
 	var s strings.Builder
 
 	// Styles
-	pendingStyle := lipgloss.NewStyle().Foreground(colors.DarkGray)           // Dark gray
-	downloadingStyle := lipgloss.NewStyle().Foreground(colors.NeonPink)       // Neon Pink
-	pausedStyle := lipgloss.NewStyle().Foreground(colors.StatePaused)         // Yellow/Gold for paused Partial
-	completedStyle := lipgloss.NewStyle().Foreground(colors.StateDownloading) // Neon Green / Cyan
+	pendingStyle := lipgloss.NewStyle().Foreground(colors.DarkGray())           // Dark gray
+	downloadingStyle := lipgloss.NewStyle().Foreground(colors.Pink())       // Neon Pink
+	pausedStyle := lipgloss.NewStyle().Foreground(colors.StatePaused())         // Yellow/Gold for paused Partial
+	completedStyle := lipgloss.NewStyle().Foreground(colors.StateDownloading()) // Neon Green / Cyan
 
 	block := "\u25a0"
 

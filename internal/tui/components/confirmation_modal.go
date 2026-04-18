@@ -31,7 +31,7 @@ func (NoKeys) FullHelp() [][]key.Binding { return nil }
 // View renders the confirmation modal content (without the box wrapper or help text)
 func (m ConfirmationModal) view() string {
 	detailStyle := lipgloss.NewStyle().
-		Foreground(colors.NeonPurple).
+		Foreground(colors.Magenta()).
 		Bold(true)
 
 	// Build content - just message and detail (no help)
@@ -66,7 +66,7 @@ func (m ConfirmationModal) RenderWithBtopBox(
 
 	// Style and center help text
 	helpStyle := lipgloss.NewStyle().
-		Foreground(colors.Gray).
+		Foreground(colors.Gray()).
 		Width(innerWidth).
 		Align(lipgloss.Center)
 	helpText := helpStyle.Render(m.Help.View(m.Keys))
@@ -121,7 +121,7 @@ func (m ConfirmationModal) Centered(width, height int) string {
 
 	// Style and center help text
 	helpStyle := lipgloss.NewStyle().
-		Foreground(colors.Gray).
+		Foreground(colors.Gray()).
 		Width(innerWidth).
 		Align(lipgloss.Center)
 	helpText := helpStyle.Render(m.Help.View(m.Keys))

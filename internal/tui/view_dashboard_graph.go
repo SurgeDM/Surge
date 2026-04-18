@@ -121,7 +121,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 		graphAreaWidth, axisWidth := GetGraphAreaDimensions(width, true)
 		graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
 
-		axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)
+		axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.Cyan()).Align(lipgloss.Right)
 		axisLines := buildAxisLines(graphContentHeight, axisStyle)
 		axisColumn := lipgloss.NewStyle().
 			Height(graphContentHeight).
@@ -139,9 +139,9 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 		speedMbps := currentSpeed * 8
 		topMbps := topSpeed * 8
 
-		valueStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
-		labelStyleStats := lipgloss.NewStyle().Foreground(colors.LightGray)
-		dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
+		valueStyle := lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
+		labelStyleStats := lipgloss.NewStyle().Foreground(colors.LightGray())
+		dimStyle := lipgloss.NewStyle().Foreground(colors.Gray())
 
 		statsContent := lipgloss.JoinVertical(lipgloss.Left,
 			fmt.Sprintf("%s %s", valueStyle.Render("\u25bc"), valueStyle.Render(fmt.Sprintf("%.2f MB/s", currentSpeed))),
@@ -155,7 +155,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 
 		statsBoxStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colors.Gray).
+			BorderForeground(colors.Gray()).
 			Padding(0, 1).
 			Width(GraphStatsWidth).
 			Height(graphContentHeight)
@@ -164,7 +164,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 		graphAreaWidth, axisWidth := GetGraphAreaDimensions(width, false)
 		graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
 
-		axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.NeonCyan).Align(lipgloss.Right)
+		axisStyle := lipgloss.NewStyle().Width(axisWidth).Foreground(colors.Cyan()).Align(lipgloss.Right)
 		axisLines := buildAxisLines(graphContentHeight, axisStyle)
 		axisColumn := lipgloss.NewStyle().
 			Height(graphContentHeight).
@@ -175,5 +175,5 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 	}
 
 	innerContent := lipgloss.JoinVertical(lipgloss.Left, "", graphWithAxis, "")
-	return renderBtopBox(PaneTitleStyle.Render(" Network Activity "), "", innerContent, width, height, colors.NeonCyan)
+	return renderBtopBox(PaneTitleStyle.Render(" Network Activity "), "", innerContent, width, height, colors.Cyan())
 }

@@ -36,7 +36,7 @@ func NewFilePickerModal(title string, picker *filepicker.Model, helpModel help.M
 
 // View returns the inner content of the file picker (without the box)
 func (m FilePickerModal) View() string {
-	pathStyle := lipgloss.NewStyle().Foreground(colors.LightGray)
+	pathStyle := lipgloss.NewStyle().Foreground(colors.LightGray())
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		"",

@@ -24,9 +24,9 @@ func (m RootModel) viewSettings() string {
 	if width < MinSettingsWidth || height < 10 { // Special threshold for settings rendering floor
 		content := lipgloss.NewStyle().
 			Padding(DefaultPaddingY, DefaultPaddingX*2).
-			Foreground(colors.LightGray).
+			Foreground(colors.LightGray()).
 			Render("Terminal too small for settings view")
-		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.NeonPurple)
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.Magenta())
 		return m.renderModalWithOverlay(box)
 	}
 
@@ -34,9 +34,9 @@ func (m RootModel) viewSettings() string {
 	if len(categories) == 0 {
 		content := lipgloss.NewStyle().
 			Padding(1, 2).
-			Foreground(colors.LightGray).
+			Foreground(colors.LightGray()).
 			Render("No settings categories available")
-		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.NeonPurple)
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.Magenta())
 		return m.renderModalWithOverlay(box)
 	}
 
@@ -54,9 +54,9 @@ func (m RootModel) viewSettings() string {
 	if len(settingsMeta) == 0 {
 		content := lipgloss.NewStyle().
 			Padding(1, 2).
-			Foreground(colors.LightGray).
+			Foreground(colors.LightGray()).
 			Render("No settings available in this category")
-		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.NeonPurple)
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.Magenta())
 		return m.renderModalWithOverlay(box)
 	}
 
@@ -103,7 +103,7 @@ func (m RootModel) viewSettings() string {
 		helpText,
 	)
 
-	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, colors.NeonPurple)
+	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, colors.Magenta())
 	return m.renderModalWithOverlay(box)
 }
 
@@ -141,7 +141,7 @@ func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxW
 		return tabs
 	}
 
-	settingsActiveTab := lipgloss.NewStyle().Foreground(colors.NeonPurple)
+	settingsActiveTab := lipgloss.NewStyle().Foreground(colors.Magenta())
 	tryBars := []string{
 		components.RenderNumberedTabBar(makeTabs(false), activeTab, settingsActiveTab, TabStyle),
 		components.RenderTabBar(makeTabs(false), activeTab, settingsActiveTab, TabStyle),
@@ -156,7 +156,7 @@ func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxW
 
 	fallback := fmt.Sprintf("[%d/%d] %s", activeTab+1, len(categories), categories[activeTab])
 	return lipgloss.NewStyle().
-		Foreground(colors.Gray).
+		Foreground(colors.Gray()).
 		Width(maxWidth).
 		Align(lipgloss.Center).
 		Render(fallback)
@@ -176,7 +176,7 @@ func (m RootModel) renderSettingsHelp(width int) string {
 	}
 
 	return lipgloss.NewStyle().
-		Foreground(colors.Gray).
+		Foreground(colors.Gray()).
 		Width(width).
 		Align(lipgloss.Center).
 		Render(helpText)
@@ -246,17 +246,17 @@ func renderSettingsListViewport(settingsMeta []config.SettingMeta, selectedRow, 
 
 		meta := settingsMeta[idx]
 		prefix := "  "
-		style := lipgloss.NewStyle().Foreground(colors.LightGray)
+		style := lipgloss.NewStyle().Foreground(colors.LightGray())
 		if idx == selectedRow {
 			prefix = "\u25b8 "
-			style = lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
+			style = lipgloss.NewStyle().Foreground(colors.Magenta()).Bold(true)
 		}
 
 		if meta.Key == "max_global_connections" {
 			style = lipgloss.NewStyle().Foreground(colors.ThemeColor("#aaaaaa", "238"))
 			if idx == selectedRow {
 				prefix = "# "
-				style = lipgloss.NewStyle().Foreground(colors.Gray)
+				style = lipgloss.NewStyle().Foreground(colors.Gray())
 			}
 		}
 
@@ -295,7 +295,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	meta := settingsMeta[selectedRow]
 	value := settingsValues[meta.Key]
 	unit := m.getSettingUnit()
-	unitStyle := lipgloss.NewStyle().Foreground(colors.Gray)
+	unitStyle := lipgloss.NewStyle().Foreground(colors.Gray())
 
 	var valueStr string
 	if m.SettingsIsEditing {
@@ -305,20 +305,20 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		case "auth_token":
 			token := GetAuthToken()
 			if token == "" {
-				valueStr = lipgloss.NewStyle().Foreground(colors.Gray).Render("(Not generated yet)")
+				valueStr = lipgloss.NewStyle().Foreground(colors.Gray()).Render("(Not generated yet)")
 			} else {
 				if m.ExtensionTokenCopied {
-					valueStr = lipgloss.NewStyle().Foreground(colors.StateDownloading).Bold(true).Render("Copied!")
+					valueStr = lipgloss.NewStyle().Foreground(colors.StateDownloading()).Bold(true).Render("Copied!")
 				} else {
 					displayToken := token
 					if len(token) > 16 {
 						displayToken = token[:8] + "..." + token[len(token)-8:]
 					}
-					valueStr = displayToken + lipgloss.NewStyle().Foreground(colors.Gray).Render(" [Enter to Copy]")
+					valueStr = displayToken + lipgloss.NewStyle().Foreground(colors.Gray()).Render(" [Enter to Copy]")
 				}
 			}
 		case "link":
-			valueStr = lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Open [Enter]")
+			valueStr = lipgloss.NewStyle().Foreground(colors.Cyan()).Render("Open [Enter]")
 		default:
 			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key, true) + unitStyle.Render(unit)
 			if meta.Key == "max_global_connections" {
@@ -335,17 +335,15 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		valueLabel = "Action: "
 	}
 
-	valueLabelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
-	valueContentStyle := lipgloss.NewStyle().Foreground(colors.White)
+	valueLabelStyle := lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
+	valueContentStyle := lipgloss.NewStyle().Foreground(colors.White())
 	valueDisplay := valueLabelStyle.Render(valueLabel) + valueContentStyle.Render(valueStr)
 	valueDisplay = lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(valueDisplay)
 
-	divider := lipgloss.NewStyle().
-		Foreground(colors.Gray).
-		Render(strings.Repeat("\u2500", innerWidth))
+	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2500", innerWidth))
 
 	descDisplay := lipgloss.NewStyle().
-		Foreground(colors.LightGray).
+		Foreground(colors.LightGray()).
 		Width(innerWidth).
 		MaxWidth(innerWidth).
 		Render(meta.Description)
@@ -376,7 +374,7 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 	listContent := renderSettingsListViewport(settingsMeta, selectedRow, listRows, leftWidth-(BoxStyle.GetHorizontalFrameSize()*2))
 	listBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colors.Gray).
+		BorderForeground(colors.Gray()).
 		Width(leftWidth).
 		Padding(1, 1).
 		Render(listContent)
@@ -397,9 +395,7 @@ func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, se
 	if dividerHeight < 1 {
 		dividerHeight = 1
 	}
-	divider := lipgloss.NewStyle().
-		Foreground(colors.Gray).
-		Render(strings.Repeat("\u2502\n", dividerHeight-1) + "\u2502")
+	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2502\n", dividerHeight-1) + "\u2502")
 
 	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
 	return formatSettingsBlock(content, modalWidth-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
@@ -431,7 +427,7 @@ func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, sele
 
 	list := renderSettingsListViewport(settingsMeta, selectedRow, listRows, innerWidth)
 	detail := m.renderSettingsDetailBlock(settingsMeta, selectedRow, settingsValues, innerWidth, detailRows)
-	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("\u2500", innerWidth))
+	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2500", innerWidth))
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		list,
@@ -606,7 +602,13 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 					}
 				}
 				targetField.Set(reflect.ValueOf(theme))
-				m.ApplyTheme(theme)
+				m.ApplyTheme(theme, m.Settings.General.ThemePath)
+				return nil
+			}
+			if key == "theme_path" {
+				targetField.SetString(value)
+				// Re-apply the current theme mode but with the brand new path
+				m.ApplyTheme(m.Settings.General.Theme, value)
 				return nil
 			}
 
@@ -862,6 +864,8 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.General.LiveSpeedGraph = defaults.General.LiveSpeedGraph
 		case "theme":
 			m.Settings.General.Theme = defaults.General.Theme
+		case "theme_path":
+			m.Settings.General.ThemePath = defaults.General.ThemePath
 		case "log_retention_count":
 			m.Settings.General.LogRetentionCount = defaults.General.LogRetentionCount
 		}

@@ -71,7 +71,7 @@ func (m RootModel) View() tea.View {
 
 	// Terminal too small to render any meaningful layout
 	if m.width < MinTermWidth || m.height < MinTermHeight {
-		msg := lipgloss.NewStyle().Foreground(colors.NeonCyan).Render(fmt.Sprintf("Terminal too small (min: %d×%d)", MinTermWidth, MinTermHeight))
+		msg := lipgloss.NewStyle().Foreground(colors.Cyan()).Render(fmt.Sprintf("Terminal too small (min: %d×%d)", MinTermWidth, MinTermHeight))
 		return m.wrapView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, msg))
 	}
 
@@ -82,7 +82,7 @@ func (m RootModel) View() tea.View {
 			Detail:      "Please wait",
 			Keys:        components.NoKeys{},
 			Help:        m.help,
-			BorderColor: colors.NeonCyan,
+			BorderColor: colors.Cyan(),
 		}
 		modal.Width, modal.Height = GetDynamicModalDimensions(m.width, m.height, 40, 6, 60, 10)
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
@@ -101,7 +101,7 @@ func (m RootModel) View() tea.View {
 			BrowseHintIndex: 2,
 			Help:            m.help,
 			HelpKeys:        m.keys.Input,
-			BorderColor:     colors.NeonPink,
+			BorderColor:     colors.Pink(),
 		}
 		// Resolve dynamic dimensions
 		w, _ := GetDynamicModalDimensions(m.width, m.height, 46, 8, 80, 0)
@@ -121,7 +121,7 @@ func (m RootModel) View() tea.View {
 			&fp,
 			m.help,
 			m.keys.FilePicker,
-			colors.NeonPink,
+			colors.Pink(),
 		)
 		// Resolve dynamic dimensions
 		w, h := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
@@ -147,7 +147,7 @@ func (m RootModel) View() tea.View {
 			Detail:      truncateString(m.duplicateInfo, 50),
 			Keys:        m.keys.Duplicate,
 			Help:        m.help,
-			BorderColor: colors.NeonPink,
+			BorderColor: colors.Pink(),
 		}
 		// Resolve dynamic dimensions
 		w, _ := GetDynamicModalDimensions(m.width, m.height, 40, 6, 60, 0)
@@ -182,7 +182,7 @@ func (m RootModel) View() tea.View {
 			BrowseHintIndex: 0,
 			Help:            m.help,
 			HelpKeys:        m.keys.Extension,
-			BorderColor:     colors.NeonCyan,
+			BorderColor:     colors.Cyan(),
 		}
 		// Resolve dynamic dimensions
 		w, _ := GetDynamicModalDimensions(m.width, m.height, 60, 10, 86, 0)
@@ -201,7 +201,7 @@ func (m RootModel) View() tea.View {
 			&fp,
 			m.help,
 			m.keys.FilePicker,
-			colors.NeonCyan,
+			colors.Cyan(),
 		)
 		// Resolve dynamic dimensions
 		w, h := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
@@ -220,7 +220,7 @@ func (m RootModel) View() tea.View {
 			Detail:      truncateString(m.batchFilePath, 50),
 			Keys:        m.keys.BatchConfirm,
 			Help:        m.help,
-			BorderColor: colors.NeonCyan,
+			BorderColor: colors.Cyan(),
 		}
 		// Resolve dynamic dimensions
 		w, _ := GetDynamicModalDimensions(m.width, m.height, 40, 6, 60, 0)
@@ -243,7 +243,7 @@ func (m RootModel) View() tea.View {
 			Detail:      fmt.Sprintf("Current: %s", m.UpdateInfo.CurrentVersion),
 			Keys:        m.keys.Update,
 			Help:        m.help,
-			BorderColor: colors.NeonCyan,
+			BorderColor: colors.Cyan(),
 		}
 		// Resolve dynamic dimensions
 		w, _ := GetDynamicModalDimensions(m.width, m.height, 50, 8, 60, 0)
@@ -264,7 +264,7 @@ func (m RootModel) View() tea.View {
 			BrowseHintIndex: -1, // No browse hint needed
 			Help:            m.help,
 			HelpKeys:        m.keys.Input,
-			BorderColor:     colors.NeonPink,
+			BorderColor:     colors.Pink(),
 		}
 		// Resolve dynamic dimensions
 		w, _ := GetDynamicModalDimensions(m.width, m.height, 46, 6, 80, 0)
@@ -282,7 +282,7 @@ func (m RootModel) View() tea.View {
 			Title:       "Keyboard Shortcuts",
 			HelpKeys:    m.keys.Dashboard,
 			Help:        m.help,
-			BorderColor: colors.NeonCyan,
+			BorderColor: colors.Cyan(),
 			Width:       w,
 			Height:      h,
 		}
@@ -417,7 +417,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 
 	// Separator Style
 	divider := lipgloss.NewStyle().
-		Foreground(colors.Gray).
+		Foreground(colors.Gray()).
 		Width(contentWidth).
 		Render("\n" + strings.Repeat("\u2500", contentWidth) + "\n")
 
@@ -430,7 +430,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	statusStr := getDownloadStatus(d, spinnerView)
 	statusStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colors.Gray).
+		BorderForeground(colors.Gray()).
 		Width(contentWidth).
 		Align(lipgloss.Center)
 
@@ -461,13 +461,13 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("URL: "), StatsValueStyle.Render(truncateMiddle(d.URL, valueWidth))),
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("File: "), StatsValueStyle.Render(truncateString(displayFilename, valueWidth))),
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Path: "), StatsValueStyle.Render(truncateMiddle(displayPath, valueWidth))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray).Render(truncateString(d.ID, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray()).Render(truncateString(d.ID, valueWidth))),
 	)
 	fileSection := sectionStyle.Render(fileInfoContent)
 
 	// --- 3. Progress Section ---
 	labelStr := "Progress: "
-	progLabelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan)
+	progLabelStyle := lipgloss.NewStyle().Foreground(colors.Cyan())
 
 	var progContent string
 	if contentWidth > 45 { // Enough space for "Progress: " (10) + some bar + padding
@@ -611,7 +611,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		}
 		// More prominent Mirrors display
 		mirrorLabel := StatsLabelStyle.Render("Mirrors")
-		mirrorStats := lipgloss.NewStyle().Foreground(colors.LightGray).Render(fmt.Sprintf("%d Active / %d Total (%d Errors)", activeCount, total, errorCount))
+		mirrorStats := lipgloss.NewStyle().Foreground(colors.LightGray()).Render(fmt.Sprintf("%d Active / %d Total (%d Errors)", activeCount, total, errorCount))
 
 		mirrorSection = sectionStyle.Render(lipgloss.JoinVertical(lipgloss.Left, mirrorLabel, mirrorStats))
 	}
@@ -620,7 +620,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	var errorSection string
 	if d.err != nil {
 		errorSection = sectionStyle.
-			Render(lipgloss.NewStyle().Foreground(colors.StateError).Render("Error: " + d.err.Error()))
+			Render(lipgloss.NewStyle().Foreground(colors.StateError()).Render("Error: " + d.err.Error()))
 	}
 
 	// Combine with Dividers
@@ -653,10 +653,10 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 
 func getDownloadStatus(d *DownloadModel, spinnerView string) string {
 	if d.pausing {
-		return lipgloss.NewStyle().Foreground(colors.StatePaused).Render(spinnerView + " Pausing...")
+		return lipgloss.NewStyle().Foreground(colors.StatePaused()).Render(spinnerView + " Pausing...")
 	}
 	if d.resuming {
-		return lipgloss.NewStyle().Foreground(colors.StateDownloading).Render(spinnerView + " Resuming...")
+		return lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(spinnerView + " Resuming...")
 	}
 	status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
 	return status.RenderWithSpinner(spinnerView)
@@ -739,24 +739,24 @@ func (m RootModel) viewQuitConfirm() string {
 	innerWidth := w - (components.BorderFrameWidth * 2)
 
 	messageStyle := lipgloss.NewStyle().
-		Foreground(colors.White).
+		Foreground(colors.White()).
 		Width(innerWidth).
 		Align(lipgloss.Center)
 
 	detailStyle := lipgloss.NewStyle().
-		Foreground(colors.NeonPurple).
+		Foreground(colors.Magenta()).
 		Bold(true).
 		Width(innerWidth).
 		Align(lipgloss.Center)
 
 	pad := "   "
 
-	activeFirst := lipgloss.NewStyle().Foreground(colors.White).Background(colors.NeonPink).Bold(true).Underline(true)
-	activeRest := lipgloss.NewStyle().Foreground(colors.White).Background(colors.NeonPink).Bold(true)
-	activePad := lipgloss.NewStyle().Background(colors.NeonPink)
+	activeFirst := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Pink()).Bold(true).Underline(true)
+	activeRest := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Pink()).Bold(true)
+	activePad := lipgloss.NewStyle().Background(colors.Pink())
 
-	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray).Background(lipgloss.Color("236")).Underline(true)
-	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray).Background(lipgloss.Color("236"))
+	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236")).Underline(true)
+	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236"))
 	inactivePad := lipgloss.NewStyle().Background(lipgloss.Color("236"))
 
 	renderBtn := func(padStyle, firstStyle, restStyle lipgloss.Style, first, rest string) string {
@@ -782,7 +782,7 @@ func (m RootModel) viewQuitConfirm() string {
 		detail = fmt.Sprintf("%d active download(s) will be paused", stats.ActiveCount)
 	}
 
-	helpStyle := lipgloss.NewStyle().Foreground(colors.Gray).Width(innerWidth).Align(lipgloss.Center)
+	helpStyle := lipgloss.NewStyle().Foreground(colors.Gray()).Width(innerWidth).Align(lipgloss.Center)
 	helpText := helpStyle.Render(m.help.View(m.keys.QuitConfirm))
 
 	var lines []string
@@ -812,7 +812,7 @@ func (m RootModel) viewQuitConfirm() string {
 	}
 
 	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	return renderBtopBox(PaneTitleStyle.Render(" Quit Surge "), "", content, w, h, colors.NeonPink)
+	return renderBtopBox(PaneTitleStyle.Render(" Quit Surge "), "", content, w, h, colors.Pink())
 }
 
 // renderBtopBox creates a btop-style box with title embedded in the top border

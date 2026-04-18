@@ -205,7 +205,7 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 		StartTime:     time.Now(),
 		progress: progress.New(
 			progress.WithSpringOptions(0.5, 0.1),
-			progress.WithColors(colors.ProgressStart, colors.ProgressEnd),
+			progress.WithColors(colors.ProgressStart(), colors.ProgressEnd()),
 			progress.WithScaled(true),
 		),
 		state: state,
@@ -263,7 +263,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		settings.General.AutoResume = false
 	}
 
-	applyColorModeForTheme(settings.General.Theme, initialDarkBackground)
+	applyColorModeForTheme(settings.General.Theme, settings.General.ThemePath, initialDarkBackground)
 
 	// Load paused downloads from master list (now uses global config directory)
 	var downloads []*DownloadModel
@@ -328,10 +328,10 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	// Initialize help
 	helpModel := help.New()
-	helpModel.Styles.ShortKey = lipgloss.NewStyle().Foreground(colors.LightGray)
-	helpModel.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.Gray)
-	helpModel.Styles.FullKey = lipgloss.NewStyle().Foreground(colors.NeonPink)
-	helpModel.Styles.FullDesc = lipgloss.NewStyle().Foreground(colors.LightGray)
+	helpModel.Styles.ShortKey = lipgloss.NewStyle().Foreground(colors.LightGray())
+	helpModel.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.Gray())
+	helpModel.Styles.FullKey = lipgloss.NewStyle().Foreground(colors.Pink())
+	helpModel.Styles.FullDesc = lipgloss.NewStyle().Foreground(colors.LightGray())
 
 	// Initialize settings input for editing
 	settingsInput := textinput.New()
@@ -576,30 +576,30 @@ func newFilepicker(currentDir string) filepicker.Model {
 }
 
 // ApplyTheme applies the selected theme mode
-func (m *RootModel) ApplyTheme(mode int) {
-	applyColorModeForTheme(mode, m.InitialDarkBackground)
+func (m *RootModel) ApplyTheme(mode int, path string) {
+	applyColorModeForTheme(mode, path, m.InitialDarkBackground)
 	m.refreshThemeCaches()
 }
 
-func applyColorModeForTheme(mode int, initialDarkBackground bool) {
-	switch mode {
-	case config.ThemeAdaptive:
-		colors.SetDarkMode(initialDarkBackground)
-	case config.ThemeLight:
-		colors.SetDarkMode(false)
-	case config.ThemeDark:
-		colors.SetDarkMode(true)
-	default:
-		colors.SetDarkMode(initialDarkBackground)
-	}
+func applyColorModeForTheme(mode int, themePath string, initialDarkBackground bool) {
+    isDark := initialDarkBackground
+
+    switch mode {
+    case config.ThemeLight:
+        isDark = false
+    case config.ThemeDark:
+        isDark = true
+    }
+
+    colors.LoadTheme(themePath, isDark)
 }
 
 func (m *RootModel) refreshThemeCaches() {
 	rebuildStyles()
-	m.help.Styles.ShortKey = lipgloss.NewStyle().Foreground(colors.LightGray)
-	m.help.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.Gray)
-	m.help.Styles.FullKey = lipgloss.NewStyle().Foreground(colors.NeonPink)
-	m.help.Styles.FullDesc = lipgloss.NewStyle().Foreground(colors.LightGray)
+	m.help.Styles.ShortKey = lipgloss.NewStyle().Foreground(colors.LightGray())
+	m.help.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.Gray())
+	m.help.Styles.FullKey = lipgloss.NewStyle().Foreground(colors.Pink())
+	m.help.Styles.FullDesc = lipgloss.NewStyle().Foreground(colors.LightGray())
 	applyListTheme(&m.list)
 	m.logoCache = ""
 }

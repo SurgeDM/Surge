@@ -37,7 +37,7 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 	}
 
 	// Styles
-	gridStyle := lipgloss.NewStyle().Foreground(colors.Gray)
+	gridStyle := lipgloss.NewStyle().Foreground(colors.Gray())
 
 	// 1. Prepare the canvas with a Grid
 	rows := make([][]string, height)
@@ -144,10 +144,10 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 // overlayStatsBox renders stats on top of the graph in the top-right area
 func overlayStatsBox(graph string, stats *GraphStats, width, height int) string {
 	// Create the stats box content - btop style
-	valueStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
-	labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray)
-	headerStyle := lipgloss.NewStyle().Foreground(colors.NeonPink).Bold(true)
-	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
+	valueStyle := lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
+	labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray())
+	headerStyle := lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true)
+	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray())
 
 	speedMbps := stats.DownloadSpeed * 8
 	topMbps := stats.DownloadTop * 8

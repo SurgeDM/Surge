@@ -81,15 +81,15 @@ func (s DownloadStatus) Label() string {
 func (s DownloadStatus) Color() color.Color {
 	switch s {
 	case StatusQueued, StatusPaused:
-		return colors.StatePaused
+		return colors.StatePaused()
 	case StatusDownloading:
-		return colors.StateDownloading
+		return colors.StateDownloading()
 	case StatusComplete:
-		return colors.StateDone
+		return colors.StateDone()
 	case StatusError:
-		return colors.StateError
+		return colors.StateError()
 	default:
-		return colors.Gray
+		return colors.Gray()
 	}
 }
 

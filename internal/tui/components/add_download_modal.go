@@ -28,13 +28,13 @@ type AddDownloadModal struct {
 
 // View renders the inner content (without border box).
 func (m AddDownloadModal) View() string {
-	labelStyle := lipgloss.NewStyle().Width(10).Foreground(colors.LightGray)
-	hintBase := lipgloss.NewStyle().MarginLeft(1).Foreground(colors.LightGray)
+	labelStyle := lipgloss.NewStyle().Width(10).Foreground(colors.LightGray())
+	hintBase := lipgloss.NewStyle().MarginLeft(1).Foreground(colors.LightGray())
 	content := []string{""}
 
 	if m.ShowURL && m.URL != "" {
 		content = append(content,
-			lipgloss.NewStyle().Foreground(colors.LightGray).Render("URL: "+m.URL),
+			lipgloss.NewStyle().Foreground(colors.LightGray()).Render("URL: "+m.URL),
 			"",
 		)
 	}
@@ -59,7 +59,7 @@ func (m AddDownloadModal) View() string {
 		if m.BrowseHintIndex == i {
 			hintStyle := hintBase
 			if m.FocusedInput == i {
-				hintStyle = hintStyle.Foreground(colors.NeonPink)
+				hintStyle = hintStyle.Foreground(colors.Pink())
 			}
 			row = lipgloss.JoinHorizontal(lipgloss.Left, row, hintStyle.Render("[Tab] Browse"))
 		}

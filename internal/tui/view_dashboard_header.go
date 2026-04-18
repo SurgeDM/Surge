@@ -32,7 +32,7 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 /____/`
 
 	// Server info part
-	greenDot := lipgloss.NewStyle().Foreground(colors.StateDownloading).Render("\u25cf")
+	greenDot := lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render("\u25cf")
 	host := m.ServerHost
 	if host == "" {
 		host = "127.0.0.1"
@@ -42,11 +42,11 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 	var statusLine string
 	if contentWidth < 28 {
 		// Just show the address when narrow
-		statusLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render(" " + serverAddr)
+		statusLine = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true).Render(" " + serverAddr)
 	} else if m.IsRemote {
-		statusLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render(" Connected to " + serverAddr)
+		statusLine = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true).Render(" Connected to " + serverAddr)
 	} else {
-		statusLine = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true).Render(" Serving at " + serverAddr)
+		statusLine = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true).Render(" Serving at " + serverAddr)
 	}
 
 	serverPortContent := lipgloss.NewStyle().
@@ -60,7 +60,7 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 		innerContent = lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Center, serverPortContent)
 	} else if width < MinLogoWidth {
 		// Show compact logo for medium-short headers or narrow terminals
-		logoContent := ApplyGradient(compactLogoText, colors.NeonPink, colors.NeonPurple)
+		logoContent := ApplyGradient(compactLogoText, colors.Pink(), colors.Magenta())
 		logoBoxHeight := contentHeight - components.SingleLineHeight // 1 line for the server text at the bottom
 		logoBox := lipgloss.Place(contentWidth, logoBoxHeight, lipgloss.Center, lipgloss.Center, logoContent)
 		innerContent = lipgloss.JoinVertical(lipgloss.Center, logoBox, serverPortContent)
@@ -69,7 +69,7 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 		if m.logoCache != "" {
 			logoContent = m.logoCache
 		} else {
-			gradientLogo := ApplyGradient(logoText, colors.NeonPink, colors.NeonPurple)
+			gradientLogo := ApplyGradient(logoText, colors.Pink(), colors.Magenta())
 			m.logoCache = lipgloss.NewStyle().Render(gradientLogo)
 			logoContent = m.logoCache
 		}
@@ -79,5 +79,5 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 		innerContent = lipgloss.JoinVertical(lipgloss.Center, logoBox, serverPortContent)
 	}
 
-	return renderBtopBox("", PaneTitleStyle.Render(" Server "), innerContent, width, height, colors.Gray)
+	return renderBtopBox("", PaneTitleStyle.Render(" Server "), innerContent, width, height, colors.Gray())
 }

@@ -19,9 +19,9 @@ func (m RootModel) viewCategoryManager() string {
 	if width < MinSettingsWidth || height < 10 { // Rendering floor for modals
 		content := lipgloss.NewStyle().
 			Padding(DefaultPaddingY, DefaultPaddingX*2).
-			Foreground(colors.LightGray).
+			Foreground(colors.LightGray()).
 			Render("Terminal too small for category manager")
-		box := renderBtopBox(PaneTitleStyle.Render(" Category Manager "), "", content, width, height, colors.NeonPurple)
+		box := renderBtopBox(PaneTitleStyle.Render(" Category Manager "), "", content, width, height, colors.Magenta())
 		return m.renderModalWithOverlay(box)
 	}
 
@@ -49,24 +49,24 @@ func (m RootModel) viewCategoryManager() string {
 
 	// === TOGGLE BAR ===
 	enabledStr := "OFF"
-	enabledColor := colors.Gray
+	enabledColor := colors.Gray()
 	if m.Settings.Categories.CategoryEnabled {
 		enabledStr = "ON"
-		enabledColor = colors.StateDownloading
+		enabledColor = colors.StateDownloading()
 	}
 	toggleStyle := lipgloss.NewStyle().Foreground(enabledColor).Bold(true)
-	toggleLine := lipgloss.NewStyle().Foreground(colors.LightGray).Render("  Auto-Sort Downloads: ") +
+	toggleLine := lipgloss.NewStyle().Foreground(colors.LightGray()).Render("  Auto-Sort Downloads: ") +
 		toggleStyle.Render(enabledStr) +
-		lipgloss.NewStyle().Foreground(colors.Gray).Render("  (t to toggle)")
+		lipgloss.NewStyle().Foreground(colors.Gray()).Render("  (t to toggle)")
 	if width < MinGraphStatsWidth {
-		toggleLine = lipgloss.NewStyle().Foreground(colors.LightGray).Render("  Auto-Sort: ") +
+		toggleLine = lipgloss.NewStyle().Foreground(colors.LightGray()).Render("  Auto-Sort: ") +
 			toggleStyle.Render(enabledStr) +
-			lipgloss.NewStyle().Foreground(colors.Gray).Render("  (t)")
+			lipgloss.NewStyle().Foreground(colors.Gray()).Render("  (t)")
 	}
 
 	helpText := m.renderCategoryHelp(width - (ProgressBarWidthOffset + HeaderWidthOffset))
 	catCount := fmt.Sprintf("%d categories", len(cats))
-	infoLine := lipgloss.NewStyle().Foreground(colors.Gray).Render("  " + catCount)
+	infoLine := lipgloss.NewStyle().Foreground(colors.Gray()).Render("  " + catCount)
 
 	innerHeight := height - BoxStyle.GetVerticalFrameSize()
 	toggleBarHeight := lipgloss.Height(toggleLine)
@@ -100,7 +100,7 @@ func (m RootModel) viewCategoryManager() string {
 		padding+helpText,
 	)
 
-	box := renderBtopBox(PaneTitleStyle.Render(" Category Manager "), "", fullContent, width, height, colors.NeonPurple)
+	box := renderBtopBox(PaneTitleStyle.Render(" Category Manager "), "", fullContent, width, height, colors.Magenta())
 	return m.renderModalWithOverlay(box)
 }
 
@@ -118,7 +118,7 @@ func (m RootModel) renderCategoryHelp(width int) string {
 	}
 
 	return lipgloss.NewStyle().
-		Foreground(colors.Gray).
+		Foreground(colors.Gray()).
 		Width(width).
 		Align(lipgloss.Center).
 		Render(helpText)
@@ -171,20 +171,20 @@ func renderCategoryListViewport(cats []config.Category, cursor int, editing bool
 			}
 
 			prefix := "  "
-			style := lipgloss.NewStyle().Foreground(colors.LightGray)
+			style := lipgloss.NewStyle().Foreground(colors.LightGray())
 			if idx == cursor && !editing {
 				prefix = "\u25b8 "
-				style = lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
+				style = lipgloss.NewStyle().Foreground(colors.Magenta()).Bold(true)
 			}
 			lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+label))
 			continue
 		}
 
 		addPrefix := "  "
-		addStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan)
+		addStyle := lipgloss.NewStyle().Foreground(colors.Cyan())
 		if idx == cursor && !editing {
 			addPrefix = "\u25b8 "
-			addStyle = lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
+			addStyle = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
 		}
 		lines = append(lines, addStyle.Width(innerWidth).MaxWidth(innerWidth).Render(addPrefix+"+ Add Category"))
 	}
@@ -202,7 +202,7 @@ func (m RootModel) renderCategoryDetailView(cats []config.Category, cursor, inne
 
 	if cursor >= len(cats) || len(cats) == 0 {
 		msg := lipgloss.NewStyle().
-			Foreground(colors.Gray).
+			Foreground(colors.Gray()).
 			Width(innerWidth).
 			MaxWidth(innerWidth).
 			Render("Press Enter to create a new category\nor press 'a' to add.")
@@ -210,9 +210,9 @@ func (m RootModel) renderCategoryDetailView(cats []config.Category, cursor, inne
 	}
 
 	cat := cats[cursor]
-	labelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
-	valueStyle := lipgloss.NewStyle().Foreground(colors.White)
-	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
+	labelStyle := lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
+	valueStyle := lipgloss.NewStyle().Foreground(colors.White())
+	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray())
 	divider := dimStyle.Render(strings.Repeat("\u2500", innerWidth))
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
@@ -244,8 +244,8 @@ func (m RootModel) renderCategoryEditView(innerWidth, rows int) string {
 	fieldLabels := []string{"Name:", "Description:", "Pattern:", "Path:"}
 	var fieldLines []string
 	for i, label := range fieldLabels {
-		labelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
-		valueStyle := lipgloss.NewStyle().Foreground(colors.White)
+		labelStyle := lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
+		valueStyle := lipgloss.NewStyle().Foreground(colors.White())
 		value := m.catMgrInputs[i].Value()
 		if i == m.catMgrEditField {
 			value = m.catMgrInputs[i].View()
@@ -258,7 +258,7 @@ func (m RootModel) renderCategoryEditView(innerWidth, rows int) string {
 	}
 
 	hint := lipgloss.NewStyle().
-		Foreground(colors.Gray).
+		Foreground(colors.Gray()).
 		Width(innerWidth).
 		MaxWidth(innerWidth).
 		Render("tab: next field  enter: save  esc: cancel")
@@ -276,7 +276,7 @@ func (m RootModel) renderCategoryTwoColumn(cats []config.Category, cursor, modal
 
 	listBoxStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colors.Gray).
+		BorderForeground(colors.Gray()).
 		Width(leftWidth).
 		Padding(1, 1)
 
@@ -313,10 +313,7 @@ func (m RootModel) renderCategoryTwoColumn(cats []config.Category, cursor, modal
 	if dividerHeight < 1 {
 		dividerHeight = 1
 	}
-	divider := lipgloss.NewStyle().
-		Foreground(colors.Gray).
-		Render(strings.Repeat("\u2502\n", dividerHeight-1) + "\u2502")
-
+	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2502\n", dividerHeight-1) + "\u2502")
 	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
 	return formatSettingsBlock(content, modalWidth-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
 }
@@ -354,7 +351,7 @@ func (m RootModel) renderCategoryCompact(cats []config.Category, cursor, modalWi
 		detail = m.renderCategoryDetailView(cats, cursor, innerWidth, detailRows)
 	}
 
-	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("\u2500", innerWidth))
+	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2500", innerWidth))
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		list,
 		divider,

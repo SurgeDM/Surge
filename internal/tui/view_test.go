@@ -375,8 +375,8 @@ func BenchmarkLogoGradient(b *testing.B) {
 /____/\__,_/_/   \__, /\___/ 
                 /____/       `
 
-	startColor := colors.NeonPink
-	endColor := colors.NeonPurple
+	startColor := colors.Pink()
+	endColor := colors.Magenta()
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
@@ -394,7 +394,7 @@ func BenchmarkCachedLogo(b *testing.B) {
 
 	m := InitialRootModel(1701, "test-version", nil, processing.NewLifecycleManager(nil, nil), false)
 	// Pre-warm cache
-	gradientLogo := ApplyGradient(logoText, colors.NeonPink, colors.NeonPurple)
+	gradientLogo := ApplyGradient(logoText, colors.Pink(), colors.Magenta())
 	m.logoCache = lipgloss.NewStyle().Render(gradientLogo)
 
 	b.ResetTimer()
@@ -402,7 +402,7 @@ func BenchmarkCachedLogo(b *testing.B) {
 		if m.logoCache != "" {
 			_ = m.logoCache
 		} else {
-			_ = ApplyGradient(logoText, colors.NeonPink, colors.NeonPurple)
+			_ = ApplyGradient(logoText, colors.Pink(), colors.Magenta())
 		}
 	}
 }

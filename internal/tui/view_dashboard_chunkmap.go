@@ -49,5 +49,5 @@ func (m *RootModel) renderChunkMapBox(width, height int, selected *DownloadModel
 
 	}
 
-	return renderBtopBox("", PaneTitleStyle.Render(" Chunk Map "), innerContent, width, height, colors.Gray)
+	return renderBtopBox("", PaneTitleStyle.Render(" Chunk Map "), innerContent, width, height, colors.Gray())
 }

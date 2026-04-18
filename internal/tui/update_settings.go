@@ -130,7 +130,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if settingKey == "theme" {
 			newTheme := (m.Settings.General.Theme + 1) % 3
 			m.Settings.General.Theme = newTheme
-			m.ApplyTheme(newTheme)
+			m.ApplyTheme(newTheme, m.Settings.General.ThemePath)
 			return m, nil
 		}
 
@@ -184,7 +184,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		currentCategory := categories[m.SettingsActiveTab]
 		m.resetSettingToDefault(currentCategory, settingKey, defaults)
 		if settingKey == "theme" {
-			m.ApplyTheme(m.Settings.General.Theme)
+			m.ApplyTheme(m.Settings.General.Theme, m.Settings.General.ThemePath)
 		}
 		return m, nil
 	}
