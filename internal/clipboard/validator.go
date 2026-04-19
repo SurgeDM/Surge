@@ -3,11 +3,7 @@ package clipboard
 import (
 	"net/url"
 	"strings"
-
-	"github.com/atotto/clipboard"
 )
-
-var clipboardReadAll = clipboard.ReadAll
 
 type Validator struct {
 	allowedSchemes map[string]bool
@@ -41,7 +37,7 @@ func (v *Validator) ExtractURL(text string) string {
 }
 
 func ReadURL() string {
-	text, err := clipboardReadAll()
+	text, err := Read()
 	if err != nil {
 		return ""
 	}

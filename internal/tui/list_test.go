@@ -12,7 +12,7 @@ import (
 var testAnsiEscapeRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
 func TestDownloadItem_Description(t *testing.T) {
-	spinnerView := "⠋"
+	spinnerView := "\u280b"
 
 	tests := []struct {
 		name     string
@@ -24,14 +24,14 @@ func TestDownloadItem_Description(t *testing.T) {
 			model: &DownloadModel{
 				pausing: true,
 			},
-			expected: "⠋ Pausing...",
+			expected: "\u280b Pausing...",
 		},
 		{
 			name: "Resuming State",
 			model: &DownloadModel{
 				resuming: true,
 			},
-			expected: "⠋ Resuming...",
+			expected: "\u280b Resuming...",
 		},
 		{
 			name: "Queued State",
@@ -42,7 +42,7 @@ func TestDownloadItem_Description(t *testing.T) {
 				paused:     false,
 				err:        nil,
 			},
-			expected: "⠋ Queued",
+			expected: "\u280b Queued",
 		},
 	}
 

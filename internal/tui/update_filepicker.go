@@ -25,20 +25,24 @@ func (m RootModel) updateFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.FilePicker.Cancel) {
 		// Cancel and return to appropriate state
 		if m.SettingsFileBrowsing {
+			m.Settings.General.DefaultDownloadDir = m.filepickerOriginalPath
 			m.SettingsFileBrowsing = false
 			m.state = SettingsState
 			return m, nil
 		}
 		if m.ExtensionFileBrowsing {
+			m.inputs[2].SetValue(m.filepickerOriginalPath)
 			m.ExtensionFileBrowsing = false
 			m.state = ExtensionConfirmationState
 			return m, nil
 		}
 		if m.catMgrFileBrowsing {
+			m.catMgrInputs[3].SetValue(m.filepickerOriginalPath)
 			m.catMgrFileBrowsing = false
 			m.state = CategoryManagerState
 			return m, nil
 		}
+		m.inputs[2].SetValue(m.filepickerOriginalPath)
 		m.state = InputState
 		return m, nil
 	}

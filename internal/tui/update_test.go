@@ -356,7 +356,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 1. Test Extension Prompt Enabled
-	m.Settings.General.ExtensionPrompt = true
+	m.Settings.Extension.ExtensionPrompt = true
 	m.Settings.General.WarnOnDuplicate = true
 
 	msg := events.DownloadRequestMsg{
@@ -382,7 +382,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 2. Test Duplicate Warning (when prompt disabled but duplicate exists)
-	m.Settings.General.ExtensionPrompt = false
+	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = true
 
 	// Add existing download
@@ -399,7 +399,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 3. Test No Prompt (Direct Download)
-	m.Settings.General.ExtensionPrompt = false
+	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = true
 	m.downloads = nil // Clear downloads
 
@@ -1042,6 +1042,38 @@ func TestUpdate_CategoryManagerNotEditingPasteIsIgnored(t *testing.T) {
 
 	if got := m2.catMgrInputs[2].Value(); got != "keep-pattern" {
 		t.Fatalf("expected no paste when category editor inactive, got %q", got)
+	}
+}
+
+func TestUpdate_WindowSizeNormalizesCategoryManagerSelection(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = []config.Category{
+		{Name: "Docs", Pattern: `(?i)\\.txt$`, Path: "docs"},
+	}
+
+	var catInputs [4]textinput.Model
+	for i := range catInputs {
+		catInputs[i] = textinput.New()
+	}
+
+	m := RootModel{
+		state:           CategoryManagerState,
+		Settings:        settings,
+		catMgrCursor:    99,
+		catMgrEditing:   true,
+		catMgrEditField: 99,
+		catMgrInputs:    catInputs,
+		list:            NewDownloadList(80, 20),
+	}
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 58, Height: 16})
+	m2 := updated.(RootModel)
+
+	if got, want := m2.catMgrCursor, 0; got != want {
+		t.Fatalf("catMgrCursor = %d, want %d", got, want)
+	}
+	if got, want := m2.catMgrEditField, 3; got != want {
+		t.Fatalf("catMgrEditField = %d, want %d", got, want)
 	}
 }
 

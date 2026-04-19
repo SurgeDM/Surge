@@ -36,7 +36,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case resumeResultMsg:
 		if msg.err != nil {
-			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Auto-resume failed for %s: %v", msg.id, msg.err)))
+			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Auto-resume failed for %s: %v", msg.id, msg.err)))
 			return m, nil
 		}
 		if d := m.FindDownloadByID(msg.id); d != nil {
@@ -96,7 +96,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.UpdateListItems()
 		}
-		m.addLogEntry(LogStyleError.Render("✖ Failed to enqueue download: " + msg.err.Error()))
+		m.addLogEntry(LogStyleError.Render("\u2716 Failed to enqueue download: " + msg.err.Error()))
 		return m, nil
 
 	case events.DownloadRequestMsg:
@@ -122,7 +122,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.Settings.General.ExtensionPrompt {
+		if m.Settings != nil && m.Settings.Extension.ExtensionPrompt {
 			m.pendingURL = msg.URL
 			m.pendingMirrors = msg.Mirrors
 			m.pendingHeaders = msg.Headers
@@ -155,8 +155,9 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.pausing = false
 			// Keep resuming=true for resumed downloads until real transfer starts.
 			// Update progress bar
+			var progressCmd tea.Cmd
 			if d.Total > 0 {
-				d.progress.SetPercent(0)
+				progressCmd = d.progress.SetPercent(0)
 			}
 			if d.state == nil && msg.State != nil {
 				d.state = msg.State
@@ -164,7 +165,9 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if d.state != nil {
 				d.state.SetTotalSize(msg.Total) // Keep state updated for verification if needed
 			}
-			found = true
+			m.UpdateListItems()
+			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
+			return m, tea.Batch(progressCmd, m.spinner.Tick)
 		}
 
 		if !found {
@@ -174,22 +177,21 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 				newDownload.state = msg.State
 			}
 			m.downloads = append(m.downloads, newDownload)
+			m.UpdateListItems()
+			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
+			return m, m.spinner.Tick
 		}
-
-		m.UpdateListItems()
-		m.addLogEntry(LogStyleStarted.Render("⬇ Started: " + msg.Filename))
-		return m, m.spinner.Tick
-
 	case events.ProgressMsg:
-		m.processProgressMsg(msg)
-		return m, nil
+		cmd := m.processProgressMsg(msg)
+		return m, cmd
 
 	case events.BatchProgressMsg:
-		for _, msg := range msg {
-			m.processProgressMsg(msg)
+		var cmds []tea.Cmd
+		for _, bm := range msg {
+			cmds = append(cmds, m.processProgressMsg(bm))
 		}
 		// Only update UI once per batch
-		return m, nil
+		return m, tea.Batch(cmds...)
 
 	case events.DownloadCompleteMsg:
 
@@ -210,7 +212,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if msg.Elapsed.Seconds() > 0 {
 					speed = float64(d.Total) / msg.Elapsed.Seconds()
 				}
-				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("✔ Done: %s (%.2f MB/s)", d.Filename, speed/float64(config.MB))))
+				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 Done: %s (%.2f MB/s)", d.Filename, speed/float64(config.MB))))
 			}
 		}
 		m.UpdateListItems()
@@ -221,7 +223,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
 			d.err = msg.Err
 			d.done = true
-			m.addLogEntry(LogStyleError.Render("✖ Error: " + d.Filename))
+			m.addLogEntry(LogStyleError.Render("\u2716 Error: " + d.Filename))
 			found = true
 		}
 		if !found {
@@ -229,7 +231,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newDownload.err = msg.Err
 			newDownload.done = true
 			m.downloads = append(m.downloads, newDownload)
-			m.addLogEntry(LogStyleError.Render("✖ Error: " + msg.Filename))
+			m.addLogEntry(LogStyleError.Render("\u2716 Error: " + msg.Filename))
 		}
 		m.UpdateListItems()
 		return m, nil
@@ -241,7 +243,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.resuming = false
 			d.Downloaded = msg.Downloaded
 			d.Speed = 0
-			m.addLogEntry(LogStylePaused.Render("⏸ Paused: " + d.Filename))
+			m.addLogEntry(LogStylePaused.Render("\u23f8 Paused: " + d.Filename))
 		}
 		m.UpdateListItems()
 		return m, nil
@@ -251,7 +253,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.paused = false
 			d.pausing = false
 			d.resuming = true
-			m.addLogEntry(LogStyleStarted.Render("▶ Resumed: " + d.Filename))
+			m.addLogEntry(LogStyleStarted.Render("\u25b6 Resumed: " + d.Filename))
 		}
 		m.UpdateListItems()
 		return m, m.spinner.Tick
@@ -275,7 +277,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case events.DownloadRemovedMsg:
 		if m.removeDownloadByID(msg.DownloadID) {
 			if msg.Filename != "" {
-				m.addLogEntry(LogStyleError.Render("✖ Removed: " + msg.Filename))
+				m.addLogEntry(LogStyleError.Render("\u2716 Removed: " + msg.Filename))
 			}
 			m.UpdateListItems()
 		}
@@ -283,7 +285,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case events.SystemLogMsg:
 		if msg.Message != "" {
-			m.addLogEntry(LogStyleStarted.Render("ℹ " + msg.Message))
+			m.addLogEntry(LogStyleStarted.Render("\u2139 " + msg.Message))
 		}
 		return m, nil
 	}

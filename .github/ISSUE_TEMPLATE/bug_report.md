@@ -1,6 +1,6 @@
 ---
-name: Bug report
-about: Create a report to help us improve
+name: Surge Bug report
+about: Report a bug for the Surge Core app (CLI/TUI/Backend)
 title: ""
 labels: bug
 assignees: ""

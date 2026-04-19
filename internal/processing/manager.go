@@ -33,9 +33,21 @@ type LifecycleManager struct {
 	isNameActive        IsNameActiveFunc
 	engineHooks         EngineHooks
 	hooksMu             sync.RWMutex
+	// probeSem caps the number of simultaneous server probes so adding a
+	// large batch of downloads does not flood the network with HEAD requests.
+	probeSem chan struct{}
 }
 
-const maxWorkingFileReservationAttempts = 100
+const (
+	maxWorkingFileReservationAttempts = 100
+	// defaultMaxConcurrentProbes is the fallback probe concurrency cap used when
+	// no settings value is available. The live value comes from
+	// NetworkSettings.MaxConcurrentProbes.
+	defaultMaxConcurrentProbes = 3
+	// maxConcurrentProbes is the package-level cap used by tests that construct
+	// a manager without a settings snapshot (newLifecycleManagerForTest).
+	maxConcurrentProbes = defaultMaxConcurrentProbes
+)
 
 var settingsRefreshTTL = time.Second
 
@@ -79,12 +91,22 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 		activeCheck = isNameActive[0]
 	}
 
+	probeCap := defaultMaxConcurrentProbes
+	if settings != nil && settings.Network.MaxConcurrentProbes > 0 {
+		probeCap = settings.Network.MaxConcurrentProbes
+	}
+	sem := make(chan struct{}, probeCap)
+	for i := 0; i < probeCap; i++ {
+		sem <- struct{}{}
+	}
+
 	return &LifecycleManager{
 		settings:            settings,
 		settingsRefreshedAt: time.Now(),
 		addFunc:             addFunc,
 		addWithIDFunc:       addWithIDFunc,
 		isNameActive:        activeCheck,
+		probeSem:            sem,
 	}
 }
 
@@ -167,12 +189,12 @@ type DownloadRequest struct {
 }
 
 // Enqueue probes and reserves a stable destination before dispatching to the queue layer.
-func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) (string, error) {
+func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) (string, string, error) {
 	if mgr.addFunc == nil {
-		return "", fmt.Errorf("add function unavailable")
+		return "", "", fmt.Errorf("add function unavailable")
 	}
 
-	utils.Debug("Lifecycle: Enqueue %s", req.URL)
+	utils.Debug("Lifecycle: Enqueue %s (Filename: %s)", req.URL, req.Filename)
 	return mgr.enqueueResolved(ctx, req, func(finalPath, finalFilename string, probe *ProbeResult) (string, error) {
 		return mgr.addFunc(
 			req.URL,
@@ -188,9 +210,9 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 }
 
 // EnqueueWithID does the same lifecycle work as Enqueue while preserving a caller-owned id.
-func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadRequest, requestID string) (string, error) {
+func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadRequest, requestID string) (string, string, error) {
 	if mgr.addWithIDFunc == nil {
-		return "", fmt.Errorf("addWithID function unavailable")
+		return "", "", fmt.Errorf("addWithID function unavailable")
 	}
 
 	utils.Debug("Lifecycle: EnqueueWithID %s (%s)", req.URL, requestID)
@@ -210,27 +232,39 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 
 // enqueueResolved prepares the final path and working file before handing the
 // download to the engine, so workers and lifecycle events agree on one stable destination.
-func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadRequest, dispatch func(string, string, *ProbeResult) (string, error)) (string, error) {
+func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadRequest, dispatch func(string, string, *ProbeResult) (string, error)) (string, string, error) {
 	if req.URL == "" {
-		return "", fmt.Errorf("URL is required")
+		return "", "", fmt.Errorf("URL is required")
 	}
 	if req.Path == "" {
-		return "", fmt.Errorf("destination path is required")
+		return "", "", fmt.Errorf("destination path is required")
 	}
 
 	settings := mgr.GetSettings()
 
-	probe, err := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.Network.ProxyURL)
+	// Throttle concurrent probes — acquire a semaphore slot before probing.
+	// If the context is cancelled (e.g., shutdown) we abort immediately.
+	if mgr.probeSem != nil {
+		select {
+		case <-mgr.probeSem:
+			// acquired
+		case <-ctx.Done():
+			return "", "", fmt.Errorf("enqueue aborted before probe: %w", ctx.Err())
+		}
+		defer func() { mgr.probeSem <- struct{}{} }()
+	}
+
+	probe, err := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
 	if err != nil {
 		utils.Debug("Lifecycle: Probe failed: %v\n", err)
-		return "", fmt.Errorf("probe failed: %w", err)
+		return "", "", fmt.Errorf("probe failed: %w", err)
 	}
 
 	isNameActive := mgr.buildIsNameActive()
 
 	for attempt := 0; attempt < maxWorkingFileReservationAttempts; attempt++ {
 		if ctx.Err() != nil {
-			return "", fmt.Errorf("enqueue aborted: %w", ctx.Err())
+			return "", "", fmt.Errorf("enqueue aborted: %w", ctx.Err())
 		}
 
 		finalPath, finalFilename, err := ResolveDestination(
@@ -243,7 +277,7 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 			isNameActive,
 		)
 		if err != nil {
-			return "", fmt.Errorf("failed to resolve destination: %w", err)
+			return "", "", fmt.Errorf("failed to resolve destination: %w", err)
 		}
 
 		// Reserve the working path before dispatch so a concurrent enqueue has to
@@ -252,14 +286,14 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 			if errors.Is(err, os.ErrExist) {
 				continue
 			}
-			return "", err
+			return "", "", err
 		}
 
 		surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
 		newID, err := dispatch(finalPath, finalFilename, probe)
 		if err != nil {
 			_ = os.Remove(surgePath)
-			return "", err
+			return "", "", err
 		}
 
 		// Emit queued event now that the pool has accepted the download.
@@ -276,10 +310,10 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 			})
 		}
 
-		return newID, nil
+		return newID, finalFilename, nil
 	}
 
-	return "", fmt.Errorf("failed to reserve unique working file for %q after %d attempts", req.URL, maxWorkingFileReservationAttempts)
+	return "", "", fmt.Errorf("failed to reserve unique working file for %q after %d attempts", req.URL, maxWorkingFileReservationAttempts)
 }
 
 // IsNameActive reports whether the configured active-download callback would

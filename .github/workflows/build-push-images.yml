@@ -1,6 +1,9 @@
 name: Build and Push Docker Images
 
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
     inputs:
       surge_version:
@@ -39,12 +42,28 @@ jobs:
           if [ -n "${{ inputs.surge_version }}" ]; then
             SURGE_VERSION="${{ inputs.surge_version }}"
             echo "Using manually specified version: $SURGE_VERSION"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            SURGE_VERSION="${GITHUB_REF_NAME#v}"
+            echo "Using tag version: $SURGE_VERSION"
           else
             echo "Fetching latest Surge release..."
             SURGE_VERSION=$(curl -s https://api.github.com/repos/SurgeDM/Surge/releases/latest | jq -r .tag_name | sed 's/^v//')
             echo "Latest Surge version: $SURGE_VERSION"
           fi
           echo "version=$SURGE_VERSION" >> $GITHUB_OUTPUT
+
+      - name: Decide latest tag behavior
+        id: latest-tag
+        run: |
+          ENABLE_LATEST=false
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            if [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+              ENABLE_LATEST=true
+            fi
+          elif [[ "${{ inputs.tag_as_latest }}" == "true" ]]; then
+            ENABLE_LATEST=true
+          fi
+          echo "enable=$ENABLE_LATEST" >> $GITHUB_OUTPUT
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -66,7 +85,7 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ steps.surge-version.outputs.version }}
-            type=raw,value=latest,enable=${{ inputs.tag_as_latest }}
+            type=raw,value=latest,enable=${{ steps.latest-tag.outputs.enable }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5

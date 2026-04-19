@@ -289,8 +289,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 					notify(title, fmt.Sprintf("Download complete in %s (%.2f MB/s)", m.Elapsed.Truncate(time.Second), avgSpeed/float64(types.MB)))
 				}
 			}
-			if settings != nil && settings.General.PostDownload.OnCompleteCommand != "" {
-				go RunPostActions(settings.General.PostDownload, PostActionContext{
+			if settings != nil && settings.PostDownload.OnCompleteCommand != "" {
+				go RunPostActions(settings.PostDownload, PostActionContext{
 					Filename: filename,
 					FilePath: destPath,
 					Size:     m.Total,
@@ -337,12 +337,12 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 			// Fire the on-error hook for every DownloadError event when a command
 			// is configured, independent of the notification setting.
-			if settings != nil && settings.General.PostDownload.OnErrorCommand != "" {
+			if settings != nil && settings.PostDownload.OnErrorCommand != "" {
 				errMsg := ""
 				if m.Err != nil {
 					errMsg = m.Err.Error()
 				}
-				go RunPostActions(settings.General.PostDownload, PostActionContext{
+				go RunPostActions(settings.PostDownload, PostActionContext{
 					Filename: filename,
 					FilePath: destPath,
 					ID:       m.DownloadID,

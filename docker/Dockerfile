@@ -1,38 +1,60 @@
+FROM alpine:3.21 AS downloader
+
+RUN apk add --no-cache ca-certificates curl jq tar
+
+ARG TARGETOS
+ARG TARGETARCH
+ARG SURGE_VERSION
+
+RUN if [ "${TARGETOS:-linux}" != "linux" ]; then \
+      echo "Unsupported target OS: ${TARGETOS}" >&2; \
+      exit 1; \
+    fi && \
+    case "${TARGETARCH}" in \
+      amd64) SURGE_ARCH="amd64" ;; \
+      arm64) SURGE_ARCH="arm64" ;; \
+      arm) SURGE_ARCH="arm" ;; \
+      *) echo "Unsupported target architecture: ${TARGETARCH}" >&2; exit 1 ;; \
+    esac && \
+    if [ -z "${SURGE_VERSION}" ]; then \
+      echo "Fetching latest surge release..."; \
+      SURGE_VERSION=$(curl -fsSL https://api.github.com/repos/SurgeDM/Surge/releases/latest | jq -r .tag_name | sed 's/^v//'); \
+    else \
+      echo "Using specified surge version: ${SURGE_VERSION}"; \
+    fi && \
+    echo "Downloading surge v${SURGE_VERSION} for ${TARGETOS:-linux}/${SURGE_ARCH}" && \
+    curl -fsSL -o /tmp/surge.tar.gz \
+      "https://github.com/SurgeDM/Surge/releases/download/v${SURGE_VERSION}/surge_${SURGE_VERSION}_linux_${SURGE_ARCH}.tar.gz" && \
+    mkdir -p /tmp/surge-extract /out && \
+    tar -xzf /tmp/surge.tar.gz -C /tmp/surge-extract && \
+    install -m 0755 /tmp/surge-extract/surge /out/surge
+
 FROM alpine:3.21
 
-RUN apk add --no-cache ca-certificates curl jq
+ARG SURGE_UID=1000
+ARG SURGE_GID=1000
 
-ARG SURGE_VERSION=""
+RUN apk add --no-cache ca-certificates && \
+    addgroup -g ${SURGE_GID} -S surge && \
+    adduser -u ${SURGE_UID} -S -D -h /home/surge -G surge surge && \
+    mkdir -p /downloads /var/lib/surge /home/surge && \
+    chown -R surge:surge /downloads /var/lib/surge /home/surge
 
-RUN ARCH=$(uname -m) && \
-    case ${ARCH} in \
-    x86_64) SURGE_ARCH="amd64" ;; \
-    aarch64) SURGE_ARCH="arm64" ;; \
-    armv7l) SURGE_ARCH="arm" ;; \
-    *) echo "Unsupported architecture: ${ARCH}" && exit 1 ;; \
-    esac && \
-    if [ -z "$SURGE_VERSION" ]; then \
-    echo "Fetching latest surge release..."; \
-    SURGE_VERSION=$(curl -s https://api.github.com/repos/SurgeDM/Surge/releases/latest | jq -r .tag_name | sed 's/^v//'); \
-    else \
-    echo "Using specified surge version: $SURGE_VERSION"; \
-    fi && \
-    echo "Downloading surge v${SURGE_VERSION} for architecture: ${SURGE_ARCH}" && \
-    curl -L -o /tmp/surge.tar.gz \
-    "https://github.com/SurgeDM/Surge/releases/download/v${SURGE_VERSION}/surge_${SURGE_VERSION}_linux_${SURGE_ARCH}.tar.gz" && \
-    tar -xzf /tmp/surge.tar.gz -C /usr/local/bin && \
-    rm /tmp/surge.tar.gz && \
-    chmod +x /usr/local/bin/surge && \
-    echo "Installed surge v${SURGE_VERSION}" && \
-    apk del curl jq
+COPY --from=downloader /out/surge /usr/local/bin/surge
 
-RUN mkdir -p /root/.local/state/surge/logs /downloads
+ENV HOME=/home/surge \
+    XDG_CONFIG_HOME=/var/lib \
+    XDG_STATE_HOME=/var/lib
 
 WORKDIR /downloads
+
+VOLUME ["/downloads", "/var/lib/surge"]
 
 LABEL org.opencontainers.image.source="https://github.com/SurgeDM/Surge"
 LABEL org.opencontainers.image.description="Surge download manager"
 LABEL org.opencontainers.image.licenses="MIT"
+
+USER surge
 
 EXPOSE 1700
 

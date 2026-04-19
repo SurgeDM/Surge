@@ -1,0 +1,33 @@
+{
+  "name": "surge-extension",
+  "description": "Surge Download Manager browser extension",
+  "private": true,
+  "version": "2.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "zip:edge": "wxt zip -b edge",
+    "check": "tsc --noEmit",
+    "lint": "eslint .",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "solid-js": "^1.9.7"
+  },
+  "devDependencies": {
+    "@typescript-eslint/eslint-plugin": "^8.58.0",
+    "@typescript-eslint/parser": "^8.58.0",
+    "eslint": "^9.39.4",
+    "eslint-plugin-solid": "^0.14.5",
+    "typescript": "^5.8.3",
+    "typescript-eslint": "^8.58.0",
+    "vite-plugin-solid": "^2.11.8",
+    "vitest": "^3.2.4",
+    "wxt": "^0.20.20"
+  }
+}

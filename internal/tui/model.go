@@ -9,6 +9,7 @@ import (
 
 	"charm.land/bubbles/v2/filepicker"
 	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/progress"
 	"charm.land/bubbles/v2/spinner"
@@ -22,8 +23,16 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/version"
 )
+
+// InitializeTUI prepares global TUI state like styles and component caches.
+// This should be called exactly once before any TUI elements are rendered.
+func InitializeTUI() {
+	InitializeStyles()
+	components.InitializeStatusCache()
+}
 
 type UIState int // Defines UIState as int to be used in rootModel
 
@@ -32,8 +41,7 @@ const (
 	InputState                                // InputState is 1
 	DetailState                               // DetailState is 2
 	FilePickerState                           // FilePickerState is 3
-	HistoryState                              // HistoryState is 4
-	DuplicateWarningState                     // DuplicateWarningState is 5
+	DuplicateWarningState                     // DuplicateWarningState is 4
 	SearchState                               // SearchState is 6
 	SettingsState                             // SettingsState is 7
 	ExtensionConfirmationState                // ExtensionConfirmationState is 8
@@ -43,6 +51,7 @@ const (
 	URLUpdateState                            // URLUpdateState is 12
 	CategoryManagerState                      // CategoryManagerState is 13
 	QuitConfirmState                          // QuitConfirmState is 14
+	HelpModalState                            // HelpModalState is 15
 )
 
 const (
@@ -93,7 +102,8 @@ type RootModel struct {
 	Orchestrator *processing.LifecycleManager
 
 	// File picker for directory selection
-	filepicker filepicker.Model
+	filepicker             filepicker.Model
+	filepickerOriginalPath string
 
 	// Bubbles help component
 	help help.Model
@@ -102,10 +112,6 @@ type RootModel struct {
 	list list.Model
 
 	PWD string
-
-	// History view
-	historyEntries []types.DownloadEntry
-	historyCursor  int
 
 	// Duplicate detection
 	pendingURL           string // URL pending confirmation
@@ -133,6 +139,7 @@ type RootModel struct {
 	SettingsInput         textinput.Model  // Input for editing string/int values
 	SettingsFileBrowsing  bool             // Whether browsing for a directory
 	ExtensionFileBrowsing bool             // Whether browsing for extension prompt path
+	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download
@@ -196,8 +203,12 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 		FilenameLower: strings.ToLower(filename),
 		Total:         total,
 		StartTime:     time.Now(),
-		progress:      progress.New(progress.WithSpringOptions(0.5, 0.1)),
-		state:         state,
+		progress: progress.New(
+			progress.WithSpringOptions(0.5, 0.1),
+			progress.WithColors(colors.ProgressStart, colors.ProgressEnd),
+			progress.WithScaled(true),
+		),
+		state: state,
 	}
 }
 
@@ -319,6 +330,8 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	helpModel := help.New()
 	helpModel.Styles.ShortKey = lipgloss.NewStyle().Foreground(colors.LightGray)
 	helpModel.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.Gray)
+	helpModel.Styles.FullKey = lipgloss.NewStyle().Foreground(colors.NeonPink)
+	helpModel.Styles.FullDesc = lipgloss.NewStyle().Foreground(colors.LightGray)
 
 	// Initialize settings input for editing
 	settingsInput := textinput.New()
@@ -392,6 +405,8 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		cancelEnqueue:         cancelEnqueue,
 		spinner:               s,
 	}
+
+	InitAuthToken() // Cache auth token for TUI to avoid per-frame disk I/O
 
 	m.refreshThemeCaches()
 
@@ -478,11 +493,13 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 		// Apply tab filter first
 		switch m.activeTab {
 		case TabQueued:
-			if d.done || d.Speed > 0 {
+			// Queued includes paused downloads and anything not currently active or done
+			if d.done || (!d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming)) {
 				continue
 			}
 		case TabActive:
-			if d.done || (d.Speed == 0 && d.Connections == 0) {
+			// Active excludes paused downloads and anything without current activity
+			if d.done || d.paused || d.pausing || (d.Speed == 0 && d.Connections == 0 && !d.resuming) {
 				continue
 			}
 		case TabDone:
@@ -492,7 +509,7 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 		}
 
 		// Apply dashboard category filter.
-		if m.categoryFilter != "" && m.Settings != nil && m.Settings.General.CategoryEnabled {
+		if m.categoryFilter != "" && m.Settings != nil && m.Settings.Categories.CategoryEnabled {
 			if !m.matchesCategoryFilter(d) {
 				continue
 			}
@@ -528,7 +545,7 @@ func (m RootModel) matchesCategoryFilter(d *DownloadModel) bool {
 		filename = processing.InferFilenameFromURL(d.URL)
 	}
 
-	cat, err := config.GetCategoryForFile(filename, m.Settings.General.Categories)
+	cat, err := config.GetCategoryForFile(filename, m.Settings.Categories.Categories)
 	if filter == "Uncategorized" {
 		return err != nil || cat == nil
 	}
@@ -549,6 +566,12 @@ func newFilepicker(currentDir string) filepicker.Model {
 	fp.ShowSize = true
 	fp.ShowPermissions = true
 	fp.SetHeight(FilePickerHeight)
+
+	// Re-bind Select and Open to '.' per user preference.
+	// We also keep 'right' for Open to allow directory navigation.
+	fp.KeyMap.Select = key.NewBinding(key.WithKeys("."))
+	fp.KeyMap.Open = key.NewBinding(key.WithKeys(".", "right"))
+
 	return fp
 }
 
@@ -575,6 +598,8 @@ func (m *RootModel) refreshThemeCaches() {
 	rebuildStyles()
 	m.help.Styles.ShortKey = lipgloss.NewStyle().Foreground(colors.LightGray)
 	m.help.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.Gray)
+	m.help.Styles.FullKey = lipgloss.NewStyle().Foreground(colors.NeonPink)
+	m.help.Styles.FullDesc = lipgloss.NewStyle().Foreground(colors.LightGray)
 	applyListTheme(&m.list)
 	m.logoCache = ""
 }

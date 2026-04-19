@@ -40,7 +40,22 @@ func (m AddDownloadModal) View() string {
 	}
 
 	for i := 0; i < len(m.Inputs) && i < len(m.Labels); i++ {
-		row := lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render(m.Labels[i]), m.Inputs[i].View())
+		// Calculate available width for inputs
+		// Accounts for: horizontal padding (4), label (10), and box borders (2)
+		const labelWidth = 10
+		horizontalPadding := lipgloss.NewStyle().Padding(0, 2).GetHorizontalFrameSize()
+		inputW := m.Width - BorderFrameWidth - horizontalPadding - labelWidth
+
+		if m.BrowseHintIndex == i {
+			inputW -= 13 // Margin (1) + "[Tab] Browse" (12)
+		}
+		if inputW < 10 {
+			inputW = 10
+		}
+		ti := m.Inputs[i]
+		ti.SetWidth(inputW)
+
+		row := lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render(m.Labels[i]), ti.View())
 		if m.BrowseHintIndex == i {
 			hintStyle := hintBase
 			if m.FocusedInput == i {

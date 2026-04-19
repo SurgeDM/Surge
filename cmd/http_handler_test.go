@@ -72,6 +72,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	// Create a temporary settings file
 	settings := config.DefaultSettings()
 	settings.General.DefaultDownloadDir = defaultDownloadDir
+	settings.Extension.ExtensionPrompt = false
 
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatal(err)
@@ -81,10 +82,9 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	GlobalPool = download.NewWorkerPool(nil, 1)
 
 	tests := []struct {
-		name                 string
-		request              DownloadRequest
-		expectedPathSuffix   string
-		expectedPathAbsolute bool
+		name               string
+		request            DownloadRequest
+		expectedOutputPath string
 	}{
 		{
 			name: "Absolute Path (Explicit)",
@@ -92,8 +92,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				URL:  "http://example.com/file1",
 				Path: filepath.Join(tempDir, "absolute"),
 			},
-			expectedPathSuffix:   "absolute",
-			expectedPathAbsolute: true,
+			expectedOutputPath: filepath.Join(tempDir, "absolute"),
 		},
 		{
 			name: "Relative Path (No Flag)",
@@ -101,8 +100,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				URL:  "http://example.com/file2",
 				Path: "relative",
 			},
-			expectedPathSuffix:   "relative",
-			expectedPathAbsolute: true,
+			expectedOutputPath: filepath.Join(mustGetwd(t), "relative"),
 		},
 		{
 			name: "Relative to Default Dir",
@@ -111,8 +109,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				Path:                 "subdir",
 				RelativeToDefaultDir: true,
 			},
-			expectedPathSuffix:   filepath.Join(filepath.Base(defaultDownloadDir), "subdir"),
-			expectedPathAbsolute: true,
+			expectedOutputPath: filepath.Join(defaultDownloadDir, "subdir"),
 		},
 		{
 			name: "Nested Relative to Default Dir",
@@ -121,8 +118,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				Path:                 "nested/deep",
 				RelativeToDefaultDir: true,
 			},
-			expectedPathSuffix:   filepath.Join(filepath.Base(defaultDownloadDir), "nested", "deep"),
-			expectedPathAbsolute: true,
+			expectedOutputPath: filepath.Join(defaultDownloadDir, "nested", "deep"),
 		},
 		{
 			name: "Empty Path (Default)",
@@ -130,8 +126,41 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				URL:  "http://example.com/file5",
 				Path: "",
 			},
-			expectedPathSuffix:   filepath.Base(defaultDownloadDir), // Should be just the default dir
-			expectedPathAbsolute: true,
+			expectedOutputPath: defaultDownloadDir,
+		},
+		{
+			name: "Windows Download Root Maps To Default Dir",
+			request: DownloadRequest{
+				URL:  "http://example.com/file6",
+				Path: "C:/Users/me/Downloads",
+			},
+			expectedOutputPath: defaultDownloadDir,
+		},
+		{
+			name: "Windows Nested Path Maps Under Default Dir",
+			request: DownloadRequest{
+				URL:  "http://example.com/file7",
+				Path: "C:/Users/me/Downloads/surge-repro",
+			},
+			expectedOutputPath: filepath.Join(defaultDownloadDir, "surge-repro"),
+		},
+		{
+			name: "Windows Nested Path Relative Flag Maps Under Default Dir",
+			request: DownloadRequest{
+				URL:                  "http://example.com/file8",
+				Path:                 "C:/Users/me/Downloads/surge-repro",
+				RelativeToDefaultDir: true,
+			},
+			expectedOutputPath: filepath.Join(defaultDownloadDir, "surge-repro"),
+		},
+		{
+			name: "Unmatched Windows Path Falls Back To Default Dir",
+			request: DownloadRequest{
+				URL:                  "http://example.com/file9",
+				Path:                 "E:/Torrents/complete",
+				RelativeToDefaultDir: true,
+			},
+			expectedOutputPath: defaultDownloadDir,
 		},
 	}
 
@@ -158,34 +187,12 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 					found = true
 					t.Logf("OutputPath for %s: %s", tt.name, cfg.OutputPath)
 
-					if !filepath.IsAbs(cfg.OutputPath) && tt.expectedPathAbsolute {
+					if !filepath.IsAbs(cfg.OutputPath) {
 						t.Errorf("Expected absolute path, got %s", cfg.OutputPath)
 					}
 
-					// Verify suffix
-					// NOTE: cfg.OutputPath is absolute path.
-					// If expectedPathSuffix is relative (like "relative"), we check if path ends with it.
-					// If expectedPathSuffix is absolute (like /tmp/.../absolute), we check if paths match.
-
-					if tt.request.RelativeToDefaultDir {
-						expectedAbs := filepath.Join(defaultDownloadDir, tt.request.Path)
-						if cfg.OutputPath != expectedAbs {
-							t.Errorf("Expected path %s, got %s", expectedAbs, cfg.OutputPath)
-						}
-					} else if tt.request.Path == "" {
-						if cfg.OutputPath != defaultDownloadDir {
-							t.Errorf("Expected path %s, got %s", defaultDownloadDir, cfg.OutputPath)
-						}
-					} else if filepath.IsAbs(tt.request.Path) {
-						if cfg.OutputPath != tt.request.Path {
-							t.Errorf("Expected path %s, got %s", tt.request.Path, cfg.OutputPath)
-						}
-					} else {
-						// Relative path without flag (Ensured Absolute CWD)
-						// Hard to test exactly without knowing CWD, but it should end with the relative path
-						if !strings.HasSuffix(cfg.OutputPath, tt.request.Path) {
-							t.Errorf("Expected suffix %s, got %s", tt.request.Path, cfg.OutputPath)
-						}
+					if cfg.OutputPath != tt.expectedOutputPath {
+						t.Errorf("Expected path %s, got %s", tt.expectedOutputPath, cfg.OutputPath)
 					}
 					break
 				}
@@ -195,6 +202,57 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestShouldFallbackUnmappedWindowsPath(t *testing.T) {
+	tests := []struct {
+		name                 string
+		relativeToDefaultDir bool
+		hostOS               string
+		want                 bool
+	}{
+		{
+			name:                 "relative request falls back on windows",
+			relativeToDefaultDir: true,
+			hostOS:               "windows",
+			want:                 true,
+		},
+		{
+			name:                 "relative request falls back on linux",
+			relativeToDefaultDir: true,
+			hostOS:               "linux",
+			want:                 true,
+		},
+		{
+			name:                 "explicit request does not fall back on windows",
+			relativeToDefaultDir: false,
+			hostOS:               "windows",
+			want:                 false,
+		},
+		{
+			name:                 "explicit request falls back on linux",
+			relativeToDefaultDir: false,
+			hostOS:               "linux",
+			want:                 true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := shouldFallbackUnmappedWindowsPath(tt.relativeToDefaultDir, tt.hostOS); got != tt.want {
+				t.Fatalf("shouldFallbackUnmappedWindowsPath(%v, %q) = %v, want %v", tt.relativeToDefaultDir, tt.hostOS, got, tt.want)
+			}
+		})
+	}
+}
+
+func mustGetwd(t *testing.T) string {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatalf("Getwd failed: %v", err)
+	}
+	return wd
 }
 
 func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
@@ -376,7 +434,7 @@ func TestHandleDownload_PublishError_RecordsPreflightError(t *testing.T) {
 	t.Cleanup(func() { serverProgram = origServerProgram })
 
 	settings := config.DefaultSettings()
-	settings.General.ExtensionPrompt = true
+	settings.Extension.ExtensionPrompt = true
 	settings.General.WarnOnDuplicate = false
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)

@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/concurrent"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/single"
@@ -23,14 +24,6 @@ import (
 func safeSendProgress(ch chan<- any, msg any) {
 	defer func() { _ = recover() }()
 	ch <- msg
-}
-
-// ProbeResult contains all metadata from server probe
-type ProbeResult struct {
-	FileSize      int64
-	SupportsRange bool
-	Filename      string
-	ContentType   string
 }
 
 // uniqueFilePath returns a unique file path by appending (1), (2), etc. if the file exists
@@ -160,7 +153,11 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			utils.Debug("Probing %d mirrors", len(mirrors))
 			// Always check primary + mirrors to ensure we are using the best set
 			allToCheck := append([]string{cfg.URL}, mirrors...)
-			valid, errs := processing.ProbeMirrorsWithProxy(ctx, allToCheck, cfg.Runtime.ProxyURL)
+			runCfg := &config.RuntimeConfig{
+				ProxyURL:  cfg.Runtime.ProxyURL,
+				CustomDNS: cfg.Runtime.CustomDNS,
+			}
+			valid, errs := processing.ProbeMirrorsWithProxy(ctx, allToCheck, runCfg)
 
 			// Log errors
 			for u, e := range errs {

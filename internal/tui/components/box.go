@@ -9,6 +9,17 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
+const (
+	// BorderFrameHeight is the combined height of top and bottom borders (2)
+	BorderFrameHeight = 2
+	// BorderFrameWidth is the combined width of left and right borders (2)
+	BorderFrameWidth = 2
+	// BtopBoxOverheadHeight is the header + footer overhead (2)
+	BtopBoxOverheadHeight = 2
+	// SingleLineHeight is a standard single line height (1)
+	SingleLineHeight = 1
+)
+
 // BoxRenderer is the function signature for rendering btop-style boxes
 type BoxRenderer func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string
 
@@ -19,14 +30,14 @@ type BoxRenderer func(leftTitle, rightTitle, content string, width, height int, 
 func RenderBtopBox(leftTitle, rightTitle string, content string, width, height int, borderColor color.Color) string {
 	// Border characters
 	const (
-		topLeft     = "╭"
-		topRight    = "╮"
-		bottomLeft  = "╰"
-		bottomRight = "╯"
-		horizontal  = "─"
-		vertical    = "│"
+		topLeft     = "\u256d"
+		topRight    = "\u256e"
+		bottomLeft  = "\u2570"
+		bottomRight = "\u256f"
+		horizontal  = "\u2500"
+		vertical    = "\u2502"
 	)
-	innerWidth := width - 2
+	innerWidth := width - BorderFrameWidth
 	if innerWidth < 1 {
 		innerWidth = 1
 	}
@@ -45,7 +56,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 
 	// Case 1: Both Titles
 	if leftTitle != "" && rightTitle != "" {
-		remainingWidth := innerWidth - leftTitleWidth - rightTitleWidth - 1 // 1 for the start dash
+		remainingWidth := innerWidth - leftTitleWidth - rightTitleWidth - lipgloss.Width(horizontal)
 		if remainingWidth < 1 {
 			remainingWidth = 1 // overflow mitigation (might break layout but prevents crash)
 		}
@@ -58,7 +69,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 
 	} else if leftTitle != "" {
 		// Case 2: Only Left Title
-		remainingWidth := innerWidth - leftTitleWidth - 1
+		remainingWidth := innerWidth - leftTitleWidth - lipgloss.Width(horizontal)
 		if remainingWidth < 0 {
 			remainingWidth = 0
 		}
@@ -69,7 +80,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 
 	} else if rightTitle != "" {
 		// Case 3: Only Right Title
-		remainingWidth := innerWidth - rightTitleWidth - 1
+		remainingWidth := innerWidth - rightTitleWidth - lipgloss.Width(horizontal)
 		if remainingWidth < 0 {
 			remainingWidth = 0
 		}
@@ -84,16 +95,16 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	}
 
 	// Build bottom border: ╰───────────────────╯
-	bottomBorder := lipgloss.NewStyle().Foreground(borderColor).Render(
+	bottomBorder := borderStyler.Render(
 		bottomLeft + strings.Repeat(horizontal, innerWidth) + bottomRight,
 	)
 
-	// Style for vertical borders
-	borderStyle := lipgloss.NewStyle().Foreground(borderColor)
-
 	// Wrap content lines with vertical borders
 	contentLines := strings.Split(content, "\n")
-	innerHeight := height - 2 // Account for top and bottom borders
+	innerHeight := height - BorderFrameHeight // Account for top and bottom borders
+
+	// Style for truncation
+	truncStyle := lipgloss.NewStyle().MaxWidth(innerWidth)
 
 	var wrappedLines []string
 	for i := 0; i < innerHeight; i++ {
@@ -108,13 +119,9 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 		if lineWidth < innerWidth {
 			line = line + strings.Repeat(" ", innerWidth-lineWidth)
 		} else if lineWidth > innerWidth {
-			// Truncate (simplified - just take first innerWidth chars)
-			runes := []rune(line)
-			if len(runes) > innerWidth {
-				line = string(runes[:innerWidth])
-			}
+			line = truncStyle.Render(line)
 		}
-		wrappedLines = append(wrappedLines, borderStyle.Render(vertical)+line+borderStyle.Render(vertical))
+		wrappedLines = append(wrappedLines, borderStyler.Render(vertical)+line+borderStyler.Render(vertical))
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, topBorder, strings.Join(wrappedLines, "\n"), bottomBorder)

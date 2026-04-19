@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -11,32 +12,33 @@ import (
 
 // Settings holds all user-configurable application settings organized by category.
 type Settings struct {
-	General     GeneralSettings     `json:"general"`
-	Network     NetworkSettings     `json:"network"`
-	Performance PerformanceSettings `json:"performance"`
+	General      GeneralSettings     `json:"general" ui_label:"General"`
+	PostDownload PostDownloadActions `json:"post_download" ui_label:"Post-Download"`
+	Network      NetworkSettings     `json:"network" ui_label:"Network"`
+	Performance  PerformanceSettings `json:"performance" ui_label:"Performance"`
+	Categories   CategorySettings    `json:"categories" ui_label:"Categories"`
+	Extension    ExtensionSettings   `json:"extension" ui_label:"Extension"`
 }
 
 // GeneralSettings contains application behavior settings.
 type GeneralSettings struct {
-	DefaultDownloadDir           string     `json:"default_download_dir"`
-	WarnOnDuplicate              bool       `json:"warn_on_duplicate"`
-	DownloadCompleteNotification bool       `json:"download_complete_notification"`
-	AllowRemoteOpenActions       bool       `json:"allow_remote_open_actions"`
-	ExtensionPrompt              bool       `json:"extension_prompt"`
-	AutoResume                   bool       `json:"auto_resume"`
-	SkipUpdateCheck              bool       `json:"skip_update_check"`
-	CategoryEnabled              bool       `json:"category_enabled"`
-	Categories                   []Category `json:"categories"`
+	DefaultDownloadDir           string `json:"default_download_dir" ui_label:"Default Download Dir" ui_desc:"Default directory for new downloads. Leave empty to use current directory."`
+	WarnOnDuplicate              bool   `json:"warn_on_duplicate" ui_label:"Warn on Duplicate" ui_desc:"Show warning when adding a download that already exists."`
+	DownloadCompleteNotification bool   `json:"download_complete_notification" ui_label:"Download Complete Notification" ui_desc:"Show system notification when a download finishes."`
+	AllowRemoteOpenActions       bool   `json:"allow_remote_open_actions" ui_label:"Allow Remote Open Actions" ui_desc:"Allow /open-file and /open-folder API calls from non-loopback clients. Disabled by default for security."`
+	AutoResume                   bool   `json:"auto_resume" ui_label:"Auto Resume" ui_desc:"Automatically resume paused downloads on startup."`
+	SkipUpdateCheck              bool   `json:"skip_update_check" ui_label:"Skip Update Check" ui_desc:"Disable automatic check for new versions on startup."`
 
-	ClipboardMonitor  bool                `json:"clipboard_monitor"`
-	Theme             int                 `json:"theme"`
-	LogRetentionCount int                 `json:"log_retention_count"`
-	PostDownload      PostDownloadActions `json:"post_download"`
+	ClipboardMonitor  bool `json:"clipboard_monitor" ui_label:"Clipboard Monitor" ui_desc:"Watch clipboard for URLs and prompt to download them."`
+	Theme             int  `json:"theme" ui_label:"App Theme" ui_desc:"UI Theme (System, Light, Dark)."`
+	LogRetentionCount int  `json:"log_retention_count" ui_label:"Log Retention Count" ui_desc:"Number of recent log files to keep."`
+	LiveSpeedGraph    bool `json:"live_speed_graph" ui_label:"Live Speed Graph" ui_desc:"Use live speed for graph instead of EMA smoothed speed."`
 }
 
+// PostDownloadActions holds shell hooks that run after downloads complete or fail.
 type PostDownloadActions struct {
-	OnCompleteCommand string `json:"on_complete_command"`
-	OnErrorCommand    string `json:"on_error_command"`
+	OnCompleteCommand string `json:"on_complete_command" ui_label:"On Complete Command" ui_desc:"Shell command to run after a download completes. Variables: {filename}, {filepath}, {size}, {speed}, {duration}, {id}"`
+	OnErrorCommand    string `json:"on_error_command" ui_label:"On Error Command" ui_desc:"Shell command to run when a download fails. Variables: {filename}, {filepath}, {id}, {error}"`
 }
 
 const (
@@ -45,24 +47,42 @@ const (
 	ThemeDark     = 2
 )
 
+// CategorySettings holds options specifically for categorizing files.
+type CategorySettings struct {
+	CategoryEnabled bool       `json:"category_enabled" ui_label:"Manage Categories" ui_desc:"Sort downloads into subfolders by file type. Press Enter to open Category Manager."`
+	Categories      []Category `json:"categories" ui_ignored:"true"`
+}
+
+// ExtensionSettings contains settings for the browser extension.
+type ExtensionSettings struct {
+	ExtensionPrompt     bool   `json:"extension_prompt" ui_label:"Extension Prompt" ui_desc:"Prompt for confirmation when adding downloads via browser extension."`
+	ChromeExtensionURL  string `json:"chrome_extension_url" ui_label:"Get Chrome Extension" ui_type:"link" ui_desc:"Open the Surge Chrome extension page."`
+	FirefoxExtensionURL string `json:"firefox_extension_url" ui_label:"Get Firefox Extension" ui_type:"link" ui_desc:"Open the Surge Firefox extension page."`
+	AuthToken           string `json:"-" ui_label:"Auth Token" ui_type:"auth_token" ui_desc:"Your authentication token. Use this to connect the Browser Extension to Surge."`
+	InstructionsURL     string `json:"instructions_url" ui_label:"Setup Instructions" ui_type:"link" ui_desc:"View detailed instructions on how to set up the Surge browser extension."`
+}
+
 // NetworkSettings contains network connection parameters.
 type NetworkSettings struct {
-	MaxConnectionsPerHost  int    `json:"max_connections_per_host"`
-	MaxConcurrentDownloads int    `json:"max_concurrent_downloads"`
-	UserAgent              string `json:"user_agent"`
-	ProxyURL               string `json:"proxy_url"`
-	SequentialDownload     bool   `json:"sequential_download"`
-	MinChunkSize           int64  `json:"min_chunk_size"`
-	WorkerBufferSize       int    `json:"worker_buffer_size"`
+	MaxConnectionsPerHost  int    `json:"max_connections_per_host" ui_label:"Max Connections/Host" ui_desc:"Maximum concurrent connections per host (1-64)."`
+	MaxConcurrentDownloads int    `json:"max_concurrent_downloads" ui_label:"Max Concurrent Downloads" ui_desc:"Maximum number of downloads running at once (1-10). Requires restart."`
+	MaxConcurrentProbes    int    `json:"max_concurrent_probes" ui_label:"Max Concurrent Probes" ui_desc:"Maximum number of simultaneous server probes when adding many downloads at once (1-10)."`
+	UserAgent              string `json:"user_agent" ui_label:"User Agent" ui_desc:"Custom User-Agent string for HTTP requests. Leave empty for default."`
+	ProxyURL               string `json:"proxy_url" ui_label:"Proxy URL" ui_desc:"HTTP/HTTPS proxy URL (e.g. http://127.0.0.1:1700). Leave empty to use system default."`
+	CustomDNS              string `json:"custom_dns" ui_label:"Custom DNS Server" ui_desc:"Set custom DNS (e.g., 1.1.1.1:53, 94.140.14.14:53). Leave empty for system."`
+	SequentialDownload     bool   `json:"sequential_download" ui_label:"Sequential Download" ui_desc:"Download pieces in order (Streaming Mode). May be slower."`
+	MinChunkSize           int64  `json:"min_chunk_size" ui_label:"Min Chunk Size" ui_desc:"Minimum download chunk size in MB (e.g., 2)."`
+	WorkerBufferSize       int    `json:"worker_buffer_size" ui_label:"Worker Buffer Size" ui_desc:"I/O buffer size per worker in KB (e.g., 512)."`
+	DialHedgeCount         int    `json:"dial_hedge_count" ui_label:"Dial Hedge Count" ui_desc:"Number of extra connections to dial pre-emptively to avoid slow connects (0-16)."`
 }
 
 // PerformanceSettings contains performance tuning parameters.
 type PerformanceSettings struct {
-	MaxTaskRetries        int           `json:"max_task_retries"`
-	SlowWorkerThreshold   float64       `json:"slow_worker_threshold"`
-	SlowWorkerGracePeriod time.Duration `json:"slow_worker_grace_period"`
-	StallTimeout          time.Duration `json:"stall_timeout"`
-	SpeedEmaAlpha         float64       `json:"speed_ema_alpha"`
+	MaxTaskRetries        int           `json:"max_task_retries" ui_label:"Max Task Retries" ui_desc:"Number of times to retry a failed chunk before giving up."`
+	SlowWorkerThreshold   float64       `json:"slow_worker_threshold" ui_label:"Slow Worker Threshold" ui_desc:"Restart workers slower than this fraction of mean speed (0.0-1.0)."`
+	SlowWorkerGracePeriod time.Duration `json:"slow_worker_grace_period" ui_label:"Slow Worker Grace" ui_desc:"Grace period before checking worker speed (e.g., 5s)."`
+	StallTimeout          time.Duration `json:"stall_timeout" ui_label:"Stall Timeout" ui_desc:"Restart workers with no data for this duration (e.g., 5s)."`
+	SpeedEmaAlpha         float64       `json:"speed_ema_alpha" ui_label:"Speed EMA Alpha" ui_desc:"Exponential moving average smoothing factor (0.0-1.0)."`
 }
 
 // SettingMeta provides metadata for a single setting (for UI rendering).
@@ -70,54 +90,107 @@ type SettingMeta struct {
 	Key         string // JSON key name
 	Label       string // Human-readable label
 	Description string // Help text displayed in right pane
-	Type        string // "string", "int", "int64", "bool", "duration", "float64"
+	Type        string // "string", "int", "int64", "bool", "duration", "float64", "auth_token", "link"
 }
 
 // GetSettingsMetadata returns metadata for all settings organized by category.
 func GetSettingsMetadata() map[string][]SettingMeta {
-	return map[string][]SettingMeta{
-		"General": {
-			{Key: "default_download_dir", Label: "Default Download Dir", Description: "Default directory for new downloads. Leave empty to use current directory.", Type: "string"},
-			{Key: "download_complete_notification", Label: "Download Complete Notification", Description: "Show system notification when a download finishes.", Type: "bool"},
-			{Key: "allow_remote_open_actions", Label: "Allow Remote Open Actions", Description: "Allow /open-file and /open-folder API calls from non-loopback clients. Disabled by default for security.", Type: "bool"},
-			{Key: "warn_on_duplicate", Label: "Warn on Duplicate", Description: "Show warning when adding a download that already exists.", Type: "bool"},
-			{Key: "extension_prompt", Label: "Extension Prompt", Description: "Prompt for confirmation when adding downloads via browser extension.", Type: "bool"},
-			{Key: "auto_resume", Label: "Auto Resume", Description: "Automatically resume paused downloads on startup.", Type: "bool"},
-			{Key: "skip_update_check", Label: "Skip Update Check", Description: "Disable automatic check for new versions on startup.", Type: "bool"},
+	meta := make(map[string][]SettingMeta)
+	t := reflect.TypeOf(Settings{})
 
-			{Key: "clipboard_monitor", Label: "Clipboard Monitor", Description: "Watch clipboard for URLs and prompt to download them.", Type: "bool"},
-			{Key: "theme", Label: "App Theme", Description: "UI Theme (System, Light, Dark).", Type: "int"},
-			{Key: "log_retention_count", Label: "Log Retention Count", Description: "Number of recent log files to keep.", Type: "int"},
-		},
-		"Categories": {
-			{Key: "category_enabled", Label: "Manage Categories", Description: "Sort downloads into subfolders by file type. Press Enter to open Category Manager.", Type: "bool"},
-		},
-		"Post-Download": {
-			{Key: "on_complete_command", Label: "On Complete Command", Description: "Shell command to run after a download completes. Variables: {filename}, {filepath}, {size}, {speed}, {duration}, {id}", Type: "string"},
-			{Key: "on_error_command", Label: "On Error Command", Description: "Shell command to run when a download fails. Variables: {filename}, {filepath}, {id}, {error}", Type: "string"},
-		},
-		"Network": {
-			{Key: "max_connections_per_host", Label: "Max Connections/Host", Description: "Maximum concurrent connections per host (1-64).", Type: "int"},
-			{Key: "max_concurrent_downloads", Label: "Max Concurrent Downloads", Description: "Maximum number of downloads running at once (1-10). Requires restart.", Type: "int"},
-			{Key: "user_agent", Label: "User Agent", Description: "Custom User-Agent string for HTTP requests. Leave empty for default.", Type: "string"},
-			{Key: "proxy_url", Label: "Proxy URL", Description: "HTTP/HTTPS proxy URL (e.g. http://127.0.0.1:1700). Leave empty to use system default.", Type: "string"},
-			{Key: "sequential_download", Label: "Sequential Download", Description: "Download pieces in order (Streaming Mode). May be slower.", Type: "bool"},
-			{Key: "min_chunk_size", Label: "Min Chunk Size", Description: "Minimum download chunk size in MB (e.g., 2).", Type: "int64"},
-			{Key: "worker_buffer_size", Label: "Worker Buffer Size", Description: "I/O buffer size per worker in KB (e.g., 512).", Type: "int"},
-		},
-		"Performance": {
-			{Key: "max_task_retries", Label: "Max Task Retries", Description: "Number of times to retry a failed chunk before giving up.", Type: "int"},
-			{Key: "slow_worker_threshold", Label: "Slow Worker Threshold", Description: "Restart workers slower than this fraction of mean speed (0.0-1.0).", Type: "float64"},
-			{Key: "slow_worker_grace_period", Label: "Slow Worker Grace", Description: "Grace period before checking worker speed (e.g., 5s).", Type: "duration"},
-			{Key: "stall_timeout", Label: "Stall Timeout", Description: "Restart workers with no data for this duration (e.g., 5s).", Type: "duration"},
-			{Key: "speed_ema_alpha", Label: "Speed EMA Alpha", Description: "Exponential moving average smoothing factor (0.0-1.0).", Type: "float64"},
-		},
+	for i := 0; i < t.NumField(); i++ {
+		catField := t.Field(i)
+		catLabel := catField.Tag.Get("ui_label")
+		if catLabel == "" {
+			catLabel = catField.Name
+		}
+
+		var catMetas []SettingMeta
+		catType := catField.Type
+		if catType.Kind() == reflect.Struct {
+			for j := 0; j < catType.NumField(); j++ {
+				settingField := catType.Field(j)
+				if settingField.Tag.Get("ui_ignored") == "true" {
+					continue
+				}
+
+				key := settingField.Tag.Get("json")
+				if key == "" {
+					key = settingField.Name
+				}
+
+				label := settingField.Tag.Get("ui_label")
+				if label == "" {
+					label = settingField.Name
+				}
+
+				desc := settingField.Tag.Get("ui_desc")
+
+				// Determine implicit Type
+				typStr := settingField.Tag.Get("ui_type")
+				if typStr == "" {
+					typStr = "string"
+					switch settingField.Type.Kind() {
+					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
+						typStr = "int"
+					case reflect.Int64:
+						if settingField.Type.String() == "time.Duration" {
+							typStr = "duration"
+						} else {
+							typStr = "int64"
+						}
+					case reflect.Bool:
+						typStr = "bool"
+					case reflect.Float32, reflect.Float64:
+						typStr = "float64"
+					}
+				}
+
+				catMetas = append(catMetas, SettingMeta{
+					Key:         key,
+					Label:       label,
+					Description: desc,
+					Type:        typStr,
+				})
+			}
+		}
+		// Only output categories that have editable GUI parameters
+		if len(catMetas) > 0 {
+			meta[catLabel] = catMetas
+		}
 	}
+	return meta
 }
 
 // CategoryOrder returns the order of categories for UI tabs.
 func CategoryOrder() []string {
-	return []string{"General", "Post-Download", "Network", "Performance", "Categories"}
+	var order []string
+	t := reflect.TypeOf(Settings{})
+	for i := 0; i < t.NumField(); i++ {
+		field := t.Field(i)
+		label := field.Tag.Get("ui_label")
+		if label == "" {
+			label = field.Name
+		}
+
+		// Ensure category has UI elements before creating a tab!
+		catType := field.Type
+		hasUIElements := false
+		if catType.Kind() == reflect.Struct {
+			for j := 0; j < catType.NumField(); j++ {
+				if catType.Field(j).Tag.Get("ui_ignored") != "true" {
+					hasUIElements = true
+					break
+				}
+			}
+		}
+
+		// Only tabulate categories with active inputs
+		if hasUIElements {
+			order = append(order, label)
+		}
+	}
+	return order
 }
 
 const (
@@ -136,22 +209,24 @@ func DefaultSettings() *Settings {
 			WarnOnDuplicate:              true,
 			DownloadCompleteNotification: true,
 			AllowRemoteOpenActions:       false,
-			ExtensionPrompt:              false,
 			AutoResume:                   false,
-			CategoryEnabled:              false,
-			Categories:                   DefaultCategories(),
 
 			ClipboardMonitor:  true,
 			Theme:             ThemeAdaptive,
 			LogRetentionCount: 5,
+			LiveSpeedGraph:    false,
 		},
 		Network: NetworkSettings{
 			MaxConnectionsPerHost:  32,
 			MaxConcurrentDownloads: 3,
+			MaxConcurrentProbes:    3,
 			UserAgent:              "", // Empty means use default UA
+			ProxyURL:               "",
+			CustomDNS:              "",
 			SequentialDownload:     false,
 			MinChunkSize:           2 * MB,
 			WorkerBufferSize:       512 * KB,
+			DialHedgeCount:         4,
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        3,
@@ -159,6 +234,17 @@ func DefaultSettings() *Settings {
 			SlowWorkerGracePeriod: 5 * time.Second,
 			StallTimeout:          3 * time.Second,
 			SpeedEmaAlpha:         0.3,
+		},
+		Categories: CategorySettings{
+			CategoryEnabled: false,
+			Categories:      DefaultCategories(),
+		},
+		Extension: ExtensionSettings{
+			ExtensionPrompt:     true,
+			ChromeExtensionURL:  "https://github.com/SurgeDM/Surge/releases/latest",
+			FirefoxExtensionURL: "https://addons.mozilla.org/en-US/firefox/addon/surge/",
+			AuthToken:           "", // Handled specially in TUI
+			InstructionsURL:     "https://github.com/SurgeDM/Surge#browser-extension",
 		},
 	}
 }
@@ -183,7 +269,7 @@ func LoadSettings() (*Settings, error) {
 
 	settings := DefaultSettings() // Start with defaults to fill any missing fields
 	if err := json.Unmarshal(data, settings); err != nil {
-		utils.Debug("Warning: corrupt settings file %s: %v — using defaults", path, err)
+		utils.Debug("Warning: corrupt settings file %s: %v \u2014 using defaults", path, err)
 		return DefaultSettings(), nil
 	}
 
@@ -217,11 +303,14 @@ func SaveSettings(s *Settings) error {
 // This is used to pass user settings to the download engine
 type RuntimeConfig struct {
 	MaxConnectionsPerHost int
+	MaxConcurrentProbes   int
 	UserAgent             string
 	ProxyURL              string
+	CustomDNS             string
 	SequentialDownload    bool
 	MinChunkSize          int64
 	WorkerBufferSize      int
+	DialHedgeCount        int
 	MaxTaskRetries        int
 	SlowWorkerThreshold   float64
 	SlowWorkerGracePeriod time.Duration
@@ -233,11 +322,14 @@ type RuntimeConfig struct {
 func (s *Settings) ToRuntimeConfig() *RuntimeConfig {
 	return &RuntimeConfig{
 		MaxConnectionsPerHost: s.Network.MaxConnectionsPerHost,
+		MaxConcurrentProbes:   s.Network.MaxConcurrentProbes,
 		UserAgent:             s.Network.UserAgent,
 		ProxyURL:              s.Network.ProxyURL,
+		CustomDNS:             s.Network.CustomDNS,
 		SequentialDownload:    s.Network.SequentialDownload,
 		MinChunkSize:          s.Network.MinChunkSize,
 		WorkerBufferSize:      s.Network.WorkerBufferSize,
+		DialHedgeCount:        s.Network.DialHedgeCount,
 		MaxTaskRetries:        s.Performance.MaxTaskRetries,
 		SlowWorkerThreshold:   s.Performance.SlowWorkerThreshold,
 		SlowWorkerGracePeriod: s.Performance.SlowWorkerGracePeriod,

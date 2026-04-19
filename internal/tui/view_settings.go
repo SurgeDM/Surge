@@ -20,104 +20,360 @@ func (m RootModel) viewSettings() string {
 		return ""
 	}
 
-	// Larger, more spacious modal size (responsive to terminal width)
-	width := int(float64(m.width) * 0.65) // 65% of terminal width
-	if width < 90 {
-		width = 90
-	}
-	if width > 120 {
-		width = 120
-	}
-	height := 24
-	if m.width < width+4 {
-		width = m.width - 4
-	}
-	if m.height < height+4 {
-		height = m.height - 4
-	}
-	if width < 40 || height < 10 {
+	width, height := GetSettingsDimensions(m.width, m.height)
+	if width < MinSettingsWidth || height < 10 { // Special threshold for settings rendering floor
 		content := lipgloss.NewStyle().
-			Padding(1, 2).
+			Padding(DefaultPaddingY, DefaultPaddingX*2).
 			Foreground(colors.LightGray).
 			Render("Terminal too small for settings view")
 		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.NeonPurple)
 		return m.renderModalWithOverlay(box)
 	}
 
-	// Get category metadata
 	categories := config.CategoryOrder()
+	if len(categories) == 0 {
+		content := lipgloss.NewStyle().
+			Padding(1, 2).
+			Foreground(colors.LightGray).
+			Render("No settings categories available")
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.NeonPurple)
+		return m.renderModalWithOverlay(box)
+	}
+
 	metadata := config.GetSettingsMetadata()
-
-	// Safety: Ensure active tab is within bounds (handling reduced category count)
-	if m.SettingsActiveTab >= len(categories) {
-		m.SettingsActiveTab = len(categories) - 1
+	activeTab := m.SettingsActiveTab
+	if activeTab < 0 {
+		activeTab = 0
 	}
-	if m.SettingsActiveTab < 0 {
-		m.SettingsActiveTab = 0
+	if activeTab >= len(categories) {
+		activeTab = len(categories) - 1
 	}
 
-	// === TAB BAR ===
-	var tabs []components.Tab
-	for _, cat := range categories {
-		tabs = append(tabs, components.Tab{Label: cat, Count: -1})
-	}
-	// Purple theme for settings tabs
-	settingsActiveTab := lipgloss.NewStyle().Foreground(colors.NeonPurple)
-	tabBar := components.RenderNumberedTabBar(tabs, m.SettingsActiveTab, settingsActiveTab, TabStyle)
-
-	// === CONTENT AREA ===
-	currentCategory := categories[m.SettingsActiveTab]
+	currentCategory := categories[activeTab]
 	settingsMeta := metadata[currentCategory]
+	if len(settingsMeta) == 0 {
+		content := lipgloss.NewStyle().
+			Padding(1, 2).
+			Foreground(colors.LightGray).
+			Render("No settings available in this category")
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.NeonPurple)
+		return m.renderModalWithOverlay(box)
+	}
 
-	// Get current settings values
+	selectedRow := m.SettingsSelectedRow
+	if selectedRow < 0 {
+		selectedRow = 0
+	}
+	if selectedRow >= len(settingsMeta) {
+		selectedRow = len(settingsMeta) - 1
+	}
+
 	settingsValues := m.getSettingsValues(currentCategory)
+	tabBar := m.renderSettingsTabBar(categories, activeTab, width-(ProgressBarWidthOffset+HeaderWidthOffset))
+	helpText := m.renderSettingsHelp(width - (ProgressBarWidthOffset + HeaderWidthOffset))
 
-	// Calculate column widths - give left panel more room
-	leftWidth := 32
-	minRightWidth := 16
-	if width-leftWidth-8 < minRightWidth {
-		leftWidth = width - minRightWidth - 8
-	}
-	if leftWidth < 12 {
-		leftWidth = 12
-	}
-	rightWidth := width - leftWidth - 8
-	if rightWidth < minRightWidth {
-		rightWidth = minRightWidth
+	innerHeight := height - BoxStyle.GetVerticalFrameSize()
+	tabBarHeight := lipgloss.Height(tabBar)
+	helpHeight := lipgloss.Height(helpText)
+	bodyHeight := innerHeight - tabBarHeight - helpHeight - (LayoutGapStyle.GetVerticalFrameSize() * 2) // one line gap above body and help
+	if bodyHeight < 3 {
+		bodyHeight = 3
 	}
 
-	// === LEFT COLUMN: Settings List (names only) ===
-	var listLines []string
-	for i, meta := range settingsMeta {
-		line := meta.Label
+	var content string
+	if width >= 72 && bodyHeight >= 8 {
+		content = m.renderSettingsTwoColumn(settingsMeta, selectedRow, settingsValues, width, bodyHeight)
+	} else {
+		content = m.renderSettingsCompact(settingsMeta, selectedRow, settingsValues, width, bodyHeight)
+	}
 
-		// Highlight selected row with better visual treatment
-		if i == m.SettingsSelectedRow {
-			style := lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
-			cursor := "▸ "
+	contentHeight := lipgloss.Height(content)
+	usedHeight := tabBarHeight + LayoutGapStyle.GetVerticalFrameSize() + contentHeight + LayoutGapStyle.GetVerticalFrameSize() + helpHeight
+	paddingLines := innerHeight - usedHeight
+	if paddingLines < 0 {
+		paddingLines = 0
+	}
+	padding := strings.Repeat("\n", paddingLines)
 
-			if meta.Key == "max_global_connections" {
-				style = lipgloss.NewStyle().Foreground(colors.Gray)
-				cursor = "# "
+	fullContent := lipgloss.JoinVertical(lipgloss.Left,
+		tabBar,
+		"",
+		content,
+		padding,
+		helpText,
+	)
+
+	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, colors.NeonPurple)
+	return m.renderModalWithOverlay(box)
+}
+
+func shortSettingsCategoryLabel(label string) string {
+	switch label {
+	case "General":
+		return "Gen"
+	case "Network":
+		return "Net"
+	case "Performance":
+		return "Perf"
+	case "Categories":
+		return "Cats"
+	case "Extension":
+		return "Ext"
+	default:
+		return label
+	}
+}
+
+func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxWidth int) string {
+	if maxWidth < 1 {
+		maxWidth = 1
+	}
+
+	makeTabs := func(useShort bool) []components.Tab {
+		tabs := make([]components.Tab, 0, len(categories))
+		for _, cat := range categories {
+			label := cat
+			if useShort {
+				label = shortSettingsCategoryLabel(cat)
 			}
+			tabs = append(tabs, components.Tab{Label: label, Count: -1})
+		}
+		return tabs
+	}
 
-			line = style.Render(cursor + line)
-		} else {
-			style := lipgloss.NewStyle().Foreground(colors.LightGray)
+	settingsActiveTab := lipgloss.NewStyle().Foreground(colors.NeonPurple)
+	tryBars := []string{
+		components.RenderNumberedTabBar(makeTabs(false), activeTab, settingsActiveTab, TabStyle),
+		components.RenderTabBar(makeTabs(false), activeTab, settingsActiveTab, TabStyle),
+		components.RenderTabBar(makeTabs(true), activeTab, settingsActiveTab, TabStyle),
+	}
 
-			if meta.Key == "max_global_connections" {
-				style = lipgloss.NewStyle().Foreground(colors.ThemeColor("#aaaaaa", "238")) // Darker gray
-			}
+	for _, candidate := range tryBars {
+		if lipgloss.Width(candidate) <= maxWidth {
+			return lipgloss.NewStyle().Width(maxWidth).Align(lipgloss.Center).Render(candidate)
+		}
+	}
 
-			line = style.Render("  " + line)
+	fallback := fmt.Sprintf("[%d/%d] %s", activeTab+1, len(categories), categories[activeTab])
+	return lipgloss.NewStyle().
+		Foreground(colors.Gray).
+		Width(maxWidth).
+		Align(lipgloss.Center).
+		Render(fallback)
+}
+
+func (m RootModel) renderSettingsHelp(width int) string {
+	if width < 1 {
+		width = 1
+	}
+
+	helpText := m.help.View(m.keys.Settings)
+	if width < 60 {
+		helpText = "esc: save/close  tab: next tab  enter: edit"
+	}
+	if width < 40 {
+		helpText = "esc close | enter edit"
+	}
+
+	return lipgloss.NewStyle().
+		Foreground(colors.Gray).
+		Width(width).
+		Align(lipgloss.Center).
+		Render(helpText)
+}
+
+func formatSettingsBlock(content string, width, rows int) string {
+	if width < 1 {
+		width = 1
+	}
+	if rows < 1 {
+		rows = 1
+	}
+
+	lines := strings.Split(content, "\n")
+	if len(lines) > rows {
+		lines = lines[:rows]
+	}
+	for len(lines) < rows {
+		lines = append(lines, "")
+	}
+
+	for i := range lines {
+		lines[i] = lipgloss.NewStyle().Width(width).MaxWidth(width).Render(lines[i])
+	}
+
+	return strings.Join(lines, "\n")
+}
+
+func renderSettingsListViewport(settingsMeta []config.SettingMeta, selectedRow, rows, innerWidth int) string {
+	if rows < 1 {
+		rows = 1
+	}
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+
+	if len(settingsMeta) == 0 {
+		return formatSettingsBlock("(No settings)", innerWidth, rows)
+	}
+
+	if selectedRow < 0 {
+		selectedRow = 0
+	}
+	if selectedRow >= len(settingsMeta) {
+		selectedRow = len(settingsMeta) - 1
+	}
+
+	start := 0
+	if selectedRow >= rows {
+		start = selectedRow - rows + 1
+	}
+	maxStart := len(settingsMeta) - rows
+	if maxStart < 0 {
+		maxStart = 0
+	}
+	if start > maxStart {
+		start = maxStart
+	}
+
+	lines := make([]string, 0, rows)
+	for i := 0; i < rows; i++ {
+		idx := start + i
+		if idx >= len(settingsMeta) {
+			lines = append(lines, "")
+			continue
 		}
 
-		listLines = append(listLines, line)
+		meta := settingsMeta[idx]
+		prefix := "  "
+		style := lipgloss.NewStyle().Foreground(colors.LightGray)
+		if idx == selectedRow {
+			prefix = "\u25b8 "
+			style = lipgloss.NewStyle().Foreground(colors.NeonPurple).Bold(true)
+		}
+
+		if meta.Key == "max_global_connections" {
+			style = lipgloss.NewStyle().Foreground(colors.ThemeColor("#aaaaaa", "238"))
+			if idx == selectedRow {
+				prefix = "# "
+				style = lipgloss.NewStyle().Foreground(colors.Gray)
+			}
+		}
+
+		label := meta.Label
+		maxLabelLen := innerWidth - len(prefix)
+		if maxLabelLen < 0 {
+			maxLabelLen = 0
+		}
+
+		// Truncate to avoid line wrapping which breaks parent height constraints
+		if len(label) > maxLabelLen {
+			if maxLabelLen > 3 {
+				label = label[:maxLabelLen-3] + "..."
+			} else {
+				label = label[:maxLabelLen]
+			}
+		}
+
+		lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+label))
 	}
 
-	listContent := lipgloss.JoinVertical(lipgloss.Left, listLines...)
+	return strings.Join(lines, "\n")
+}
 
-	// Wrap list in a bordered box with better padding
+func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, innerWidth, rows int) string {
+	if innerWidth < 1 {
+		innerWidth = 1
+	}
+	if rows < 1 {
+		rows = 1
+	}
+	if len(settingsMeta) == 0 || selectedRow < 0 || selectedRow >= len(settingsMeta) {
+		return formatSettingsBlock("No setting selected", innerWidth, rows)
+	}
+
+	meta := settingsMeta[selectedRow]
+	value := settingsValues[meta.Key]
+	unit := m.getSettingUnit()
+	unitStyle := lipgloss.NewStyle().Foreground(colors.Gray)
+
+	var valueStr string
+	if m.SettingsIsEditing {
+		valueStr = m.SettingsInput.View() + unitStyle.Render(unit)
+	} else {
+		switch meta.Type {
+		case "auth_token":
+			token := GetAuthToken()
+			if token == "" {
+				valueStr = lipgloss.NewStyle().Foreground(colors.Gray).Render("(Not generated yet)")
+			} else {
+				if m.ExtensionTokenCopied {
+					valueStr = lipgloss.NewStyle().Foreground(colors.StateDownloading).Bold(true).Render("Copied!")
+				} else {
+					displayToken := token
+					if len(token) > 16 {
+						displayToken = token[:8] + "..." + token[len(token)-8:]
+					}
+					valueStr = displayToken + lipgloss.NewStyle().Foreground(colors.Gray).Render(" [Enter to Copy]")
+				}
+			}
+		case "link":
+			valueStr = lipgloss.NewStyle().Foreground(colors.NeonCyan).Render("Open [Enter]")
+		default:
+			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key, true) + unitStyle.Render(unit)
+			if meta.Key == "max_global_connections" {
+				valueStr += " (Ignored)"
+			}
+		}
+	}
+
+	valueLabel := "Value: "
+	if meta.Key == "default_download_dir" && !m.SettingsIsEditing {
+		valueLabel = "[Tab] Browse: "
+	}
+	if meta.Type == "link" {
+		valueLabel = "Action: "
+	}
+
+	valueLabelStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
+	valueContentStyle := lipgloss.NewStyle().Foreground(colors.White)
+	valueDisplay := valueLabelStyle.Render(valueLabel) + valueContentStyle.Render(valueStr)
+	valueDisplay = lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(valueDisplay)
+
+	divider := lipgloss.NewStyle().
+		Foreground(colors.Gray).
+		Render(strings.Repeat("\u2500", innerWidth))
+
+	descDisplay := lipgloss.NewStyle().
+		Foreground(colors.LightGray).
+		Width(innerWidth).
+		MaxWidth(innerWidth).
+		Render(meta.Description)
+
+	detail := lipgloss.JoinVertical(lipgloss.Left,
+		valueDisplay,
+		"",
+		divider,
+		"",
+		descDisplay,
+	)
+
+	return formatSettingsBlock(detail, innerWidth, rows)
+}
+
+func (m RootModel) renderSettingsTwoColumn(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
+	leftWidth, rightWidth := CalculateTwoColumnWidths(modalWidth, 32, 22)
+
+	if leftWidth < 12 || rightWidth < 14 {
+		return m.renderSettingsCompact(settingsMeta, selectedRow, settingsValues, modalWidth, bodyHeight)
+	}
+
+	// Account for both border and internal padding
+	listRows := bodyHeight - BoxStyle.GetVerticalFrameSize() - InternalPaddingHeight
+	if listRows < 1 {
+		listRows = 1
+	}
+	listContent := renderSettingsListViewport(settingsMeta, selectedRow, listRows, leftWidth-(BoxStyle.GetHorizontalFrameSize()*2))
 	listBox := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colors.Gray).
@@ -125,161 +381,165 @@ func (m RootModel) viewSettings() string {
 		Padding(1, 1).
 		Render(listContent)
 
-	// === RIGHT COLUMN: Value + Description ===
-	var rightContent string
-	if m.SettingsSelectedRow < len(settingsMeta) {
-		meta := settingsMeta[m.SettingsSelectedRow]
-		value := settingsValues[meta.Key]
-
-		// Get unit suffix
-		unit := m.getSettingUnit()
-		unitStyle := lipgloss.NewStyle().Foreground(colors.Gray)
-
-		// Format value
-		var valueStr string
-		if m.SettingsIsEditing {
-			// Show input with unit suffix (non-deletable)
-			valueStr = m.SettingsInput.View() + unitStyle.Render(unit)
-		} else {
-			// Show formatted value with unit
-			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key) + unitStyle.Render(unit)
-
-			if meta.Key == "max_global_connections" {
-				valueStr += " (Ignored)"
-			}
-		}
-
-		// Show Tab hint for directory settings
-		valueLabel := "Value: "
-		if meta.Key == "default_download_dir" && !m.SettingsIsEditing {
-			valueLabel = "[Tab] Browse: "
-		}
-
-		// Value section with better styling
-		valueLabelStyle := lipgloss.NewStyle().
-			Foreground(colors.NeonCyan).
-			Bold(true)
-		valueContentStyle := lipgloss.NewStyle().
-			Foreground(colors.White)
-
-		valueDisplay := valueLabelStyle.Render(valueLabel) + valueContentStyle.Render(valueStr)
-
-		// Subtle divider between value and description
-		dividerWidth := rightWidth - 4
-		if dividerWidth < 1 {
-			dividerWidth = 1
-		}
-		divider := lipgloss.NewStyle().
-			Foreground(colors.Gray).
-			Render(strings.Repeat("─", dividerWidth))
-
-		// Description with better formatting
-		descDisplay := lipgloss.NewStyle().
-			Foreground(colors.LightGray).
-			Width(rightWidth - 4).
-			Render(meta.Description)
-
-		rightContent = lipgloss.JoinVertical(lipgloss.Left,
-			valueDisplay,
-			"",
-			divider,
-			"",
-			descDisplay,
-		)
+	if m.SettingsIsEditing {
+		m.updateSettingsInputWidthForViewport()
 	}
 
-	rightBox := lipgloss.NewStyle().
-		Width(rightWidth).
-		Padding(1, 2).
-		Render(rightContent)
-
-	// === VERTICAL DIVIDER ===
-	// Calculate divider height based on listBox height
-	listBoxHeight := lipgloss.Height(listBox)
-	dividerStyle := lipgloss.NewStyle().
-		Foreground(colors.Gray)
-	if listBoxHeight < 1 {
-		listBoxHeight = 1
+	rightBoxStyle := lipgloss.NewStyle().Width(rightWidth).Padding(1, 2)
+	rightRows := bodyHeight - rightBoxStyle.GetVerticalFrameSize()
+	if rightRows < 1 {
+		rightRows = 1
 	}
-	divider := dividerStyle.Render(strings.Repeat("│\n", listBoxHeight-1) + "│")
+	rightContent := m.renderSettingsDetailBlock(settingsMeta, selectedRow, settingsValues, rightWidth-rightBoxStyle.GetHorizontalFrameSize(), rightRows)
+	rightBox := rightBoxStyle.Render(rightContent)
 
-	// === COMBINE COLUMNS ===
-	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
-
-	// === HELP TEXT using Bubbles help ===
-	helpStyle := lipgloss.NewStyle().
+	dividerHeight := max(lipgloss.Height(listBox), lipgloss.Height(rightBox))
+	if dividerHeight < 1 {
+		dividerHeight = 1
+	}
+	divider := lipgloss.NewStyle().
 		Foreground(colors.Gray).
-		Width(width - 6).
-		Align(lipgloss.Center)
-	helpText := helpStyle.Render(m.help.View(m.keys.Settings))
+		Render(strings.Repeat("\u2502\n", dividerHeight-1) + "\u2502")
 
-	// Calculate heights for proper spacing
-	tabBarHeight := lipgloss.Height(tabBar)
-	contentHeight := lipgloss.Height(content)
-	helpHeight := lipgloss.Height(helpText)
+	content := lipgloss.JoinHorizontal(lipgloss.Top, listBox, divider, rightBox)
+	return formatSettingsBlock(content, modalWidth-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
+}
 
-	// innerHeight = height - 2 (top/bottom borders)
-	innerHeight := height - 2
-	// Used space: 1 (empty line) + tabBarHeight + 1 (empty line) + contentHeight + helpHeight
-	usedHeight := 1 + tabBarHeight + 1 + contentHeight + helpHeight
-	// Padding needed to push help to bottom
-	paddingLines := innerHeight - usedHeight
-	if paddingLines < 0 {
-		paddingLines = 0
+func (m RootModel) renderSettingsCompact(settingsMeta []config.SettingMeta, selectedRow int, settingsValues map[string]interface{}, modalWidth, bodyHeight int) string {
+	innerWidth := modalWidth - BoxStyle.GetHorizontalFrameSize()
+	if innerWidth < 1 {
+		innerWidth = 1
 	}
-	padding := strings.Repeat("\n", paddingLines)
 
-	// === FINAL ASSEMBLY ===
-	fullContent := lipgloss.JoinVertical(lipgloss.Left,
-		"",
-		tabBar,
-		"",
-		content,
-		padding+helpText,
+	if m.SettingsIsEditing {
+		m.updateSettingsInputWidthForViewport()
+	}
+
+	listRows := bodyHeight / 2
+	if listRows < 1 {
+		listRows = 1
+	}
+
+	detailRows := bodyHeight - listRows - DividerHeight // line for the divider line
+	if detailRows < 1 {
+		detailRows = 1
+		listRows = bodyHeight - detailRows
+		if listRows < 1 {
+			listRows = 1
+		}
+	}
+
+	list := renderSettingsListViewport(settingsMeta, selectedRow, listRows, innerWidth)
+	detail := m.renderSettingsDetailBlock(settingsMeta, selectedRow, settingsValues, innerWidth, detailRows)
+	divider := lipgloss.NewStyle().Foreground(colors.Gray).Render(strings.Repeat("\u2500", innerWidth))
+
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		list,
+		divider,
+		detail,
 	)
 
-	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, colors.NeonPurple)
+	return formatSettingsBlock(content, innerWidth, bodyHeight)
+}
 
-	return m.renderModalWithOverlay(box)
+func (m *RootModel) normalizeSettingsSelection() {
+	categories := config.CategoryOrder()
+	if len(categories) == 0 {
+		m.SettingsActiveTab = 0
+		m.SettingsSelectedRow = 0
+		if m.SettingsIsEditing {
+			m.SettingsIsEditing = false
+			m.SettingsInput.Blur()
+		}
+		return
+	}
+
+	if m.SettingsActiveTab < 0 {
+		m.SettingsActiveTab = 0
+	}
+	if m.SettingsActiveTab >= len(categories) {
+		m.SettingsActiveTab = len(categories) - 1
+	}
+
+	settingsMap := config.GetSettingsMetadata()
+	settingsList := settingsMap[categories[m.SettingsActiveTab]]
+	if len(settingsList) == 0 {
+		m.SettingsSelectedRow = 0
+		if m.SettingsIsEditing {
+			m.SettingsIsEditing = false
+			m.SettingsInput.Blur()
+		}
+		return
+	}
+
+	if m.SettingsSelectedRow < 0 {
+		m.SettingsSelectedRow = 0
+	}
+	if m.SettingsSelectedRow >= len(settingsList) {
+		m.SettingsSelectedRow = len(settingsList) - 1
+	}
+}
+
+func (m *RootModel) updateSettingsInputWidthForViewport() {
+	modalWidth, _ := GetSettingsDimensions(m.width, m.height)
+	var targetWidth int
+	if modalWidth >= 72 {
+		_, rightWidth := CalculateTwoColumnWidths(modalWidth, 32, 22)
+		targetWidth = rightWidth - 10 // Fixed offset for labels
+	} else {
+		targetWidth = modalWidth - 16 // Fixed offset for labels
+	}
+
+	if targetWidth < MinSettingsInputW {
+		targetWidth = MinSettingsInputW
+	}
+	if targetWidth > MaxSettingsInputW {
+		targetWidth = MaxSettingsInputW
+	}
+
+	m.SettingsInput.SetWidth(targetWidth)
 }
 
 // getSettingsValues returns a map of setting key -> value for a category
 func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 	values := make(map[string]interface{})
 
-	switch category {
-	case "General":
-		values["default_download_dir"] = m.Settings.General.DefaultDownloadDir
-		values["warn_on_duplicate"] = m.Settings.General.WarnOnDuplicate
-		values["download_complete_notification"] = m.Settings.General.DownloadCompleteNotification
-		values["allow_remote_open_actions"] = m.Settings.General.AllowRemoteOpenActions
-		values["extension_prompt"] = m.Settings.General.ExtensionPrompt
-		values["auto_resume"] = m.Settings.General.AutoResume
-		values["skip_update_check"] = m.Settings.General.SkipUpdateCheck
+	val := reflect.ValueOf(m.Settings).Elem()
+	typ := val.Type()
 
-		values["clipboard_monitor"] = m.Settings.General.ClipboardMonitor
-		values["theme"] = m.Settings.General.Theme
-		values["log_retention_count"] = m.Settings.General.LogRetentionCount
+	var catVal reflect.Value
+	var found bool
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		label := field.Tag.Get("ui_label")
+		if label == "" {
+			label = field.Name
+		}
+		if label == category {
+			catVal = val.Field(i)
+			found = true
+			break
+		}
+	}
 
-	case "Network":
-		values["max_connections_per_host"] = m.Settings.Network.MaxConnectionsPerHost
+	if !found {
+		return values
+	}
 
-		values["max_concurrent_downloads"] = m.Settings.Network.MaxConcurrentDownloads
-		values["user_agent"] = m.Settings.Network.UserAgent
-		values["sequential_download"] = m.Settings.Network.SequentialDownload
-		values["min_chunk_size"] = m.Settings.Network.MinChunkSize
-		values["worker_buffer_size"] = m.Settings.Network.WorkerBufferSize
-	case "Performance":
-		values["max_task_retries"] = m.Settings.Performance.MaxTaskRetries
-		values["slow_worker_threshold"] = m.Settings.Performance.SlowWorkerThreshold
-		values["slow_worker_grace_period"] = m.Settings.Performance.SlowWorkerGracePeriod
-		values["stall_timeout"] = m.Settings.Performance.StallTimeout
-		values["speed_ema_alpha"] = m.Settings.Performance.SpeedEmaAlpha
-	case "Categories":
-		values["category_enabled"] = m.Settings.General.CategoryEnabled
-	case "Post-Download":
-		values["on_complete_command"] = m.Settings.General.PostDownload.OnCompleteCommand
-		values["on_error_command"] = m.Settings.General.PostDownload.OnErrorCommand
+	if catVal.Kind() == reflect.Struct {
+		catTyp := catVal.Type()
+		for i := 0; i < catTyp.NumField(); i++ {
+			field := catTyp.Field(i)
+			if field.Tag.Get("ui_ignored") == "true" {
+				continue
+			}
+
+			key := field.Tag.Get("json")
+			if key == "" {
+				key = field.Name
+			}
+			values[key] = catVal.Field(i).Interface()
+		}
 	}
 
 	return values
@@ -287,37 +547,114 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 
 // setSettingValue sets a setting value from string input
 func (m *RootModel) setSettingValue(category, key, value string) error {
-	metadata := config.GetSettingsMetadata()
-	metas := metadata[category]
+	val := reflect.ValueOf(m.Settings).Elem()
+	typ := val.Type()
 
-	var meta config.SettingMeta
-	for _, sm := range metas {
-		if sm.Key == key {
-			meta = sm
+	var catVal reflect.Value
+	var foundCat bool
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		label := field.Tag.Get("ui_label")
+		if label == "" {
+			label = field.Name
+		}
+		if label == category {
+			catVal = val.Field(i)
+			foundCat = true
 			break
 		}
 	}
 
-	switch category {
-	case "General":
-		return m.setGeneralSetting(key, value, meta.Type)
-	case "Network":
-		return m.setNetworkSetting(key, value, meta.Type)
-	case "Performance":
-		return m.setPerformanceSetting(key, value, meta.Type)
-	case "Categories":
-		if key == "category_enabled" {
-			m.Settings.General.CategoryEnabled = !m.Settings.General.CategoryEnabled
-		}
-	case "Post-Download":
-		switch key {
-		case "on_complete_command":
-			m.Settings.General.PostDownload.OnCompleteCommand = value
-		case "on_error_command":
-			m.Settings.General.PostDownload.OnErrorCommand = value
-		}
+	if !foundCat || catVal.Kind() != reflect.Struct {
+		return nil
 	}
 
+	catTyp := catVal.Type()
+	for i := 0; i < catTyp.NumField(); i++ {
+		field := catTyp.Field(i)
+		if field.Tag.Get("ui_ignored") == "true" {
+			continue
+		}
+
+		fieldKey := field.Tag.Get("json")
+		if fieldKey == "" {
+			fieldKey = field.Name
+		}
+
+		if fieldKey == key {
+			targetField := catVal.Field(i)
+			if !targetField.CanSet() {
+				return nil
+			}
+
+			// Special logic for Theme to trigger app re-rendering internally
+			if key == "theme" {
+				var theme int
+				valLower := strings.ToLower(value)
+				switch valLower {
+				case "system", "adaptive", "0":
+					theme = config.ThemeAdaptive
+				case "light", "1":
+					theme = config.ThemeLight
+				case "dark", "2":
+					theme = config.ThemeDark
+				default:
+					if v, err := strconv.Atoi(value); err == nil && v >= 0 && v <= 2 {
+						theme = v
+					} else {
+						return nil // Invalid
+					}
+				}
+				targetField.Set(reflect.ValueOf(theme))
+				m.ApplyTheme(theme)
+				return nil
+			}
+
+			// Generic Parsing and Application
+			switch targetField.Kind() {
+			case reflect.Bool:
+				// Typically toggled unless explicitly typed out
+				if value == "" {
+					targetField.SetBool(!targetField.Bool())
+				} else {
+					b, _ := strconv.ParseBool(value)
+					targetField.SetBool(b)
+				}
+			case reflect.String:
+				targetField.SetString(value)
+			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
+				if v, err := strconv.Atoi(value); err == nil {
+					targetField.SetInt(int64(v))
+				}
+			case reflect.Int64:
+				if targetField.Type().String() == "time.Duration" {
+					if _, err := strconv.ParseFloat(value, 64); err == nil {
+						value += "s"
+					}
+					if v, err := time.ParseDuration(value); err == nil {
+						targetField.Set(reflect.ValueOf(v))
+					}
+				} else {
+					// Handle KB/MB scaling gracefully if specified
+					if key == "min_chunk_size" {
+						if v, err := strconv.ParseFloat(value, 64); err == nil {
+							targetField.SetInt(int64(v * float64(config.MB)))
+						}
+					} else {
+						if v, err := strconv.ParseInt(value, 10, 64); err == nil {
+							targetField.SetInt(v)
+						}
+					}
+				}
+			case reflect.Float32, reflect.Float64:
+				if v, err := strconv.ParseFloat(value, 64); err == nil {
+					targetField.SetFloat(v)
+				}
+			}
+
+			return nil
+		}
+	}
 	return nil
 }
 
@@ -332,145 +669,6 @@ func (m *RootModel) persistSettings() error {
 	}
 	if m.Orchestrator != nil {
 		m.Orchestrator.ApplySettings(m.Settings)
-	}
-	return nil
-}
-
-func (m *RootModel) setGeneralSetting(key, value, typ string) error {
-	switch key {
-	case "default_download_dir":
-		m.Settings.General.DefaultDownloadDir = value
-	case "warn_on_duplicate":
-		m.Settings.General.WarnOnDuplicate = !m.Settings.General.WarnOnDuplicate
-	case "allow_remote_open_actions":
-		m.Settings.General.AllowRemoteOpenActions = !m.Settings.General.AllowRemoteOpenActions
-	case "extension_prompt":
-		m.Settings.General.ExtensionPrompt = !m.Settings.General.ExtensionPrompt
-	case "auto_resume":
-		m.Settings.General.AutoResume = !m.Settings.General.AutoResume
-	case "skip_update_check":
-		m.Settings.General.SkipUpdateCheck = !m.Settings.General.SkipUpdateCheck
-	case "clipboard_monitor":
-		m.Settings.General.ClipboardMonitor = !m.Settings.General.ClipboardMonitor
-
-	case "theme":
-		var theme int
-		valLower := strings.ToLower(value)
-		switch valLower {
-		case "system", "adaptive", "0":
-			theme = config.ThemeAdaptive
-		case "light", "1":
-			theme = config.ThemeLight
-		case "dark", "2":
-			theme = config.ThemeDark
-		default:
-			// Try parsing as int fallback
-			if v, err := strconv.Atoi(value); err == nil {
-				if v >= 0 && v <= 2 {
-					theme = v
-				} else {
-					return nil // Invalid range
-				}
-			} else {
-				return nil // Invalid value
-			}
-		}
-		m.Settings.General.Theme = theme
-		m.ApplyTheme(theme)
-	case "log_retention_count":
-		if v, err := strconv.Atoi(value); err == nil {
-			if v < 0 {
-				v = 0 // Minimum valid value
-			}
-			m.Settings.General.LogRetentionCount = v
-		}
-	}
-	return nil
-}
-
-func (m *RootModel) setNetworkSetting(key, value, typ string) error {
-	switch key {
-	case "max_connections_per_host":
-		if v, err := strconv.Atoi(value); err == nil {
-			m.Settings.Network.MaxConnectionsPerHost = v
-		}
-
-	case "max_concurrent_downloads":
-		if v, err := strconv.Atoi(value); err == nil {
-			if v < 1 {
-				v = 1
-			} else if v > 10 {
-				v = 10
-			}
-			m.Settings.Network.MaxConcurrentDownloads = v
-		}
-	case "user_agent":
-		m.Settings.Network.UserAgent = value
-	case "sequential_download":
-		// Toggle logic handled by generic bool toggle in Update, but just in case
-		if value == "" {
-			m.Settings.Network.SequentialDownload = !m.Settings.Network.SequentialDownload
-		} else {
-			// For programmatic setting if ever needed
-			b, _ := strconv.ParseBool(value)
-			m.Settings.Network.SequentialDownload = b
-		}
-	case "min_chunk_size":
-		// Parse as MB and convert to bytes
-		if v, err := strconv.ParseFloat(value, 64); err == nil {
-			m.Settings.Network.MinChunkSize = int64(v * float64(config.MB))
-		}
-	case "worker_buffer_size":
-		// Keep buffer in KB
-		if v, err := strconv.ParseFloat(value, 64); err == nil {
-			m.Settings.Network.WorkerBufferSize = int(v * float64(config.KB))
-		}
-	}
-	return nil
-}
-
-func (m *RootModel) setPerformanceSetting(key, value, typ string) error {
-	switch key {
-	case "max_task_retries":
-		if v, err := strconv.Atoi(value); err == nil {
-			m.Settings.Performance.MaxTaskRetries = v
-		}
-	case "slow_worker_threshold":
-		if v, err := strconv.ParseFloat(value, 64); err == nil {
-			// Clamp to valid range 0.0-1.0
-			if v < 0.0 {
-				v = 0.0
-			} else if v > 1.0 {
-				v = 1.0
-			}
-			m.Settings.Performance.SlowWorkerThreshold = v
-		}
-	case "slow_worker_grace_period":
-		// Check if it's just a number, if so add "s"
-		if _, err := strconv.ParseFloat(value, 64); err == nil {
-			value += "s"
-		}
-		if v, err := time.ParseDuration(value); err == nil {
-			m.Settings.Performance.SlowWorkerGracePeriod = v
-		}
-	case "stall_timeout":
-		// Check if it's just a number, if so add "s"
-		if _, err := strconv.ParseFloat(value, 64); err == nil {
-			value += "s"
-		}
-		if v, err := time.ParseDuration(value); err == nil {
-			m.Settings.Performance.StallTimeout = v
-		}
-	case "speed_ema_alpha":
-		if v, err := strconv.ParseFloat(value, 64); err == nil {
-			// Clamp to valid range 0.0-1.0
-			if v < 0.0 {
-				v = 0.0
-			} else if v > 1.0 {
-				v = 1.0
-			}
-			m.Settings.Performance.SpeedEmaAlpha = v
-		}
 	}
 	return nil
 }
@@ -531,6 +729,8 @@ func (m RootModel) getSettingUnit() string {
 		return " MB"
 	case "worker_buffer_size":
 		return " KB"
+	case "dial_hedge_count":
+		return " conns"
 	case "max_task_retries":
 		return " retries"
 	case "slow_worker_grace_period", "stall_timeout":
@@ -543,7 +743,7 @@ func (m RootModel) getSettingUnit() string {
 }
 
 // formatSettingValueForEdit returns a plain value without units for editing
-func formatSettingValueForEdit(value interface{}, typ, key string) string {
+func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool) string {
 	switch key {
 	case "min_chunk_size":
 		if v, ok := value.(int64); ok {
@@ -577,11 +777,11 @@ func formatSettingValueForEdit(value interface{}, typ, key string) string {
 	}
 
 	// Default: use standard format
-	return formatSettingValue(value, typ)
+	return formatSettingValue(value, typ, truncate)
 }
 
 // formatSettingValue formats a setting value for display
-func formatSettingValue(value interface{}, typ string) string {
+func formatSettingValue(value interface{}, typ string, truncate bool) string {
 	if value == nil {
 		return "-"
 	}
@@ -612,16 +812,18 @@ func formatSettingValue(value interface{}, typ string) string {
 		if v, ok := value.(float64); ok {
 			return fmt.Sprintf("%.2f", v)
 		}
-	case "string":
+	case "string", "link":
 		if s, ok := value.(string); ok {
 			if s == "" {
 				return "(default)"
 			}
-			if len(s) > 30 {
+			if truncate && len(s) > 30 {
 				return s[:27] + "..."
 			}
 			return s
 		}
+	case "auth_token":
+		return "********"
 	}
 
 	// Fallback using reflection for numeric types
@@ -647,8 +849,6 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.General.WarnOnDuplicate = defaults.General.WarnOnDuplicate
 		case "download_complete_notification":
 			m.Settings.General.DownloadCompleteNotification = defaults.General.DownloadCompleteNotification
-		case "extension_prompt":
-			m.Settings.General.ExtensionPrompt = defaults.General.ExtensionPrompt
 		case "auto_resume":
 			m.Settings.General.AutoResume = defaults.General.AutoResume
 		case "skip_update_check":
@@ -656,6 +856,10 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 
 		case "clipboard_monitor":
 			m.Settings.General.ClipboardMonitor = defaults.General.ClipboardMonitor
+		case "allow_remote_open_actions":
+			m.Settings.General.AllowRemoteOpenActions = defaults.General.AllowRemoteOpenActions
+		case "live_speed_graph":
+			m.Settings.General.LiveSpeedGraph = defaults.General.LiveSpeedGraph
 		case "theme":
 			m.Settings.General.Theme = defaults.General.Theme
 		case "log_retention_count":
@@ -670,14 +874,22 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 
 		case "max_concurrent_downloads":
 			m.Settings.Network.MaxConcurrentDownloads = defaults.Network.MaxConcurrentDownloads
+		case "max_concurrent_probes":
+			m.Settings.Network.MaxConcurrentProbes = defaults.Network.MaxConcurrentProbes
 		case "user_agent":
 			m.Settings.Network.UserAgent = defaults.Network.UserAgent
+		case "proxy_url":
+			m.Settings.Network.ProxyURL = defaults.Network.ProxyURL
+		case "custom_dns":
+			m.Settings.Network.CustomDNS = defaults.Network.CustomDNS
 		case "sequential_download":
 			m.Settings.Network.SequentialDownload = defaults.Network.SequentialDownload
 		case "min_chunk_size":
 			m.Settings.Network.MinChunkSize = defaults.Network.MinChunkSize
 		case "worker_buffer_size":
 			m.Settings.Network.WorkerBufferSize = defaults.Network.WorkerBufferSize
+		case "dial_hedge_count":
+			m.Settings.Network.DialHedgeCount = defaults.Network.DialHedgeCount
 		}
 	case "Performance":
 		switch key {
@@ -695,14 +907,27 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 	case "Categories":
 		switch key {
 		case "category_enabled":
-			m.Settings.General.CategoryEnabled = defaults.General.CategoryEnabled
+			m.Settings.Categories.CategoryEnabled = defaults.Categories.CategoryEnabled
+		}
+	case "Extension":
+		switch key {
+		case "extension_prompt":
+			m.Settings.Extension.ExtensionPrompt = defaults.Extension.ExtensionPrompt
+		case "chrome_extension_url":
+			m.Settings.Extension.ChromeExtensionURL = defaults.Extension.ChromeExtensionURL
+		case "firefox_extension_url":
+			m.Settings.Extension.FirefoxExtensionURL = defaults.Extension.FirefoxExtensionURL
+		case "instructions_url":
+			m.Settings.Extension.InstructionsURL = defaults.Extension.InstructionsURL
+		case "-":
+			m.Settings.Extension.AuthToken = defaults.Extension.AuthToken
 		}
 	case "Post-Download":
 		switch key {
 		case "on_complete_command":
-			m.Settings.General.PostDownload.OnCompleteCommand = defaults.General.PostDownload.OnCompleteCommand
+			m.Settings.PostDownload.OnCompleteCommand = defaults.PostDownload.OnCompleteCommand
 		case "on_error_command":
-			m.Settings.General.PostDownload.OnErrorCommand = defaults.General.PostDownload.OnErrorCommand
+			m.Settings.PostDownload.OnErrorCommand = defaults.PostDownload.OnErrorCommand
 		}
 	}
 }

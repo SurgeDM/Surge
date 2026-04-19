@@ -13,10 +13,10 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-func (m *RootModel) processProgressMsg(msg events.ProgressMsg) {
+func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 	d := m.FindDownloadByID(msg.DownloadID)
 	if d == nil || d.done || d.paused {
-		return
+		return nil
 	}
 
 	prevDownloaded := d.Downloaded
@@ -46,9 +46,10 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) {
 		}
 	}
 
+	var cmd tea.Cmd
 	if d.Total > 0 {
 		percentage := float64(d.Downloaded) / float64(d.Total)
-		d.progress.SetPercent(percentage)
+		cmd = d.progress.SetPercent(percentage)
 	}
 
 	// Update speed graph history with EMA smoothing for smooth transitions
@@ -56,7 +57,9 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) {
 		totalSpeed := m.calcTotalSpeed()
 		// EMA smooth against previous graph point for visual continuity
 		var smoothed float64
-		if len(m.SpeedHistory) > 0 {
+		if m.Settings != nil && m.Settings.General.LiveSpeedGraph {
+			smoothed = totalSpeed
+		} else if len(m.SpeedHistory) > 0 {
 			prev := m.SpeedHistory[len(m.SpeedHistory)-1]
 			const graphAlpha = 0.3 // Graph smoothing factor
 			smoothed = graphAlpha*totalSpeed + (1-graphAlpha)*prev
@@ -70,12 +73,13 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) {
 	}
 
 	m.UpdateListItems()
+	return cmd
 }
 
 // startDownload initiates a new download
 func (m RootModel) startDownload(url string, mirrors []string, headers map[string]string, path string, isDefaultPath bool, filename, id string) (RootModel, tea.Cmd) {
 	if m.Service == nil {
-		m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
+		m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
 		return m, nil
 	}
 
@@ -166,7 +170,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		if err != nil {
 			m.removeDownloadByID(optimisticID)
 			m.UpdateListItems()
-			m.addLogEntry(LogStyleError.Render("✖ Failed to add download: " + err.Error()))
+			m.addLogEntry(LogStyleError.Render("\u2716 Failed to add download: " + err.Error()))
 			return m, nil
 		}
 
@@ -182,22 +186,29 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 
 	cmd := func() tea.Msg {
 		ctx := m.downloadEnqueueContext()
-		var newID string
+		var newID, finalFilename string
 		var err error
 		if requestID != "" {
-			newID, err = m.Orchestrator.EnqueueWithID(ctx, req, requestID)
+			newID, finalFilename, err = m.Orchestrator.EnqueueWithID(ctx, req, requestID)
 		} else {
-			newID, err = m.Orchestrator.Enqueue(ctx, req)
+			newID, finalFilename, err = m.Orchestrator.Enqueue(ctx, req)
 		}
 		if err != nil {
 			return enqueueErrorMsg{tempID: optimisticID, err: err}
 		}
+
+		// Use the server-resolved filename if available
+		displayFilename := finalFilename
+		if displayFilename == "" {
+			displayFilename = optimisticFilename
+		}
+
 		return enqueueSuccessMsg{
 			tempID:   optimisticID,
 			id:       newID,
 			url:      url,
 			path:     resolvedPath,
-			filename: optimisticFilename,
+			filename: displayFilename,
 		}
 	}
 

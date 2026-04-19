@@ -7,6 +7,10 @@ import (
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
 
+func init() {
+	InitializeStatusCache()
+}
+
 func TestStatusRender_ReflectsThemeChanges(t *testing.T) {
 	prev := colors.IsDarkMode()
 	t.Cleanup(func() { colors.SetDarkMode(prev) })
@@ -23,7 +27,7 @@ func TestStatusRender_ReflectsThemeChanges(t *testing.T) {
 }
 
 func TestStatusRenderWithSpinner(t *testing.T) {
-	spinnerFrame := "⠋"
+	spinnerFrame := "\u280b"
 
 	queuedStr := StatusQueued.RenderWithSpinner(spinnerFrame)
 	if !strings.Contains(queuedStr, spinnerFrame+" Queued") {

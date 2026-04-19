@@ -11,7 +11,7 @@ from the `settings.json` file located in the application data directory:
 - **macOS:** `~/Library/Application Support/surge/settings.json`
 - **Linux:** `~/.config/surge/settings.json`
 
-The `settings.json` file expects a nested structure divided into `general`, `network`, and `performance` categories. For example:
+The `settings.json` file expects a nested structure divided into `general`, `network`, `performance`, and `categories` sections. For example:
 
 ```json
 {
@@ -24,6 +24,9 @@ The `settings.json` file expects a nested structure divided into `general`, `net
   },
   "performance": {
     "max_task_retries": 5
+  },
+  "categories": {
+    "category_enabled": true
   }
 }
 ```
@@ -60,6 +63,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `clipboard_monitor`    | bool   | Watch the system clipboard for URLs and prompt to download them.                                   | `true`  |
 | `theme`                | int    | UI Theme (0=Adaptive, 1=Light, 2=Dark).                                                            | `0`     |
 | `log_retention_count`  | int    | Number of recent log files to keep.                                                                | `5`     |
+| `live_speed_graph`     | bool   | Use live speed for graph instead of EMA smoothed speed.                                            | `false` |
 
 ### Connection Settings
 
@@ -67,6 +71,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | :------------------------- | :----- | :---------------------------------------------------------------------------------------------------- | :------ |
 | `max_connections_per_host` | int    | Maximum concurrent connections allowed to a single host (1-64).                                       | `32`    |
 | `max_concurrent_downloads` | int    | Maximum number of downloads running simultaneously (requires restart).                                | `3`     |
+| `max_concurrent_probes`    | int    | Maximum number of simultaneous server probes when many downloads are added at once (1-10). Requires restart. | `3`     |
 | `user_agent`               | string | Custom User-Agent string for HTTP requests. Leave empty for default.                                  | `""`    |
 | `proxy_url`                | string | HTTP/HTTPS proxy URL (e.g., `http://127.0.0.1:8080`). Leave empty to use system settings.             | `""`    |
 | `sequential_download`      | bool   | Download file pieces in strict order (Streaming Mode). Useful for previewing media but may be slower. | `false` |
@@ -82,3 +87,9 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `slow_worker_grace_period` | duration | Time to wait before checking a worker's speed (e.g., `5s`).                  | `5s`    |
 | `stall_timeout`            | duration | Restart workers that haven't received data for this duration (e.g., `3s`).   | `3s`    |
 | `speed_ema_alpha`          | float    | Exponential moving average smoothing factor for speed calculation (0.0-1.0). | `0.3`   |
+
+### Category Settings
+
+| Key                    | Type   | Description                                                                                              | Default |
+| :--------------------- | :----- | :------------------------------------------------------------------------------------------------------- | :------ |
+| `category_enabled`     | bool   | Enable automatic sorting of downloads into subfolders based on file type categories.                     | `false` |

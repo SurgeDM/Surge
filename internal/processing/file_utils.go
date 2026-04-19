@@ -44,11 +44,13 @@ func InferFilenameFromURL(rawURL string) string {
 	query := parsed.Query()
 	if name := strings.TrimSpace(query.Get("filename")); name != "" {
 		if base := strings.TrimSpace(path.Base(name)); isSafeComponent(base) {
+			utils.Debug("Inferred filename from query param 'filename': %s", base)
 			return base
 		}
 	}
 	if name := strings.TrimSpace(query.Get("file")); name != "" {
 		if base := strings.TrimSpace(path.Base(name)); isSafeComponent(base) {
+			utils.Debug("Inferred filename from query param 'file': %s", base)
 			return base
 		}
 	}
@@ -57,6 +59,7 @@ func InferFilenameFromURL(rawURL string) string {
 	if !isSafeComponent(base) {
 		return ""
 	}
+	utils.Debug("Inferred filename from URL path: %s", base)
 	return base
 }
 
@@ -135,11 +138,11 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string, string) b
 // GetCategoryPath applies category routing only while the caller is still using
 // the default destination, so explicit user paths are left untouched.
 func GetCategoryPath(filename, defaultDir string, settings *config.Settings) (string, error) {
-	if settings == nil || !settings.General.CategoryEnabled || filename == "" {
+	if settings == nil || !settings.Categories.CategoryEnabled || filename == "" {
 		return defaultDir, nil
 	}
 
-	cat, err := config.GetCategoryForFile(filename, settings.General.Categories)
+	cat, err := config.GetCategoryForFile(filename, settings.Categories.Categories)
 	if err != nil {
 		return defaultDir, fmt.Errorf("category match error for %s: %w", filename, err)
 	}
@@ -159,8 +162,10 @@ func getBaseFilename(url, candidate string, probe *ProbeResult) string {
 	if candidate != "" {
 		return candidate
 	}
-	if probe != nil && probe.Filename != "" {
-		return probe.Filename
+	if probe != nil {
+		if probe.DetectedFilename != "" {
+			return probe.DetectedFilename
+		}
 	}
 	return InferFilenameFromURL(url)
 }
@@ -171,13 +176,16 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 	filename := getBaseFilename(url, candidateFilename, probe)
 
 	destPath := defaultDir
-	if routeToCategory && settings != nil && settings.General.CategoryEnabled && filename != "" {
+	if routeToCategory && settings != nil && settings.Categories.CategoryEnabled && filename != "" {
 		var err error
 		destPath, err = GetCategoryPath(filename, defaultDir, settings)
 		if err != nil {
 			return "", "", err
 		}
 	}
+
+	// Safety: Truncate early so GetUniqueFilename has room to append a suffix
+	filename = utils.TruncateFilename(filename)
 
 	finalFilename := GetUniqueFilename(destPath, filename, isNameActive)
 	if finalFilename == "" {

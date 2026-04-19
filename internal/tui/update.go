@@ -4,6 +4,8 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/utils"
 
+	"charm.land/lipgloss/v2"
+
 	tea "charm.land/bubbletea/v2"
 )
 
@@ -74,26 +76,55 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Calculate list dimensions
-		// List goes in bottom-left pane
-		availableWidth := msg.Width - 4
-		leftWidth := int(float64(availableWidth) * ListWidthRatio)
-
-		// Calculate list height (total height - header row - margins)
-		topHeight := 9
-		bottomHeight := msg.Height - topHeight - 5
-		if bottomHeight < 10 {
-			bottomHeight = 10
+		if m.state == SettingsState {
+			m.normalizeSettingsSelection()
+			if m.SettingsIsEditing {
+				m.updateSettingsInputWidthForViewport()
+			}
 		}
 
-		m.list.SetSize(leftWidth-2, bottomHeight-4)
+		if m.state == CategoryManagerState {
+			m.normalizeCategoryManagerSelection()
+			if m.catMgrEditing {
+				m.updateCategoryInputWidthsForViewport()
+			}
+		}
+
+		// Sync layout calculations with DashboardLayout to set dimensions correctly
+		layout := CalculateDashboardLayout(msg.Width, msg.Height)
+
+		// Update viewport width and re-wrap content to new bounds
+		logHeight := layout.HeaderHeight - BoxStyle.GetVerticalFrameSize()
+		if logHeight < 1 {
+			logHeight = 1
+		}
+		m.logViewport.SetWidth(layout.LogWidth - BoxStyle.GetHorizontalFrameSize())
+		m.logViewport.SetHeight(logHeight)
+		m.refreshLogViewportContent()
+
+		// Setup download list dimensions
+		listInnerPadding := lipgloss.NewStyle().Padding(1, 2)
+		m.list.SetSize(
+			layout.ListWidth-listInnerPadding.GetHorizontalFrameSize()-BoxStyle.GetHorizontalFrameSize(),
+			layout.ListHeight-layout.TabBarHeight-BoxStyle.GetVerticalFrameSize()-listInnerPadding.GetVerticalFrameSize(),
+		)
 
 		// Update list based on active tab
 		m.UpdateListItems()
+
+		// Update filepicker height (Account for 2 borders, 1 title, 1 path line, 2 padding, 2 help)
+		const pickerChromeHeight = 8
+		_, fpHeight := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
+		m.filepicker.SetHeight(fpHeight - pickerChromeHeight)
+
 		return m, nil
 
 	case notificationTickMsg:
 		// Notification tick is still used but logs don't expire
+		return m, nil
+
+	case extensionTokenFlashFadeMsg:
+		m.ExtensionTokenCopied = false
 		return m, nil
 
 	case UpdateCheckResultMsg:
@@ -165,9 +196,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case FilePickerState:
 			return m.updateFilePicker(msg)
 
-		case HistoryState:
-			return m.updateHistory(msg)
-
 		case DuplicateWarningState:
 			return m.updateDuplicateWarning(msg)
 
@@ -194,6 +222,13 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case CategoryManagerState:
 			return m.updateCategoryManager(msg)
+
+		case HelpModalState:
+			if msg.String() == "esc" {
+				m.state = DashboardState
+				return m, nil
+			}
+			return m, nil
 
 		default:
 			return m, nil

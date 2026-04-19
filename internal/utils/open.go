@@ -71,3 +71,11 @@ func buildOpenCommand(path string) *exec.Cmd {
 		return exec.Command("xdg-open", path)
 	}
 }
+
+// OpenBrowser opens a URL in the system's default web browser.
+func OpenBrowser(url string) error {
+	if url == "" {
+		return fmt.Errorf("url is empty")
+	}
+	return openWithSystem(url)
+}

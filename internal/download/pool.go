@@ -485,6 +485,27 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 func (p *WorkerPool) GracefulShutdown() {
 	p.PauseAll()
 
+	// Discard all queued-but-not-yet-started downloads so that idle workers
+	// do not pick them up and begin downloading after shutdown is initiated.
+	// Workers already guard against this with the p.queued check at loop entry,
+	// so clearing the map here is sufficient; draining taskChan is belt-and-suspenders.
+	p.mu.Lock()
+	for id := range p.queued {
+		delete(p.queued, id)
+	}
+	p.mu.Unlock()
+
+	// Drain taskChan to discard any configs that were already written into the
+	// buffered channel but not yet consumed by a worker.
+drainLoop:
+	for {
+		select {
+		case <-p.taskChan:
+		default:
+			break drainLoop
+		}
+	}
+
 	// Wait for any downloads in "Pausing" state to finish transitioning
 	// This ensures we don't exit while a database write is pending/active
 	ticker := time.NewTicker(gracefulShutdownPausePollInterval)

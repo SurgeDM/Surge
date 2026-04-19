@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 )
@@ -23,10 +24,36 @@ func (m *RootModel) addLogEntry(msg string) {
 		m.logEntries = m.logEntries[len(m.logEntries)-100:]
 	}
 
-	// Update viewport content
-	m.logViewport.SetContent(strings.Join(m.logEntries, "\n"))
+	m.refreshLogViewportContent()
 	// Auto-scroll to bottom
 	m.logViewport.GotoBottom()
+}
+
+// refreshLogViewportContent re-renders log entries with current viewport wrapping.
+func (m *RootModel) refreshLogViewportContent() {
+	width := m.logViewport.Width()
+	if width <= 0 {
+		return
+	}
+
+	// Render each entry at the viewport width so the content fills the pane.
+	// Lines wider than the viewport will be clipped during rendering.
+	wrapStyle := lipgloss.NewStyle().Width(width).Align(lipgloss.Left)
+
+	var wrappedEntries []string
+	for _, entry := range m.logEntries {
+		wrapped := wrapStyle.Render(entry)
+		wrappedEntries = append(wrappedEntries, strings.Split(wrapped, "\n")...)
+	}
+
+	// Bottom-align entries if they don't fill the viewport
+	height := m.logViewport.Height()
+	if height > 0 && len(wrappedEntries) < height {
+		padding := make([]string, height-len(wrappedEntries))
+		wrappedEntries = append(padding, wrappedEntries...)
+	}
+
+	m.logViewport.SetContent(strings.Join(wrappedEntries, "\n"))
 }
 
 // removeDownloadByID removes a download from the in-memory list.
@@ -99,4 +126,13 @@ func (m RootModel) checkForDuplicate(url string) *processing.DuplicateResult {
 		return active
 	}
 	return processing.CheckForDuplicate(url, m.Settings, activeDownloads)
+}
+
+// renderEmptyMessage provides a consistent visual for "no data" states in dashboard panes.
+func renderEmptyMessage(width, height int, message string) string {
+	if width < 1 || height < 1 {
+		return ""
+	}
+	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center,
+		EmptyMessageStyle.Render(message))
 }

@@ -64,7 +64,7 @@ Surge is available on multiple platforms. Choose the method that works best for 
 | **Prebuilt Binary**          | [Download from Releases](https://github.com/SurgeDM/Surge/releases/latest) | Easiest method. Just download and run.       |
 | **Arch Linux (AUR)**         | `yay -S surge`                                                                 | Managed via AUR.                             |
 | **macOS / Linux (Homebrew)** | `brew install SurgeDM/tap/surge`                                      | Recommended for Mac/Linux users.             |
-| **Windows**         | `winget install SurgeDM.surge`<br />or<br />`scoop install surge` | Recommended for Windows users.               |
+| **Windows**         | `winget install surge-downloader.surge`<br />or<br />`scoop install surge` | Recommended for Windows users.               |
 | **Dockerfile**               | [See instructions](#4-server-mode-with-docker-compose)                              | Run Surge in server mode with Docker Compose |
 | **Go Install**               | `go install github.com/SurgeDM/Surge@latest`                          | Requires Go 1.25+                           |
 
@@ -114,6 +114,8 @@ The API is token-protected. Generate/read your token by running:
 ```bash
 surge token
 ```
+
+Alternatively, you can find it in the TUI under **Settings > Extension**.
 
 ### 3. Remote TUI
 
@@ -207,6 +209,9 @@ We would love to see you benchmark Surge on your system!
 
 The Surge extension intercepts browser downloads and sends them straight to your terminal. It communicates with the Surge client on port **1700** by default.
 
+> [!IMPORTANT]
+> An **Auth Token** is required to connect the extension to your Surge server. This can be obtained from the TUI under **Settings > Extension** or by running `surge token`.
+
 ### Chrome / Edge / Brave
 
 1. Download `extension-chrome.zip` from the latest GitHub release.
@@ -215,6 +220,7 @@ The Surge extension intercepts browser downloads and sends them straight to your
 4. Enable **"Developer mode"** in the top right corner.
 5. Click **"Load unpacked"**.
 6. Select the unzipped `extension-chrome` folder.
+7. Click the Surge icon in your browser toolbar and enter your **Auth Token** in the settings.
 
 ### Firefox
 
@@ -224,6 +230,7 @@ The Surge extension intercepts browser downloads and sends them straight to your
    - Navigate to `about:debugging#/runtime/this-firefox`.
    - Click **"Load Temporary Add-on..."**.
    - Select the zip file (or unzip and select `manifest.json`).
+   - Click the Surge icon in your browser toolbar and enter your **Auth Token** in the settings.
 
 ---
 

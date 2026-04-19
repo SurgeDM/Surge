@@ -55,10 +55,10 @@ func (i DownloadItem) Description() string {
 
 	speedInfo := ""
 	if d.Speed > 0 {
-		speedInfo = fmt.Sprintf(" • %.2f MB/s", d.Speed/float64(MB))
+		speedInfo = fmt.Sprintf(" \u2022 %.2f MB/s", d.Speed/float64(MB))
 	}
 
-	return fmt.Sprintf("%s • %.0f%%%s • %s", styledStatus, pct, speedInfo, sizeInfo)
+	return fmt.Sprintf("%s \u2022 %.0f%%%s \u2022 %s", styledStatus, pct, speedInfo, sizeInfo)
 }
 
 func (i DownloadItem) FilterValue() string {
@@ -111,7 +111,7 @@ func newDownloadDelegate() downloadDelegate {
 		selTitleStyle:  selTitle,
 		selDescStyle:   selDesc,
 		prefixNormal:   "  ",
-		prefixSelected: lipgloss.NewStyle().Foreground(colors.NeonPink).Render("▌ "),
+		prefixSelected: lipgloss.NewStyle().Foreground(colors.NeonPink).Render("\u258c "),
 	}
 }
 
@@ -142,20 +142,19 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 		prefix = d.prefixNormal
 	}
 
-	// Truncate title if needed
-	width := m.Width() - 6
-	if width < 20 {
-		width = 20
+	// Truncate title and description if needed
+	// m.Width() is the available space for the list item
+	availableWidth := m.Width() - (components.BorderFrameWidth * 2) // Account for prefix and some padding
+	if availableWidth < 10 {
+		availableWidth = 10
 	}
-	title := i.Title()
-	maxTitleWidth := width - 10
-	if len(title) > maxTitleWidth {
-		title = title[:maxTitleWidth-3] + "..."
-	}
+
+	title := truncateString(i.Title(), availableWidth)
+	description := truncateString(i.Description(), availableWidth)
 
 	// Render lines
 	line1 := prefix + titleStyle.Render(title)
-	line2 := prefix + descStyle.Render(i.Description())
+	line2 := prefix + descStyle.Render(description)
 
 	_, _ = fmt.Fprintf(w, "%s\n%s", line1, line2)
 }
@@ -269,7 +268,7 @@ func (m *RootModel) UpdateListItems() {
 					var newTab int
 					if d.done {
 						newTab = TabDone
-					} else if d.Speed > 0 {
+					} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming) {
 						newTab = TabActive
 					} else {
 						newTab = TabQueued

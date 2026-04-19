@@ -1,33 +1,31 @@
 services:
   surge:
-    image: ghcr.io/SurgeDM/Surge # OR surge:latest if building
+    image: ghcr.io/surgedm/surge # Or build locally with the commented block below.
     #    build:
     #      context: .
     #      dockerfile: Dockerfile
+    #      args:
+    #        SURGE_VERSION: "0.8.0" # Optional. Omit to build from the latest release.
+    #        SURGE_UID: ${UID:-1000}
+    #        SURGE_GID: ${GID:-1000}
     container_name: surge
+    user: "${UID:-1000}:${GID:-1000}"
     ports:
       - "1700:1700"
     volumes:
-      #- ~/docker/volumes/surge/downloads:/downloads # isolation if using in a professional envir
-      #- ~/docker/volumes/surge/config:/root/.surge  # isolation if using in a professional envir
       - ./downloads:/downloads
-      - ./surge-config:/root/.local/state/surge
+      - ./surge-config:/var/lib/surge
     restart: unless-stopped
     environment:
       - TZ=UTC
-    #healthcheck:
-    #  test: ["CMD", "surge", "server", "status"]  # at times during release the conatiner health check can break having manual health check for testing and trouble shooting is nice. 
-    #  interval: 30s
-    #  timeout: 10s
-    #  retries: 3
-    # start_period: 5s
-    deploy:
-      resources:
-        limits:
-          cpus: '0.5'
-          memory: 256M # change to your liking or specs
+    # Resource limits are optional. Uncomment and tune based on your hardware.
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '2.0'
+    #       memory: 1G
     logging:
-      driver: "json-file" # etting this up proper you want to see logs all Terminal based apps should have logs
+      driver: "json-file"
       options:
         max-size: "10m"
         max-file: "3"

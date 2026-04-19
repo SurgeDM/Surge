@@ -27,22 +27,25 @@ type statusInfo struct {
 }
 
 var statusMap = map[DownloadStatus]statusInfo{
-	StatusQueued:      {icon: "⋯", label: "Queued"},
-	StatusDownloading: {icon: "⬇", label: "Downloading"},
-	StatusPaused:      {icon: "⏸", label: "Paused"},
-	StatusComplete:    {icon: "✔", label: "Completed"},
-	StatusError:       {icon: "✖", label: "Error"},
+	StatusQueued:      {icon: "\u22ef", label: "Queued"},
+	StatusDownloading: {icon: "\u2b07", label: "Downloading"},
+	StatusPaused:      {icon: "\u23f8", label: "Paused"},
+	StatusComplete:    {icon: "\u2714", label: "Completed"},
+	StatusError:       {icon: "\u2716", label: "Error"},
 }
 
 var (
 	statusRenderCache  [StatusError + 1][2]string // [status][0:full,1:icon]
 	queuedSpinnerStyle lipgloss.Style
+	statusOnce         sync.Once
 	cacheMu            sync.RWMutex
 )
 
-func init() {
-	rebuildStatusCache()
-	colors.RegisterThemeChangeHook(rebuildStatusCache)
+func InitializeStatusCache() {
+	statusOnce.Do(func() {
+		rebuildStatusCache()
+		colors.RegisterThemeChangeHook(rebuildStatusCache)
+	})
 }
 
 func rebuildStatusCache() {

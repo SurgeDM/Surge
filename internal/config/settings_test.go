@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -28,9 +29,6 @@ func TestDefaultSettings(t *testing.T) {
 		if !settings.General.WarnOnDuplicate {
 			t.Error("WarnOnDuplicate should be true by default")
 		}
-		if settings.General.ExtensionPrompt {
-			t.Error("ExtensionPrompt should be false by default")
-		}
 		if settings.General.AllowRemoteOpenActions {
 			t.Error("AllowRemoteOpenActions should be false by default")
 		}
@@ -51,6 +49,9 @@ func TestDefaultSettings(t *testing.T) {
 		// UserAgent can be empty (means use default)
 		if settings.Network.SequentialDownload {
 			t.Error("SequentialDownload should be false by default")
+		}
+		if settings.Network.DialHedgeCount != 4 {
+			t.Errorf("DialHedgeCount should be 4 by default, got: %d", settings.Network.DialHedgeCount)
 		}
 	})
 
@@ -81,6 +82,22 @@ func TestDefaultSettings(t *testing.T) {
 		}
 		if settings.Performance.SpeedEmaAlpha < 0 || settings.Performance.SpeedEmaAlpha > 1 {
 			t.Errorf("SpeedEmaAlpha should be between 0 and 1, got: %f", settings.Performance.SpeedEmaAlpha)
+		}
+	})
+
+	// Verify Extension settings
+	t.Run("ExtensionSettings", func(t *testing.T) {
+		if !settings.Extension.ExtensionPrompt {
+			t.Error("ExtensionPrompt should be true by default in its new home")
+		}
+		if settings.Extension.ChromeExtensionURL == "" {
+			t.Error("ChromeExtensionURL should not be empty")
+		}
+		if settings.Extension.FirefoxExtensionURL == "" {
+			t.Error("FirefoxExtensionURL should not be empty")
+		}
+		if settings.Extension.InstructionsURL == "" {
+			t.Error("InstructionsURL should not be empty")
 		}
 	})
 }
@@ -137,8 +154,10 @@ func TestSaveAndLoadSettings(t *testing.T) {
 		General: GeneralSettings{
 			DefaultDownloadDir: tmpDir,
 			WarnOnDuplicate:    false,
-			ExtensionPrompt:    true,
 			AutoResume:         true,
+		},
+		Extension: ExtensionSettings{
+			ExtensionPrompt: true,
 		},
 		Network: NetworkSettings{
 			MaxConnectionsPerHost:  16,
@@ -146,6 +165,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 			UserAgent:              "TestAgent/1.0",
 			MinChunkSize:           1 * MB,
 			WorkerBufferSize:       256 * KB,
+			DialHedgeCount:         6,
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        5,
@@ -187,7 +207,7 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	if loaded.General.WarnOnDuplicate != original.General.WarnOnDuplicate {
 		t.Error("WarnOnDuplicate mismatch")
 	}
-	if loaded.General.ExtensionPrompt != original.General.ExtensionPrompt {
+	if loaded.Extension.ExtensionPrompt != original.Extension.ExtensionPrompt {
 		t.Error("ExtensionPrompt mismatch")
 	}
 	if loaded.Network.MaxConcurrentDownloads != original.Network.MaxConcurrentDownloads {
@@ -198,6 +218,9 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	}
 	if loaded.Network.UserAgent != original.Network.UserAgent {
 		t.Error("UserAgent mismatch")
+	}
+	if loaded.Network.DialHedgeCount != original.Network.DialHedgeCount {
+		t.Errorf("DialHedgeCount mismatch: got %d, want %d", loaded.Network.DialHedgeCount, original.Network.DialHedgeCount)
 	}
 	if loaded.Network.MinChunkSize != original.Network.MinChunkSize {
 		t.Error("MinChunkSize mismatch")
@@ -385,6 +408,9 @@ func TestToRuntimeConfig(t *testing.T) {
 	if runtime.WorkerBufferSize != settings.Network.WorkerBufferSize {
 		t.Error("WorkerBufferSize not correctly mapped")
 	}
+	if runtime.DialHedgeCount != settings.Network.DialHedgeCount {
+		t.Error("DialHedgeCount not correctly mapped")
+	}
 	if runtime.MaxTaskRetries != settings.Performance.MaxTaskRetries {
 		t.Error("MaxTaskRetries not correctly mapped")
 	}
@@ -399,6 +425,46 @@ func TestToRuntimeConfig(t *testing.T) {
 	}
 	if runtime.SpeedEmaAlpha != settings.Performance.SpeedEmaAlpha {
 		t.Error("SpeedEmaAlpha not correctly mapped")
+	}
+}
+
+// TestToRuntimeConfig_Exhaustive uses reflection to ensure that EVERY field
+// in the target RuntimeConfig struct is populated by ToRuntimeConfig.
+// This prevents "propagation gaps" when new fields are added to settings.
+func TestToRuntimeConfig_Exhaustive(t *testing.T) {
+	settings := DefaultSettings()
+
+	// Fill ALL network and performance settings with non-zero values
+	settings.Network.MaxConnectionsPerHost = 1
+	settings.Network.MaxConcurrentDownloads = 1
+	settings.Network.MaxConcurrentProbes = 1
+	settings.Network.UserAgent = "f"
+	settings.Network.ProxyURL = "g"
+	settings.Network.CustomDNS = "h"
+	settings.Network.SequentialDownload = true
+	settings.Network.MinChunkSize = 1
+	settings.Network.WorkerBufferSize = 1
+	settings.Network.DialHedgeCount = 1
+
+	settings.Performance.MaxTaskRetries = 1
+	settings.Performance.SlowWorkerThreshold = 0.1
+	settings.Performance.SlowWorkerGracePeriod = 1 * time.Second
+	settings.Performance.StallTimeout = 1 * time.Second
+	settings.Performance.SpeedEmaAlpha = 0.1
+
+	runtime := settings.ToRuntimeConfig()
+
+	v := reflect.ValueOf(*runtime)
+	typeOfS := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldName := typeOfS.Field(i).Name
+
+		// Ensure no field is zero-valued
+		if field.IsZero() {
+			t.Errorf("Field %q is zero in resulting RuntimeConfig. Did you forget to map it in Settings.ToRuntimeConfig?", fieldName)
+		}
 	}
 }
 
@@ -437,6 +503,7 @@ func TestGetSettingsMetadata(t *testing.T) {
 			validTypes := map[string]bool{
 				"string": true, "int": true, "int64": true,
 				"bool": true, "duration": true, "float64": true,
+				"auth_token": true, "link": true,
 			}
 			if !validTypes[setting.Type] {
 				t.Errorf("Category %s, key %s: Invalid type %q", category, setting.Key, setting.Type)
@@ -453,7 +520,7 @@ func TestCategoryOrder(t *testing.T) {
 	}
 
 	// Should have all expected categories
-	expectedCount := 5 // General, Post-Download, Network, Performance, Categories
+	expectedCount := 6 // General, Post-Download, Network, Performance, Categories, Extension
 	if len(order) != expectedCount {
 		t.Errorf("Expected %d categories, got %d", expectedCount, len(order))
 	}
@@ -578,7 +645,7 @@ func TestSaveAndLoadSettings_PreservesEmptyCategories(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 
 	settings := DefaultSettings()
-	settings.General.Categories = []Category{}
+	settings.Categories.Categories = []Category{}
 
 	if err := SaveSettings(settings); err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)
@@ -597,11 +664,11 @@ func TestSaveAndLoadSettings_PreservesEmptyCategories(t *testing.T) {
 		t.Fatalf("LoadSettings failed: %v", err)
 	}
 
-	if loaded.General.Categories == nil {
+	if loaded.Categories.Categories == nil {
 		t.Fatal("expected categories slice to be non-nil after load")
 	}
-	if len(loaded.General.Categories) != 0 {
-		t.Fatalf("expected zero categories after reload, got %d", len(loaded.General.Categories))
+	if len(loaded.Categories.Categories) != 0 {
+		t.Fatalf("expected zero categories after reload, got %d", len(loaded.Categories.Categories))
 	}
 }
 
@@ -612,8 +679,10 @@ func TestSaveAndLoadSettings_RoundTrip(t *testing.T) {
 		General: GeneralSettings{
 			DefaultDownloadDir: "/test/path",
 			WarnOnDuplicate:    false,
-			ExtensionPrompt:    true,
 			AutoResume:         true,
+		},
+		Extension: ExtensionSettings{
+			ExtensionPrompt: true,
 		},
 		Network: NetworkSettings{
 			MaxConnectionsPerHost: 64,
@@ -647,7 +716,7 @@ func TestSaveAndLoadSettings_RoundTrip(t *testing.T) {
 	if loaded.General.WarnOnDuplicate != original.General.WarnOnDuplicate {
 		t.Error("WarnOnDuplicate mismatch")
 	}
-	if loaded.General.ExtensionPrompt != original.General.ExtensionPrompt {
+	if loaded.Extension.ExtensionPrompt != original.Extension.ExtensionPrompt {
 		t.Error("ExtensionPrompt mismatch")
 	}
 

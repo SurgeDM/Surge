@@ -1,0 +1,218 @@
+name: Integration
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "extension/**"
+      - "cmd/**"
+      - "internal/**"
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+  pull_request:
+    paths:
+      - "extension/**"
+      - "cmd/**"
+      - "internal/**"
+      - "**.go"
+      - "go.mod"
+      - "go.sum"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  integration:
+    name: Extension ↔ Surge Backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.0"
+          check-latest: false
+
+      - name: Build Surge binary
+        run: go build -o surge .
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+          cache-dependency-path: extension/package-lock.json
+
+      - name: Install extension dependencies
+        working-directory: extension
+        run: npm ci
+
+      - name: Build extension (Chrome)
+        working-directory: extension
+        run: npm run build -- -b chrome
+
+      - name: Build extension (Firefox)
+        working-directory: extension
+        run: npm run build -- -b firefox
+
+      - name: Start Surge server and test extension API
+        run: |
+          export SURGE_TOKEN=test-integration-token
+          XDG_RUNTIME_DIR=$(mktemp -d)
+          XDG_CONFIG_HOME=$(mktemp -d)
+          mkdir -p "$XDG_CONFIG_HOME/surge"
+          mkdir -p "$XDG_RUNTIME_DIR"
+
+          echo '{"general":{"default_download_dir":"'"$HOME"'/Downloads"}}' > "$XDG_CONFIG_HOME/surge/settings.json"
+
+          ./surge server --token test-integration-token &
+          SURGE_PID=$!
+          cleanup() {
+            kill $SURGE_PID 2>/dev/null || true
+            rm -rf "$XDG_RUNTIME_DIR" "$XDG_CONFIG_HOME"
+          }
+          trap cleanup EXIT
+
+          for i in $(seq 1 20); do
+            if curl -sf http://127.0.0.1:1700/health > /dev/null 2>&1; then
+              echo "Surge server started on port 1700"
+              break
+            fi
+            if [ "$i" -eq 20 ]; then
+              echo "Surge server failed to start"
+              exit 1
+            fi
+            sleep 0.5
+          done
+
+          # 1. Health endpoint (extension discovery)
+          echo "--- Testing /health ---"
+          HEALTH=$(curl -sf http://127.0.0.1:1700/health)
+          echo "$HEALTH" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['status']=='ok', 'health check failed'"
+          echo "PASS: /health"
+
+          # 2. Auth rejection without token
+          echo "--- Testing auth enforcement ---"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://127.0.0.1:1700/list || true)
+          if [ "$STATUS" != "401" ]; then
+            echo "FAIL: Expected 401 without auth, got $STATUS"
+            exit 1
+          fi
+          echo "PASS: auth enforcement"
+
+          # 3. Auth acceptance with Bearer token
+          echo "--- Testing Bearer auth ---"
+          STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer test-integration-token" \
+            http://127.0.0.1:1700/list || true)
+          if [ "$STATUS" != "200" ]; then
+            echo "FAIL: Expected 200 with auth, got $STATUS"
+            exit 1
+          fi
+          echo "PASS: Bearer auth"
+
+          # 4. CORS headers (extension cross-origin fetch)
+          echo "--- Testing CORS headers ---"
+          RESP_HEADERS=$(curl -si http://127.0.0.1:1700/health)
+          echo "$RESP_HEADERS" | grep -qi "Access-Control-Allow-Origin: \*" || {
+            echo "FAIL: Missing CORS headers"
+            echo "$RESP_HEADERS"
+            exit 1
+          }
+          echo "PASS: CORS headers"
+
+          # 5. Download request from extension (POST /download)
+          echo "--- Testing download endpoint ---"
+          PYTHON_HTTP_PID=""
+          cleanup_http() {
+            kill $PYTHON_HTTP_PID 2>/dev/null || true
+          }
+          trap 'cleanup; cleanup_http' EXIT
+          echo "test-download-content" > /tmp/surge-test-file.txt
+          python3 -m http.server 18000 --directory /tmp &
+          PYTHON_HTTP_PID=$!
+          sleep 0.5
+
+          RESULT=$(curl -sf -X POST http://127.0.0.1:1700/download \
+            -H "Authorization: Bearer test-integration-token" \
+            -H "Content-Type: application/json" \
+            -d '{"url":"http://127.0.0.1:18000/surge-test-file.txt","skip_approval":true}')
+
+          echo "$RESULT" | python3 -c "import sys,json; d=json.load(sys.stdin); assert d['status']=='queued', f\"download not queued: {d}\""
+          echo "PASS: download endpoint accepts extension request"
+
+          # 6. CORS preflight (browser extension preflight)
+          echo "--- Testing CORS preflight ---"
+          PREFLIGHT_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X OPTIONS \
+            -H "Origin: chrome-extension://test" \
+            -H "Access-Control-Request-Method: POST" \
+            -H "Access-Control-Request-Headers: Content-Type, Authorization" \
+            http://127.0.0.1:1700/download || true)
+          if [ "$PREFLIGHT_STATUS" != "200" ]; then
+            echo "FAIL: Expected 200 for CORS preflight, got $PREFLIGHT_STATUS"
+            exit 1
+          fi
+          echo "PASS: CORS preflight"
+
+          # 7. Download status query (nonexistent ID)
+          echo "--- Testing download status endpoint ---"
+          STATUS_RESULT=$(curl -s -o /dev/null -w "%{http_code}" \
+            -H "Authorization: Bearer test-integration-token" \
+            "http://127.0.0.1:1700/download?id=nonexistent" || true)
+          if [ "$STATUS_RESULT" != "404" ]; then
+            echo "FAIL: Expected 404 for nonexistent ID, got $STATUS_RESULT"
+            exit 1
+          fi
+          echo "PASS: download status endpoint"
+
+          # 8. Invalid JSON
+          echo "--- Testing input validation ---"
+          BAD_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer test-integration-token" \
+            -H "Content-Type: application/json" \
+            -d 'not-json' \
+            http://127.0.0.1:1700/download || true)
+          if [ "$BAD_STATUS" != "400" ]; then
+            echo "FAIL: Expected 400 for invalid JSON, got $BAD_STATUS"
+            exit 1
+          fi
+          echo "PASS: input validation"
+
+          # 9. Missing URL
+          EMPTY_URL_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer test-integration-token" \
+            -H "Content-Type: application/json" \
+            -d '{"filename":"test.txt"}' \
+            http://127.0.0.1:1700/download || true)
+          if [ "$EMPTY_URL_STATUS" != "400" ]; then
+            echo "FAIL: Expected 400 for missing url, got $EMPTY_URL_STATUS"
+            exit 1
+          fi
+          echo "PASS: missing URL validation"
+
+          # 10. Path traversal
+          TRAVERSE_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            -X POST \
+            -H "Authorization: Bearer test-integration-token" \
+            -H "Content-Type: application/json" \
+            -d '{"url":"http://example.com/f","path":"../etc"}' \
+            http://127.0.0.1:1700/download || true)
+          if [ "$TRAVERSE_STATUS" != "400" ]; then
+            echo "FAIL: Expected 400 for path traversal, got $TRAVERSE_STATUS"
+            exit 1
+          fi
+          echo "PASS: path traversal prevention"
+
+          echo ""
+          echo "=== All integration tests passed ==="

@@ -6,39 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
-	"github.com/SurgeDM/Surge/internal/engine/state"
 )
-
-func (m RootModel) updateHistory(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if key.Matches(msg, m.keys.History.Close) {
-		m.state = DashboardState
-		return m, nil
-	}
-	if key.Matches(msg, m.keys.History.Up) {
-		if m.historyCursor > 0 {
-			m.historyCursor--
-		}
-		return m, nil
-	}
-	if key.Matches(msg, m.keys.History.Down) {
-		if m.historyCursor < len(m.historyEntries)-1 {
-			m.historyCursor++
-		}
-		return m, nil
-	}
-	if key.Matches(msg, m.keys.History.Delete) {
-		if m.historyCursor >= 0 && m.historyCursor < len(m.historyEntries) {
-			entry := m.historyEntries[m.historyCursor]
-			_ = state.RemoveFromMasterList(entry.ID)
-			m.historyEntries, _ = state.LoadCompletedDownloads()
-			if m.historyCursor >= len(m.historyEntries) && m.historyCursor > 0 {
-				m.historyCursor--
-			}
-		}
-		return m, nil
-	}
-	return m, nil
-}
 
 func (m RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Duplicate.Continue) {
@@ -128,9 +96,9 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		}
 
 		if skipped > 0 {
-			m.addLogEntry(LogStyleStarted.Render(fmt.Sprintf("⬇ Added %d downloads from batch (%d duplicates skipped)", added, skipped)))
+			m.addLogEntry(LogStyleStarted.Render(fmt.Sprintf("\u2b07 Added %d downloads from batch (%d duplicates skipped)", added, skipped)))
 		} else {
-			m.addLogEntry(LogStyleStarted.Render(fmt.Sprintf("⬇ Added %d downloads from batch", added)))
+			m.addLogEntry(LogStyleStarted.Render(fmt.Sprintf("\u2b07 Added %d downloads from batch", added)))
 		}
 		m.pendingBatchURLs = nil
 		m.batchFilePath = ""
@@ -159,9 +127,9 @@ func (m RootModel) updateURLUpdate(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if newURL != "" {
 			if d := m.GetSelectedDownload(); d != nil {
 				if err := m.Service.UpdateURL(d.ID, newURL); err != nil {
-					m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to update URL: %s", err.Error())))
+					m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Failed to update URL: %s", err.Error())))
 				} else {
-					m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("✔ URL Updated: %s", d.Filename)))
+					m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 URL Updated: %s", d.Filename)))
 					d.URL = newURL
 				}
 			}
