@@ -259,6 +259,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	fp.ShowSize = true
 	fp.ShowPermissions = true
 	fp.SetHeight(FilePickerHeight)
+	applyFilepickerTheme(&fp)
 
 	// Load settings for auto resume
 	settings, _ := config.LoadSettings()
@@ -582,6 +583,8 @@ func newFilepicker(currentDir string) filepicker.Model {
 	// Keep ESC reserved for dismissing the modal; use left/backspace/h to go up.
 	fp.KeyMap.Back = key.NewBinding(key.WithKeys("h", "backspace", "left"))
 
+	applyFilepickerTheme(&fp)
+
 	return fp
 }
 
@@ -611,6 +614,7 @@ func (m *RootModel) refreshThemeCaches() {
 	m.help.Styles.FullKey = lipgloss.NewStyle().Foreground(colors.Pink())
 	m.help.Styles.FullDesc = lipgloss.NewStyle().Foreground(colors.LightGray())
 	applyListTheme(&m.list)
+	applyFilepickerTheme(&m.filepicker)
 	m.logoCache = ""
 	// Rebuild progress bar colors for all existing downloads so the gradient
 	// matches the newly loaded palette rather than the one active at creation time.
@@ -621,4 +625,21 @@ func (m *RootModel) refreshThemeCaches() {
 			progress.WithScaled(true),
 		)
 	}
+}
+
+func applyFilepickerTheme(fp *filepicker.Model) {
+	if fp == nil {
+		return
+	}
+
+	fp.Styles.Cursor = lipgloss.NewStyle().Foreground(colors.Pink())
+	fp.Styles.Symlink = lipgloss.NewStyle().Foreground(colors.Cyan())
+	fp.Styles.Directory = lipgloss.NewStyle().Foreground(colors.Blue())
+	fp.Styles.File = lipgloss.NewStyle().Foreground(colors.White())
+	fp.Styles.DisabledFile = lipgloss.NewStyle().Foreground(colors.Gray())
+	fp.Styles.Permission = lipgloss.NewStyle().Foreground(colors.Gray())
+	fp.Styles.Selected = lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true)
+	fp.Styles.DisabledSelected = lipgloss.NewStyle().Foreground(colors.LightGray())
+	fp.Styles.FileSize = lipgloss.NewStyle().Foreground(colors.Gray()).Width(7).Align(lipgloss.Right)
+	fp.Styles.EmptyDirectory = lipgloss.NewStyle().Foreground(colors.Gray()).Padding(0, 2)
 }
