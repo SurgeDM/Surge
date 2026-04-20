@@ -31,7 +31,7 @@ type Palette struct {
 		White   string `toml:"white"`
 	} `toml:"normal"`
 	Bright struct {
-		Black   string `toml:"black"`   // → LightGray()
+		Black   string `toml:"black"`   // unused by accessors (reserved for future use)
 		Red     string `toml:"red"`     // → Pink(), ProgressStart()
 		Green   string `toml:"green"`   // unused by accessors (reserved for future use)
 		Yellow  string `toml:"yellow"`  // unused by accessors (reserved for future use)
@@ -126,8 +126,10 @@ func init() {
 // resolveThemePath resolves a theme name or path in the following priority order:
 //  1. path + ".toml" if it exists on disk (bare name shorthand)
 //  2. path as-is if it exists on disk
-//  3. $XDG_CONFIG_HOME/surge/themes/path (bare name in XDG themes dir)
-//  4. $XDG_CONFIG_HOME/surge/themes/path + ".toml"
+//  3. ./themes/path (local development themes)
+//  4. ./themes/path + ".toml"
+//  5. $XDG_CONFIG_HOME/surge/themes/path (bare name in XDG themes dir)
+//  6. $XDG_CONFIG_HOME/surge/themes/path + ".toml"
 //
 // "~" at the start is expanded to the user's home directory before any lookup.
 func resolveThemePath(path string) string {
@@ -259,13 +261,17 @@ func blendHex(fg, bg string, ratio float64) string {
 	if len(fgStr) != 6 || len(bgStr) != 6 {
 		return "#888888" // Fallback
 	}
-	r1, _ := strconv.ParseInt(fgStr[0:2], 16, 32)
-	g1, _ := strconv.ParseInt(fgStr[2:4], 16, 32)
-	b1, _ := strconv.ParseInt(fgStr[4:6], 16, 32)
+	r1, err1 := strconv.ParseInt(fgStr[0:2], 16, 32)
+	g1, err2 := strconv.ParseInt(fgStr[2:4], 16, 32)
+	b1, err3 := strconv.ParseInt(fgStr[4:6], 16, 32)
 
-	r2, _ := strconv.ParseInt(bgStr[0:2], 16, 32)
-	g2, _ := strconv.ParseInt(bgStr[2:4], 16, 32)
-	b2, _ := strconv.ParseInt(bgStr[4:6], 16, 32)
+	r2, err4 := strconv.ParseInt(bgStr[0:2], 16, 32)
+	g2, err5 := strconv.ParseInt(bgStr[2:4], 16, 32)
+	b2, err6 := strconv.ParseInt(bgStr[4:6], 16, 32)
+
+	if err1 != nil || err2 != nil || err3 != nil || err4 != nil || err5 != nil || err6 != nil {
+		return "#888888" // Fallback on parse error (invalid hex chars)
+	}
 
 	r := int(float64(r1)*ratio + float64(r2)*(1-ratio))
 	g := int(float64(g1)*ratio + float64(g2)*(1-ratio))

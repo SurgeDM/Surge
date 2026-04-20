@@ -6,8 +6,9 @@ Surge features a powerful palette-based theme engine that allows you to customiz
 
 Surge looks for themes in the following order:
 
-1.  **Direct Path**: If you provide a full path to a `.toml` file in your settings.
-2.  **Surge Themes Directory**: If you provide a name (e.g., `dracula`), Surge looks for `dracula.toml` in:
+1.  **Direct Path / Working Directory**: If you provide a full path or a filename in your current directory (including autocomplete results).
+2.  **Local `themes/` Folder**: Surge looks for themes in a `themes/` directory relative to where it is running (useful for bundled themes).
+3.  **Global Surge Themes**: Surge then checks for themes in your user configuration directory:
     *   **Linux**: `~/.config/surge/themes/`
     *   **macOS**: `~/Library/Application Support/surge/themes/`
     *   **Windows**: `%APPDATA%\surge\themes\`
