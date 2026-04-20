@@ -254,10 +254,19 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 		defer func() { mgr.probeSem <- struct{}{} }()
 	}
 
-	probe, err := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
-	if err != nil {
-		utils.Debug("Lifecycle: Probe failed: %v\n", err)
-		return "", "", fmt.Errorf("probe failed: %w", err)
+	probe, probeErr := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
+	if probeErr != nil {
+		utils.Debug("Lifecycle: Probe failed: %v — enqueueing with zero metadata (sequential fallback)\n", probeErr)
+		// Probe failures are non-fatal: the server may block probe requests but
+		// still serve the actual download (e.g. Overleaf returning 403 on a
+		// Range probe while the authenticated download flow succeeds). Fall back
+		// to a zero-value ProbeResult so the engine uses the single-threaded
+		// downloader instead of rejecting the request entirely.
+		probe = &ProbeResult{}
+		if req.Filename != "" {
+			probe.Filename = req.Filename
+			probe.DetectedFilename = req.Filename
+		}
 	}
 
 	isNameActive := mgr.buildIsNameActive()
