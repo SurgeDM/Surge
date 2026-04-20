@@ -166,15 +166,8 @@ func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
 
 // Helper functions (duplicated from cmd/startup_test.go because packages differ)
 func setupTestEnv(t *testing.T, tmpDir string) {
-	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	t.Cleanup(func() {
-		if originalXDG == "" {
-			_ = os.Unsetenv("XDG_CONFIG_HOME")
-		} else {
-			_ = os.Setenv("XDG_CONFIG_HOME", originalXDG)
-		}
-	})
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 
 	surgeDir := config.GetSurgeDir()
 	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
