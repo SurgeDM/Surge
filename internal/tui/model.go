@@ -582,16 +582,16 @@ func (m *RootModel) ApplyTheme(mode int, path string) {
 }
 
 func applyColorModeForTheme(mode int, themePath string, initialDarkBackground bool) {
-    isDark := initialDarkBackground
+	isDark := initialDarkBackground
 
-    switch mode {
-    case config.ThemeLight:
-        isDark = false
-    case config.ThemeDark:
-        isDark = true
-    }
+	switch mode {
+	case config.ThemeLight:
+		isDark = false
+	case config.ThemeDark:
+		isDark = true
+	}
 
-    colors.LoadTheme(themePath, isDark)
+	colors.LoadTheme(themePath, isDark)
 }
 
 func (m *RootModel) refreshThemeCaches() {

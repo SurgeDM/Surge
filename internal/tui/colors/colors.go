@@ -2,17 +2,17 @@ package colors
 
 import (
 	"image/color"
-	"strings"
-	"path/filepath"
-	"sync"
 	"os"
+	"path/filepath"
+	"strings"
+	"sync"
 
 	"charm.land/lipgloss/v2"
 	"github.com/BurntSushi/toml"
 )
 
 type Palette struct {
-	Name string `toml:"name"`
+	Name    string `toml:"name"`
 	Primary struct {
 		Background string `toml:"background"`
 		Foreground string `toml:"foreground"`
@@ -40,20 +40,20 @@ type Palette struct {
 }
 
 type ThemeConfig struct {
-    IsDark bool `toml:"is_dark"`
-    Colors struct {
-        Dark  *Palette `toml:"dark"`  // [colors.dark]
-        Light *Palette `toml:"light"` // [colors.light]
-        *Palette                      // embedded for single [colors] files
-    } `toml:"colors"`
+	IsDark bool `toml:"is_dark"`
+	Colors struct {
+		Dark     *Palette `toml:"dark"`  // [colors.dark]
+		Light    *Palette `toml:"light"` // [colors.light]
+		*Palette          // embedded for single [colors] files
+	} `toml:"colors"`
 }
 
 var (
 	currentPalette *Palette
-	isDarkMode bool
-	modeMu   sync.RWMutex
-	hooks    []func()
-	hookMu   sync.RWMutex
+	isDarkMode     bool
+	modeMu         sync.RWMutex
+	hooks          []func()
+	hookMu         sync.RWMutex
 )
 
 var defaultDark = Palette{
@@ -199,27 +199,27 @@ func triggerHooks() {
 }
 
 func palette() *Palette {
-    modeMu.RLock()
-    p := currentPalette
-    modeMu.RUnlock()
-    return p
+	modeMu.RLock()
+	p := currentPalette
+	modeMu.RUnlock()
+	return p
 }
 
 func Background() color.Color { return lipgloss.Color(palette().Primary.Background) }
 func Foreground() color.Color { return lipgloss.Color(palette().Primary.Foreground) }
 
 // Semantic Mappings
-func White() color.Color { return lipgloss.Color(palette().Normal.White) }
-func Gray() color.Color { return lipgloss.Color(palette().Normal.Black) }
-func Red() color.Color  { return lipgloss.Color(palette().Normal.Red) }
-func Pink() color.Color  { return lipgloss.Color(palette().Bright.Red) }
-func Green() color.Color { return lipgloss.Color(palette().Normal.Green) }
-func Orange() color.Color { return lipgloss.Color(palette().Normal.Yellow) }
-func Blue() color.Color { return lipgloss.Color(palette().Normal.Blue) }
-func Magenta() color.Color { return lipgloss.Color(palette().Normal.Magenta) }
-func Cyan() color.Color { return lipgloss.Color(palette().Normal.Cyan) }
+func White() color.Color     { return lipgloss.Color(palette().Normal.White) }
+func Gray() color.Color      { return lipgloss.Color(palette().Normal.Black) }
+func Red() color.Color       { return lipgloss.Color(palette().Normal.Red) }
+func Pink() color.Color      { return lipgloss.Color(palette().Bright.Red) }
+func Green() color.Color     { return lipgloss.Color(palette().Normal.Green) }
+func Orange() color.Color    { return lipgloss.Color(palette().Normal.Yellow) }
+func Blue() color.Color      { return lipgloss.Color(palette().Normal.Blue) }
+func Magenta() color.Color   { return lipgloss.Color(palette().Normal.Magenta) }
+func Cyan() color.Color      { return lipgloss.Color(palette().Normal.Cyan) }
 func LightGray() color.Color { return lipgloss.Color(palette().Bright.Black) }
-func DarkGray() color.Color { return lipgloss.Color(palette().Bright.Black) }
+func DarkGray() color.Color  { return lipgloss.Color(palette().Bright.Black) }
 
 // State Mappings
 func StateError() color.Color       { return Red() }

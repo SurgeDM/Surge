@@ -28,11 +28,11 @@ type GeneralSettings struct {
 	AutoResume                   bool   `json:"auto_resume" ui_label:"Auto Resume" ui_desc:"Automatically resume paused downloads on startup."`
 	SkipUpdateCheck              bool   `json:"skip_update_check" ui_label:"Skip Update Check" ui_desc:"Disable automatic check for new versions on startup."`
 
-	ClipboardMonitor  bool `json:"clipboard_monitor" ui_label:"Clipboard Monitor" ui_desc:"Watch clipboard for URLs and prompt to download them."`
-	Theme             int  `json:"theme" ui_label:"App Theme" ui_desc:"UI Theme (System, Light, Dark)."`
+	ClipboardMonitor  bool   `json:"clipboard_monitor" ui_label:"Clipboard Monitor" ui_desc:"Watch clipboard for URLs and prompt to download them."`
+	Theme             int    `json:"theme" ui_label:"App Theme" ui_desc:"UI Theme (System, Light, Dark)."`
 	ThemePath         string `json:"theme_path" ui_label:"Theme File" ui_desc:"Path to a custom .toml color scheme."`
-	LogRetentionCount int  `json:"log_retention_count" ui_label:"Log Retention Count" ui_desc:"Number of recent log files to keep."`
-	LiveSpeedGraph    bool `json:"live_speed_graph" ui_label:"Live Speed Graph" ui_desc:"Use live speed for graph instead of EMA smoothed speed."`
+	LogRetentionCount int    `json:"log_retention_count" ui_label:"Log Retention Count" ui_desc:"Number of recent log files to keep."`
+	LiveSpeedGraph    bool   `json:"live_speed_graph" ui_label:"Live Speed Graph" ui_desc:"Use live speed for graph instead of EMA smoothed speed."`
 }
 
 const (
@@ -207,7 +207,7 @@ func DefaultSettings() *Settings {
 
 			ClipboardMonitor:  true,
 			Theme:             ThemeAdaptive,
-			ThemePath: "",
+			ThemePath:         "",
 			LogRetentionCount: 5,
 			LiveSpeedGraph:    false,
 		},

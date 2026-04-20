@@ -197,7 +197,7 @@ func (m ChunkMapModel) View() string {
 
 	// Styles
 	pendingStyle := lipgloss.NewStyle().Foreground(colors.DarkGray())           // Dark gray
-	downloadingStyle := lipgloss.NewStyle().Foreground(colors.Pink())       // Neon Pink
+	downloadingStyle := lipgloss.NewStyle().Foreground(colors.Pink())           // Neon Pink
 	pausedStyle := lipgloss.NewStyle().Foreground(colors.StatePaused())         // Yellow/Gold for paused Partial
 	completedStyle := lipgloss.NewStyle().Foreground(colors.StateDownloading()) // Neon Green / Cyan
 
