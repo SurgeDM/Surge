@@ -118,7 +118,7 @@ func GetThemesDir() string {
 
 // EnsureDirs creates all required directories
 func EnsureDirs() error {
-	dirs := []string{GetSurgeDir(), GetStateDir(), GetRuntimeDir(), GetLogsDir()}
+	dirs := []string{GetSurgeDir(), GetStateDir(), GetRuntimeDir(), GetLogsDir(), GetThemesDir()}
 	for _, dir := range dirs {
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			return err

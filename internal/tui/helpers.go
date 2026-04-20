@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 )
@@ -108,12 +109,17 @@ func (m *RootModel) handleFilePickerSelection(path string) (tea.Model, tea.Cmd) 
 }
 
 func (m *RootModel) handleFilePickerGotoHome() tea.Cmd {
-	defaultDir := m.Settings.General.DefaultDownloadDir
-	if defaultDir == "" {
-		homeDir, _ := os.UserHomeDir()
-		defaultDir = filepath.Join(homeDir, "Downloads")
+	var targetDir string
+	if m.filepickerOrigin == FilePickerOriginTheme {
+		targetDir = config.GetThemesDir()
+	} else {
+		targetDir = m.Settings.General.DefaultDownloadDir
+		if targetDir == "" {
+			homeDir, _ := os.UserHomeDir()
+			targetDir = filepath.Join(homeDir, "Downloads")
+		}
 	}
-	m.filepicker = newFilepicker(defaultDir)
+	m.filepicker = newFilepicker(targetDir)
 	return m.filepicker.Init()
 }
 

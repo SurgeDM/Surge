@@ -1,9 +1,11 @@
 package colors
 
 import (
+	"fmt"
 	"image/color"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -245,13 +247,38 @@ func Pink() color.Color {
 	}
 	return lipgloss.Color(palette().Bright.Red)
 }
-func Green() color.Color     { return lipgloss.Color(palette().Normal.Green) }
-func Orange() color.Color    { return lipgloss.Color(palette().Normal.Yellow) }
-func Blue() color.Color      { return lipgloss.Color(palette().Normal.Blue) }
-func Magenta() color.Color   { return lipgloss.Color(palette().Normal.Magenta) }
-func Cyan() color.Color      { return lipgloss.Color(palette().Normal.Cyan) }
-func LightGray() color.Color { return lipgloss.Color(palette().Bright.Black) }
-func DarkGray() color.Color  { return lipgloss.Color(palette().Primary.Background) }
+func Green() color.Color   { return lipgloss.Color(palette().Normal.Green) }
+func Orange() color.Color  { return lipgloss.Color(palette().Normal.Yellow) }
+func Blue() color.Color    { return lipgloss.Color(palette().Normal.Blue) }
+func Magenta() color.Color { return lipgloss.Color(palette().Normal.Magenta) }
+func Cyan() color.Color    { return lipgloss.Color(palette().Normal.Cyan) }
+
+func blendHex(fg, bg string, ratio float64) string {
+	fgStr := strings.TrimPrefix(fg, "#")
+	bgStr := strings.TrimPrefix(bg, "#")
+	if len(fgStr) != 6 || len(bgStr) != 6 {
+		return "#888888" // Fallback
+	}
+	r1, _ := strconv.ParseInt(fgStr[0:2], 16, 32)
+	g1, _ := strconv.ParseInt(fgStr[2:4], 16, 32)
+	b1, _ := strconv.ParseInt(fgStr[4:6], 16, 32)
+
+	r2, _ := strconv.ParseInt(bgStr[0:2], 16, 32)
+	g2, _ := strconv.ParseInt(bgStr[2:4], 16, 32)
+	b2, _ := strconv.ParseInt(bgStr[4:6], 16, 32)
+
+	r := int(float64(r1)*ratio + float64(r2)*(1-ratio))
+	g := int(float64(g1)*ratio + float64(g2)*(1-ratio))
+	b := int(float64(b1)*ratio + float64(b2)*(1-ratio))
+
+	return fmt.Sprintf("#%02x%02x%02x", r, g, b)
+}
+
+func LightGray() color.Color {
+	return lipgloss.Color(blendHex(palette().Primary.Foreground, palette().Primary.Background, 0.55))
+}
+
+func DarkGray() color.Color { return lipgloss.Color(palette().Primary.Background) }
 
 // State Mappings
 func StateError() color.Color       { return Red() }
