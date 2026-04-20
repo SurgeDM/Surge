@@ -3,6 +3,8 @@ package colors
 import (
 	"fmt"
 	"image/color"
+	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 )
@@ -76,4 +78,53 @@ func TestSetDarkMode_ConcurrentAccess(t *testing.T) {
 	}
 
 	wg.Wait()
+}
+
+func TestLoadTheme_SingleScheme(t *testing.T) {
+	prevPath := lastThemePath
+	prevMode := IsDarkMode()
+	t.Cleanup(func() { LoadTheme(prevPath, prevMode) })
+
+	tmpDir := t.TempDir()
+	themePath := filepath.Join(tmpDir, "test-theme.toml")
+
+	content := `
+[colors]
+name = "Test Theme"
+[colors.primary]
+background = "#123456"
+foreground = "#654321"
+
+[colors.normal]
+black = "#000001"
+red = "#000002"
+green = "#000003"
+yellow = "#000004"
+blue = "#000005"
+magenta = "#000006"
+cyan = "#000007"
+white = "#000008"
+
+[colors.bright]
+black = "#000009"
+red = "#00000a"
+green = "#00000b"
+yellow = "#00000c"
+blue = "#00000d"
+magenta = "#00000e"
+cyan = "#00000f"
+white = "#000010"
+`
+	if err := os.WriteFile(themePath, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write test theme: %v", err)
+	}
+
+	LoadTheme(themePath, true)
+
+	if got := colorHex(Background()); got != "#123456" {
+		t.Errorf("Background() = %q, want #123456", got)
+	}
+	if got := colorHex(Pink()); got != "#00000a" {
+		t.Errorf("Pink() = %q, want #00000a (bright red)", got)
+	}
 }

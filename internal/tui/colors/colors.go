@@ -37,14 +37,13 @@ type Palette struct {
 		Cyan    string `toml:"cyan"`    // unused by accessors (reserved for future use)
 		White   string `toml:"white"`   // unused by accessors (reserved for future use)
 	} `toml:"bright"`
+
+	Dark  *Palette `toml:"dark"`
+	Light *Palette `toml:"light"`
 }
 
 type ThemeConfig struct {
-	Colors struct {
-		Dark     *Palette `toml:"dark"`  // [colors.dark]
-		Light    *Palette `toml:"light"` // [colors.light]
-		*Palette          // embedded for single [colors] files
-	} `toml:"colors"`
+	Colors *Palette `toml:"colors"`
 }
 
 var (
@@ -182,15 +181,14 @@ func LoadTheme(path string, darkPreferred bool) {
 		if data, err := os.ReadFile(resolvedPath); err == nil {
 			var cfg ThemeConfig
 			if err := toml.Unmarshal(data, &cfg); err == nil {
-				// 1. Priority: Specific [colors.dark] or [colors.light] blocks
-				if darkPreferred && cfg.Colors.Dark != nil {
-					newPalette = cfg.Colors.Dark
-				} else if !darkPreferred && cfg.Colors.Light != nil {
-					newPalette = cfg.Colors.Light
-				} else if cfg.Colors.Palette != nil {
-					// 2. Fallback: The embedded [colors] block for single-scheme files
-					// Note: With embedding, we check if the pointer inside the struct is non-nil
-					newPalette = cfg.Colors.Palette
+				if cfg.Colors != nil {
+					if darkPreferred && cfg.Colors.Dark != nil {
+						newPalette = cfg.Colors.Dark
+					} else if !darkPreferred && cfg.Colors.Light != nil {
+						newPalette = cfg.Colors.Light
+					} else {
+						newPalette = cfg.Colors
+					}
 				}
 			}
 		}
