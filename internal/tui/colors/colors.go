@@ -40,7 +40,6 @@ type Palette struct {
 }
 
 type ThemeConfig struct {
-	IsDark bool `toml:"is_dark"`
 	Colors struct {
 		Dark     *Palette `toml:"dark"`  // [colors.dark]
 		Light    *Palette `toml:"light"` // [colors.light]
@@ -147,6 +146,10 @@ func resolveThemePath(path string) string {
 		xdgPath := filepath.Join(configDir, "surge", "themes", path)
 		if _, err := os.Stat(xdgPath); err == nil {
 			return xdgPath
+		}
+		xdgPathWithExt := xdgPath + ".toml"
+		if _, err := os.Stat(xdgPathWithExt); err == nil {
+			return xdgPathWithExt
 		}
 	}
 

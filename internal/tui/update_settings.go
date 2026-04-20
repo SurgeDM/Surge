@@ -83,14 +83,15 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Open file browser for default_download_dir or theme_path
 	if key.Matches(msg, m.keys.Settings.Browse) {
 		settingKey := m.getCurrentSettingKey()
-		if settingKey == "default_download_dir" {
+		switch settingKey {
+		case "default_download_dir":
 			originalPath := m.Settings.General.DefaultDownloadDir
 			browseDir := originalPath
 			if browseDir == "" {
 				browseDir = m.PWD
 			}
 			return m, m.openDirectoryPicker(FilePickerOriginSettings, originalPath, browseDir)
-		} else if settingKey == "theme_path" {
+		case "theme_path":
 			originalPath := m.Settings.General.ThemePath
 			browseDir := originalPath
 			if browseDir == "" {
