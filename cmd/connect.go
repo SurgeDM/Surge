@@ -65,12 +65,17 @@ func connectAndRunTUI(cmd *cobra.Command, target string) error {
 	fmt.Printf("Connecting to %s...\n", parsed.BaseURL)
 
 	service := core.NewRemoteDownloadService(parsed.BaseURL, token)
+	defer func() { _ = service.Shutdown() }()
+
 	_, err = service.List()
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
-	stream, cleanup, err := service.StreamEvents(context.Background())
+	streamCtx, cancelStream := context.WithCancel(context.Background())
+	defer cancelStream()
+
+	stream, cleanup, err := service.StreamEvents(streamCtx)
 	if err != nil {
 		return fmt.Errorf("failed to start event stream: %w", err)
 	}

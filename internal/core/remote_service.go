@@ -239,9 +239,13 @@ func (s *RemoteDownloadService) StreamEvents(ctx context.Context) (<-chan interf
 	if ctx == nil {
 		ctx = context.Background()
 	}
+	streamCtx, cancel := mergeContexts(s.ctx, ctx)
 	ch := make(chan interface{}, 100)
-	go s.streamWithReconnect(ctx, ch)
-	return ch, func() {}, nil
+	go func() {
+		defer cancel()
+		s.streamWithReconnect(streamCtx, ch)
+	}()
+	return ch, cancel, nil
 }
 
 // Publish emits an event into the service's event stream.
@@ -255,8 +259,6 @@ func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan
 	backoff := 1 * time.Second
 	for {
 		select {
-		case <-s.ctx.Done():
-			return
 		case <-ctx.Done():
 			return
 		default:
@@ -268,8 +270,6 @@ func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan
 		}
 		// Check context again before sleeping
 		select {
-		case <-s.ctx.Done():
-			return
 		case <-ctx.Done():
 			return
 		case <-time.After(backoff):
@@ -279,6 +279,23 @@ func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan
 		if backoff < 30*time.Second {
 			backoff *= 2
 		}
+	}
+}
+
+func mergeContexts(contexts ...context.Context) (context.Context, context.CancelFunc) {
+	merged, cancel := context.WithCancel(context.Background())
+	stops := make([]func() bool, 0, len(contexts))
+	for _, ctx := range contexts {
+		if ctx == nil {
+			continue
+		}
+		stops = append(stops, context.AfterFunc(ctx, cancel))
+	}
+	return merged, func() {
+		for _, stop := range stops {
+			stop()
+		}
+		cancel()
 	}
 }
 
