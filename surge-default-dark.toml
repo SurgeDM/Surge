@@ -2,7 +2,6 @@
 
 [colors]
 name = "Surge Cyberpunk"
-is_dark = true
 
 [colors.primary]
 # base 00 - DarkGray.dark
@@ -24,7 +23,7 @@ blue =    '#58a6ff'
 # base 0E - Magenta (or StateDone)
 magenta = '#bd93f9'
 # base 0C - Cyan
-cyan =    '#8be9fd' 
+cyan =    '#8be9fd'
 # base 07 - White
 white =   '#f8f8f2'
 
@@ -42,6 +41,6 @@ blue =    '#58a6ff'
 # base 0F - ProgressEnd(Neon Purple)
 magenta = '#bd93f9'
 # base 0C - Cyan
-cyan =    '#8be9fd' 
+cyan =    '#8be9fd'
 # base 07 - White
 white =   '#f8f8f2'

@@ -28,14 +28,14 @@ type Palette struct {
 		White   string `toml:"white"`
 	} `toml:"normal"`
 	Bright struct {
-		Black   string `toml:"black"` // Used for LightGray/Secondary info
-		Red     string `toml:"red"`   // Used for ProgressStart (Pink)
-		Green   string `toml:"green"`
-		Yellow  string `toml:"yellow"`
-		Blue    string `toml:"blue"`
-		Magenta string `toml:"magenta"` // Used for ProgressEnd
-		Cyan    string `toml:"cyan"`
-		White   string `toml:"white"`
+		Black   string `toml:"black"`   // → LightGray()
+		Red     string `toml:"red"`     // → Pink(), ProgressStart()
+		Green   string `toml:"green"`   // unused by accessors (reserved for future use)
+		Yellow  string `toml:"yellow"`  // unused by accessors (reserved for future use)
+		Blue    string `toml:"blue"`    // unused by accessors (reserved for future use)
+		Magenta string `toml:"magenta"` // → ProgressEnd()
+		Cyan    string `toml:"cyan"`    // unused by accessors (reserved for future use)
+		White   string `toml:"white"`   // unused by accessors (reserved for future use)
 	} `toml:"bright"`
 }
 
@@ -50,6 +50,7 @@ type ThemeConfig struct {
 var (
 	currentPalette *Palette
 	isDarkMode     bool
+	lastThemePath  string // last path passed to LoadTheme; re-used by SetDarkMode
 	modeMu         sync.RWMutex
 	hooks          []func()
 	hookMu         sync.RWMutex
@@ -118,6 +119,13 @@ func init() {
 	isDarkMode = true
 }
 
+// resolveThemePath resolves a theme name or path in the following priority order:
+//  1. path + ".toml" if it exists on disk (bare name shorthand)
+//  2. path as-is if it exists on disk
+//  3. $XDG_CONFIG_HOME/surge/themes/path (bare name in XDG themes dir)
+//  4. $XDG_CONFIG_HOME/surge/themes/path + ".toml"
+//
+// "~" at the start is expanded to the user's home directory before any lookup.
 func resolveThemePath(path string) string {
 	if path == "" {
 		return ""
@@ -159,6 +167,7 @@ func resolveThemePath(path string) string {
 func LoadTheme(path string, darkPreferred bool) {
 	modeMu.Lock()
 	isDarkMode = darkPreferred
+	lastThemePath = path
 
 	// Start with internal defaults
 	newPalette := &defaultLight
@@ -222,7 +231,7 @@ func Blue() color.Color      { return lipgloss.Color(palette().Normal.Blue) }
 func Magenta() color.Color   { return lipgloss.Color(palette().Normal.Magenta) }
 func Cyan() color.Color      { return lipgloss.Color(palette().Normal.Cyan) }
 func LightGray() color.Color { return lipgloss.Color(palette().Bright.Black) }
-func DarkGray() color.Color  { return lipgloss.Color(palette().Bright.Black) }
+func DarkGray() color.Color  { return lipgloss.Color(palette().Primary.Background) }
 
 // State Mappings
 func StateError() color.Color       { return Red() }
@@ -265,27 +274,21 @@ func RegisterThemeChangeHook(fn func()) {
 }
 
 // SetDarkMode updates the active theme mode and notifies registered listeners.
+// If a custom theme was previously loaded via LoadTheme, it is re-applied with
+// the new dark/light preference so the palette is not reverted to built-in defaults.
 func SetDarkMode(isDark bool) {
 	modeMu.Lock()
 	changed := isDarkMode != isDark
-	isDarkMode = isDark
-	if isDark {
-		currentPalette = &defaultDark
-	} else {
-		currentPalette = &defaultLight
-	}
+	path := lastThemePath
 	modeMu.Unlock()
 
 	if !changed {
 		return
 	}
 
-	hookMu.RLock()
-	registeredHooks := append([]func(){}, hooks...)
-	hookMu.RUnlock()
-	for _, fn := range registeredHooks {
-		fn()
-	}
+	// Re-load the active theme (custom or empty → built-in default) with the new mode.
+	LoadTheme(path, isDark)
+	return
 }
 
 // ThemeColor returns the light or dark variant based on current mode.

@@ -4,8 +4,6 @@ import (
 	"image/color"
 	"strings"
 
-	"github.com/SurgeDM/Surge/internal/tui/colors"
-
 	"charm.land/lipgloss/v2"
 )
 
@@ -126,10 +124,3 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 
 	return lipgloss.JoinVertical(lipgloss.Left, topBorder, strings.Join(wrappedLines, "\n"), bottomBorder)
 }
-
-// Default colors for convenience (re-exported from colors package)
-var (
-	DefaultBorderColor = colors.Pink()
-	SecondaryBorder    = colors.DarkGray()
-	AccentBorder       = colors.Cyan()
-)

@@ -4,7 +4,6 @@
 
 [colors]
 name = "Catppuccin Frappe"
-is_dark = true
 
 [colors.primary]
 background = "#303446"
