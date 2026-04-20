@@ -109,4 +109,25 @@ describe('download interception naming', () => {
     const body = JSON.parse(downloadCall?.[1].body);
     expect(body.filename).toBe('');
   });
+
+  it('does not cancel the browser download when Surge is offline', async () => {
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url.includes('/health')) return { ok: false };
+      return { ok: false };
+    });
+
+    const downloadItem = {
+      id: 789,
+      url: 'https://example.com/offline-fallback.zip',
+      startTime: new Date().toISOString(),
+    };
+
+    await __test__.handleDownloadCreated(downloadItem);
+
+    expect(browser.downloads.cancel).not.toHaveBeenCalled();
+    expect(browser.downloads.erase).not.toHaveBeenCalled();
+
+    const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+    expect(downloadCall).toBeUndefined();
+  });
 });

@@ -581,6 +581,66 @@ func TestActionCommandsRunE_ReturnNoServerErrors(t *testing.T) {
 	}
 }
 
+func TestConnectCmd_HostSourcesBypassLocalAutodetect(t *testing.T) {
+	tests := []struct {
+		name  string
+		args  []string
+		setup func(t *testing.T)
+	}{
+		{
+			name:  "host flag",
+			args:  []string{"connect", "--host", "198.1.1.1:7800"},
+			setup: func(_ *testing.T) {},
+		},
+		{
+			name: "SURGE_HOST env",
+			args: []string{"connect"},
+			setup: func(t *testing.T) {
+				t.Setenv("SURGE_HOST", "198.1.1.1:7800")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origSettings := globalSettings
+			origPool := GlobalPool
+			origProgressCh := GlobalProgressCh
+			t.Cleanup(func() {
+				globalSettings = origSettings
+				GlobalPool = origPool
+				GlobalProgressCh = origProgressCh
+			})
+
+			setupIsolatedCmdState(t)
+			resetCommandConnectionState(t)
+			_ = rootCmd.PersistentFlags().Set("host", "")
+			t.Cleanup(func() {
+				_ = rootCmd.PersistentFlags().Set("host", "")
+			})
+
+			tt.setup(t)
+			rootCmd.SetArgs(tt.args)
+
+			err := rootCmd.Execute()
+			if err == nil {
+				t.Fatal("expected connect command to return an error")
+			}
+
+			if strings.Contains(err.Error(), "no local Surge server detected") {
+				t.Fatalf("connect command ignored configured host source: %v", err)
+			}
+
+			if !strings.Contains(err.Error(), "requires authentication") {
+				t.Fatalf("expected remote target auth error, got: %v", err)
+			}
+			if !strings.Contains(err.Error(), "https://198.1.1.1:7800") {
+				t.Fatalf("expected remote target path with token error, got: %v", err)
+			}
+		})
+	}
+}
+
 func TestActionCommandsRunE_ReturnAmbiguousIDErrors(t *testing.T) {
 	tests := []struct {
 		name string

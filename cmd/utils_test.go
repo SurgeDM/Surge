@@ -11,11 +11,13 @@ func TestResolveClientOutputPath(t *testing.T) {
 	// Save original env vars to restore later
 	originalHost := os.Getenv("SURGE_HOST")
 	originalGlobalHost := globalHost
+	originalInsecureHTTP := globalInsecureHTTP
 	defer func() {
 		if err := os.Setenv("SURGE_HOST", originalHost); err != nil {
 			t.Errorf("failed to restore environment variable: %v", err)
 		}
 		globalHost = originalGlobalHost
+		globalInsecureHTTP = originalInsecureHTTP
 	}()
 
 	wd, err := os.Getwd()
@@ -102,5 +104,36 @@ func TestResolveClientOutputPath(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestResolveAPIConnection_UsesSharedInsecureHTTPSetting(t *testing.T) {
+	originalGlobalHost := globalHost
+	originalGlobalToken := globalToken
+	originalInsecureHTTP := globalInsecureHTTP
+	defer func() {
+		globalHost = originalGlobalHost
+		globalToken = originalGlobalToken
+		globalInsecureHTTP = originalInsecureHTTP
+	}()
+
+	globalHost = "http://example.com:1700"
+	globalToken = "test-token"
+	globalInsecureHTTP = false
+
+	if _, _, err := resolveAPIConnection(true); err == nil {
+		t.Fatal("expected insecure HTTP target to be rejected when insecure-http is disabled")
+	} else if !strings.Contains(err.Error(), "--insecure-http") {
+		t.Fatalf("expected insecure HTTP error, got: %v", err)
+	}
+
+	globalInsecureHTTP = true
+
+	baseURL, _, err := resolveAPIConnection(true)
+	if err != nil {
+		t.Fatalf("resolveAPIConnection returned error with insecure-http enabled: %v", err)
+	}
+	if baseURL != "http://example.com:1700" {
+		t.Fatalf("resolveAPIConnection baseURL = %q, want %q", baseURL, "http://example.com:1700")
 	}
 }

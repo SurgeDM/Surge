@@ -220,12 +220,12 @@ func TestConnectCmd_AutoDetectsLocalServer(t *testing.T) {
 
 	// The constructed target should resolve correctly
 	target := fmt.Sprintf("127.0.0.1:%d", port)
-	baseURL, err := resolveConnectBaseURL(target, false)
+	parsed, err := parseConnectTarget(target, false)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
-	if baseURL != "http://127.0.0.1:1700" {
-		t.Fatalf("Expected http://127.0.0.1:1700, got %s", baseURL)
+	if parsed.BaseURL != "http://127.0.0.1:1700" {
+		t.Fatalf("Expected http://127.0.0.1:1700, got %s", parsed.BaseURL)
 	}
 }
 
@@ -248,7 +248,7 @@ func TestConnectCmd_NoServerRunning(t *testing.T) {
 // connect target resolution Tests
 // =============================================================================
 
-func TestResolveConnectBaseURL(t *testing.T) {
+func TestParseConnectTarget_BaseURL(t *testing.T) {
 	tests := []struct {
 		name         string
 		target       string
@@ -258,8 +258,10 @@ func TestResolveConnectBaseURL(t *testing.T) {
 	}{
 		{name: "loopback host:port defaults http", target: "127.0.0.1:1700", want: "http://127.0.0.1:1700"},
 		{name: "localhost defaults http", target: "localhost:1700", want: "http://localhost:1700"},
+		{name: "ipv6 loopback host:port defaults http", target: "[::1]:1700", want: "http://[::1]:1700"},
 		{name: "remote host defaults https", target: "example.com:1700", want: "https://example.com:1700"},
 		{name: "https URL allowed", target: "https://example.com:1700", want: "https://example.com:1700"},
+		{name: "https URL loopback stays https", target: "https://127.0.0.1:1700", want: "https://127.0.0.1:1700"},
 		{name: "http URL loopback allowed", target: "http://127.0.0.1:1700", want: "http://127.0.0.1:1700"},
 		{name: "private ip host:port defaults http", target: "192.168.1.10:1700", want: "http://192.168.1.10:1700"},
 		{name: "http URL private IP allowed", target: "http://10.0.0.15:1700", want: "http://10.0.0.15:1700"},
@@ -270,20 +272,49 @@ func TestResolveConnectBaseURL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := resolveConnectBaseURL(tt.target, tt.insecureHTTP)
+			got, err := parseConnectTarget(tt.target, tt.insecureHTTP)
 			if tt.wantErr {
 				if err == nil {
-					t.Fatalf("Expected error, got nil (result: %s)", got)
+					t.Fatalf("Expected error, got nil (result: %#v)", got)
 				}
 				return
 			}
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
-			if got != tt.want {
-				t.Fatalf("Expected %q, got %q", tt.want, got)
+			if got.BaseURL != tt.want {
+				t.Fatalf("Expected %q, got %q", tt.want, got.BaseURL)
 			}
 		})
+	}
+}
+
+func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	if err := config.EnsureDirs(); err != nil {
+		t.Fatalf("Failed to ensure dirs: %v", err)
+	}
+
+	origToken := globalToken
+	globalToken = ""
+	t.Setenv("SURGE_TOKEN", "")
+	t.Cleanup(func() {
+		globalToken = origToken
+	})
+
+	target, err := parseConnectTarget("[::1]:1700", false)
+	if err != nil {
+		t.Fatalf("parseConnectTarget returned error: %v", err)
+	}
+
+	token, err := resolveTokenForConnectTarget(target)
+	if err != nil {
+		t.Fatalf("resolveTokenForConnectTarget returned error: %v", err)
+	}
+	if token == "" {
+		t.Fatal("expected non-empty local token for IPv6 loopback target")
 	}
 }
 

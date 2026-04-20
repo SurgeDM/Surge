@@ -55,6 +55,7 @@ func resolveLocalToken() string {
 	return ensureAuthToken()
 }
 
+// resolveHostTarget returns the target host, prioritizing the --host flag over the SURGE_HOST environment variable.
 func resolveHostTarget() string {
 	if host := strings.TrimSpace(globalHost); host != "" {
 		return host
@@ -92,15 +93,16 @@ func resolveAPIConnection(requireServer bool) (string, string, error) {
 		return "", "", errors.New("surge is not running locally. start it or pass --host (or set SURGE_HOST)")
 	}
 
-	baseURL, err := resolveConnectBaseURL(target, false)
+	clientCfg := currentRemoteClientConfig()
+	parsed, err := parseConnectTarget(target, clientCfg.AllowInsecureHTTP)
 	if err != nil {
 		return "", "", err
 	}
-	token, err := resolveTokenForTarget(target)
+	token, err := resolveTokenForConnectTarget(parsed)
 	if err != nil {
 		return "", "", err
 	}
-	return baseURL, token, nil
+	return parsed.BaseURL, token, nil
 }
 
 func doAPIRequest(method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
@@ -117,7 +119,10 @@ func doAPIRequest(method string, baseURL string, token string, path string, body
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	client := &http.Client{}
+	client, err := newRemoteAPIHTTPClient()
+	if err != nil {
+		return nil, err
+	}
 	return client.Do(req)
 }
 

@@ -16,23 +16,10 @@ import (
 )
 
 func TestAutoResume_Enabled(t *testing.T) {
-	// 1. Setup Environment with XDG_CONFIG_HOME override
-	tmpDir, err := os.MkdirTemp("", "surge-autoresume-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	// Override config home
-	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer func() {
-		if originalXDG == "" {
-			_ = os.Unsetenv("XDG_CONFIG_HOME")
-		} else {
-			_ = os.Setenv("XDG_CONFIG_HOME", originalXDG)
-		}
-	}()
+	// 1. Setup Environment with isolated config roots
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 
 	// config.GetSurgeDir() will now be under tmpDir/surge
 	surgeDir := config.GetSurgeDir()
@@ -53,6 +40,7 @@ func TestAutoResume_Enabled(t *testing.T) {
 
 	// 3. Configure State DB
 	state.CloseDB() // Ensure clean state
+	t.Cleanup(state.CloseDB)
 	dbPath := filepath.Join(surgeDir, "state", "surge.db")
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		t.Fatal(err)
@@ -103,21 +91,9 @@ func TestAutoResume_Enabled(t *testing.T) {
 
 func TestAutoResume_Disabled(t *testing.T) {
 	// 1. Setup Environment
-	tmpDir, err := os.MkdirTemp("", "surge-autoresume-off-test")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.RemoveAll(tmpDir) }()
-
-	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	defer func() {
-		if originalXDG == "" {
-			_ = os.Unsetenv("XDG_CONFIG_HOME")
-		} else {
-			_ = os.Setenv("XDG_CONFIG_HOME", originalXDG)
-		}
-	}()
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 
 	surgeDir := config.GetSurgeDir()
 	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
@@ -136,6 +112,7 @@ func TestAutoResume_Disabled(t *testing.T) {
 
 	// 3. Configure State DB
 	state.CloseDB() // Ensure clean state
+	t.Cleanup(state.CloseDB)
 	dbPath := filepath.Join(surgeDir, "state", "surge.db")
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		t.Fatal(err)
