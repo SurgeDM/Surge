@@ -17,6 +17,10 @@ type DuplicateResult struct {
 }
 
 // CheckForDuplicate inspects active and persisted downloads for duplicate URLs.
+// It always performs the scan regardless of settings.General.WarnOnDuplicate.
+// Policy decisions (whether to warn, block, or auto-approve) are the caller's
+// responsibility. This separation is required so that headless mode can always
+// distinguish duplicates from new downloads, even when WarnOnDuplicate is off.
 func CheckForDuplicate(url string, settings *config.Settings, activeDownloads func() map[string]*types.DownloadConfig) *DuplicateResult {
 	normalizedInputURL := strings.TrimRight(url, "/")
 
