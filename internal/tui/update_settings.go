@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"os"
+	"path/filepath"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -94,6 +96,11 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		case "theme_path":
 			originalPath := m.Settings.General.ThemePath
 			browseDir := originalPath
+			if browseDir != "" {
+				if info, err := os.Stat(browseDir); err == nil && !info.IsDir() {
+					browseDir = filepath.Dir(browseDir)
+				}
+			}
 			if browseDir == "" {
 				browseDir = m.PWD
 			}

@@ -61,7 +61,13 @@ func (m RootModel) updateFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// H key to jump to default download directory
 	if key.Matches(msg, m.keys.FilePicker.GotoHome) {
-		return m, m.handleFilePickerGotoHome()
+		cmd := m.handleFilePickerGotoHome()
+		if m.filepickerOrigin == FilePickerOriginTheme {
+			m.filepicker.FileAllowed = true
+			m.filepicker.DirAllowed = false
+			m.filepicker.AllowedTypes = []string{".toml"}
+		}
+		return m, cmd
 	}
 
 	// '.' to select current directory — only in directory-picking modes.

@@ -10,12 +10,6 @@ import (
 )
 
 // Helper to check for colors
-const (
-	ColorPending     = "236" // DarkGray (approx)
-	ColorDownloading = "198" // Neon Pink
-	ColorPaused      = "3"   // Warning (Yellow) - from lipgloss standard definition usually, checking components
-	ColorCompleted   = "14"  // Cyan
-)
 
 // Helper to set chunk state in a bitmap
 // Index is chunk index. Status: 0=Pending, 1=Downloading, 2=Completed
