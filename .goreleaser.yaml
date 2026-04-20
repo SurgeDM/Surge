@@ -17,6 +17,7 @@ builds:
 before:
   hooks:
     - ./scripts/package-fonts.sh
+    - ./scripts/package-themes.sh
 
 release:
   footer: |
@@ -26,6 +27,7 @@ release:
     - Release automation powered by [GoReleaser Pro](https://goreleaser.com/pro/)
   extra_files:
     - glob: .goreleaser-extra/fonts.zip
+    - glob: .goreleaser-extra/themes.zip
 
 changelog:
   sort: asc
