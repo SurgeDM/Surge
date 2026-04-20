@@ -27,10 +27,15 @@ func (m RootModel) updateInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Input.Tab) && m.focusedInput == 2 {
-		m.state = FilePickerState
-		m.filepickerOriginalPath = m.inputs[2].Value()
-		m.filepicker = newFilepicker(m.PWD)
-		return m, m.filepicker.Init()
+		originalPath := m.inputs[2].Value()
+		browseDir := strings.TrimSpace(originalPath)
+		if browseDir == "" {
+			browseDir = m.Settings.General.DefaultDownloadDir
+		}
+		if browseDir == "" {
+			browseDir = m.PWD
+		}
+		return m, m.openDirectoryPicker(FilePickerOriginAdd, originalPath, browseDir)
 	}
 
 	if key.Matches(msg, m.keys.Input.Up) && m.focusedInput > 0 {
@@ -130,15 +135,12 @@ func parseURLInput(input string) (url string, mirrors []string) {
 
 func (m RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Extension.Browse) && m.focusedInput == 2 {
-		m.ExtensionFileBrowsing = true
-		m.filepickerOriginalPath = m.inputs[2].Value()
-		browseDir := strings.TrimSpace(m.filepickerOriginalPath)
+		originalPath := m.inputs[2].Value()
+		browseDir := strings.TrimSpace(originalPath)
 		if browseDir == "" {
 			browseDir = m.PWD
 		}
-		m.state = FilePickerState
-		m.filepicker = newFilepicker(browseDir)
-		return m, m.filepicker.Init()
+		return m, m.openDirectoryPicker(FilePickerOriginExtension, originalPath, browseDir)
 	}
 
 	if key.Matches(msg, m.keys.Extension.Next) || key.Matches(msg, m.keys.Extension.Prev) {
@@ -173,7 +175,7 @@ func (m RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, 
 	}
 
 	if key.Matches(msg, m.keys.Extension.Cancel) {
-		m.ExtensionFileBrowsing = false
+		m.filepickerOrigin = FilePickerOriginNone
 		m.blurAllInputs()
 		m.state = DashboardState
 		return m, nil
