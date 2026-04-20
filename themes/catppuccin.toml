@@ -1,6 +1,5 @@
+# Catppuccin Frappe
 # source: https://github.com/catppuccin/alacritty/blob/main/catppuccin-frappe.toml
-
-# modified to fit the spec
 
 [colors]
 name = "Catppuccin Frappe"
@@ -8,6 +7,7 @@ name = "Catppuccin Frappe"
 [colors.primary]
 background = "#303446"
 foreground = "#c6d0f5"
+accent = "#ca9ee6"
 
 [colors.normal]
 black = "#51576d"

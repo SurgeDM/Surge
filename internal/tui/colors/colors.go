@@ -16,6 +16,7 @@ type Palette struct {
 	Primary struct {
 		Background string `toml:"background"`
 		Foreground string `toml:"foreground"`
+		Accent     string `toml:"accent"`
 	} `toml:"primary"`
 	Normal struct {
 		Black   string `toml:"black"`
@@ -59,7 +60,8 @@ var defaultDark = Palette{
 	Primary: struct {
 		Background string `toml:"background"`
 		Foreground string `toml:"foreground"`
-	}{Background: "#282a36", Foreground: "#f8f8f2"},
+		Accent     string `toml:"accent"`
+	}{Background: "#282a36", Foreground: "#f8f8f2", Accent: "#ff79c6"},
 
 	Normal: struct {
 		Black   string `toml:"black"`
@@ -88,7 +90,8 @@ var defaultLight = Palette{
 	Primary: struct {
 		Background string `toml:"background"`
 		Foreground string `toml:"foreground"`
-	}{Background: "#ffffff", Foreground: "#1a1a1a"},
+		Accent     string `toml:"accent"`
+	}{Background: "#ffffff", Foreground: "#1a1a1a", Accent: "#d10074"},
 
 	Normal: struct {
 		Black   string `toml:"black"`
@@ -146,6 +149,19 @@ func resolveThemePath(path string) string {
 
 	if _, err := os.Stat(path); err == nil {
 		return path
+	}
+
+	// 5. ./themes/path
+	// 6. ./themes/path + ".toml"
+	localThemesPath := filepath.Join("themes", path)
+	if _, err := os.Stat(localThemesPath); err == nil {
+		return localThemesPath
+	}
+	if !strings.HasSuffix(localThemesPath, ".toml") {
+		pathWithExt := localThemesPath + ".toml"
+		if _, err := os.Stat(pathWithExt); err == nil {
+			return pathWithExt
+		}
 	}
 
 	configDir, err := os.UserConfigDir()
@@ -219,10 +235,16 @@ func Background() color.Color { return lipgloss.Color(palette().Primary.Backgrou
 func Foreground() color.Color { return lipgloss.Color(palette().Primary.Foreground) }
 
 // Semantic Mappings
-func White() color.Color     { return lipgloss.Color(palette().Normal.White) }
-func Gray() color.Color      { return lipgloss.Color(palette().Normal.Black) }
-func Red() color.Color       { return lipgloss.Color(palette().Normal.Red) }
-func Pink() color.Color      { return lipgloss.Color(palette().Bright.Red) }
+func White() color.Color { return lipgloss.Color(palette().Normal.White) }
+func Gray() color.Color  { return lipgloss.Color(palette().Normal.Black) }
+func Red() color.Color   { return lipgloss.Color(palette().Normal.Red) }
+func Pink() color.Color {
+	acc := palette().Primary.Accent
+	if acc != "" {
+		return lipgloss.Color(acc)
+	}
+	return lipgloss.Color(palette().Bright.Red)
+}
 func Green() color.Color     { return lipgloss.Color(palette().Normal.Green) }
 func Orange() color.Color    { return lipgloss.Color(palette().Normal.Yellow) }
 func Blue() color.Color      { return lipgloss.Color(palette().Normal.Blue) }
@@ -239,8 +261,14 @@ func StateDone() color.Color        { return Magenta() }
 func StateVersion() color.Color     { return Blue() }
 
 // Progress Mappings
-func ProgressStart() color.Color { return lipgloss.Color(palette().Bright.Red) } // Neon Pink
-func ProgressEnd() color.Color   { return lipgloss.Color(palette().Bright.Magenta) }
+func ProgressStart() color.Color {
+	acc := palette().Primary.Accent
+	if acc != "" {
+		return lipgloss.Color(acc)
+	}
+	return lipgloss.Color(palette().Bright.Red) // Neon Pink
+}
+func ProgressEnd() color.Color { return lipgloss.Color(palette().Bright.Magenta) }
 
 type themeColor struct {
 	light string

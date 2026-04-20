@@ -1,13 +1,14 @@
 # Vibrant "Cyberpunk" Neon Colors (Dark Mode)
 
 [colors]
-name = "Surge Cyberpunk"
+name = "Surge Default"
 
 [colors.primary]
 # base 00 - DarkGray.dark
 background = '#282a36'
 # base 05 - White(Standard Text)
 foreground = '#f8f8f2'
+accent = '#ff79c6'
 
 [colors.normal]
 # base 01 - Gray(Selection/Borders)
