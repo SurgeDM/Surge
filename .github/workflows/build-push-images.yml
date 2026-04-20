@@ -38,9 +38,11 @@ jobs:
 
       - name: Get Surge version
         id: surge-version
+        env:
+          INPUT_SURGE_VERSION: ${{ inputs.surge_version }}
         run: |
-          if [ -n "${{ inputs.surge_version }}" ]; then
-            SURGE_VERSION="${{ inputs.surge_version }}"
+          if [ -n "$INPUT_SURGE_VERSION" ]; then
+            SURGE_VERSION="$INPUT_SURGE_VERSION"
             echo "Using manually specified version: $SURGE_VERSION"
           elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             SURGE_VERSION="${GITHUB_REF_NAME#v}"
@@ -54,13 +56,15 @@ jobs:
 
       - name: Decide latest tag behavior
         id: latest-tag
+        env:
+          INPUT_TAG_AS_LATEST: ${{ inputs.tag_as_latest }}
         run: |
           ENABLE_LATEST=false
           if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
             if [[ "${GITHUB_REF_NAME}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
               ENABLE_LATEST=true
             fi
-          elif [[ "${{ inputs.tag_as_latest }}" == "true" ]]; then
+          elif [[ "$INPUT_TAG_AS_LATEST" == "true" ]]; then
             ENABLE_LATEST=true
           fi
           echo "enable=$ENABLE_LATEST" >> $GITHUB_OUTPUT
