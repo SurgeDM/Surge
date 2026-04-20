@@ -28,16 +28,26 @@ type RemoteDownloadService struct {
 }
 
 // NewRemoteDownloadService creates a new remote service instance.
-func NewRemoteDownloadService(baseURL string, token string) *RemoteDownloadService {
+func NewRemoteDownloadService(baseURL string, token string, opts HTTPClientOptions) (*RemoteDownloadService, error) {
 	ctx, cancel := context.WithCancel(context.Background())
+	client, err := NewHTTPClient(opts)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
+	sseClient, err := NewStreamingHTTPClient(opts)
+	if err != nil {
+		cancel()
+		return nil, err
+	}
 	return &RemoteDownloadService{
 		BaseURL:   baseURL,
 		Token:     token,
-		Client:    &http.Client{Timeout: 30 * time.Second},
-		SSEClient: &http.Client{},
+		Client:    client,
+		SSEClient: sseClient,
 		ctx:       ctx,
 		cancel:    cancel,
-	}
+	}, nil
 }
 
 func (s *RemoteDownloadService) doRequest(method, path string, body interface{}) (*http.Response, error) {

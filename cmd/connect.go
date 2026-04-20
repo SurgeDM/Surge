@@ -46,13 +46,12 @@ var connectCmd = &cobra.Command{
 }
 
 func init() {
-	connectCmd.Flags().Bool("insecure-http", false, "Allow plain HTTP for non-loopback targets")
 	rootCmd.AddCommand(connectCmd)
 }
 
-func connectAndRunTUI(cmd *cobra.Command, target string) error {
-	insecureHTTP, _ := cmd.Flags().GetBool("insecure-http")
-	parsed, err := parseConnectTarget(target, insecureHTTP)
+func connectAndRunTUI(_ *cobra.Command, target string) error {
+	clientCfg := currentRemoteClientConfig()
+	parsed, err := parseConnectTarget(target, clientCfg.AllowInsecureHTTP)
 	if err != nil {
 		return err
 	}
@@ -64,10 +63,16 @@ func connectAndRunTUI(cmd *cobra.Command, target string) error {
 
 	fmt.Printf("Connecting to %s...\n", parsed.BaseURL)
 
-	service := core.NewRemoteDownloadService(parsed.BaseURL, token)
+	service, err := newRemoteDownloadService(parsed.BaseURL, token)
+	if err != nil {
+		return fmt.Errorf("failed to configure remote client: %w", err)
+	}
 	defer func() { _ = service.Shutdown() }()
 
+	requestTimeout := service.Client.Timeout
+	service.Client.Timeout = clientCfg.ConnectTimeout
 	_, err = service.List()
+	service.Client.Timeout = requestTimeout
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}

@@ -93,7 +93,8 @@ func resolveAPIConnection(requireServer bool) (string, string, error) {
 		return "", "", errors.New("surge is not running locally. start it or pass --host (or set SURGE_HOST)")
 	}
 
-	parsed, err := parseConnectTarget(target, false)
+	clientCfg := currentRemoteClientConfig()
+	parsed, err := parseConnectTarget(target, clientCfg.AllowInsecureHTTP)
 	if err != nil {
 		return "", "", err
 	}
@@ -118,7 +119,10 @@ func doAPIRequest(method string, baseURL string, token string, path string, body
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	client := &http.Client{}
+	client, err := newRemoteAPIHTTPClient()
+	if err != nil {
+		return nil, err
+	}
 	return client.Do(req)
 }
 

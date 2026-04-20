@@ -543,6 +543,9 @@ func Execute() error {
 func init() {
 	rootCmd.PersistentFlags().StringVar(&globalHost, "host", "", "Server host to connect/control (or set SURGE_HOST), e.g. 127.0.0.1:1700")
 	rootCmd.PersistentFlags().StringVar(&globalToken, "token", "", "Bearer token (or set SURGE_TOKEN)")
+	rootCmd.PersistentFlags().BoolVar(&globalInsecureHTTP, "insecure-http", false, "Allow plain HTTP for non-loopback remote targets")
+	rootCmd.PersistentFlags().BoolVar(&globalInsecureTLS, "insecure-tls", false, "Skip TLS certificate verification for remote targets")
+	rootCmd.PersistentFlags().StringVar(&globalTLSCAFile, "tls-ca-file", "", "PEM bundle to trust for remote HTTPS targets")
 	rootCmd.Flags().StringP("batch", "b", "", "File containing URLs to download (one per line)")
 	rootCmd.Flags().IntP("port", "p", 0, "Port to listen on (default: 8080 or first available)")
 	rootCmd.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
