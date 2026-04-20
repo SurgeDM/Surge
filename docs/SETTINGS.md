@@ -63,7 +63,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `skip_update_check`    | bool   | Disable automatic check for new versions on startup.                                               | `false` |
 | `clipboard_monitor`    | bool   | Watch the system clipboard for URLs and prompt to download them.                                   | `true`  |
 | `theme`                | int    | UI Theme (0=Adaptive, 1=Light, 2=Dark).                                                            | `0`     |
-| `theme_path`           | string | Path to a custom `.toml` color scheme or name of theme in the `themes` directory.                 | `""`    |
+| `theme_path`           | string | Path to a custom `.toml` color scheme or name of theme in the `themes` directory. See [THEMES.md](THEMES.md). | `""`    |
 | `log_retention_count`  | int    | Number of recent log files to keep.                                                                | `5`     |
 | `live_speed_graph`     | bool   | Use live speed for graph instead of EMA smoothed speed.                                            | `false` |
 
