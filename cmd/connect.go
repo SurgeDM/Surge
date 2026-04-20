@@ -15,6 +15,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
+type connectTarget struct {
+	BaseURL string
+	Host    string
+	Port    int
+}
+
 var connectCmd = &cobra.Command{
 	Use:   "connect [host:port]",
 	Short: "Connect TUI to a running Surge daemon",
@@ -46,19 +52,19 @@ func init() {
 
 func connectAndRunTUI(cmd *cobra.Command, target string) error {
 	insecureHTTP, _ := cmd.Flags().GetBool("insecure-http")
-	baseURL, err := resolveConnectBaseURL(target, insecureHTTP)
+	parsed, err := parseConnectTarget(target, insecureHTTP)
 	if err != nil {
 		return err
 	}
 
-	token, err := resolveTokenForTarget(target)
+	token, err := resolveTokenForConnectTarget(parsed)
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("Connecting to %s...\n", baseURL)
+	fmt.Printf("Connecting to %s...\n", parsed.BaseURL)
 
-	service := core.NewRemoteDownloadService(baseURL, token)
+	service := core.NewRemoteDownloadService(parsed.BaseURL, token)
 	_, err = service.List()
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
@@ -70,18 +76,7 @@ func connectAndRunTUI(cmd *cobra.Command, target string) error {
 	}
 	defer cleanup()
 
-	port := 0
-	serverHost := hostnameFromTarget(target)
-	if u, err := url.Parse(baseURL); err == nil {
-		if h := u.Hostname(); h != "" {
-			serverHost = h
-		}
-		if p := u.Port(); p != "" {
-			port, _ = strconv.Atoi(p)
-		}
-	}
-
-	m := newRemoteRootModel(port, service, serverHost)
+	m := newRemoteRootModel(parsed.Port, service, parsed.Host)
 
 	p := tea.NewProgram(m)
 	go func() {
@@ -103,7 +98,7 @@ func newRemoteRootModel(port int, service core.DownloadService, serverHost strin
 	return m
 }
 
-func resolveTokenForTarget(target string) (string, error) {
+func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 	token := strings.TrimSpace(globalToken)
 	if token == "" {
 		token = strings.TrimSpace(os.Getenv("SURGE_TOKEN"))
@@ -112,53 +107,98 @@ func resolveTokenForTarget(target string) (string, error) {
 		return token, nil
 	}
 
-	host := target
-	if strings.Contains(target, "://") {
-		u, err := url.Parse(target)
-		if err == nil {
-			host = u.Hostname()
-		}
-	} else {
-		host = hostnameFromTarget(target)
-	}
-
-	if isLocalHost(host) {
+	if isLocalHost(target.Host) {
 		return ensureAuthToken(), nil
 	}
 	return "", fmt.Errorf("no token provided. Use --token or set SURGE_TOKEN")
 }
 
-func resolveConnectBaseURL(target string, allowInsecureHTTP bool) (string, error) {
+func parseConnectTarget(target string, allowInsecureHTTP bool) (connectTarget, error) {
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return connectTarget{}, fmt.Errorf("invalid target: empty target")
+	}
+
+	var (
+		scheme string
+		host   string
+		port   string
+	)
+
 	if strings.Contains(target, "://") {
 		u, err := url.Parse(target)
 		if err != nil {
-			return "", fmt.Errorf("invalid target: %v", err)
+			return connectTarget{}, fmt.Errorf("invalid target %q: %w", target, err)
 		}
 		if u.Scheme != "http" && u.Scheme != "https" {
-			return "", fmt.Errorf("unsupported scheme %q (use http or https)", u.Scheme)
+			return connectTarget{}, fmt.Errorf("unsupported scheme %q (use http or https)", u.Scheme)
 		}
 		if u.Host == "" {
-			return "", fmt.Errorf("invalid target: missing host")
+			return connectTarget{}, fmt.Errorf("invalid target %q: missing host", target)
 		}
-		host := u.Hostname()
-		if u.Scheme == "http" && !allowInsecureHTTP && !isLoopbackHost(host) && !isPrivateIPHost(host) {
-			return "", fmt.Errorf("refusing insecure HTTP for non-loopback target. Use https:// or --insecure-http")
+		if u.User != nil {
+			return connectTarget{}, fmt.Errorf("invalid target %q: user info is not supported", target)
 		}
-		return fmt.Sprintf("%s://%s", u.Scheme, u.Host), nil
+
+		scheme = u.Scheme
+		host = u.Hostname()
+		port = u.Port()
+	} else {
+		var err error
+		host, port, err = net.SplitHostPort(target)
+		if err != nil {
+			return connectTarget{}, formatConnectTargetAddrError(target, err)
+		}
 	}
 
-	scheme := "https"
-	host := hostnameFromTarget(target)
-	if isLoopbackHost(host) || isPrivateIPHost(host) {
-		scheme = "http"
+	if host == "" {
+		return connectTarget{}, fmt.Errorf("invalid target %q: missing host", target)
 	}
-	return fmt.Sprintf("%s://%s", scheme, target), nil
+
+	portNumber := 0
+	if port != "" {
+		n, err := strconv.Atoi(port)
+		if err != nil || n < 1 || n > 65535 {
+			return connectTarget{}, fmt.Errorf("invalid target %q: invalid port %q", target, port)
+		}
+		portNumber = n
+	}
+
+	if scheme == "" {
+		scheme = "https"
+		if isLoopbackHost(host) || isPrivateIPHost(host) {
+			scheme = "http"
+		}
+	}
+
+	if scheme == "http" && !allowInsecureHTTP && !isLoopbackHost(host) && !isPrivateIPHost(host) {
+		return connectTarget{}, fmt.Errorf("refusing insecure HTTP for non-loopback target. Use https:// or --insecure-http")
+	}
+
+	return connectTarget{
+		BaseURL: fmt.Sprintf("%s://%s", scheme, formatConnectURLHost(host, port)),
+		Host:    host,
+		Port:    portNumber,
+	}, nil
 }
 
-func hostnameFromTarget(target string) string {
-	host := target
-	if idx := strings.Index(host, ":"); idx != -1 {
-		host = host[:idx]
+func formatConnectTargetAddrError(target string, err error) error {
+	msg := err.Error()
+	if strings.Contains(msg, "too many colons") {
+		return fmt.Errorf("invalid target %q: IPv6 addresses with ports must use brackets, for example [2001:db8::1]:1700", target)
+	}
+	if strings.Contains(msg, "missing port") {
+		return fmt.Errorf("invalid target %q: expected host:port or http(s) URL", target)
+	}
+	return fmt.Errorf("invalid target %q: %w", target, err)
+}
+
+func formatConnectURLHost(host, port string) string {
+	if port != "" {
+		return net.JoinHostPort(host, port)
+	}
+	if strings.Contains(host, ":") {
+		return "[" + host + "]"
 	}
 	return host
 }

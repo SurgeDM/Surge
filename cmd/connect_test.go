@@ -114,3 +114,50 @@ func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
 		t.Fatalf("queued download ID = %q, want remote-add-id", selected.ID)
 	}
 }
+
+func TestParseConnectTarget_ParsesIPv6AddressWithPort(t *testing.T) {
+	tests := []struct {
+		name   string
+		target string
+		want   connectTarget
+	}{
+		{
+			name:   "bracketed IPv6 address with port",
+			target: "[2001:db8::1]:1700",
+			want: connectTarget{
+				BaseURL: "https://[2001:db8::1]:1700",
+				Host:    "2001:db8::1",
+				Port:    1700,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := parseConnectTarget(tt.target, false)
+			if err != nil {
+				t.Fatalf("parseConnectTarget(%q) returned error: %v", tt.target, err)
+			}
+			if got != tt.want {
+				t.Fatalf("parseConnectTarget(%q) = %#v, want %#v", tt.target, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseConnectTarget_InvalidTarget(t *testing.T) {
+	tests := []string{
+		"example.com",
+		"2001:db8::1:1700",
+		"[2001:db8::1]",
+		"example.com:not-a-port",
+	}
+
+	for _, target := range tests {
+		t.Run(target, func(t *testing.T) {
+			if got, err := parseConnectTarget(target, false); err == nil {
+				t.Fatalf("parseConnectTarget(%q) = %#v, want error", target, got)
+			}
+		})
+	}
+}
