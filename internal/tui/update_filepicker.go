@@ -25,9 +25,15 @@ func (m RootModel) updateFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.FilePicker.Cancel) {
 		// Cancel and return to appropriate state
 		if m.SettingsFileBrowsing {
-			m.Settings.General.DefaultDownloadDir = m.filepickerOriginalPath
+			if m.SettingsBrowsingKey == "theme_path" {
+				m.Settings.General.ThemePath = m.filepickerOriginalPath
+			} else {
+				m.Settings.General.DefaultDownloadDir = m.filepickerOriginalPath
+			}
 			m.SettingsFileBrowsing = false
+			m.SettingsBrowsingKey = ""
 			m.state = SettingsState
+			m.resetFilepickerToDirMode()
 			return m, nil
 		}
 		if m.ExtensionFileBrowsing {

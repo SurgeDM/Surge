@@ -69,8 +69,8 @@ func TestSetDarkMode_ConcurrentAccess(t *testing.T) {
 			for j := 0; j < 200; j++ {
 				_ = ThemeColor("#010101", "#fefefe")
 				_ = IsDarkMode()
-				_ = Pink
-				_ = StateDone
+				_ = Pink()
+				_ = StateDone()
 			}
 		}()
 	}

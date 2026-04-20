@@ -80,14 +80,28 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Open file browser for default_download_dir
+	// Open file browser for default_download_dir or theme_path
 	if key.Matches(msg, m.keys.Settings.Browse) {
 		settingKey := m.getCurrentSettingKey()
 		if settingKey == "default_download_dir" {
 			m.SettingsFileBrowsing = true
+			m.SettingsBrowsingKey = settingKey
 			m.filepickerOriginalPath = m.Settings.General.DefaultDownloadDir
 			m.state = FilePickerState
 			m.filepicker = newFilepicker(m.filepickerOriginalPath)
+			return m, m.filepicker.Init()
+		} else if settingKey == "theme_path" {
+			m.SettingsFileBrowsing = true
+			m.SettingsBrowsingKey = settingKey
+			m.filepickerOriginalPath = m.Settings.General.ThemePath
+			if m.filepickerOriginalPath == "" {
+				m.filepickerOriginalPath = m.PWD
+			}
+			m.state = FilePickerState
+			m.filepicker = newFilepicker(m.filepickerOriginalPath)
+			m.filepicker.DirAllowed = false
+			m.filepicker.FileAllowed = true
+			m.filepicker.AllowedTypes = []string{".toml"}
 			return m, m.filepicker.Init()
 		}
 		return m, nil

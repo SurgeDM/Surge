@@ -70,9 +70,16 @@ func (m *RootModel) removeDownloadByID(id string) bool {
 
 func (m *RootModel) handleFilePickerSelection(path string) (tea.Model, tea.Cmd) {
 	if m.SettingsFileBrowsing {
-		m.Settings.General.DefaultDownloadDir = path
+		if m.SettingsBrowsingKey == "theme_path" {
+			m.Settings.General.ThemePath = path
+			m.ApplyTheme(m.Settings.General.Theme, path)
+		} else {
+			m.Settings.General.DefaultDownloadDir = path
+		}
 		m.SettingsFileBrowsing = false
+		m.SettingsBrowsingKey = ""
 		m.state = SettingsState
+		m.resetFilepickerToDirMode()
 		return m, nil
 	}
 	if m.ExtensionFileBrowsing {

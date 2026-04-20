@@ -328,7 +328,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	}
 
 	valueLabel := "Value: "
-	if meta.Key == "default_download_dir" && !m.SettingsIsEditing {
+	if (meta.Key == "default_download_dir" || meta.Key == "theme_path") && !m.SettingsIsEditing {
 		valueLabel = "[Tab] Browse: "
 	}
 	if meta.Type == "link" {

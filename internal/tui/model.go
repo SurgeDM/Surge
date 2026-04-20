@@ -138,6 +138,7 @@ type RootModel struct {
 	SettingsIsEditing     bool             // Whether currently editing a value
 	SettingsInput         textinput.Model  // Input for editing string/int values
 	SettingsFileBrowsing  bool             // Whether browsing for a directory
+	SettingsBrowsingKey   string           // Key of the setting being browsed for
 	ExtensionFileBrowsing bool             // Whether browsing for extension prompt path
 	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
 
