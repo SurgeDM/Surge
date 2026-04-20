@@ -68,6 +68,7 @@ jobs:
         env:
           FIREFOX_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
           FIREFOX_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          FIREFOX_EXTENSION_ID: surge@surge-downloader.com
 
   release:
     name: Create Release
