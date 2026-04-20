@@ -461,6 +461,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) error {
 
 	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), noResume)
 	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())
+	m.Transfer = core.NewLocalTransferService(GlobalService, Version)
 	m.ServerHost = serverBindHost
 	if m.ServerHost == "" {
 		m.ServerHost = "127.0.0.1"

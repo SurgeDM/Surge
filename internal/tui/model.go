@@ -18,6 +18,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 
+	"github.com/SurgeDM/Surge/internal/backup"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/types"
@@ -52,6 +53,10 @@ const (
 	CategoryManagerState                      // CategoryManagerState is 13
 	QuitConfirmState                          // QuitConfirmState is 14
 	HelpModalState                            // HelpModalState is 15
+	DataTransferState                         // DataTransferState is 16
+	TransferExportPickerState                 // TransferExportPickerState is 17
+	TransferImportPickerState                 // TransferImportPickerState is 18
+	TransferRootPickerState                   // TransferRootPickerState is 19
 )
 
 const (
@@ -99,6 +104,7 @@ type RootModel struct {
 	// Service Interface
 	// Core
 	Service      core.DownloadService
+	Transfer     core.TransferService
 	Orchestrator *processing.LifecycleManager
 
 	// File picker for directory selection
@@ -156,6 +162,15 @@ type RootModel struct {
 
 	// URL Refresh
 	urlUpdateInput textinput.Model // Text input for updating URL
+
+	// Data transfer
+	transferIncludeLogs     bool
+	transferIncludePartials bool
+	transferReplace         bool
+	transferPreview         *backup.ImportPreview
+	transferImportFile      string
+	transferRootDir         string
+	transferStatus          string
 
 	// Category manager
 	categoryFilter     string             // Dashboard filter ("" = all)
@@ -396,6 +411,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		SettingsInput:         settingsInput,
 		searchInput:           searchInput,
 		urlUpdateInput:        urlUpdateInput,
+		transferRootDir:       settings.General.DefaultDownloadDir,
 		catMgrInputs:          [4]textinput.Model{catNameInput, catDescInput, catPatternInput, catPathInput},
 		keys:                  Keys,
 		ServerPort:            serverPort,
@@ -407,6 +423,9 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	}
 
 	InitAuthToken() // Cache auth token for TUI to avoid per-frame disk I/O
+	if strings.TrimSpace(m.transferRootDir) == "" {
+		m.transferRootDir = "."
+	}
 
 	m.refreshThemeCaches()
 

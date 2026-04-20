@@ -65,7 +65,7 @@ func (f *fakeRemoteDownloadService) GetStatus(id string) (*types.DownloadStatus,
 func (f *fakeRemoteDownloadService) Shutdown() error { return nil }
 
 func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
-	m := newRemoteRootModel(1700, nil, "example.com")
+	m := newRemoteRootModel(1700, nil, "example.com", "https://example.com:1700", "token")
 
 	if m.Orchestrator != nil {
 		t.Fatal("expected remote root model to use nil orchestrator")
@@ -80,7 +80,7 @@ func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
 
 func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
 	service := &fakeRemoteDownloadService{}
-	m := newRemoteRootModel(1700, service, "example.com")
+	m := newRemoteRootModel(1700, service, "example.com", "https://example.com:1700", "token")
 	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = false
 

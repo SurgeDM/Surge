@@ -15,6 +15,7 @@ type KeyMap struct {
 	Update         UpdateKeyMap
 	CategoryMgr    CategoryManagerKeyMap
 	QuitConfirm    QuitConfirmKeyMap
+	Transfer       TransferKeyMap
 }
 
 // DashboardKeyMap defines keybindings for the main dashboard
@@ -30,6 +31,7 @@ type DashboardKeyMap struct {
 	Refresh        key.Binding
 	Delete         key.Binding
 	Settings       key.Binding
+	DataTransfer   key.Binding
 	Log            key.Binding
 	ToggleHelp     key.Binding
 	OpenFile       key.Binding
@@ -129,6 +131,18 @@ type QuitConfirmKeyMap struct {
 	Cancel key.Binding
 }
 
+// TransferKeyMap defines keybindings for data import/export.
+type TransferKeyMap struct {
+	Export         key.Binding
+	Import         key.Binding
+	TogglePartials key.Binding
+	ToggleLogs     key.Binding
+	ToggleReplace  key.Binding
+	BrowseRoot     key.Binding
+	Apply          key.Binding
+	Close          key.Binding
+}
+
 // CategoryManagerKeyMap defines keybindings for the category manager
 type CategoryManagerKeyMap struct {
 	Up     key.Binding
@@ -187,6 +201,10 @@ var Keys = KeyMap{
 		Settings: key.NewBinding(
 			key.WithKeys("s"),
 			key.WithHelp("s", "settings"),
+		),
+		DataTransfer: key.NewBinding(
+			key.WithKeys("d"),
+			key.WithHelp("d", "data"),
 		),
 		Log: key.NewBinding(
 			key.WithKeys("l"),
@@ -447,6 +465,40 @@ var Keys = KeyMap{
 		Cancel: key.NewBinding(
 			key.WithKeys("esc", "ctrl+c", "ctrl+q"),
 			key.WithHelp("n/esc", "cancel"),
+		),
+	},
+	Transfer: TransferKeyMap{
+		Export: key.NewBinding(
+			key.WithKeys("e"),
+			key.WithHelp("e", "export"),
+		),
+		Import: key.NewBinding(
+			key.WithKeys("i"),
+			key.WithHelp("i", "import"),
+		),
+		TogglePartials: key.NewBinding(
+			key.WithKeys("p"),
+			key.WithHelp("p", "partials"),
+		),
+		ToggleLogs: key.NewBinding(
+			key.WithKeys("l"),
+			key.WithHelp("l", "logs"),
+		),
+		ToggleReplace: key.NewBinding(
+			key.WithKeys("x"),
+			key.WithHelp("x", "replace"),
+		),
+		BrowseRoot: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "root"),
+		),
+		Apply: key.NewBinding(
+			key.WithKeys("a"),
+			key.WithHelp("a", "apply"),
+		),
+		Close: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "close"),
 		),
 	},
 }

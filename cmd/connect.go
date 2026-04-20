@@ -78,7 +78,7 @@ func connectAndRunTUI(cmd *cobra.Command, target string) error {
 		}
 	}
 
-	m := newRemoteRootModel(port, service, serverHost)
+	m := newRemoteRootModel(port, service, serverHost, baseURL, token)
 
 	p := tea.NewProgram(m)
 	go func() {
@@ -93,8 +93,9 @@ func connectAndRunTUI(cmd *cobra.Command, target string) error {
 	return nil
 }
 
-func newRemoteRootModel(port int, service core.DownloadService, serverHost string) tui.RootModel {
+func newRemoteRootModel(port int, service core.DownloadService, serverHost string, baseURL string, token string) tui.RootModel {
 	m := tui.InitialRootModel(port, Version, service, nil, false)
+	m.Transfer = core.NewRemoteTransferService(baseURL, token)
 	m.ServerHost = serverHost
 	m.IsRemote = true
 	return m
