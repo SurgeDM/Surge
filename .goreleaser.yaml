@@ -22,6 +22,7 @@ release:
   footer: |
     ---
     **Enjoying Surge?** Consider supporting the project to keep it blazing fast!
+    - [GitHub Sponsors](https://github.com/sponsors/SurgeDM)
     - [Buy Me a Coffee](https://buymeacoffee.com/surge.downloader)
     - Release automation powered by [GoReleaser Pro](https://goreleaser.com/pro/)
   extra_files:
