@@ -183,7 +183,7 @@ func resolveDuplicateState(urlForAdd string, settings *config.Settings) (bool, b
 		return active
 	}
 
-	dupResult := processing.CheckForDuplicate(urlForAdd, settings, activeDownloadsFunc)
+	dupResult := processing.CheckForDuplicate(urlForAdd, activeDownloadsFunc)
 	if dupResult == nil {
 		return false, false
 	}

@@ -19,8 +19,20 @@ func TestHandleDownload_HeadlessMode_AutoApprovesNonDuplicate(t *testing.T) {
 	setupIsolatedCmdState(t)
 
 	// Simulation: headless mode (no TUI)
+	origServerProgram := serverProgram
 	serverProgram = nil
-	t.Cleanup(func() { serverProgram = nil })
+	t.Cleanup(func() { serverProgram = origServerProgram })
+
+	origLifecycle := GlobalLifecycle
+	origPool := GlobalPool
+	origProgress := GlobalProgressCh
+	origService := GlobalService
+	t.Cleanup(func() {
+		GlobalLifecycle = origLifecycle
+		GlobalPool = origPool
+		GlobalProgressCh = origProgress
+		GlobalService = origService
+	})
 
 	// Enable ExtensionPrompt (default is true, but let's be explicit)
 	settings := config.DefaultSettings()
@@ -65,8 +77,18 @@ func TestHandleDownload_HeadlessMode_RejectsDuplicateWithWarn(t *testing.T) {
 	setupIsolatedCmdState(t)
 
 	// Simulation: headless mode
+	origServerProgram := serverProgram
 	serverProgram = nil
-	t.Cleanup(func() { serverProgram = nil })
+	t.Cleanup(func() { serverProgram = origServerProgram })
+
+	origPool := GlobalPool
+	origProgress := GlobalProgressCh
+	origService := GlobalService
+	t.Cleanup(func() {
+		GlobalPool = origPool
+		GlobalProgressCh = origProgress
+		GlobalService = origService
+	})
 
 	// Enable WarnOnDuplicate
 	settings := config.DefaultSettings()
@@ -105,8 +127,18 @@ func TestHandleDownload_HeadlessMode_RejectsDuplicateWithWarn(t *testing.T) {
 
 func TestHandleDownload_HeadlessMode_RejectsExtensionPromptDuplicate(t *testing.T) {
 	setupIsolatedCmdState(t)
+	origServerProgram := serverProgram
 	serverProgram = nil
-	t.Cleanup(func() { serverProgram = nil })
+	t.Cleanup(func() { serverProgram = origServerProgram })
+
+	origPool := GlobalPool
+	origProgress := GlobalProgressCh
+	origService := GlobalService
+	t.Cleanup(func() {
+		GlobalPool = origPool
+		GlobalProgressCh = origProgress
+		GlobalService = origService
+	})
 
 	settings := config.DefaultSettings()
 	settings.Extension.ExtensionPrompt = true

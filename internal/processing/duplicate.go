@@ -3,7 +3,6 @@ package processing
 import (
 	"strings"
 
-	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 )
@@ -21,7 +20,7 @@ type DuplicateResult struct {
 // Policy decisions (whether to warn, block, or auto-approve) are the caller's
 // responsibility. This separation is required so that headless mode can always
 // distinguish duplicates from new downloads, even when WarnOnDuplicate is off.
-func CheckForDuplicate(url string, settings *config.Settings, activeDownloads func() map[string]*types.DownloadConfig) *DuplicateResult {
+func CheckForDuplicate(url string, activeDownloads func() map[string]*types.DownloadConfig) *DuplicateResult {
 	normalizedInputURL := strings.TrimRight(url, "/")
 
 	// Check active downloads
