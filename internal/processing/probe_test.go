@@ -138,7 +138,7 @@ func TestProbeServer_RangedProbeRetryLogic(t *testing.T) {
 		// Second attempt (without Range) should succeed
 		w.Header().Set("Content-Length", "100")
 		w.WriteHeader(http.StatusOK)
-		w.Write(make([]byte, 100))
+		_, _ = w.Write(make([]byte, 100))
 	}))
 	defer server.Close()
 

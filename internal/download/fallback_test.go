@@ -33,7 +33,7 @@ func TestTUIDownload_ConcurrentFails_FallsBackToSingle(t *testing.T) {
 		t.Logf("Mock server: received normal request, succeeding")
 		w.Header().Set("Content-Length", "5")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("hello"))
+		_, _ = w.Write([]byte("hello"))
 	}))
 	defer server.Close()
 
@@ -46,7 +46,7 @@ func TestTUIDownload_ConcurrentFails_FallsBackToSingle(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create surge file: %v", err)
 	}
-	f.Close()
+	_ = f.Close()
 
 	cfg := &types.DownloadConfig{
 		ID:            "test-concurrent-fail",
@@ -109,7 +109,7 @@ func TestTUIDownload_ProbeFails_FallsBackToSingleGracefully(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "5")
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("world"))
+		_, _ = w.Write([]byte("world"))
 	}))
 	defer server.Close()
 
@@ -121,7 +121,7 @@ func TestTUIDownload_ProbeFails_FallsBackToSingleGracefully(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create surge file: %v", err)
 	}
-	f.Close()
+	_ = f.Close()
 
 	cfg := &types.DownloadConfig{
 		ID:            "test-probe-fail",
@@ -173,7 +173,7 @@ func TestTUIDownload_ContextCanceled_AbortsFallback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to create surge file: %v", err)
 	}
-	f.Close()
+	_ = f.Close()
 
 	cfg := &types.DownloadConfig{
 		ID:            "test-cancel",
