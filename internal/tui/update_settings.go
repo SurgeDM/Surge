@@ -92,7 +92,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if browseDir == "" {
 				browseDir = m.PWD
 			}
-			return m, m.openDirectoryPicker(FilePickerOriginSettings, originalPath, browseDir)
+			return m, m.openDirectoryPicker(FilePickerOriginSettings, originalPath, browseDir, false, true)
 		case "theme_path":
 			originalPath := m.Settings.General.ThemePath
 			browseDir := originalPath
@@ -102,11 +102,12 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				}
 			}
 			if browseDir == "" {
+				browseDir = config.GetThemesDir()
+			}
+			if browseDir == "" {
 				browseDir = m.PWD
 			}
-			cmd := m.openDirectoryPicker(FilePickerOriginTheme, originalPath, browseDir)
-			m.filepicker.FileAllowed = true
-			m.filepicker.DirAllowed = false
+			cmd := m.openDirectoryPicker(FilePickerOriginTheme, originalPath, browseDir, true, false)
 			m.filepicker.AllowedTypes = []string{".toml"}
 			return m, cmd
 		}

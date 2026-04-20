@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/SurgeDM/Surge/internal/engine/types"
@@ -117,16 +118,30 @@ func (m *RootModel) handleFilePickerGotoHome() tea.Cmd {
 }
 
 func (m *RootModel) resetFilepickerToDirMode() {
-	m.filepicker.FileAllowed = false
-	m.filepicker.DirAllowed = true
+	m.applyFilePickerMode(false, true)
 	m.filepicker.AllowedTypes = nil
 }
 
-func (m *RootModel) openDirectoryPicker(origin FilePickerOrigin, originalPath, browseDir string) tea.Cmd {
+func (m *RootModel) applyFilePickerMode(fileAllowed, dirAllowed bool) {
+	m.filepicker.FileAllowed = fileAllowed
+	m.filepicker.DirAllowed = dirAllowed
+
+	if fileAllowed {
+		m.filepicker.KeyMap.Select = key.NewBinding(key.WithKeys(".", "enter"))
+		m.filepicker.KeyMap.Open = key.NewBinding(key.WithKeys(".", "enter", "right"))
+	} else {
+		m.filepicker.KeyMap.Select = key.NewBinding(key.WithKeys("."))
+		m.filepicker.KeyMap.Open = key.NewBinding(key.WithKeys(".", "right"))
+	}
+}
+
+func (m *RootModel) openDirectoryPicker(origin FilePickerOrigin, originalPath, browseDir string, fileAllowed, dirAllowed bool) tea.Cmd {
 	m.filepickerOrigin = origin
 	m.filepickerOriginalPath = originalPath
 	m.state = FilePickerState
 	m.filepicker = newFilepicker(browseDir)
+	m.applyFilePickerMode(fileAllowed, dirAllowed)
+
 	return m.filepicker.Init()
 }
 

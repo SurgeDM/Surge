@@ -125,7 +125,7 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 				if browseDir == "" {
 					browseDir = m.PWD
 				}
-				return m, m.openDirectoryPicker(FilePickerOriginCategory, originalPath, browseDir)
+				return m, m.openDirectoryPicker(FilePickerOriginCategory, originalPath, browseDir, false, true)
 			}
 			// Cycle fields
 			m.catMgrInputs[m.catMgrEditField].Blur()

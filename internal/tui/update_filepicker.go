@@ -63,8 +63,7 @@ func (m RootModel) updateFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.FilePicker.GotoHome) {
 		cmd := m.handleFilePickerGotoHome()
 		if m.filepickerOrigin == FilePickerOriginTheme {
-			m.filepicker.FileAllowed = true
-			m.filepicker.DirAllowed = false
+			m.applyFilePickerMode(true, false)
 			m.filepicker.AllowedTypes = []string{".toml"}
 		}
 		return m, cmd
@@ -99,8 +98,7 @@ func (m RootModel) updateBatchFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 	// H key to jump to default download directory
 	if key.Matches(msg, m.keys.FilePicker.GotoHome) {
 		cmd := m.handleFilePickerGotoHome()
-		m.filepicker.FileAllowed = true
-		m.filepicker.DirAllowed = false
+		m.applyFilePickerMode(true, false)
 		return m, cmd
 	}
 

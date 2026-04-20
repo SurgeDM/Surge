@@ -111,6 +111,11 @@ func GetLogsDir() string {
 	return filepath.Join(GetStateDir(), "logs")
 }
 
+// GetThemesDir returns the directory for themes
+func GetThemesDir() string {
+	return filepath.Join(GetSurgeDir(), "themes")
+}
+
 // EnsureDirs creates all required directories
 func EnsureDirs() error {
 	dirs := []string{GetSurgeDir(), GetStateDir(), GetRuntimeDir(), GetLogsDir()}

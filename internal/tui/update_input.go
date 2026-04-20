@@ -35,7 +35,7 @@ func (m RootModel) updateInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if browseDir == "" {
 			browseDir = m.PWD
 		}
-		return m, m.openDirectoryPicker(FilePickerOriginAdd, originalPath, browseDir)
+		return m, m.openDirectoryPicker(FilePickerOriginAdd, originalPath, browseDir, false, true)
 	}
 
 	if key.Matches(msg, m.keys.Input.Up) && m.focusedInput > 0 {
@@ -140,7 +140,7 @@ func (m RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, 
 		if browseDir == "" {
 			browseDir = m.PWD
 		}
-		return m, m.openDirectoryPicker(FilePickerOriginExtension, originalPath, browseDir)
+		return m, m.openDirectoryPicker(FilePickerOriginExtension, originalPath, browseDir, false, true)
 	}
 
 	if key.Matches(msg, m.keys.Extension.Next) || key.Matches(msg, m.keys.Extension.Prev) {
