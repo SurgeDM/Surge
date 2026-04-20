@@ -40,6 +40,7 @@ func TestAutoResume_Enabled(t *testing.T) {
 
 	// 3. Configure State DB
 	state.CloseDB() // Ensure clean state
+	t.Cleanup(state.CloseDB)
 	dbPath := filepath.Join(surgeDir, "state", "surge.db")
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		t.Fatal(err)
@@ -111,6 +112,7 @@ func TestAutoResume_Disabled(t *testing.T) {
 
 	// 3. Configure State DB
 	state.CloseDB() // Ensure clean state
+	t.Cleanup(state.CloseDB)
 	dbPath := filepath.Join(surgeDir, "state", "surge.db")
 	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
 		t.Fatal(err)

@@ -185,6 +185,7 @@ func setupTestEnv(t *testing.T, tmpDir string) {
 	dbPath := filepath.Join(surgeDir, "state", "surge.db")
 	_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
 	state.CloseDB()
+	t.Cleanup(state.CloseDB)
 	state.Configure(dbPath)
 }
 

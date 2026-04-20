@@ -35,6 +35,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 
 	// Setup a temporary DB for state
 	state.CloseDB()
+	t.Cleanup(state.CloseDB)
 	dbPath := filepath.Join(tmpDir, "surge.db")
 	state.Configure(dbPath)
 
