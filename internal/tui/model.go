@@ -612,4 +612,13 @@ func (m *RootModel) refreshThemeCaches() {
 	m.help.Styles.FullDesc = lipgloss.NewStyle().Foreground(colors.LightGray())
 	applyListTheme(&m.list)
 	m.logoCache = ""
+	// Rebuild progress bar colors for all existing downloads so the gradient
+	// matches the newly loaded palette rather than the one active at creation time.
+	for _, d := range m.downloads {
+		d.progress = progress.New(
+			progress.WithSpringOptions(0.5, 0.1),
+			progress.WithColors(colors.ProgressStart(), colors.ProgressEnd()),
+			progress.WithScaled(true),
+		)
+	}
 }

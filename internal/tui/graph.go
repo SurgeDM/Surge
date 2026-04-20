@@ -62,17 +62,21 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 	// Block characters for partial fills
 	blocks := []string{" ", "\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2588"}
 
+	// Snapshot current palette colors once per render so the gradient is consistent
+	// across all rows and doesn't allocate on every iteration.
+	gradient := graphColors()
+
 	// Pre-calculate styles for every row to avoid re-creating them in the loop
 	// Optimization: Pre-render all possible block characters for each row style
 	// This avoids calling style.Render() width*height times
 	rowChars := make([][]string, height)
 	for y := 0; y < height; y++ {
 		// Map height 'y' to an index in gradient
-		colorIdx := (y * len(graphColors())) / height
-		if colorIdx >= len(graphColors()) {
-			colorIdx = len(graphColors()) - 1
+		colorIdx := (y * len(gradient)) / height
+		if colorIdx >= len(gradient) {
+			colorIdx = len(gradient) - 1
 		}
-		style := lipgloss.NewStyle().Foreground(graphColors()[colorIdx])
+		style := lipgloss.NewStyle().Foreground(gradient[colorIdx])
 
 		rowChars[y] = make([]string, len(blocks))
 		for k, b := range blocks {
