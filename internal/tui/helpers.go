@@ -69,34 +69,41 @@ func (m *RootModel) removeDownloadByID(id string) bool {
 }
 
 func (m *RootModel) handleFilePickerSelection(path string) (tea.Model, tea.Cmd) {
-	if m.SettingsFileBrowsing {
-		if m.SettingsBrowsingKey == "theme_path" {
-			m.Settings.General.ThemePath = path
-			m.ApplyTheme(m.Settings.General.Theme, path)
-		} else {
-			m.Settings.General.DefaultDownloadDir = path
-		}
-		m.SettingsFileBrowsing = false
-		m.SettingsBrowsingKey = ""
+	switch m.filepickerOrigin {
+	case FilePickerOriginTheme:
+		m.Settings.General.ThemePath = path
+		m.ApplyTheme(m.Settings.General.Theme, path)
+		m.filepickerOrigin = FilePickerOriginNone
 		m.state = SettingsState
 		m.resetFilepickerToDirMode()
 		return m, nil
-	}
-	if m.ExtensionFileBrowsing {
+	case FilePickerOriginSettings:
+		m.Settings.General.DefaultDownloadDir = path
+		m.filepickerOrigin = FilePickerOriginNone
+		m.state = SettingsState
+		m.resetFilepickerToDirMode()
+		return m, nil
+	case FilePickerOriginExtension:
 		m.inputs[2].SetValue(path)
-		m.ExtensionFileBrowsing = false
+		m.focusInput(2)
+		m.filepickerOrigin = FilePickerOriginNone
 		m.state = ExtensionConfirmationState
 		return m, nil
-	}
-	if m.catMgrFileBrowsing {
+	case FilePickerOriginCategory:
 		m.catMgrInputs[3].SetValue(path)
-		m.catMgrFileBrowsing = false
+		m.catMgrEditField = 3
+		m.blurAllCatInputs()
+		m.catMgrInputs[3].Focus()
+		m.filepickerOrigin = FilePickerOriginNone
 		m.state = CategoryManagerState
 		return m, nil
+	default:
+		m.inputs[2].SetValue(path)
+		m.focusInput(2)
+		m.filepickerOrigin = FilePickerOriginNone
+		m.state = InputState
+		return m, nil
 	}
-	m.inputs[2].SetValue(path)
-	m.state = InputState
-	return m, nil
 }
 
 func (m *RootModel) handleFilePickerGotoHome() tea.Cmd {
@@ -113,6 +120,14 @@ func (m *RootModel) resetFilepickerToDirMode() {
 	m.filepicker.FileAllowed = false
 	m.filepicker.DirAllowed = true
 	m.filepicker.AllowedTypes = nil
+}
+
+func (m *RootModel) openDirectoryPicker(origin FilePickerOrigin, originalPath, browseDir string) tea.Cmd {
+	m.filepickerOrigin = origin
+	m.filepickerOriginalPath = originalPath
+	m.state = FilePickerState
+	m.filepicker = newFilepicker(browseDir)
+	return m.filepicker.Init()
 }
 
 // checkForDuplicate checks if a compatible download already exists

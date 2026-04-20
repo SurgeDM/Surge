@@ -84,25 +84,23 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Settings.Browse) {
 		settingKey := m.getCurrentSettingKey()
 		if settingKey == "default_download_dir" {
-			m.SettingsFileBrowsing = true
-			m.SettingsBrowsingKey = settingKey
-			m.filepickerOriginalPath = m.Settings.General.DefaultDownloadDir
-			m.state = FilePickerState
-			m.filepicker = newFilepicker(m.filepickerOriginalPath)
-			return m, m.filepicker.Init()
-		} else if settingKey == "theme_path" {
-			m.SettingsFileBrowsing = true
-			m.SettingsBrowsingKey = settingKey
-			m.filepickerOriginalPath = m.Settings.General.ThemePath
-			if m.filepickerOriginalPath == "" {
-				m.filepickerOriginalPath = m.PWD
+			originalPath := m.Settings.General.DefaultDownloadDir
+			browseDir := originalPath
+			if browseDir == "" {
+				browseDir = m.PWD
 			}
-			m.state = FilePickerState
-			m.filepicker = newFilepicker(m.filepickerOriginalPath)
-			m.filepicker.DirAllowed = false
+			return m, m.openDirectoryPicker(FilePickerOriginSettings, originalPath, browseDir)
+		} else if settingKey == "theme_path" {
+			originalPath := m.Settings.General.ThemePath
+			browseDir := originalPath
+			if browseDir == "" {
+				browseDir = m.PWD
+			}
+			cmd := m.openDirectoryPicker(FilePickerOriginTheme, originalPath, browseDir)
 			m.filepicker.FileAllowed = true
+			m.filepicker.DirAllowed = false
 			m.filepicker.AllowedTypes = []string{".toml"}
-			return m, m.filepicker.Init()
+			return m, cmd
 		}
 		return m, nil
 	}
