@@ -243,7 +243,7 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 
 	writeJSONResponse(w, http.StatusConflict, map[string]string{
 		"status":  "error",
-		"message": "Download rejected: Duplicate download or approval required (Headless mode)",
+		"message": "Download rejected: Duplicate download detected (Headless mode)",
 	})
 	return true
 }
