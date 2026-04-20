@@ -258,6 +258,7 @@ func TestResolveConnectBaseURL(t *testing.T) {
 	}{
 		{name: "loopback host:port defaults http", target: "127.0.0.1:1700", want: "http://127.0.0.1:1700"},
 		{name: "localhost defaults http", target: "localhost:1700", want: "http://localhost:1700"},
+		{name: "ipv6 loopback host:port defaults http", target: "[::1]:1700", want: "http://[::1]:1700"},
 		{name: "remote host defaults https", target: "example.com:1700", want: "https://example.com:1700"},
 		{name: "https URL allowed", target: "https://example.com:1700", want: "https://example.com:1700"},
 		{name: "http URL loopback allowed", target: "http://127.0.0.1:1700", want: "http://127.0.0.1:1700"},
@@ -284,6 +285,30 @@ func TestResolveConnectBaseURL(t *testing.T) {
 				t.Fatalf("Expected %q, got %q", tt.want, got)
 			}
 		})
+	}
+}
+
+func TestResolveTokenForTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	if err := config.EnsureDirs(); err != nil {
+		t.Fatalf("Failed to ensure dirs: %v", err)
+	}
+
+	origToken := globalToken
+	globalToken = ""
+	t.Setenv("SURGE_TOKEN", "")
+	t.Cleanup(func() {
+		globalToken = origToken
+	})
+
+	token, err := resolveTokenForTarget("[::1]:1700")
+	if err != nil {
+		t.Fatalf("resolveTokenForTarget returned error: %v", err)
+	}
+	if token == "" {
+		t.Fatal("expected non-empty local token for IPv6 loopback target")
 	}
 }
 
