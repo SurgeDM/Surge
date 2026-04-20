@@ -409,16 +409,16 @@ async function handleDownloadCreated(downloadItem: {
   if (shouldSkipUrl(downloadItem.url)) return;
   if (!isFreshDownload(downloadItem)) return;
 
-  // Cancel the browser download IMMEDIATELY — before any network calls.
-  // This is the critical fix: when the browser window is focused, Chrome actively
-  // progresses the download during any async work. Cancelling first ensures we
-  // always win the race regardless of window focus state.
+  // Only intercept when Surge is actually reachable. If the daemon is offline,
+  // leave the browser download alone so normal downloads keep working.
+  if (!await checkHealthSilent()) return;
+
+  // Once health has passed, cancel the browser download immediately before any
+  // additional async work so the browser does not race ahead of the handoff.
   try {
     await browser.downloads.cancel(downloadItem.id);
     await browser.downloads.erase({ id: downloadItem.id } as any);
   } catch { /* already completed or removed — ignore */ }
-
-  if (!await checkHealthSilent()) return;
 
   const { filename, directory } = extractPathInfo(downloadItem);
   const duplicateDisplayName = filename || downloadItem.url.split('/').pop()?.split('?')[0] || 'Unknown file';
