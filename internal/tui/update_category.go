@@ -117,18 +117,15 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		if key.Matches(msg, m.keys.CategoryMgr.Tab) {
 			// On Path field, open file picker for directory browsing
 			if m.catMgrEditField == 3 {
-				m.filepickerOriginalPath = m.catMgrInputs[3].Value()
-				browseDir := strings.TrimSpace(m.filepickerOriginalPath)
+				originalPath := m.catMgrInputs[3].Value()
+				browseDir := strings.TrimSpace(originalPath)
 				if browseDir == "" {
 					browseDir = m.Settings.General.DefaultDownloadDir
 				}
 				if browseDir == "" {
 					browseDir = m.PWD
 				}
-				m.catMgrFileBrowsing = true
-				m.state = FilePickerState
-				m.filepicker = newFilepicker(browseDir)
-				return m, m.filepicker.Init()
+				return m, m.openDirectoryPicker(FilePickerOriginCategory, originalPath, browseDir)
 			}
 			// Cycle fields
 			m.catMgrInputs[m.catMgrEditField].Blur()

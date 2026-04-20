@@ -54,6 +54,16 @@ const (
 	HelpModalState                            // HelpModalState is 15
 )
 
+type FilePickerOrigin int
+
+const (
+	FilePickerOriginNone FilePickerOrigin = iota
+	FilePickerOriginAdd
+	FilePickerOriginSettings
+	FilePickerOriginExtension
+	FilePickerOriginCategory
+)
+
 const (
 	TabQueued = 0
 	TabActive = 1
@@ -104,6 +114,7 @@ type RootModel struct {
 	// File picker for directory selection
 	filepicker             filepicker.Model
 	filepickerOriginalPath string
+	filepickerOrigin       FilePickerOrigin
 
 	// Bubbles help component
 	help help.Model
@@ -132,14 +143,12 @@ type RootModel struct {
 	logFocused  bool           // Whether the log viewport is focused
 
 	// Settings
-	Settings              *config.Settings // Application settings
-	SettingsActiveTab     int              // Active category tab (0-3)
-	SettingsSelectedRow   int              // Selected setting within current tab
-	SettingsIsEditing     bool             // Whether currently editing a value
-	SettingsInput         textinput.Model  // Input for editing string/int values
-	SettingsFileBrowsing  bool             // Whether browsing for a directory
-	ExtensionFileBrowsing bool             // Whether browsing for extension prompt path
-	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
+	Settings             *config.Settings // Application settings
+	SettingsActiveTab    int              // Active category tab (0-3)
+	SettingsSelectedRow  int              // Selected setting within current tab
+	SettingsIsEditing    bool             // Whether currently editing a value
+	SettingsInput        textinput.Model  // Input for editing string/int values
+	ExtensionTokenCopied bool             // Flash message for "Token Copied!"
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download
@@ -158,14 +167,12 @@ type RootModel struct {
 	urlUpdateInput textinput.Model // Text input for updating URL
 
 	// Category manager
-	categoryFilter     string             // Dashboard filter ("" = all)
-	catMgrCursor       int                // Selected category index
-	catMgrEditing      bool               // Whether editing a category
-	catMgrEditField    int                // 0=Name, 1=Description, 2=Pattern, 3=Path
-	catMgrInputs       [4]textinput.Model // Inputs for Name, Description, Pattern, Path
-	catMgrIsNew        bool               // Whether adding a new category
-	catMgrFileBrowsing bool               // Whether browsing for a category path
-
+	categoryFilter  string             // Dashboard filter ("" = all)
+	catMgrCursor    int                // Selected category index
+	catMgrEditing   bool               // Whether editing a category
+	catMgrEditField int                // 0=Name, 1=Description, 2=Pattern, 3=Path
+	catMgrInputs    [4]textinput.Model // Inputs for Name, Description, Pattern, Path
+	catMgrIsNew     bool               // Whether adding a new category
 	// Quit confirm button focus (0 = Yep!, 1 = Nope)
 	quitConfirmFocused int
 
@@ -571,6 +578,8 @@ func newFilepicker(currentDir string) filepicker.Model {
 	// We also keep 'right' for Open to allow directory navigation.
 	fp.KeyMap.Select = key.NewBinding(key.WithKeys("."))
 	fp.KeyMap.Open = key.NewBinding(key.WithKeys(".", "right"))
+	// Keep ESC reserved for dismissing the modal; use left/backspace/h to go up.
+	fp.KeyMap.Back = key.NewBinding(key.WithKeys("h", "backspace", "left"))
 
 	return fp
 }

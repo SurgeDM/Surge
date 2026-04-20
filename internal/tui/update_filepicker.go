@@ -23,28 +23,33 @@ func (m *RootModel) handleBatchFileSelection(path string) (tea.Model, tea.Cmd) {
 
 func (m RootModel) updateFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.FilePicker.Cancel) {
-		// Cancel and return to appropriate state
-		if m.SettingsFileBrowsing {
+		switch m.filepickerOrigin {
+		case FilePickerOriginSettings:
 			m.Settings.General.DefaultDownloadDir = m.filepickerOriginalPath
-			m.SettingsFileBrowsing = false
+			m.filepickerOrigin = FilePickerOriginNone
 			m.state = SettingsState
 			return m, nil
-		}
-		if m.ExtensionFileBrowsing {
+		case FilePickerOriginExtension:
 			m.inputs[2].SetValue(m.filepickerOriginalPath)
-			m.ExtensionFileBrowsing = false
+			m.focusInput(2)
+			m.filepickerOrigin = FilePickerOriginNone
 			m.state = ExtensionConfirmationState
 			return m, nil
-		}
-		if m.catMgrFileBrowsing {
+		case FilePickerOriginCategory:
 			m.catMgrInputs[3].SetValue(m.filepickerOriginalPath)
-			m.catMgrFileBrowsing = false
+			m.catMgrEditField = 3
+			m.blurAllCatInputs()
+			m.catMgrInputs[3].Focus()
+			m.filepickerOrigin = FilePickerOriginNone
 			m.state = CategoryManagerState
 			return m, nil
+		default:
+			m.inputs[2].SetValue(m.filepickerOriginalPath)
+			m.focusInput(2)
+			m.filepickerOrigin = FilePickerOriginNone
+			m.state = InputState
+			return m, nil
 		}
-		m.inputs[2].SetValue(m.filepickerOriginalPath)
-		m.state = InputState
-		return m, nil
 	}
 
 	// H key to jump to default download directory

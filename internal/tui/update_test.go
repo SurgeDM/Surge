@@ -3,10 +3,12 @@ package tui
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
@@ -19,6 +21,27 @@ import (
 )
 
 var errTest = errors.New("test error")
+
+func newInputModels() []textinput.Model {
+	inputs := []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()}
+	for i := range inputs {
+		inputs[i].Prompt = ""
+	}
+	return inputs
+}
+
+func unwrapRootModel(t *testing.T, model tea.Model) RootModel {
+	t.Helper()
+	switch v := model.(type) {
+	case RootModel:
+		return v
+	case *RootModel:
+		return *v
+	default:
+		t.Fatalf("unexpected tea.Model type %T", model)
+		return RootModel{}
+	}
+}
 
 func TestUpdate_ResumeResultSetsResuming(t *testing.T) {
 	m := RootModel{
@@ -660,7 +683,7 @@ func TestQuitConfirm_TabWrapsFromNoToYes(t *testing.T) {
 	m := newQuitConfirmModel()
 	m.quitConfirmFocused = 1
 	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
-	m2 := updated.(RootModel)
+	m2 := unwrapRootModel(t, updated)
 	if m2.quitConfirmFocused != 0 {
 		t.Fatal("expected tab on Nope to wrap back to Yep!")
 	}
@@ -868,18 +891,10 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 }
 
 func TestUpdate_InputStatePasteRoutesToFocusedField(t *testing.T) {
-	makeInputs := func() []textinput.Model {
-		in := []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()}
-		for i := range in {
-			in[i].Prompt = ""
-		}
-		return in
-	}
-
 	m := RootModel{
 		state:        InputState,
 		focusedInput: 0,
-		inputs:       makeInputs(),
+		inputs:       newInputModels(),
 	}
 	m.inputs[0].Focus()
 
@@ -908,6 +923,114 @@ func TestUpdate_InputStatePasteRoutesToFocusedField(t *testing.T) {
 	m4 := updated.(RootModel)
 	if got := m4.inputs[2].Value(); got != "/tmp/downloads" {
 		t.Fatalf("extension path input paste = %q, want %q", got, "/tmp/downloads")
+	}
+}
+
+func TestUpdate_AddPathBrowseUsesCurrentPathAndEscReturnsToInput(t *testing.T) {
+	browseDir := t.TempDir()
+
+	m := RootModel{
+		state:        InputState,
+		focusedInput: 2,
+		inputs:       newInputModels(),
+		keys:         Keys,
+		PWD:          filepath.Dir(browseDir),
+		Settings:     config.DefaultSettings(),
+	}
+	m.inputs[2].SetValue(browseDir)
+	m.inputs[2].Focus()
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m2 := updated.(RootModel)
+
+	if got, want := m2.state, FilePickerState; got != want {
+		t.Fatalf("state = %v, want %v", got, want)
+	}
+	if got, want := m2.filepickerOrigin, FilePickerOriginAdd; got != want {
+		t.Fatalf("filepickerOrigin = %v, want %v", got, want)
+	}
+	if got, want := m2.filepicker.CurrentDirectory, browseDir; got != want {
+		t.Fatalf("current directory = %q, want %q", got, want)
+	}
+
+	updated, _ = m2.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m3 := unwrapRootModel(t, updated)
+
+	if got, want := m3.state, InputState; got != want {
+		t.Fatalf("state after esc = %v, want %v", got, want)
+	}
+	if got := m3.filepickerOrigin; got != FilePickerOriginNone {
+		t.Fatalf("filepickerOrigin after esc = %v, want none", got)
+	}
+	if got, want := m3.focusedInput, 2; got != want {
+		t.Fatalf("focusedInput after esc = %d, want %d", got, want)
+	}
+	if got, want := m3.inputs[2].Value(), browseDir; got != want {
+		t.Fatalf("path input after esc = %q, want %q", got, want)
+	}
+}
+
+func TestUpdate_FilePickerUseDirReturnsToAddInput(t *testing.T) {
+	browseDir := t.TempDir()
+
+	m := RootModel{
+		state:            FilePickerState,
+		focusedInput:     2,
+		inputs:           newInputModels(),
+		keys:             Keys,
+		Settings:         config.DefaultSettings(),
+		filepicker:       newFilepicker(browseDir),
+		filepickerOrigin: FilePickerOriginAdd,
+	}
+	m.filepicker.CurrentDirectory = browseDir
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m2 := unwrapRootModel(t, updated)
+
+	if got, want := m2.state, InputState; got != want {
+		t.Fatalf("state after use dir = %v, want %v", got, want)
+	}
+	if got, want := m2.inputs[2].Value(), browseDir; got != want {
+		t.Fatalf("path input after use dir = %q, want %q", got, want)
+	}
+	if got, want := m2.focusedInput, 2; got != want {
+		t.Fatalf("focusedInput after use dir = %d, want %d", got, want)
+	}
+}
+
+func TestNewFilepickerEscIsCancelOnly(t *testing.T) {
+	fp := newFilepicker(t.TempDir())
+	esc := tea.KeyPressMsg{Code: tea.KeyEscape}
+
+	if key.Matches(esc, fp.KeyMap.Back) {
+		t.Fatal("expected esc not to match filepicker back key")
+	}
+}
+
+func TestUpdate_FilePickerLeftAtRootStaysOpen(t *testing.T) {
+	rootDir := string(os.PathSeparator)
+	if volume := filepath.VolumeName(t.TempDir()); volume != "" {
+		rootDir = volume + string(os.PathSeparator)
+	}
+
+	m := RootModel{
+		state:            FilePickerState,
+		inputs:           newInputModels(),
+		keys:             Keys,
+		Settings:         config.DefaultSettings(),
+		filepicker:       newFilepicker(rootDir),
+		filepickerOrigin: FilePickerOriginAdd,
+	}
+	m.filepicker.CurrentDirectory = rootDir
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	m2 := unwrapRootModel(t, updated)
+
+	if got, want := m2.state, FilePickerState; got != want {
+		t.Fatalf("state after left at root = %v, want %v", got, want)
+	}
+	if got, want := filepath.Clean(m2.filepicker.CurrentDirectory), filepath.Clean(rootDir); got != want {
+		t.Fatalf("current directory after left at root = %q, want %q", got, want)
 	}
 }
 
