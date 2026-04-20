@@ -102,3 +102,36 @@ func TestHandleDownload_HeadlessMode_RejectsDuplicateWithWarn(t *testing.T) {
 		t.Fatalf("expected 409 Conflict for duplicate in headless mode, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
+
+func TestHandleDownload_HeadlessMode_RejectsExtensionPromptDuplicate(t *testing.T) {
+	setupIsolatedCmdState(t)
+	serverProgram = nil
+	t.Cleanup(func() { serverProgram = nil })
+
+	settings := config.DefaultSettings()
+	settings.Extension.ExtensionPrompt = true
+	settings.General.WarnOnDuplicate = false
+	if err := config.SaveSettings(settings); err != nil {
+		t.Fatalf("SaveSettings failed: %v", err)
+	}
+
+	url := "http://example.com/already-downloaded.bin"
+	_ = state.AddToMasterList(types.DownloadEntry{
+		ID: "ext-dup-id", URL: url, Filename: "already-downloaded.bin", Status: "completed",
+	})
+
+	progressCh := make(chan any, 10)
+	GlobalProgressCh = progressCh
+	GlobalPool = download.NewWorkerPool(progressCh, 1)
+	svc := core.NewLocalDownloadService(GlobalPool)
+	GlobalService = svc
+
+	body := fmt.Sprintf(`{"url": %q, "skip_approval": false}`, url)
+	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	handleDownload(rec, req, t.TempDir(), svc)
+
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409 for duplicate with ExtensionPrompt=true, got %d: %s", rec.Code, rec.Body.String())
+	}
+}

@@ -18,10 +18,6 @@ type DuplicateResult struct {
 
 // CheckForDuplicate inspects active and persisted downloads for duplicate URLs.
 func CheckForDuplicate(url string, settings *config.Settings, activeDownloads func() map[string]*types.DownloadConfig) *DuplicateResult {
-	if !settings.General.WarnOnDuplicate {
-		return nil
-	}
-
 	normalizedInputURL := strings.TrimRight(url, "/")
 
 	// Check active downloads
