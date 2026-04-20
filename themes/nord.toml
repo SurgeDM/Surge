@@ -28,3 +28,28 @@ blue = "#81a1c1"
 magenta = "#b48ead"
 cyan = "#8fbcbb"
 white = "#eceff4"
+
+[colors.light.primary]
+background = "#eceff4"
+foreground = "#2e3440"
+accent = "#5e81ac"
+
+[colors.light.normal]
+black = "#e5e9f0"
+red = "#bf616a"
+green = "#a3be8c"
+yellow = "#ebcb8b"
+blue = "#81a1c1"
+magenta = "#b48ead"
+cyan = "#8fbcbb"
+white = "#4c566a"
+
+[colors.light.bright]
+black = "#d8dee9"
+red = "#bf616a"
+green = "#a3be8c"
+yellow = "#ebcb8b"
+blue = "#81a1c1"
+magenta = "#b48ead"
+cyan = "#88c0d0"
+white = "#3b4252"

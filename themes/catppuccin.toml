@@ -2,8 +2,9 @@
 # source: https://github.com/catppuccin/alacritty/blob/main/catppuccin-frappe.toml
 
 [colors]
-name = "Catppuccin Frappe"
+name = "Catppuccin"
 
+# Frappe (Dark)
 [colors.primary]
 background = "#303446"
 foreground = "#c6d0f5"
@@ -28,3 +29,29 @@ blue = "#8caaee"
 magenta = "#f4b8e4"
 cyan = "#81c8be"
 white = "#a5adce"
+
+# Latte (Light)
+[colors.light.primary]
+background = "#eff1f5"
+foreground = "#4c4f69"
+accent = "#8839ef"
+
+[colors.light.normal]
+black = "#e6e9ef"
+red = "#d20f39"
+green = "#40a02b"
+yellow = "#df8e1d"
+blue = "#1e66f5"
+magenta = "#ea76cb"
+cyan = "#179299"
+white = "#4c4f69"
+
+[colors.light.bright]
+black = "#bcc0cc"
+red = "#d20f39"
+green = "#40a02b"
+yellow = "#df8e1d"
+blue = "#1e66f5"
+magenta = "#ea76cb"
+cyan = "#179299"
+white = "#4c4f69"
