@@ -111,7 +111,7 @@ export default function DownloadItem(props: Props) {
   });
 
   const renderActions = (inline = false) => (
-    <div class={`download-actions${inline ? ' inline' : ''}`} onClick={handleActionClick}>
+    <div class={`download-actions${inline ? ' inline' : ''}`}>
       <For each={actions()}>{(button) => (
         <button
           type="button"
@@ -119,6 +119,7 @@ export default function DownloadItem(props: Props) {
           data-action={button.action}
           title={button.title}
           aria-label={button.title}
+          onClick={handleActionClick}
         >
           {button.icon}
         </button>
@@ -144,7 +145,14 @@ export default function DownloadItem(props: Props) {
 
   return (
     <div class={`download-item${expanded() ? ' expanded' : ''}`} data-id={dl().id}>
-      <div class="download-header" data-toggle onClick={() => setExpanded(!expanded())}>
+      <button
+        type="button"
+        class="download-header"
+        data-toggle
+        onClick={() => setExpanded(!expanded())}
+        aria-expanded={expanded()}
+        aria-label={`${expanded() ? 'Collapse' : 'Expand'} details for ${dl().filename || extractFilename(dl().url)}`}
+      >
         <div class="download-main">
           <span class="filename" title={dl().filename || dl().url}>
             {truncate(dl().filename || extractFilename(dl().url), 28)}
@@ -157,9 +165,9 @@ export default function DownloadItem(props: Props) {
         </div>
         <div class="download-header-right">
           <span class={`status-tag ${status()}`}>{STATUS_LABELS[status()]}</span>
-          <span class="expand-icon">{expanded() ? '\u25BC' : '\u25B6'}</span>
+          <span class="expand-icon" aria-hidden="true">{expanded() ? '\u25BC' : '\u25B6'}</span>
         </div>
-      </div>
+      </button>
 
       <div class="download-details">
         <div class="progress-container">
@@ -171,7 +179,7 @@ export default function DownloadItem(props: Props) {
             <span class="progress-percent">{dl().progress.toFixed(1)}%</span>
           </div>
         </div>
-        <div class="download-actions" onClick={handleActionClick}>
+        <div class="download-actions">
           <For each={actions()}>{(button) => (
             <button
               type="button"
@@ -179,6 +187,7 @@ export default function DownloadItem(props: Props) {
               data-action={button.action}
               title={button.title}
               aria-label={button.title}
+              onClick={handleActionClick}
             >
               {button.icon}
             </button>

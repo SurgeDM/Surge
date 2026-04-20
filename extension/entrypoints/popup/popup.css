@@ -39,6 +39,11 @@
   padding: 0;
 }
 
+*:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
 html, body, #app {
   width: 360px;
   height: 540px;
@@ -173,6 +178,11 @@ body {
     0 0 0 1px rgba(255, 255, 255, 0.06);
   transition: all 0.2s ease;
   cursor: pointer;
+  border: none;
+  font-family: inherit;
+  width: auto;
+  line-height: normal;
+  text-align: left;
 }
 
 .status-badge.online {
@@ -448,9 +458,13 @@ body {
   justify-content: space-between;
   align-items: center;
   padding: 12px 14px;
-  cursor: pointer;
   gap: 12px;
   transition: background 0.15s ease;
+  background: transparent;
+  border: none;
+  width: 100%;
+  font-family: inherit;
+  text-align: left;
 }
 
 .download-header:hover {
@@ -827,6 +841,11 @@ body {
 
 .toggle-row:hover {
   color: var(--accent-primary);
+}
+
+.toggle input:focus-visible + .toggle-slider {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 4px;
 }
 
 .toggle {

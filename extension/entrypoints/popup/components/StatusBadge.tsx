@@ -12,9 +12,14 @@ export default function StatusBadge(props: { connected: boolean; authValid: bool
   };
 
   return (
-    <div class={`status-badge ${status()}`} onClick={() => props.onClick?.()}>
-      <span class={`status-dot ${status()}`} />
+    <button
+      type="button"
+      class={`status-badge ${status()}`}
+      onClick={() => props.onClick?.()}
+      aria-label={`Server status: ${text()}`}
+    >
+      <span class={`status-dot ${status()}`} aria-hidden="true" />
       <span class="status-text">{text()}</span>
-    </div>
+    </button>
   );
 }
