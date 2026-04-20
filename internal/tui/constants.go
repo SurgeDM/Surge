@@ -27,7 +27,7 @@ const (
 	DefaultSettingsHeight = 26
 
 	MinRightColumnWidth = 50 // Hide right column if narrow
-	MinGraphStatsWidth  = 70 // Hide inline graph stats if narrow
+	MinGraphStatsWidth  = 50 // Show inline graph stats whenever right column is visible
 	MinLogoWidth        = 40 // Hide ASCII logo if narrow
 
 	MinGraphHeight      = 9

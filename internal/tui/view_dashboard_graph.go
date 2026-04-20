@@ -154,9 +154,9 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 		)
 
 		statsBoxStyle := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
+			Border(lipgloss.NormalBorder(), false, true, false, false).
 			BorderForeground(colors.Gray()).
-			Padding(0, 1).
+			Padding(0, 1). // 1 padding left and right for breathing room
 			Width(GraphStatsWidth).
 			Height(graphContentHeight)
 		statsBox := statsBoxStyle.Render(statsContent)

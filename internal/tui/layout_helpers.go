@@ -68,21 +68,19 @@ func IsShortTerminal(height int) bool {
 // GetGraphAreaDimensions calculates dimensions for the graph area
 func GetGraphAreaDimensions(rightWidth int, isStatsHidden bool) (int, int) {
 	axisWidth := GraphAxisWidth
+	innerWidth := rightWidth - BoxStyle.GetHorizontalFrameSize()
 
 	if isStatsHidden {
-		// No stats box — graph gets almost full width.
-		// Higher buffer (* 5) accounts for extra padding needed when axis is on the far right
-		// to maintain visual balance with the outer container borders.
-		graphAreaWidth := rightWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 5)
+		// Graph takes almost full width, minus axis. Use small buffer for safety
+		graphAreaWidth := innerWidth - axisWidth - 2
 		if graphAreaWidth < 10 {
 			graphAreaWidth = 10
 		}
 		return graphAreaWidth, axisWidth
 	}
 
-	// Graph takes remaining width after stats box.
-	// Smaller buffer (* 3) as the stats box provides its own internal padding.
-	graphAreaWidth := rightWidth - GraphStatsWidth - axisWidth - (BoxStyle.GetHorizontalFrameSize() * 3)
+	// Graph takes remaining width after stats box
+	graphAreaWidth := innerWidth - GraphStatsWidth - axisWidth - 2
 	if graphAreaWidth < 10 {
 		graphAreaWidth = 10
 	}
@@ -218,10 +216,19 @@ func CalculateDashboardLayout(termW, termH int) DashboardLayout {
 		}
 
 		// Adjust heights for detail and chunk map
+		targetDetailH := l.AvailableHeight - targetGraphH
+
+		// If we show chunk map, check if there's enough room for details
+		if l.ShowChunkMap {
+			potentialDetailH := targetDetailH - (5 + components.BorderFrameHeight)
+			if potentialDetailH < 14 {
+				l.ShowChunkMap = false
+			}
+		}
+
 		if l.ShowChunkMap {
 			l.ChunkMapHeight = 5 + components.BorderFrameHeight // 5 rows of content + 2 for borders
 			l.GraphHeight = targetGraphH
-
 			l.DetailHeight = l.AvailableHeight - l.GraphHeight - l.ChunkMapHeight
 		} else {
 			l.GraphHeight = targetGraphH
