@@ -440,6 +440,7 @@ var rootCmd = &cobra.Command{
 		if err := initializeRootLocalRuntime(); err != nil {
 			return err
 		}
+		defer cancelGlobalEnqueue()
 
 		opts := readRootRunOptions(cmd)
 		port, cleanup, err := startRootHTTPServer(opts)
