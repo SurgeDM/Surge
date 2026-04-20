@@ -84,10 +84,12 @@ func TestHandleDownload_HeadlessMode_RejectsDuplicateWithWarn(t *testing.T) {
 	origPool := GlobalPool
 	origProgress := GlobalProgressCh
 	origService := GlobalService
+	origLifecycle := GlobalLifecycle
 	t.Cleanup(func() {
 		GlobalPool = origPool
 		GlobalProgressCh = origProgress
 		GlobalService = origService
+		GlobalLifecycle = origLifecycle
 	})
 
 	// Enable WarnOnDuplicate
@@ -134,10 +136,12 @@ func TestHandleDownload_HeadlessMode_RejectsExtensionPromptDuplicate(t *testing.
 	origPool := GlobalPool
 	origProgress := GlobalProgressCh
 	origService := GlobalService
+	origLifecycle := GlobalLifecycle
 	t.Cleanup(func() {
 		GlobalPool = origPool
 		GlobalProgressCh = origProgress
 		GlobalService = origService
+		GlobalLifecycle = origLifecycle
 	})
 
 	settings := config.DefaultSettings()

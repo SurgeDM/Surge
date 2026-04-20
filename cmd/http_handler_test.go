@@ -424,10 +424,18 @@ func (f *failingPublishService) Publish(msg interface{}) error {
 func TestHandleDownload_PublishError_RecordsPreflightError(t *testing.T) {
 	setupIsolatedCmdState(t)
 
-	GlobalPool = download.NewWorkerPool(nil, 1)
+	origPool := GlobalPool
+	origProgress := GlobalProgressCh
+	origService := GlobalService
+	origLifecycle := GlobalLifecycle
 	t.Cleanup(func() {
-		GlobalPool = nil
+		GlobalPool = origPool
+		GlobalProgressCh = origProgress
+		GlobalService = origService
+		GlobalLifecycle = origLifecycle
 	})
+
+	GlobalPool = download.NewWorkerPool(nil, 1)
 
 	origServerProgram := serverProgram
 	serverProgram = &tea.Program{}
@@ -441,11 +449,7 @@ func TestHandleDownload_PublishError_RecordsPreflightError(t *testing.T) {
 	}
 
 	svc := &failingPublishService{publishErr: errors.New("publish failed")}
-	origService := GlobalService
 	GlobalService = svc
-	t.Cleanup(func() {
-		GlobalService = origService
-	})
 
 	outDir := t.TempDir()
 	body := fmt.Sprintf(`{"url": %q, "path": %q}`, "http://example.com/file.bin", outDir)
