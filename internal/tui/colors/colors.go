@@ -288,7 +288,6 @@ func SetDarkMode(isDark bool) {
 
 	// Re-load the active theme (custom or empty → built-in default) with the new mode.
 	LoadTheme(path, isDark)
-	return
 }
 
 // ThemeColor returns the light or dark variant based on current mode.
