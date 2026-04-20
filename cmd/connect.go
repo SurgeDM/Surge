@@ -17,8 +17,6 @@ import (
 
 type connectTarget struct {
 	BaseURL string
-	Host    string
-	Port    int
 }
 
 var connectCmd = &cobra.Command{
@@ -39,7 +37,7 @@ var connectCmd = &cobra.Command{
 				return fmt.Errorf("no local Surge server detected. Start one with 'surge' or 'surge server', or specify a target: surge connect <host:port>")
 			}
 			target = fmt.Sprintf("127.0.0.1:%d", port)
-			fmt.Printf("Auto-detected local server on port %d\n", port)
+			fmt.Fprintf(os.Stderr, "Auto-detected local server on port %d\n", port)
 		}
 		return connectAndRunTUI(cmd, target)
 	},
@@ -61,7 +59,7 @@ func connectAndRunTUI(_ *cobra.Command, target string) error {
 		return err
 	}
 
-	fmt.Printf("Connecting to %s...\n", parsed.BaseURL)
+	fmt.Fprintf(os.Stderr, "Connecting to %s...\n", parsed.BaseURL)
 
 	service, err := newRemoteDownloadService(parsed.BaseURL, token)
 	if err != nil {
@@ -86,7 +84,7 @@ func connectAndRunTUI(_ *cobra.Command, target string) error {
 	}
 	defer cleanup()
 
-	m := newRemoteRootModel(parsed.Port, service, parsed.Host)
+	m := newRemoteRootModel(parsed.BaseURL, service)
 
 	p := tea.NewProgram(m)
 	go func() {
@@ -101,9 +99,11 @@ func connectAndRunTUI(_ *cobra.Command, target string) error {
 	return nil
 }
 
-func newRemoteRootModel(port int, service core.DownloadService, serverHost string) tui.RootModel {
-	m := tui.InitialRootModel(port, Version, service, nil, false)
+func newRemoteRootModel(baseURL string, service core.DownloadService) tui.RootModel {
+	serverHost, serverPort := parseRemoteServerAddress(baseURL)
+	m := tui.InitialRootModel(serverPort, Version, service, nil, false)
 	m.ServerHost = serverHost
+	m.ServerPort = serverPort
 	m.IsRemote = true
 	return m
 }
@@ -117,10 +117,11 @@ func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 		return token, nil
 	}
 
-	if isLocalHost(target.Host) {
+	serverHost, _ := parseRemoteServerAddress(target.BaseURL)
+	if isLocalHost(serverHost) {
 		return ensureAuthToken(), nil
 	}
-	return "", fmt.Errorf("no token provided. Use --token or set SURGE_TOKEN")
+	return "", fmt.Errorf("remote target %q requires authentication: use --token or set SURGE_TOKEN", target.BaseURL)
 }
 
 func parseConnectTarget(target string, allowInsecureHTTP bool) (connectTarget, error) {
@@ -165,13 +166,11 @@ func parseConnectTarget(target string, allowInsecureHTTP bool) (connectTarget, e
 		return connectTarget{}, fmt.Errorf("invalid target %q: missing host", target)
 	}
 
-	portNumber := 0
 	if port != "" {
 		n, err := strconv.Atoi(port)
 		if err != nil || n < 1 || n > 65535 {
 			return connectTarget{}, fmt.Errorf("invalid target %q: invalid port %q", target, port)
 		}
-		portNumber = n
 	}
 
 	if scheme == "" {
@@ -187,9 +186,32 @@ func parseConnectTarget(target string, allowInsecureHTTP bool) (connectTarget, e
 
 	return connectTarget{
 		BaseURL: fmt.Sprintf("%s://%s", scheme, formatConnectURLHost(host, port)),
-		Host:    host,
-		Port:    portNumber,
 	}, nil
+}
+
+func parseRemoteServerAddress(baseURL string) (string, int) {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return "", 0
+	}
+
+	port, err := strconv.Atoi(u.Port())
+	if err != nil {
+		port = defaultPortForScheme(u.Scheme)
+	}
+
+	return u.Hostname(), port
+}
+
+func defaultPortForScheme(scheme string) int {
+	switch scheme {
+	case "http":
+		return 80
+	case "https":
+		return 443
+	default:
+		return 0
+	}
 }
 
 func formatConnectTargetAddrError(target string, err error) error {

@@ -631,7 +631,10 @@ func TestConnectCmd_HostSourcesBypassLocalAutodetect(t *testing.T) {
 				t.Fatalf("connect command ignored configured host source: %v", err)
 			}
 
-			if !strings.Contains(err.Error(), "no token provided") {
+			if !strings.Contains(err.Error(), "requires authentication") {
+				t.Fatalf("expected remote target auth error, got: %v", err)
+			}
+			if !strings.Contains(err.Error(), "https://198.1.1.1:7800") {
 				t.Fatalf("expected remote target path with token error, got: %v", err)
 			}
 		})

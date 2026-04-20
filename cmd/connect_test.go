@@ -65,7 +65,7 @@ func (f *fakeRemoteDownloadService) GetStatus(id string) (*types.DownloadStatus,
 func (f *fakeRemoteDownloadService) Shutdown() error { return nil }
 
 func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
-	m := newRemoteRootModel(1700, nil, "example.com")
+	m := newRemoteRootModel("https://example.com:1700", nil)
 
 	if m.Orchestrator != nil {
 		t.Fatal("expected remote root model to use nil orchestrator")
@@ -76,11 +76,14 @@ func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
 	if m.ServerHost != "example.com" {
 		t.Fatalf("server host = %q, want example.com", m.ServerHost)
 	}
+	if m.ServerPort != 1700 {
+		t.Fatalf("server port = %d, want 1700", m.ServerPort)
+	}
 }
 
 func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
 	service := &fakeRemoteDownloadService{}
-	m := newRemoteRootModel(1700, service, "example.com")
+	m := newRemoteRootModel("https://example.com:1700", service)
 	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = false
 
@@ -126,8 +129,6 @@ func TestParseConnectTarget_ParsesIPv6AddressWithPort(t *testing.T) {
 			target: "[2001:db8::1]:1700",
 			want: connectTarget{
 				BaseURL: "https://[2001:db8::1]:1700",
-				Host:    "2001:db8::1",
-				Port:    1700,
 			},
 		},
 	}
@@ -140,6 +141,28 @@ func TestParseConnectTarget_ParsesIPv6AddressWithPort(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Fatalf("parseConnectTarget(%q) = %#v, want %#v", tt.target, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseRemoteServerAddress_DefaultPorts(t *testing.T) {
+	tests := []struct {
+		name     string
+		baseURL  string
+		wantHost string
+		wantPort int
+	}{
+		{name: "https default port", baseURL: "https://example.com", wantHost: "example.com", wantPort: 443},
+		{name: "http default port", baseURL: "http://127.0.0.1", wantHost: "127.0.0.1", wantPort: 80},
+		{name: "explicit port", baseURL: "https://example.com:1700", wantHost: "example.com", wantPort: 1700},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotHost, gotPort := parseRemoteServerAddress(tt.baseURL)
+			if gotHost != tt.wantHost || gotPort != tt.wantPort {
+				t.Fatalf("parseRemoteServerAddress(%q) = (%q, %d), want (%q, %d)", tt.baseURL, gotHost, gotPort, tt.wantHost, tt.wantPort)
 			}
 		})
 	}
