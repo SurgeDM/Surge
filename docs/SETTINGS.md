@@ -42,6 +42,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | **Config**  | `settings.json`                   | `~/.config/surge/`           | `~/Library/Application Support/surge/`      | `%APPDATA%\surge\`      |
 | **State**   | Database (`surge.db`), auth token | `~/.local/state/surge/`      | `~/Library/Application Support/surge/`      | `%APPDATA%\surge\`      |
 | **Logs**    | Timestamped `.log` files          | `~/.local/state/surge/logs/` | `~/Library/Application Support/surge/logs/` | `%APPDATA%\surge\logs\` |
+| **Themes**  | Custom `.toml` theme files        | `~/.config/surge/themes/`    | `~/Library/Application Support/surge/themes/` | `%APPDATA%\surge\themes\` |
 | **Runtime** | PID file, port file, lock         | `$XDG_RUNTIME_DIR/surge/`¹   | `$TMPDIR/surge-runtime/`                    | `%TEMP%\surge\`         |
 
 > ¹ Falls back to `~/.local/state/surge/` when `$XDG_RUNTIME_DIR` is not set (e.g. Docker / headless).
@@ -62,6 +63,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `skip_update_check`    | bool   | Disable automatic check for new versions on startup.                                               | `false` |
 | `clipboard_monitor`    | bool   | Watch the system clipboard for URLs and prompt to download them.                                   | `true`  |
 | `theme`                | int    | UI Theme (0=Adaptive, 1=Light, 2=Dark).                                                            | `0`     |
+| `theme_path`           | string | Path to a custom `.toml` color scheme or name of theme in the `themes` directory.                 | `""`    |
 | `log_retention_count`  | int    | Number of recent log files to keep.                                                                | `5`     |
 | `live_speed_graph`     | bool   | Use live speed for graph instead of EMA smoothed speed.                                            | `false` |
 
