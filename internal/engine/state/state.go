@@ -24,6 +24,8 @@ const (
 
 	hashPrefixMD5    = "md5:"
 	hashPrefixSHA256 = "sha256:"
+
+	sqlDeleteTasks = "DELETE FROM tasks WHERE download_id = ?"
 )
 
 // SaveStateOptions controls pause-state persistence behavior.
@@ -117,7 +119,7 @@ func upsertDownloadState(tx *sql.Tx, state *types.DownloadState) error {
 
 func saveTasksInBatches(tx *sql.Tx, downloadID string, tasks []types.Task) error {
 	// First delete existing tasks for this download
-	if _, err := tx.Exec("DELETE FROM tasks WHERE download_id = ?", downloadID); err != nil {
+	if _, err := tx.Exec(sqlDeleteTasks, downloadID); err != nil {
 		return fmt.Errorf("failed to delete old tasks: %w", err)
 	}
 
@@ -343,7 +345,7 @@ func DeleteTasks(id string) error {
 		return fmt.Errorf("id cannot be empty")
 	}
 
-	_, err := db.Exec("DELETE FROM tasks WHERE download_id = ?", id)
+	_, err := db.Exec(sqlDeleteTasks, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete tasks: %w", err)
 	}
@@ -768,7 +770,7 @@ func computeFileHash(path string) (string, error) {
 
 func removeDownloadAndTasks(id string) error {
 	return withTx(func(tx *sql.Tx) error {
-		if _, err := tx.Exec("DELETE FROM tasks WHERE download_id = ?", id); err != nil {
+		if _, err := tx.Exec(sqlDeleteTasks, id); err != nil {
 			return fmt.Errorf("failed to delete tasks: %w", err)
 		}
 		if _, err := tx.Exec("DELETE FROM downloads WHERE id = ?", id); err != nil {
