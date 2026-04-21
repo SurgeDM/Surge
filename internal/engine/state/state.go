@@ -49,6 +49,17 @@ func SaveState(url string, destPath string, state *types.DownloadState) error {
 
 // SaveStateWithOptions saves download state to SQLite with custom persistence options.
 func SaveStateWithOptions(url string, destPath string, state *types.DownloadState, opts SaveStateOptions) error {
+	prepareStateForSave(url, state, opts)
+
+	return withTx(func(tx *sql.Tx) error {
+		if err := upsertDownloadState(tx, state); err != nil {
+			return err
+		}
+		return saveTasksInBatches(tx, state.ID, state.Tasks)
+	})
+}
+
+func prepareStateForSave(url string, state *types.DownloadState, opts SaveStateOptions) {
 	// Ensure ID is set
 	if state.ID == "" {
 		state.ID = uuid.New().String()
@@ -76,10 +87,10 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 		}
 		state.FileHash = fileHash
 	}
+}
 
-	return withTx(func(tx *sql.Tx) error {
-		// 1. Upsert into downloads table
-		_, err := tx.Exec(`
+func upsertDownloadState(tx *sql.Tx, state *types.DownloadState) error {
+	_, err := tx.Exec(`
 				INSERT INTO downloads (
 					id, url, dest_path, filename, status, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size, file_hash
 			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -98,69 +109,53 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 				actual_chunk_size=excluded.actual_chunk_size,
 				file_hash=excluded.file_hash
 		`, state.ID, state.URL, state.DestPath, state.Filename, "paused", state.TotalSize, state.Downloaded, state.URLHash, state.CreatedAt, state.PausedAt, state.Elapsed/1e6, strings.Join(state.Mirrors, ","), state.ChunkBitmap, state.ActualChunkSize, state.FileHash)
-		if err != nil {
-			return fmt.Errorf("failed to upsert download: %w", err)
-		}
-
-		// 2. Refresh tasks
-		// First delete existing tasks for this download
-		if _, err := tx.Exec("DELETE FROM tasks WHERE download_id = ?", state.ID); err != nil {
-			return fmt.Errorf("failed to delete old tasks: %w", err)
-		}
-
-		// Insert new tasks using batch insert
-		// SQLite limit is often 999 or 32766 params. Safe batch size: 50 tasks * 3 params = 150 params.
-		const batchSize = 50
-		tasks := state.Tasks
-		numTasks := len(tasks)
-
-		if numTasks > 0 {
-			// Prepare statement for full batches
-			placeholders := strings.Repeat("(?, ?, ?),", batchSize)
-			placeholders = placeholders[:len(placeholders)-1] // remove trailing comma
-			stmt, err := tx.Prepare("INSERT INTO tasks (download_id, offset, length) VALUES " + placeholders)
-			if err != nil {
-				return fmt.Errorf("failed to prepare batch insert: %w", err)
-			}
-			defer func() { _ = stmt.Close() }()
-
-			for i := 0; i < numTasks; i += batchSize {
-				end := i + batchSize
-				if end > numTasks {
-					// Last batch (partial)
-					end = numTasks
-					batch := tasks[i:end]
-
-					var q strings.Builder
-					q.WriteString("INSERT INTO tasks (download_id, offset, length) VALUES ")
-					args := make([]interface{}, 0, len(batch)*3)
-					for j, task := range batch {
-						if j > 0 {
-							q.WriteString(",")
-						}
-						q.WriteString("(?, ?, ?)")
-						args = append(args, state.ID, task.Offset, task.Length)
-					}
-					if _, err := tx.Exec(q.String(), args...); err != nil {
-						return fmt.Errorf("failed to insert partial batch: %w", err)
-					}
-				} else {
-					// Full batch
-					batch := tasks[i:end]
-					args := make([]interface{}, 0, batchSize*3)
-					for _, task := range batch {
-						args = append(args, state.ID, task.Offset, task.Length)
-					}
-					if _, err := stmt.Exec(args...); err != nil {
-						return fmt.Errorf("failed to insert tasks batch: %w", err)
-					}
-				}
-			}
-		}
-
-		return nil
-	})
+	if err != nil {
+		return fmt.Errorf("failed to upsert download: %w", err)
+	}
+	return nil
 }
+
+func saveTasksInBatches(tx *sql.Tx, downloadID string, tasks []types.Task) error {
+	// First delete existing tasks for this download
+	if _, err := tx.Exec("DELETE FROM tasks WHERE download_id = ?", downloadID); err != nil {
+		return fmt.Errorf("failed to delete old tasks: %w", err)
+	}
+
+	if len(tasks) == 0 {
+		return nil
+	}
+
+	const batchSize = 50
+	for i := 0; i < len(tasks); i += batchSize {
+		end := i + batchSize
+		if end > len(tasks) {
+			end = len(tasks)
+		}
+		if err := insertTaskBatch(tx, downloadID, tasks[i:end]); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func insertTaskBatch(tx *sql.Tx, downloadID string, batch []types.Task) error {
+	var q strings.Builder
+	q.WriteString("INSERT INTO tasks (download_id, offset, length) VALUES ")
+	args := make([]interface{}, 0, len(batch)*3)
+	for i, task := range batch {
+		if i > 0 {
+			q.WriteString(",")
+		}
+		q.WriteString("(?, ?, ?)")
+		args = append(args, downloadID, task.Offset, task.Length)
+	}
+	if _, err := tx.Exec(q.String(), args...); err != nil {
+		return fmt.Errorf("failed to insert tasks batch: %w", err)
+	}
+	return nil
+}
+
 
 func computeFileHashMD5WithTimeout(path string, timeout time.Duration) (string, bool, error) {
 	if timeout <= 0 {
