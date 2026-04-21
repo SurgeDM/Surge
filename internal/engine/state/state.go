@@ -828,6 +828,14 @@ func NormalizeStaleDownloads() (int, error) {
 	return int(count), nil
 }
 
+type integrityEntry struct {
+	id         string
+	destPath   string
+	fileHash   string
+	status     string
+	downloaded int64
+}
+
 // ValidateIntegrity checks that paused .surge files still exist and haven't been tampered with.
 // Removes orphaned or corrupted entries from the database.
 // Returns the number of entries removed.
@@ -837,31 +845,45 @@ func ValidateIntegrity() (int, error) {
 		return 0, fmt.Errorf(errDatabaseNotInitialized)
 	}
 
-	// Load all paused/queued downloads
+	entries, err := loadPausedEntries(db)
+	if err != nil {
+		return 0, err
+	}
+
+	expectedSurgePaths, candidateDirs, err := collectExpectedPaths(db, entries)
+	if err != nil {
+		return 0, err
+	}
+
+	removed, err := verifyEntriesIntegrity(entries)
+	if err != nil {
+		return removed, err
+	}
+
+	if err := cleanupOrphanSurgeFiles(candidateDirs, expectedSurgePaths); err != nil {
+		return removed, err
+	}
+
+	return removed, nil
+}
+
+func loadPausedEntries(db *sql.DB) ([]integrityEntry, error) {
 	rows, err := db.Query(`
 		SELECT id, dest_path, file_hash, status, downloaded
 		FROM downloads
 		WHERE status IN ('paused', 'queued')
 	`)
 	if err != nil {
-		return 0, fmt.Errorf("failed to query paused downloads: %w", err)
+		return nil, fmt.Errorf("failed to query paused downloads: %w", err)
 	}
 	defer func() { _ = rows.Close() }()
 
-	type entry struct {
-		id         string
-		destPath   string
-		fileHash   string
-		status     string
-		downloaded int64
-	}
-
-	var entries []entry
+	var entries []integrityEntry
 	for rows.Next() {
-		var e entry
+		var e integrityEntry
 		var fh sql.NullString
 		if err := rows.Scan(&e.id, &e.destPath, &fh, &e.status, &e.downloaded); err != nil {
-			return 0, err
+			return nil, err
 		}
 		if fh.Valid {
 			e.fileHash = fh.String
@@ -869,10 +891,12 @@ func ValidateIntegrity() (int, error) {
 		entries = append(entries, e)
 	}
 	if err := rows.Err(); err != nil {
-		return 0, fmt.Errorf("failed to iterate paused downloads: %w", err)
+		return nil, fmt.Errorf("failed to iterate paused downloads: %w", err)
 	}
+	return entries, nil
+}
 
-	removed := 0
+func collectExpectedPaths(db *sql.DB, entries []integrityEntry) (map[string]struct{}, map[string]struct{}, error) {
 	expectedSurgePaths := make(map[string]struct{}, len(entries))
 	candidateDirs := make(map[string]struct{}, len(entries))
 
@@ -893,14 +917,15 @@ func ValidateIntegrity() (int, error) {
 		WHERE dest_path IS NOT NULL AND dest_path != ''
 	`)
 	if err != nil {
-		return 0, fmt.Errorf("failed to query known download paths: %w", err)
+		return nil, nil, fmt.Errorf("failed to query known download paths: %w", err)
 	}
+	defer func() { _ = allRows.Close() }()
+
 	for allRows.Next() {
 		var dest string
 		var status string
 		if err := allRows.Scan(&dest, &status); err != nil {
-			_ = allRows.Close()
-			return 0, fmt.Errorf("failed to scan download path: %w", err)
+			return nil, nil, fmt.Errorf("failed to scan download path: %w", err)
 		}
 		candidateDirs[filepath.Dir(dest)] = struct{}{}
 		if status != "completed" {
@@ -908,76 +933,95 @@ func ValidateIntegrity() (int, error) {
 		}
 	}
 	if err := allRows.Err(); err != nil {
-		_ = allRows.Close()
-		return 0, fmt.Errorf("failed to iterate download paths: %w", err)
+		return nil, nil, fmt.Errorf("failed to iterate download paths: %w", err)
 	}
-	_ = allRows.Close()
+	return expectedSurgePaths, candidateDirs, nil
+}
 
+func verifyEntriesIntegrity(entries []integrityEntry) (int, error) {
+	removed := 0
 	for _, e := range entries {
-		surgePath := e.destPath + types.IncompleteSuffix
-
-		// Check if .surge file exists
-		_, statErr := os.Stat(surgePath)
-		if os.IsNotExist(statErr) {
-			// File missing — remove orphaned DB entry
-			utils.Debug("Integrity: .surge file missing for %s, removing entry %s", e.destPath, e.id)
-			if err := removeDownloadAndTasks(e.id); err != nil {
-				return removed, fmt.Errorf("failed to remove orphaned entry %s: %w", e.id, err)
-			}
-			removed++
-			continue
-		}
-		if statErr != nil {
-			return removed, fmt.Errorf("failed to stat %s: %w", surgePath, statErr)
-		}
-
-		// If we have a stored hash, verify it
-		if e.fileHash != "" {
-			matches, err := compareAgainstStoredFileHash(surgePath, e.fileHash)
-			if err != nil {
-				return removed, fmt.Errorf("failed to verify hash for %s: %w", surgePath, err)
-			}
-			if !matches {
-				// File has been tampered with — remove entry and corrupted file
-				utils.Debug("Integrity: hash mismatch for %s (expected %s), removing", surgePath, e.fileHash)
-				if err := retryRemove(surgePath); err != nil && !os.IsNotExist(err) {
-					return removed, fmt.Errorf("failed to remove tampered file %s: %w", surgePath, err)
-				}
-				if err := removeDownloadAndTasks(e.id); err != nil {
-					return removed, fmt.Errorf("failed to remove tampered entry %s: %w", e.id, err)
-				}
-				removed++
-			}
-		}
-	}
-
-	// Remove orphan .surge files that no longer have matching paused/queued entries.
-	for dir := range candidateDirs {
-		files, err := os.ReadDir(dir)
+		wasRemoved, err := verifySingleEntry(e)
 		if err != nil {
-			if os.IsNotExist(err) {
-				continue
-			}
-			return removed, fmt.Errorf("failed to read directory %s: %w", dir, err)
+			return removed, err
 		}
-		for _, f := range files {
-			if f.IsDir() {
-				continue
-			}
-			name := f.Name()
-			if !strings.HasSuffix(name, types.IncompleteSuffix) {
-				continue
-			}
-			surgePath := filepath.Join(dir, name)
-			if _, ok := expectedSurgePaths[surgePath]; ok {
-				continue
-			}
-			if err := retryRemove(surgePath); err != nil && !os.IsNotExist(err) {
-				return removed, fmt.Errorf("failed to remove orphan file %s: %w", surgePath, err)
-			}
-			utils.Debug("Integrity: removed orphan .surge file %s", surgePath)
+		if wasRemoved {
+			removed++
 		}
 	}
-
 	return removed, nil
 }
+
+func verifySingleEntry(e integrityEntry) (bool, error) {
+	surgePath := e.destPath + types.IncompleteSuffix
+
+	// Check if .surge file exists
+	_, statErr := os.Stat(surgePath)
+	if os.IsNotExist(statErr) {
+		// File missing — remove orphaned DB entry
+		utils.Debug("Integrity: .surge file missing for %s, removing entry %s", e.destPath, e.id)
+		if err := removeDownloadAndTasks(e.id); err != nil {
+			return false, fmt.Errorf("failed to remove orphaned entry %s: %w", e.id, err)
+		}
+		return true, nil
+	}
+	if statErr != nil {
+		return false, fmt.Errorf("failed to stat %s: %w", surgePath, statErr)
+	}
+
+	// If we have a stored hash, verify it
+	if e.fileHash != "" {
+		matches, err := compareAgainstStoredFileHash(surgePath, e.fileHash)
+		if err != nil {
+			return false, fmt.Errorf("failed to verify hash for %s: %w", surgePath, err)
+		}
+		if !matches {
+			// File has been tampered with — remove entry and corrupted file
+			utils.Debug("Integrity: hash mismatch for %s (expected %s), removing", surgePath, e.fileHash)
+			if err := retryRemove(surgePath); err != nil && !os.IsNotExist(err) {
+				return false, fmt.Errorf("failed to remove tampered file %s: %w", surgePath, err)
+			}
+			if err := removeDownloadAndTasks(e.id); err != nil {
+				return false, fmt.Errorf("failed to remove tampered entry %s: %w", e.id, err)
+			}
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+func cleanupOrphanSurgeFiles(candidateDirs map[string]struct{}, expectedSurgePaths map[string]struct{}) error {
+	// Remove orphan .surge files that no longer have matching paused/queued entries.
+	for dir := range candidateDirs {
+		if err := cleanupDir(dir, expectedSurgePaths); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func cleanupDir(dir string, expectedSurgePaths map[string]struct{}) error {
+	files, err := os.ReadDir(dir)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return fmt.Errorf("failed to read directory %s: %w", dir, err)
+	}
+
+	for _, f := range files {
+		if f.IsDir() || !strings.HasSuffix(f.Name(), types.IncompleteSuffix) {
+			continue
+		}
+		surgePath := filepath.Join(dir, f.Name())
+		if _, ok := expectedSurgePaths[surgePath]; ok {
+			continue
+		}
+		if err := retryRemove(surgePath); err != nil && !os.IsNotExist(err) {
+			return fmt.Errorf("failed to remove orphan file %s: %w", surgePath, err)
+		}
+		utils.Debug("Integrity: removed orphan .surge file %s", surgePath)
+	}
+	return nil
+}
+
