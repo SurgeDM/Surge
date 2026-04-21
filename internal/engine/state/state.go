@@ -690,16 +690,31 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 		return nil, fmt.Errorf(errDatabaseNotInitialized)
 	}
 
-	// Prepare IN clause placeholders
+	inClause, args := prepareBatchArgs(ids)
+
+	states, err := loadDownloadBatch(db, inClause, args)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := attachTasksToStatesBatch(db, inClause, args, states); err != nil {
+		return nil, err
+	}
+
+	return states, nil
+}
+
+func prepareBatchArgs(ids []string) (string, []interface{}) {
 	placeholders := make([]string, len(ids))
 	args := make([]interface{}, len(ids))
 	for i, id := range ids {
 		placeholders[i] = "?"
 		args[i] = id
 	}
-	inClause := strings.Join(placeholders, ",")
+	return strings.Join(placeholders, ","), args
+}
 
-	// 1. Load Downloads
+func loadDownloadBatch(db *sql.DB, inClause string, args []interface{}) (map[string]*types.DownloadState, error) {
 	query := fmt.Sprintf(`
 		SELECT id, url, dest_path, filename, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size
 		FROM downloads
@@ -710,15 +725,13 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to query downloads batch: %w", err)
 	}
-
-	states := make(map[string]*types.DownloadState)
-
 	defer func() {
 		if err := rows.Close(); err != nil {
 			utils.Debug(msgErrorClosingRows, err)
 		}
 	}()
 
+	states := make(map[string]*types.DownloadState)
 	for rows.Next() {
 		var state types.DownloadState
 		var timeTaken, createdAt, pausedAt, actualChunkSize sql.NullInt64
@@ -733,31 +746,18 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 			return nil, err
 		}
 
-		if createdAt.Valid {
-			state.CreatedAt = createdAt.Int64
-		}
-		if pausedAt.Valid {
-			state.PausedAt = pausedAt.Int64
-		}
-		if timeTaken.Valid {
-			state.Elapsed = timeTaken.Int64 * 1e6
-		}
-		if mirrors.Valid && mirrors.String != "" {
-			state.Mirrors = strings.Split(mirrors.String, ",")
-		}
-		if actualChunkSize.Valid {
-			state.ActualChunkSize = actualChunkSize.Int64
-		}
+		mapNullFieldsToState(&state, createdAt, pausedAt, timeTaken, actualChunkSize, mirrors, sql.NullString{})
 		state.ChunkBitmap = chunkBitmap
-
 		states[state.ID] = &state
 	}
+	return states, nil
+}
 
-	// 2. Load Tasks for all these downloads
+func attachTasksToStatesBatch(db *sql.DB, inClause string, args []interface{}, states map[string]*types.DownloadState) error {
 	taskQuery := fmt.Sprintf(`SELECT download_id, offset, length FROM tasks WHERE download_id IN (%s)`, inClause)
 	taskRows, err := db.Query(taskQuery, args...)
 	if err != nil {
-		return nil, fmt.Errorf("failed to query tasks batch: %w", err)
+		return fmt.Errorf("failed to query tasks batch: %w", err)
 	}
 	defer func() {
 		if err := taskRows.Close(); err != nil {
@@ -769,15 +769,15 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 		var downloadID string
 		var t types.Task
 		if err := taskRows.Scan(&downloadID, &t.Offset, &t.Length); err != nil {
-			return nil, err
+			return err
 		}
 		if s, ok := states[downloadID]; ok {
 			s.Tasks = append(s.Tasks, t)
 		}
 	}
-
-	return states, nil
+	return nil
 }
+
 
 // computeFileHash computes SHA-256 hash of a file for integrity verification.
 // Returns the hex-encoded hash or empty string on error.
