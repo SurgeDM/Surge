@@ -393,42 +393,54 @@ func LoadMasterList() (*types.MasterList, error) {
 
 	var list types.MasterList
 	for rows.Next() {
-		var e types.DownloadEntry
-		var completedAt, timeTaken sql.NullInt64      // handle nulls
-		var filename, urlHash, mirrors sql.NullString // handle nulls
-		var avgSpeed sql.NullFloat64                  // handle null avg_speed
-
-		if err := rows.Scan(
-			&e.ID, &e.URL, &e.DestPath, &filename, &e.Status, &e.TotalSize, &e.Downloaded,
-			&completedAt, &timeTaken, &urlHash, &mirrors, &avgSpeed,
-		); err != nil {
+		e, err := scanDownloadEntry(rows)
+		if err != nil {
 			return nil, err
 		}
-
-		if completedAt.Valid {
-			e.CompletedAt = completedAt.Int64
-		}
-		if timeTaken.Valid {
-			e.TimeTaken = timeTaken.Int64
-		}
-		if filename.Valid {
-			e.Filename = filename.String
-		}
-		if urlHash.Valid {
-			e.URLHash = urlHash.String
-		}
-		if mirrors.Valid && mirrors.String != "" {
-			e.Mirrors = strings.Split(mirrors.String, ",")
-		}
-		if avgSpeed.Valid {
-			e.AvgSpeed = avgSpeed.Float64
-		}
-
 		list.Downloads = append(list.Downloads, e)
 	}
 
 	return &list, nil
 }
+
+func scanDownloadEntry(rows *sql.Rows) (types.DownloadEntry, error) {
+	var e types.DownloadEntry
+	var completedAt, timeTaken sql.NullInt64      // handle nulls
+	var filename, urlHash, mirrors sql.NullString // handle nulls
+	var avgSpeed sql.NullFloat64                  // handle null avg_speed
+
+	if err := rows.Scan(
+		&e.ID, &e.URL, &e.DestPath, &filename, &e.Status, &e.TotalSize, &e.Downloaded,
+		&completedAt, &timeTaken, &urlHash, &mirrors, &avgSpeed,
+	); err != nil {
+		return e, err
+	}
+
+	mapEntryNullFields(&e, completedAt, timeTaken, filename, urlHash, mirrors, avgSpeed)
+	return e, nil
+}
+
+func mapEntryNullFields(e *types.DownloadEntry, completedAt, timeTaken sql.NullInt64, filename, urlHash, mirrors sql.NullString, avgSpeed sql.NullFloat64) {
+	if completedAt.Valid {
+		e.CompletedAt = completedAt.Int64
+	}
+	if timeTaken.Valid {
+		e.TimeTaken = timeTaken.Int64
+	}
+	if filename.Valid {
+		e.Filename = filename.String
+	}
+	if urlHash.Valid {
+		e.URLHash = urlHash.String
+	}
+	if mirrors.Valid && mirrors.String != "" {
+		e.Mirrors = strings.Split(mirrors.String, ",")
+	}
+	if avgSpeed.Valid {
+		e.AvgSpeed = avgSpeed.Float64
+	}
+}
+
 
 // AddToMasterList adds or updates a download entry
 func AddToMasterList(entry types.DownloadEntry) error {
