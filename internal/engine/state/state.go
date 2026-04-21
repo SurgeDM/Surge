@@ -26,6 +26,7 @@ const (
 	hashPrefixSHA256 = "sha256:"
 
 	sqlDeleteTasks = "DELETE FROM tasks WHERE download_id = ?"
+	errDatabaseNotInitialized = "database not initialized"
 )
 
 // SaveStateOptions controls pause-state persistence behavior.
@@ -245,7 +246,7 @@ func parseStoredHash(storedHash string) (algo, value string) {
 func LoadState(url string, destPath string) (*types.DownloadState, error) {
 	db := getDBHelper()
 	if db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	var state types.DownloadState
@@ -333,7 +334,7 @@ func loadTasksForDownload(db *sql.DB, downloadID string) ([]types.Task, error) {
 func DeleteState(id string) error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	if id == "" {
@@ -351,7 +352,7 @@ func DeleteState(id string) error {
 func DeleteTasks(id string) error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	if id == "" {
@@ -469,7 +470,7 @@ func AddToMasterList(entry types.DownloadEntry) error {
 func RemoveFromMasterList(id string) error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	_, err := db.Exec("DELETE FROM downloads WHERE id = ?", id)
@@ -563,7 +564,7 @@ func LoadCompletedDownloads() ([]types.DownloadEntry, error) {
 func CheckDownloadExists(url string) (bool, error) {
 	db := getDBHelper()
 	if db == nil {
-		return false, fmt.Errorf("database not initialized")
+		return false, fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	var count int
@@ -580,7 +581,7 @@ func CheckDownloadExists(url string) (bool, error) {
 func UpdateStatus(id string, status string) error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	result, err := db.Exec("UPDATE downloads SET status = ? WHERE id = ?", status, id)
@@ -600,7 +601,7 @@ func UpdateStatus(id string, status string) error {
 func UpdateURL(id string, newURL string) error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	newHash := URLHash(newURL)
@@ -622,7 +623,7 @@ func UpdateURL(id string, newURL string) error {
 func PauseAllDownloads() error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	_, err := db.Exec("UPDATE downloads SET status = 'paused' WHERE status != 'completed'")
@@ -633,7 +634,7 @@ func PauseAllDownloads() error {
 func ResumeAllDownloads() error {
 	db := getDBHelper()
 	if db == nil {
-		return fmt.Errorf("database not initialized")
+		return fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	_, err := db.Exec("UPDATE downloads SET status = 'queued' WHERE status = 'paused'")
@@ -653,7 +654,7 @@ func ListAllDownloads() ([]types.DownloadEntry, error) {
 func RemoveCompletedDownloads() (int64, error) {
 	db := getDBHelper()
 	if db == nil {
-		return 0, fmt.Errorf("database not initialized")
+		return 0, fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	result, err := db.Exec("DELETE FROM downloads WHERE status = 'completed'")
@@ -673,7 +674,7 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 
 	db := getDBHelper()
 	if db == nil {
-		return nil, fmt.Errorf("database not initialized")
+		return nil, fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	// Prepare IN clause placeholders
@@ -802,7 +803,7 @@ func removeDownloadAndTasks(id string) error {
 func NormalizeStaleDownloads() (int, error) {
 	db := getDBHelper()
 	if db == nil {
-		return 0, fmt.Errorf("database not initialized")
+		return 0, fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	result, err := db.Exec(`UPDATE downloads SET status = 'paused' WHERE status = 'downloading'`)
@@ -820,7 +821,7 @@ func NormalizeStaleDownloads() (int, error) {
 func ValidateIntegrity() (int, error) {
 	db := getDBHelper()
 	if db == nil {
-		return 0, fmt.Errorf("database not initialized")
+		return 0, fmt.Errorf(errDatabaseNotInitialized)
 	}
 
 	// Load all paused/queued downloads
