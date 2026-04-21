@@ -243,7 +243,6 @@ func parseStoredHash(storedHash string) (algo, value string) {
 
 // LoadState loads download state from SQLite
 func LoadState(url string, destPath string) (*types.DownloadState, error) {
-
 	db := getDBHelper()
 	if db == nil {
 		return nil, fmt.Errorf("database not initialized")
@@ -274,6 +273,19 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 		return nil, fmt.Errorf("failed to query download: %w", err)
 	}
 
+	mapNullFieldsToState(&state, createdAt, pausedAt, timeTaken, actualChunkSize, mirrors, fileHash)
+	state.ChunkBitmap = chunkBitmap
+
+	tasks, err := loadTasksForDownload(db, state.ID)
+	if err != nil {
+		return nil, err
+	}
+	state.Tasks = tasks
+
+	return &state, nil
+}
+
+func mapNullFieldsToState(state *types.DownloadState, createdAt, pausedAt, timeTaken, actualChunkSize sql.NullInt64, mirrors, fileHash sql.NullString) {
 	if createdAt.Valid {
 		state.CreatedAt = createdAt.Int64
 	}
@@ -289,13 +301,13 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 	if actualChunkSize.Valid {
 		state.ActualChunkSize = actualChunkSize.Int64
 	}
-	state.ChunkBitmap = chunkBitmap
 	if fileHash.Valid {
 		state.FileHash = fileHash.String
 	}
+}
 
-	// Load tasks
-	rows, err := db.Query("SELECT offset, length FROM tasks WHERE download_id = ?", state.ID)
+func loadTasksForDownload(db *sql.DB, downloadID string) ([]types.Task, error) {
+	rows, err := db.Query("SELECT offset, length FROM tasks WHERE download_id = ?", downloadID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query tasks: %w", err)
 	}
@@ -305,16 +317,17 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 		}
 	}()
 
+	var tasks []types.Task
 	for rows.Next() {
 		var t types.Task
 		if err := rows.Scan(&t.Offset, &t.Length); err != nil {
 			return nil, err
 		}
-		state.Tasks = append(state.Tasks, t)
+		tasks = append(tasks, t)
 	}
-
-	return &state, nil
+	return tasks, nil
 }
+
 
 // DeleteState removes the state from SQLite
 func DeleteState(id string) error {
