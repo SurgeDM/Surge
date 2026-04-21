@@ -27,6 +27,7 @@ const (
 
 	sqlDeleteTasks = "DELETE FROM tasks WHERE download_id = ?"
 	errDatabaseNotInitialized = "database not initialized"
+	msgErrorClosingRows       = "Error closing rows: %v"
 )
 
 // SaveStateOptions controls pause-state persistence behavior.
@@ -314,7 +315,7 @@ func loadTasksForDownload(db *sql.DB, downloadID string) ([]types.Task, error) {
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
-			utils.Debug("Error closing rows: %v", err)
+			utils.Debug(msgErrorClosingRows, err)
 		}
 	}()
 
@@ -386,7 +387,7 @@ func LoadMasterList() (*types.MasterList, error) {
 	}
 	defer func() {
 		if err := rows.Close(); err != nil {
-			utils.Debug("Error closing rows: %v", err)
+			utils.Debug(msgErrorClosingRows, err)
 		}
 	}()
 
@@ -702,7 +703,7 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 
 	defer func() {
 		if err := rows.Close(); err != nil {
-			utils.Debug("Error closing rows: %v", err)
+			utils.Debug(msgErrorClosingRows, err)
 		}
 	}()
 
