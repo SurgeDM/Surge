@@ -8,7 +8,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/engine/concurrent"
+	"github.com/SurgeDM/Surge/internal/engine/network"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -20,7 +23,7 @@ type activeDownload struct {
 	running atomic.Bool
 }
 
-type WorkerPool struct {
+type TaskPool struct {
 	taskChan     chan types.DownloadConfig
 	progressCh   chan<- any
 	progressDone chan struct{}                   // closed when progressCh must no longer be sent to
@@ -29,7 +32,11 @@ type WorkerPool struct {
 	mu           sync.RWMutex
 	wg           sync.WaitGroup // We use this to wait for all active downloads to pause before exiting the program
 	maxDownloads int
+	execution    *types.ExecutionDeps
 }
+
+// WorkerPool is a temporary compatibility alias during the TaskPool migration.
+type WorkerPool = TaskPool
 
 var (
 	// gracefulShutdownPauseSoftTimeout controls when we emit a warning that
@@ -46,22 +53,36 @@ var (
 	cancelStopPollInterval = 10 * time.Millisecond
 )
 
-func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
+func NewTaskPool(progressCh chan<- any, maxDownloads int) *TaskPool {
 	if maxDownloads < 1 {
 		maxDownloads = 3 // Default to 3 if invalid
 	}
-	pool := &WorkerPool{
+	connections := network.NewConnectionManager()
+	buffers := network.NewBufferPoolManager()
+	networkWorkers := concurrent.NewNetworkWorkerPool(maxDownloads * types.PerHostMax)
+
+	pool := &TaskPool{
 		taskChan:     make(chan types.DownloadConfig, 100), // We make it buffered to avoid blocking add
 		progressCh:   progressCh,
 		progressDone: make(chan struct{}),
 		downloads:    make(map[string]*activeDownload),
 		queued:       make(map[string]types.DownloadConfig),
 		maxDownloads: maxDownloads,
+		execution: &types.ExecutionDeps{
+			HTTPClients:    connections,
+			BufferPools:    buffers,
+			NetworkWorkers: networkWorkers,
+		},
 	}
+	processing.SetProbeConnectionManager(connections)
 	for i := 0; i < maxDownloads; i++ {
 		go pool.worker()
 	}
 	return pool
+}
+
+func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
+	return NewTaskPool(progressCh, maxDownloads)
 }
 
 // syncConfigFromState syncs Filename, DestPath, and Mirrors from the associated state.
@@ -101,9 +122,12 @@ func resolveDestPath(cfg *types.DownloadConfig) string {
 
 // Add adds a new download task to the pool. The caller (LifecycleManager) is
 // responsible for emitting any lifecycle events (e.g. DownloadQueuedMsg).
-func (p *WorkerPool) Add(cfg types.DownloadConfig) {
+func (p *TaskPool) Add(cfg types.DownloadConfig) {
 	if cfg.ProgressCh == nil {
 		cfg.ProgressCh = p.progressCh
+	}
+	if cfg.Execution == nil {
+		cfg.Execution = p.execution
 	}
 	p.mu.Lock()
 	p.queued[cfg.ID] = cfg
@@ -113,7 +137,7 @@ func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 }
 
 // HasDownload reports whether a download with the given URL is currently active or queued in the pool.
-func (p *WorkerPool) HasDownload(url string) bool {
+func (p *TaskPool) HasDownload(url string) bool {
 	p.mu.RLock()
 	for _, ad := range p.downloads {
 		if ad.config.URL == url {
@@ -133,7 +157,7 @@ func (p *WorkerPool) HasDownload(url string) bool {
 }
 
 // ActiveCount returns the number of currently active (downloading/pausing) downloads
-func (p *WorkerPool) ActiveCount() int {
+func (p *TaskPool) ActiveCount() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -150,7 +174,7 @@ func (p *WorkerPool) ActiveCount() int {
 }
 
 // GetAll returns all active download configs (for listing)
-func (p *WorkerPool) GetAll() []types.DownloadConfig {
+func (p *TaskPool) GetAll() []types.DownloadConfig {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
@@ -168,7 +192,7 @@ func (p *WorkerPool) GetAll() []types.DownloadConfig {
 
 // Pause pauses a specific download by ID. Returns true if found and pause initiated
 // (or already paused), false otherwise. Pure mechanical operation — no events emitted.
-func (p *WorkerPool) Pause(downloadID string) bool {
+func (p *TaskPool) Pause(downloadID string) bool {
 	p.mu.RLock()
 	ad, exists := p.downloads[downloadID]
 	p.mu.RUnlock()
@@ -204,7 +228,7 @@ func (p *WorkerPool) Pause(downloadID string) bool {
 }
 
 // PauseAll pauses all active downloads (for graceful shutdown)
-func (p *WorkerPool) PauseAll() {
+func (p *TaskPool) PauseAll() {
 	p.mu.RLock()
 	ids := make([]string, 0, len(p.downloads)) // This stores the uuids of the downloads to be paused
 	for id, ad := range p.downloads {
@@ -223,7 +247,7 @@ func (p *WorkerPool) PauseAll() {
 // Cancel cancels and removes a download by ID. Returns metadata about what was
 // removed so the caller (LifecycleManager) can emit events and handle cleanup.
 // No events are emitted by the pool itself.
-func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
+func (p *TaskPool) Cancel(downloadID string) types.CancelResult {
 	p.mu.Lock()
 	ad, activeExists := p.downloads[downloadID]
 	qCfg, queuedExists := p.queued[downloadID]
@@ -273,7 +297,7 @@ func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
 // ExtractPausedConfig atomically removes a paused download from the pool and returns
 // its config (with state cleared for re-enqueue) so the LifecycleManager can resume it.
 // Returns nil if the download is not found, not paused, or still transitioning (pausing).
-func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfig {
+func (p *TaskPool) ExtractPausedConfig(downloadID string) *types.DownloadConfig {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
@@ -301,7 +325,7 @@ func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfi
 // UpdateURL updates the in-memory URL of a download by ID.
 // The caller (LifecycleManager) is responsible for persisting the change to the DB.
 // It fails if the download is actively downloading (not paused or errored).
-func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
+func (p *TaskPool) UpdateURL(downloadID string, newURL string) error {
 	p.mu.Lock()
 	ad, exists := p.downloads[downloadID]
 	_, qExists := p.queued[downloadID]
@@ -328,8 +352,11 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 	return nil
 }
 
-func (p *WorkerPool) worker() {
+func (p *TaskPool) worker() {
 	for cfg := range p.taskChan {
+		if cfg.Execution == nil {
+			cfg.Execution = p.execution
+		}
 		p.mu.RLock()
 		_, stillQueued := p.queued[cfg.ID]
 		p.mu.RUnlock()
@@ -371,7 +398,7 @@ func (p *WorkerPool) worker() {
 		}
 
 		if isPaused {
-			utils.Debug("WorkerPool: Download %s paused cleanly", cfg.ID)
+			utils.Debug("TaskPool: Download %s paused cleanly", cfg.ID)
 			// If paused, we keep it in downloads map for potential resume via ExtractPausedConfig
 		} else if err != nil {
 			if cfg.State != nil {
@@ -401,7 +428,7 @@ func (p *WorkerPool) worker() {
 }
 
 // GetStatus returns the status of an active download
-func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
+func (p *TaskPool) GetStatus(id string) *types.DownloadStatus {
 	p.mu.RLock()
 	ad, exists := p.downloads[id]
 	qCfg, qExists := p.queued[id]
@@ -482,7 +509,7 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 }
 
 // GracefulShutdown pauses all downloads and waits for them to save state
-func (p *WorkerPool) GracefulShutdown() {
+func (p *TaskPool) GracefulShutdown() {
 	p.PauseAll()
 
 	// Discard all queued-but-not-yet-started downloads so that idle workers
@@ -546,6 +573,15 @@ drainLoop:
 	}
 
 	p.wg.Wait() // Blocks until all workers call Done()
+
+	if p.execution != nil && p.execution.NetworkWorkers != nil {
+		p.execution.NetworkWorkers.Shutdown()
+	}
+	if p.execution != nil {
+		if connections, ok := p.execution.HTTPClients.(*network.ConnectionManager); ok {
+			connections.Shutdown()
+		}
+	}
 
 	// Signal that progressCh must no longer be sent to, then close taskChan
 	// so worker goroutines exit their range loop.

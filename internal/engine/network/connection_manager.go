@@ -18,10 +18,10 @@ import (
 type requestHeadersContextKey struct{}
 
 type transportProfile struct {
-	ProxyURL  string
-	CustomDNS string
-	MaxConns  int
-	ForceTCP4 bool
+	ProxyURL   string
+	CustomDNS  string
+	MaxConns   int
+	ForceTCP4  bool
 	ForceHTTP1 bool
 }
 
