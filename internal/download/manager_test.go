@@ -326,6 +326,52 @@ func TestTUIDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
 	}
 }
 
+func TestTUIDownload_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T) {
+	tmpDir := t.TempDir()
+	fileSize := 10 * 1024
+	server := testutil.NewMockServerT(t,
+		testutil.WithFileSize(int64(fileSize)),
+		testutil.WithRangeSupport(true),
+		testutil.WithFailOnNthRequest(2), // Fail first worker GET
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "midfail.bin")
+	surgePath := destPath + types.IncompleteSuffix
+	if f, err := os.Create(surgePath); err == nil {
+		_ = f.Close()
+	}
+
+	progressCh := make(chan any, 100)
+	cfg := types.DownloadConfig{
+		URL:           server.URL(),
+		OutputPath:    tmpDir,
+		Filename:      "midfail.bin",
+		ID:            "mid-fail-test",
+		ProgressCh:    progressCh,
+		State:         types.NewProgressState("mid-fail-test", int64(fileSize)),
+		Runtime:       &types.RuntimeConfig{MinChunkSize: 10240}, // Force single worker in concurrent
+		TotalSize:     int64(fileSize),
+		SupportsRange: true,
+	}
+
+	// Drain progress channel
+	go func() {
+		for range progressCh {
+		}
+	}()
+
+	if err := TUIDownload(context.Background(), &cfg); err != nil {
+		t.Fatalf("TUIDownload should have succeeded via fallback: %v", err)
+	}
+
+	// Progress should be correctly reset and then full
+	downloaded, _, _, _, _, _ := cfg.State.GetProgress()
+	if downloaded != int64(fileSize) {
+		t.Errorf("Progress counter = %d, want %d", downloaded, fileSize)
+	}
+}
+
 func TestUniqueFilePath_IncompleteFileConflict(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "surge-test-*")
 	if err != nil {

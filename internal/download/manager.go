@@ -200,6 +200,13 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		if downloadErr != nil && !errors.Is(downloadErr, types.ErrPaused) && !errors.Is(downloadErr, context.Canceled) {
 			utils.Debug("Concurrent download failed: %v — falling back to single-threaded", downloadErr)
 			useConcurrent = false // Trigger sequential block below
+
+			// Reset progress state for single-stream restart from byte 0
+			if cfg.State != nil {
+				cfg.State.Downloaded.Store(0)
+				cfg.State.VerifiedProgress.Store(0)
+				cfg.State.SyncSessionStart()
+			}
 		}
 	}
 
