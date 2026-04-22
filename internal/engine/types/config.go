@@ -1,6 +1,9 @@
 package types
 
 import (
+	"context"
+	"net/http"
+	"sync"
 	"time"
 )
 
@@ -65,6 +68,31 @@ type DownloadConfig struct {
 	IsExplicitCategory bool              // Used to override category routing from TUI
 	TotalSize          int64             // Total size in bytes of the required download
 	SupportsRange      bool              // Indicates whether the server supports range requests for concurrency
+	Execution          *ExecutionDeps    // Shared execution dependencies owned by the service/engine layer
+}
+
+// HTTPClientFactory provides shared HTTP clients for concurrent downloads.
+type HTTPClientFactory interface {
+	ConcurrentClient(runtime *RuntimeConfig) *http.Client
+}
+
+// BufferPoolFactory provides shared byte-buffer pools keyed by buffer size.
+type BufferPoolFactory interface {
+	Get(size int) *sync.Pool
+}
+
+// NetworkWorkerRunner executes logical download workers on a persistent worker pool.
+type NetworkWorkerRunner interface {
+	Run(ctx context.Context, workerCount int, fn func(workerID int) error) <-chan error
+	Size() int
+	Shutdown()
+}
+
+// ExecutionDeps groups shared runtime-scoped execution resources for concurrent downloads.
+type ExecutionDeps struct {
+	HTTPClients    HTTPClientFactory
+	BufferPools    BufferPoolFactory
+	NetworkWorkers NetworkWorkerRunner
 }
 
 // RuntimeConfig holds dynamic settings that can override defaults
