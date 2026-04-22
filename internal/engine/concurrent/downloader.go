@@ -4,12 +4,15 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"math"
 	"net"
 	"net/http"
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -29,6 +32,7 @@ type ConcurrentDownloader struct {
 	URL          string // For pause/resume
 	DestPath     string // For pause/resume
 	Runtime      *types.RuntimeConfig
+	TotalSize    int64
 	bufPool      sync.Pool
 	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
 }
@@ -310,7 +314,19 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		d.State.SetCancelFunc(cancel)
 	}
 
+	bootstrapClient := d.newConcurrentClient(1)
+	defer bootstrapClient.CloseIdleConnections()
+
 	// Determine connections and chunk size
+	if fileSize <= 0 {
+		discoveredSize, err := d.bootstrapMetadata(ctx, bootstrapClient, rawurl)
+		if err != nil {
+			return err
+		}
+		fileSize = discoveredSize
+	}
+	d.TotalSize = fileSize
+
 	numConns := d.getInitialConnections(fileSize)
 	chunkSize := d.determineChunkSize(fileSize, numConns)
 
@@ -604,6 +620,59 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
 	return finalizeCompletedDownload()
+}
+
+func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *http.Client, rawurl string) (int64, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
+	if err != nil {
+		return 0, fmt.Errorf("failed to create concurrent bootstrap request: %w", err)
+	}
+
+	for key, val := range d.Headers {
+		if key != "Range" {
+			req.Header.Set(key, val)
+		}
+	}
+	req.Header.Set("User-Agent", d.Runtime.GetUserAgent())
+	req.Header.Set("Range", "bytes=0-0")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		return 0, fmt.Errorf("failed to bootstrap concurrent download: %w", err)
+	}
+	defer func() {
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 32*types.KB))
+		_ = resp.Body.Close()
+	}()
+
+	if resp.StatusCode != http.StatusPartialContent {
+		return 0, fmt.Errorf("concurrent bootstrap requires 206 response, got %d", resp.StatusCode)
+	}
+
+	contentRange := resp.Header.Get("Content-Range")
+	if contentRange == "" {
+		return 0, fmt.Errorf("concurrent bootstrap missing Content-Range header")
+	}
+	idx := strings.LastIndex(contentRange, "/")
+	if idx == -1 || idx+1 >= len(contentRange) {
+		return 0, fmt.Errorf("concurrent bootstrap invalid Content-Range header: %q", contentRange)
+	}
+
+	sizeStr := contentRange[idx+1:]
+	if sizeStr == "*" {
+		return 0, fmt.Errorf("concurrent bootstrap returned unknown size")
+	}
+
+	fileSize, err := strconv.ParseInt(sizeStr, 10, 64)
+	if err != nil || fileSize <= 0 {
+		return 0, fmt.Errorf("concurrent bootstrap invalid file size %q", sizeStr)
+	}
+
+	if d.State != nil {
+		d.State.SetTotalSize(fileSize)
+	}
+
+	return fileSize, nil
 }
 
 // prewarmConnections fires off concurrent pings to the mirrors to populate the connection pool

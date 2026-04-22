@@ -165,6 +165,54 @@ func TestLifecycleManager_EnqueueWithID_PrecreatesWorkingFileBeforeDispatch(t *t
 	}
 }
 
+func TestLifecycleManager_EnqueueWithID_ProbeFailureStillDispatches(t *testing.T) {
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	tempDir := t.TempDir()
+	expectedID := "request-id"
+
+	mgr := newLifecycleManagerForTest()
+	mgr.addWithIDFunc = func(url, path, filename string, _ []string, _ map[string]string, requestID string, totalSize int64, supportsRange bool) (string, error) {
+		if url != server.URL {
+			t.Fatalf("url = %q, want %q", url, server.URL)
+		}
+		if path != tempDir {
+			t.Fatalf("path = %q, want %q", path, tempDir)
+		}
+		if filename != "fallback.bin" {
+			t.Fatalf("filename = %q, want fallback.bin", filename)
+		}
+		if requestID != expectedID {
+			t.Fatalf("requestID = %q, want %q", requestID, expectedID)
+		}
+		if totalSize != 0 {
+			t.Fatalf("totalSize = %d, want 0", totalSize)
+		}
+		if !supportsRange {
+			t.Fatal("expected optimistic concurrent flag after probe failure")
+		}
+		return requestID, nil
+	}
+
+	id, filename, err := mgr.EnqueueWithID(context.Background(), &DownloadRequest{
+		URL:      server.URL,
+		Filename: "fallback.bin",
+		Path:     tempDir,
+	}, expectedID)
+	if err != nil {
+		t.Fatalf("EnqueueWithID failed: %v", err)
+	}
+	if id != expectedID {
+		t.Fatalf("id = %q, want %q", id, expectedID)
+	}
+	if filename != "fallback.bin" {
+		t.Fatalf("filename = %q, want fallback.bin", filename)
+	}
+}
+
 func TestLifecycleManager_Enqueue_RemovesWorkingFileOnDispatchError(t *testing.T) {
 	server := newProbeTestServer(t, 2048)
 	defer server.Close()

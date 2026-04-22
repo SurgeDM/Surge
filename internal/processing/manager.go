@@ -256,13 +256,14 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 
 	probe, probeErr := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
 	if probeErr != nil {
-		utils.Debug("Lifecycle: Probe failed: %v — enqueueing with zero metadata (sequential fallback)\n", probeErr)
-		// Probe failures are non-fatal: the server may block probe requests but
-		// still serve the actual download (e.g. Overleaf returning 403 on a
-		// Range probe while the authenticated download flow succeeds). Fall back
-		// to a zero-value ProbeResult so the engine uses the single-threaded
-		// downloader instead of rejecting the request entirely.
+		utils.Debug("Lifecycle: Probe failed: %v — enqueueing with optimistic fallback metadata\n", probeErr)
+		// Probe failures are non-fatal: some servers reject or intermittently fail
+		// lightweight probe requests but still accept the actual download flow.
+		// Mark range support as "unknown, try it" by keeping size at zero and
+		// setting SupportsRange so the download path can attempt a concurrent
+		// bootstrap before falling back to single-stream mode.
 		probe = &ProbeResult{}
+		probe.SupportsRange = true
 		if req.Filename != "" {
 			probe.Filename = req.Filename
 			probe.DetectedFilename = req.Filename

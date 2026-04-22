@@ -24,6 +24,7 @@ type SingleDownloader struct {
 	ID           string               // Download ID
 	State        *types.ProgressState // Shared state for TUI polling
 	Runtime      *types.RuntimeConfig
+	TotalSize    int64
 	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
 }
 
@@ -164,6 +165,14 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 	if resp.StatusCode != http.StatusOK {
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
+	}
+
+	if fileSize <= 0 && resp.ContentLength > 0 {
+		fileSize = resp.ContentLength
+	}
+	d.TotalSize = fileSize
+	if d.State != nil && fileSize > 0 {
+		d.State.SetTotalSize(fileSize)
 	}
 
 	// Use .surge extension for incomplete file (must be pre-created by processing layer)

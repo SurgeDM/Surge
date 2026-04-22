@@ -142,9 +142,17 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		cfg.State.SetTotalSize(cfg.TotalSize)
 	}
 
+	effectiveTotalSize := cfg.TotalSize
+	if cfg.State != nil && effectiveTotalSize <= 0 {
+		_, stateTotal, _, _, _, _ := cfg.State.GetProgress()
+		if stateTotal > 0 {
+			effectiveTotalSize = stateTotal
+		}
+	}
+
 	// Choose downloader based on probe results
 	var downloadErr error
-	useConcurrent := cfg.SupportsRange && cfg.TotalSize > 0
+	useConcurrent := cfg.SupportsRange
 
 	if useConcurrent {
 		utils.Debug("Using concurrent downloader")
@@ -179,6 +187,13 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		utils.Debug("Calling Download with mirrors: %v", mirrors)
 		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, cfg.TotalSize)
+		if d.TotalSize > 0 {
+			cfg.TotalSize = d.TotalSize
+			effectiveTotalSize = d.TotalSize
+			if cfg.State != nil {
+				cfg.State.SetTotalSize(d.TotalSize)
+			}
+		}
 
 		// Determine if we should attempt a fallback to single-threaded mode.
 		// We fallback if concurrent failed, but it wasn't a clean pause or external cancellation.
@@ -194,6 +209,10 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		d := single.NewSingleDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		downloadErr = d.Download(ctx, cfg.URL, finalDestPath, cfg.TotalSize, finalFilename)
+		if d.TotalSize > 0 {
+			cfg.TotalSize = d.TotalSize
+			effectiveTotalSize = d.TotalSize
+		}
 	}
 
 	// Only send completion if NO error AND not paused
@@ -207,7 +226,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	if downloadErr == nil && !isPaused {
 		var elapsed time.Duration
 		if cfg.State != nil {
-			_, elapsed = cfg.State.FinalizeSession(cfg.TotalSize)
+			_, elapsed = cfg.State.FinalizeSession(effectiveTotalSize)
 		} else {
 			elapsed = time.Since(start)
 		}
@@ -216,7 +235,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		// Compute average download speed in bytes/sec
 		var avgSpeed float64
 		if elapsed.Seconds() > 0 {
-			avgSpeed = float64(cfg.TotalSize) / elapsed.Seconds()
+			avgSpeed = float64(effectiveTotalSize) / elapsed.Seconds()
 		}
 
 		if cfg.ProgressCh != nil {
@@ -224,7 +243,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 				DownloadID: cfg.ID,
 				Filename:   finalFilename,
 				Elapsed:    elapsed,
-				Total:      cfg.TotalSize,
+				Total:      effectiveTotalSize,
 				AvgSpeed:   avgSpeed,
 			})
 		}
