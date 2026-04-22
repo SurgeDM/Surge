@@ -1,0 +1,259 @@
+# golangci-lint v2 — Surge Download Manager
+# https://golangci-lint.run/docs/configuration/file/
+version: "2"
+
+run:
+  timeout: 5m
+  tests: true
+
+# ─────────────────────────────────────────────
+# FORMATTERS (v2: separate from linters)
+# ─────────────────────────────────────────────
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  settings:
+    goimports:
+      local-prefixes:
+        - github.com/SurgeDM/Surge
+
+# ─────────────────────────────────────────────
+# LINTERS
+# ─────────────────────────────────────────────
+linters:
+  default: none
+  enable:
+    # ── Correctness & Safety ─────────────────
+    - errcheck          # unchecked errors in write/read paths → silent corruption
+    - govet             # copies of sync.Mutex, shadowed vars, fieldalignment
+    - staticcheck       # SA* dead code, S* simplifications, QF* quick-fixes
+    - ineffassign       # assigned values never used
+    - unused            # unexported symbols never referenced (post surge-core extraction)
+    - unparam           # params always called with same value → dead flexibility
+    - makezero          # slice created with non-zero length then appended
+    - wastedassign      # assigned then immediately overwritten
+
+    # ── Concurrency (critical for worker pools) ──
+    - copyloopvar       # loop-var capture in goroutines (classic download-worker bug)
+    - noctx             # HTTP calls without context → goroutine leak on failed downloads
+    - bodyclose         # response body not closed → memory leak in concurrent fetcher
+    - contextcheck      # context not propagated through call chain
+    - fatcontext        # context.WithValue inside loops → alloc pressure
+
+    # ── Performance ──────────────────────────
+    - prealloc          # slices that can be pre-allocated (chunk assembly, buffer paths)
+    - perfsprint        # fmt.Sprintf → cheaper alternatives in hot paths
+    - mirror            # prefer strings.* over bytes.* conversions where free
+
+    # ── Dead Code ────────────────────────────
+    - exhaustive        # missing enum cases in switch → silently dead branches
+    - nilerr            # return nil where err != nil is ignored
+    - nilnil            # functions returning (nil, nil) — ambiguous contract
+
+    # ── Duplication & Complexity ─────────────
+    - dupl              # structurally similar blocks (chunk/worker logic)
+    - gocognit          # cognitive complexity — update/reconcile loop reasoning
+    - cyclop            # cyclomatic complexity
+    - nestif            # deeply nested ifs in state machines
+    - funlen            # oversized functions in view_dashboard_* files
+    - maintidx          # maintainability index — catches entropy in processing pipeline
+    - gocritic          # multi-check: hugeParam, sloppyLen, appendAssign, dupImport
+
+    # ── Binary / Dep hygiene ─────────────────
+    - depguard          # block heavy/banned imports
+    - gomodguard        # module-level allow/deny (keep surge-core lean)
+    - unparam           # see above — also signals unused injection points
+
+    # ── Security ─────────────────────────────
+    - gosec             # G115 int overflow in byte-offset arithmetic, G304 file paths
+
+    # ── Error handling ────────────────────────
+    - errorlint         # errors.Is/As usage — wrapping bugs
+    - nolintlint        # malformed or unnecessary nolint directives
+
+    # ── Style (kept minimal) ─────────────────
+    - misspell          # typos in comments/strings
+    - godot             # comment punctuation
+    - whitespace        # trailing newlines
+    - goconst           # repeated string → const candidate
+
+  settings:
+
+    # ── govet ────────────────────────────────
+    govet:
+      enable:
+        - fieldalignment  # struct padding; matters with thousands of chunk structs
+        - shadow          # shadowed variables across goroutine closures
+        - loopclosure     # goroutine captures loop variable
+
+    # ── prealloc ─────────────────────────────
+    prealloc:
+      simple: true
+      range-loops: true
+      for-loops: true
+
+    # ── dupl ─────────────────────────────────
+    dupl:
+      threshold: 120   # lines; tune down if Downloader impls diverge further
+
+    # ── gocognit ─────────────────────────────
+    gocognit:
+      min-complexity: 20   # TUI update() gets complex; don't fire on every branch
+
+    # ── cyclop ───────────────────────────────
+    cyclop:
+      max-complexity: 15
+      skip-tests: true
+
+    # ── funlen ───────────────────────────────
+    funlen:
+      lines: 80
+      statements: 50
+
+    # ── nestif ───────────────────────────────
+    nestif:
+      min-complexity: 6
+
+    # ── maintidx ─────────────────────────────
+    maintidx:
+      under: 20
+
+    # ── gocritic ─────────────────────────────
+    gocritic:
+      enabled-checks:
+        - hugeParam        # large structs passed by value in worker fns
+        - sloppyLen        # len(s) > 0 → len(s) != 0
+        - appendAssign     # append result not assigned back
+        - dupImport        # same package imported twice
+        - rangeValCopy     # range copies large value
+        - paramTypeCombine # func(a int, b int) → func(a, b int)
+      disabled-checks:
+        - whyNoLint        # covered by nolintlint
+
+    # ── gosec ────────────────────────────────
+    gosec:
+      includes:
+        - G115   # integer overflow on type conversion (byte offsets!)
+        - G304   # file path injection
+        - G306   # file permissions
+        - G401   # weak crypto (not expected but catch early)
+      excludes:
+        - G104   # errors unhandled — errcheck covers this better
+        - G307   # defer close — bodyclose is more precise
+
+    # ── exhaustive ───────────────────────────
+    exhaustive:
+      default-signifies-exhaustive: true   # allow default: to satisfy exhaustion
+
+    # ── goconst ──────────────────────────────
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+      ignore-tests: true
+
+    # ── errorlint ────────────────────────────
+    errorlint:
+      errorf: true
+      errorf-multi: true
+      asserts: true
+      comparison: true
+
+    # ── depguard ─────────────────────────────
+    depguard:
+      rules:
+        no-unsafe:
+          deny:
+            - pkg: unsafe
+              desc: "use unsafe only with explicit justification and nolint"
+        prefer-stdlib-json:
+          deny:
+            - pkg: "github.com/json-iterator/go"
+              desc: "benchmark before replacing stdlib encoding/json"
+
+    # ── gomodguard ───────────────────────────
+    gomodguard:
+      blocked:
+        modules:
+          - github.com/pkg/errors:
+              recommendations:
+                - errors
+                - fmt
+              reason: "use stdlib errors with %w wrapping"
+
+    # ── nolintlint ───────────────────────────
+    nolintlint:
+      require-explanation: true   # force a comment on every nolint
+      require-specific: true      # nolint:all is forbidden
+      allow-unused: false
+
+    # ── misspell ─────────────────────────────
+    misspell:
+      locale: US
+
+    # ── perfsprint ───────────────────────────
+    perfsprint:
+      err-error: true
+      errorf: true
+      sprintf1: true
+      strconcat: false   # keep readable in TUI label building
+
+  # ── Exclusions ──────────────────────────────
+  exclusions:
+    generated: lax
+    rules:
+      # Test files: relax complexity and param rules
+      - path: "_test\\.go"
+        linters:
+          - funlen
+          - gocognit
+          - cyclop
+          - dupl
+          - goconst
+          - maintidx
+
+      # TUI view files: large render functions are expected
+      - path: "view_dashboard.*\\.go"
+        linters:
+          - funlen
+          - gocognit
+
+      # Bubble Tea Update() — intentionally large switch
+      - path: "update\\.go"
+        linters:
+          - cyclop
+          - gocognit
+          - funlen
+
+      # concurrent downloader worker/task — similar by design
+      - path: "(worker|task)\\.go"
+        linters:
+          - dupl
+
+      # main entrypoint
+      - path: "main\\.go"
+        linters:
+          - funlen
+
+    # Exclude the browser extension (JS/TS — not Go)
+    paths:
+      - extension/
+
+# ─────────────────────────────────────────────
+# ISSUES OUTPUT
+# ─────────────────────────────────────────────
+issues:
+  max-issues-per-linter: 50
+  max-same-issues: 5
+  uniq-by-line: false   # show all linters firing on the same line
+
+output:
+  formats:
+    colored-line-number:
+      path: stdout
+  print-issued-lines: true
+  print-linter-name: true
+  sort-results: true
+  sort-order:
+    - linter
+    - file
