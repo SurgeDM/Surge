@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/engine/network"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -16,8 +17,9 @@ import (
 // worker downloads tasks from the queue
 func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []string, file *os.File, queue *TaskQueue, totalSize int64, client *http.Client) error {
 	// Get pooled buffer
-	bufPtr := d.bufPool.Get().(*[]byte)
-	defer d.bufPool.Put(bufPtr)
+	bufPool := d.bufferPool()
+	bufPtr := bufPool.Get().(*[]byte)
+	defer bufPool.Put(bufPtr)
 	buf := *bufPtr
 
 	utils.Debug("Worker %d started", id)
@@ -181,7 +183,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 // downloadTask downloads a single byte range and writes to file at offset
 func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, file *os.File, activeTask *ActiveTask, buf []byte, client *http.Client, totalSize int64) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
+	req, err := http.NewRequestWithContext(network.WithRequestHeaders(ctx, d.Headers), http.MethodGet, rawurl, nil)
 	if err != nil {
 		return err
 	}
