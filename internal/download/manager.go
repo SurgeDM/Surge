@@ -137,8 +137,8 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		})
 	}
 
-	// Update shared state
-	if cfg.State != nil {
+	// Update shared state if we have a valid size
+	if cfg.State != nil && cfg.TotalSize > 0 {
 		cfg.State.SetTotalSize(cfg.TotalSize)
 	}
 

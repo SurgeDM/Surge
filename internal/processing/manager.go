@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -261,7 +263,13 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 		// Distinguish between terminal client errors (invalid scheme, etc) and
 		// server-side rejections or timeouts that we can optimistically ignore.
 		var urlErr *url.Error
-		isTerminal := errors.As(probeErr, &urlErr) || errors.Is(probeErr, ErrProbeRequestCreation)
+		var isTerminal bool
+		if errors.As(probeErr, &urlErr) {
+			var opErr *net.OpError
+			isTerminal = !errors.As(probeErr, &opErr) && // not a network-layer error
+				strings.Contains(urlErr.Error(), "unsupported protocol scheme")
+		}
+		isTerminal = isTerminal || errors.Is(probeErr, ErrProbeRequestCreation)
 
 		if isTerminal {
 			return "", "", probeErr
