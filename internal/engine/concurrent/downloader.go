@@ -2,13 +2,10 @@ package concurrent
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"math"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -17,10 +14,17 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/network"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
+
+var defaultExecution = &types.ExecutionDeps{
+	HTTPClients:    network.NewConnectionManager(),
+	BufferPools:    network.NewBufferPoolManager(),
+	NetworkWorkers: NewNetworkWorkerPool(types.PerHostMax),
+}
 
 // ConcurrentDownloader handles multi-connection downloads
 type ConcurrentDownloader struct {
@@ -33,8 +37,8 @@ type ConcurrentDownloader struct {
 	DestPath     string // For pause/resume
 	Runtime      *types.RuntimeConfig
 	TotalSize    int64
-	bufPool      sync.Pool
 	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
+	Execution    *types.ExecutionDeps
 }
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
@@ -54,14 +58,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 		State:        progState,
 		activeTasks:  make(map[int]*ActiveTask),
 		Runtime:      runtime,
-		bufPool: sync.Pool{
-			New: func() any {
-				// Use configured buffer size
-				size := runtime.GetWorkerBufferSize()
-				buf := make([]byte, size)
-				return &buf
-			},
-		},
+		Execution:    defaultExecution,
 	}
 }
 
@@ -188,76 +185,23 @@ func createTasks(fileSize, chunkSize int64) []types.Task {
 	return tasks
 }
 
-// newConcurrentClient creates an http.Client tuned for concurrent downloads
-func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
-	// Ensure we have enough connections per host
-	maxConns := d.Runtime.GetMaxConnectionsPerHost()
-	if numConns > maxConns {
-		maxConns = numConns
+func (d *ConcurrentDownloader) execution() *types.ExecutionDeps {
+	if d.Execution != nil {
+		return d.Execution
 	}
+	return defaultExecution
+}
 
-	var proxyFunc func(*http.Request) (*url.URL, error)
-	if d.Runtime.ProxyURL != "" {
-		if parsedURL, err := url.Parse(d.Runtime.ProxyURL); err == nil {
-			proxyFunc = http.ProxyURL(parsedURL)
-		} else {
-			// Fallback or log error? For now fallback to environment
-			utils.Debug("Invalid proxy URL %s: %v", d.Runtime.ProxyURL, err)
-			proxyFunc = http.ProxyFromEnvironment
-		}
-	} else {
-		proxyFunc = http.ProxyFromEnvironment
-	}
+func (d *ConcurrentDownloader) bufferPool() *sync.Pool {
+	return d.execution().BufferPools.Get(d.Runtime.GetWorkerBufferSize())
+}
 
-	transport := &http.Transport{
-		// Connection pooling
-		MaxIdleConns:        types.DefaultMaxIdleConns,
-		MaxIdleConnsPerHost: maxConns + d.Runtime.GetDialHedgeCount() + 2, // Host buffer for hedges
-		MaxConnsPerHost:     maxConns,
-		Proxy:               proxyFunc,
+func (d *ConcurrentDownloader) concurrentClient() *http.Client {
+	return d.execution().HTTPClients.ConcurrentClient(d.Runtime)
+}
 
-		// Timeouts to prevent hung connections
-		IdleConnTimeout:       types.DefaultIdleConnTimeout,
-		TLSHandshakeTimeout:   types.DefaultTLSHandshakeTimeout,
-		ResponseHeaderTimeout: types.DefaultResponseHeaderTimeout,
-		ExpectContinueTimeout: types.DefaultExpectContinueTimeout,
-
-		// Performance tuning
-		DisableCompression: true,  // Files are usually already compressed
-		ForceAttemptHTTP2:  false, // FORCE HTTP/1.1 for multiple TCP connections
-		TLSNextProto:       make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
-	}
-
-	dialer := &net.Dialer{
-		Timeout:   types.DialTimeout,
-		KeepAlive: types.KeepAliveDuration,
-	}
-
-	utils.ConfigureDialer(dialer, d.Runtime.CustomDNS)
-	transport.DialContext = dialer.DialContext
-
-	return &http.Client{
-		Transport: transport,
-		// Preserve headers on redirects for authenticated downloads
-		// By default, Go strips sensitive headers (Cookie, Authorization) on cross-domain redirects.
-		// Since these headers were explicitly provided by the browser for this download, we forward them.
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
-			}
-			// Copy headers from original request to redirect request
-			if len(via) > 0 {
-				utils.CopyRedirectHeaders(req, via[0])
-			}
-			// Re-apply explicit custom headers down the redirect chain
-			for key, val := range d.Headers {
-				if key != "Range" {
-					req.Header.Set(key, val)
-				}
-			}
-			return nil
-		},
-	}
+func (d *ConcurrentDownloader) workerRunner() types.NetworkWorkerRunner {
+	return d.execution().NetworkWorkers
 }
 
 // Download downloads a file using multiple concurrent connections
@@ -314,12 +258,9 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		d.State.SetCancelFunc(cancel)
 	}
 
-	bootstrapClient := d.newConcurrentClient(1)
-	defer bootstrapClient.CloseIdleConnections()
-
 	// Determine connections and chunk size
 	if fileSize <= 0 {
-		discoveredSize, err := d.bootstrapMetadata(downloadCtx, bootstrapClient, rawurl)
+		discoveredSize, err := d.bootstrapMetadata(downloadCtx, d.concurrentClient(), rawurl)
 		if err != nil {
 			return err
 		}
@@ -331,8 +272,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	chunkSize := d.determineChunkSize(fileSize, numConns)
 
 	// Create tuned HTTP client for concurrent downloads
-	client := d.newConcurrentClient(numConns)
-	defer client.CloseIdleConnections()
+	client := d.concurrentClient()
 
 	// Initialize chunk visualization
 	if d.State != nil {
@@ -511,27 +451,9 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		}
 	}()
 
-	// Start workers
-	var wg sync.WaitGroup
-	workerErrors := make(chan error, numConns)
-
-	for i := 0; i < numConns; i++ {
-		wg.Add(1)
-		go func(workerID int) {
-			defer wg.Done()
-			err := d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
-			if err != nil && err != context.Canceled {
-				workerErrors <- err
-			}
-		}(i)
-	}
-
-	// Wait for all workers to complete
-	go func() {
-		wg.Wait()
-		close(workerErrors)
-		queue.Close()
-	}()
+	workerErrors := d.workerRunner().Run(downloadCtx, numConns, func(workerID int) error {
+		return d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
+	})
 
 	// Check for errors or pause
 	var downloadErr error
@@ -696,7 +618,7 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 			mirror := mirrors[idx%len(mirrors)]
 
 			// Use a fast Range request to ensure the handshake completes
-			req, err := http.NewRequestWithContext(pingCtx, http.MethodGet, mirror, nil)
+			req, err := http.NewRequestWithContext(network.WithRequestHeaders(pingCtx, d.Headers), http.MethodGet, mirror, nil)
 			if err != nil {
 				return
 			}

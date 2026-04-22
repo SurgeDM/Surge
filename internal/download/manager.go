@@ -185,6 +185,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 
 		d := concurrent.NewConcurrentDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
+		d.Execution = cfg.Execution
 		utils.Debug("Calling Download with mirrors: %v", mirrors)
 		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, cfg.TotalSize)
 		if d.TotalSize > 0 {
