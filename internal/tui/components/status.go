@@ -9,7 +9,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// DownloadStatus represents the state of a download
+// DownloadStatus represents the state of a download.
 type DownloadStatus int
 
 const (
@@ -20,7 +20,7 @@ const (
 	StatusError
 )
 
-// statusInfo holds the display properties for each status
+// statusInfo holds the display properties for each status.
 type statusInfo struct {
 	icon  string
 	label string
@@ -61,7 +61,7 @@ func rebuildStatusCache() {
 	queuedSpinnerStyle = lipgloss.NewStyle().Foreground(StatusQueued.Color())
 }
 
-// Icon returns the status icon
+// Icon returns the status icon.
 func (s DownloadStatus) Icon() string {
 	if info, ok := statusMap[s]; ok {
 		return info.icon
@@ -69,7 +69,7 @@ func (s DownloadStatus) Icon() string {
 	return "?"
 }
 
-// Label returns the status label
+// Label returns the status label.
 func (s DownloadStatus) Label() string {
 	if info, ok := statusMap[s]; ok {
 		return info.label
@@ -77,7 +77,7 @@ func (s DownloadStatus) Label() string {
 	return "Unknown"
 }
 
-// Color returns the status color
+// Color returns the status color.
 func (s DownloadStatus) Color() color.Color {
 	switch s {
 	case StatusQueued, StatusPaused:
@@ -93,7 +93,7 @@ func (s DownloadStatus) Color() color.Color {
 	}
 }
 
-// Render returns the styled icon + label combination
+// Render returns the styled icon + label combination.
 func (s DownloadStatus) Render() string {
 	cacheMu.RLock()
 	defer cacheMu.RUnlock()
@@ -103,7 +103,7 @@ func (s DownloadStatus) Render() string {
 	return "Unknown"
 }
 
-// RenderWithSpinner returns the styled icon + label combination, conditionally substituting a dynamic spinner for the Queued state
+// RenderWithSpinner returns the styled icon + label combination, conditionally substituting a dynamic spinner for the Queued state.
 func (s DownloadStatus) RenderWithSpinner(spinnerView string) string {
 	if s == StatusQueued {
 		cacheMu.RLock()
@@ -114,7 +114,7 @@ func (s DownloadStatus) RenderWithSpinner(spinnerView string) string {
 	return s.Render()
 }
 
-// RenderIcon returns just the styled icon
+// RenderIcon returns just the styled icon.
 func (s DownloadStatus) RenderIcon() string {
 	cacheMu.RLock()
 	defer cacheMu.RUnlock()
@@ -125,7 +125,7 @@ func (s DownloadStatus) RenderIcon() string {
 }
 
 // DetermineStatus determines the DownloadStatus based on download state
-// This centralizes the status determination logic that was duplicated in view.go and list.go
+// This centralizes the status determination logic that was duplicated in view.go and list.go.
 func DetermineStatus(done bool, paused bool, hasError bool, speed float64, downloaded int64) DownloadStatus {
 	switch {
 	case hasError:

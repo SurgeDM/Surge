@@ -47,7 +47,7 @@ func advanceRemainingTasks(tasks []types.Task, consumed int64) []types.Task {
 
 func finalizeCompletedFile(finalPath string) error {
 	if finalPath == "" {
-		return fmt.Errorf("missing destination path for completed download")
+		return errors.New("missing destination path for completed download")
 	}
 
 	surgePath := finalPath + types.IncompleteSuffix
@@ -75,7 +75,6 @@ func finalizeCompletedFile(finalPath string) error {
 func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 	for msg := range ch {
 		switch m := msg.(type) {
-
 		case events.DownloadStartedMsg:
 			// Persist the started record immediately so crash recovery and later lifecycle
 			// events have a stable destination record even before the first pause snapshot.
@@ -272,7 +271,6 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)
 			}
 			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
-
 				if filename == "" {
 					filename = m.Filename
 				}
@@ -307,7 +305,6 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				}
 			}
 			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
-
 				filename := m.Filename
 				if filename == "" && existing != nil {
 					filename = existing.Filename

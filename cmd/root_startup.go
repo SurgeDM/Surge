@@ -35,7 +35,7 @@ func runStartupIntegrityCheck() string {
 	return ""
 }
 
-// initializeGlobalState sets up the environment and configures the engine state and logging
+// initializeGlobalState sets up the environment and configures the engine state and logging.
 func initializeGlobalState() error {
 	stateDir := config.GetStateDir()
 	logsDir := config.GetLogsDir()

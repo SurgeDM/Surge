@@ -10,18 +10,18 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// FilePickerModal represents a styled file picker modal
+// FilePickerModal represents a styled file picker modal.
 type FilePickerModal struct {
-	Title       string
-	Picker      *filepicker.Model
-	Help        help.Model
 	HelpKeys    help.KeyMap
 	BorderColor color.Color
+	Picker      *filepicker.Model
+	Help        help.Model
+	Title       string
 	Width       int
 	Height      int
 }
 
-// NewFilePickerModal creates a file picker modal with default styling
+// NewFilePickerModal creates a file picker modal with default styling.
 func NewFilePickerModal(title string, picker *filepicker.Model, helpModel help.Model, helpKeys help.KeyMap, borderColor color.Color) FilePickerModal {
 	return FilePickerModal{
 		Title:       title,
@@ -34,7 +34,7 @@ func NewFilePickerModal(title string, picker *filepicker.Model, helpModel help.M
 	}
 }
 
-// View returns the inner content of the file picker (without the box)
+// View returns the inner content of the file picker (without the box).
 func (m FilePickerModal) View() string {
 	pathStyle := lipgloss.NewStyle().Foreground(colors.LightGray())
 
@@ -50,7 +50,7 @@ func (m FilePickerModal) View() string {
 	return lipgloss.NewStyle().Padding(0, 2).Render(content)
 }
 
-// RenderWithBtopBox renders the modal using the btop-style box
+// RenderWithBtopBox renders the modal using the btop-style box.
 func (m FilePickerModal) RenderWithBtopBox(
 	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
 	titleStyle lipgloss.Style,

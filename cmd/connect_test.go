@@ -11,10 +11,10 @@ import (
 )
 
 type fakeRemoteDownloadService struct {
-	addCalls     int
 	lastURL      string
 	lastPath     string
 	lastFile     string
+	addCalls     int
 	lastExplicit bool
 }
 

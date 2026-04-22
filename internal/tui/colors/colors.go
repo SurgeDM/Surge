@@ -14,12 +14,8 @@ import (
 )
 
 type Palette struct {
-	Name    string `toml:"name"`
-	Primary struct {
-		Background string `toml:"background"`
-		Foreground string `toml:"foreground"`
-		Accent     string `toml:"accent"`
-	} `toml:"primary"`
+	Dark   *Palette `toml:"dark"`
+	Light  *Palette `toml:"light"`
 	Normal struct {
 		Black   string `toml:"black"`
 		Red     string `toml:"red"`
@@ -31,18 +27,22 @@ type Palette struct {
 		White   string `toml:"white"`
 	} `toml:"normal"`
 	Bright struct {
-		Black   string `toml:"black"`   // unused by accessors (reserved for future use)
-		Red     string `toml:"red"`     // → Pink(), ProgressStart()
-		Green   string `toml:"green"`   // unused by accessors (reserved for future use)
-		Yellow  string `toml:"yellow"`  // unused by accessors (reserved for future use)
-		Blue    string `toml:"blue"`    // unused by accessors (reserved for future use)
-		Magenta string `toml:"magenta"` // → ProgressEnd()
-		Cyan    string `toml:"cyan"`    // unused by accessors (reserved for future use)
-		White   string `toml:"white"`   // unused by accessors (reserved for future use)
+		Black   string `toml:"black"`
+		Red     string `toml:"red"`
+		Green   string `toml:"green"`
+		Yellow  string `toml:"yellow"`
+		Blue    string `toml:"blue"`
+		Magenta string `toml:"magenta"`
+		Cyan    string `toml:"cyan"`
+		White   string `toml:"white"`
 	} `toml:"bright"`
-
-	Dark  *Palette `toml:"dark"`
-	Light *Palette `toml:"light"`
+	Primary struct {
+		Background string `toml:"background"`
+		Foreground string `toml:"foreground"`
+		Accent     string `toml:"accent"`
+	} `toml:"primary"`
+	Name string `toml:"name"` // unused by accessors (reserved for future use)
+	// unused by accessors (reserved for future use)
 }
 
 type ThemeConfig struct {
@@ -238,7 +238,7 @@ func palette() *Palette {
 func Background() color.Color { return lipgloss.Color(palette().Primary.Background) }
 func Foreground() color.Color { return lipgloss.Color(palette().Primary.Foreground) }
 
-// Semantic Mappings
+// Semantic Mappings.
 func White() color.Color { return lipgloss.Color(palette().Normal.White) }
 func Gray() color.Color  { return lipgloss.Color(palette().Normal.Black) }
 func Red() color.Color   { return lipgloss.Color(palette().Normal.Red) }
@@ -286,14 +286,14 @@ func LightGray() color.Color {
 
 func DarkGray() color.Color { return lipgloss.Color(palette().Primary.Background) }
 
-// State Mappings
+// State Mappings.
 func StateError() color.Color       { return Red() }
 func StatePaused() color.Color      { return Orange() }
 func StateDownloading() color.Color { return Green() }
 func StateDone() color.Color        { return Magenta() }
 func StateVersion() color.Color     { return Blue() }
 
-// Progress Mappings
+// Progress Mappings.
 func ProgressStart() color.Color {
 	acc := palette().Primary.Accent
 	if acc != "" {

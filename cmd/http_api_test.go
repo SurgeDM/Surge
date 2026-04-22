@@ -211,13 +211,13 @@ func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 
 func TestResolveDownloadDestPath(t *testing.T) {
 	tests := []struct {
-		name           string
-		useNilService  bool
+		wantErrIs      error
 		service        *httpAPITestService
+		name           string
 		id             string
 		wantPath       string
-		wantErrIs      error
 		wantErrContain string
+		useNilService  bool
 	}{
 		{
 			name:          "service unavailable",
@@ -312,11 +312,11 @@ func TestOpenEndpoints_ReturnMappedResolveStatuses(t *testing.T) {
 	globalSettings = config.DefaultSettings()
 
 	tests := []struct {
+		service    *httpAPITestService
 		name       string
 		path       string
-		useNil     bool
-		service    *httpAPITestService
 		statusCode int
+		useNil     bool
 	}{
 		{
 			name:       "service unavailable returns 503",

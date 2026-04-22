@@ -7,16 +7,16 @@ import (
 )
 
 const (
-	// === Timeouts and Intervals ===
+	// === Timeouts and Intervals ===.
 	TickInterval = 200 * time.Millisecond
 
-	// === Layout Ratios ===
+	// === Layout Ratios ===.
 	ListWidthRatio         = 0.6  // Dashboard: List takes 60% width
 	SettingsWidthRatio     = 0.72 // Modals: Settings/Category use 72% width
 	LogoWidthRatio         = 0.45 // Header: Logo takes 45% of left column
 	GraphTargetHeightRatio = 0.4  // Right Column: Graph target 40% height
 
-	// === Thresholds and Minimums ===
+	// === Thresholds and Minimums ===.
 	MinTermWidth             = 45
 	MinTermHeight            = 12
 	ShortTermHeightThreshold = 25 // Switch to compact header below this height
@@ -36,14 +36,14 @@ const (
 	MinChunkMapHeight   = 4
 	MinChunkMapVisibleH = 18 // Min term height to show chunk map
 
-	// === Component Heights ===
+	// === Component Heights ===.
 	ModalHeightPadding = 4 // Bottom fallback padding for modals to avoid clipping
 	HeaderHeightMax    = 11
 	HeaderHeightMin    = 3
 	FilePickerHeight   = 12
 	CardHeight         = 2 // Compact rows for downloads list
 
-	// === Padding and Offsets ===
+	// === Padding and Offsets ===.
 	DefaultPaddingX        = 1
 	DefaultPaddingY        = 0
 	PopupPaddingX          = 2
@@ -52,26 +52,26 @@ const (
 	HeaderWidthOffset      = 2
 	ProgressBarWidthOffset = 4
 
-	// === Layout Offsets (Clean Math) ===
+	// === Layout Offsets (Clean Math) ===.
 	InternalPaddingHeight = 2 // Standard internal vertical padding
 	InternalPaddingWidth  = 2 // Standard internal horizontal padding
 	FooterHeight          = 1 // Application-wide footer height (keybindings)
 	DividerHeight         = 1 // Horizontal/Vertical divider line
 
-	// === Graph Configuration ===
+	// === Graph Configuration ===.
 	GraphAxisWidth  = 10
 	GraphStatsWidth = 18
 	GraphHeadroom   = 1.1 // Scale max speed by 110% for visual headroom
 
-	// === Input Dimensions ===
+	// === Input Dimensions ===.
 	InputWidth        = 40
 	MinSettingsInputW = 8
 	MaxSettingsInputW = 48
 
-	// === Channel Buffers ===
+	// === Channel Buffers ===.
 	ProgressChannelBuffer = types.ProgressChannelBuffer
 
-	// === Units ===
+	// === Units ===.
 	KB = types.KB
 	MB = types.MB
 	GB = types.GB

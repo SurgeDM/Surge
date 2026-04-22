@@ -99,10 +99,10 @@ func TestActiveTask_Cancel(t *testing.T) {
 		Cancel: cancel,
 	}
 
-	// Verify context is not cancelled
+	// Verify context is not canceled
 	select {
 	case <-ctx.Done():
-		t.Fatal("Context should not be cancelled")
+		t.Fatal("Context should not be canceled")
 	default:
 	}
 
@@ -113,7 +113,7 @@ func TestActiveTask_Cancel(t *testing.T) {
 	case <-ctx.Done():
 		// Expected
 	default:
-		t.Error("Context should be cancelled after Cancel()")
+		t.Error("Context should be canceled after Cancel()")
 	}
 }
 

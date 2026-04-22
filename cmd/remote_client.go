@@ -20,9 +20,9 @@ var (
 )
 
 type remoteClientConfig struct {
-	AllowInsecureHTTP bool
-	ConnectTimeout    time.Duration
 	HTTPOptions       core.HTTPClientOptions
+	ConnectTimeout    time.Duration
+	AllowInsecureHTTP bool
 }
 
 func currentRemoteClientConfig() remoteClientConfig {

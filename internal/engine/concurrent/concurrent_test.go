@@ -14,7 +14,7 @@ import (
 )
 
 // Helper to init state just for tests (avoiding global init if possible,
-// using temporary directories for each test)
+// using temporary directories for each test).
 func initTestState(t *testing.T) (string, func()) {
 	state.CloseDB() // Ensure any previous DB is closed
 
@@ -317,7 +317,6 @@ func TestConcurrentDownloader_SmallFile(t *testing.T) {
 	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
 		t.Error(err)
 	}
-
 }
 
 func TestConcurrentDownloader_MediumFile(t *testing.T) {
@@ -446,7 +445,6 @@ func TestConcurrentDownloader_PauseAtCompletionFinalizesAsCompleted(t *testing.T
 	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
 		t.Fatal(err)
 	}
-
 }
 
 func TestConcurrentDownloader_ProgressTracking(t *testing.T) {
@@ -639,7 +637,6 @@ func TestConcurrentDownloader_ResumePartialDownload(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Resume download failed: %v", err)
 	}
-
 }
 
 // =============================================================================

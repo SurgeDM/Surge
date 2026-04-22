@@ -9,10 +9,11 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
-	"github.com/spf13/cobra"
 )
 
 var lsCmd = &cobra.Command{
@@ -55,7 +56,7 @@ var lsCmd = &cobra.Command{
 	},
 }
 
-// downloadInfo is a unified structure for display
+// downloadInfo is a unified structure for display.
 type downloadInfo struct {
 	ID         string  `json:"id"`
 	URL        string  `json:"url,omitempty"`

@@ -1,10 +1,12 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
-	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/spf13/cobra"
+
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 var addCmd = &cobra.Command{
@@ -13,7 +15,7 @@ var addCmd = &cobra.Command{
 	Short:   "Add a new download to the running Surge instance",
 	Long:    `Add one or more URLs to the download queue of a running Surge instance.`,
 	RunE: func(cmd *cobra.Command, args []string) error {
-		//initializeGlobally is required to ensure that the config and logger are set up before we attempt to resolve the API connection or read the batch file.
+		// initializeGlobally is required to ensure that the config and logger are set up before we attempt to resolve the API connection or read the batch file.
 		if err := initializeGlobalState(); err != nil {
 			return err
 		}
@@ -66,10 +68,10 @@ var addCmd = &cobra.Command{
 		}
 
 		if attempted > 0 {
-			return fmt.Errorf("failed to add any downloads")
+			return errors.New("failed to add any downloads")
 		}
 
-		return fmt.Errorf("no valid URLs to add")
+		return errors.New("no valid URLs to add")
 	},
 }
 

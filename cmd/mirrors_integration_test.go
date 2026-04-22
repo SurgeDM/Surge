@@ -83,7 +83,7 @@ func TestMirrors_CLI_Integration(t *testing.T) {
 	}
 }
 
-// TestParseURLArg_Unit tests the parsing logic directly
+// TestParseURLArg_Unit tests the parsing logic directly.
 func TestParseURLArg_Unit(t *testing.T) {
 	tests := []struct {
 		name            string

@@ -14,7 +14,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// DownloadItem implements list.Item interface for downloads
+// DownloadItem implements list.Item interface for downloads.
 type DownloadItem struct {
 	download    *DownloadModel
 	spinnerView string
@@ -68,7 +68,7 @@ func (i DownloadItem) FilterValue() string {
 	return i.download.Filename
 }
 
-// Custom delegate for rendering download items
+// Custom delegate for rendering download items.
 type downloadDelegate struct {
 	keys           *delegateKeyMap
 	baseTitleStyle lipgloss.Style
@@ -159,19 +159,19 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 	_, _ = fmt.Fprintf(w, "%s\n%s", line1, line2)
 }
 
-// ShortHelp returns keybindings to show in the mini help view
+// ShortHelp returns keybindings to show in the mini help view.
 func (d downloadDelegate) ShortHelp() []key.Binding {
 	return []key.Binding{d.keys.pause, d.keys.delete}
 }
 
-// FullHelp returns keybindings for the expanded help view
+// FullHelp returns keybindings for the expanded help view.
 func (d downloadDelegate) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{d.keys.pause, d.keys.delete},
 	}
 }
 
-// NewDownloadList creates a new list.Model configured for downloads
+// NewDownloadList creates a new list.Model configured for downloads.
 func NewDownloadList(width, height int) list.Model {
 	delegate := newDownloadDelegate()
 
@@ -209,9 +209,8 @@ func applyListTheme(l *list.Model) {
 		Padding(2, 0)
 }
 
-// UpdateListItems updates the list with filtered downloads based on active tab
+// UpdateListItems updates the list with filtered downloads based on active tab.
 func (m *RootModel) UpdateListItems() {
-
 	if m.list.Width() == 0 {
 		return
 	}
@@ -295,7 +294,7 @@ func (m *RootModel) UpdateListItems() {
 	m.SelectedDownloadID = ""
 }
 
-// GetSelectedDownload returns the currently selected download from the list
+// GetSelectedDownload returns the currently selected download from the list.
 func (m *RootModel) GetSelectedDownload() *DownloadModel {
 	if item := m.list.SelectedItem(); item != nil {
 		if di, ok := item.(DownloadItem); ok {

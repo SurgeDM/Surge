@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -9,24 +10,25 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/google/uuid"
+
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/utils"
-	"github.com/google/uuid"
 )
 
-// DownloadRequest represents a download request from the browser extension
+// DownloadRequest represents a download request from the browser extension.
 type DownloadRequest struct {
+	Headers              map[string]string `json:"headers,omitempty"`
 	URL                  string            `json:"url"`
 	Filename             string            `json:"filename,omitempty"`
 	Path                 string            `json:"path,omitempty"`
-	RelativeToDefaultDir bool              `json:"relative_to_default_dir,omitempty"`
 	Mirrors              []string          `json:"mirrors,omitempty"`
-	SkipApproval         bool              `json:"skip_approval,omitempty"` // Extension validated request, skip TUI prompt
-	Headers              map[string]string `json:"headers,omitempty"`       // Custom HTTP headers from browser (cookies, auth, etc.)
+	RelativeToDefaultDir bool              `json:"relative_to_default_dir,omitempty"`
+	SkipApproval         bool              `json:"skip_approval,omitempty"`
 	IsExplicitCategory   bool              `json:"is_explicit_category,omitempty"`
 }
 
@@ -114,26 +116,26 @@ func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) 
 		return req, fmt.Errorf("invalid json: %w", err)
 	}
 	if req.URL == "" {
-		return req, fmt.Errorf("url is required")
+		return req, errors.New("url is required")
 	}
 	if strings.Contains(req.Filename, "..") {
-		return req, fmt.Errorf("invalid filename")
+		return req, errors.New("invalid filename")
 	}
 	if strings.Contains(req.Filename, "/") || strings.Contains(req.Filename, "\\") {
-		return req, fmt.Errorf("invalid filename")
+		return req, errors.New("invalid filename")
 	}
 	if strings.Contains(req.Path, "..") {
-		return req, fmt.Errorf("invalid path")
+		return req, errors.New("invalid path")
 	}
 	if req.RelativeToDefaultDir && req.Path != "" {
 		// Linux filepath.IsAbs does not recognize Windows drive paths, so those
 		// are normalized later against the daemon's default download directory.
 		if filepath.IsAbs(req.Path) && !utils.IsWindowsAbsPath(req.Path) {
-			return req, fmt.Errorf("invalid path")
+			return req, errors.New("invalid path")
 		}
 		cleanPath := filepath.Clean(req.Path)
 		if cleanPath == ".." || strings.HasPrefix(cleanPath, ".."+string(filepath.Separator)) {
-			return req, fmt.Errorf("invalid path")
+			return req, errors.New("invalid path")
 		}
 		req.Path = cleanPath
 	}
@@ -272,7 +274,7 @@ func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resol
 }
 
 // processDownloads handles the logic of adding downloads either to local pool or remote server
-// Returns the number of successfully added downloads
+// Returns the number of successfully added downloads.
 func processDownloads(urls []string, outputDir string, port int) int {
 	successCount := 0
 
@@ -327,7 +329,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		// CLI explicit arg means we do not auto-route when user provided an explicit output path.
 		isExplicit := isExplicitOutputPath(outPath, settings.General.DefaultDownloadDir)
 		if lifecycle == nil {
-			err := fmt.Errorf("lifecycle manager unavailable")
+			err := errors.New("lifecycle manager unavailable")
 			recordPreflightDownloadError(url, outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", url, err))
 			continue

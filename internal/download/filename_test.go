@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// Tests requested by user: ensure "file (1)" is preserved if it doesn't exist
+// Tests requested by user: ensure "file (1)" is preserved if it doesn't exist.
 func TestUniqueFilePath_Preservation(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "surge-filename-*")
 	if err != nil {
@@ -47,7 +47,7 @@ func TestUniqueFilePath_Preservation(t *testing.T) {
 	}
 }
 
-// Additional robustness tests
+// Additional robustness tests.
 func TestUniqueFilePath_WhitespaceParsing(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "surge-filename-*")
 	if err != nil {

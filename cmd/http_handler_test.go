@@ -13,6 +13,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/download"
@@ -207,8 +208,8 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 func TestShouldFallbackUnmappedWindowsPath(t *testing.T) {
 	tests := []struct {
 		name                 string
-		relativeToDefaultDir bool
 		hostOS               string
+		relativeToDefaultDir bool
 		want                 bool
 	}{
 		{
@@ -413,8 +414,8 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 }
 
 type failingPublishService struct {
-	fakeRemoteDownloadService
 	publishErr error
+	fakeRemoteDownloadService
 }
 
 func (f *failingPublishService) Publish(msg interface{}) error {

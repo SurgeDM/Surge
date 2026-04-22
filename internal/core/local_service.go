@@ -2,11 +2,14 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/google/uuid"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/download"
@@ -14,7 +17,6 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
-	"github.com/google/uuid"
 )
 
 func completedSpeedMBps(entry types.DownloadEntry) float64 {
@@ -30,7 +32,7 @@ func completedSpeedMBps(entry types.DownloadEntry) float64 {
 	return 0
 }
 
-// ReloadSettings reloads settings from disk
+// ReloadSettings reloads settings from disk.
 func (s *LocalDownloadService) ReloadSettings() error {
 	settings, err := config.LoadSettings()
 	if err != nil {
@@ -44,29 +46,20 @@ func (s *LocalDownloadService) ReloadSettings() error {
 
 // LocalDownloadService implements DownloadService for the local embedded engine.
 type LocalDownloadService struct {
-	Pool    *download.WorkerPool
-	InputCh chan interface{}
-
-	// Broadcast fields
-	listeners  []chan interface{}
-	listenerMu sync.Mutex
-
-	broadcastWG  sync.WaitGroup
-	reportTicker *time.Ticker
-	reportWG     sync.WaitGroup
-
-	// Lifecycle
-	ctx    context.Context
-	cancel context.CancelFunc
-	// shutdownOnce guarantees Shutdown is safe to call multiple times.
-	shutdownOnce sync.Once
-	shutdownErr  error
-
-	// Settings Cache
-	settings   *config.Settings
-	settingsMu sync.RWMutex
-
 	lifecycleHooks LifecycleHooks
+	ctx            context.Context
+	shutdownErr    error
+	InputCh        chan interface{}
+	reportTicker   *time.Ticker
+	cancel         context.CancelFunc
+	Pool           *download.WorkerPool
+	settings       *config.Settings
+	listeners      []chan interface{}
+	broadcastWG    sync.WaitGroup
+	reportWG       sync.WaitGroup
+	settingsMu     sync.RWMutex
+	shutdownOnce   sync.Once
+	listenerMu     sync.Mutex
 }
 
 // LifecycleHooks routes service-level management calls through the LifecycleManager.
@@ -318,13 +311,13 @@ func (s *LocalDownloadService) StreamEvents(ctx context.Context) (<-chan interfa
 // Publish emits an event into the service's event stream.
 func (s *LocalDownloadService) Publish(msg interface{}) error {
 	if s.InputCh == nil {
-		return fmt.Errorf("input channel not initialized")
+		return errors.New("input channel not initialized")
 	}
 	select {
 	case s.InputCh <- msg:
 		return nil
 	case <-time.After(1 * time.Second):
-		return fmt.Errorf("event publish timeout")
+		return errors.New("event publish timeout")
 	}
 }
 
@@ -467,7 +460,7 @@ func (s *LocalDownloadService) AddWithID(url string, path string, filename strin
 
 func (s *LocalDownloadService) add(url string, path string, filename string, mirrors []string, headers map[string]string, requestedID string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
 	if s.Pool == nil {
-		return "", fmt.Errorf("worker pool not initialized")
+		return "", errors.New("worker pool not initialized")
 	}
 
 	s.settingsMu.RLock()
@@ -489,12 +482,12 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 		id = uuid.New().String()
 	}
 	if st := s.Pool.GetStatus(id); st != nil {
-		return "", fmt.Errorf("download id already exists")
+		return "", errors.New("download id already exists")
 	}
 	if entry, err := state.GetDownload(id); err != nil {
 		return "", fmt.Errorf("failed to query download state: %w", err)
 	} else if entry != nil {
-		return "", fmt.Errorf("download id already exists")
+		return "", errors.New("download id already exists")
 	}
 
 	state := types.NewProgressState(id, 0)
@@ -525,7 +518,7 @@ func (s *LocalDownloadService) Pause(id string) error {
 	if s.lifecycleHooks.Pause != nil {
 		return s.lifecycleHooks.Pause(id)
 	}
-	return fmt.Errorf("PauseFunc not initialized")
+	return errors.New("PauseFunc not initialized")
 }
 
 // Resume resumes a paused download.
@@ -533,7 +526,7 @@ func (s *LocalDownloadService) Resume(id string) error {
 	if s.lifecycleHooks.Resume != nil {
 		return s.lifecycleHooks.Resume(id)
 	}
-	return fmt.Errorf("ResumeFunc not initialized")
+	return errors.New("ResumeFunc not initialized")
 }
 
 // ResumeBatch resumes multiple paused downloads efficiently.
@@ -543,7 +536,7 @@ func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
 	}
 	errs := make([]error, len(ids))
 	for i := range errs {
-		errs[i] = fmt.Errorf("ResumeBatchFunc not initialized")
+		errs[i] = errors.New("ResumeBatchFunc not initialized")
 	}
 	return errs
 }
@@ -554,14 +547,14 @@ func (s *LocalDownloadService) SetLifecycleHooks(hooks LifecycleHooks) {
 	s.lifecycleHooks = hooks
 }
 
-// UpdateURL updates the URL of a paused or errored download
+// UpdateURL updates the URL of a paused or errored download.
 func (s *LocalDownloadService) UpdateURL(id string, newURL string) error {
 	if s.lifecycleHooks.UpdateURL != nil {
 		return s.lifecycleHooks.UpdateURL(id, newURL)
 	}
 	// Fallback: update pool in-memory only (no DB persistence)
 	if s.Pool == nil {
-		return fmt.Errorf("worker pool not initialized")
+		return errors.New("worker pool not initialized")
 	}
 	return s.Pool.UpdateURL(id, newURL)
 }
@@ -573,7 +566,7 @@ func (s *LocalDownloadService) Delete(id string) error {
 	}
 	// Fallback when lifecycle hooks not wired (e.g. tests)
 	if s.Pool == nil {
-		return fmt.Errorf("worker pool not initialized")
+		return errors.New("worker pool not initialized")
 	}
 	s.Pool.Cancel(id)
 	if entry, err := state.GetDownload(id); err == nil && entry != nil {
@@ -592,7 +585,7 @@ func (s *LocalDownloadService) Delete(id string) error {
 // GetStatus returns a status for a single download by id.
 func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, error) {
 	if id == "" {
-		return nil, fmt.Errorf("missing id")
+		return nil, errors.New("missing id")
 	}
 
 	// 1. Check active pool
@@ -628,10 +621,10 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 		return &status, nil
 	}
 
-	return nil, fmt.Errorf("download not found")
+	return nil, errors.New("download not found")
 }
 
-// History returns completed downloads
+// History returns completed downloads.
 func (s *LocalDownloadService) History() ([]types.DownloadEntry, error) {
 	// For local service, we can directly access the state DB
 	return state.LoadCompletedDownloads()

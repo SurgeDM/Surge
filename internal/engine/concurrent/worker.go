@@ -2,6 +2,7 @@ package concurrent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -13,7 +14,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// worker downloads tasks from the queue
+// worker downloads tasks from the queue.
 func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []string, file *os.File, queue *TaskQueue, totalSize int64, client *http.Client) error {
 	// Get pooled buffer
 	bufPtr := d.bufPool.Get().(*[]byte)
@@ -43,7 +44,6 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 		maxRetries := d.Runtime.GetMaxTaskRetries()
 		for attempt := 0; attempt < maxRetries; attempt++ {
 			if attempt > 0 {
-
 				if len(mirrors) == 1 {
 					time.Sleep(time.Duration(1<<attempt) * types.RetryBaseDelay) // Exponential backoff incase of failure
 				}
@@ -109,14 +109,14 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				return ctx.Err()
 			}
 
-			// Check if TASK context was cancelled by Health Monitor (not by us calling taskCancel)
+			// Check if TASK context was canceled by Health Monitor (not by us calling taskCancel)
 			// but parent context is still fine
 			if wasExternallyCancelled && lastErr != nil {
-				// Health monitor cancelled this task - re-queue REMAINING work only
+				// Health monitor canceled this task - re-queue REMAINING work only
 
 				// Force rotation to next mirror to avoid getting stuck on the slow one
 				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
-				utils.Debug("Worker %d: Health check cancelled task, rotating from mirror %s to %s", id, mirrors[(currentMirrorIdx+len(mirrors)-1)%len(mirrors)], mirrors[currentMirrorIdx])
+				utils.Debug("Worker %d: Health check canceled task, rotating from mirror %s to %s", id, mirrors[(currentMirrorIdx+len(mirrors)-1)%len(mirrors)], mirrors[currentMirrorIdx])
 
 				if remaining := activeTask.RemainingTask(); remaining != nil {
 					// Clamp to original task end (don't go past original boundary)
@@ -126,7 +126,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 					}
 					if remaining.Length > 0 {
 						queue.Push(*remaining)
-						utils.Debug("Worker %d: health-cancelled task requeued (remaining: %d bytes from offset %d)",
+						utils.Debug("Worker %d: health-canceled task requeued (remaining: %d bytes from offset %d)",
 							id, remaining.Length, remaining.Offset)
 					}
 				}
@@ -139,7 +139,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				break // Exit retry loop, get next task
 			}
 
-			// Only delete from activeTasks on normal completion (not cancelled)
+			// Only delete from activeTasks on normal completion (not canceled)
 			d.activeMu.Lock()
 			delete(d.activeTasks, id)
 			d.activeMu.Unlock()
@@ -179,7 +179,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 	}
 }
 
-// downloadTask downloads a single byte range and writes to file at offset
+// downloadTask downloads a single byte range and writes to file at offset.
 func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, file *os.File, activeTask *ActiveTask, buf []byte, client *http.Client, totalSize int64) error {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
 	if err != nil {
@@ -215,7 +215,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 
 	// Handle rate limiting explicitly
 	if resp.StatusCode == http.StatusTooManyRequests {
-		return fmt.Errorf("rate limited (429)")
+		return errors.New("rate limited (429)")
 	}
 
 	// Validate status code
@@ -223,7 +223,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 		// Valid only if we requested the full file
 		// If we wanted a partial range but got the whole file (200), that's an error because we can't handle the full stream at a non-zero offset
 		if task.Offset != 0 || task.Length != totalSize {
-			return fmt.Errorf("server indicated success (200) but ignored range request (expected 206)")
+			return errors.New("server indicated success (200) but ignored range request (expected 206)")
 		}
 	} else if resp.StatusCode != http.StatusPartialContent {
 		return fmt.Errorf("unexpected status: %d", resp.StatusCode)
@@ -301,7 +301,6 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 		}
 
 		if readSoFar > 0 {
-
 			// check stopAt again before writing
 			// truncate readSoFar
 			currentStopAt := activeTask.StopAt.Load()

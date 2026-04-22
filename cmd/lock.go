@@ -4,17 +4,18 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/gofrs/flock"
+
+	"github.com/SurgeDM/Surge/internal/config"
 )
 
-// InstanceLock wraps the file locking mechanism
+// InstanceLock wraps the file locking mechanism.
 type InstanceLock struct {
 	flock *flock.Flock
 	path  string
 }
 
-// Global lock instance
+// Global lock instance.
 var instanceLock *InstanceLock
 
 // AcquireLock attempts to acquire the single instance lock.

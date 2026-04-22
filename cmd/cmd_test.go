@@ -252,8 +252,8 @@ func TestParseConnectTarget_BaseURL(t *testing.T) {
 	tests := []struct {
 		name         string
 		target       string
-		insecureHTTP bool
 		want         string
+		insecureHTTP bool
 		wantErr      bool
 	}{
 		{name: "loopback host:port defaults http", target: "127.0.0.1:1700", want: "http://127.0.0.1:1700"},

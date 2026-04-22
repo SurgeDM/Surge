@@ -4,23 +4,24 @@ import (
 	"strings"
 
 	"charm.land/lipgloss/v2"
+
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
 
-// ChunkMapModel visualizes download chunks as a grid using a bitmap
+// ChunkMapModel visualizes download chunks as a grid using a bitmap.
 type ChunkMapModel struct {
 	Bitmap          []byte
-	BitmapWidth     int // Total number of chunks in bitmap
-	Width           int // UI render width (columns * 2)
-	Height          int // Available height in rows (0 = auto)
-	Paused          bool
+	ChunkProgress   []int64
+	BitmapWidth     int
+	Width           int
+	Height          int
 	TotalSize       int64
 	ActualChunkSize int64
-	ChunkProgress   []int64
+	Paused          bool
 }
 
-// NewChunkMapModel creates a new chunk map visualization
+// NewChunkMapModel creates a new chunk map visualization.
 func NewChunkMapModel(bitmap []byte, bitmapWidth int, width, height int, paused bool, totalSize int64, actualChunkSize int64, chunkProgress []int64) ChunkMapModel {
 	return ChunkMapModel{
 		Bitmap:          bitmap,
@@ -47,7 +48,7 @@ func (m ChunkMapModel) getChunkState(index int) types.ChunkStatus {
 	return types.ChunkStatus(val)
 }
 
-// View renders the chunk grid
+// View renders the chunk grid.
 func (m ChunkMapModel) View() string {
 	if m.BitmapWidth == 0 || len(m.Bitmap) == 0 {
 		return ""
@@ -228,7 +229,7 @@ func (m ChunkMapModel) View() string {
 }
 
 // CalculateHeight returns the number of lines needed to render the chunks
-// Takes available height to support dynamic sizing
+// Takes available height to support dynamic sizing.
 func CalculateHeight(count int, width int, availableHeight int) int {
 	if count == 0 {
 		return 0

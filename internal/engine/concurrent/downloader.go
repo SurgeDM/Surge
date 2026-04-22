@@ -3,6 +3,7 @@ package concurrent
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"math"
 	"net"
@@ -19,21 +20,21 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// ConcurrentDownloader handles multi-connection downloads
+// ConcurrentDownloader handles multi-connection downloads.
 type ConcurrentDownloader struct {
-	ProgressChan chan<- any           // Channel for events (start/complete/error)
-	ID           string               // Download ID
-	State        *types.ProgressState // Shared state for TUI polling
-	activeTasks  map[int]*ActiveTask
-	activeMu     sync.Mutex
-	URL          string // For pause/resume
-	DestPath     string // For pause/resume
-	Runtime      *types.RuntimeConfig
 	bufPool      sync.Pool
-	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
+	ProgressChan chan<- any
+	State        *types.ProgressState
+	activeTasks  map[int]*ActiveTask
+	Runtime      *types.RuntimeConfig
+	Headers      map[string]string
+	ID           string
+	URL          string
+	DestPath     string
+	activeMu     sync.Mutex
 }
 
-// NewConcurrentDownloader creates a new concurrent downloader with all required parameters
+// NewConcurrentDownloader creates a new concurrent downloader with all required parameters.
 func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.ProgressState, runtime *types.RuntimeConfig) *ConcurrentDownloader {
 	if runtime == nil {
 		runtime = &types.RuntimeConfig{
@@ -61,7 +62,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 	}
 }
 
-// getInitialConnections returns the starting number of connections based on file size
+// getInitialConnections returns the starting number of connections based on file size.
 func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 	maxConns := d.Runtime.GetMaxConnectionsPerHost()
 	minChunkSize := d.Runtime.GetMinChunkSize() // e.g., 1MB or 5MB
@@ -98,7 +99,7 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 	return calculatedWorkers
 }
 
-// ReportMirrorError marks a mirror as having an error in the state
+// ReportMirrorError marks a mirror as having an error in the state.
 func (d *ConcurrentDownloader) ReportMirrorError(url string) {
 	if d.State == nil {
 		return
@@ -119,7 +120,7 @@ func (d *ConcurrentDownloader) ReportMirrorError(url string) {
 	}
 }
 
-// calculateChunkSize determines optimal chunk size
+// calculateChunkSize determines optimal chunk size.
 func (d *ConcurrentDownloader) calculateChunkSize(fileSize int64, numConns int) int64 {
 	// Safety check
 	if numConns <= 0 {
@@ -144,7 +145,7 @@ func (d *ConcurrentDownloader) calculateChunkSize(fileSize int64, numConns int) 
 	return chunkSize
 }
 
-// determineChunkSize decides the strategy (Sequential vs Parallel)
+// determineChunkSize decides the strategy (Sequential vs Parallel).
 func (d *ConcurrentDownloader) determineChunkSize(fileSize int64, numConns int) int64 {
 	if d.Runtime.SequentialDownload {
 		// Sequential mode: Use small fixed chunks (MinChunkSize) to ensure strict ordering
@@ -164,7 +165,7 @@ func (d *ConcurrentDownloader) determineChunkSize(fileSize int64, numConns int) 
 	return d.calculateChunkSize(fileSize, numConns)
 }
 
-// createTasks generates initial task queue from file size and chunk size
+// createTasks generates initial task queue from file size and chunk size.
 func createTasks(fileSize, chunkSize int64) []types.Task {
 	if chunkSize <= 0 {
 		return nil
@@ -184,7 +185,7 @@ func createTasks(fileSize, chunkSize int64) []types.Task {
 	return tasks
 }
 
-// newConcurrentClient creates an http.Client tuned for concurrent downloads
+// newConcurrentClient creates an http.Client tuned for concurrent downloads.
 func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 	// Ensure we have enough connections per host
 	maxConns := d.Runtime.GetMaxConnectionsPerHost()
@@ -239,7 +240,7 @@ func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 		// Since these headers were explicitly provided by the browser for this download, we forward them.
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
+				return errors.New("stopped after 10 redirects")
 			}
 			// Copy headers from original request to redirect request
 			if len(via) > 0 {
@@ -257,7 +258,7 @@ func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
 }
 
 // Download downloads a file using multiple concurrent connections
-// Uses pre-probed metadata (file size already known)
+// Uses pre-probed metadata (file size already known).
 func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, candidateMirrors []string, activeMirrors []string, destPath string, fileSize int64) error {
 	utils.Debug("ConcurrentDownloader.Download: %s -> %s (size: %d, mirrors: %d)", rawurl, destPath, fileSize, len(activeMirrors))
 
@@ -504,7 +505,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		go func(workerID int) {
 			defer wg.Done()
 			err := d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
-			if err != nil && err != context.Canceled {
+			if err != nil && !errors.Is(err, context.Canceled) {
 				workerErrors <- err
 			}
 		}(i)
@@ -592,7 +593,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		return types.ErrPaused // Signal valid pause to caller
 	}
 
-	// Handle cancel: context was cancelled but not via Pause()
+	// Handle cancel: context was canceled but not via Pause()
 	// Propagate cancellation so callers don't treat this as a successful completion.
 	if downloadCtx.Err() == context.Canceled {
 		return context.Canceled
@@ -606,7 +607,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	return finalizeCompletedDownload()
 }
 
-// prewarmConnections fires off concurrent pings to the mirrors to populate the connection pool
+// prewarmConnections fires off concurrent pings to the mirrors to populate the connection pool.
 func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *http.Client, numRequired, hedgeCount int, mirrors []string) {
 	totalToStart := numRequired + hedgeCount
 	if totalToStart > 128 { // Safety cap
@@ -622,7 +623,6 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 
 	for i := 0; i < totalToStart; i++ {
 		go func(idx int) {
-
 			// Round-robin mirrors
 			mirror := mirrors[idx%len(mirrors)]
 
@@ -675,5 +675,5 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 	}
 
 	utils.Debug("Pre-warming complete: %d connections hot", completed)
-	// Remaining pings will be cancelled by defer cancelPings()
+	// Remaining pings will be canceled by defer cancelPings()
 }

@@ -17,7 +17,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// readActivePort reads the port from the port file
+// readActivePort reads the port from the port file.
 func readActivePort() int {
 	portFile := filepath.Join(config.GetRuntimeDir(), "port")
 	data, err := os.ReadFile(portFile)
@@ -30,7 +30,7 @@ func readActivePort() int {
 }
 
 // ParseURLArg parses a command line argument that might contain comma-separated mirrors
-// Returns the primary URL and a list of all mirrors (including the primary)
+// Returns the primary URL and a list of all mirrors (including the primary).
 func ParseURLArg(arg string) (string, []string) {
 	parts := strings.Split(arg, ",")
 	var urls []string
@@ -155,7 +155,7 @@ func sendToServer(url string, mirrors []string, outPath string, baseURL string, 
 	return nil
 }
 
-// GetRemoteDownloads fetches all downloads from the running server
+// GetRemoteDownloads fetches all downloads from the running server.
 func GetRemoteDownloads(baseURL string, token string) ([]types.DownloadStatus, error) {
 	resp, err := doAPIRequest(http.MethodGet, baseURL, token, "/list", nil)
 	if err != nil {

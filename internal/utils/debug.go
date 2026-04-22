@@ -18,13 +18,13 @@ var (
 	logsDir   atomic.Value // string
 )
 
-// ConfigureDebug sets the directory for debug logs
+// ConfigureDebug sets the directory for debug logs.
 func ConfigureDebug(dir string) {
 	logsDir.Store(dir)
 }
 
 // IsLoggingEnabled returns true if debug logging is configured
-// This allows callers to skip expensive argument evaluation
+// This allows callers to skip expensive argument evaluation.
 func IsLoggingEnabled() bool {
 	val := logsDir.Load()
 	if val == nil {
@@ -34,7 +34,7 @@ func IsLoggingEnabled() bool {
 	return ok && dir != ""
 }
 
-// Debug writes a message to debug.log file in the configured directory
+// Debug writes a message to debug.log file in the configured directory.
 func Debug(format string, args ...any) {
 	// Internal fast path check without lock
 	val := logsDir.Load()
@@ -60,7 +60,7 @@ func Debug(format string, args ...any) {
 	}
 }
 
-// CleanupLogs removes old log files, keeping only the most recent retentionCount files
+// CleanupLogs removes old log files, keeping only the most recent retentionCount files.
 func CleanupLogs(retentionCount int) {
 	if retentionCount < 0 {
 		return // Keep all logs

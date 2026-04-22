@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -34,9 +35,9 @@ func TestUniqueFilePath(t *testing.T) {
 
 	tests := []struct {
 		name     string
-		existing []string
 		input    string
 		want     string
+		existing []string
 	}{
 		{
 			name:     "No conflict",
@@ -434,7 +435,7 @@ func TestProbeServer_ContextCancellation(t *testing.T) {
 
 	_, err := processing.ProbeServer(ctx, server.URL(), "", nil)
 	if err == nil {
-		t.Error("Expected error when context is cancelled")
+		t.Error("Expected error when context is canceled")
 	}
 }
 
@@ -613,9 +614,9 @@ func TestDownload_BuildsConfig(t *testing.T) {
 
 	err := Download(ctx, "http://example.com/file", "/tmp/output", nil, "test-id")
 
-	// Should fail because context is cancelled
+	// Should fail because context is canceled
 	if err == nil {
-		t.Log("Download returned nil error with cancelled context - this may be acceptable")
+		t.Log("Download returned nil error with canceled context - this may be acceptable")
 	}
 }
 
@@ -648,9 +649,11 @@ func TestUniqueFilePath_LongFilename(t *testing.T) {
 
 	// Create a file with a long name (within OS limits)
 	longName := ""
+	var longNameSb651 strings.Builder
 	for i := 0; i < 50; i++ {
-		longName += "a"
+		longNameSb651.WriteString("a")
 	}
+	longName += longNameSb651.String()
 	longName += ".txt"
 
 	existingFile := filepath.Join(tmpDir, longName)

@@ -21,7 +21,7 @@ func getXDGBaseDir(envKey, fallback string) string {
 // GetSurgeDir returns the directory for configuration files (settings.json).
 // Linux: $XDG_CONFIG_HOME/surge or ~/.config/surge
 // macOS: ~/Library/Application Support/surge
-// Windows: %APPDATA%/surge
+// Windows: %APPDATA%/surge.
 func GetSurgeDir() string {
 	if runtime.GOOS == "windows" {
 		// Preserve legacy location for existing Windows installs.
@@ -106,17 +106,17 @@ func GetPicturesDir() string {
 	return xdg.UserDirs.Pictures
 }
 
-// GetLogsDir returns the directory for logs
+// GetLogsDir returns the directory for logs.
 func GetLogsDir() string {
 	return filepath.Join(GetStateDir(), "logs")
 }
 
-// GetThemesDir returns the directory for themes
+// GetThemesDir returns the directory for themes.
 func GetThemesDir() string {
 	return filepath.Join(GetSurgeDir(), "themes")
 }
 
-// EnsureDirs creates all required directories
+// EnsureDirs creates all required directories.
 func EnsureDirs() error {
 	dirs := []string{GetSurgeDir(), GetStateDir(), GetRuntimeDir(), GetLogsDir(), GetThemesDir()}
 	for _, dir := range dirs {

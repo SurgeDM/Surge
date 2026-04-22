@@ -5,10 +5,11 @@ import (
 	"runtime"
 
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/SurgeDM/Surge/internal/version"
 )
 
-// checkForUpdateCmd performs an async update check
+// checkForUpdateCmd performs an async update check.
 func checkForUpdateCmd(currentVersion string) tea.Cmd {
 	return func() tea.Msg {
 		info, _ := version.CheckForUpdate(currentVersion)
@@ -25,7 +26,7 @@ func shutdownCmd(service interface{ Shutdown() error }) tea.Cmd {
 	}
 }
 
-// openWithSystem opens a file or URL with the system's default application
+// openWithSystem opens a file or URL with the system's default application.
 func openWithSystem(path string) error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {

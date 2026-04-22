@@ -2,6 +2,7 @@ package single
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -20,17 +21,17 @@ import (
 // the server doesn't support Range headers. If interrupted, the download must restart.
 type SingleDownloader struct {
 	Client       *http.Client
-	ProgressChan chan<- any           // Channel for events (start/complete/error)
-	ID           string               // Download ID
-	State        *types.ProgressState // Shared state for TUI polling
+	ProgressChan chan<- any
+	State        *types.ProgressState
 	Runtime      *types.RuntimeConfig
-	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
+	Headers      map[string]string
+	ID           string
 }
 
 type singleTransportKey struct {
 	proxyURL  string
-	maxConns  int
 	customDNS string
+	maxConns  int
 }
 
 var singleTransportCache sync.Map // map[singleTransportKey]*http.Transport
@@ -42,7 +43,7 @@ var bufPool = sync.Pool{
 	},
 }
 
-// NewSingleDownloader creates a new single-threaded downloader with all required parameters
+// NewSingleDownloader creates a new single-threaded downloader with all required parameters.
 func NewSingleDownloader(id string, progressCh chan<- any, state *types.ProgressState, runtime *types.RuntimeConfig) *SingleDownloader {
 	if runtime == nil {
 		runtime = &types.RuntimeConfig{}
@@ -65,7 +66,7 @@ func newSingleClient(runtime *types.RuntimeConfig, sd *SingleDownloader) *http.C
 		Transport: transport,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
+				return errors.New("stopped after 10 redirects")
 			}
 			if len(via) > 0 {
 				utils.CopyRedirectHeaders(req, via[0])
@@ -237,13 +238,13 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 }
 
 type progressReader struct {
+	lastFlush     time.Time
 	reader        io.Reader
 	state         *types.ProgressState
 	batchSize     int64
 	batchInterval time.Duration
 	written       int64
 	pending       int64
-	lastFlush     time.Time
 	readChecks    uint8
 }
 

@@ -2,7 +2,7 @@ package tui
 
 import "github.com/SurgeDM/Surge/internal/tui/components"
 
-// GetHeaderHeight returns the appropriate header height based on terminal height
+// GetHeaderHeight returns the appropriate header height based on terminal height.
 func GetHeaderHeight(termHeight int) int {
 	if termHeight < ShortTermHeightThreshold {
 		return HeaderHeightMin
@@ -10,7 +10,7 @@ func GetHeaderHeight(termHeight int) int {
 	return HeaderHeightMax
 }
 
-// GetMinGraphHeight returns the minimum graph height based on terminal height
+// GetMinGraphHeight returns the minimum graph height based on terminal height.
 func GetMinGraphHeight(termHeight int) int {
 	if termHeight < ShortTermHeightThreshold {
 		return MinGraphHeightShort
@@ -18,7 +18,7 @@ func GetMinGraphHeight(termHeight int) int {
 	return MinGraphHeight
 }
 
-// GetSettingsDimensions calculates dimensions for settings/category modals
+// GetSettingsDimensions calculates dimensions for settings/category modals.
 func GetSettingsDimensions(termWidth, termHeight int) (int, int) {
 	width := int(float64(termWidth) * SettingsWidthRatio)
 	if width < MinSettingsWidth {
@@ -48,7 +48,7 @@ func GetSettingsDimensions(termWidth, termHeight int) (int, int) {
 	return width, height
 }
 
-// GetListWidth calculates the list width based on available width
+// GetListWidth calculates the list width based on available width.
 func GetListWidth(availableWidth int) int {
 	leftWidth := int(float64(availableWidth) * ListWidthRatio)
 
@@ -60,12 +60,12 @@ func GetListWidth(availableWidth int) int {
 	return leftWidth
 }
 
-// IsShortTerminal returns true if the terminal height is below the threshold
+// IsShortTerminal returns true if the terminal height is below the threshold.
 func IsShortTerminal(height int) bool {
 	return height < ShortTermHeightThreshold
 }
 
-// GetGraphAreaDimensions calculates dimensions for the graph area
+// GetGraphAreaDimensions calculates dimensions for the graph area.
 func GetGraphAreaDimensions(rightWidth int, isStatsHidden bool) (int, int) {
 	axisWidth := GraphAxisWidth
 	innerWidth := rightWidth - BoxStyle.GetHorizontalFrameSize()
@@ -234,7 +234,6 @@ func CalculateDashboardLayout(termW, termH int) DashboardLayout {
 			l.GraphHeight = targetGraphH
 			l.DetailHeight = l.AvailableHeight - l.GraphHeight
 		}
-
 	}
 
 	// 4. Download List Dimensions

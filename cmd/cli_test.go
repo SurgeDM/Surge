@@ -22,7 +22,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// TestResolveDownloadID_Remote verifies that resolveDownloadID queries the server
+// TestResolveDownloadID_Remote verifies that resolveDownloadID queries the server.
 func TestResolveDownloadID_Remote(t *testing.T) {
 	// 1. Mock Server
 	downloads := []types.DownloadStatus{
@@ -178,7 +178,7 @@ func TestResolveDownloadID_LocalModeFallsBackToDBWhenRemoteListFails(t *testing.
 	}
 }
 
-// TestLsCmd_Alias verify 'l' alias exists
+// TestLsCmd_Alias verify 'l' alias exists.
 func TestLsCmd_Alias(t *testing.T) {
 	found := false
 	for _, alias := range lsCmd.Aliases {
@@ -192,7 +192,7 @@ func TestLsCmd_Alias(t *testing.T) {
 	}
 }
 
-// TestGetRemoteDownloads verify it parses response
+// TestGetRemoteDownloads verify it parses response.
 func TestGetRemoteDownloads(t *testing.T) {
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -379,8 +379,8 @@ func TestServerPIDLifecycle(t *testing.T) {
 func TestFormatSize_Table(t *testing.T) {
 	tests := []struct {
 		name  string
-		bytes int64
 		want  string
+		bytes int64
 	}{
 		{name: "zero", bytes: 0, want: "0 B"},
 		{name: "bytes", bytes: 512, want: "512 B"},
@@ -516,8 +516,8 @@ func TestAddCmdRunE_ReturnsExpectedErrors(t *testing.T) {
 
 func TestActionCommandsRunE_ReturnNoServerErrors(t *testing.T) {
 	tests := []struct {
-		name string
 		run  func() error
+		name string
 	}{
 		{
 			name: "pause",
@@ -583,9 +583,9 @@ func TestActionCommandsRunE_ReturnNoServerErrors(t *testing.T) {
 
 func TestConnectCmd_HostSourcesBypassLocalAutodetect(t *testing.T) {
 	tests := []struct {
+		setup func(t *testing.T)
 		name  string
 		args  []string
-		setup func(t *testing.T)
 	}{
 		{
 			name:  "host flag",
@@ -643,8 +643,8 @@ func TestConnectCmd_HostSourcesBypassLocalAutodetect(t *testing.T) {
 
 func TestActionCommandsRunE_ReturnAmbiguousIDErrors(t *testing.T) {
 	tests := []struct {
-		name string
 		run  func() error
+		name string
 	}{
 		{
 			name: "pause",
@@ -855,8 +855,8 @@ func TestShowDownloadDetails_UsesDatabaseFallback(t *testing.T) {
 func TestSendToServer_SuccessAndServerError(t *testing.T) {
 	tests := []struct {
 		name       string
-		statusCode int
 		body       string
+		statusCode int
 		wantErr    bool
 	}{
 		{name: "success accepted", statusCode: http.StatusAccepted, body: `{"id":"abc"}`},

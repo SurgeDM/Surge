@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -10,9 +11,10 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/spf13/cobra"
+
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/tui"
-	"github.com/spf13/cobra"
 )
 
 type connectTarget struct {
@@ -34,7 +36,7 @@ var connectCmd = &cobra.Command{
 		} else {
 			port := readActivePort()
 			if port == 0 {
-				return fmt.Errorf("no local Surge server detected. Start one with 'surge' or 'surge server', or specify a target: surge connect <host:port>")
+				return errors.New("no local Surge server detected. Start one with 'surge' or 'surge server', or specify a target: surge connect <host:port>")
 			}
 			target = fmt.Sprintf("127.0.0.1:%d", port)
 			fmt.Fprintf(os.Stderr, "Auto-detected local server on port %d\n", port)
@@ -127,7 +129,7 @@ func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 func parseConnectTarget(target string, allowInsecureHTTP bool) (connectTarget, error) {
 	target = strings.TrimSpace(target)
 	if target == "" {
-		return connectTarget{}, fmt.Errorf("invalid target: empty target")
+		return connectTarget{}, errors.New("invalid target: empty target")
 	}
 
 	var (
@@ -181,7 +183,7 @@ func parseConnectTarget(target string, allowInsecureHTTP bool) (connectTarget, e
 	}
 
 	if scheme == "http" && !allowInsecureHTTP && !isLoopbackHost(host) && !isPrivateIPHost(host) {
-		return connectTarget{}, fmt.Errorf("refusing insecure HTTP for non-loopback target. Use https:// or --insecure-http")
+		return connectTarget{}, errors.New("refusing insecure HTTP for non-loopback target. Use https:// or --insecure-http")
 	}
 
 	return connectTarget{

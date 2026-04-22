@@ -8,7 +8,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// === Layout Styles ===
+// === Layout Styles ===.
 var (
 	AppStyle          lipgloss.Style
 	PaneStyle         lipgloss.Style

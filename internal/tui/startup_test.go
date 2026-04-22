@@ -164,7 +164,7 @@ func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
 	}
 }
 
-// Helper functions (duplicated from cmd/startup_test.go because packages differ)
+// Helper functions (duplicated from cmd/startup_test.go because packages differ).
 func setupTestEnv(t *testing.T, tmpDir string) {
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
