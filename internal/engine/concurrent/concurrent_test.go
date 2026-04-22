@@ -3,8 +3,11 @@ package concurrent
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -727,5 +730,105 @@ func TestCreateTasks_ZeroChunkSize(t *testing.T) {
 	tasks = createTasks(1000, -1)
 	if tasks != nil {
 		t.Error("createTasks should return nil for negative chunk size")
+	}
+}
+
+// =============================================================================
+// Bootstrap Metadata Tests
+// =============================================================================
+
+func TestConcurrentDownloader_Download_BootstrapSize(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	expectedSize := int64(1024)
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.Header.Get("Range") == "bytes=0-0" {
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-0/%d", expectedSize))
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write([]byte("x"))
+			return
+		}
+		// Subsequent chunk requests
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(make([]byte, 1024))
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "bootstrap_test.bin")
+	state := types.NewProgressState("bootstrap-id", 0) // Unknown size
+	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 1}
+
+	downloader := NewConcurrentDownloader("bootstrap-id", nil, state, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	err := downloader.Download(ctx, server.URL, nil, nil, destPath, 0)
+	if err != nil {
+		t.Fatalf("Download failed: %v", err)
+	}
+
+	if downloader.TotalSize != expectedSize {
+		t.Errorf("Expected TotalSize %d, got %d", expectedSize, downloader.TotalSize)
+	}
+}
+
+func TestConcurrentDownloader_Download_BootstrapFail_Non206(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK) // Not 206
+		_, _ = w.Write([]byte("full content"))
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "bootstrap_fail.bin")
+	state := types.NewProgressState("bootstrap-fail-id", 0)
+	downloader := NewConcurrentDownloader("bootstrap-fail-id", nil, state, nil)
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	err := downloader.Download(context.Background(), server.URL, nil, nil, destPath, 0)
+	if err == nil {
+		t.Fatal("Expected error when bootstrap fails (non-206)")
+	}
+	if !strings.Contains(err.Error(), "requires 206 response") {
+		t.Errorf("Expected 206 error, got: %v", err)
+	}
+}
+
+func TestConcurrentDownloader_Download_BootstrapFail_InvalidRange(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Range", "garbage")
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("x"))
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "bootstrap_invalid.bin")
+	state := types.NewProgressState("bootstrap-invalid-id", 0)
+	downloader := NewConcurrentDownloader("bootstrap-invalid-id", nil, state, nil)
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	err := downloader.Download(context.Background(), server.URL, nil, nil, destPath, 0)
+	if err == nil {
+		t.Fatal("Expected error when bootstrap fails (invalid range)")
+	}
+	if !strings.Contains(err.Error(), "invalid Content-Range header") {
+		t.Errorf("Expected range error, got: %v", err)
 	}
 }

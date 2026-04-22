@@ -2,6 +2,7 @@ package single
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -692,5 +693,43 @@ func BenchmarkSingleDownloader(b *testing.B) {
 		}
 		cancel()
 		_ = os.Remove(destPath)
+	}
+}
+
+func TestSingleDownloader_Download_BootstrapSize(t *testing.T) {
+	tmpDir, cleanup, _ := testutil.TempDir("surge-bootstrap-single")
+	defer cleanup()
+
+	expectedSize := int64(1024)
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", expectedSize))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(make([]byte, 1024))
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "bootstrap_single.bin")
+	state := types.NewProgressState("bootstrap-id", 0) // Unknown size
+	runtime := &types.RuntimeConfig{}
+
+	downloader := NewSingleDownloader("bootstrap-id", nil, state, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	err := downloader.Download(ctx, server.URL, destPath, 0, "bootstrap.bin")
+	if err != nil {
+		t.Fatalf("Download failed: %v", err)
+	}
+
+	if downloader.TotalSize != expectedSize {
+		t.Errorf("Expected TotalSize %d, got %d", expectedSize, downloader.TotalSize)
+	}
+	if state.TotalSize != expectedSize {
+		t.Errorf("Expected state.TotalSize %d, got %d", expectedSize, state.TotalSize)
 	}
 }

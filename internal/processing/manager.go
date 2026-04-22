@@ -9,6 +9,8 @@ import (
 	"sync"
 	"time"
 
+	"strings"
+
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/types"
@@ -256,8 +258,19 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 
 	probe, probeErr := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
 	if probeErr != nil {
+		// Distinguish between terminal client errors (invalid scheme, etc) and
+		// server-side rejections or timeouts that we can optimistically ignore.
+		errStr := probeErr.Error()
+		isTerminal := strings.Contains(errStr, "unsupported protocol scheme") ||
+			strings.Contains(errStr, "failed to create probe request")
+
+		if isTerminal {
+			return "", "", probeErr
+		}
+
 		utils.Debug("Lifecycle: Probe failed: %v — enqueueing with optimistic fallback metadata\n", probeErr)
-		// Probe failures are non-fatal: some servers reject or intermittently fail
+		// Probe failures are non-fatal for known server-side issues (403/405/500) or
+		// network timeouts: some servers reject or intermittently fail
 		// lightweight probe requests but still accept the actual download flow.
 		// Mark range support as "unknown, try it" by keeping size at zero and
 		// setting SupportsRange so the download path can attempt a concurrent
