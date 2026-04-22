@@ -319,7 +319,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Determine connections and chunk size
 	if fileSize <= 0 {
-		discoveredSize, err := d.bootstrapMetadata(ctx, bootstrapClient, rawurl)
+		discoveredSize, err := d.bootstrapMetadata(downloadCtx, bootstrapClient, rawurl)
 		if err != nil {
 			return err
 		}
