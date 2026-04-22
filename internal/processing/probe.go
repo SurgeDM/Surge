@@ -2,6 +2,7 @@ package processing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -28,6 +29,9 @@ var (
 )
 
 const maxProbeClients = 8
+
+// ErrProbeRequestCreation is returned when a probe request cannot be initialized.
+var ErrProbeRequestCreation = errors.New("failed to create probe request")
 
 // ProbeResult contains all metadata from server probe
 type ProbeResult struct {
@@ -123,7 +127,7 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 		req, reqErr := newProbeRequest(probeCtx, rawurl, headers, true)
 		if reqErr != nil {
 			cancel()
-			err = fmt.Errorf("failed to create probe request: %w", reqErr)
+			err = fmt.Errorf("%w: %w", ErrProbeRequestCreation, reqErr)
 			break
 		}
 
@@ -138,7 +142,7 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 			reqNoRange, reqNoRangeErr := newProbeRequest(probeCtx, rawurl, headers, false)
 			if reqNoRangeErr != nil {
 				cancel()
-				err = fmt.Errorf("failed to create probe request without range: %w", reqNoRangeErr)
+				err = fmt.Errorf("%w without range: %w", ErrProbeRequestCreation, reqNoRangeErr)
 				break
 			}
 

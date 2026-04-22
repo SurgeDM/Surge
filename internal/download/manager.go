@@ -207,6 +207,11 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 				cfg.State.VerifiedProgress.Store(0)
 				cfg.State.SyncSessionStart()
 			}
+
+			// Truncate the working file to zero to prevent stale tail bytes
+			// from the failed concurrent session.
+			surgePath := finalDestPath + types.IncompleteSuffix
+			_ = os.Truncate(surgePath, 0)
 		}
 	}
 

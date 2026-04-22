@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"strings"
+	"net/url"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/events"
@@ -260,9 +260,8 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 	if probeErr != nil {
 		// Distinguish between terminal client errors (invalid scheme, etc) and
 		// server-side rejections or timeouts that we can optimistically ignore.
-		errStr := probeErr.Error()
-		isTerminal := strings.Contains(errStr, "unsupported protocol scheme") ||
-			strings.Contains(errStr, "failed to create probe request")
+		var urlErr *url.Error
+		isTerminal := errors.As(probeErr, &urlErr) || errors.Is(probeErr, ErrProbeRequestCreation)
 
 		if isTerminal {
 			return "", "", probeErr

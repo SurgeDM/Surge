@@ -349,9 +349,9 @@ func TestTUIDownload_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T)
 		Filename:      "midfail.bin",
 		ID:            "mid-fail-test",
 		ProgressCh:    progressCh,
-		State:         types.NewProgressState("mid-fail-test", int64(fileSize)),
-		Runtime:       &types.RuntimeConfig{MinChunkSize: 10240}, // Force single worker in concurrent
-		TotalSize:     int64(fileSize),
+		State:         types.NewProgressState("mid-fail-test", 0), // Simulating unknown size
+		Runtime:       &types.RuntimeConfig{MinChunkSize: 10240},
+		TotalSize:     0, // Force bootstrap attempt/failure
 		SupportsRange: true,
 	}
 
@@ -365,10 +365,20 @@ func TestTUIDownload_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T)
 		t.Fatalf("TUIDownload should have succeeded via fallback: %v", err)
 	}
 
-	// Progress should be correctly reset and then full
+	// Verification:
+	// 1. Progress counter is correct
 	downloaded, _, _, _, _, _ := cfg.State.GetProgress()
 	if downloaded != int64(fileSize) {
 		t.Errorf("Progress counter = %d, want %d", downloaded, fileSize)
+	}
+
+	// 2. File on disk is exactly the right size (no stale tail bytes)
+	fi, err := os.Stat(surgePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Size() != int64(fileSize) {
+		t.Errorf("File size on disk = %d, want %d (potential stale bytes)", fi.Size(), fileSize)
 	}
 }
 
