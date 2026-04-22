@@ -197,7 +197,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 
 		// Determine if we should attempt a fallback to single-threaded mode.
 		// We fallback if concurrent failed, but it wasn't a clean pause or external cancellation.
-		if downloadErr != nil && !errors.Is(downloadErr, types.ErrPaused) && !errors.Is(downloadErr, context.Canceled) {
+		if downloadErr != nil && !errors.Is(downloadErr, types.ErrPaused) && !errors.Is(downloadErr, context.Canceled) && !errors.Is(downloadErr, context.DeadlineExceeded) {
 			utils.Debug("Concurrent download failed: %v — falling back to single-threaded", downloadErr)
 			useConcurrent = false // Trigger sequential block below
 
@@ -261,7 +261,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		}
 	} else if downloadErr != nil && !isPaused {
 		// Verify it's not a cancellation error
-		if errors.Is(downloadErr, context.Canceled) {
+		if errors.Is(downloadErr, context.Canceled) || errors.Is(downloadErr, context.DeadlineExceeded) {
 			utils.Debug("Download canceled cleanly")
 			return nil
 		}
