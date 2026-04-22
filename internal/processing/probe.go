@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	neturl "net/url"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/engine/network"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -22,13 +22,7 @@ var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
 	"AppleWebKit/537.36 (KHTML, like Gecko) " +
 	"Chrome/120.0.0.0 Safari/537.36"
 
-var (
-	probeClientsMu   sync.Mutex
-	probeClients     = make(map[string]*http.Client)
-	probeClientOrder []string
-)
-
-const maxProbeClients = 8
+var probeConnectionManager = network.NewConnectionManager()
 
 // ErrProbeRequestCreation is returned when a probe request cannot be initialized.
 var ErrProbeRequestCreation = errors.New("failed to create probe request")
@@ -42,8 +36,13 @@ type ProbeResult struct {
 	ContentType      string
 }
 
-// probeHeadersContextKey is used to pass custom headers to the HTTP client's CheckRedirect function
-type probeHeadersContextKey struct{}
+func SetProbeConnectionManager(manager *network.ConnectionManager) {
+	if manager == nil {
+		probeConnectionManager = network.NewConnectionManager()
+		return
+	}
+	probeConnectionManager = manager
+}
 
 func resolveRuntimeConfig() *config.RuntimeConfig {
 	settings, err := config.LoadSettings()
@@ -87,7 +86,7 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 
 	// Embed custom headers in context so CheckRedirect can use them
 	if headers != nil {
-		ctx = context.WithValue(ctx, probeHeadersContextKey{}, headers)
+		ctx = network.WithRequestHeaders(ctx, headers)
 	}
 
 	var resp *http.Response
@@ -257,94 +256,7 @@ func applyProbeHeaders(req *http.Request, headers map[string]string, includeRang
 }
 
 func getProbeClient(runCfg *config.RuntimeConfig) *http.Client {
-	probeClientsMu.Lock()
-	defer probeClientsMu.Unlock()
-
-	key := ""
-	if runCfg != nil {
-		// Quote values to prevent ambiguity when one value contains the separator
-		key = fmt.Sprintf("%q|%q", runCfg.ProxyURL, runCfg.CustomDNS)
-	}
-
-	if cached, ok := probeClients[key]; ok {
-		return cached
-	}
-
-	client := &http.Client{
-		Transport: newProbeTransport(runCfg),
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
-			}
-			if len(via) > 0 {
-				copyProbeRedirectHeaders(req, via[0])
-			}
-
-			// Re-apply custom explicitly provided headers on cross-origin redirects
-			if customHeaders, ok := req.Context().Value(probeHeadersContextKey{}).(map[string]string); ok {
-				for k, v := range customHeaders {
-					if !strings.EqualFold(k, "Range") {
-						req.Header.Set(k, v)
-					}
-				}
-			}
-			return nil
-		},
-	}
-
-	if len(probeClients) >= maxProbeClients && len(probeClientOrder) > 0 {
-		evictedKey := probeClientOrder[0]
-		probeClientOrder = probeClientOrder[1:]
-		if evictedClient, ok := probeClients[evictedKey]; ok {
-			evictedClient.CloseIdleConnections()
-			delete(probeClients, evictedKey)
-		}
-	}
-
-	probeClients[key] = client
-	probeClientOrder = append(probeClientOrder, key)
-	return client
-}
-
-func newProbeTransport(runCfg *config.RuntimeConfig) *http.Transport {
-	proxyFunc := http.ProxyFromEnvironment
-	var customDNS string
-	if runCfg != nil {
-		customDNS = runCfg.CustomDNS
-		if strings.TrimSpace(runCfg.ProxyURL) != "" {
-			if parsedURL, err := neturl.Parse(runCfg.ProxyURL); err == nil {
-				proxyFunc = http.ProxyURL(parsedURL)
-			} else {
-				utils.Debug("Invalid probe proxy URL %s: %v", runCfg.ProxyURL, err)
-			}
-		}
-	}
-
-	dialer := &net.Dialer{
-		Timeout:   types.DialTimeout,
-		KeepAlive: types.KeepAliveDuration,
-	}
-
-	utils.ConfigureDialer(dialer, customDNS)
-
-	return &http.Transport{
-		Proxy:                 proxyFunc,
-		MaxIdleConns:          types.DefaultMaxIdleConns,
-		MaxIdleConnsPerHost:   types.PerHostMax,
-		IdleConnTimeout:       types.DefaultIdleConnTimeout,
-		TLSHandshakeTimeout:   types.DefaultTLSHandshakeTimeout,
-		ResponseHeaderTimeout: types.DefaultResponseHeaderTimeout,
-		ExpectContinueTimeout: types.DefaultExpectContinueTimeout,
-		// Use tcp4 to prefer IPv4 when connecting to CDN hosts.
-		// Some CDN nodes resolve to IPv6 addresses that are unreachable
-		// on networks that have IPv6 assigned but no working IPv6 path.
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			if network == "tcp" {
-				network = "tcp4"
-			}
-			return dialer.DialContext(ctx, network, addr)
-		},
-	}
+	return probeConnectionManager.ProbeClient(runCfg)
 }
 
 func copyProbeRedirectHeaders(dst, src *http.Request) {
