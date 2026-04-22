@@ -12,13 +12,13 @@ import (
 )
 
 const (
-	// GitHubAPIURL is the endpoint for fetching the latest release
+	// GitHubAPIURL is the endpoint for fetching the latest release.
 	GitHubAPIURL = "https://api.github.com/repos/SurgeDM/Surge/releases/latest"
-	// RequestTimeout is the timeout for the GitHub API request
+	// RequestTimeout is the timeout for the GitHub API request.
 	RequestTimeout = 10 * time.Second
 )
 
-// UpdateInfo contains information about an available update
+// UpdateInfo contains information about an available update.
 type UpdateInfo struct {
 	CurrentVersion  string // The current version of Surge
 	LatestVersion   string // The latest version available on GitHub
@@ -26,7 +26,7 @@ type UpdateInfo struct {
 	UpdateAvailable bool   // Whether an update is available
 }
 
-// GitHubRelease represents the relevant fields from the GitHub API response
+// GitHubRelease represents the relevant fields from the GitHub API response.
 type GitHubRelease struct {
 	TagName string `json:"tag_name"`
 	HTMLURL string `json:"html_url"`
@@ -87,7 +87,7 @@ func CheckForUpdate(currentVersion string) (*UpdateInfo, error) {
 	return updateInfo, nil
 }
 
-// normalizeVersion removes the 'v' prefix and trims whitespace
+// normalizeVersion removes the 'v' prefix and trims whitespace.
 func normalizeVersion(version string) string {
 	version = strings.TrimSpace(version)
 	version = strings.TrimPrefix(version, "v")
@@ -95,7 +95,7 @@ func normalizeVersion(version string) string {
 }
 
 // isNewerVersion compares two semver strings and returns true if latest > current
-// Assumes format: MAJOR.MINOR.PATCH (e.g., "1.2.3")
+// Assumes format: MAJOR.MINOR.PATCH (e.g., "1.2.3").
 func isNewerVersion(latest, current string) bool {
 	latestParts := parseVersion(latest)
 	currentParts := parseVersion(current)
@@ -111,7 +111,7 @@ func isNewerVersion(latest, current string) bool {
 	return false // Versions are equal
 }
 
-// parseVersion parses a semver string into [major, minor, patch]
+// parseVersion parses a semver string into [major, minor, patch].
 func parseVersion(version string) [3]int {
 	var parts [3]int
 

@@ -26,7 +26,7 @@ func safeSendProgress(ch chan<- any, msg any) {
 	ch <- msg
 }
 
-// uniqueFilePath returns a unique file path by appending (1), (2), etc. if the file exists
+// uniqueFilePath returns a unique file path by appending (1), (2), etc. if the file exists.
 func uniqueFilePath(path string) string {
 	// Check if file exists (both final and incomplete)
 	if _, err := os.Stat(path); os.IsNotExist(err) {
@@ -72,7 +72,7 @@ func uniqueFilePath(path string) string {
 	return path
 }
 
-// TUIDownload is the main entry point for downloads executed by the Engine pool
+// TUIDownload is the main entry point for downloads executed by the Engine pool.
 func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	start := time.Now()
 	// Engine expects cfg.OutputPath and cfg.Filename to be fully resolved by the processing layer
@@ -238,7 +238,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	return downloadErr
 }
 
-// Download is the CLI entry point (non-TUI) - convenience wrapper
+// Download is the CLI entry point (non-TUI) - convenience wrapper.
 func Download(ctx context.Context, url string, outPath string, progressCh chan<- any, id string) error {
 	cfg := types.DownloadConfig{
 		URL:        url,

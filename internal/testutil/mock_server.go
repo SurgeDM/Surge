@@ -3,6 +3,7 @@ package testutil
 
 import (
 	"crypto/rand"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -18,33 +19,27 @@ import (
 
 // MockServer is a configurable HTTP test server for download testing.
 type MockServer struct {
-	Server *httptest.Server
-
-	// Configuration
-	FileSize          int64         // Size of the served file
-	SupportsRanges    bool          // Whether to support HTTP Range requests
-	ContentType       string        // Content-Type header value
-	Filename          string        // Filename in Content-Disposition header
-	RandomData        bool          // If true, serve random data; otherwise serve zeros
-	Latency           time.Duration // Artificial latency per request
-	ByteLatency       time.Duration // Latency per byte (simulates slow connection)
-	FailAfterBytes    int64         // Fail connection after this many bytes (0 = no fail)
-	FailOnNthRequest  int           // Fail on Nth request (0 = don't fail)
-	MaxConcurrentReqs int           // Max concurrent requests (0 = unlimited)
-
-	// Tracking
-	RequestCount   atomic.Int64
-	BytesServed    atomic.Int64
-	ActiveRequests atomic.Int64
-	RangeRequests  atomic.Int64
-	FullRequests   atomic.Int64
-	FailedRequests atomic.Int64
-	requestCountMu sync.Mutex
-	internalReqNum int
-
-	// Internal
-	data          []byte
-	CustomHandler http.HandlerFunc
+	Server            *httptest.Server
+	CustomHandler     http.HandlerFunc
+	ContentType       string
+	Filename          string
+	data              []byte
+	FullRequests      atomic.Int64
+	BytesServed       atomic.Int64
+	ByteLatency       time.Duration
+	FailAfterBytes    int64
+	FailOnNthRequest  int
+	MaxConcurrentReqs int
+	RequestCount      atomic.Int64
+	Latency           time.Duration
+	ActiveRequests    atomic.Int64
+	RangeRequests     atomic.Int64
+	FileSize          int64
+	FailedRequests    atomic.Int64
+	internalReqNum    int
+	requestCountMu    sync.Mutex
+	SupportsRanges    bool
+	RandomData        bool
 }
 
 // MockServerOption is a function that configures a MockServer.
@@ -345,16 +340,16 @@ func (m *MockServer) setCommonHeaders(w http.ResponseWriter, start, end int64) {
 }
 
 // parseRange parses an HTTP Range header and returns start, end positions.
-// Handles formats like "bytes=0-499" or "bytes=500-"
+// Handles formats like "bytes=0-499" or "bytes=500-".
 func parseRange(rangeHeader string, fileSize int64) (int64, int64, error) {
 	if !strings.HasPrefix(rangeHeader, "bytes=") {
-		return 0, 0, fmt.Errorf("invalid range prefix")
+		return 0, 0, errors.New("invalid range prefix")
 	}
 
 	rangeSpec := strings.TrimPrefix(rangeHeader, "bytes=")
 	parts := strings.Split(rangeSpec, "-")
 	if len(parts) != 2 {
-		return 0, 0, fmt.Errorf("invalid range format")
+		return 0, 0, errors.New("invalid range format")
 	}
 
 	var start, end int64
@@ -387,7 +382,7 @@ func parseRange(rangeHeader string, fileSize int64) (int64, int64, error) {
 
 	// Validate
 	if start < 0 || end >= fileSize || start > end {
-		return 0, 0, fmt.Errorf("range out of bounds")
+		return 0, 0, errors.New("range out of bounds")
 	}
 
 	return start, end, nil

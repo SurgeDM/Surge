@@ -27,12 +27,11 @@ type GeneralSettings struct {
 	AllowRemoteOpenActions       bool   `json:"allow_remote_open_actions" ui_label:"Allow Remote Open Actions" ui_desc:"Allow /open-file and /open-folder API calls from non-loopback clients. Disabled by default for security."`
 	AutoResume                   bool   `json:"auto_resume" ui_label:"Auto Resume" ui_desc:"Automatically resume paused downloads on startup."`
 	SkipUpdateCheck              bool   `json:"skip_update_check" ui_label:"Skip Update Check" ui_desc:"Disable automatic check for new versions on startup."`
-
-	ClipboardMonitor  bool   `json:"clipboard_monitor" ui_label:"Clipboard Monitor" ui_desc:"Watch clipboard for URLs and prompt to download them."`
-	Theme             int    `json:"theme" ui_label:"App Theme" ui_desc:"UI Theme (System, Light, Dark)."`
-	ThemePath         string `json:"theme_path" ui_label:"Theme File" ui_desc:"Path to a custom .toml color scheme."`
-	LogRetentionCount int    `json:"log_retention_count" ui_label:"Log Retention Count" ui_desc:"Number of recent log files to keep."`
-	LiveSpeedGraph    bool   `json:"live_speed_graph" ui_label:"Live Speed Graph" ui_desc:"Use live speed for graph instead of EMA smoothed speed."`
+	ClipboardMonitor             bool   `json:"clipboard_monitor" ui_label:"Clipboard Monitor" ui_desc:"Watch clipboard for URLs and prompt to download them."`
+	Theme                        int    `json:"theme" ui_label:"App Theme" ui_desc:"UI Theme (System, Light, Dark)."`
+	ThemePath                    string `json:"theme_path" ui_label:"Theme File" ui_desc:"Path to a custom .toml color scheme."`
+	LogRetentionCount            int    `json:"log_retention_count" ui_label:"Log Retention Count" ui_desc:"Number of recent log files to keep."`
+	LiveSpeedGraph               bool   `json:"live_speed_graph" ui_label:"Live Speed Graph" ui_desc:"Use live speed for graph instead of EMA smoothed speed."`
 }
 
 const (
@@ -194,7 +193,6 @@ const (
 
 // DefaultSettings returns a new Settings instance with sensible defaults.
 func DefaultSettings() *Settings {
-
 	defaultDir := GetDownloadsDir()
 
 	return &Settings{
@@ -295,15 +293,14 @@ func SaveSettings(s *Settings) error {
 }
 
 // ToRuntimeConfig converts Settings to a downloader RuntimeConfig
-// This is used to pass user settings to the download engine
+// This is used to pass user settings to the download engine.
 type RuntimeConfig struct {
-	MaxConnectionsPerHost int
-	MaxConcurrentProbes   int
-	UserAgent             string
 	ProxyURL              string
 	CustomDNS             string
-	SequentialDownload    bool
+	UserAgent             string
 	MinChunkSize          int64
+	MaxConcurrentProbes   int
+	MaxConnectionsPerHost int
 	WorkerBufferSize      int
 	DialHedgeCount        int
 	MaxTaskRetries        int
@@ -311,9 +308,10 @@ type RuntimeConfig struct {
 	SlowWorkerGracePeriod time.Duration
 	StallTimeout          time.Duration
 	SpeedEmaAlpha         float64
+	SequentialDownload    bool
 }
 
-// ToRuntimeConfig creates a RuntimeConfig from user Settings
+// ToRuntimeConfig creates a RuntimeConfig from user Settings.
 func (s *Settings) ToRuntimeConfig() *RuntimeConfig {
 	return &RuntimeConfig{
 		MaxConnectionsPerHost: s.Network.MaxConnectionsPerHost,

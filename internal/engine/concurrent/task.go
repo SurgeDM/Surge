@@ -9,29 +9,23 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
-// ActiveTask tracks a task currently being processed by a worker
+// ActiveTask tracks a task currently being processed by a worker.
 type ActiveTask struct {
-	Task          types.Task
-	CurrentOffset atomic.Int64
-	StopAt        atomic.Int64
-
-	// Health monitoring fields
-	LastActivity atomic.Int64       // Unix nano timestamp of last data received
-	Speed        float64            // EMA-smoothed speed in bytes/sec (protected by mutex)
-	StartTime    time.Time          // When this task started
-	Cancel       context.CancelFunc // Cancel function to abort this task
-	SpeedMu      sync.Mutex         // Protects Speed field
-
-	// Sliding window for recent speed tracking
-	WindowStart time.Time    // When current measurement window started
-	WindowBytes atomic.Int64 // Bytes downloaded in current window
-
-	// Hedged request tracking
-	Hedged          atomic.Int32  // 1 if an idle worker is already racing this task
-	SharedMaxOffset *atomic.Int64 // Highest offset reached by any racing worker
+	Task            types.Task
+	StartTime       time.Time
+	WindowStart     time.Time
+	Cancel          context.CancelFunc
+	SharedMaxOffset *atomic.Int64
+	CurrentOffset   atomic.Int64
+	StopAt          atomic.Int64
+	LastActivity    atomic.Int64
+	Speed           float64
+	WindowBytes     atomic.Int64
+	SpeedMu         sync.Mutex
+	Hedged          atomic.Int32
 }
 
-// RemainingBytes returns the number of bytes left for this task
+// RemainingBytes returns the number of bytes left for this task.
 func (at *ActiveTask) RemainingBytes() int64 {
 	current := at.CurrentOffset.Load()
 	stopAt := at.StopAt.Load()
@@ -41,7 +35,7 @@ func (at *ActiveTask) RemainingBytes() int64 {
 	return stopAt - current
 }
 
-// RemainingTask returns a Task representing the remaining work, or nil if complete
+// RemainingTask returns a Task representing the remaining work, or nil if complete.
 func (at *ActiveTask) RemainingTask() *types.Task {
 	current := at.CurrentOffset.Load()
 	stopAt := at.StopAt.Load()
@@ -51,7 +45,7 @@ func (at *ActiveTask) RemainingTask() *types.Task {
 	return &types.Task{Offset: current, Length: stopAt - current}
 }
 
-// GetSpeed returns the current EMA-smoothed speed, decaying if stalled
+// GetSpeed returns the current EMA-smoothed speed, decaying if stalled.
 func (at *ActiveTask) GetSpeed() float64 {
 	at.SpeedMu.Lock()
 	speed := at.Speed
@@ -77,7 +71,7 @@ func (at *ActiveTask) GetSpeed() float64 {
 }
 
 // alignedSplitSize calculates a split size that is half of remaining, aligned to AlignSize
-// Returns 0 if the split would be smaller than MinChunk
+// Returns 0 if the split would be smaller than MinChunk.
 func alignedSplitSize(remaining int64) int64 {
 	half := (remaining / 2 / types.AlignSize) * types.AlignSize
 	if half < types.MinChunk {

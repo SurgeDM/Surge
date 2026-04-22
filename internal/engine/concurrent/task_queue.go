@@ -7,16 +7,16 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
-// TaskQueue is a thread-safe work-stealing queue
+// TaskQueue is a thread-safe work-stealing queue.
 type TaskQueue struct {
+	cond        *sync.Cond
 	tasks       []types.Task
 	head        int
+	idleWorkers atomic.Int64
+	waiting     atomic.Int64
+	size        atomic.Int64
 	mu          sync.Mutex
-	cond        *sync.Cond
 	done        bool
-	idleWorkers atomic.Int64 // Atomic counter for idle workers
-	waiting     atomic.Int64 // Number of workers currently waiting on cond
-	size        atomic.Int64 // Queue size to avoid lock contention in Len callers
 }
 
 func NewTaskQueue() *TaskQueue {
@@ -65,7 +65,6 @@ func (q *TaskQueue) Pop() (types.Task, bool) {
 	q.head++
 	q.size.Add(-1)
 	if q.head > len(q.tasks)/2 {
-
 		// slice instead of copy to avoid allocation
 		q.tasks = q.tasks[q.head:]
 		q.head = 0
@@ -88,7 +87,7 @@ func (q *TaskQueue) IdleWorkers() int64 {
 	return q.idleWorkers.Load()
 }
 
-// DrainRemaining returns all remaining tasks in the queue (used for pause/resume)
+// DrainRemaining returns all remaining tasks in the queue (used for pause/resume).
 func (q *TaskQueue) DrainRemaining() []types.Task {
 	q.mu.Lock()
 	defer q.mu.Unlock()

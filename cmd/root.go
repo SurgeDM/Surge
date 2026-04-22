@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
@@ -28,7 +29,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// Version information - set via ldflags during build
+// Version information - set via ldflags during build.
 var (
 	Version   = "dev"
 	BuildTime = "unknown"
@@ -46,7 +47,7 @@ func init() {
 // activeDownloads tracks in-flight downloads for headless/server exit logic.
 var activeDownloads int32
 
-// pendingEnqueue tracks the number of pending batch enqueues to avoid premature exit
+// pendingEnqueue tracks the number of pending batch enqueues to avoid premature exit.
 var pendingEnqueue int32
 
 var (
@@ -54,7 +55,7 @@ var (
 	globalToken string
 )
 
-// Globals for Unified Backend
+// Globals for Unified Backend.
 var (
 	GlobalPool              *download.WorkerPool
 	GlobalProgressCh        chan any
@@ -300,9 +301,9 @@ func isExplicitOutputPath(outPath, defaultDir string) bool {
 }
 
 type rootRunOptions struct {
-	portFlag     int
 	batchFile    string
 	outputDir    string
+	portFlag     int
 	noResume     bool
 	exitWhenDone bool
 }
@@ -330,7 +331,7 @@ func maybeRunRemoteTUI(cmd *cobra.Command, args []string) (bool, error) {
 	}
 
 	if len(args) > 0 {
-		return false, fmt.Errorf("URLs cannot be passed when using --host. Use 'surge add <url>' after connecting")
+		return false, errors.New("URLs cannot be passed when using --host. Use 'surge add <url>' after connecting")
 	}
 
 	if err := connectAndRunTUI(cmd, hostTarget); err != nil {
@@ -346,7 +347,7 @@ func acquireRootInstanceLock() (func(), error) {
 	}
 
 	if !isMaster {
-		return nil, fmt.Errorf("surge is already running. Use 'surge add <url>' to add a download to the active instance")
+		return nil, errors.New("surge is already running. Use 'surge add <url>' to add a download to the active instance")
 	}
 
 	return func() {
@@ -407,14 +408,14 @@ func queueInitialRootDownloads(args []string, opts rootRunOptions) {
 	}()
 }
 
-// rootCmd represents the base command when called without any subcommands
+// rootCmd represents the base command when called without any subcommands.
 var rootCmd = &cobra.Command{
 	Use:           "surge [url]...",
 	Short:         "Blazing fast TUI download manager built in Go for power users",
 	Long:          `Surge is a blazing fast TUI download manager built in Go for power users. Find more info here: https://github.com/SurgeDM/Surge`,
 	Version:       Version,
 	Args:          cobra.ArbitraryArgs,
-	SilenceErrors: true, //errors are printed in main.go this prevents double printing
+	SilenceErrors: true, // errors are printed in main.go this prevents double printing
 	SilenceUsage:  true, // prevent usage text from being printed on every error
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		GlobalProgressCh = make(chan any, 100)
@@ -453,7 +454,7 @@ var rootCmd = &cobra.Command{
 	},
 }
 
-// startTUI initializes and runs the TUI program
+// startTUI initializes and runs the TUI program.
 func startTUI(port int, exitWhenDone bool, noResume bool) error {
 	tui.InitializeTUI()
 	// Initialize TUI

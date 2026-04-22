@@ -8,6 +8,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -76,7 +77,7 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 	return cmd
 }
 
-// startDownload initiates a new download
+// startDownload initiates a new download.
 func (m RootModel) startDownload(url string, mirrors []string, headers map[string]string, path string, isDefaultPath bool, filename, id string) (RootModel, tea.Cmd) {
 	if m.Service == nil {
 		m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))

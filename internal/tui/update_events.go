@@ -7,6 +7,7 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/tui/components"
@@ -14,9 +15,7 @@ import (
 )
 
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
-
 	switch msg := msg.(type) {
-
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)

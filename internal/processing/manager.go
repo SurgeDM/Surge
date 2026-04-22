@@ -25,17 +25,15 @@ type AddDownloadWithIDFunc func(string, string, string, []string, map[string]str
 type IsNameActiveFunc func(dir, name string) bool
 
 type LifecycleManager struct {
-	settings            *config.Settings
-	settingsMu          sync.RWMutex
+	engineHooks         EngineHooks
 	settingsRefreshedAt time.Time
+	settings            *config.Settings
 	addFunc             AddDownloadFunc
 	addWithIDFunc       AddDownloadWithIDFunc
 	isNameActive        IsNameActiveFunc
-	engineHooks         EngineHooks
+	probeSem            chan struct{}
+	settingsMu          sync.RWMutex
 	hooksMu             sync.RWMutex
-	// probeSem caps the number of simultaneous server probes so adding a
-	// large batch of downloads does not flood the network with HEAD requests.
-	probeSem chan struct{}
 }
 
 const (
@@ -179,11 +177,11 @@ func (m *LifecycleManager) SaveSettings(s *config.Settings) error {
 
 // DownloadRequest carries the already-approved inputs needed to probe and reserve a file path.
 type DownloadRequest struct {
+	Headers            map[string]string
 	URL                string
 	Filename           string
 	Path               string
 	Mirrors            []string
-	Headers            map[string]string
 	IsExplicitCategory bool
 	SkipApproval       bool
 }
@@ -191,7 +189,7 @@ type DownloadRequest struct {
 // Enqueue probes and reserves a stable destination before dispatching to the queue layer.
 func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) (string, string, error) {
 	if mgr.addFunc == nil {
-		return "", "", fmt.Errorf("add function unavailable")
+		return "", "", errors.New("add function unavailable")
 	}
 
 	utils.Debug("Lifecycle: Enqueue %s (Filename: %s)", req.URL, req.Filename)
@@ -212,7 +210,7 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 // EnqueueWithID does the same lifecycle work as Enqueue while preserving a caller-owned id.
 func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadRequest, requestID string) (string, string, error) {
 	if mgr.addWithIDFunc == nil {
-		return "", "", fmt.Errorf("addWithID function unavailable")
+		return "", "", errors.New("addWithID function unavailable")
 	}
 
 	utils.Debug("Lifecycle: EnqueueWithID %s (%s)", req.URL, requestID)
@@ -234,16 +232,16 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 // download to the engine, so workers and lifecycle events agree on one stable destination.
 func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadRequest, dispatch func(string, string, *ProbeResult) (string, error)) (string, string, error) {
 	if req.URL == "" {
-		return "", "", fmt.Errorf("URL is required")
+		return "", "", errors.New("URL is required")
 	}
 	if req.Path == "" {
-		return "", "", fmt.Errorf("destination path is required")
+		return "", "", errors.New("destination path is required")
 	}
 
 	settings := mgr.GetSettings()
 
 	// Throttle concurrent probes — acquire a semaphore slot before probing.
-	// If the context is cancelled (e.g., shutdown) we abort immediately.
+	// If the context is canceled (e.g., shutdown) we abort immediately.
 	if mgr.probeSem != nil {
 		select {
 		case <-mgr.probeSem:

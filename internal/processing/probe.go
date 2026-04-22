@@ -2,6 +2,7 @@ package processing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -29,16 +30,16 @@ var (
 
 const maxProbeClients = 8
 
-// ProbeResult contains all metadata from server probe
+// ProbeResult contains all metadata from server probe.
 type ProbeResult struct {
-	FileSize         int64
-	SupportsRange    bool
 	Filename         string
 	DetectedFilename string
 	ContentType      string
+	FileSize         int64
+	SupportsRange    bool
 }
 
-// probeHeadersContextKey is used to pass custom headers to the HTTP client's CheckRedirect function
+// probeHeadersContextKey is used to pass custom headers to the HTTP client's CheckRedirect function.
 type probeHeadersContextKey struct{}
 
 func resolveRuntimeConfig() *config.RuntimeConfig {
@@ -63,7 +64,7 @@ var (
 	probeHostLocks sync.Map // map[string]*sync.Mutex
 )
 
-// getProbeHostLock returns a mutex for a specific host to sequentialize probes
+// getProbeHostLock returns a mutex for a specific host to sequentialize probes.
 func getProbeHostLock(rawurl string) *sync.Mutex {
 	parsed, err := neturl.Parse(rawurl)
 	host := "unknown"
@@ -270,7 +271,7 @@ func getProbeClient(runCfg *config.RuntimeConfig) *http.Client {
 		Transport: newProbeTransport(runCfg),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
+				return errors.New("stopped after 10 redirects")
 			}
 			if len(via) > 0 {
 				copyProbeRedirectHeaders(req, via[0])
@@ -388,8 +389,8 @@ func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, runCfg *config
 	errs = make(map[string]error)
 
 	type mirrorProbeResult struct {
-		valid bool
 		err   error
+		valid bool
 	}
 
 	results := make([]mirrorProbeResult, len(candidates))
@@ -413,7 +414,7 @@ func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, runCfg *config
 			} else {
 				outcome.valid = result.SupportsRange
 				if !result.SupportsRange {
-					outcome.err = fmt.Errorf("does not support ranges")
+					outcome.err = errors.New("does not support ranges")
 				}
 			}
 			results[idx] = outcome

@@ -10,14 +10,14 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// ConfirmationModal renders a styled confirmation dialog box
+// ConfirmationModal renders a styled confirmation dialog box.
 type ConfirmationModal struct {
+	Keys        help.KeyMap
+	BorderColor color.Color
+	Help        help.Model
 	Title       string
 	Message     string
-	Detail      string      // Optional additional detail line (e.g., filename, URL)
-	Keys        help.KeyMap // Key bindings to show in help
-	Help        help.Model  // Help model for rendering keys
-	BorderColor color.Color // Border color for the box
+	Detail      string
 	Width       int
 	Height      int
 }
@@ -28,7 +28,7 @@ type NoKeys struct{}
 func (NoKeys) ShortHelp() []key.Binding  { return nil }
 func (NoKeys) FullHelp() [][]key.Binding { return nil }
 
-// View renders the confirmation modal content (without the box wrapper or help text)
+// View renders the confirmation modal content (without the box wrapper or help text).
 func (m ConfirmationModal) view() string {
 	detailStyle := lipgloss.NewStyle().
 		Foreground(colors.Magenta()).
@@ -49,7 +49,7 @@ func (m ConfirmationModal) view() string {
 }
 
 // RenderWithBtopBox renders the modal using the btop-style box with title in border
-// Help text is pushed to the last line of the modal
+// Help text is pushed to the last line of the modal.
 func (m ConfirmationModal) RenderWithBtopBox(
 	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
 	titleStyle lipgloss.Style,
@@ -107,7 +107,7 @@ func (m ConfirmationModal) RenderWithBtopBox(
 }
 
 // Centered returns the modal centered in the given dimensions (for standalone use)
-// Help text is pushed to the last line
+// Help text is pushed to the last line.
 func (m ConfirmationModal) Centered(width, height int) string {
 	boxStyle := lipgloss.NewStyle().
 		Border(lipgloss.DoubleBorder()).

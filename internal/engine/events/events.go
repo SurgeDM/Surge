@@ -8,21 +8,21 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
-// ProgressMsg represents a progress update from the downloader
+// ProgressMsg represents a progress update from the downloader.
 type ProgressMsg struct {
 	DownloadID        string
+	ChunkBitmap       []byte
+	ChunkProgress     []int64
 	Downloaded        int64
 	Total             int64
-	Speed             float64 // bytes per second
+	Speed             float64
 	Elapsed           time.Duration
 	ActiveConnections int
-	ChunkBitmap       []byte
 	BitmapWidth       int
 	ActualChunkSize   int64
-	ChunkProgress     []int64
 }
 
-// DownloadCompleteMsg signals that the download finished successfully
+// DownloadCompleteMsg signals that the download finished successfully.
 type DownloadCompleteMsg struct {
 	DownloadID string
 	Filename   string
@@ -31,12 +31,12 @@ type DownloadCompleteMsg struct {
 	AvgSpeed   float64 // Average download speed in bytes/sec
 }
 
-// DownloadErrorMsg signals that an error occurred
+// DownloadErrorMsg signals that an error occurred.
 type DownloadErrorMsg struct {
+	Err        error
 	DownloadID string
 	Filename   string
 	DestPath   string
-	Err        error
 }
 
 func (m DownloadErrorMsg) MarshalJSON() ([]byte, error) {
@@ -96,21 +96,21 @@ func (m *DownloadErrorMsg) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
-// DownloadStartedMsg is sent when a download actually starts (after metadata fetch)
+// DownloadStartedMsg is sent when a download actually starts (after metadata fetch).
 type DownloadStartedMsg struct {
+	State      *types.ProgressState `json:"-"`
 	DownloadID string
 	URL        string
 	Filename   string
+	DestPath   string
 	Total      int64
-	DestPath   string               // Full path to the destination file
-	State      *types.ProgressState `json:"-"`
 }
 
 type DownloadPausedMsg struct {
+	State      *types.DownloadState `json:"-"`
 	DownloadID string
 	Filename   string
 	Downloaded int64
-	State      *types.DownloadState `json:"-"`
 }
 
 type DownloadResumedMsg struct {
@@ -138,18 +138,18 @@ type SystemLogMsg struct {
 	Message string
 }
 
-// BatchProgressMsg represents a batch of progress updates to reduce TUI render calls
+// BatchProgressMsg represents a batch of progress updates to reduce TUI render calls.
 type BatchProgressMsg []ProgressMsg
 
 // DownloadRequestMsg signals a request to start a download (e.g. from extension)
-// that may need user confirmation or duplicate checking
+// that may need user confirmation or duplicate checking.
 type DownloadRequestMsg struct {
+	Headers  map[string]string
 	ID       string
 	URL      string
 	Filename string
 	Path     string
 	Mirrors  []string
-	Headers  map[string]string
 }
 
 const (

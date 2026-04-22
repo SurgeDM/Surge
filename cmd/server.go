@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 
 	"os"
@@ -12,9 +13,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/utils"
-	"github.com/spf13/cobra"
 )
 
 var serverCmd = &cobra.Command{
@@ -37,7 +39,7 @@ var serverStartCmd = &cobra.Command{
 		}
 
 		if !isMaster {
-			return fmt.Errorf("surge server is already running")
+			return errors.New("surge server is already running")
 		}
 		defer func() {
 			if err := ReleaseLock(); err != nil {
@@ -149,7 +151,7 @@ func savePID() {
 		return
 	}
 	pidFile := filepath.Join(config.GetRuntimeDir(), "pid")
-	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", pid)), 0o644); err != nil {
+	if err := os.WriteFile(pidFile, []byte(strconv.Itoa(pid)), 0o644); err != nil {
 		utils.Debug("Error writing PID file: %v", err)
 	}
 }

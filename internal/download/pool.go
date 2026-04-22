@@ -2,7 +2,7 @@ package download
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -12,11 +12,10 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// activeDownload tracks a download that's currently running
+// activeDownload tracks a download that's currently running.
 type activeDownload struct {
-	config types.DownloadConfig
-	cancel context.CancelFunc
-	// running is true while the worker goroutine is executing TUIDownload for this config.
+	cancel  context.CancelFunc
+	config  types.DownloadConfig
 	running atomic.Bool
 }
 
@@ -132,7 +131,7 @@ func (p *WorkerPool) HasDownload(url string) bool {
 	return false
 }
 
-// ActiveCount returns the number of currently active (downloading/pausing) downloads
+// ActiveCount returns the number of currently active (downloading/pausing) downloads.
 func (p *WorkerPool) ActiveCount() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -149,7 +148,7 @@ func (p *WorkerPool) ActiveCount() int {
 	return count
 }
 
-// GetAll returns all active download configs (for listing)
+// GetAll returns all active download configs (for listing).
 func (p *WorkerPool) GetAll() []types.DownloadConfig {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
@@ -203,7 +202,7 @@ func (p *WorkerPool) Pause(downloadID string) bool {
 	return true
 }
 
-// PauseAll pauses all active downloads (for graceful shutdown)
+// PauseAll pauses all active downloads (for graceful shutdown).
 func (p *WorkerPool) PauseAll() {
 	p.mu.RLock()
 	ids := make([]string, 0, len(p.downloads)) // This stores the uuids of the downloads to be paused
@@ -308,14 +307,14 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 
 	if qExists {
 		p.mu.Unlock()
-		return fmt.Errorf("cannot update URL for a queued download, please cancel or wait for it to start")
+		return errors.New("cannot update URL for a queued download, please cancel or wait for it to start")
 	}
 
 	if exists && ad != nil {
 		if ad.config.State != nil && !ad.config.State.IsPaused() {
 			if ad.running.Load() {
 				p.mu.Unlock()
-				return fmt.Errorf("download is currently active, please pause it before updating the URL")
+				return errors.New("download is currently active, please pause it before updating the URL")
 			}
 		}
 		ad.config.URL = newURL
@@ -382,7 +381,6 @@ func (p *WorkerPool) worker() {
 			p.mu.Lock()
 			delete(p.downloads, cfg.ID)
 			p.mu.Unlock()
-
 		} else {
 			// Only mark as done if not paused
 			if cfg.State != nil {
@@ -400,7 +398,7 @@ func (p *WorkerPool) worker() {
 	}
 }
 
-// GetStatus returns the status of an active download
+// GetStatus returns the status of an active download.
 func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 	p.mu.RLock()
 	ad, exists := p.downloads[id]
@@ -481,7 +479,7 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 	return status
 }
 
-// GracefulShutdown pauses all downloads and waits for them to save state
+// GracefulShutdown pauses all downloads and waits for them to save state.
 func (p *WorkerPool) GracefulShutdown() {
 	p.PauseAll()
 

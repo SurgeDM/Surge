@@ -961,7 +961,7 @@ func TestLifecycleManager_UpdateURL_Success(t *testing.T) {
 func TestLifecycleManager_UpdateURL_HookError(t *testing.T) {
 	testutil.SetupStateDB(t)
 
-	expectedErr := fmt.Errorf("not in pausable state")
+	expectedErr := errors.New("not in pausable state")
 	mgr := newLifecycleManagerForTest()
 	mgr.SetEngineHooks(EngineHooks{
 		UpdateURL: func(id, newURL string) error { return expectedErr },
@@ -976,7 +976,7 @@ func TestLifecycleManager_UpdateURL_HookError(t *testing.T) {
 // --- Probe semaphore tests ---
 
 // newSlowProbeServer creates an httptest server that serves 206 Partial Content
-// but delays each response by `delay` so we can observe concurrency behaviour.
+// but delays each response by `delay` so we can observe concurrency behavior.
 func newSlowProbeServer(t *testing.T, size int64, delay time.Duration, inflight *int32) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1025,7 +1025,7 @@ func TestLifecycleManager_ProbeSemaphore_LimitsInflight(t *testing.T) {
 
 	mgr := newLifecycleManagerForTest()
 	mgr.addFunc = func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
-		return "", fmt.Errorf("dispatch intentionally rejected for test")
+		return "", errors.New("dispatch intentionally rejected for test")
 	}
 	settings := config.DefaultSettings()
 	settings.Categories.CategoryEnabled = false
@@ -1065,12 +1065,12 @@ func TestLifecycleManager_ProbeSemaphore_LimitsInflight(t *testing.T) {
 
 // TestLifecycleManager_ProbeSemaphore_CancelledContextAbortsWait verifies that
 // a queued enqueue waiting on the semaphore returns immediately when its context
-// is cancelled, without needing to wait for a slot to become available.
+// is canceled, without needing to wait for a slot to become available.
 func TestLifecycleManager_ProbeSemaphore_CancelledContextAbortsWait(t *testing.T) {
 	// Build a manager and fill its semaphore completely so the next Enqueue blocks.
 	mgr := newLifecycleManagerForTest()
 	mgr.addFunc = func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
-		t.Fatal("dispatch should not run when context is cancelled")
+		t.Fatal("dispatch should not run when context is canceled")
 		return "", nil
 	}
 
@@ -1087,7 +1087,7 @@ func TestLifecycleManager_ProbeSemaphore_CancelledContextAbortsWait(t *testing.T
 	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
-	cancel() // already cancelled
+	cancel() // already canceled
 
 	start := time.Now()
 	_, _, err := mgr.Enqueue(ctx, &DownloadRequest{
@@ -1097,7 +1097,7 @@ func TestLifecycleManager_ProbeSemaphore_CancelledContextAbortsWait(t *testing.T
 	elapsed := time.Since(start)
 
 	if err == nil {
-		t.Fatal("expected error due to cancelled context, got nil")
+		t.Fatal("expected error due to canceled context, got nil")
 	}
 	if !errors.Is(err, context.Canceled) {
 		t.Fatalf("expected context.Canceled, got %v", err)

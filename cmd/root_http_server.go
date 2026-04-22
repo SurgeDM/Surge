@@ -2,22 +2,25 @@ package cmd
 
 import (
 	"crypto/subtle"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+
+	"github.com/google/uuid"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/utils"
-	"github.com/google/uuid"
 )
 
 const serverBindHost = "0.0.0.0"
 
-// findAvailablePort tries ports starting from 'start' until one is available
+// findAvailablePort tries ports starting from 'start' until one is available.
 func findAvailablePort(start int) (int, net.Listener) {
 	bindHost := serverBindHost
 	for port := start; port < start+100; port++ {
@@ -40,7 +43,7 @@ func bindServerListener(portFlag int) (int, net.Listener, error) {
 	}
 	port, ln := findAvailablePort(1700)
 	if ln == nil {
-		return 0, nil, fmt.Errorf("could not find available port")
+		return 0, nil, errors.New("could not find available port")
 	}
 	return port, ln, nil
 }
@@ -53,13 +56,13 @@ func saveActivePort(port int) {
 	}
 
 	portFile := filepath.Join(config.GetRuntimeDir(), "port")
-	if err := os.WriteFile(portFile, []byte(fmt.Sprintf("%d", port)), 0o644); err != nil {
+	if err := os.WriteFile(portFile, []byte(strconv.Itoa(port)), 0o644); err != nil {
 		utils.Debug("Error writing port file: %v", err)
 	}
 	utils.Debug("HTTP server listening on port %d", port)
 }
 
-// removeActivePort cleans up the port file on exit
+// removeActivePort cleans up the port file on exit.
 func removeActivePort() {
 	portFile := filepath.Join(config.GetRuntimeDir(), "port")
 	if err := os.Remove(portFile); err != nil && !os.IsNotExist(err) {
@@ -67,7 +70,7 @@ func removeActivePort() {
 	}
 }
 
-// startHTTPServer starts the HTTP server using an existing listener
+// startHTTPServer starts the HTTP server using an existing listener.
 func startHTTPServer(ln net.Listener, port int, defaultOutputDir string, service core.DownloadService, tokenOverride string) {
 	authToken := strings.TrimSpace(tokenOverride)
 	if authToken == "" {

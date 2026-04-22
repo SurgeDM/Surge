@@ -4,10 +4,10 @@ import (
 	"github.com/SurgeDM/Surge/internal/version"
 )
 
-// notificationTickMsg is sent to check if a notification should be cleared
+// notificationTickMsg is sent to check if a notification should be cleared.
 type notificationTickMsg struct{}
 
-// UpdateCheckResultMsg is sent when the update check is complete
+// UpdateCheckResultMsg is sent when the update check is complete.
 type UpdateCheckResultMsg struct {
 	Info *version.UpdateInfo
 }
@@ -25,11 +25,11 @@ type enqueueSuccessMsg struct {
 }
 
 type enqueueErrorMsg struct {
-	tempID string
 	err    error
+	tempID string
 }
 
 type resumeResultMsg struct {
-	id  string
 	err error
+	id  string
 }

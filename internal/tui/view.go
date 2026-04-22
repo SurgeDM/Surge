@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -15,7 +16,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Viewport layout
+// Viewport layout.
 const maxUIDuration = 30 * 24 * time.Hour
 
 // formatDurationForUI formats a duration as a human-readable clock string.
@@ -49,7 +50,7 @@ func formatDurationForUI(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", mins, secs)
 }
 
-// renderModalWithOverlay renders a modal centered on screen with a dark overlay effect
+// renderModalWithOverlay renders a modal centered on screen with a dark overlay effect.
 func (m RootModel) renderModalWithOverlay(modal string) string {
 	// Place modal centered with dark gray background fill for overlay effect
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal,
@@ -381,11 +382,9 @@ func (m RootModel) View() tea.View {
 			detailBox := m.renderDetailsBox(layout.LeftWidth, layout.DetailHeight, detailContent)
 			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox, detailBox)
 		} else {
-
 			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
 		}
 	} else {
-
 		leftColumn := lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
 		body = lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
 	}
@@ -402,7 +401,7 @@ func (m RootModel) View() tea.View {
 	return m.wrapView(lipgloss.Place(layout.AvailableWidth, m.height, lipgloss.Center, lipgloss.Top, fullView))
 }
 
-// Helper to render the detailed info pane
+// Helper to render the detailed info pane.
 func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	pct := 0.0
 	if d.Total > 0 {
@@ -580,7 +579,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		if conns == 0 {
 			conns = 1 // Single-connection download (range requests not supported)
 		}
-		connStr := fmt.Sprintf("%d", conns)
+		connStr := strconv.Itoa(conns)
 		leftColItems = append(leftColItems, lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Conns:"), StatsValueStyle.Render(connStr)))
 	}
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, leftColItems...)
@@ -819,5 +818,5 @@ func (m RootModel) viewQuitConfirm() string {
 // Supports left and right titles (e.g., search on left, pane name on right)
 // Accepts pre-styled title strings
 // Example: ╭─ 🔍 Search... ─────────── Downloads ─╮
-// Delegates to components.RenderBtopBox for the actual rendering
+// Delegates to components.RenderBtopBox for the actual rendering.
 var renderBtopBox = components.RenderBtopBox

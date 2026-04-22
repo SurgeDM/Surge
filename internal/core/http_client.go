@@ -12,9 +12,9 @@ import (
 )
 
 type HTTPClientOptions struct {
+	CAFile             string
 	Timeout            time.Duration
 	InsecureSkipVerify bool
-	CAFile             string
 }
 
 func NewHTTPClient(opts HTTPClientOptions) (*http.Client, error) {

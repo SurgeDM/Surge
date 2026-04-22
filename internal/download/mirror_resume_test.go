@@ -9,13 +9,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/utils"
-	"github.com/google/uuid"
 )
 
 func TestIntegration_MirrorResume(t *testing.T) {

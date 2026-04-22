@@ -14,7 +14,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// viewSettings renders the Btop-style settings page
+// viewSettings renders the Btop-style settings page.
 func (m RootModel) viewSettings() string {
 	if m.width <= 0 || m.height <= 0 {
 		return ""
@@ -496,7 +496,7 @@ func (m *RootModel) updateSettingsInputWidthForViewport() {
 	m.SettingsInput.SetWidth(targetWidth)
 }
 
-// getSettingsValues returns a map of setting key -> value for a category
+// getSettingsValues returns a map of setting key -> value for a category.
 func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 	values := make(map[string]interface{})
 
@@ -541,7 +541,7 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 	return values
 }
 
-// setSettingValue sets a setting value from string input
+// setSettingValue sets a setting value from string input.
 func (m *RootModel) setSettingValue(category, key, value string) error {
 	val := reflect.ValueOf(m.Settings).Elem()
 	typ := val.Type()
@@ -675,7 +675,7 @@ func (m *RootModel) persistSettings() error {
 	return nil
 }
 
-// getCurrentSettingKey returns the key of the currently selected setting
+// getCurrentSettingKey returns the key of the currently selected setting.
 func (m RootModel) getCurrentSettingKey() string {
 	meta := m.getCurrentSettingMeta()
 	if meta != nil {
@@ -684,7 +684,7 @@ func (m RootModel) getCurrentSettingKey() string {
 	return ""
 }
 
-// getCurrentSettingMeta returns the metadata for the currently selected setting
+// getCurrentSettingMeta returns the metadata for the currently selected setting.
 func (m RootModel) getCurrentSettingMeta() *config.SettingMeta {
 	categories := config.CategoryOrder()
 	if m.SettingsActiveTab < 0 || m.SettingsActiveTab >= len(categories) {
@@ -700,7 +700,7 @@ func (m RootModel) getCurrentSettingMeta() *config.SettingMeta {
 	return &settingsList[m.SettingsSelectedRow]
 }
 
-// getCurrentSettingType returns the type of the currently selected setting
+// getCurrentSettingType returns the type of the currently selected setting.
 func (m RootModel) getCurrentSettingType() string {
 	meta := m.getCurrentSettingMeta()
 	if meta != nil {
@@ -709,7 +709,7 @@ func (m RootModel) getCurrentSettingType() string {
 	return "string"
 }
 
-// getSettingsCount returns the number of settings in the current category
+// getSettingsCount returns the number of settings in the current category.
 func (m RootModel) getSettingsCount() int {
 	categories := config.CategoryOrder()
 	if m.SettingsActiveTab >= 0 && m.SettingsActiveTab < len(categories) {
@@ -723,7 +723,7 @@ func (m RootModel) getSettingsCount() int {
 	return 0
 }
 
-// getSettingUnit returns the unit suffix for the currently selected setting
+// getSettingUnit returns the unit suffix for the currently selected setting.
 func (m RootModel) getSettingUnit() string {
 	key := m.getCurrentSettingKey()
 	switch key {
@@ -744,7 +744,7 @@ func (m RootModel) getSettingUnit() string {
 	}
 }
 
-// formatSettingValueForEdit returns a plain value without units for editing
+// formatSettingValueForEdit returns a plain value without units for editing.
 func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool) string {
 	switch key {
 	case "min_chunk_size":
@@ -782,7 +782,7 @@ func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool
 	return formatSettingValue(value, typ, truncate)
 }
 
-// formatSettingValue formats a setting value for display
+// formatSettingValue formats a setting value for display.
 func formatSettingValue(value interface{}, typ string, truncate bool) string {
 	if value == nil {
 		return "-"
@@ -803,12 +803,12 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 	case "int64":
 		if v, ok := value.(int64); ok {
 			// Just display the raw number - units handled by getSettingUnit
-			return fmt.Sprintf("%d", v)
+			return strconv.FormatInt(v, 10)
 		}
 	case "int":
 		v := reflect.ValueOf(value)
 		if v.Kind() == reflect.Int {
-			return fmt.Sprintf("%d", v.Int())
+			return strconv.FormatInt(v.Int(), 10)
 		}
 	case "float64":
 		if v, ok := value.(float64); ok {
@@ -832,7 +832,7 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 	v := reflect.ValueOf(value)
 	switch v.Kind() {
 	case reflect.Int, reflect.Int64:
-		return fmt.Sprintf("%d", v.Int())
+		return strconv.FormatInt(v.Int(), 10)
 	case reflect.Float64:
 		return fmt.Sprintf("%.2f", v.Float())
 	default:
@@ -840,7 +840,7 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 	}
 }
 
-// resetSettingToDefault resets a specific setting to its default value
+// resetSettingToDefault resets a specific setting to its default value.
 func (m *RootModel) resetSettingToDefault(category, key string, defaults *config.Settings) {
 	switch category {
 	case "General":

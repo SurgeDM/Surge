@@ -15,7 +15,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// TestServer_Startup_HandlesResume verifies that resumePausedDownloads() works for server mode
+// TestServer_Startup_HandlesResume verifies that resumePausedDownloads() works for server mode.
 func TestServer_Startup_HandlesResume(t *testing.T) {
 	// 1. Setup Environment
 	tmpDir, err := os.MkdirTemp("", "surge-server-startup-test")
@@ -108,7 +108,7 @@ func TestStartupIntegrityCheck_RemovesMissingPausedEntry(t *testing.T) {
 	}
 }
 
-// Helper: Setup XDG_CONFIG_HOME and Settings
+// Helper: Setup XDG_CONFIG_HOME and Settings.
 func setupTestEnv(t *testing.T, tmpDir string) {
 	originalXDG := os.Getenv("XDG_CONFIG_HOME")
 	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)

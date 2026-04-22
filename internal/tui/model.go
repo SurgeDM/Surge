@@ -72,135 +72,91 @@ const (
 )
 
 type DownloadModel struct {
+	progress      progress.Model
+	StartTime     time.Time
+	err           error
+	state         *types.ProgressState
+	Destination   string
 	ID            string
 	URL           string
 	Filename      string
 	FilenameLower string
-	Destination   string // Full path to the destination file
+	lastETA       time.Duration
+	Elapsed       time.Duration
 	Total         int64
-	Downloaded    int64
-	Speed         float64
 	Connections   int
-
-	StartTime time.Time
-	Elapsed   time.Duration
-	lastETA   time.Duration // EMA-smoothed ETA for UI stability
-
-	progress progress.Model
-
-	// Unified architecture: View Model updated by events
-	// No direct state access or polling reporter
-	state *types.ProgressState // Keep for now if needed for details view, but mostly passive
-
-	done     bool
-	err      error
-	paused   bool
-	pausing  bool // UI state: transitioning to pause
-	resuming bool // UI state: waiting for async resume
+	Speed         float64
+	Downloaded    int64
+	done          bool
+	paused        bool
+	pausing       bool
+	resuming      bool
 }
 
 type RootModel struct {
-	downloads    []*DownloadModel
-	width        int
-	height       int
-	state        UIState
-	activeTab    int // 0=Queued, 1=Active, 2=Done
-	inputs       []textinput.Model
-	focusedInput int
-	// Service Interface
-	// Core
-	Service      core.DownloadService
-	Orchestrator *processing.LifecycleManager
-
-	// File picker for directory selection
+	list                   list.Model
 	filepicker             filepicker.Model
+	lastSpeedHistoryUpdate time.Time
+	Service                core.DownloadService
+	enqueueCtx             context.Context
+	Settings               *config.Settings
+	pendingHeaders         map[string]string
+	cancelEnqueue          context.CancelFunc
+	Orchestrator           *processing.LifecycleManager
+	UpdateInfo             *version.UpdateInfo
+	help                   help.Model
+	pendingPath            string
+	pendingFilename        string
+	batchFilePath          string
+	PWD                    string
+	pendingURL             string
+	searchQuery            string
+	ServerHost             string
+	logoCache              string
+	SelectedDownloadID     string
+	CurrentVersion         string
+	duplicateInfo          string
 	filepickerOriginalPath string
+	categoryFilter         string
+	keys                   KeyMap
+	SpeedHistory           []float64
+	logEntries             []string
+	downloads              []*DownloadModel
+	pendingMirrors         []string
+	inputs                 []textinput.Model
+	pendingBatchURLs       []string
+	catMgrInputs           [4]textinput.Model
+	SettingsInput          textinput.Model
+	urlUpdateInput         textinput.Model
+	searchInput            textinput.Model
+	logViewport            viewport.Model
+	spinner                spinner.Model
+	SettingsSelectedRow    int
+	ServerPort             int
+	width                  int
+	height                 int
+	state                  UIState
+	catMgrCursor           int
+	activeTab              int
+	catMgrEditField        int
+	SettingsActiveTab      int
+	focusedInput           int
+	quitConfirmFocused     int
 	filepickerOrigin       FilePickerOrigin
-
-	// Bubbles help component
-	help help.Model
-
-	// Bubbles list component for download listing
-	list list.Model
-
-	PWD string
-
-	// Duplicate detection
-	pendingURL           string // URL pending confirmation
-	pendingPath          string // Path pending confirmation
-	pendingIsDefaultPath bool
-	pendingFilename      string   // Filename pending confirmation
-	pendingMirrors       []string // Mirrors pending confirmation
-	pendingHeaders       map[string]string
-	duplicateInfo        string // Info about the duplicate
-
-	// Graph Data
-	SpeedHistory           []float64 // Stores the last ~60 ticks of speed data
-	lastSpeedHistoryUpdate time.Time // Last time SpeedHistory was updated (for 0.5s sampling)
-
-	// Notification log system
-	logViewport viewport.Model // Scrollable log viewport
-	logEntries  []string       // Log entries for download events
-	logFocused  bool           // Whether the log viewport is focused
-
-	// Settings
-	Settings             *config.Settings // Application settings
-	SettingsActiveTab    int              // Active category tab (0-3)
-	SettingsSelectedRow  int              // Selected setting within current tab
-	SettingsIsEditing    bool             // Whether currently editing a value
-	SettingsInput        textinput.Model  // Input for editing string/int values
-	ExtensionTokenCopied bool             // Flash message for "Token Copied!"
-
-	// Selection persistence
-	SelectedDownloadID string // ID of the currently selected download
-	ManualTabSwitch    bool   // Whether the last tab switch was manual
-
-	// Search functionality
-	searchInput  textinput.Model // Text input for search
-	searchActive bool            // Whether search mode is active
-	searchQuery  string          // Current search query
-
-	// Batch import
-	pendingBatchURLs []string // URLs pending batch import
-	batchFilePath    string   // Path to the batch file
-
-	// URL Refresh
-	urlUpdateInput textinput.Model // Text input for updating URL
-
-	// Category manager
-	categoryFilter  string             // Dashboard filter ("" = all)
-	catMgrCursor    int                // Selected category index
-	catMgrEditing   bool               // Whether editing a category
-	catMgrEditField int                // 0=Name, 1=Description, 2=Pattern, 3=Path
-	catMgrInputs    [4]textinput.Model // Inputs for Name, Description, Pattern, Path
-	catMgrIsNew     bool               // Whether adding a new category
-	// Quit confirm button focus (0 = Yep!, 1 = Nope)
-	quitConfirmFocused int
-
-	// Keybindings
-	keys KeyMap
-
-	// Server port for display
-	ServerPort int
-	ServerHost string
-	IsRemote   bool
-
-	// Update check
-	UpdateInfo     *version.UpdateInfo // Update information (nil if no update available)
-	CurrentVersion string              // Current version of Surge
-
-	InitialDarkBackground bool // Captured at startup for "System" theme
-
-	logoCache string // Cached logo with gradient applied
-
-	enqueueCtx    context.Context
-	cancelEnqueue context.CancelFunc
-	shuttingDown  bool
-
-	spinner spinner.Model
+	catMgrEditing          bool
+	pendingIsDefaultPath   bool
+	IsRemote               bool
+	logFocused             bool
+	catMgrIsNew            bool
+	InitialDarkBackground  bool
+	searchActive           bool
+	SettingsIsEditing      bool
+	ExtensionTokenCopied   bool
+	shuttingDown           bool
+	ManualTabSwitch        bool
 }
 
-// NewDownloadModel creates a new download model
+// NewDownloadModel creates a new download model.
 func NewDownloadModel(id string, url string, filename string, total int64) *DownloadModel {
 	// Create dummy state container for compatibility if needed
 	state := types.NewProgressState(id, total)
@@ -483,7 +439,7 @@ func (m RootModel) Init() tea.Cmd {
 	return tea.Batch(cmds...)
 }
 
-// FindDownloadByID finds a download by its ID
+// FindDownloadByID finds a download by its ID.
 func (m *RootModel) FindDownloadByID(id string) *DownloadModel {
 	for _, d := range m.downloads {
 		if d.ID == id {
@@ -493,7 +449,7 @@ func (m *RootModel) FindDownloadByID(id string) *DownloadModel {
 	return nil
 }
 
-// Helper to get downloads for the current tab
+// Helper to get downloads for the current tab.
 func (m RootModel) getFilteredDownloads() []*DownloadModel {
 	var filtered []*DownloadModel
 	searchLower := strings.ToLower(m.searchQuery)
@@ -588,7 +544,7 @@ func newFilepicker(currentDir string) filepicker.Model {
 	return fp
 }
 
-// ApplyTheme applies the selected theme mode
+// ApplyTheme applies the selected theme mode.
 func (m *RootModel) ApplyTheme(mode int, path string) {
 	applyColorModeForTheme(mode, path, m.InitialDarkBackground)
 	m.refreshThemeCaches()

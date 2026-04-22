@@ -9,7 +9,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// StartHeadlessConsumer starts a goroutine to consume progress messages and log to stdout
+// StartHeadlessConsumer starts a goroutine to consume progress messages and log to stdout.
 func StartHeadlessConsumer() {
 	go func() {
 		if GlobalService == nil {
@@ -45,7 +45,7 @@ func StartHeadlessConsumer() {
 	}()
 }
 
-// truncateID shortens a UUID to its first 8 characters for display
+// truncateID shortens a UUID to its first 8 characters for display.
 func truncateID(id string) string {
 	if len(id) > 8 {
 		return id[:8]

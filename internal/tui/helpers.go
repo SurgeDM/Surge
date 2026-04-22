@@ -10,12 +10,13 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 )
 
-// addLogEntry adds a log entry to the log viewport
+// addLogEntry adds a log entry to the log viewport.
 func (m *RootModel) addLogEntry(msg string) {
 	timestamp := time.Now().Format("15:04:05")
 	entry := fmt.Sprintf("[%s] %s", timestamp, msg)
@@ -151,7 +152,7 @@ func (m *RootModel) openDirectoryPicker(origin FilePickerOrigin, originalPath, b
 	return m.filepicker.Init()
 }
 
-// checkForDuplicate checks if a compatible download already exists
+// checkForDuplicate checks if a compatible download already exists.
 func (m RootModel) checkForDuplicate(url string) *processing.DuplicateResult {
 	activeDownloads := func() map[string]*types.DownloadConfig {
 		active := make(map[string]*types.DownloadConfig)

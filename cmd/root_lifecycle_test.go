@@ -23,11 +23,11 @@ import (
 )
 
 type countingLifecycleService struct {
-	streamCalls atomic.Int32
 	streamCh    chan interface{}
-	cleanupMu   sync.Mutex
-	cleaned     bool
 	logs        []string
+	cleanupMu   sync.Mutex
+	streamCalls atomic.Int32
+	cleaned     bool
 }
 
 var _ core.DownloadService = (*countingLifecycleService)(nil)

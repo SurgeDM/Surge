@@ -11,7 +11,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// GraphStats contains the statistics to overlay on the graph
+// GraphStats contains the statistics to overlay on the graph.
 type GraphStats struct {
 	DownloadSpeed float64 // Current download speed in MB/s
 	DownloadTop   float64 // Top download speed in MB/s
@@ -149,7 +149,7 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 	return graphStr
 }
 
-// overlayStatsBox renders stats on top of the graph in the top-right area
+// overlayStatsBox renders stats on top of the graph in the top-right area.
 func overlayStatsBox(graph string, stats *GraphStats, width, height int) string {
 	// Create the stats box content - btop style
 	valueStyle := lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)

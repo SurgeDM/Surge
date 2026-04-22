@@ -2,6 +2,7 @@ package types
 
 import (
 	"context"
+	"errors"
 	"testing"
 	"time"
 )
@@ -73,7 +74,7 @@ func TestProgressState_Error(t *testing.T) {
 	testErr := context.DeadlineExceeded
 	ps.SetError(testErr)
 
-	if err := ps.GetError(); err != testErr {
+	if err := ps.GetError(); !errors.Is(err, testErr) {
 		t.Errorf("GetError = %v, want %v", err, testErr)
 	}
 }
@@ -105,10 +106,10 @@ func TestProgressState_PauseWithCancelFunc(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	ps.SetCancelFunc(cancel)
 
-	// Verify context is not cancelled
+	// Verify context is not canceled
 	select {
 	case <-ctx.Done():
-		t.Fatal("Context should not be cancelled yet")
+		t.Fatal("Context should not be canceled yet")
 	default:
 	}
 
@@ -119,7 +120,7 @@ func TestProgressState_PauseWithCancelFunc(t *testing.T) {
 	case <-ctx.Done():
 		// Expected
 	default:
-		t.Error("Context should be cancelled after Pause()")
+		t.Error("Context should be canceled after Pause()")
 	}
 }
 

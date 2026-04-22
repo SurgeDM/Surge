@@ -6,7 +6,7 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// Tab represents a single tab item
+// Tab represents a single tab item.
 type Tab struct {
 	Label string
 	Count int // If >= 0, displays as "Label (Count)"; if < 0, displays just "Label"
@@ -14,7 +14,7 @@ type Tab struct {
 
 // RenderTabBar renders a horizontal tab bar with the given tabs
 // Each tab is wrapped in a rounded border box for consistent styling
-// activeIndex specifies which tab is currently active (0-indexed)
+// activeIndex specifies which tab is currently active (0-indexed).
 func RenderTabBar(tabs []Tab, activeIndex int, activeStyle, inactiveStyle lipgloss.Style) string {
 	var rendered []string
 	for i, t := range tabs {
@@ -47,7 +47,7 @@ func RenderTabBar(tabs []Tab, activeIndex int, activeStyle, inactiveStyle lipglo
 }
 
 // RenderNumberedTabBar renders tabs with number prefixes like "[1] General"
-// Each tab is wrapped in a rounded border box
+// Each tab is wrapped in a rounded border box.
 func RenderNumberedTabBar(tabs []Tab, activeIndex int, activeStyle, inactiveStyle lipgloss.Style) string {
 	var rendered []string
 	for i, t := range tabs {

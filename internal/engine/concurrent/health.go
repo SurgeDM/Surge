@@ -7,7 +7,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// checkWorkerHealth detects slow workers and cancels them
+// checkWorkerHealth detects slow workers and cancels them.
 func (d *ConcurrentDownloader) checkWorkerHealth() {
 	d.activeMu.Lock()
 	defer d.activeMu.Unlock()
@@ -55,7 +55,6 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 	// Second pass: check for slow and stalled workers
 	stallTimeout := d.Runtime.GetStallTimeout()
 	for workerID, active := range d.activeTasks {
-
 		// timeSinceActivity := now.Sub(lastTime)
 		taskDuration := now.Sub(active.StartTime)
 
@@ -71,12 +70,12 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 		if lastActivity > 0 {
 			timeSinceData := now.Sub(time.Unix(0, lastActivity))
 			if timeSinceData >= stallTimeout {
-				utils.Debug("Health: Worker %d stalled (no data for %v), cancelling",
+				utils.Debug("Health: Worker %d stalled (no data for %v), canceling",
 					workerID, timeSinceData.Truncate(time.Millisecond))
 				if active.Cancel != nil {
 					active.Cancel()
 				}
-				continue // Already cancelled, skip speed check
+				continue // Already canceled, skip speed check
 			}
 		}
 
@@ -88,7 +87,7 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 			isBelowThreshold := workerSpeed > 0 && workerSpeed < threshold*meanSpeed
 
 			if isBelowThreshold {
-				utils.Debug("Health: Worker %d slow (%.2f KB/s vs mean %.2f KB/s), cancelling",
+				utils.Debug("Health: Worker %d slow (%.2f KB/s vs mean %.2f KB/s), canceling",
 					workerID, workerSpeed/float64(types.KB), meanSpeed/float64(types.KB))
 				if active.Cancel != nil {
 					active.Cancel()

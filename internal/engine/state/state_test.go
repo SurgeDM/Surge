@@ -2,13 +2,15 @@ package state
 
 import (
 	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/google/uuid"
+
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 func setupTestDB(t *testing.T) string {
@@ -269,11 +271,10 @@ func TestDeleteState(t *testing.T) {
 
 	// Verify it was deleted
 	_, err := LoadState(testURL, testDestPath)
-	switch err {
-	case nil:
+	switch {
+	case err == nil:
 		t.Error("LoadState should fail after DeleteState")
-	case sql.ErrNoRows:
-		// Acceptable error
+	case errors.Is(err, sql.ErrNoRows):
 	}
 }
 

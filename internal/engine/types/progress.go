@@ -10,33 +10,28 @@ import (
 )
 
 type ProgressState struct {
-	ID            string
-	Downloaded    atomic.Int64
-	TotalSize     int64
-	DestPath      string // Initial destination path
-	Filename      string // Initial filename
-	URL           string // Source URL
-	StartTime     time.Time
-	ActiveWorkers atomic.Int32
-	Done          atomic.Bool
-	Error         atomic.Pointer[error]
-	Paused        atomic.Bool
-	Pausing       atomic.Bool // Intermediate state: Pause requested but workers not yet exited
-	cancelFunc    context.CancelFunc
-
-	VerifiedProgress  atomic.Int64  // Verified bytes written to disk (for UI progress)
-	SessionStartBytes int64         // SessionStartBytes tracks how many bytes were already downloaded when the current session started
-	SavedElapsed      time.Duration // Time spent in previous sessions
-
-	Mirrors []MirrorStatus // Status of each mirror
-
-	// Chunk Visualization (Bitmap)
-	ChunkBitmap     []byte  // 2 bits per chunk
-	ChunkProgress   []int64 // Bytes downloaded per chunk (runtime only, not persisted)
-	ActualChunkSize int64   // Size of each actual chunk in bytes
-	BitmapWidth     int     // Number of chunks tracked
-
-	mu sync.Mutex // Protects TotalSize, StartTime, SessionStartBytes, SavedElapsed, Mirrors
+	StartTime         time.Time
+	cancelFunc        context.CancelFunc
+	Error             atomic.Pointer[error]
+	DestPath          string
+	Filename          string
+	URL               string
+	ID                string
+	ChunkProgress     []int64
+	ChunkBitmap       []byte
+	Mirrors           []MirrorStatus
+	SavedElapsed      time.Duration
+	VerifiedProgress  atomic.Int64
+	SessionStartBytes int64
+	TotalSize         int64
+	Downloaded        atomic.Int64
+	ActualChunkSize   int64
+	BitmapWidth       int
+	mu                sync.Mutex
+	Pausing           atomic.Bool
+	Paused            atomic.Bool
+	Done              atomic.Bool
+	ActiveWorkers     atomic.Int32
 }
 
 type MirrorStatus struct {
@@ -243,7 +238,7 @@ func (ps *ProgressState) GetMirrors() []MirrorStatus {
 	return mirrors
 }
 
-// ChunkStatus represents the status of a visualization chunk
+// ChunkStatus represents the status of a visualization chunk.
 type ChunkStatus int
 
 const (
@@ -252,7 +247,7 @@ const (
 	ChunkCompleted   ChunkStatus = 2 // 10 (Bit 2 set)
 )
 
-// InitBitmap initializes the chunk bitmap
+// InitBitmap initializes the chunk bitmap.
 func (ps *ProgressState) InitBitmap(totalSize int64, chunkSize int64) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
@@ -280,7 +275,7 @@ func (ps *ProgressState) InitBitmap(totalSize int64, chunkSize int64) {
 	ps.ChunkProgress = make([]int64, numChunks)
 }
 
-// RestoreBitmap restores the chunk bitmap from saved state
+// RestoreBitmap restores the chunk bitmap from saved state.
 func (ps *ProgressState) RestoreBitmap(bitmap []byte, actualChunkSize int64) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
@@ -289,7 +284,7 @@ func (ps *ProgressState) RestoreBitmap(bitmap []byte, actualChunkSize int64) {
 		return
 	}
 
-	//utils.Debug("RestoreBitmap: Len=%d, ChunkSize=%d", len(bitmap), actualChunkSize)
+	// utils.Debug("RestoreBitmap: Len=%d, ChunkSize=%d", len(bitmap), actualChunkSize)
 
 	ps.ChunkBitmap = bitmap
 	ps.ActualChunkSize = actualChunkSize
@@ -318,14 +313,14 @@ func (ps *ProgressState) SetChunkProgress(progress []int64) {
 	copy(ps.ChunkProgress, progress)
 }
 
-// SetChunkState sets the 2-bit state for a specific chunk index (thread-safe)
+// SetChunkState sets the 2-bit state for a specific chunk index (thread-safe).
 func (ps *ProgressState) SetChunkState(index int, status ChunkStatus) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.setChunkState(index, status)
 }
 
-// setChunkState sets the 2-bit state (internal, expects lock)
+// setChunkState sets the 2-bit state (internal, expects lock).
 func (ps *ProgressState) setChunkState(index int, status ChunkStatus) {
 	if index < 0 || index >= ps.BitmapWidth {
 		return
@@ -343,14 +338,14 @@ func (ps *ProgressState) setChunkState(index int, status ChunkStatus) {
 	ps.ChunkBitmap[byteIndex] |= val
 }
 
-// GetChunkState gets the 2-bit state for a specific chunk index (thread-safe)
+// GetChunkState gets the 2-bit state for a specific chunk index (thread-safe).
 func (ps *ProgressState) GetChunkState(index int) ChunkStatus {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	return ps.getChunkState(index)
 }
 
-// getChunkState gets the 2-bit state (internal, expects lock)
+// getChunkState gets the 2-bit state (internal, expects lock).
 func (ps *ProgressState) getChunkState(index int) ChunkStatus {
 	if index < 0 || index >= ps.BitmapWidth {
 		return ChunkPending
@@ -363,7 +358,7 @@ func (ps *ProgressState) getChunkState(index int) ChunkStatus {
 	return ChunkStatus(val)
 }
 
-// UpdateChunkStatus updates the bitmap based on byte range
+// UpdateChunkStatus updates the bitmap based on byte range.
 func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkStatus) {
 	ps.mu.Lock()
 
@@ -455,7 +450,7 @@ func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkSta
 	}
 }
 
-// RecalculateProgress reconstructs ChunkProgress from remaining tasks (for resume)
+// RecalculateProgress reconstructs ChunkProgress from remaining tasks (for resume).
 func (ps *ProgressState) RecalculateProgress(remainingTasks []Task) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
@@ -542,7 +537,7 @@ func (ps *ProgressState) RecalculateProgress(remainingTasks []Task) {
 	}
 }
 
-// GetBitmap returns a copy of the bitmap and metadata
+// GetBitmap returns a copy of the bitmap and metadata.
 func (ps *ProgressState) GetBitmap() ([]byte, int, int64, int64, []int64) {
 	return ps.GetBitmapSnapshot(true)
 }

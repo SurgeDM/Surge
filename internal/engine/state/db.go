@@ -2,6 +2,7 @@ package state
 
 import (
 	"database/sql"
+	"errors"
 	"fmt"
 	"log"
 	"sync"
@@ -16,7 +17,7 @@ var (
 	configured bool
 )
 
-// Configure sets the path for the SQLite database
+// Configure sets the path for the SQLite database.
 func Configure(path string) {
 	dbMu.Lock()
 	defer dbMu.Unlock()
@@ -24,7 +25,7 @@ func Configure(path string) {
 	configured = true
 }
 
-// initDBLocked initialises the database connection.
+// initDBLocked initializes the database connection.
 // Caller must hold dbMu.
 func initDBLocked() error {
 	if db != nil {
@@ -32,7 +33,7 @@ func initDBLocked() error {
 	}
 
 	if !configured || dbPath == "" {
-		return fmt.Errorf("state database not configured: call state.Configure() first")
+		return errors.New("state database not configured: call state.Configure() first")
 	}
 
 	var err error
@@ -168,7 +169,7 @@ func GetDB() (*sql.DB, error) {
 	return db, nil
 }
 
-// Helper to ensure DB is initialized and return it
+// Helper to ensure DB is initialized and return it.
 func getDBHelper() *sql.DB {
 	d, err := GetDB()
 	if err != nil {
@@ -178,11 +179,11 @@ func getDBHelper() *sql.DB {
 	return d
 }
 
-// Transaction helper
+// Transaction helper.
 func withTx(fn func(*sql.Tx) error) error {
 	d := getDBHelper()
 	if d == nil {
-		return fmt.Errorf("database not initialized")
+		return errors.New("database not initialized")
 	}
 
 	tx, err := d.Begin()

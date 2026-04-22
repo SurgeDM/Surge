@@ -2,7 +2,7 @@ package tui
 
 import "charm.land/bubbles/v2/key"
 
-// KeyMap defines the keybindings for the entire application
+// KeyMap defines the keybindings for the entire application.
 type KeyMap struct {
 	Dashboard      DashboardKeyMap
 	Input          InputKeyMap
@@ -17,7 +17,7 @@ type KeyMap struct {
 	QuitConfirm    QuitConfirmKeyMap
 }
 
-// DashboardKeyMap defines keybindings for the main dashboard
+// DashboardKeyMap defines keybindings for the main dashboard.
 type DashboardKeyMap struct {
 	TabQueued      key.Binding
 	TabActive      key.Binding
@@ -47,7 +47,7 @@ type DashboardKeyMap struct {
 	LogClose  key.Binding
 }
 
-// InputKeyMap defines keybindings for the add download input
+// InputKeyMap defines keybindings for the add download input.
 type InputKeyMap struct {
 	Tab    key.Binding
 	Enter  key.Binding
@@ -57,7 +57,7 @@ type InputKeyMap struct {
 	Cancel key.Binding
 }
 
-// FilePickerKeyMap defines keybindings for the file picker
+// FilePickerKeyMap defines keybindings for the file picker.
 type FilePickerKeyMap struct {
 	UseDir   key.Binding
 	GotoHome key.Binding
@@ -67,14 +67,14 @@ type FilePickerKeyMap struct {
 	Cancel   key.Binding
 }
 
-// DuplicateKeyMap defines keybindings for duplicate warning
+// DuplicateKeyMap defines keybindings for duplicate warning.
 type DuplicateKeyMap struct {
 	Continue key.Binding
 	Focus    key.Binding
 	Cancel   key.Binding
 }
 
-// ExtensionKeyMap defines keybindings for extension confirmation
+// ExtensionKeyMap defines keybindings for extension confirmation.
 type ExtensionKeyMap struct {
 	Confirm key.Binding
 	Browse  key.Binding
@@ -83,7 +83,7 @@ type ExtensionKeyMap struct {
 	Cancel  key.Binding
 }
 
-// SettingsKeyMap defines keybindings for the settings view
+// SettingsKeyMap defines keybindings for the settings view.
 type SettingsKeyMap struct {
 	Tab1    key.Binding
 	Tab2    key.Binding
@@ -100,26 +100,26 @@ type SettingsKeyMap struct {
 	Close   key.Binding
 }
 
-// SettingsEditorKeyMap defines keybindings for editing a setting
+// SettingsEditorKeyMap defines keybindings for editing a setting.
 type SettingsEditorKeyMap struct {
 	Confirm key.Binding
 	Cancel  key.Binding
 }
 
-// BatchConfirmKeyMap defines keybindings for batch import confirmation
+// BatchConfirmKeyMap defines keybindings for batch import confirmation.
 type BatchConfirmKeyMap struct {
 	Confirm key.Binding
 	Cancel  key.Binding
 }
 
-// UpdateKeyMap defines keybindings for update notification
+// UpdateKeyMap defines keybindings for update notification.
 type UpdateKeyMap struct {
 	OpenGitHub  key.Binding
 	IgnoreNow   key.Binding
 	NeverRemind key.Binding
 }
 
-// QuitConfirmKeyMap defines keybindings for the quit confirmation modal
+// QuitConfirmKeyMap defines keybindings for the quit confirmation modal.
 type QuitConfirmKeyMap struct {
 	Left   key.Binding
 	Right  key.Binding
@@ -129,7 +129,7 @@ type QuitConfirmKeyMap struct {
 	Cancel key.Binding
 }
 
-// CategoryManagerKeyMap defines keybindings for the category manager
+// CategoryManagerKeyMap defines keybindings for the category manager.
 type CategoryManagerKeyMap struct {
 	Up     key.Binding
 	Down   key.Binding
@@ -141,7 +141,7 @@ type CategoryManagerKeyMap struct {
 	Close  key.Binding
 }
 
-// Keys contains all the keybindings for the application
+// Keys contains all the keybindings for the application.
 var Keys = KeyMap{
 	Dashboard: DashboardKeyMap{
 		TabQueued: key.NewBinding(
@@ -451,12 +451,12 @@ var Keys = KeyMap{
 	},
 }
 
-// ShortHelp returns keybindings to show in the mini help view
+// ShortHelp returns keybindings to show in the mini help view.
 func (k DashboardKeyMap) ShortHelp() []key.Binding {
 	return []key.Binding{k.ToggleHelp}
 }
 
-// FullHelp returns keybindings for the expanded help view
+// FullHelp returns keybindings for the expanded help view.
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab},

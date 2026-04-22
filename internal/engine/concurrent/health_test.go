@@ -48,9 +48,9 @@ func TestHealth_LastManStanding(t *testing.T) {
 	// 4. Verify Cancellation
 	select {
 	case <-ctx.Done():
-		// Success: context cancelled
+		// Success: context canceled
 	default:
-		t.Errorf("Worker should have been cancelled (Global Speed ~10MB/s, Worker 1MB/s)")
+		t.Errorf("Worker should have been canceled (Global Speed ~10MB/s, Worker 1MB/s)")
 	}
 }
 
@@ -83,23 +83,23 @@ func TestHealth_MultipleWorkers(t *testing.T) {
 
 	d.checkWorkerHealth()
 
-	// Verify Worker 2 cancelled
+	// Verify Worker 2 canceled
 	select {
 	case <-w2Ctx.Done():
 		// Success
 	default:
-		t.Error("Worker 2 should have been cancelled")
+		t.Error("Worker 2 should have been canceled")
 	}
 
-	// Verify others NOT cancelled
+	// Verify others NOT canceled
 	select {
 	case <-w0Ctx.Done():
-		t.Error("Worker 0 should NOT have been cancelled")
+		t.Error("Worker 0 should NOT have been canceled")
 	default:
 	}
 	select {
 	case <-w1Ctx.Done():
-		t.Error("Worker 1 should NOT have been cancelled")
+		t.Error("Worker 1 should NOT have been canceled")
 	default:
 	}
 }
@@ -129,24 +129,24 @@ func TestHealth_GracePeriod(t *testing.T) {
 
 	d.checkWorkerHealth()
 
-	// Verify Worker 1 NOT cancelled due to grace period
+	// Verify Worker 1 NOT canceled due to grace period
 	select {
 	case <-w1Ctx.Done():
-		t.Error("Worker 1 should NOT have been cancelled (Grace Period)")
+		t.Error("Worker 1 should NOT have been canceled (Grace Period)")
 	default:
 		// Success
 	}
 
-	// Verify Worker 0 NOT cancelled (Fast enough)
+	// Verify Worker 0 NOT canceled (Fast enough)
 	select {
 	case <-w0Ctx.Done():
-		t.Error("Worker 0 should NOT have been cancelled")
+		t.Error("Worker 0 should NOT have been canceled")
 	default:
 	}
 }
 
 func TestHealth_StallDetection(t *testing.T) {
-	// A worker that has received no data for StallTimeout should be cancelled
+	// A worker that has received no data for StallTimeout should be canceled
 	// regardless of speed comparison
 	runtime := &types.RuntimeConfig{
 		SlowWorkerThreshold:   0.5,
@@ -173,11 +173,11 @@ func TestHealth_StallDetection(t *testing.T) {
 
 	d.checkWorkerHealth()
 
-	// Verify stalled worker was cancelled
+	// Verify stalled worker was canceled
 	select {
 	case <-stalledCtx.Done():
-		// Success: stall detected and cancelled
+		// Success: stall detected and canceled
 	default:
-		t.Error("Stalled worker should have been cancelled")
+		t.Error("Stalled worker should have been canceled")
 	}
 }

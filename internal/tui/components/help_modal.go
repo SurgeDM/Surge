@@ -8,17 +8,17 @@ import (
 	"charm.land/lipgloss/v2"
 )
 
-// HelpModal renders a styled help overlay showing all keyboard shortcuts
+// HelpModal renders a styled help overlay showing all keyboard shortcuts.
 type HelpModal struct {
-	Title       string
-	HelpKeys    help.KeyMap // Must implement FullHelp() [][]key.Binding
-	Help        help.Model  // Help model for rendering
+	HelpKeys    help.KeyMap
 	BorderColor color.Color
+	Help        help.Model
+	Title       string
 	Width       int
 	Height      int
 }
 
-// RenderWithBtopBox renders the help modal using a btop-style box with title in border
+// RenderWithBtopBox renders the help modal using a btop-style box with title in border.
 func (m HelpModal) RenderWithBtopBox(
 	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
 	titleStyle lipgloss.Style,
