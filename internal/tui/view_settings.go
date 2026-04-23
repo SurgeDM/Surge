@@ -268,13 +268,7 @@ func renderSettingsListViewport(settingsMeta []config.SettingMeta, selectedRow, 
 		}
 
 		// Truncate to avoid line wrapping which breaks parent height constraints
-		if len(label) > maxLabelLen {
-			if maxLabelLen > 3 {
-				label = label[:maxLabelLen-3] + "..."
-			} else {
-				label = label[:maxLabelLen]
-			}
-		}
+		label = utils.Truncate(label, maxLabelLen)
 
 		lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+label))
 	}
@@ -827,8 +821,8 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 			if s == "" {
 				return "(default)"
 			}
-			if truncate && len(s) > 30 {
-				return s[:27] + "..."
+			if truncate {
+				return utils.Truncate(s, 30)
 			}
 			return s
 		}

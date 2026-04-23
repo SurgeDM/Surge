@@ -54,11 +54,64 @@ func TestWrapText(t *testing.T) {
 			width:    0,
 			expected: "hello",
 		},
+		{
+			name:     "Multi-byte runes (emojis)",
+			text:     "🌟🌟🌟🌟🌟",
+			width:    4, // Each emoji is width 2
+			expected: "🌟🌟\n🌟🌟\n🌟",
+		},
+		{
+			name:     "CJK characters",
+			text:     "你好世界",
+			width:    4, // Each character is width 2
+			expected: "你好\n世界",
+		},
+		{
+			name:     "Mixed ASCII and runes",
+			text:     "hello 🌟 world",
+			width:    8,
+			expected: "hello 🌟\nworld",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			assert.Equal(t, tt.expected, WrapText(tt.text, tt.width))
+		})
+	}
+}
+
+func TestTruncate(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		limit    int
+		expected string
+	}{
+		{"ASCII", "hello world", 5, "hell…"},
+		{"Emoji", "🌟🌟🌟", 4, "🌟…"}, // 🌟 is width 2, so 🌟 is 2, next 🌟 would make it 4, but limit-1 is 3. So only one 🌟 fits.
+		{"CJK", "你好世界", 5, "你好…"}, // 你是2, 好的2, 总共4. 世是2, 总共6 > 5. 所以只有你好.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, Truncate(tt.text, tt.limit))
+		})
+	}
+}
+
+func TestTruncateMiddle(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		limit    int
+		expected string
+	}{
+		{"ASCII", "1234567890", 5, "12…90"},
+		{"Mixed", "abc🌟def", 6, "ab…def"}, // abc(3) 🌟(2) def(3). limit 6.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, TruncateMiddle(tt.text, tt.limit))
 		})
 	}
 }

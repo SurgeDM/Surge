@@ -149,8 +149,8 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 		availableWidth = 10
 	}
 
-	title := truncateString(i.Title(), availableWidth)
-	description := truncateString(i.Description(), availableWidth)
+	title := utils.Truncate(i.Title(), availableWidth)
+	description := utils.Truncate(i.Description(), availableWidth)
 
 	// Render lines
 	line1 := prefix + titleStyle.Render(title)

@@ -4,6 +4,7 @@ import (
 	"image/color"
 
 	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/utils"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/textinput"
@@ -33,8 +34,11 @@ func (m AddDownloadModal) View() string {
 	content := []string{""}
 
 	if m.ShowURL && m.URL != "" {
+		horizontalPadding := lipgloss.NewStyle().Padding(0, 2).GetHorizontalFrameSize()
+		innerWidth := m.Width - BorderFrameWidth - horizontalPadding
+		wrappedURL := utils.WrapText(m.URL, innerWidth-5) // Offset for "URL: "
 		content = append(content,
-			lipgloss.NewStyle().Foreground(colors.LightGray()).Render("URL: "+m.URL),
+			lipgloss.NewStyle().Foreground(colors.LightGray()).Render("URL: "+wrappedURL),
 			"",
 		)
 	}

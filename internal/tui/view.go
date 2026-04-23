@@ -144,7 +144,7 @@ func (m RootModel) View() tea.View {
 		modal := components.ConfirmationModal{
 			Title:       "\u26a0 Duplicate Detected",
 			Message:     "A download with this URL already exists",
-			Detail:      utils.WrapText(m.duplicateInfo, 50),
+			Detail:      m.duplicateInfo,
 			Keys:        m.keys.Duplicate,
 			Help:        m.help,
 			BorderColor: colors.Pink(),
@@ -178,7 +178,7 @@ func (m RootModel) View() tea.View {
 			Labels:          []string{"Path:", "Filename:"},
 			FocusedInput:    focused,
 			ShowURL:         true,
-			URL:             utils.WrapText(m.pendingURL, 68),
+			URL:             m.pendingURL,
 			BrowseHintIndex: 0,
 			Help:            m.help,
 			HelpKeys:        m.keys.Extension,
@@ -217,7 +217,7 @@ func (m RootModel) View() tea.View {
 		modal := components.ConfirmationModal{
 			Title:       "Batch Import",
 			Message:     fmt.Sprintf("Add %d downloads?", urlCount),
-			Detail:      utils.WrapText(m.batchFilePath, 50),
+			Detail:      m.batchFilePath,
 			Keys:        m.keys.BatchConfirm,
 			Help:        m.help,
 			BorderColor: colors.Cyan(),
@@ -687,42 +687,6 @@ func (m RootModel) ComputeViewStats() ViewStats {
 		stats.TotalDownloaded += d.Downloaded
 	}
 	return stats
-}
-
-func truncateString(s string, i int) string {
-	if i <= 0 {
-		return ""
-	}
-	if lipgloss.Width(s) <= i {
-		return s
-	}
-	if i <= 1 {
-		return "\u2026"
-	}
-	return lipgloss.NewStyle().MaxWidth(i-1).Render(s) + "\u2026"
-}
-
-func truncateMiddle(s string, i int) string {
-	if i <= 0 {
-		return ""
-	}
-	if lipgloss.Width(s) <= i {
-		return s
-	}
-	if i <= 5 {
-		return truncateString(s, i)
-	}
-
-	runes := []rune(s)
-	// We use i-1 because \u2026 is one character
-	start := (i - 1) / 2
-	end := i - 1 - start
-
-	if start+end+1 > len(runes) {
-		return s
-	}
-
-	return string(runes[:start]) + "\u2026" + string(runes[len(runes)-end:])
 }
 
 func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {

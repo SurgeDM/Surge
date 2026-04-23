@@ -4,6 +4,7 @@ import (
 	"image/color"
 
 	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/utils"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/bubbles/v2/key"
@@ -35,6 +36,7 @@ func (m ConfirmationModal) view() string {
 		Bold(true)
 
 	// Build content - just message and detail (no help)
+	// We wrap these manually to the modal width in RenderWithBtopBox
 	content := m.Message
 
 	if m.Detail != "" {
@@ -70,6 +72,27 @@ func (m ConfirmationModal) RenderWithBtopBox(
 		Width(innerWidth).
 		Align(lipgloss.Center)
 	helpText := helpStyle.Render(m.Help.View(m.Keys))
+
+	detailStyle := lipgloss.NewStyle().
+		Foreground(colors.Magenta()).
+		Bold(true)
+
+	// Ensure message and detail are wrapped to innerWidth
+	wrappedMessage := utils.WrapText(m.Message, innerWidth)
+	wrappedDetail := ""
+	if m.Detail != "" {
+		wrappedDetail = utils.WrapText(m.Detail, innerWidth)
+	}
+
+	// Re-build content with wrapped text
+	mainContent = wrappedMessage
+	if wrappedDetail != "" {
+		mainContent = lipgloss.JoinVertical(lipgloss.Center,
+			mainContent,
+			"",
+			detailStyle.Render(wrappedDetail),
+		)
+	}
 
 	// Calculate heights
 	mainContentHeight := lipgloss.Height(mainContent)
