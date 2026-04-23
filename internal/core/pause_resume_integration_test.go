@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -144,7 +145,7 @@ func forceSingleConnectionRuntime(svc *LocalDownloadService) {
 	// Keep integration behavior deterministic:
 	// - single worker connection (no hedging/stealing overlap effects),
 	// - conservative health settings to avoid synthetic task cancellation.
-	svc.settings.Network.MaxConnectionsPerHost = 10
+	svc.settings.Network.MaxConnectionsPerHost = 1
 	svc.settings.Performance.SlowWorkerGracePeriod = 60 * time.Second
 	svc.settings.Performance.StallTimeout = 60 * time.Second
 }
@@ -747,16 +748,17 @@ func TestIntegration_PauseResumeBatch_ColdPath(t *testing.T) {
 	if f, err := os.Create(destPath2 + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id2, err := svc1.Add(server.URL(), outputDir, "cold2.bin", nil, nil, false, fileSize, true)
+	url2 := strings.Replace(server.URL(), "127.0.0.1", "localhost", 1)
+	id2, err := svc1.Add(url2, outputDir, "cold2.bin", nil, nil, false, fileSize, true)
 	if err != nil {
 		t.Fatalf("add 2 failed: %v", err)
 	}
 
 	waitForDownloadStatus(t, svc1, id1, 25*time.Second, func(st *types.DownloadStatus) bool {
-		return (st.Status == "downloading" || st.Status == "completed") && st.Downloaded > 1024*512
+		return st.Status == "downloading" && st.Downloaded > 1024*512
 	})
 	waitForDownloadStatus(t, svc1, id2, 25*time.Second, func(st *types.DownloadStatus) bool {
-		return (st.Status == "downloading" || st.Status == "completed") && st.Downloaded > 1024*512
+		return st.Status == "downloading" && st.Downloaded > 1024*512
 	})
 
 	if err := svc1.Pause(id1); err != nil {
