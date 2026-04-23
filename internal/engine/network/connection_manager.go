@@ -81,6 +81,7 @@ func (m *ConnectionManager) ProbeClient(runtime *config.RuntimeConfig) *http.Cli
 		CustomDNS:  strings.TrimSpace(runtime.CustomDNS),
 		MaxConns:   runtime.MaxConnectionsPerHost,
 		ForceHTTP1: true,
+		ForceTCP4:  true,
 	}
 	if transportProfile.MaxConns <= 0 {
 		transportProfile.MaxConns = enginetypes.PerHostMax
