@@ -51,7 +51,7 @@ func TestPrewarmConnections_Reuse(t *testing.T) {
 		t.Fatalf("Request failed: %v", err)
 	}
 	_, _ = io.Copy(io.Discard, resp.Body)
-	resp.Body.Close()
+	_ = resp.Body.Close()
 
 	if !reused {
 		t.Error("Expected connection to be reused after prewarming, but it was not. Handshake leak likely present.")
