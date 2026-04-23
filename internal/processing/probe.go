@@ -259,35 +259,6 @@ func getProbeClient(runCfg *config.RuntimeConfig) *http.Client {
 	return probeConnectionManager.ProbeClient(runCfg)
 }
 
-func copyProbeRedirectHeaders(dst, src *http.Request) {
-	if dst == nil || src == nil {
-		return
-	}
-
-	if sameProbeRedirectOrigin(dst.URL, src.URL) {
-		for key, vals := range src.Header {
-			dst.Header[key] = append([]string(nil), vals...)
-		}
-		return
-	}
-
-	for key := range dst.Header {
-		delete(dst.Header, key)
-	}
-
-	for _, key := range []string{"Range", "User-Agent"} {
-		if vals := src.Header.Values(key); len(vals) > 0 {
-			dst.Header[key] = append([]string(nil), vals...)
-		}
-	}
-}
-
-func sameProbeRedirectOrigin(a, b *neturl.URL) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host)
-}
 
 // ProbeMirrors is the convenience wrapper for callers that need mirror probing
 // to honor the saved proxy setting but do not already hold a live settings snapshot.
