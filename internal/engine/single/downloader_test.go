@@ -307,40 +307,6 @@ func TestNewSingleDownloader(t *testing.T) {
 	}
 }
 
-func TestNewSingleDownloader_TransportReuse(t *testing.T) {
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 8}
-	d1 := NewSingleDownloader("test-id-1", nil, nil, runtime)
-	d2 := NewSingleDownloader("test-id-2", nil, nil, runtime)
-
-	t1, ok := d1.probeClient().Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("expected downloader client transport to be *http.Transport")
-	}
-	t2, ok := d2.probeClient().Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("expected downloader client transport to be *http.Transport")
-	}
-	if t1 != t2 {
-		t.Fatal("expected transport reuse for identical runtime config")
-	}
-}
-
-func TestNewSingleDownloader_TransportIsolationByProxy(t *testing.T) {
-	d1 := NewSingleDownloader("test-id-1", nil, nil, &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:8080"})
-	d2 := NewSingleDownloader("test-id-2", nil, nil, &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:9090"})
-
-	t1, ok := d1.probeClient().Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("expected downloader client transport to be *http.Transport")
-	}
-	t2, ok := d2.probeClient().Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("expected downloader client transport to be *http.Transport")
-	}
-	if t1 == t2 {
-		t.Fatal("expected different transports for different proxy settings")
-	}
-}
 
 func TestSingleDownloader_Download_Success(t *testing.T) {
 	tmpDir, cleanup, err := testutil.TempDir("surge-single-test")

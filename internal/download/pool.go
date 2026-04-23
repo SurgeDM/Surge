@@ -574,6 +574,9 @@ drainLoop:
 
 	p.wg.Wait() // Blocks until all workers call Done()
 
+	// Shutdown the global execution layers. This is safe to do here because
+	// wg.Wait() above ensures all download goroutines have returned, meaning
+	// no more calls to Run() or HTTPClients can occur.
 	if p.execution != nil && p.execution.NetworkWorkers != nil {
 		p.execution.NetworkWorkers.Shutdown()
 	}

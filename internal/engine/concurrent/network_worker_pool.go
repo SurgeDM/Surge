@@ -18,6 +18,7 @@ type networkWorkerJob struct {
 type NetworkWorkerPool struct {
 	size     int
 	jobs     chan networkWorkerJob
+	stop     chan struct{}
 	stopOnce sync.Once
 	stopped  atomic.Bool
 }
@@ -30,6 +31,7 @@ func NewNetworkWorkerPool(size int) *NetworkWorkerPool {
 	pool := &NetworkWorkerPool{
 		size: size,
 		jobs: make(chan networkWorkerJob),
+		stop: make(chan struct{}),
 	}
 
 	for i := 0; i < size; i++ {
@@ -69,6 +71,8 @@ func (p *NetworkWorkerPool) Run(ctx context.Context, workerCount int, fn func(wo
 		case p.jobs <- job:
 		case <-ctx.Done():
 			done.Done()
+		case <-p.stop:
+			done.Done()
 		}
 	}
 
@@ -87,16 +91,27 @@ func (p *NetworkWorkerPool) Size() int {
 func (p *NetworkWorkerPool) Shutdown() {
 	p.stopOnce.Do(func() {
 		p.stopped.Store(true)
-		close(p.jobs)
+		close(p.stop)
+		// We don't close p.jobs here to avoid panics in Run's send.
+		// Workers will exit when p.stop is closed.
 	})
 }
 
 func (p *NetworkWorkerPool) worker() {
-	for job := range p.jobs {
-		err := job.fn(job.workerID)
-		if err != nil && err != context.Canceled {
-			job.results <- err
+	for {
+		select {
+		case job, ok := <-p.jobs:
+			if !ok {
+				return
+			}
+			err := job.fn(job.workerID)
+			if err != nil && err != context.Canceled {
+				job.results <- err
+			}
+			job.done.Done()
+		case <-p.stop:
+			return
 		}
-		job.done.Done()
 	}
 }
+
