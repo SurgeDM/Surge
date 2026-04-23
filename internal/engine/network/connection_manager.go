@@ -18,11 +18,12 @@ import (
 type requestHeadersContextKey struct{}
 
 type transportProfile struct {
-	ProxyURL   string
-	CustomDNS  string
-	MaxConns   int
-	ForceTCP4  bool
-	ForceHTTP1 bool
+	ProxyURL       string
+	CustomDNS      string
+	MaxConns       int
+	DialHedgeCount int
+	ForceTCP4      bool
+	ForceHTTP1     bool
 }
 
 type clientProfile struct {
@@ -58,11 +59,12 @@ func (m *ConnectionManager) ConcurrentClient(runtime *enginetypes.RuntimeConfig)
 	}
 
 	transportProfile := transportProfile{
-		ProxyURL:   strings.TrimSpace(runtime.ProxyURL),
-		CustomDNS:  strings.TrimSpace(runtime.CustomDNS),
-		MaxConns:   runtime.GetMaxConnectionsPerHost(),
-		ForceHTTP1: true,
-		ForceTCP4:  true,
+		ProxyURL:       strings.TrimSpace(runtime.ProxyURL),
+		CustomDNS:      strings.TrimSpace(runtime.CustomDNS),
+		MaxConns:       runtime.GetMaxConnectionsPerHost(),
+		DialHedgeCount: runtime.GetDialHedgeCount(),
+		ForceHTTP1:     true,
+		ForceTCP4:      true,
 	}
 	clientProfile := clientProfile{
 		Transport: transportProfile,
@@ -78,11 +80,12 @@ func (m *ConnectionManager) ProbeClient(runtime *config.RuntimeConfig) *http.Cli
 	}
 
 	transportProfile := transportProfile{
-		ProxyURL:   strings.TrimSpace(runtime.ProxyURL),
-		CustomDNS:  strings.TrimSpace(runtime.CustomDNS),
-		MaxConns:   runtime.MaxConnectionsPerHost,
-		ForceHTTP1: true,
-		ForceTCP4:  true,
+		ProxyURL:       strings.TrimSpace(runtime.ProxyURL),
+		CustomDNS:      strings.TrimSpace(runtime.CustomDNS),
+		MaxConns:       runtime.MaxConnectionsPerHost,
+		DialHedgeCount: 0, // Probing doesn't use hedged dialing
+		ForceHTTP1:     true,
+		ForceTCP4:      true,
 	}
 	if transportProfile.MaxConns <= 0 {
 		transportProfile.MaxConns = enginetypes.PerHostMax
@@ -169,7 +172,7 @@ func (m *ConnectionManager) transportLocked(profile transportProfile) *http.Tran
 
 	transport := &http.Transport{
 		MaxIdleConns:          enginetypes.DefaultMaxIdleConns,
-		MaxIdleConnsPerHost:   maxConns + enginetypes.DialHedgeCount + 2,
+		MaxIdleConnsPerHost:   maxConns + profile.DialHedgeCount + 2,
 		MaxConnsPerHost:       maxConns,
 		Proxy:                 proxyFunc,
 		IdleConnTimeout:       enginetypes.DefaultIdleConnTimeout,

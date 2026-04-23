@@ -22,26 +22,38 @@ import (
 )
 
 var (
-	defaultExec     atomic.Pointer[types.ExecutionDeps]
-	defaultExecOnce sync.Once
+	defaultExec atomic.Pointer[types.ExecutionDeps]
+	defaultMu   sync.Mutex
 )
 
 func GetDefaultExecution() *types.ExecutionDeps {
-	defaultExecOnce.Do(func() {
-		exec := &types.ExecutionDeps{
-			HTTPClients:    network.NewConnectionManager(),
-			BufferPools:    network.NewBufferPoolManager(),
-			NetworkWorkers: NewNetworkWorkerPool(types.PerHostMax),
-		}
-		defaultExec.Store(exec)
-	})
-	return defaultExec.Load()
+	if exec := defaultExec.Load(); exec != nil {
+		return exec
+	}
+
+	defaultMu.Lock()
+	defer defaultMu.Unlock()
+
+	if exec := defaultExec.Load(); exec != nil {
+		return exec
+	}
+
+	exec := &types.ExecutionDeps{
+		HTTPClients:    network.NewConnectionManager(),
+		BufferPools:    network.NewBufferPoolManager(),
+		NetworkWorkers: NewNetworkWorkerPool(types.PerHostMax),
+	}
+	defaultExec.Store(exec)
+	return exec
 }
 
 // ShutdownDefaultExecution releases global resources owned by the default execution layer.
 // Primarily used for clean test teardown to avoid goroutine leaks.
 func ShutdownDefaultExecution() {
-	if exec := defaultExec.Load(); exec != nil {
+	defaultMu.Lock()
+	defer defaultMu.Unlock()
+
+	if exec := defaultExec.Swap(nil); exec != nil {
 		exec.NetworkWorkers.Shutdown()
 		exec.HTTPClients.Shutdown()
 	}
@@ -662,11 +674,14 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 				return
 			}
 
-			// Connection is now hot in the pool.
-			// Signal readiness and IMMEDIATELY close body to release to IdleConn pool.
-			ready <- struct{}{}
+			// Drain a small prefix to trigger server-side connection reuse, then close.
+			// This ensures the connection is actually in the idle pool and available
+			// for the first real worker before we signal readiness.
 			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 32*types.KB))
 			_ = resp.Body.Close()
+
+			// Signal readiness now that the connection is hot in the pool.
+			ready <- struct{}{}
 		}(i)
 	}
 
