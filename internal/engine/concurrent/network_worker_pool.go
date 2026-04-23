@@ -55,6 +55,7 @@ func (p *NetworkWorkerPool) Run(ctx context.Context, workerCount int, fn func(wo
 		workerCount = p.size
 	}
 
+	// Ensure results channel is sized to the effective workerCount after capping
 	results := make(chan error, workerCount)
 	var done sync.WaitGroup
 

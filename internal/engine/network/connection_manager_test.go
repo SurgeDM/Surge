@@ -43,6 +43,20 @@ func TestConnectionManager_TransportIsolationByProxy(t *testing.T) {
 	}
 }
 
+func TestConnectionManager_ProbeClient_ProxyIsolation(t *testing.T) {
+	mgr := NewConnectionManager()
+
+	c1 := mgr.ProbeClient(&config.RuntimeConfig{ProxyURL: "http://127.0.0.1:8080"})
+	c2 := mgr.ProbeClient(&config.RuntimeConfig{ProxyURL: "http://127.0.0.1:9090"})
+
+	t1 := c1.Transport.(*http.Transport)
+	t2 := c2.Transport.(*http.Transport)
+
+	if t1 == t2 {
+		t.Fatal("expected different transports for different proxy settings in probe client")
+	}
+}
+
 func TestConnectionManager_TransportIsolationByHedgeCount(t *testing.T) {
 	mgr := NewConnectionManager()
 

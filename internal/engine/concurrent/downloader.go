@@ -483,6 +483,12 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		}
 	}()
 
+	// Start a watcher to unblock workers if context is cancelled (via pause, shutdown, or fatal error)
+	go func() {
+		<-downloadCtx.Done()
+		queue.Close()
+	}()
+
 	workerErrors := d.workerRunner().Run(downloadCtx, numConns, func(workerID int) error {
 		return d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
 	})
@@ -492,6 +498,8 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	for err := range workerErrors {
 		if err != nil {
 			downloadErr = err
+			// Trigger context cancellation on first fatal error to unblock other workers
+			cancel()
 		}
 	}
 
