@@ -34,8 +34,6 @@ type TaskPool struct {
 	execution    *types.ExecutionDeps
 }
 
-// WorkerPool is a temporary compatibility alias during the TaskPool migration.
-type WorkerPool = TaskPool
 
 var (
 	// gracefulShutdownPauseSoftTimeout controls when we emit a warning that
@@ -79,9 +77,6 @@ func NewTaskPool(progressCh chan<- any, maxDownloads int) *TaskPool {
 	return pool
 }
 
-func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
-	return NewTaskPool(progressCh, maxDownloads)
-}
 
 // syncConfigFromState syncs Filename, DestPath, and Mirrors from the associated state.
 func syncConfigFromState(cfg *types.DownloadConfig) {

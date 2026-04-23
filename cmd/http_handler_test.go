@@ -79,7 +79,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	}
 
 	// Initialize GlobalPool (required by handleDownload)
-	GlobalPool = download.NewWorkerPool(nil, 1)
+	GlobalPool = download.NewTaskPool(nil, 1)
 
 	tests := []struct {
 		name               string
@@ -260,7 +260,7 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 
 	progressCh := make(chan any, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
+	GlobalPool = download.NewTaskPool(progressCh, 1)
 
 	origLifecycle := GlobalLifecycle
 	origService := GlobalService
@@ -359,7 +359,7 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 
 	progressCh := make(chan any, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
+	GlobalPool = download.NewTaskPool(progressCh, 1)
 
 	origLifecycle := GlobalLifecycle
 	origService := GlobalService
@@ -435,7 +435,7 @@ func TestHandleDownload_PublishError_RecordsPreflightError(t *testing.T) {
 		GlobalLifecycle = origLifecycle
 	})
 
-	GlobalPool = download.NewWorkerPool(nil, 1)
+	GlobalPool = download.NewTaskPool(nil, 1)
 
 	origServerProgram := serverProgram
 	serverProgram = &tea.Program{}

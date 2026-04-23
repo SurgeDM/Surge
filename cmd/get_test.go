@@ -38,7 +38,7 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	}
 
 	GlobalProgressCh = make(chan any, 100)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 2)
+	GlobalPool = download.NewTaskPool(GlobalProgressCh, 2)
 
 	// Start server
 	svc := core.NewLocalDownloadService(GlobalPool)

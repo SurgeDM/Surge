@@ -51,7 +51,7 @@ func TestHandleDownload_HeadlessMode_AutoApprovesNonDuplicate(t *testing.T) {
 
 	progressCh := make(chan any, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
+	GlobalPool = download.NewTaskPool(progressCh, 1)
 
 	// Mock lifecycle to bypass real downloads
 	GlobalLifecycle = processing.NewLifecycleManager(func(url, path, filename string, _ []string, headers map[string]string, explicit bool, totalSize int64, supportsRange bool) (string, error) {
@@ -101,7 +101,7 @@ func TestHandleDownload_HeadlessMode_RejectsDuplicateWithWarn(t *testing.T) {
 
 	progressCh := make(chan any, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
+	GlobalPool = download.NewTaskPool(progressCh, 1)
 
 	// Seed the DB with a "duplicate" entry
 	url := "http://example.com/duplicate.bin"
@@ -158,7 +158,7 @@ func TestHandleDownload_HeadlessMode_RejectsExtensionPromptDuplicate(t *testing.
 
 	progressCh := make(chan any, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
+	GlobalPool = download.NewTaskPool(progressCh, 1)
 	svc := core.NewLocalDownloadService(GlobalPool)
 	GlobalService = svc
 

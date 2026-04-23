@@ -68,7 +68,7 @@ func TestAutoResume_Enabled(t *testing.T) {
 
 	// 5. Initialize Model
 	ch := make(chan any, 10)
-	pool := download.NewWorkerPool(ch, 1)
+	pool := download.NewTaskPool(ch, 1)
 
 	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, ch), processing.NewLifecycleManager(nil, nil), false)
 
@@ -140,7 +140,7 @@ func TestAutoResume_Disabled(t *testing.T) {
 
 	// 5. Initialize Model
 	ch := make(chan any, 10)
-	pool := download.NewWorkerPool(ch, 1)
+	pool := download.NewTaskPool(ch, 1)
 
 	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, ch), processing.NewLifecycleManager(nil, nil), false)
 

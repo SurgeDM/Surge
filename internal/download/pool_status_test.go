@@ -6,9 +6,9 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
-func TestWorkerPool_GetStatus_NonExistent(t *testing.T) {
+func TestTaskPool_GetStatus_NonExistent(t *testing.T) {
 	ch := make(chan any, 10)
-	pool := NewWorkerPool(ch, 3)
+	pool := NewTaskPool(ch, 3)
 
 	status := pool.GetStatus("non-existent-id")
 	if status != nil {
@@ -16,9 +16,9 @@ func TestWorkerPool_GetStatus_NonExistent(t *testing.T) {
 	}
 }
 
-func TestWorkerPool_GetStatus_Active(t *testing.T) {
+func TestTaskPool_GetStatus_Active(t *testing.T) {
 	ch := make(chan any, 10)
-	pool := NewWorkerPool(ch, 3)
+	pool := NewTaskPool(ch, 3)
 
 	id := "test-id"
 	state := types.NewProgressState(id, 1000)
@@ -58,9 +58,9 @@ func TestWorkerPool_GetStatus_Active(t *testing.T) {
 	}
 }
 
-func TestWorkerPool_GetStatus_Paused(t *testing.T) {
+func TestTaskPool_GetStatus_Paused(t *testing.T) {
 	ch := make(chan any, 10)
-	pool := NewWorkerPool(ch, 3)
+	pool := NewTaskPool(ch, 3)
 
 	id := "test-id"
 	state := types.NewProgressState(id, 1000)
@@ -87,9 +87,9 @@ func TestWorkerPool_GetStatus_Paused(t *testing.T) {
 	}
 }
 
-func TestWorkerPool_GetStatus_Completed(t *testing.T) {
+func TestTaskPool_GetStatus_Completed(t *testing.T) {
 	ch := make(chan any, 10)
-	pool := NewWorkerPool(ch, 3)
+	pool := NewTaskPool(ch, 3)
 
 	id := "test-id"
 	state := types.NewProgressState(id, 1000)

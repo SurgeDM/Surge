@@ -34,7 +34,7 @@ func TestTUI_Startup_HandlesResume(t *testing.T) {
 
 	// 3. Initialize TUI Model (Simulate StartTUI)
 	progressChan := make(chan any, 10)
-	pool := download.NewWorkerPool(progressChan, 3)
+	pool := download.NewTaskPool(progressChan, 3)
 
 	// PASSING noResume=false (default)
 	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
@@ -98,7 +98,7 @@ func TestTUI_Startup_LoadsCompletedTiming(t *testing.T) {
 	}
 
 	progressChan := make(chan any, 10)
-	pool := download.NewWorkerPool(progressChan, 3)
+	pool := download.NewTaskPool(progressChan, 3)
 	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
 
 	var found *DownloadModel
@@ -146,7 +146,7 @@ func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
 	}
 
 	progressChan := make(chan any, 10)
-	pool := download.NewWorkerPool(progressChan, 3)
+	pool := download.NewTaskPool(progressChan, 3)
 	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
 
 	var found *DownloadModel

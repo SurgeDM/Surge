@@ -1039,7 +1039,7 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 		atomic.StoreInt32(&activeDownloads, 0)
 
 		GlobalProgressCh = make(chan any, 10)
-		GlobalPool = download.NewWorkerPool(GlobalProgressCh, 2)
+		GlobalPool = download.NewTaskPool(GlobalProgressCh, 2)
 		GlobalService = core.NewLocalDownloadService(GlobalPool)
 
 		probeServer := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

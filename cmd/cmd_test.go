@@ -22,7 +22,7 @@ import (
 func init() {
 	// Initialize GlobalPool for tests
 	GlobalProgressCh = make(chan any, 100)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 4)
+	GlobalPool = download.NewTaskPool(GlobalProgressCh, 4)
 }
 
 // =============================================================================

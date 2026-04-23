@@ -366,7 +366,7 @@ func TestGenerateUniqueFilename_IncompleteSuffixConstant(t *testing.T) {
 func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	// Setup initial model
 	ch := make(chan any, 100)
-	pool := download.NewWorkerPool(ch, 1)
+	pool := download.NewTaskPool(ch, 1)
 	svc := core.NewLocalDownloadServiceWithInput(pool, ch)
 	t.Cleanup(func() { _ = svc.Shutdown() })
 
@@ -441,7 +441,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 
 func TestStartDownload_UsesProvidedIDWhenServiceSupportsIt(t *testing.T) {
 	ch := make(chan any, 16)
-	pool := download.NewWorkerPool(ch, 1)
+	pool := download.NewTaskPool(ch, 1)
 	svc := core.NewLocalDownloadServiceWithInput(pool, ch)
 	t.Cleanup(func() {
 		_ = svc.Shutdown()

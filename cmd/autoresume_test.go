@@ -78,7 +78,7 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 
 	// 5. Initialize GlobalPool + GlobalService
 	GlobalProgressCh = make(chan any, 10)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 4)
+	GlobalPool = download.NewTaskPool(GlobalProgressCh, 4)
 	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 
 	GlobalLifecycle = processing.NewLifecycleManager(nil, nil, nil)

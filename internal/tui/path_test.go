@@ -18,7 +18,7 @@ func TestStartDownload_EnforcesAbsolutePath(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	ch := make(chan any, 10)
-	pool := download.NewWorkerPool(ch, 1)
+	pool := download.NewTaskPool(ch, 1)
 
 	m := RootModel{
 		Settings:  config.DefaultSettings(),

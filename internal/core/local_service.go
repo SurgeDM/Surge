@@ -44,7 +44,7 @@ func (s *LocalDownloadService) ReloadSettings() error {
 
 // LocalDownloadService implements DownloadService for the local embedded engine.
 type LocalDownloadService struct {
-	Pool    *download.WorkerPool
+	Pool    *download.TaskPool
 	InputCh chan interface{}
 
 	// Broadcast fields
@@ -84,13 +84,13 @@ const (
 )
 
 // NewLocalDownloadService creates a new specific service instance.
-func NewLocalDownloadService(pool *download.WorkerPool) *LocalDownloadService {
+func NewLocalDownloadService(pool *download.TaskPool) *LocalDownloadService {
 	return NewLocalDownloadServiceWithInput(pool, nil)
 }
 
 // NewLocalDownloadServiceWithInput creates a service using a provided input channel.
 // If inputCh is nil, a new buffered channel is created.
-func NewLocalDownloadServiceWithInput(pool *download.WorkerPool, inputCh chan interface{}) *LocalDownloadService {
+func NewLocalDownloadServiceWithInput(pool *download.TaskPool, inputCh chan interface{}) *LocalDownloadService {
 	if inputCh == nil {
 		inputCh = make(chan interface{}, 100)
 	}

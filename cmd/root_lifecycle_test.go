@@ -120,7 +120,7 @@ func TestEnsureLocalLifecycle_StartsEventWorker(t *testing.T) {
 	GlobalLifecycle = nil
 	GlobalLifecycleCleanup = nil
 	GlobalProgressCh = make(chan any, 32)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 1)
+	GlobalPool = download.NewTaskPool(GlobalProgressCh, 1)
 	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 	t.Cleanup(func() {
 		if GlobalLifecycleCleanup != nil {
@@ -217,7 +217,7 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 	GlobalLifecycle = nil
 	GlobalLifecycleCleanup = nil
 	GlobalProgressCh = make(chan any, 32)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 1)
+	GlobalPool = download.NewTaskPool(GlobalProgressCh, 1)
 	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 	t.Cleanup(func() {
 		if GlobalLifecycleCleanup != nil {
@@ -304,7 +304,7 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 	GlobalLifecycle = nil
 	GlobalLifecycleCleanup = nil
 	GlobalProgressCh = make(chan any, 32)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 1)
+	GlobalPool = download.NewTaskPool(GlobalProgressCh, 1)
 	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 	t.Cleanup(func() {
 		if GlobalLifecycleCleanup != nil {
@@ -445,7 +445,7 @@ func TestProcessDownloads_UsesSharedEnqueueContext(t *testing.T) {
 	setupIsolatedCmdState(t)
 	service := &countingLifecycleService{}
 	GlobalService = service
-	GlobalPool = download.NewWorkerPool(nil, 1)
+	GlobalPool = download.NewTaskPool(nil, 1)
 	GlobalLifecycleCleanup = nil
 	t.Cleanup(func() {
 		GlobalService = nil

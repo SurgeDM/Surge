@@ -31,7 +31,7 @@ func TestStateSync(t *testing.T) {
 
 	// Provide a dummy pool to avoid panics if logic tries to use it
 	progressChan := make(chan any, 10)
-	pool := download.NewWorkerPool(progressChan, 1)
+	pool := download.NewTaskPool(progressChan, 1)
 
 	// Initialize model with progress channel and service
 	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)

@@ -34,7 +34,7 @@ func TestServer_Startup_HandlesResume(t *testing.T) {
 
 	// 3. Initialize Global Pool (required for resumePausedDownloads)
 	GlobalProgressCh = make(chan any, 10)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 3)
+	GlobalPool = download.NewTaskPool(GlobalProgressCh, 3)
 	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 
 	GlobalLifecycle = processing.NewLifecycleManager(nil, nil, nil)

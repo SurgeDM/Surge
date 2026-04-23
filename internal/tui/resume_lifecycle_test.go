@@ -40,7 +40,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	state.Configure(dbPath)
 
 	ch := make(chan any, 10)
-	pool := download.NewWorkerPool(ch, 1)
+	pool := download.NewTaskPool(ch, 1)
 
 	// 2. Initialize Model with DefaultDir = DirA
 	settings := config.DefaultSettings()
