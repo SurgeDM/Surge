@@ -13,6 +13,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // addLogEntry adds a log entry to the log viewport
@@ -44,8 +45,9 @@ func (m *RootModel) refreshLogViewportContent() {
 
 	var wrappedEntries []string
 	for _, entry := range m.logEntries {
-		wrapped := wrapStyle.Render(entry)
-		wrappedEntries = append(wrappedEntries, strings.Split(wrapped, "\n")...)
+		wrapped := utils.WrapText(entry, width)
+		rendered := wrapStyle.Render(wrapped)
+		wrappedEntries = append(wrappedEntries, strings.Split(rendered, "\n")...)
 	}
 
 	// Bottom-align entries if they don't fill the viewport

@@ -7,6 +7,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // viewCategoryManager renders the category management screen.
@@ -216,18 +217,18 @@ func (m RootModel) renderCategoryDetailView(cats []config.Category, cursor, inne
 	divider := dimStyle.Render(strings.Repeat("\u2500", innerWidth))
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
-		labelStyle.Render("Name: ")+valueStyle.Width(innerWidth-6).Render(cat.Name),
+		labelStyle.Render("Name: ")+valueStyle.Width(innerWidth-6).MaxWidth(innerWidth-6).Render(utils.WrapText(cat.Name, innerWidth-6)),
 		"",
 		labelStyle.Render("Description:"),
-		valueStyle.Width(innerWidth).Render(cat.Description),
+		valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render(utils.WrapText(cat.Description, innerWidth)),
 		"",
 		divider,
 		"",
 		labelStyle.Render("Pattern (Regex):"),
-		valueStyle.Width(innerWidth).Render(cat.Pattern),
+		valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render(utils.WrapText(cat.Pattern, innerWidth)),
 		"",
 		labelStyle.Render("Path:"),
-		valueStyle.Width(innerWidth).Render(cat.Path),
+		valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render(utils.WrapText(cat.Path, innerWidth)),
 	)
 
 	return formatSettingsBlock(content, innerWidth, rows)

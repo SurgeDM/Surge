@@ -10,6 +10,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
+	"github.com/SurgeDM/Surge/internal/utils"
 
 	"charm.land/lipgloss/v2"
 )
@@ -342,11 +343,12 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2500", innerWidth))
 
+	wrappedDesc := utils.WrapText(meta.Description, innerWidth)
 	descDisplay := lipgloss.NewStyle().
 		Foreground(colors.LightGray()).
 		Width(innerWidth).
 		MaxWidth(innerWidth).
-		Render(meta.Description)
+		Render(wrappedDesc)
 
 	detail := lipgloss.JoinVertical(lipgloss.Left,
 		valueDisplay,

@@ -144,7 +144,7 @@ func (m RootModel) View() tea.View {
 		modal := components.ConfirmationModal{
 			Title:       "\u26a0 Duplicate Detected",
 			Message:     "A download with this URL already exists",
-			Detail:      truncateString(m.duplicateInfo, 50),
+			Detail:      utils.WrapText(m.duplicateInfo, 50),
 			Keys:        m.keys.Duplicate,
 			Help:        m.help,
 			BorderColor: colors.Pink(),
@@ -178,7 +178,7 @@ func (m RootModel) View() tea.View {
 			Labels:          []string{"Path:", "Filename:"},
 			FocusedInput:    focused,
 			ShowURL:         true,
-			URL:             truncateString(m.pendingURL, 68),
+			URL:             utils.WrapText(m.pendingURL, 68),
 			BrowseHintIndex: 0,
 			Help:            m.help,
 			HelpKeys:        m.keys.Extension,
@@ -217,7 +217,7 @@ func (m RootModel) View() tea.View {
 		modal := components.ConfirmationModal{
 			Title:       "Batch Import",
 			Message:     fmt.Sprintf("Add %d downloads?", urlCount),
-			Detail:      truncateString(m.batchFilePath, 50),
+			Detail:      utils.WrapText(m.batchFilePath, 50),
 			Keys:        m.keys.BatchConfirm,
 			Help:        m.help,
 			BorderColor: colors.Cyan(),
@@ -458,10 +458,10 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	}
 
 	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("URL: "), StatsValueStyle.Render(truncateMiddle(d.URL, valueWidth))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("File: "), StatsValueStyle.Render(truncateString(displayFilename, valueWidth))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("Path: "), StatsValueStyle.Render(truncateMiddle(displayPath, valueWidth))),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray()).Render(truncateString(d.ID, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("URL: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(d.URL, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("File: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(displayFilename, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("Path: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(displayPath, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray()).Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(d.ID, valueWidth))),
 	)
 	fileSection := sectionStyle.Render(fileInfoContent)
 
