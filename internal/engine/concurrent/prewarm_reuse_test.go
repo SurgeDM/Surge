@@ -1,0 +1,59 @@
+package concurrent
+
+import (
+	"context"
+	"io"
+	"net/http"
+	"net/http/httptrace"
+	"testing"
+
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/testutil"
+)
+
+func TestPrewarmConnections_Reuse(t *testing.T) {
+	fileSize := int64(1 * types.KB)
+	server := testutil.NewMockServerT(t,
+		testutil.WithFileSize(fileSize),
+		testutil.WithRangeSupport(true),
+	)
+	defer server.Close()
+
+	runtime := &types.RuntimeConfig{
+		MaxConnectionsPerHost: 2,
+		DialHedgeCount:        0,
+	}
+
+	downloader := NewConcurrentDownloader("test-reuse", nil, nil, runtime)
+	client := downloader.newConcurrentClient(1)
+
+	ctx := context.Background()
+	mirrors := []string{server.URL()}
+
+	// 1. Prewarm connections
+	// This should populate the idle pool with one connection
+	downloader.prewarmConnections(ctx, client, 1, 0, mirrors)
+
+	// 2. Perform a request and check for reuse
+	reused := false
+	trace := &httptrace.ClientTrace{
+		GotConn: func(info httptrace.GotConnInfo) {
+			if info.Reused {
+				reused = true
+			}
+		},
+	}
+
+	req, _ := http.NewRequestWithContext(httptrace.WithClientTrace(ctx, trace), http.MethodGet, server.URL(), nil)
+	req.Header.Set("Range", "bytes=0-0")
+	resp, err := client.Do(req)
+	if err != nil {
+		t.Fatalf("Request failed: %v", err)
+	}
+	_, _ = io.Copy(io.Discard, resp.Body)
+	resp.Body.Close()
+
+	if !reused {
+		t.Error("Expected connection to be reused after prewarming, but it was not. Handshake leak likely present.")
+	}
+}
