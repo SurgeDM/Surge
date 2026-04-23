@@ -92,6 +92,13 @@ func NewProgressState(id string, totalSize int64) *ProgressState {
 func (ps *ProgressState) SetTotalSize(size int64) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
+
+	// If size is already set and timer is running, don't reset the clock.
+	// This prevents post-download updates from erasing the session duration.
+	if ps.TotalSize == size && !ps.StartTime.IsZero() {
+		return
+	}
+
 	ps.TotalSize = size
 	ps.SessionStartBytes = ps.VerifiedProgress.Load()
 	ps.StartTime = time.Now()
@@ -214,6 +221,33 @@ func (ps *ProgressState) FinalizeSession(downloaded int64) (time.Duration, time.
 	ps.VerifiedProgress.Store(downloaded)
 
 	return sessionElapsed, totalElapsed
+}
+
+// SessionReset wipes the current progress and session state, allowing for a fresh start (e.g. fallback).
+func (ps *ProgressState) SessionReset() {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+
+	ps.Downloaded.Store(0)
+	ps.VerifiedProgress.Store(0)
+	ps.SessionStartBytes = 0
+	ps.StartTime = time.Now()
+	ps.SavedElapsed = 0
+	ps.Done.Store(false)
+	ps.Paused.Store(false)
+	ps.Pausing.Store(false)
+	ps.Error.Store(nil)
+
+	// Clear mirrors error status
+	for i := range ps.Mirrors {
+		ps.Mirrors[i].Error = false
+	}
+
+	// Reset chunk tracking if initialized
+	if ps.BitmapWidth > 0 {
+		ps.ChunkBitmap = make([]byte, len(ps.ChunkBitmap))
+		ps.ChunkProgress = make([]int64, ps.BitmapWidth)
+	}
 }
 
 // FinalizePauseSession finalizes the current session for a pause transition.

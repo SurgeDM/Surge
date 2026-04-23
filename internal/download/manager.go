@@ -186,13 +186,11 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		d := concurrent.NewConcurrentDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		utils.Debug("Calling Download with mirrors: %v", mirrors)
-		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, cfg.TotalSize)
+		// Pass effectiveTotalSize to avoid unnecessary bootstrap if state already knows the size
+		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, effectiveTotalSize)
 		if d.TotalSize > 0 {
 			cfg.TotalSize = d.TotalSize
 			effectiveTotalSize = d.TotalSize
-			if cfg.State != nil {
-				cfg.State.SetTotalSize(d.TotalSize)
-			}
 		}
 
 		// Determine if we should attempt a fallback to single-threaded mode.
@@ -201,11 +199,9 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			utils.Debug("Concurrent download failed: %v — falling back to single-threaded", downloadErr)
 			useConcurrent = false // Trigger sequential block below
 
-			// Reset progress state for single-stream restart from byte 0
+			// Reset progress state cleanly for single-stream restart from byte 0
 			if cfg.State != nil {
-				cfg.State.Downloaded.Store(0)
-				cfg.State.VerifiedProgress.Store(0)
-				cfg.State.SyncSessionStart()
+				cfg.State.SessionReset()
 			}
 
 			// Truncate the working file to zero to prevent stale tail bytes
@@ -220,7 +216,8 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		utils.Debug("Using single-threaded downloader")
 		d := single.NewSingleDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
-		downloadErr = d.Download(ctx, cfg.URL, finalDestPath, cfg.TotalSize, finalFilename)
+		// Pass effectiveTotalSize here as well
+		downloadErr = d.Download(ctx, cfg.URL, finalDestPath, effectiveTotalSize, finalFilename)
 		if d.TotalSize > 0 {
 			cfg.TotalSize = d.TotalSize
 			effectiveTotalSize = d.TotalSize
