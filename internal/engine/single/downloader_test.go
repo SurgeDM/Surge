@@ -307,7 +307,6 @@ func TestNewSingleDownloader(t *testing.T) {
 	}
 }
 
-
 func TestSingleDownloader_Download_Success(t *testing.T) {
 	tmpDir, cleanup, err := testutil.TempDir("surge-single-test")
 	if err != nil {
