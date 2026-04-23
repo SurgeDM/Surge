@@ -77,6 +77,7 @@ func TestConnectionManager_ProbeVsConcurrentReuse(t *testing.T) {
 	downloadRuntime := &types.RuntimeConfig{
 		MaxConnectionsPerHost: 8,
 		ProxyURL:              "http://proxy:8080",
+		DialHedgeCount:        0, // Explicitly match probe's default for reuse assertion
 	}
 	probeRuntime := &config.RuntimeConfig{
 		MaxConnectionsPerHost: 8,

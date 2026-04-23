@@ -23,7 +23,6 @@ var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
 	"Chrome/120.0.0.0 Safari/537.36"
 
 var (
-	probeConnMu sync.RWMutex
 	// defaultProbeConnMgr is used as a fallback if no explicit manager is provided to a probe.
 	defaultProbeConnMgr = network.NewConnectionManager()
 )
@@ -100,7 +99,7 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 	} else {
 		mgr = defaultProbeConnMgr
 	}
-	client := getProbeClient(runCfg, mgr)
+	client := mgr.ProbeClient(runCfg)
 
 	// Sequentialize probes to the same host to prevent rate limiting (e.g., Google Drive)
 	hostLock := getProbeHostLock(rawurl)
@@ -262,10 +261,6 @@ func applyProbeHeaders(req *http.Request, headers map[string]string, includeRang
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", ua)
 	}
-}
-
-func getProbeClient(runCfg *config.RuntimeConfig, connMgr *network.ConnectionManager) *http.Client {
-	return connMgr.ProbeClient(runCfg)
 }
 
 // ProbeMirrors is the convenience wrapper for callers that need mirror probing
