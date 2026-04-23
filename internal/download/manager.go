@@ -220,6 +220,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		// Fallback to single-threaded downloader
 		utils.Debug("Using single-threaded downloader")
 		d := single.NewSingleDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
+		d.Execution = cfg.Execution
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		downloadErr = d.Download(ctx, cfg.URL, finalDestPath, cfg.TotalSize, finalFilename)
 		if d.TotalSize > 0 {

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine/events"
@@ -21,27 +22,28 @@ import (
 )
 
 var (
-	defaultExec     *types.ExecutionDeps
+	defaultExec     atomic.Pointer[types.ExecutionDeps]
 	defaultExecOnce sync.Once
 )
 
-func getDefaultExecution() *types.ExecutionDeps {
+func GetDefaultExecution() *types.ExecutionDeps {
 	defaultExecOnce.Do(func() {
-		defaultExec = &types.ExecutionDeps{
+		exec := &types.ExecutionDeps{
 			HTTPClients:    network.NewConnectionManager(),
 			BufferPools:    network.NewBufferPoolManager(),
 			NetworkWorkers: NewNetworkWorkerPool(types.PerHostMax),
 		}
+		defaultExec.Store(exec)
 	})
-	return defaultExec
+	return defaultExec.Load()
 }
 
 // ShutdownDefaultExecution releases global resources owned by the default execution layer.
 // Primarily used for clean test teardown to avoid goroutine leaks.
 func ShutdownDefaultExecution() {
-	if defaultExec != nil {
-		defaultExec.NetworkWorkers.Shutdown()
-		defaultExec.HTTPClients.Shutdown()
+	if exec := defaultExec.Load(); exec != nil {
+		exec.NetworkWorkers.Shutdown()
+		exec.HTTPClients.Shutdown()
 	}
 }
 
@@ -207,7 +209,7 @@ func (d *ConcurrentDownloader) execution() *types.ExecutionDeps {
 	if d.Execution != nil {
 		return d.Execution
 	}
-	return getDefaultExecution()
+	return GetDefaultExecution()
 }
 
 func (d *ConcurrentDownloader) bufferPool() *sync.Pool {
@@ -663,6 +665,7 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 			// Connection is now hot in the pool.
 			// Signal readiness and IMMEDIATELY close body to release to IdleConn pool.
 			ready <- struct{}{}
+			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 32*types.KB))
 			_ = resp.Body.Close()
 		}(i)
 	}
