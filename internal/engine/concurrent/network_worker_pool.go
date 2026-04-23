@@ -8,7 +8,6 @@ import (
 )
 
 type networkWorkerJob struct {
-	ctx      context.Context
 	workerID int
 	fn       func(workerID int) error
 	results  chan error
@@ -60,7 +59,6 @@ func (p *NetworkWorkerPool) Run(ctx context.Context, workerCount int, fn func(wo
 	for i := 0; i < workerCount; i++ {
 		done.Add(1)
 		job := networkWorkerJob{
-			ctx:      ctx,
 			workerID: i,
 			fn:       fn,
 			results:  results,

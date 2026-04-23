@@ -312,11 +312,11 @@ func TestNewSingleDownloader_TransportReuse(t *testing.T) {
 	d1 := NewSingleDownloader("test-id-1", nil, nil, runtime)
 	d2 := NewSingleDownloader("test-id-2", nil, nil, runtime)
 
-	t1, ok := d1.Client.Transport.(*http.Transport)
+	t1, ok := d1.probeClient().Transport.(*http.Transport)
 	if !ok {
 		t.Fatal("expected downloader client transport to be *http.Transport")
 	}
-	t2, ok := d2.Client.Transport.(*http.Transport)
+	t2, ok := d2.probeClient().Transport.(*http.Transport)
 	if !ok {
 		t.Fatal("expected downloader client transport to be *http.Transport")
 	}
@@ -329,11 +329,11 @@ func TestNewSingleDownloader_TransportIsolationByProxy(t *testing.T) {
 	d1 := NewSingleDownloader("test-id-1", nil, nil, &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:8080"})
 	d2 := NewSingleDownloader("test-id-2", nil, nil, &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:9090"})
 
-	t1, ok := d1.Client.Transport.(*http.Transport)
+	t1, ok := d1.probeClient().Transport.(*http.Transport)
 	if !ok {
 		t.Fatal("expected downloader client transport to be *http.Transport")
 	}
-	t2, ok := d2.Client.Transport.(*http.Transport)
+	t2, ok := d2.probeClient().Transport.(*http.Transport)
 	if !ok {
 		t.Fatal("expected downloader client transport to be *http.Transport")
 	}
