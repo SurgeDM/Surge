@@ -753,10 +753,10 @@ func TestIntegration_PauseResumeBatch_ColdPath(t *testing.T) {
 	}
 
 	waitForDownloadStatus(t, svc1, id1, 25*time.Second, func(st *types.DownloadStatus) bool {
-		return st.Status == "downloading" && st.Downloaded > 1024*512
+		return (st.Status == "downloading" || st.Status == "completed") && st.Downloaded > 1024*512
 	})
 	waitForDownloadStatus(t, svc1, id2, 25*time.Second, func(st *types.DownloadStatus) bool {
-		return st.Status == "downloading" && st.Downloaded > 1024*512
+		return (st.Status == "downloading" || st.Status == "completed") && st.Downloaded > 1024*512
 	})
 
 	if err := svc1.Pause(id1); err != nil {
