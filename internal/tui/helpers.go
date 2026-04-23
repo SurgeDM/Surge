@@ -40,7 +40,7 @@ func (m *RootModel) refreshLogViewportContent() {
 	}
 
 	// Render each entry at the viewport width so the content fills the pane.
-	// Lines wider than the viewport will be clipped during rendering.
+	// WrapText pre-wraps lines so no content is clipped during rendering.
 	wrapStyle := lipgloss.NewStyle().Width(width).Align(lipgloss.Left)
 
 	var wrappedEntries []string

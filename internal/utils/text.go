@@ -45,10 +45,9 @@ func WrapText(text string, width int) string {
 				// Handle words longer than width by hard-wrapping them
 				for runewidth.StringWidth(word) > width {
 					// Find where to break
-					sub, w := truncateToWidth(word, width)
+					sub := truncateToWidth(word, width)
 					result = append(result, sub)
 					word = word[len(sub):]
-					_ = w
 				}
 				currentLine.WriteString(word)
 				currentLineWidth = runewidth.StringWidth(word)
@@ -70,8 +69,8 @@ func WrapText(text string, width int) string {
 	return strings.Join(result, "\n")
 }
 
-// truncateToWidth truncates a string to a visual width and returns the truncated string and its actual width.
-func truncateToWidth(s string, width int) (string, int) {
+// truncateToWidth truncates a string to a visual width and returns the truncated string.
+func truncateToWidth(s string, width int) string {
 	var res strings.Builder
 	var w int
 	for _, r := range s {
@@ -82,7 +81,7 @@ func truncateToWidth(s string, width int) (string, int) {
 		res.WriteRune(r)
 		w += rw
 	}
-	return res.String(), w
+	return res.String()
 }
 
 // Truncate truncates a string to a maximum visual width and adds an ellipsis if needed.
@@ -97,12 +96,12 @@ func Truncate(s string, limit int) string {
 		return "…"
 	}
 
-	sub, _ := truncateToWidth(s, limit-1)
+	sub := truncateToWidth(s, limit-1)
 	return sub + "…"
 }
 
-// TruncateMiddle truncates a string in the middle to a maximum visual width.
-func TruncateMiddle(s string, limit int) string {
+// truncateMiddle truncates a string in the middle to a maximum visual width.
+func truncateMiddle(s string, limit int) string {
 	if limit <= 0 {
 		return ""
 	}
@@ -116,7 +115,7 @@ func TruncateMiddle(s string, limit int) string {
 	leftLimit := (limit - 1) / 2
 	rightLimit := limit - 1 - leftLimit
 
-	left, _ := truncateToWidth(s, leftLimit)
+	left := truncateToWidth(s, leftLimit)
 
 	// For the right part, we need to find how many characters from the end fit in rightLimit
 	runes := []rune(s)

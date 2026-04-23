@@ -72,6 +72,18 @@ func TestWrapText(t *testing.T) {
 			width:    8,
 			expected: "hello 🌟\nworld",
 		},
+		{
+			name:     "Hard wrap mid-sentence",
+			text:     "short supercalifragilisticexpialidocious",
+			width:    10,
+			expected: "short\nsupercalif\nragilistic\nexpialidoc\nious",
+		},
+		{
+			name:     "Width 1",
+			text:     "abc",
+			width:    1,
+			expected: "a\nb\nc",
+		},
 	}
 
 	for _, tt := range tests {
@@ -91,6 +103,7 @@ func TestTruncate(t *testing.T) {
 		{"ASCII", "hello world", 5, "hell…"},
 		{"Emoji", "🌟🌟🌟", 4, "🌟…"}, // 🌟 is width 2, so 🌟 is 2, next 🌟 would make it 4, but limit-1 is 3. So only one 🌟 fits.
 		{"CJK", "你好世界", 5, "你好…"}, // 你是2, 好的2, 总共4. 世是2, 总共6 > 5. 所以只有你好.
+		{"Limit 1", "hello", 1, "…"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -111,7 +124,25 @@ func TestTruncateMiddle(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, TruncateMiddle(tt.text, tt.limit))
+			assert.Equal(t, tt.expected, truncateMiddle(tt.text, tt.limit))
+		})
+	}
+}
+
+func TestTruncateMiddleEdgeCases(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		limit    int
+		expected string
+	}{
+		{"Limit 1", "hello", 1, "…"},
+		{"Limit 2", "hello", 2, "h…"},
+		{"Limit 3", "hello", 3, "h…o"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, truncateMiddle(tt.text, tt.limit))
 		})
 	}
 }

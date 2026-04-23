@@ -31,19 +31,27 @@ func (NoKeys) FullHelp() [][]key.Binding { return nil }
 
 // View renders the confirmation modal content (without the box wrapper or help text)
 func (m ConfirmationModal) view() string {
-	detailStyle := lipgloss.NewStyle().
-		Foreground(colors.Magenta()).
-		Bold(true)
+	return m.renderBody(0)
+}
 
-	// Build content - just message and detail (no help)
-	// We wrap these manually to the modal width in RenderWithBtopBox
-	content := m.Message
+// renderBody handles joining message and detail with a gap and optional wrapping.
+func (m ConfirmationModal) renderBody(width int) string {
+	msg := m.Message
+	det := m.Detail
 
-	if m.Detail != "" {
+	if width > 0 {
+		msg = utils.WrapText(msg, width)
+		if det != "" {
+			det = utils.WrapText(det, width)
+		}
+	}
+
+	content := msg
+	if det != "" {
 		content = lipgloss.JoinVertical(lipgloss.Center,
 			content,
 			"",
-			detailStyle.Render(m.Detail),
+			getDetailStyle().Render(det),
 		)
 	}
 
@@ -73,26 +81,8 @@ func (m ConfirmationModal) RenderWithBtopBox(
 		Align(lipgloss.Center)
 	helpText := helpStyle.Render(m.Help.View(m.Keys))
 
-	detailStyle := lipgloss.NewStyle().
-		Foreground(colors.Magenta()).
-		Bold(true)
-
-	// Ensure message and detail are wrapped to innerWidth
-	wrappedMessage := utils.WrapText(m.Message, innerWidth)
-	wrappedDetail := ""
-	if m.Detail != "" {
-		wrappedDetail = utils.WrapText(m.Detail, innerWidth)
-	}
-
-	// Re-build content with wrapped text
-	mainContent := wrappedMessage
-	if wrappedDetail != "" {
-		mainContent = lipgloss.JoinVertical(lipgloss.Center,
-			mainContent,
-			"",
-			detailStyle.Render(wrappedDetail),
-		)
-	}
+	// Ensure message and detail are wrapped to innerWidth and joined
+	mainContent := m.renderBody(innerWidth)
 
 	// Calculate heights
 	mainContentHeight := lipgloss.Height(mainContent)
@@ -159,4 +149,10 @@ func (m ConfirmationModal) Centered(width, height int) string {
 
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center,
 		boxStyle.Render(fullContent))
+}
+
+func getDetailStyle() lipgloss.Style {
+	return lipgloss.NewStyle().
+		Foreground(colors.Magenta()).
+		Bold(true)
 }
