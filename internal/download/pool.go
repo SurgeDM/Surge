@@ -507,6 +507,11 @@ func (p *TaskPool) GetStatus(id string) *types.DownloadStatus {
 }
 
 // GetConnectionManager returns the shared connection pool for this task pool.
+//
+// NOTE: This performs a type assertion to the concrete *network.ConnectionManager.
+// If a non-standard HTTPClientFactory implementation is injected into the pool,
+// this will return nil and wiring (e.g. in LifecycleManager) will fall back to
+// isolated connection pools.
 func (p *TaskPool) GetConnectionManager() *network.ConnectionManager {
 	if p.execution == nil {
 		return nil
