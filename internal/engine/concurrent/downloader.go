@@ -262,11 +262,18 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		d.State.SetCancelFunc(cancel)
 	}
 
-	// 1. Bootstrap Phase: Acquire transport with standard limit for metadata discovery
-	bootstrapTransport := engine.DefaultNetworkPool.AcquireTransport(d.Runtime.ProxyURL, d.Runtime.CustomDNS, d.Runtime.GetMaxConnectionsPerHost())
-	defer engine.DefaultNetworkPool.ReleaseTransport(bootstrapTransport)
+	// Acquire a single stable transport for the entire download session.
+	var proxyURL, customDNS string
+	if d.Runtime != nil {
+		proxyURL = d.Runtime.ProxyURL
+		customDNS = d.Runtime.CustomDNS
+	}
 
-	bootstrapClient := &http.Client{Transport: bootstrapTransport}
+	// Standardize on PoolMaxConnsPerHost for probes to match the eventual download path
+	transport := engine.DefaultNetworkPool.AcquireTransport(proxyURL, customDNS, types.PoolMaxConnsPerHost)
+	defer engine.DefaultNetworkPool.ReleaseTransport(transport)
+
+	bootstrapClient := &http.Client{Transport: transport}
 	d.applyClientSettings(bootstrapClient)
 
 	// Determine connections and chunk size
@@ -282,17 +289,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	numConns := d.getInitialConnections(fileSize)
 	chunkSize := d.determineChunkSize(fileSize, numConns)
 
-	// 2. Download Phase: Acquire transport with a limit that accounts for actual workers + hedging
-	hedgeCount := d.Runtime.GetDialHedgeCount()
-	requiredLimit := numConns + hedgeCount
-	if requiredLimit < d.Runtime.GetMaxConnectionsPerHost() {
-		requiredLimit = d.Runtime.GetMaxConnectionsPerHost()
-	}
-
-	transport := engine.DefaultNetworkPool.AcquireTransport(d.Runtime.ProxyURL, d.Runtime.CustomDNS, requiredLimit)
-	defer engine.DefaultNetworkPool.ReleaseTransport(transport)
-
-	// Create tuned HTTP client for concurrent downloads
+	// Create tuned HTTP client for concurrent downloads reusing the same transport
 	client := &http.Client{Transport: transport}
 	d.applyClientSettings(client)
 
@@ -314,6 +311,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	}
 
 	// HEDGED DIALING: Pre-warm connections to bypass slow dials
+	hedgeCount := d.Runtime.GetDialHedgeCount()
 	if hedgeCount > 0 {
 		utils.Debug("Pre-warming %d connections (hedge=%d)", numConns, hedgeCount)
 		d.prewarmConnections(downloadCtx, client, numConns, hedgeCount, workerMirrors)

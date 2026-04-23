@@ -85,16 +85,13 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 	var resp *http.Response
 
 	var proxyURL, customDNS string
-	maxConns := types.PerHostMax
 	if runCfg != nil {
 		proxyURL = runCfg.ProxyURL
 		customDNS = runCfg.CustomDNS
-		if runCfg.MaxConnectionsPerHost > 0 {
-			maxConns = runCfg.MaxConnectionsPerHost
-		}
 	}
 
-	transport := engine.DefaultNetworkPool.AcquireTransport(proxyURL, customDNS, maxConns)
+	// Standardize on PoolMaxConnsPerHost for probes to match the eventual download path
+	transport := engine.DefaultNetworkPool.AcquireTransport(proxyURL, customDNS, types.PoolMaxConnsPerHost)
 	defer engine.DefaultNetworkPool.ReleaseTransport(transport)
 
 	client := &http.Client{
