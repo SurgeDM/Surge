@@ -268,7 +268,6 @@ func getProbeClient(runCfg *config.RuntimeConfig, connMgr *network.ConnectionMan
 	return connMgr.ProbeClient(runCfg)
 }
 
-
 // ProbeMirrors is the convenience wrapper for callers that need mirror probing
 // to honor the saved proxy setting but do not already hold a live settings snapshot.
 func ProbeMirrors(ctx context.Context, mirrors []string) (valid []string, errs map[string]error) {

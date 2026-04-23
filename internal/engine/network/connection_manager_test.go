@@ -73,14 +73,14 @@ func TestConnectionManager_TransportIsolationByHedgeCount(t *testing.T) {
 
 func TestConnectionManager_ProbeVsConcurrentReuse(t *testing.T) {
 	mgr := NewConnectionManager()
-	
+
 	downloadRuntime := &types.RuntimeConfig{
 		MaxConnectionsPerHost: 8,
-		ProxyURL: "http://proxy:8080",
+		ProxyURL:              "http://proxy:8080",
 	}
 	probeRuntime := &config.RuntimeConfig{
 		MaxConnectionsPerHost: 8,
-		ProxyURL: "http://proxy:8080",
+		ProxyURL:              "http://proxy:8080",
 	}
 
 	cConcurrent := mgr.ConcurrentClient(downloadRuntime)

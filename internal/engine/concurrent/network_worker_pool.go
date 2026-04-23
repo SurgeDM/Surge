@@ -115,4 +115,3 @@ func (p *NetworkWorkerPool) worker() {
 		}
 	}
 }
-
