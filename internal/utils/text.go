@@ -40,7 +40,6 @@ func WrapText(text string, width int) string {
 				if currentLineWidth > 0 {
 					result = append(result, currentLine.String())
 					currentLine.Reset()
-					currentLineWidth = 0
 				}
 
 				// Handle words longer than width by hard-wrapping them

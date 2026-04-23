@@ -64,7 +64,7 @@ func (m ConfirmationModal) RenderWithBtopBox(
 	innerHeight := m.Height - boxFrameY
 
 	// Get content without help
-	mainContent := m.view()
+	// mainContent is defined and populated lower down after wrapping
 
 	// Style and center help text
 	helpStyle := lipgloss.NewStyle().
@@ -85,7 +85,7 @@ func (m ConfirmationModal) RenderWithBtopBox(
 	}
 
 	// Re-build content with wrapped text
-	mainContent = wrappedMessage
+	mainContent := wrappedMessage
 	if wrappedDetail != "" {
 		mainContent = lipgloss.JoinVertical(lipgloss.Center,
 			mainContent,
