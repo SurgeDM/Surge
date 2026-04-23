@@ -34,11 +34,9 @@ func TestConcurrentDownloader_ReusesConnectionAcrossDownloads(t *testing.T) {
 	defer cleanup()
 
 	exec := &types.ExecutionDeps{
-		HTTPClients:    network.NewConnectionManager(),
-		BufferPools:    network.NewBufferPoolManager(),
-		NetworkWorkers: NewNetworkWorkerPool(1),
+		HTTPClients: network.NewConnectionManager(),
+		BufferPools: network.NewBufferPoolManager(),
 	}
-	defer exec.NetworkWorkers.Shutdown()
 
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerHost: 1,
@@ -87,11 +85,9 @@ func TestConcurrentDownloader_ProbeAndDownloadShareTransport(t *testing.T) {
 	manager := network.NewConnectionManager()
 
 	exec := &types.ExecutionDeps{
-		HTTPClients:    manager,
-		BufferPools:    network.NewBufferPoolManager(),
-		NetworkWorkers: NewNetworkWorkerPool(1),
+		HTTPClients: manager,
+		BufferPools: network.NewBufferPoolManager(),
 	}
-	defer exec.NetworkWorkers.Shutdown()
 
 	probeCfg := &config.RuntimeConfig{MaxConnectionsPerHost: 1}
 	if _, err := processing.ProbeServerWithProxy(context.Background(), server.URL(), "", nil, probeCfg, manager); err != nil {

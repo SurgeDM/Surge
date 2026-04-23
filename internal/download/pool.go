@@ -8,7 +8,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/engine/concurrent"
 	"github.com/SurgeDM/Surge/internal/engine/network"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -35,7 +34,6 @@ type TaskPool struct {
 	workerWG     sync.WaitGroup
 }
 
-
 var (
 	// gracefulShutdownPauseSoftTimeout controls when we emit a warning that
 	// pausing is taking longer than expected. It is intentionally soft; shutdown
@@ -57,7 +55,6 @@ func NewTaskPool(progressCh chan<- any, maxDownloads int) *TaskPool {
 	}
 	connections := network.NewConnectionManager()
 	buffers := network.NewBufferPoolManager()
-	networkWorkers := concurrent.NewNetworkWorkerPool(maxDownloads * types.PerHostMax)
 
 	pool := &TaskPool{
 		taskChan:     make(chan types.DownloadConfig, 100), // We make it buffered to avoid blocking add
@@ -67,9 +64,8 @@ func NewTaskPool(progressCh chan<- any, maxDownloads int) *TaskPool {
 		queued:       make(map[string]types.DownloadConfig),
 		maxDownloads: maxDownloads,
 		execution: &types.ExecutionDeps{
-			HTTPClients:    connections,
-			BufferPools:    buffers,
-			NetworkWorkers: networkWorkers,
+			HTTPClients: connections,
+			BufferPools: buffers,
 		},
 	}
 	for i := 0; i < maxDownloads; i++ {
@@ -78,7 +74,6 @@ func NewTaskPool(progressCh chan<- any, maxDownloads int) *TaskPool {
 	}
 	return pool
 }
-
 
 // syncConfigFromState syncs Filename, DestPath, and Mirrors from the associated state.
 func syncConfigFromState(cfg *types.DownloadConfig) {
@@ -590,9 +585,6 @@ drainLoop:
 	// wg.Wait() above ensures all download goroutines have returned, meaning
 	// no more calls to Run() or HTTPClients can occur.
 	if p.execution != nil {
-		if p.execution.NetworkWorkers != nil {
-			p.execution.NetworkWorkers.Shutdown()
-		}
 		if p.execution.HTTPClients != nil {
 			p.execution.HTTPClients.Shutdown()
 		}

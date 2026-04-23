@@ -39,9 +39,8 @@ func GetDefaultExecution() *types.ExecutionDeps {
 	}
 
 	exec := &types.ExecutionDeps{
-		HTTPClients:    network.NewConnectionManager(),
-		BufferPools:    network.NewBufferPoolManager(),
-		NetworkWorkers: NewNetworkWorkerPool(types.PerHostMax),
+		HTTPClients: network.NewConnectionManager(),
+		BufferPools: network.NewBufferPoolManager(),
 	}
 	defaultExec.Store(exec)
 	return exec
@@ -54,7 +53,6 @@ func ShutdownDefaultExecution() {
 	defer defaultMu.Unlock()
 
 	if exec := defaultExec.Swap(nil); exec != nil {
-		exec.NetworkWorkers.Shutdown()
 		exec.HTTPClients.Shutdown()
 	}
 }
@@ -232,9 +230,6 @@ func (d *ConcurrentDownloader) concurrentClient() *http.Client {
 	return d.execution().HTTPClients.ConcurrentClient(d.Runtime)
 }
 
-func (d *ConcurrentDownloader) workerRunner() types.NetworkWorkerRunner {
-	return d.execution().NetworkWorkers
-}
 
 // Download downloads a file using multiple concurrent connections
 // Uses pre-probed metadata (file size already known)
@@ -489,17 +484,31 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		queue.Close()
 	}()
 
-	workerErrors := d.workerRunner().Run(downloadCtx, numConns, func(workerID int) error {
-		return d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
-	})
+	// Start workers inline
+	var wg sync.WaitGroup
+	workerErrors := make(chan error, numConns)
+
+	for i := 0; i < numConns; i++ {
+		wg.Add(1)
+		go func(workerID int) {
+			defer wg.Done()
+			if err := d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client); err != nil && err != context.Canceled {
+				workerErrors <- err
+				cancel() // trigger context cancellation on first fatal error to unblock other workers
+			}
+		}(i)
+	}
+
+	go func() {
+		wg.Wait()
+		close(workerErrors)
+	}()
 
 	// Check for errors or pause
 	var downloadErr error
 	for err := range workerErrors {
 		if err != nil {
 			downloadErr = err
-			// Trigger context cancellation on first fatal error to unblock other workers
-			cancel()
 		}
 	}
 

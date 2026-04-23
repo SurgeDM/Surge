@@ -1,7 +1,6 @@
 package types
 
 import (
-	"context"
 	"net/http"
 	"sync"
 	"time"
@@ -85,18 +84,10 @@ type BufferPoolFactory interface {
 	Get(size int) *sync.Pool
 }
 
-// NetworkWorkerRunner executes logical download workers on a persistent worker pool.
-type NetworkWorkerRunner interface {
-	Run(ctx context.Context, workerCount int, fn func(workerID int) error) <-chan error
-	Size() int
-	Shutdown()
-}
-
 // ExecutionDeps groups shared runtime-scoped execution resources for concurrent downloads.
 type ExecutionDeps struct {
-	HTTPClients    HTTPClientFactory
-	BufferPools    BufferPoolFactory
-	NetworkWorkers NetworkWorkerRunner
+	HTTPClients HTTPClientFactory
+	BufferPools BufferPoolFactory
 }
 
 // RuntimeConfig holds dynamic settings that can override defaults
