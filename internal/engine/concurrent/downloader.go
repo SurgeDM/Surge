@@ -720,8 +720,7 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 				return
 			}
 
-			// Connection is now hot in the pool.
-			// Drain body to ensure it can be returned to idle pool, then signal readiness.
+			// Drain body and close to return connection to idle pool, then signal readiness.
 			_, _ = io.Copy(io.Discard, resp.Body)
 			_ = resp.Body.Close()
 			ready <- struct{}{}

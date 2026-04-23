@@ -44,7 +44,10 @@ func TestPrewarmConnections_Reuse(t *testing.T) {
 		},
 	}
 
-	req, _ := http.NewRequestWithContext(httptrace.WithClientTrace(ctx, trace), http.MethodGet, server.URL(), nil)
+	req, err := http.NewRequestWithContext(httptrace.WithClientTrace(ctx, trace), http.MethodGet, server.URL(), nil)
+	if err != nil {
+		t.Fatalf("Failed to build request: %v", err)
+	}
 	req.Header.Set("Range", "bytes=0-0")
 	resp, err := client.Do(req)
 	if err != nil {
