@@ -2,13 +2,10 @@ package concurrent
 
 import (
 	"context"
-	"crypto/tls"
 	"fmt"
 	"io"
 	"math"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -16,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/engine"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
@@ -188,75 +186,25 @@ func createTasks(fileSize, chunkSize int64) []types.Task {
 	return tasks
 }
 
-// newConcurrentClient creates an http.Client tuned for concurrent downloads
-func (d *ConcurrentDownloader) newConcurrentClient(numConns int) *http.Client {
-	// Ensure we have enough connections per host
-	maxConns := d.Runtime.GetMaxConnectionsPerHost()
-	if numConns > maxConns {
-		maxConns = numConns
-	}
-
-	var proxyFunc func(*http.Request) (*url.URL, error)
-	if d.Runtime.ProxyURL != "" {
-		if parsedURL, err := url.Parse(d.Runtime.ProxyURL); err == nil {
-			proxyFunc = http.ProxyURL(parsedURL)
-		} else {
-			// Fallback or log error? For now fallback to environment
-			utils.Debug("Invalid proxy URL %s: %v", d.Runtime.ProxyURL, err)
-			proxyFunc = http.ProxyFromEnvironment
+func (d *ConcurrentDownloader) applyClientSettings(client *http.Client) {
+	// Preserve headers on redirects for authenticated downloads
+	// By default, Go strips sensitive headers (Cookie, Authorization) on cross-domain redirects.
+	// Since these headers were explicitly provided by the browser for this download, we forward them.
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("stopped after 10 redirects")
 		}
-	} else {
-		proxyFunc = http.ProxyFromEnvironment
-	}
-
-	transport := &http.Transport{
-		// Connection pooling
-		MaxIdleConns:        types.DefaultMaxIdleConns,
-		MaxIdleConnsPerHost: maxConns + d.Runtime.GetDialHedgeCount() + 2, // Host buffer for hedges
-		MaxConnsPerHost:     maxConns,
-		Proxy:               proxyFunc,
-
-		// Timeouts to prevent hung connections
-		IdleConnTimeout:       types.DefaultIdleConnTimeout,
-		TLSHandshakeTimeout:   types.DefaultTLSHandshakeTimeout,
-		ResponseHeaderTimeout: types.DefaultResponseHeaderTimeout,
-		ExpectContinueTimeout: types.DefaultExpectContinueTimeout,
-
-		// Performance tuning
-		DisableCompression: true,  // Files are usually already compressed
-		ForceAttemptHTTP2:  false, // FORCE HTTP/1.1 for multiple TCP connections
-		TLSNextProto:       make(map[string]func(authority string, c *tls.Conn) http.RoundTripper),
-	}
-
-	dialer := &net.Dialer{
-		Timeout:   types.DialTimeout,
-		KeepAlive: types.KeepAliveDuration,
-	}
-
-	utils.ConfigureDialer(dialer, d.Runtime.CustomDNS)
-	transport.DialContext = dialer.DialContext
-
-	return &http.Client{
-		Transport: transport,
-		// Preserve headers on redirects for authenticated downloads
-		// By default, Go strips sensitive headers (Cookie, Authorization) on cross-domain redirects.
-		// Since these headers were explicitly provided by the browser for this download, we forward them.
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
+		// Copy headers from original request to redirect request
+		if len(via) > 0 {
+			utils.CopyRedirectHeaders(req, via[0])
+		}
+		// Re-apply explicit custom headers down the redirect chain
+		for key, val := range d.Headers {
+			if key != "Range" {
+				req.Header.Set(key, val)
 			}
-			// Copy headers from original request to redirect request
-			if len(via) > 0 {
-				utils.CopyRedirectHeaders(req, via[0])
-			}
-			// Re-apply explicit custom headers down the redirect chain
-			for key, val := range d.Headers {
-				if key != "Range" {
-					req.Header.Set(key, val)
-				}
-			}
-			return nil
-		},
+		}
+		return nil
 	}
 }
 
@@ -314,8 +262,12 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		d.State.SetCancelFunc(cancel)
 	}
 
-	bootstrapClient := d.newConcurrentClient(1)
-	defer bootstrapClient.CloseIdleConnections()
+	// 1. Bootstrap Phase: Acquire transport with standard limit for metadata discovery
+	bootstrapTransport := engine.DefaultNetworkPool.AcquireTransport(d.Runtime.ProxyURL, d.Runtime.CustomDNS, d.Runtime.GetMaxConnectionsPerHost())
+	defer engine.DefaultNetworkPool.ReleaseTransport(bootstrapTransport)
+
+	bootstrapClient := &http.Client{Transport: bootstrapTransport}
+	d.applyClientSettings(bootstrapClient)
 
 	// Determine connections and chunk size
 	if fileSize <= 0 {
@@ -330,9 +282,19 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	numConns := d.getInitialConnections(fileSize)
 	chunkSize := d.determineChunkSize(fileSize, numConns)
 
+	// 2. Download Phase: Acquire transport with a limit that accounts for actual workers + hedging
+	hedgeCount := d.Runtime.GetDialHedgeCount()
+	requiredLimit := numConns + hedgeCount
+	if requiredLimit < d.Runtime.GetMaxConnectionsPerHost() {
+		requiredLimit = d.Runtime.GetMaxConnectionsPerHost()
+	}
+
+	transport := engine.DefaultNetworkPool.AcquireTransport(d.Runtime.ProxyURL, d.Runtime.CustomDNS, requiredLimit)
+	defer engine.DefaultNetworkPool.ReleaseTransport(transport)
+
 	// Create tuned HTTP client for concurrent downloads
-	client := d.newConcurrentClient(numConns)
-	defer client.CloseIdleConnections()
+	client := &http.Client{Transport: transport}
+	d.applyClientSettings(client)
 
 	// Initialize chunk visualization
 	if d.State != nil {
@@ -352,7 +314,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	}
 
 	// HEDGED DIALING: Pre-warm connections to bypass slow dials
-	hedgeCount := d.Runtime.GetDialHedgeCount()
 	if hedgeCount > 0 {
 		utils.Debug("Pre-warming %d connections (hedge=%d)", numConns, hedgeCount)
 		d.prewarmConnections(downloadCtx, client, numConns, hedgeCount, workerMirrors)

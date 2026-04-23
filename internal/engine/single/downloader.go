@@ -4,13 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"sync"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/engine"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -19,7 +18,6 @@ import (
 // NOTE: Pause/resume is NOT supported because this downloader is only used when
 // the server doesn't support Range headers. If interrupted, the download must restart.
 type SingleDownloader struct {
-	Client       *http.Client
 	ProgressChan chan<- any           // Channel for events (start/complete/error)
 	ID           string               // Download ID
 	State        *types.ProgressState // Shared state for TUI polling
@@ -27,14 +25,6 @@ type SingleDownloader struct {
 	TotalSize    int64
 	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
 }
-
-type singleTransportKey struct {
-	proxyURL  string
-	maxConns  int
-	customDNS string
-}
-
-var singleTransportCache sync.Map // map[singleTransportKey]*http.Transport
 
 var bufPool = sync.Pool{
 	New: func() any {
@@ -49,86 +39,30 @@ func NewSingleDownloader(id string, progressCh chan<- any, state *types.Progress
 		runtime = &types.RuntimeConfig{}
 	}
 
-	sd := &SingleDownloader{
+	return &SingleDownloader{
 		ProgressChan: progressCh,
 		ID:           id,
 		State:        state,
 		Runtime:      runtime,
 	}
-	sd.Client = newSingleClient(runtime, sd)
-	return sd
 }
 
-func newSingleClient(runtime *types.RuntimeConfig, sd *SingleDownloader) *http.Client {
-	transport := getSharedSingleTransport(runtime)
-
-	return &http.Client{
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
-			}
-			if len(via) > 0 {
-				utils.CopyRedirectHeaders(req, via[0])
-			}
-			if sd != nil && sd.Headers != nil {
-				for key, val := range sd.Headers {
-					if key != "Range" {
-						req.Header.Set(key, val)
-					}
+func (d *SingleDownloader) applyClientSettings(client *http.Client) {
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return fmt.Errorf("stopped after 10 redirects")
+		}
+		if len(via) > 0 {
+			utils.CopyRedirectHeaders(req, via[0])
+		}
+		if d.Headers != nil {
+			for key, val := range d.Headers {
+				if key != "Range" {
+					req.Header.Set(key, val)
 				}
 			}
-			return nil
-		},
-	}
-}
-
-func getSharedSingleTransport(runtime *types.RuntimeConfig) *http.Transport {
-	key := singleTransportKey{
-		proxyURL:  runtime.ProxyURL,
-		maxConns:  runtime.GetMaxConnectionsPerHost(),
-		customDNS: runtime.CustomDNS,
-	}
-
-	if cached, ok := singleTransportCache.Load(key); ok {
-		return cached.(*http.Transport)
-	}
-
-	transport := newSingleTransport(runtime)
-	actual, _ := singleTransportCache.LoadOrStore(key, transport)
-	return actual.(*http.Transport)
-}
-
-func newSingleTransport(runtime *types.RuntimeConfig) *http.Transport {
-	proxyFunc := http.ProxyFromEnvironment
-	if runtime.ProxyURL != "" {
-		if parsedURL, err := url.Parse(runtime.ProxyURL); err == nil {
-			proxyFunc = http.ProxyURL(parsedURL)
-		} else {
-			utils.Debug("Invalid proxy URL %s: %v", runtime.ProxyURL, err)
 		}
-	}
-
-	dialer := &net.Dialer{
-		Timeout:   types.DialTimeout,
-		KeepAlive: types.KeepAliveDuration,
-	}
-
-	utils.ConfigureDialer(dialer, runtime.CustomDNS)
-
-	return &http.Transport{
-		MaxIdleConns:        types.DefaultMaxIdleConns,
-		MaxIdleConnsPerHost: runtime.GetMaxConnectionsPerHost(),
-		MaxConnsPerHost:     runtime.GetMaxConnectionsPerHost(),
-		Proxy:               proxyFunc,
-
-		IdleConnTimeout:       types.DefaultIdleConnTimeout,
-		TLSHandshakeTimeout:   types.DefaultTLSHandshakeTimeout,
-		ResponseHeaderTimeout: types.DefaultResponseHeaderTimeout,
-		ExpectContinueTimeout: types.DefaultExpectContinueTimeout,
-
-		DisableCompression: true,
-		DialContext:        dialer.DialContext,
+		return nil
 	}
 }
 
@@ -136,7 +70,11 @@ func newSingleTransport(runtime *types.RuntimeConfig) *http.Transport {
 // This is used for servers that don't support Range requests.
 // If interrupted, the download cannot be resumed and must restart from the beginning.
 func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string, fileSize int64, filename string) (err error) {
-	defer d.Client.CloseIdleConnections()
+	transport := engine.DefaultNetworkPool.AcquireTransport(d.Runtime.ProxyURL, d.Runtime.CustomDNS, d.Runtime.GetMaxConnectionsPerHost())
+	defer engine.DefaultNetworkPool.ReleaseTransport(transport)
+
+	client := &http.Client{Transport: transport}
+	d.applyClientSettings(client)
 
 	if d.State != nil {
 		d.State.SetURL(rawurl)
@@ -153,7 +91,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	}
 	req.Header.Set("User-Agent", d.Runtime.GetUserAgent())
 
-	resp, err := d.Client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}

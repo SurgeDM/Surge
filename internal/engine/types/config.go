@@ -33,7 +33,7 @@ const (
 
 // HTTP Client Tuning
 const (
-	DefaultMaxIdleConns          = 100
+	DefaultMaxIdleConns          = 100 // Standard fallback
 	DefaultIdleConnTimeout       = 90 * time.Second
 	DefaultTLSHandshakeTimeout   = 10 * time.Second
 	DefaultResponseHeaderTimeout = 15 * time.Second
@@ -41,6 +41,11 @@ const (
 	DialTimeout                  = 10 * time.Second
 	KeepAliveDuration            = 30 * time.Second
 	ProbeTimeout                 = 30 * time.Second
+
+	// NetworkPool Tuning
+	PoolMaxIdleConns        = 512
+	PoolMaxIdleConnsPerHost = 128
+	PoolMaxConnsPerHost     = 512
 )
 
 // Channel buffer sizes

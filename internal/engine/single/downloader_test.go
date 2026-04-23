@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/engine"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -309,34 +310,27 @@ func TestNewSingleDownloader(t *testing.T) {
 
 func TestNewSingleDownloader_TransportReuse(t *testing.T) {
 	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 8}
-	d1 := NewSingleDownloader("test-id-1", nil, nil, runtime)
-	d2 := NewSingleDownloader("test-id-2", nil, nil, runtime)
+	t1 := engine.DefaultNetworkPool.AcquireTransport(runtime.ProxyURL, runtime.CustomDNS, runtime.GetMaxConnectionsPerHost())
+	defer engine.DefaultNetworkPool.ReleaseTransport(t1)
 
-	t1, ok := d1.Client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("expected downloader client transport to be *http.Transport")
-	}
-	t2, ok := d2.Client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("expected downloader client transport to be *http.Transport")
-	}
+	t2 := engine.DefaultNetworkPool.AcquireTransport(runtime.ProxyURL, runtime.CustomDNS, runtime.GetMaxConnectionsPerHost())
+	defer engine.DefaultNetworkPool.ReleaseTransport(t2)
+
 	if t1 != t2 {
 		t.Fatal("expected transport reuse for identical runtime config")
 	}
 }
 
 func TestNewSingleDownloader_TransportIsolationByProxy(t *testing.T) {
-	d1 := NewSingleDownloader("test-id-1", nil, nil, &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:8080"})
-	d2 := NewSingleDownloader("test-id-2", nil, nil, &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:9090"})
+	r1 := &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:8080"}
+	r2 := &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:9090"}
 
-	t1, ok := d1.Client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("expected downloader client transport to be *http.Transport")
-	}
-	t2, ok := d2.Client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("expected downloader client transport to be *http.Transport")
-	}
+	t1 := engine.DefaultNetworkPool.AcquireTransport(r1.ProxyURL, r1.CustomDNS, r1.GetMaxConnectionsPerHost())
+	defer engine.DefaultNetworkPool.ReleaseTransport(t1)
+
+	t2 := engine.DefaultNetworkPool.AcquireTransport(r2.ProxyURL, r2.CustomDNS, r2.GetMaxConnectionsPerHost())
+	defer engine.DefaultNetworkPool.ReleaseTransport(t2)
+
 	if t1 == t2 {
 		t.Fatal("expected different transports for different proxy settings")
 	}

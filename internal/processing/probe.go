@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	neturl "net/url"
 	"strconv"
@@ -14,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/engine"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -23,12 +23,8 @@ var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
 	"Chrome/120.0.0.0 Safari/537.36"
 
 var (
-	probeClientsMu   sync.Mutex
-	probeClients     = make(map[string]*http.Client)
-	probeClientOrder []string
+	probeHostLocks sync.Map // map[string]*sync.Mutex
 )
-
-const maxProbeClients = 8
 
 // ErrProbeRequestCreation is returned when a probe request cannot be initialized.
 var ErrProbeRequestCreation = errors.New("failed to create probe request")
@@ -63,10 +59,6 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 	return ProbeServerWithProxy(ctx, rawurl, filenameHint, headers, resolveRuntimeConfig())
 }
 
-var (
-	probeHostLocks sync.Map // map[string]*sync.Mutex
-)
-
 // getProbeHostLock returns a mutex for a specific host to sequentialize probes
 func getProbeHostLock(rawurl string) *sync.Mutex {
 	parsed, err := neturl.Parse(rawurl)
@@ -92,7 +84,40 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 
 	var resp *http.Response
 
-	client := getProbeClient(runCfg)
+	var proxyURL, customDNS string
+	maxConns := types.PerHostMax
+	if runCfg != nil {
+		proxyURL = runCfg.ProxyURL
+		customDNS = runCfg.CustomDNS
+		if runCfg.MaxConnectionsPerHost > 0 {
+			maxConns = runCfg.MaxConnectionsPerHost
+		}
+	}
+
+	transport := engine.DefaultNetworkPool.AcquireTransport(proxyURL, customDNS, maxConns)
+	defer engine.DefaultNetworkPool.ReleaseTransport(transport)
+
+	client := &http.Client{
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			if len(via) > 0 {
+				copyProbeRedirectHeaders(req, via[0])
+			}
+
+			// Re-apply custom explicitly provided headers on cross-origin redirects
+			if customHeaders, ok := req.Context().Value(probeHeadersContextKey{}).(map[string]string); ok {
+				for k, v := range customHeaders {
+					if !strings.EqualFold(k, "Range") {
+						req.Header.Set(k, v)
+					}
+				}
+			}
+			return nil
+		},
+	}
 
 	// Sequentialize probes to the same host to prevent rate limiting (e.g., Google Drive)
 	hostLock := getProbeHostLock(rawurl)
@@ -253,97 +278,6 @@ func applyProbeHeaders(req *http.Request, headers map[string]string, includeRang
 	}
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", ua)
-	}
-}
-
-func getProbeClient(runCfg *config.RuntimeConfig) *http.Client {
-	probeClientsMu.Lock()
-	defer probeClientsMu.Unlock()
-
-	key := ""
-	if runCfg != nil {
-		// Quote values to prevent ambiguity when one value contains the separator
-		key = fmt.Sprintf("%q|%q", runCfg.ProxyURL, runCfg.CustomDNS)
-	}
-
-	if cached, ok := probeClients[key]; ok {
-		return cached
-	}
-
-	client := &http.Client{
-		Transport: newProbeTransport(runCfg),
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
-			}
-			if len(via) > 0 {
-				copyProbeRedirectHeaders(req, via[0])
-			}
-
-			// Re-apply custom explicitly provided headers on cross-origin redirects
-			if customHeaders, ok := req.Context().Value(probeHeadersContextKey{}).(map[string]string); ok {
-				for k, v := range customHeaders {
-					if !strings.EqualFold(k, "Range") {
-						req.Header.Set(k, v)
-					}
-				}
-			}
-			return nil
-		},
-	}
-
-	if len(probeClients) >= maxProbeClients && len(probeClientOrder) > 0 {
-		evictedKey := probeClientOrder[0]
-		probeClientOrder = probeClientOrder[1:]
-		if evictedClient, ok := probeClients[evictedKey]; ok {
-			evictedClient.CloseIdleConnections()
-			delete(probeClients, evictedKey)
-		}
-	}
-
-	probeClients[key] = client
-	probeClientOrder = append(probeClientOrder, key)
-	return client
-}
-
-func newProbeTransport(runCfg *config.RuntimeConfig) *http.Transport {
-	proxyFunc := http.ProxyFromEnvironment
-	var customDNS string
-	if runCfg != nil {
-		customDNS = runCfg.CustomDNS
-		if strings.TrimSpace(runCfg.ProxyURL) != "" {
-			if parsedURL, err := neturl.Parse(runCfg.ProxyURL); err == nil {
-				proxyFunc = http.ProxyURL(parsedURL)
-			} else {
-				utils.Debug("Invalid probe proxy URL %s: %v", runCfg.ProxyURL, err)
-			}
-		}
-	}
-
-	dialer := &net.Dialer{
-		Timeout:   types.DialTimeout,
-		KeepAlive: types.KeepAliveDuration,
-	}
-
-	utils.ConfigureDialer(dialer, customDNS)
-
-	return &http.Transport{
-		Proxy:                 proxyFunc,
-		MaxIdleConns:          types.DefaultMaxIdleConns,
-		MaxIdleConnsPerHost:   types.PerHostMax,
-		IdleConnTimeout:       types.DefaultIdleConnTimeout,
-		TLSHandshakeTimeout:   types.DefaultTLSHandshakeTimeout,
-		ResponseHeaderTimeout: types.DefaultResponseHeaderTimeout,
-		ExpectContinueTimeout: types.DefaultExpectContinueTimeout,
-		// Use tcp4 to prefer IPv4 when connecting to CDN hosts.
-		// Some CDN nodes resolve to IPv6 addresses that are unreachable
-		// on networks that have IPv6 assigned but no working IPv6 path.
-		DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
-			if network == "tcp" {
-				network = "tcp4"
-			}
-			return dialer.DialContext(ctx, network, addr)
-		},
 	}
 }
 
