@@ -20,10 +20,29 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-var defaultExecution = &types.ExecutionDeps{
-	HTTPClients:    network.NewConnectionManager(),
-	BufferPools:    network.NewBufferPoolManager(),
-	NetworkWorkers: NewNetworkWorkerPool(types.PerHostMax),
+var (
+	defaultExec     *types.ExecutionDeps
+	defaultExecOnce sync.Once
+)
+
+func getDefaultExecution() *types.ExecutionDeps {
+	defaultExecOnce.Do(func() {
+		defaultExec = &types.ExecutionDeps{
+			HTTPClients:    network.NewConnectionManager(),
+			BufferPools:    network.NewBufferPoolManager(),
+			NetworkWorkers: NewNetworkWorkerPool(types.PerHostMax),
+		}
+	})
+	return defaultExec
+}
+
+// ShutdownDefaultExecution releases global resources owned by the default execution layer.
+// Primarily used for clean test teardown to avoid goroutine leaks.
+func ShutdownDefaultExecution() {
+	if defaultExec != nil {
+		defaultExec.NetworkWorkers.Shutdown()
+		defaultExec.HTTPClients.Shutdown()
+	}
 }
 
 // ConcurrentDownloader handles multi-connection downloads
@@ -58,7 +77,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 		State:        progState,
 		activeTasks:  make(map[int]*ActiveTask),
 		Runtime:      runtime,
-		Execution:    defaultExecution,
+		Execution:    getDefaultExecution(),
 	}
 }
 
@@ -189,7 +208,7 @@ func (d *ConcurrentDownloader) execution() *types.ExecutionDeps {
 	if d.Execution != nil {
 		return d.Execution
 	}
-	return defaultExecution
+	return getDefaultExecution()
 }
 
 func (d *ConcurrentDownloader) bufferPool() *sync.Pool {

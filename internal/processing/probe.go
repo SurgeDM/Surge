@@ -22,7 +22,10 @@ var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
 	"AppleWebKit/537.36 (KHTML, like Gecko) " +
 	"Chrome/120.0.0.0 Safari/537.36"
 
-var probeConnectionManager = network.NewConnectionManager()
+var (
+	probeConnMu            sync.RWMutex
+	probeConnectionManager = network.NewConnectionManager()
+)
 
 // ErrProbeRequestCreation is returned when a probe request cannot be initialized.
 var ErrProbeRequestCreation = errors.New("failed to create probe request")
@@ -37,6 +40,8 @@ type ProbeResult struct {
 }
 
 func SetProbeConnectionManager(manager *network.ConnectionManager) {
+	probeConnMu.Lock()
+	defer probeConnMu.Unlock()
 	if manager == nil {
 		probeConnectionManager = network.NewConnectionManager()
 		return
@@ -256,6 +261,8 @@ func applyProbeHeaders(req *http.Request, headers map[string]string, includeRang
 }
 
 func getProbeClient(runCfg *config.RuntimeConfig) *http.Client {
+	probeConnMu.RLock()
+	defer probeConnMu.RUnlock()
 	return probeConnectionManager.ProbeClient(runCfg)
 }
 

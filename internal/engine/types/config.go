@@ -74,6 +74,7 @@ type DownloadConfig struct {
 // HTTPClientFactory provides shared HTTP clients for concurrent downloads.
 type HTTPClientFactory interface {
 	ConcurrentClient(runtime *RuntimeConfig) *http.Client
+	Shutdown()
 }
 
 // BufferPoolFactory provides shared byte-buffer pools keyed by buffer size.

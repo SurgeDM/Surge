@@ -2,7 +2,9 @@ package concurrent
 
 import (
 	"context"
+	"fmt"
 	"sync"
+	"sync/atomic"
 )
 
 type networkWorkerJob struct {
@@ -18,6 +20,7 @@ type NetworkWorkerPool struct {
 	size     int
 	jobs     chan networkWorkerJob
 	stopOnce sync.Once
+	stopped  atomic.Bool
 }
 
 func NewNetworkWorkerPool(size int) *NetworkWorkerPool {
@@ -38,6 +41,12 @@ func NewNetworkWorkerPool(size int) *NetworkWorkerPool {
 }
 
 func (p *NetworkWorkerPool) Run(ctx context.Context, workerCount int, fn func(workerID int) error) <-chan error {
+	if p.stopped.Load() {
+		errs := make(chan error, 1)
+		errs <- fmt.Errorf("network worker pool is stopped")
+		close(errs)
+		return errs
+	}
 	if workerCount < 1 {
 		workerCount = 1
 	}
@@ -79,6 +88,7 @@ func (p *NetworkWorkerPool) Size() int {
 
 func (p *NetworkWorkerPool) Shutdown() {
 	p.stopOnce.Do(func() {
+		p.stopped.Store(true)
 		close(p.jobs)
 	})
 }
