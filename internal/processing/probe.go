@@ -23,8 +23,9 @@ var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
 	"Chrome/120.0.0.0 Safari/537.36"
 
 var (
-	probeConnMu            sync.RWMutex
-	probeConnectionManager = network.NewConnectionManager()
+	probeConnMu sync.RWMutex
+	// defaultProbeConnMgr is used as a fallback if no explicit manager is provided to a probe.
+	defaultProbeConnMgr = network.NewConnectionManager()
 )
 
 // ErrProbeRequestCreation is returned when a probe request cannot be initialized.
@@ -39,14 +40,10 @@ type ProbeResult struct {
 	ContentType      string
 }
 
-func SetProbeConnectionManager(manager *network.ConnectionManager) {
-	probeConnMu.Lock()
-	defer probeConnMu.Unlock()
-	if manager == nil {
-		probeConnectionManager = network.NewConnectionManager()
-		return
-	}
-	probeConnectionManager = manager
+// GetDefaultProbeConnectionManager returns the shared connection manager used for probes
+// when no explicit manager is provided.
+func GetDefaultProbeConnectionManager() *network.ConnectionManager {
+	return defaultProbeConnMgr
 }
 
 func resolveRuntimeConfig() *config.RuntimeConfig {
@@ -85,8 +82,9 @@ func getProbeHostLock(rawurl string) *sync.Mutex {
 
 // ProbeServerWithProxy is the hot-path variant for callers that already know
 // the effective proxy and want probe traffic to match the eventual download path
-// without re-reading settings from disk.
-func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint string, headers map[string]string, runCfg *config.RuntimeConfig) (*ProbeResult, error) {
+// without re-reading settings from disk. Optional connMgr allows sharing
+// connection pools with the downloader.
+func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint string, headers map[string]string, runCfg *config.RuntimeConfig, connMgr ...*network.ConnectionManager) (*ProbeResult, error) {
 	utils.Debug("Probing server: %s", rawurl)
 
 	// Embed custom headers in context so CheckRedirect can use them
@@ -96,7 +94,13 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 
 	var resp *http.Response
 
-	client := getProbeClient(runCfg)
+	var mgr *network.ConnectionManager
+	if len(connMgr) > 0 && connMgr[0] != nil {
+		mgr = connMgr[0]
+	} else {
+		mgr = defaultProbeConnMgr
+	}
+	client := getProbeClient(runCfg, mgr)
 
 	// Sequentialize probes to the same host to prevent rate limiting (e.g., Google Drive)
 	hostLock := getProbeHostLock(rawurl)
@@ -260,10 +264,8 @@ func applyProbeHeaders(req *http.Request, headers map[string]string, includeRang
 	}
 }
 
-func getProbeClient(runCfg *config.RuntimeConfig) *http.Client {
-	probeConnMu.RLock()
-	defer probeConnMu.RUnlock()
-	return probeConnectionManager.ProbeClient(runCfg)
+func getProbeClient(runCfg *config.RuntimeConfig, connMgr *network.ConnectionManager) *http.Client {
+	return connMgr.ProbeClient(runCfg)
 }
 
 
@@ -274,7 +276,7 @@ func ProbeMirrors(ctx context.Context, mirrors []string) (valid []string, errs m
 }
 
 // ProbeMirrorsWithProxy preserves caller order so mirror priority remains stable.
-func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, runCfg *config.RuntimeConfig) (valid []string, errs map[string]error) {
+func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, runCfg *config.RuntimeConfig, connMgr ...*network.ConnectionManager) (valid []string, errs map[string]error) {
 	candidates := orderedUniqueMirrors(mirrors)
 	utils.Debug("Probing %d mirrors...", len(candidates))
 
@@ -299,7 +301,7 @@ func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, runCfg *config
 			probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 
-			result, err := ProbeServerWithProxy(probeCtx, target, "", nil, runCfg)
+			result, err := ProbeServerWithProxy(probeCtx, target, "", nil, runCfg, connMgr...)
 
 			outcome := mirrorProbeResult{}
 			if err != nil {

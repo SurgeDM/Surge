@@ -15,6 +15,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/network"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -40,6 +41,7 @@ type LifecycleManager struct {
 	// probeSem caps the number of simultaneous server probes so adding a
 	// large batch of downloads does not flood the network with HEAD requests.
 	probeSem chan struct{}
+	connMgr  *network.ConnectionManager
 }
 
 const (
@@ -111,6 +113,7 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 		addWithIDFunc:       addWithIDFunc,
 		isNameActive:        activeCheck,
 		probeSem:            sem,
+		connMgr:             network.NewConnectionManager(),
 	}
 }
 
@@ -127,6 +130,14 @@ func (mgr *LifecycleManager) getEngineHooks() EngineHooks {
 	mgr.hooksMu.RLock()
 	defer mgr.hooksMu.RUnlock()
 	return mgr.engineHooks
+}
+
+// SetConnectionManager overrides the default connection manager.
+// Used to align probing traffic with the engine's global connection pool.
+func (mgr *LifecycleManager) SetConnectionManager(mgr2 *network.ConnectionManager) {
+	if mgr2 != nil {
+		mgr.connMgr = mgr2
+	}
 }
 
 // GetSettings reloads disk-backed routing rules opportunistically so a long-lived
@@ -258,7 +269,7 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 		defer func() { mgr.probeSem <- struct{}{} }()
 	}
 
-	probe, probeErr := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
+	probe, probeErr := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig(), mgr.connMgr)
 	if probeErr != nil {
 		// Distinguish between terminal client errors (invalid scheme, etc) and
 		// server-side rejections or timeouts that we can optimistically ignore.

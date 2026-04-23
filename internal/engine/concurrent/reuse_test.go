@@ -85,7 +85,6 @@ func TestConcurrentDownloader_ProbeAndDownloadShareTransport(t *testing.T) {
 	defer cleanup()
 
 	manager := network.NewConnectionManager()
-	processing.SetProbeConnectionManager(manager)
 
 	exec := &types.ExecutionDeps{
 		HTTPClients:    manager,
@@ -95,7 +94,7 @@ func TestConcurrentDownloader_ProbeAndDownloadShareTransport(t *testing.T) {
 	defer exec.NetworkWorkers.Shutdown()
 
 	probeCfg := &config.RuntimeConfig{MaxConnectionsPerHost: 1}
-	if _, err := processing.ProbeServerWithProxy(context.Background(), server.URL(), "", nil, probeCfg); err != nil {
+	if _, err := processing.ProbeServerWithProxy(context.Background(), server.URL(), "", nil, probeCfg, manager); err != nil {
 		t.Fatalf("probe failed: %v", err)
 	}
 

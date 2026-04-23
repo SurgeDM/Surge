@@ -223,6 +223,7 @@ func ensureGlobalLocalServiceAndLifecycle() error {
 			UpdateURL:           GlobalPool.UpdateURL,
 			PublishEvent:        localService.Publish,
 		})
+		lifecycle.SetConnectionManager(GlobalPool.GetConnectionManager())
 
 		localService.SetLifecycleHooks(core.LifecycleHooks{
 			Pause:       lifecycle.Pause,

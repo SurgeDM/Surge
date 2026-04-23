@@ -11,7 +11,6 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/concurrent"
 	"github.com/SurgeDM/Surge/internal/engine/network"
 	"github.com/SurgeDM/Surge/internal/engine/types"
-	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -74,7 +73,6 @@ func NewTaskPool(progressCh chan<- any, maxDownloads int) *TaskPool {
 			NetworkWorkers: networkWorkers,
 		},
 	}
-	processing.SetProbeConnectionManager(connections)
 	for i := 0; i < maxDownloads; i++ {
 		go pool.worker()
 	}
@@ -506,6 +504,17 @@ func (p *TaskPool) GetStatus(id string) *types.DownloadStatus {
 	}
 
 	return status
+}
+
+// GetConnectionManager returns the shared connection pool for this task pool.
+func (p *TaskPool) GetConnectionManager() *network.ConnectionManager {
+	if p.execution == nil {
+		return nil
+	}
+	if mgr, ok := p.execution.HTTPClients.(*network.ConnectionManager); ok {
+		return mgr
+	}
+	return nil
 }
 
 // GracefulShutdown pauses all downloads and waits for them to save state
