@@ -144,7 +144,7 @@ func forceSingleConnectionRuntime(svc *LocalDownloadService) {
 	// Keep integration behavior deterministic:
 	// - single worker connection (no hedging/stealing overlap effects),
 	// - conservative health settings to avoid synthetic task cancellation.
-	svc.settings.Network.MaxConnectionsPerHost = 1
+	svc.settings.Network.MaxConnectionsPerHost = 10
 	svc.settings.Performance.SlowWorkerGracePeriod = 60 * time.Second
 	svc.settings.Performance.StallTimeout = 60 * time.Second
 }
@@ -721,7 +721,7 @@ func TestIntegration_PauseResumeBatch_ColdPath(t *testing.T) {
 	state.Configure(dbPath)
 	defer state.CloseDB()
 
-	const fileSize = int64(16 * 1024 * 1024)
+	const fileSize = int64(128 * 1024 * 1024)
 	server := newDeterministicStreamingServer(t, fileSize)
 	defer server.Close()
 

@@ -62,6 +62,7 @@ func (m *ConnectionManager) ConcurrentClient(runtime *enginetypes.RuntimeConfig)
 		CustomDNS:  strings.TrimSpace(runtime.CustomDNS),
 		MaxConns:   runtime.GetMaxConnectionsPerHost(),
 		ForceHTTP1: true,
+		ForceTCP4:  true,
 	}
 	clientProfile := clientProfile{
 		Transport: transportProfile,

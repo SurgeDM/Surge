@@ -77,7 +77,6 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 		State:        progState,
 		activeTasks:  make(map[int]*ActiveTask),
 		Runtime:      runtime,
-		Execution:    getDefaultExecution(),
 	}
 }
 
