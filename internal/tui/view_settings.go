@@ -625,8 +625,14 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			case reflect.String:
 				targetField.SetString(value)
 			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
-				if v, err := strconv.Atoi(value); err == nil {
-					targetField.SetInt(int64(v))
+				if key == "worker_buffer_size" {
+					if v, err := strconv.ParseFloat(value, 64); err == nil {
+						targetField.SetInt(int64(v * float64(config.KB)))
+					}
+				} else {
+					if v, err := strconv.Atoi(value); err == nil {
+						targetField.SetInt(int64(v))
+					}
 				}
 			case reflect.Int64:
 				if targetField.Type().String() == "time.Duration" {
