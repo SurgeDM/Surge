@@ -591,12 +591,12 @@ drainLoop:
 	// Shutdown the global execution layers. This is safe to do here because
 	// wg.Wait() above ensures all download goroutines have returned, meaning
 	// no more calls to Run() or HTTPClients can occur.
-	if p.execution != nil && p.execution.NetworkWorkers != nil {
-		p.execution.NetworkWorkers.Shutdown()
-	}
 	if p.execution != nil {
-		if connections, ok := p.execution.HTTPClients.(*network.ConnectionManager); ok {
-			connections.Shutdown()
+		if p.execution.NetworkWorkers != nil {
+			p.execution.NetworkWorkers.Shutdown()
+		}
+		if p.execution.HTTPClients != nil {
+			p.execution.HTTPClients.Shutdown()
 		}
 	}
 

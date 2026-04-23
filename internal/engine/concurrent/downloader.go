@@ -647,9 +647,10 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 	// Channel to signal when a connection is ready (handshake complete)
 	ready := make(chan struct{}, totalToStart)
 
-	// Create a sub-context for the pings so we can stop them once we have enough
-	pingCtx, cancelPings := context.WithCancel(ctx)
-	defer cancelPings()
+	// Round-robin mirrors
+	if len(mirrors) == 0 {
+		return
+	}
 
 	for i := 0; i < totalToStart; i++ {
 		go func(idx int) {
@@ -658,7 +659,7 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 			mirror := mirrors[idx%len(mirrors)]
 
 			// Use a fast Range request to ensure the handshake completes
-			req, err := http.NewRequestWithContext(network.WithRequestHeaders(pingCtx, d.Headers), http.MethodGet, mirror, nil)
+			req, err := http.NewRequestWithContext(network.WithRequestHeaders(ctx, d.Headers), http.MethodGet, mirror, nil)
 			if err != nil {
 				return
 			}
@@ -682,14 +683,15 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 				return
 			}
 
-			// Drain a small prefix to trigger server-side connection reuse, then close.
-			// This ensures the connection is actually in the idle pool and available
-			// for the first real worker before we signal readiness.
-			_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 32*types.KB))
-			_ = resp.Body.Close()
-
-			// Signal readiness now that the connection is hot in the pool.
+			// Signal workers immediately — for same-host transitions,
+			// idle connections from the previous download are already available.
+			// The prewarm connection will join the pool after its body is drained.
 			ready <- struct{}{}
+
+			go func() {
+				_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 32*types.KB))
+				_ = resp.Body.Close()
+			}()
 		}(i)
 	}
 
@@ -710,5 +712,4 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 	}
 
 	utils.Debug("Pre-warming complete: %d connections hot", completed)
-	// Remaining pings will be cancelled by defer cancelPings()
 }

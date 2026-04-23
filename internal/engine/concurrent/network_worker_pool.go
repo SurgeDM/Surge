@@ -59,6 +59,7 @@ func (p *NetworkWorkerPool) Run(ctx context.Context, workerCount int, fn func(wo
 	results := make(chan error, workerCount)
 	var done sync.WaitGroup
 
+submissionLoop:
 	for i := 0; i < workerCount; i++ {
 		done.Add(1)
 		job := networkWorkerJob{
@@ -72,8 +73,10 @@ func (p *NetworkWorkerPool) Run(ctx context.Context, workerCount int, fn func(wo
 		case p.jobs <- job:
 		case <-ctx.Done():
 			done.Done()
+			break submissionLoop
 		case <-p.stop:
 			done.Done()
+			break submissionLoop
 		}
 	}
 
@@ -101,10 +104,7 @@ func (p *NetworkWorkerPool) Shutdown() {
 func (p *NetworkWorkerPool) worker() {
 	for {
 		select {
-		case job, ok := <-p.jobs:
-			if !ok {
-				return
-			}
+		case job := <-p.jobs:
 			err := job.fn(job.workerID)
 			if err != nil && err != context.Canceled {
 				job.results <- err
