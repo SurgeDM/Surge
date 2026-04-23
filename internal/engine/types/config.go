@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"sync"
 	"time"
+
+	"github.com/SurgeDM/Surge/internal/config"
 )
 
 // Size constants
@@ -74,6 +76,7 @@ type DownloadConfig struct {
 // HTTPClientFactory provides shared HTTP clients for concurrent downloads.
 type HTTPClientFactory interface {
 	ConcurrentClient(runtime *RuntimeConfig) *http.Client
+	ProbeClient(runtime *config.RuntimeConfig) *http.Client
 	Shutdown()
 }
 
