@@ -21,6 +21,7 @@ type NetworkWorkerPool struct {
 	stop     chan struct{}
 	stopOnce sync.Once
 	stopped  atomic.Bool
+	wg       sync.WaitGroup
 }
 
 func NewNetworkWorkerPool(size int) *NetworkWorkerPool {
@@ -35,6 +36,7 @@ func NewNetworkWorkerPool(size int) *NetworkWorkerPool {
 	}
 
 	for i := 0; i < size; i++ {
+		pool.wg.Add(1)
 		go pool.worker()
 	}
 
@@ -98,10 +100,12 @@ func (p *NetworkWorkerPool) Shutdown() {
 		close(p.stop)
 		// We don't close p.jobs here to avoid panics in Run's send.
 		// Workers will exit when p.stop is closed.
+		p.wg.Wait()
 	})
 }
 
 func (p *NetworkWorkerPool) worker() {
+	defer p.wg.Done()
 	for {
 		select {
 		case job := <-p.jobs:

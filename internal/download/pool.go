@@ -32,6 +32,7 @@ type TaskPool struct {
 	wg           sync.WaitGroup // We use this to wait for all active downloads to pause before exiting the program
 	maxDownloads int
 	execution    *types.ExecutionDeps
+	workerWG     sync.WaitGroup
 }
 
 
@@ -72,6 +73,7 @@ func NewTaskPool(progressCh chan<- any, maxDownloads int) *TaskPool {
 		},
 	}
 	for i := 0; i < maxDownloads; i++ {
+		pool.workerWG.Add(1)
 		go pool.worker()
 	}
 	return pool
@@ -418,6 +420,7 @@ func (p *TaskPool) worker() {
 		// If paused, we keep it in downloads map for potential resume
 		p.wg.Done()
 	}
+	p.workerWG.Done()
 }
 
 // GetStatus returns the status of an active download
@@ -599,4 +602,5 @@ drainLoop:
 	// so worker goroutines exit their range loop.
 	close(p.progressDone)
 	close(p.taskChan)
+	p.workerWG.Wait()
 }

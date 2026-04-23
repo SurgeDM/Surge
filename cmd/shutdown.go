@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"sync"
 
+	"github.com/SurgeDM/Surge/internal/engine/concurrent"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -15,6 +16,7 @@ var (
 
 func defaultGlobalShutdown() error {
 	cancelGlobalEnqueue()
+	concurrent.ShutdownDefaultExecution()
 
 	// Shutdown the service FIRST so that PauseAll() can emit DownloadPausedMsg
 	// events while the lifecycle event worker is still alive to persist them.
