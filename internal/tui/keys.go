@@ -480,15 +480,15 @@ var Keys = KeyMap{
 
 // ShortHelp returns keybindings to show in the mini help view
 func (k DashboardKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.ToggleHelp}
+	return []key.Binding{k.ToggleHelp, k.ReportBug}
 }
 
 // FullHelp returns keybindings for the expanded help view
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab},
-		{k.Add, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings},
-		{k.Log, k.ReportBug, k.Quit},
+		{k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings},
+		{k.Log, k.OpenFile, k.ReportBug, k.Quit},
 	}
 }
 
