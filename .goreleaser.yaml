@@ -21,6 +21,7 @@ before:
     - ./scripts/package-themes.sh
 
 release:
+  header: "## Changelog"
   footer: |
     ---
     **Enjoying Surge?** Consider supporting the project to keep it blazing fast!
@@ -32,12 +33,7 @@ release:
     - glob: .goreleaser-extra/themes.zip
 
 changelog:
-  sort: asc
-
-  filters:
-    exclude:
-      - "^docs:"
-      - "^test:"
+  use: github-native
 
 archives:
   - formats: [ tar.gz ]

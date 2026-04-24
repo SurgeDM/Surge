@@ -1,0 +1,18 @@
+changelog:
+  exclude:
+    labels:
+      - skip-changelog
+    authors:
+      - dependabot[bot]
+  categories:
+    - title: "Features"
+      labels:
+        - feat
+        - enhancement
+    - title: "Bug Fixes"
+      labels:
+        - fix
+        - bug
+    - title: "Internal Changes"
+      labels:
+        - "*"
