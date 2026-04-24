@@ -83,12 +83,12 @@ func (m ConfirmationModal) renderBody(width int) string {
 func renderYesNoButtons(yesLabel, noLabel string, focused int) string {
 	pad := "   "
 
-	activeFirst := lipgloss.NewStyle().Foreground(colors.White).Background(colors.NeonPink).Bold(true).Underline(true)
-	activeRest := lipgloss.NewStyle().Foreground(colors.White).Background(colors.NeonPink).Bold(true)
-	activePad := lipgloss.NewStyle().Background(colors.NeonPink)
+	activeFirst := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Pink()).Bold(true).Underline(true)
+	activeRest := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Pink()).Bold(true)
+	activePad := lipgloss.NewStyle().Background(colors.Pink())
 
-	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray).Background(lipgloss.Color("236")).Underline(true)
-	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray).Background(lipgloss.Color("236"))
+	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236")).Underline(true)
+	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236"))
 	inactivePad := lipgloss.NewStyle().Background(lipgloss.Color("236"))
 
 	yesFirst, yesRest := splitFirst(yesLabel)
