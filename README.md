@@ -78,7 +78,7 @@ For a full reference, see the **[Themes Guide](docs/THEMES.md)**, **[Settings &a
 
 ### 1. Interactive TUI Mode
 
-Just run `surge` to enter the dashboard. This is where you can visualize progress, manage the queue, and see speed graphs.
+Just run `surge` to enter the dashboard. This is where you can visualize progress, manage the queue, and see speed graphs. If you encounter any issues, press `?` to open the bug reporting wizard.
 
 ```bash
 # Start the TUI

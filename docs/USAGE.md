@@ -16,7 +16,7 @@ Surge provides a robust Command Line Interface for automation and scripting. For
 | `surge refresh <id> <url>`  | Updates the source URL of a paused or errored download.                                | None                                                                                                | Reconnects using the new link.                                          |
 | `surge rm <id>`             | Removes a download by ID/prefix.                                                       | `--clean`                                                                                           | Alias: `kill`.                                                          |
 | `surge token`               | Prints current API auth token. (Also visible in TUI > Settings > Extension)            | None                                                                                                | Useful for remote clients.                                              |
-| `surge bug-report`          | Opens a pre-filled GitHub bug report with environment details.                         | None                                                                                                | Prints a manual URL fallback if browser open fails.                     |
+| `surge bug-report`          | Opens a pre-filled GitHub bug report. Prompts for target (Core/Extension) and optional system/log details. | None                                                                                                | Prints a manual URL fallback if browser open fails.                     |
 
 ## Server Subcommands (Compatibility)
 

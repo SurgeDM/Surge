@@ -35,7 +35,8 @@ Surge automatically writes debug log files.
 **Please complete the following information:**
 
 - OS: [e.g. Windows 11 / macOS 14 / Ubuntu 24.04]
-- Surge Version: [e.g. 1.2.0 — run `surge --version`]
+- Surge Version: [e.g. 1.2.0 - run surge --version]
+- Commit: [e.g. 9f3d2ab]
 - Installed From: [e.g. Brew / GitHub Release / built from source]
 
 **Additional context**
