@@ -22,16 +22,6 @@ type CoreReportOptions struct {
 	IncludeLatestLogPath bool
 }
 
-// BugReportURL builds a GitHub new-issue URL pre-populated with system metadata.
-// version and commit should be values injected at build time via ldflags.
-func BugReportURL(version, commit string) string {
-	return CoreBugReportURL(CoreReportOptions{
-		Version:              version,
-		Commit:               commit,
-		IncludeSystemDetails: true,
-	})
-}
-
 // CoreBugReportURL builds a core bug report URL using body prefill only.
 func CoreBugReportURL(options CoreReportOptions) string {
 	issueURL, err := url.Parse(newIssueURL)
