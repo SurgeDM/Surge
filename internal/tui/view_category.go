@@ -217,18 +217,18 @@ func (m RootModel) renderCategoryDetailView(cats []config.Category, cursor, inne
 	divider := dimStyle.Render(strings.Repeat("\u2500", innerWidth))
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
-		labelStyle.Render("Name: ")+valueStyle.Width(innerWidth-6).MaxWidth(innerWidth-6).Render(utils.WrapText(cat.Name, innerWidth-6)),
+		labelStyle.Render("Name: ")+valueStyle.Width(innerWidth-6).MaxWidth(innerWidth-6).Render(utils.TruncateTwoLines(cat.Name, innerWidth-6)),
 		"",
 		labelStyle.Render("Description:"),
-		valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render(utils.WrapText(cat.Description, innerWidth)),
+		valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render(utils.TruncateTwoLines(cat.Description, innerWidth)),
 		"",
 		divider,
 		"",
 		labelStyle.Render("Pattern (Regex):"),
-		valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render(utils.WrapText(cat.Pattern, innerWidth)),
+		valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render(utils.TruncateTwoLines(cat.Pattern, innerWidth)),
 		"",
 		labelStyle.Render("Path:"),
-		valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render(utils.WrapText(cat.Path, innerWidth)),
+		valueStyle.Width(innerWidth).MaxWidth(innerWidth).Render(utils.TruncateTwoLines(cat.Path, innerWidth)),
 	)
 
 	return formatSettingsBlock(content, innerWidth, rows)

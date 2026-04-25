@@ -268,7 +268,7 @@ func renderSettingsListViewport(settingsMeta []config.SettingMeta, selectedRow, 
 		}
 
 		// Truncate to avoid line wrapping which breaks parent height constraints
-		label = utils.Truncate(label, maxLabelLen)
+		label = utils.TruncateMiddle(label, maxLabelLen)
 
 		lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+label))
 	}
@@ -332,12 +332,22 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	valueLabelStyle := lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
 	valueContentStyle := lipgloss.NewStyle().Foreground(colors.White())
-	valueDisplay := valueLabelStyle.Render(valueLabel) + valueContentStyle.Render(valueStr)
+	
+	labelRendered := valueLabelStyle.Render(valueLabel)
+	availableValueWidth := innerWidth - lipgloss.Width(labelRendered)
+	if availableValueWidth < 5 {
+		availableValueWidth = 5
+	}
+	
+	valueDisplay := lipgloss.JoinHorizontal(lipgloss.Top,
+		labelRendered,
+		valueContentStyle.Render(utils.TruncateTwoLines(valueStr, availableValueWidth)),
+	)
 	valueDisplay = lipgloss.NewStyle().Width(innerWidth).MaxWidth(innerWidth).Render(valueDisplay)
 
 	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2500", innerWidth))
 
-	wrappedDesc := utils.WrapText(meta.Description, innerWidth)
+	wrappedDesc := utils.TruncateTwoLines(meta.Description, innerWidth)
 	descDisplay := lipgloss.NewStyle().
 		Foreground(colors.LightGray()).
 		Width(innerWidth).
@@ -822,7 +832,7 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 				return "(default)"
 			}
 			if truncate {
-				return utils.Truncate(s, 30)
+				return utils.TruncateMiddle(s, 30)
 			}
 			return s
 		}
