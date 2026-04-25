@@ -247,7 +247,7 @@ func TruncateTwoLines(s string, width int) string {
 	var lines []string
 	var currentLine strings.Builder
 	currentW := 0
-
+	done := false
 	for i, info := range infos {
 		if info.w > 0 && currentW+info.w > width {
 			if len(lines) < 1 { // We only need 2 lines max
@@ -262,18 +262,15 @@ func TruncateTwoLines(s string, width int) string {
 			} else {
 				// We already have one line and this would start a third line
 				// So we stop here.
-				currentLine.Reset()
-				currentW = -1 // Mark as finished
+				done = true
 				break
 			}
 		}
-		if currentW != -1 {
-			currentLine.WriteRune(info.r)
-			currentW += info.w
-		}
+		currentLine.WriteRune(info.r)
+		currentW += info.w
 	}
 
-	if currentW != -1 && currentLine.Len() > 0 {
+	if !done && currentLine.Len() > 0 {
 		lines = append(lines, currentLine.String())
 	}
 

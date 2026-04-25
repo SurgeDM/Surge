@@ -40,7 +40,7 @@ func (m *RootModel) refreshLogViewportContent() {
 	}
 
 	// Render each entry at the viewport width so the content fills the pane.
-	// WrapText pre-wraps lines so no content is clipped during rendering.
+	// TruncateTwoLines ensures long messages don't overflow the UI.
 
 	var wrappedEntries []string
 	for _, entry := range m.logEntries {
