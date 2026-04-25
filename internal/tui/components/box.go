@@ -43,6 +43,36 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	leftTitleWidth := lipgloss.Width(leftTitle)
 	rightTitleWidth := lipgloss.Width(rightTitle)
 
+	// Truncate titles so they can never push the top border wider than innerWidth.
+	// We always reserve at least one horizontal dash (the one after ╭) so the
+	// border looks correct even on very narrow terminals.
+	const minBorderDashes = 1
+	maxTitleSpace := innerWidth - minBorderDashes
+	if maxTitleSpace <= 0 {
+		// No room for any title at this width — suppress both
+		leftTitle = ""
+		leftTitleWidth = 0
+		rightTitle = ""
+		rightTitleWidth = 0
+	} else if leftTitleWidth+rightTitleWidth > maxTitleSpace {
+		// Shorten left title first; if still too wide, also shorten right.
+		half := maxTitleSpace / 2
+		if leftTitleWidth > half {
+			leftTitle = lipgloss.NewStyle().MaxWidth(half).Render(leftTitle)
+			leftTitleWidth = lipgloss.Width(leftTitle)
+		}
+		if leftTitleWidth+rightTitleWidth > maxTitleSpace {
+			rightRemaining := maxTitleSpace - leftTitleWidth
+			if rightRemaining <= 0 {
+				rightTitle = ""
+				rightTitleWidth = 0
+			} else {
+				rightTitle = lipgloss.NewStyle().MaxWidth(rightRemaining).Render(rightTitle)
+				rightTitleWidth = lipgloss.Width(rightTitle)
+			}
+		}
+	}
+
 	// Calculate remaining horizontal space for the border
 	// Structure: ╭ + horizontal*? + leftTitle + horizontal*? + rightTitle + horizontal*? + ╮
 	// Basic structure we want:
@@ -55,8 +85,8 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	// Case 1: Both Titles
 	if leftTitle != "" && rightTitle != "" {
 		remainingWidth := innerWidth - leftTitleWidth - rightTitleWidth - lipgloss.Width(horizontal)
-		if remainingWidth < 1 {
-			remainingWidth = 1 // overflow mitigation (might break layout but prevents crash)
+		if remainingWidth < 0 {
+			remainingWidth = 0
 		}
 
 		topBorder = borderStyler.Render(topLeft+horizontal) +
@@ -100,6 +130,9 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	// Wrap content lines with vertical borders
 	contentLines := strings.Split(content, "\n")
 	innerHeight := height - BorderFrameHeight // Account for top and bottom borders
+	if innerHeight < 0 {
+		innerHeight = 0
+	}
 
 	// Style for truncation
 	truncStyle := lipgloss.NewStyle().MaxWidth(innerWidth)

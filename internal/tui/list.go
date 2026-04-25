@@ -142,11 +142,23 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 		prefix = d.prefixNormal
 	}
 
-	// Truncate title and description if needed
-	// m.Width() is the available space for the list item
-	availableWidth := m.Width() - (components.BorderFrameWidth * 2) // Account for prefix and some padding
-	if availableWidth < 10 {
-		availableWidth = 10
+	// Measure the prefix so we can subtract it from the allowed content width.
+	prefixWidth := lipgloss.Width(prefix)
+
+	// Compute the content width available for title/description.
+	// We subtract the border frame allowance AND the prefix so the total
+	// rendered line (prefix + content) never exceeds m.Width().
+	availableWidth := m.Width() - prefixWidth - (components.BorderFrameWidth * 2)
+	if availableWidth < 1 {
+		availableWidth = 1
+	}
+	// Absolute cap at list width (minus prefix) to prevent any overflow.
+	maxContent := m.Width() - prefixWidth
+	if maxContent < 1 {
+		maxContent = 1
+	}
+	if availableWidth > maxContent {
+		availableWidth = maxContent
 	}
 
 	title := utils.TruncateMiddle(i.Title(), availableWidth)

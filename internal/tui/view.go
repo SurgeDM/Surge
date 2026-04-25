@@ -233,6 +233,7 @@ func (m RootModel) View() tea.View {
 	}
 
 	if m.state == BugReportTargetState {
+		w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 64, 12)
 		modal := components.ConfirmationModal{
 			Title:       "Bug Report",
 			Message:     "What would you like to report?",
@@ -240,14 +241,15 @@ func (m RootModel) View() tea.View {
 			Keys:        m.keys.BugReport,
 			Help:        m.help,
 			BorderColor: colors.Cyan(),
-			Width:       64,
-			Height:      12,
+			Width:       w,
+			Height:      h,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == BugReportSystemDetailsState {
+		w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 66, 12)
 		modal := components.ConfirmationModal{
 			Title:            "Core Bug Report",
 			Message:          "Include system details in issue body?",
@@ -255,8 +257,8 @@ func (m RootModel) View() tea.View {
 			Keys:             m.keys.QuitConfirm,
 			Help:             m.help,
 			BorderColor:      colors.Cyan(),
-			Width:            66,
-			Height:           12,
+			Width:            w,
+			Height:           h,
 			ShowYesNoButtons: true,
 			YesNoFocused:     m.quitConfirmFocused,
 		}
@@ -265,6 +267,7 @@ func (m RootModel) View() tea.View {
 	}
 
 	if m.state == BugReportLogPathState {
+		w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 72, 12)
 		modal := components.ConfirmationModal{
 			Title:            "Core Bug Report",
 			Message:          "Include latest debug log path in issue body?",
@@ -272,8 +275,8 @@ func (m RootModel) View() tea.View {
 			Keys:             m.keys.QuitConfirm,
 			Help:             m.help,
 			BorderColor:      colors.Cyan(),
-			Width:            72,
-			Height:           12,
+			Width:            w,
+			Height:           h,
 			ShowYesNoButtons: true,
 			YesNoFocused:     m.quitConfirmFocused,
 		}
