@@ -47,7 +47,7 @@ func (m ConfirmationModal) renderBody(width int) string {
 	if width > 0 {
 		msg = utils.WrapText(msg, width)
 		if det != "" {
-			det = utils.WrapText(det, width)
+			det = utils.TruncateTwoLines(det, width)
 		}
 	}
 
