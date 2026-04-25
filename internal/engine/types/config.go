@@ -88,6 +88,8 @@ type RuntimeConfig struct {
 	SlowWorkerGracePeriod time.Duration
 	StallTimeout          time.Duration
 	SpeedEmaAlpha         float64
+	PerDownloadSpeedLimit int64
+	GlobalSpeedLimit      int64
 }
 
 // GetUserAgent returns the configured user agent or the default
@@ -184,4 +186,20 @@ func (r *RuntimeConfig) GetSpeedEmaAlpha() float64 {
 		return SpeedEMAAlpha
 	}
 	return r.SpeedEmaAlpha
+}
+
+// GetPerDownloadSpeedLimit returns configured value or 0 (unlimited)
+func (r *RuntimeConfig) GetPerDownloadSpeedLimit() int64 {
+	if r == nil {
+		return 0
+	}
+	return r.PerDownloadSpeedLimit
+}
+
+// GetGlobalSpeedLimit returns configured value or 0 (unlimited)
+func (r *RuntimeConfig) GetGlobalSpeedLimit() int64 {
+	if r == nil {
+		return 0
+	}
+	return r.GlobalSpeedLimit
 }

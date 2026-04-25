@@ -24,6 +24,8 @@ type SingleDownloader struct {
 	Runtime      *types.RuntimeConfig
 	TotalSize    int64
 	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
+	PerDownloadLimiter *engine.Limiter
+	GlobalLimiter      *engine.Limiter
 }
 
 var bufPool = sync.Pool{
@@ -44,6 +46,7 @@ func NewSingleDownloader(id string, progressCh chan<- any, state *types.Progress
 		ID:           id,
 		State:        state,
 		Runtime:      runtime,
+		PerDownloadLimiter: engine.NewLimiter(runtime.GetPerDownloadSpeedLimit()),
 	}
 }
 
@@ -136,14 +139,23 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	start := time.Now()
 	var written int64
 
+	// Apply speed limiters
+	var bodyReader io.Reader = resp.Body
+	if d.PerDownloadLimiter != nil || d.GlobalLimiter != nil {
+		bodyReader = engine.NewThrottledReader(ctx, resp.Body, d.PerDownloadLimiter, d.GlobalLimiter)
+		if bodyReader == nil {
+			bodyReader = resp.Body
+		}
+	}
+
 	bufPtr := bufPool.Get().(*[]byte)
 	buf := *bufPtr
 	defer bufPool.Put(bufPtr)
 
 	if d.State == nil {
-		written, err = io.CopyBuffer(outFile, resp.Body, buf)
+		written, err = io.CopyBuffer(outFile, bodyReader, buf)
 	} else {
-		progressReader := newProgressReader(resp.Body, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
+		progressReader := newProgressReader(bodyReader, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
 		written, err = io.CopyBuffer(outFile, progressReader, buf)
 		progressReader.Flush()
 	}

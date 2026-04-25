@@ -33,6 +33,8 @@ type ConcurrentDownloader struct {
 	TotalSize    int64
 	bufPool      sync.Pool
 	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
+	PerDownloadLimiter *engine.Limiter // Per-download speed limiter
+	GlobalLimiter      *engine.Limiter // Global speed limiter
 }
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
@@ -60,6 +62,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 				return &buf
 			},
 		},
+		PerDownloadLimiter: engine.NewLimiter(runtime.GetPerDownloadSpeedLimit()),
 	}
 }
 
