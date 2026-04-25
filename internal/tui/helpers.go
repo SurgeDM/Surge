@@ -40,14 +40,12 @@ func (m *RootModel) refreshLogViewportContent() {
 	}
 
 	// Render each entry at the viewport width so the content fills the pane.
-	// WrapText pre-wraps lines so no content is clipped during rendering.
-	wrapStyle := lipgloss.NewStyle().Width(width).Align(lipgloss.Left)
+	// TruncateTwoLines ensures long messages don't overflow the UI.
 
 	var wrappedEntries []string
 	for _, entry := range m.logEntries {
-		wrapped := utils.WrapText(entry, width)
-		rendered := wrapStyle.Render(wrapped)
-		wrappedEntries = append(wrappedEntries, strings.Split(rendered, "\n")...)
+		wrapped := utils.TruncateTwoLines(entry, width)
+		wrappedEntries = append(wrappedEntries, strings.Split(wrapped, "\n")...)
 	}
 
 	// Bottom-align entries if they don't fill the viewport

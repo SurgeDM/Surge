@@ -233,6 +233,7 @@ func (m RootModel) View() tea.View {
 	}
 
 	if m.state == BugReportTargetState {
+		w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 64, 12)
 		modal := components.ConfirmationModal{
 			Title:       "Bug Report",
 			Message:     "What would you like to report?",
@@ -240,14 +241,15 @@ func (m RootModel) View() tea.View {
 			Keys:        m.keys.BugReport,
 			Help:        m.help,
 			BorderColor: colors.Cyan(),
-			Width:       64,
-			Height:      12,
+			Width:       w,
+			Height:      h,
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))
 	}
 
 	if m.state == BugReportSystemDetailsState {
+		w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 66, 12)
 		modal := components.ConfirmationModal{
 			Title:            "Core Bug Report",
 			Message:          "Include system details in issue body?",
@@ -255,8 +257,8 @@ func (m RootModel) View() tea.View {
 			Keys:             m.keys.QuitConfirm,
 			Help:             m.help,
 			BorderColor:      colors.Cyan(),
-			Width:            66,
-			Height:           12,
+			Width:            w,
+			Height:           h,
 			ShowYesNoButtons: true,
 			YesNoFocused:     m.quitConfirmFocused,
 		}
@@ -265,6 +267,7 @@ func (m RootModel) View() tea.View {
 	}
 
 	if m.state == BugReportLogPathState {
+		w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 72, 12)
 		modal := components.ConfirmationModal{
 			Title:            "Core Bug Report",
 			Message:          "Include latest debug log path in issue body?",
@@ -272,8 +275,8 @@ func (m RootModel) View() tea.View {
 			Keys:             m.keys.QuitConfirm,
 			Help:             m.help,
 			BorderColor:      colors.Cyan(),
-			Width:            72,
-			Height:           12,
+			Width:            w,
+			Height:           h,
 			ShowYesNoButtons: true,
 			YesNoFocused:     m.quitConfirmFocused,
 		}
@@ -402,6 +405,22 @@ func (m RootModel) View() tea.View {
 		hasChunks := len(bitmap) > 0 && bitmapWidth > 0
 		showActualChunkMap := layout.ShowChunkMap && hasChunks && selected != nil && !selected.done
 
+		// Measure whether the detail content actually fits in the allocated
+		// DetailHeight. If it doesn't, the chunk map would cause details to
+		// be clipped — so give the chunk map's space back to details.
+		if showActualChunkMap {
+			detailInnerH := layout.DetailHeight - components.BorderFrameHeight
+			if detailInnerH < 1 {
+				detailInnerH = 1
+			}
+			contentH := lipgloss.Height(detailContent)
+			if contentH > detailInnerH {
+				// Detail content is taller than what's allocated; reclaim
+				// chunk map space so nothing gets cut off.
+				showActualChunkMap = false
+			}
+		}
+
 		// If we reserved space for chunk map but aren't showing it, give it to details
 		if !showActualChunkMap && layout.ShowChunkMap {
 			layout.DetailHeight += layout.ChunkMapHeight
@@ -507,9 +526,9 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	}
 
 	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("URL: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(d.URL, valueWidth))),
-		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("File: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(displayFilename, valueWidth))),
-		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("Path: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(displayPath, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("URL: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(d.URL, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("File: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayFilename, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("Path: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayPath, valueWidth))),
 		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray()).Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(d.ID, valueWidth))),
 	)
 	fileSection := sectionStyle.Render(fileInfoContent)

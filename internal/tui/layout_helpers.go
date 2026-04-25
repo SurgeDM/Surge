@@ -215,16 +215,10 @@ func CalculateDashboardLayout(termW, termH int) DashboardLayout {
 			targetGraphH = l.MinGraphHeight
 		}
 
-		// Adjust heights for detail and chunk map
-		targetDetailH := l.AvailableHeight - targetGraphH
-
-		// If we show chunk map, check if there's enough room for details
-		if l.ShowChunkMap {
-			potentialDetailH := targetDetailH - (5 + components.BorderFrameHeight)
-			if potentialDetailH < 14 {
-				l.ShowChunkMap = false
-			}
-		}
+		// Compute heights assuming chunk map may be shown.
+		// The actual decision to render the chunk map is made dynamically
+		// in View() by measuring the rendered detail content against the
+		// allocated DetailHeight. This avoids any hardcoded height guesses.
 
 		if l.ShowChunkMap {
 			l.ChunkMapHeight = 5 + components.BorderFrameHeight // 5 rows of content + 2 for borders

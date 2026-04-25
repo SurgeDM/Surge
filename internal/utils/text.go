@@ -70,18 +70,89 @@ func WrapText(text string, width int) string {
 }
 
 // truncateToWidth truncates a string to a visual width and returns the truncated string.
+// It is ANSI-aware and will include escape codes without counting them towards width.
 func truncateToWidth(s string, width int) string {
+	infos := getCharInfos(s)
 	var res strings.Builder
-	var w int
-	for _, r := range s {
-		rw := runewidth.RuneWidth(r)
-		if w+rw > width {
-			break
+	var currentW int
+	for i, info := range infos {
+		if info.w > 0 && currentW+info.w > width {
+			// Check if we need to add a reset
+			state := getAnsiState(infos, i)
+			if state != "" {
+				res.WriteString("\x1b[0m")
+			}
+			return res.String()
 		}
-		res.WriteRune(r)
-		w += rw
+		res.WriteRune(info.r)
+		currentW += info.w
 	}
+
 	return res.String()
+}
+
+type charInfo struct {
+	r rune
+	w int
+}
+
+func getCharInfos(s string) []charInfo {
+	var infos []charInfo
+	inAnsi := false
+	for _, r := range s {
+		if r == '\x1b' {
+			inAnsi = true
+		}
+
+		w := 0
+		if !inAnsi {
+			w = runewidth.RuneWidth(r)
+		}
+
+		infos = append(infos, charInfo{r, w})
+
+		if inAnsi && r != '\x1b' && r != '[' && r >= 0x40 && r <= 0x7E {
+			inAnsi = false
+		}
+	}
+	return infos
+}
+
+func getAnsiState(infos []charInfo, endIdx int) string {
+	var state strings.Builder
+	var currentAnsi strings.Builder
+	inAnsi := false
+	for i := 0; i < endIdx && i < len(infos); i++ {
+		r := infos[i].r
+		if r == '\x1b' {
+			inAnsi = true
+			currentAnsi.WriteRune(r)
+			continue
+		}
+		if inAnsi {
+			currentAnsi.WriteRune(r)
+			if r != '\x1b' && r != '[' && r >= 0x40 && r <= 0x7E {
+				inAnsi = false
+				seq := currentAnsi.String()
+				if seq == "\x1b[0m" || seq == "\x1b[m" {
+					state.Reset()
+				} else {
+					state.WriteString(seq)
+				}
+				currentAnsi.Reset()
+			}
+			continue
+		}
+	}
+	return state.String()
+}
+
+func stringWidth(s string) int {
+	var width int
+	for _, info := range getCharInfos(s) {
+		width += info.w
+	}
+	return width
 }
 
 // Truncate truncates a string to a maximum visual width and adds an ellipsis if needed.
@@ -89,7 +160,7 @@ func Truncate(s string, limit int) string {
 	if limit <= 0 {
 		return ""
 	}
-	if runewidth.StringWidth(s) <= limit {
+	if stringWidth(s) <= limit {
 		return s
 	}
 	if limit <= 1 {
@@ -100,12 +171,14 @@ func Truncate(s string, limit int) string {
 	return sub + "…"
 }
 
-// truncateMiddle truncates a string in the middle to a maximum visual width.
-func truncateMiddle(s string, limit int) string {
+// TruncateMiddle truncates a string in the middle to a maximum visual width.
+// It is ANSI-aware.
+func TruncateMiddle(s string, limit int) string {
 	if limit <= 0 {
 		return ""
 	}
-	if runewidth.StringWidth(s) <= limit {
+	totalW := stringWidth(s)
+	if totalW <= limit {
 		return s
 	}
 	if limit < 3 {
@@ -115,20 +188,90 @@ func truncateMiddle(s string, limit int) string {
 	leftLimit := (limit - 1) / 2
 	rightLimit := limit - 1 - leftLimit
 
-	left := truncateToWidth(s, leftLimit)
-
-	// For the right part, we need to find how many characters from the end fit in rightLimit
-	runes := []rune(s)
-	right := ""
-	rightWidth := 0
-	for i := len(runes) - 1; i >= 0; i-- {
-		rw := runewidth.RuneWidth(runes[i])
-		if rightWidth+rw > rightLimit {
+	infos := getCharInfos(s)
+	var left strings.Builder
+	currentW := 0
+	leftEndIdx := 0
+	for i, info := range infos {
+		if info.w > 0 && currentW+info.w > leftLimit {
 			break
 		}
-		right = string(runes[i]) + right
-		rightWidth += rw
+		left.WriteRune(info.r)
+		currentW += info.w
+		leftEndIdx = i + 1
 	}
 
-	return left + "…" + right
+	var right strings.Builder
+	currentW = 0
+	rightStartIdx := -1
+	for i := len(infos) - 1; i >= 0; i-- {
+		info := infos[i]
+		if info.w > 0 && currentW+info.w > rightLimit {
+			break
+		}
+		currentW += info.w
+		rightStartIdx = i
+	}
+
+	if rightStartIdx != -1 {
+		for i := rightStartIdx; i < len(infos); i++ {
+			right.WriteRune(infos[i].r)
+		}
+	}
+
+	lStr := left.String()
+	state := getAnsiState(infos, leftEndIdx)
+	if state != "" {
+		if !strings.HasSuffix(lStr, "\x1b[0m") {
+			lStr += "\x1b[0m"
+		}
+		return lStr + "…" + state + right.String()
+	}
+
+	return lStr + "…" + right.String()
+}
+
+// TruncateTwoLines middle-truncates a string to fit in at most 2 lines of a given width.
+// It uses character-based wrapping (ignoring word boundaries) to maximize space usage.
+func TruncateTwoLines(s string, width int) string {
+	if width <= 0 {
+		return s
+	}
+
+	// 1. Truncate in the middle if it exceeds 2 lines of visual width
+	truncated := TruncateMiddle(s, 2*width)
+
+	// 2. Wrap based on characters (visual width) by building lines rune by rune
+	infos := getCharInfos(truncated)
+	var lines []string
+	var currentLine strings.Builder
+	currentW := 0
+	done := false
+	for i, info := range infos {
+		if info.w > 0 && currentW+info.w > width {
+			if len(lines) < 1 { // We only need 2 lines max
+				state := getAnsiState(infos, i)
+				if state != "" {
+					currentLine.WriteString("\x1b[0m")
+				}
+				lines = append(lines, currentLine.String())
+				currentLine.Reset()
+				currentLine.WriteString(state)
+				currentW = 0
+			} else {
+				// We already have one line and this would start a third line
+				// So we stop here.
+				done = true
+				break
+			}
+		}
+		currentLine.WriteRune(info.r)
+		currentW += info.w
+	}
+
+	if !done && currentLine.Len() > 0 {
+		lines = append(lines, currentLine.String())
+	}
+
+	return strings.Join(lines, "\n")
 }

@@ -124,7 +124,7 @@ func TestTruncateMiddle(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, truncateMiddle(tt.text, tt.limit))
+			assert.Equal(t, tt.expected, TruncateMiddle(tt.text, tt.limit))
 		})
 	}
 }
@@ -142,7 +142,62 @@ func TestTruncateMiddleEdgeCases(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, truncateMiddle(tt.text, tt.limit))
+			assert.Equal(t, tt.expected, TruncateMiddle(tt.text, tt.limit))
 		})
 	}
+}
+
+func TestTruncateTwoLines(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		width    int
+		expected string
+	}{
+		{"Single Line", "abc", 10, "abc"},
+		{"Exactly Two Lines", "abcdefghij", 5, "abcde\nfghij"},
+		{"With Spaces", "abc def", 4, "abc \ndef"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, TruncateTwoLines(tt.text, tt.width))
+		})
+	}
+}
+
+func TestAnsiAwareness(t *testing.T) {
+	red := "\x1b[31m"
+	reset := "\x1b[0m"
+	text := red + "hello" + reset // visual width 5
+
+	t.Run("truncateToWidth", func(t *testing.T) {
+		assert.Equal(t, red+"hel"+reset, truncateToWidth(text, 3))
+	})
+
+	t.Run("TruncateMiddle", func(t *testing.T) {
+		// limit 4: left 1, right 2
+		assert.Equal(t, red+"h"+reset+"…"+red+"lo"+reset, TruncateMiddle(text, 4))
+	})
+
+	t.Run("Truncate ANSI Guard", func(t *testing.T) {
+		// This should not be truncated because visual width is 5
+		assert.Equal(t, text, Truncate(text, 10))
+		// This should be truncated
+		assert.Equal(t, red+"hel"+reset+"…", Truncate(text, 4))
+	})
+
+	t.Run("TruncateTwoLines ANSI carry-over", func(t *testing.T) {
+		// width 3: first line "hel", second line should have "lo" with red color
+		// Expected: red+"hel"+reset + "\n" + red+"lo"+reset
+		expected := red + "hel" + reset + "\n" + red + "lo" + reset
+		assert.Equal(t, expected, TruncateTwoLines(text, 3))
+	})
+
+	t.Run("Non-SGR ANSI", func(t *testing.T) {
+		// \x1b[A is cursor up (width 0)
+		cursorUp := "\x1b[A"
+		text := "abc" + cursorUp + "def"
+		assert.Equal(t, 6, stringWidth(text))
+		assert.Equal(t, "abc"+cursorUp+"d"+"\x1b[0m"+"…", Truncate(text, 5))
+	})
 }

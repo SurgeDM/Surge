@@ -36,7 +36,7 @@ func (m AddDownloadModal) View() string {
 	if m.ShowURL && m.URL != "" {
 		horizontalPadding := lipgloss.NewStyle().Padding(0, 2).GetHorizontalFrameSize()
 		innerWidth := m.Width - BorderFrameWidth - horizontalPadding
-		wrappedURL := utils.WrapText(m.URL, innerWidth-5) // Offset for "URL: "
+		wrappedURL := utils.TruncateTwoLines(m.URL, innerWidth-5) // Offset for "URL: "
 		content = append(content,
 			lipgloss.NewStyle().Foreground(colors.LightGray()).Render("URL: "+wrappedURL),
 			"",
