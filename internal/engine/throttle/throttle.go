@@ -61,53 +61,54 @@ func (l *Limiter) waitN(ctx context.Context, n int) error {
 		return nil
 	}
 
-	for {
-		l.mu.Lock()
-		if l.rate <= 0 {
-			l.mu.Unlock()
-			return nil
+	remaining := int64(n)
+	for remaining > 0 {
+		charge := remaining
+		if charge > l.burst {
+			charge = l.burst
 		}
 
-		now := time.Now()
-		elapsed := now.Sub(l.lastRefill)
-
-		// Refill tokens: (elapsed * rate) / second
-		refill := int64(float64(elapsed.Nanoseconds()) * float64(l.rate) / float64(time.Second.Nanoseconds()))
-
-		if refill > 0 {
-			l.tokens += refill
-			if l.tokens > l.burst {
-				l.tokens = l.burst
+		for {
+			l.mu.Lock()
+			if l.rate <= 0 {
+				l.mu.Unlock()
+				return nil
 			}
-			l.lastRefill = l.lastRefill.Add(time.Duration(float64(refill) * float64(time.Second.Nanoseconds()) / float64(l.rate)))
-		}
 
-		// Clamp to burst so the condition is always reachable for large reads.
-		want := int64(n)
-		if want > l.burst {
-			want = l.burst
-		}
+			now := time.Now()
+			elapsed := now.Sub(l.lastRefill)
+			refill := int64(float64(elapsed.Nanoseconds()) * float64(l.rate) / float64(time.Second.Nanoseconds()))
+			if refill > 0 {
+				l.tokens += refill
+				if l.tokens > l.burst {
+					l.tokens = l.burst
+				}
+				l.lastRefill = l.lastRefill.Add(time.Duration(float64(refill) * float64(time.Second.Nanoseconds()) / float64(l.rate)))
+			}
 
-		if l.tokens >= want {
-			l.tokens -= want
+			if l.tokens >= charge {
+				l.tokens -= charge
+				l.mu.Unlock()
+				break
+			}
+
+			needed := charge - l.tokens
+			waitDuration := time.Duration(float64(needed) * float64(time.Second.Nanoseconds()) / float64(l.rate))
 			l.mu.Unlock()
-			return nil
+
+			if waitDuration < time.Millisecond {
+				waitDuration = time.Millisecond
+			}
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(waitDuration):
+			}
 		}
 
-		needed := want - l.tokens
-		waitDuration := time.Duration(float64(needed) * float64(time.Second.Nanoseconds()) / float64(l.rate))
-		l.mu.Unlock()
-
-		if waitDuration < 1*time.Millisecond {
-			waitDuration = 1 * time.Millisecond
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(waitDuration):
-		}
+		remaining -= charge
 	}
+	return nil
 }
 
 // ThrottledReader wraps an io.Reader and enforces rate limits.

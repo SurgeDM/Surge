@@ -100,11 +100,15 @@ func TestBurstExceeded(t *testing.T) {
 	l := NewLimiter(rate)
 	// burst is 200
 
-	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
 	defer cancel()
 
+	start := time.Now()
 	// Requesting 300 bytes (exceeds burst of 200).
-	// Without the fix, this deadlocks. With the fix, it consumes 200 and returns.
+	// With the fix, it should wait for the extra 100 tokens (~1s).
 	err := l.waitN(ctx, 300)
 	assert.NoError(t, err)
+	elapsed := time.Since(start)
+
+	assert.True(t, elapsed >= 800*time.Millisecond, "Should have waited for extra tokens, got %v", elapsed)
 }
