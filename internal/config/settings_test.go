@@ -445,6 +445,8 @@ func TestToRuntimeConfig_Exhaustive(t *testing.T) {
 	settings.Network.MinChunkSize = 1
 	settings.Network.WorkerBufferSize = 1
 	settings.Network.DialHedgeCount = 1
+	settings.Network.PerDownloadSpeedLimit = 1
+	settings.Network.GlobalSpeedLimit = 1
 
 	settings.Performance.MaxTaskRetries = 1
 	settings.Performance.SlowWorkerThreshold = 0.1

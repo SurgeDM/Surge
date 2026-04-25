@@ -234,6 +234,8 @@ func DefaultSettings() *Settings {
 			MinChunkSize:           2 * MB,
 			WorkerBufferSize:       512 * KB,
 			DialHedgeCount:         4,
+			PerDownloadSpeedLimit:  0, // Unlimited
+			GlobalSpeedLimit:       0, // Unlimited
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        3,
