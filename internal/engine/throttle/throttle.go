@@ -88,7 +88,8 @@ func (l *Limiter) waitN(ctx context.Context, n int) error {
 			return nil
 		}
 
-		// Calculate wait time for the remaining tokens
+		// Calculate wait time for the remaining tokens.
+		// Division by l.rate is safe here because l.rate > 0 is checked at the top of the for-loop.
 		needed := int64(n) - l.tokens
 		waitDuration := time.Duration(float64(needed) * float64(time.Second.Nanoseconds()) / float64(l.rate))
 		l.mu.Unlock()
