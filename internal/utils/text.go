@@ -111,8 +111,7 @@ func getCharInfos(s string) []charInfo {
 
 		infos = append(infos, charInfo{r, w})
 
-		// Simple SGR sequence end detection
-		if inAnsi && r == 'm' {
+		if inAnsi && r != '\x1b' && r != '[' && r >= 0x40 && r <= 0x7E {
 			inAnsi = false
 		}
 	}
@@ -132,7 +131,7 @@ func getAnsiState(infos []charInfo, endIdx int) string {
 		}
 		if inAnsi {
 			currentAnsi.WriteRune(r)
-			if r == 'm' {
+			if r != '\x1b' && r != '[' && r >= 0x40 && r <= 0x7E {
 				inAnsi = false
 				seq := currentAnsi.String()
 				if seq == "\x1b[0m" || seq == "\x1b[m" {

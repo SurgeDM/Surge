@@ -192,4 +192,12 @@ func TestAnsiAwareness(t *testing.T) {
 		expected := red + "hel" + reset + "\n" + red + "lo" + reset
 		assert.Equal(t, expected, TruncateTwoLines(text, 3))
 	})
+
+	t.Run("Non-SGR ANSI", func(t *testing.T) {
+		// \x1b[A is cursor up (width 0)
+		cursorUp := "\x1b[A"
+		text := "abc" + cursorUp + "def"
+		assert.Equal(t, 6, stringWidth(text))
+		assert.Equal(t, "abc"+cursorUp+"d"+"\x1b[0m"+"…", Truncate(text, 5))
+	})
 }

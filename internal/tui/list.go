@@ -152,14 +152,6 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 	if availableWidth < 1 {
 		availableWidth = 1
 	}
-	// Absolute cap at list width (minus prefix) to prevent any overflow.
-	maxContent := m.Width() - prefixWidth
-	if maxContent < 1 {
-		maxContent = 1
-	}
-	if availableWidth > maxContent {
-		availableWidth = maxContent
-	}
 
 	title := utils.TruncateMiddle(i.Title(), availableWidth)
 	description := utils.Truncate(i.Description(), availableWidth)
