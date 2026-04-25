@@ -164,3 +164,18 @@ func TestTruncateTwoLines(t *testing.T) {
 		})
 	}
 }
+
+func TestAnsiAwareness(t *testing.T) {
+	red := "\x1b[31m"
+	reset := "\x1b[0m"
+	text := red + "hello" + reset // visual width 5
+	
+	t.Run("truncateToWidth", func(t *testing.T) {
+		assert.Equal(t, red+"hel"+reset, truncateToWidth(text, 3))
+	})
+	
+	t.Run("TruncateMiddle", func(t *testing.T) {
+		// limit 4: left 1, right 2
+		assert.Equal(t, red+"h"+reset+"…"+red+"lo"+reset, TruncateMiddle(text, 4))
+	})
+}

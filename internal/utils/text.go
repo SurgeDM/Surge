@@ -5,6 +5,7 @@ import (
 	"unicode"
 
 	"github.com/mattn/go-runewidth"
+	"charm.land/lipgloss/v2"
 )
 
 // WrapText wraps a string to a specified maximum width.
@@ -70,18 +71,53 @@ func WrapText(text string, width int) string {
 }
 
 // truncateToWidth truncates a string to a visual width and returns the truncated string.
+// It is ANSI-aware and will include escape codes without counting them towards width.
 func truncateToWidth(s string, width int) string {
+	infos := getCharInfos(s)
 	var res strings.Builder
-	var w int
-	for _, r := range s {
-		rw := runewidth.RuneWidth(r)
-		if w+rw > width {
+	var currentW int
+	for _, info := range infos {
+		if info.w > 0 && currentW+info.w > width {
 			break
 		}
-		res.WriteRune(r)
-		w += rw
+		res.WriteRune(info.r)
+		currentW += info.w
 	}
+	
+	// Return the result as-is to allow ANSI states (colors) to bleed into the next line
 	return res.String()
+}
+
+type charInfo struct {
+	r rune
+	w int
+}
+
+func getCharInfos(s string) []charInfo {
+	var infos []charInfo
+	inAnsi := false
+	for _, r := range s {
+		if r == '\x1b' {
+			inAnsi = true
+		}
+
+		w := 0
+		if !inAnsi {
+			w = runewidth.RuneWidth(r)
+		}
+
+		infos = append(infos, charInfo{r, w})
+
+		// Simple SGR sequence end detection
+		if inAnsi && r == 'm' {
+			inAnsi = false
+		}
+	}
+	return infos
+}
+
+func stringWidth(s string) int {
+	return lipgloss.Width(s)
 }
 
 // Truncate truncates a string to a maximum visual width and adds an ellipsis if needed.
@@ -101,11 +137,13 @@ func Truncate(s string, limit int) string {
 }
 
 // TruncateMiddle truncates a string in the middle to a maximum visual width.
+// It is ANSI-aware.
 func TruncateMiddle(s string, limit int) string {
 	if limit <= 0 {
 		return ""
 	}
-	if runewidth.StringWidth(s) <= limit {
+	totalW := stringWidth(s)
+	if totalW <= limit {
 		return s
 	}
 	if limit < 3 {
@@ -115,22 +153,41 @@ func TruncateMiddle(s string, limit int) string {
 	leftLimit := (limit - 1) / 2
 	rightLimit := limit - 1 - leftLimit
 
-	left := truncateToWidth(s, leftLimit)
-
-	// For the right part, we need to find how many characters from the end fit in rightLimit
-	runes := []rune(s)
-	right := ""
-	rightWidth := 0
-	for i := len(runes) - 1; i >= 0; i-- {
-		rw := runewidth.RuneWidth(runes[i])
-		if rightWidth+rw > rightLimit {
+	infos := getCharInfos(s)
+	var left strings.Builder
+	currentW := 0
+	for _, info := range infos {
+		if info.w > 0 && currentW+info.w > leftLimit {
 			break
 		}
-		right = string(runes[i]) + right
-		rightWidth += rw
+		left.WriteRune(info.r)
+		currentW += info.w
 	}
 
-	return left + "…" + right
+	var right strings.Builder
+	currentW = 0
+	rightStartIdx := -1
+	for i := len(infos) - 1; i >= 0; i-- {
+		info := infos[i]
+		if info.w > 0 && currentW+info.w > rightLimit {
+			break
+		}
+		currentW += info.w
+		rightStartIdx = i
+	}
+
+	if rightStartIdx != -1 {
+		for i := rightStartIdx; i < len(infos); i++ {
+			right.WriteRune(infos[i].r)
+		}
+	}
+
+	lStr := left.String()
+	if strings.Contains(lStr, "\x1b[") && !strings.HasSuffix(lStr, "\x1b[0m") {
+		lStr += "\x1b[0m"
+	}
+
+	return lStr + "…" + right.String()
 }
 
 // TruncateTwoLines middle-truncates a string to fit in at most 2 lines of a given width.
@@ -143,16 +200,34 @@ func TruncateTwoLines(s string, width int) string {
 	// 1. Truncate in the middle if it exceeds 2 lines of visual width
 	truncated := TruncateMiddle(s, 2*width)
 
-	// 2. Wrap based on characters (visual width)
+	// 2. Wrap based on characters (visual width) by building lines rune by rune
+	infos := getCharInfos(truncated)
 	var lines []string
-	current := truncated
-	for i := 0; i < 2 && current != ""; i++ {
-		sub := truncateToWidth(current, width)
-		if sub == "" {
-			break
+	var currentLine strings.Builder
+	currentW := 0
+	
+	for _, info := range infos {
+		if info.w > 0 && currentW+info.w > width {
+			if len(lines) < 1 { // We only need 2 lines max
+				lines = append(lines, currentLine.String())
+				currentLine.Reset()
+				currentW = 0
+			} else {
+				// We already have one line and this would start a third line
+				// So we stop here.
+				currentLine.Reset()
+				currentW = -1 // Mark as finished
+				break
+			}
 		}
-		lines = append(lines, sub)
-		current = current[len(sub):]
+		if currentW != -1 {
+			currentLine.WriteRune(info.r)
+			currentW += info.w
+		}
+	}
+
+	if currentW != -1 && currentLine.Len() > 0 {
+		lines = append(lines, currentLine.String())
 	}
 
 	return strings.Join(lines, "\n")
