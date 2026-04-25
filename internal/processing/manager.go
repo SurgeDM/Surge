@@ -173,7 +173,8 @@ func (m *LifecycleManager) ApplySettings(s *config.Settings) {
 
 	hooks := m.getEngineHooks()
 	if hooks.UpdateGlobalSpeedLimit != nil {
-		hooks.UpdateGlobalSpeedLimit(s.Network.GlobalSpeedLimit * 1024 * 1024)
+		rc := s.ToRuntimeConfig()
+		hooks.UpdateGlobalSpeedLimit(rc.GetGlobalSpeedLimitBytes())
 	}
 }
 

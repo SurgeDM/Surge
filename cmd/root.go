@@ -437,7 +437,8 @@ var rootCmd = &cobra.Command{
 		GlobalProgressCh = make(chan any, 100)
 		globalSettings = getSettings()
 		GlobalPool = download.NewWorkerPool(GlobalProgressCh, globalSettings.Network.MaxConcurrentDownloads)
-		GlobalPool.UpdateGlobalSpeedLimit(globalSettings.Network.GlobalSpeedLimit * 1024 * 1024)
+		rc := globalSettings.ToRuntimeConfig()
+		GlobalPool.UpdateGlobalSpeedLimit(rc.GetGlobalSpeedLimitBytes())
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if ranRemote, err := maybeRunRemoteTUI(cmd, args); err != nil {

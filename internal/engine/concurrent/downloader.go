@@ -49,7 +49,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 		}
 	}
 
-	return &ConcurrentDownloader{
+	d := &ConcurrentDownloader{
 		ID:           id,
 		ProgressChan: progressCh,
 		State:        progState,
@@ -63,8 +63,11 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 				return &buf
 			},
 		},
-		perDownloadLimiter: throttle.NewLimiter(runtime.GetPerDownloadSpeedLimit()),
 	}
+	if rate := runtime.GetPerDownloadSpeedLimit(); rate > 0 {
+		d.perDownloadLimiter = throttle.NewLimiter(rate)
+	}
+	return d
 }
 
 // SetGlobalLimiter sets the global speed limiter for the downloader

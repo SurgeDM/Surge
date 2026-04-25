@@ -60,8 +60,7 @@ func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
 		queued:       make(map[string]types.DownloadConfig),
 		maxDownloads: maxDownloads,
 	}
-	pool.globalLimiter = throttle.NewLimiter(1)
-	pool.globalLimiter.SetRate(0)
+	pool.globalLimiter = throttle.NewLimiter(0)
 	for i := 0; i < maxDownloads; i++ {
 		go pool.worker()
 	}

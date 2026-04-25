@@ -17,11 +17,8 @@ type Limiter struct {
 }
 
 // NewLimiter creates a new rate limiter. rate is in bytes per second.
-// If rate is 0, it acts as unlimited (returns nil).
+// If rate is 0, it acts as unlimited.
 func NewLimiter(rate int64) *Limiter {
-	if rate <= 0 {
-		return nil
-	}
 	l := &Limiter{}
 	l.SetRate(rate)
 	l.tokens = l.burst // Start full
@@ -74,7 +71,7 @@ func (l *Limiter) waitN(ctx context.Context, n int) error {
 		now := time.Now()
 		elapsed := now.Sub(l.lastRefill)
 
-		// Refill tokens
+		// Refill tokens: (elapsed * rate) / second
 		refill := int64(float64(elapsed.Nanoseconds()) * float64(l.rate) / float64(time.Second.Nanoseconds()))
 
 		if refill > 0 {
@@ -91,6 +88,7 @@ func (l *Limiter) waitN(ctx context.Context, n int) error {
 			return nil
 		}
 
+		// Calculate wait time for the remaining tokens
 		needed := int64(n) - l.tokens
 		waitDuration := time.Duration(float64(needed) * float64(time.Second.Nanoseconds()) / float64(l.rate))
 		l.mu.Unlock()
@@ -114,7 +112,8 @@ type ThrottledReader struct {
 	ctx      context.Context
 }
 
-// NewThrottledReader creates a new throttled reader.
+// NewThrottledReader creates a new throttled reader. It returns a passthrough reader
+// if no active limiters are provided.
 func NewThrottledReader(ctx context.Context, r io.Reader, limiters ...*Limiter) io.Reader {
 	var active []*Limiter
 	for _, l := range limiters {

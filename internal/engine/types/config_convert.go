@@ -18,7 +18,7 @@ func ConvertRuntimeConfig(rc *config.RuntimeConfig) *RuntimeConfig {
 		SlowWorkerGracePeriod: rc.SlowWorkerGracePeriod,
 		StallTimeout:          rc.StallTimeout,
 		SpeedEmaAlpha:         rc.SpeedEmaAlpha,
-		PerDownloadSpeedLimit: rc.PerDownloadSpeedLimit * 1024 * 1024,
-		GlobalSpeedLimit:      rc.GlobalSpeedLimit * 1024 * 1024,
+		PerDownloadSpeedLimit: rc.GetPerDownloadSpeedLimitBytes(),
+		GlobalSpeedLimit:      rc.GetGlobalSpeedLimitBytes(),
 	}
 }

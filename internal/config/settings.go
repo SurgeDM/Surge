@@ -68,8 +68,8 @@ type NetworkSettings struct {
 	MinChunkSize           int64  `json:"min_chunk_size" ui_label:"Min Chunk Size" ui_desc:"Minimum download chunk size in MB (e.g., 2)."`
 	WorkerBufferSize       int    `json:"worker_buffer_size" ui_label:"Worker Buffer Size" ui_desc:"I/O buffer size per worker in KB (e.g., 512)."`
 	DialHedgeCount         int    `json:"dial_hedge_count" ui_label:"Dial Hedge Count" ui_desc:"Number of extra connections to dial pre-emptively to avoid slow connects (0-16)."`
-	PerDownloadSpeedLimit int64  `json:"per_download_speed_limit" ui_label:"Per-Download Speed Limit" ui_desc:"Maximum speed per download in MB/s (0 = unlimited)."`
-	GlobalSpeedLimit      int64  `json:"global_speed_limit" ui_label:"Global Speed Limit" ui_desc:"Maximum total download speed in MB/s (0 = unlimited)."`
+	PerDownloadSpeedLimit  int64  `json:"per_download_speed_limit" ui_label:"Per-Download Speed Limit" ui_desc:"Maximum speed per download in MB/s (0 = unlimited)."`
+	GlobalSpeedLimit       int64  `json:"global_speed_limit" ui_label:"Global Speed Limit" ui_desc:"Maximum total download speed in MB/s (0 = unlimited)."`
 }
 
 // PerformanceSettings contains performance tuning parameters.
@@ -315,6 +315,16 @@ type RuntimeConfig struct {
 	SpeedEmaAlpha         float64
 	PerDownloadSpeedLimit int64
 	GlobalSpeedLimit      int64
+}
+
+// GetPerDownloadSpeedLimitBytes returns the per-download speed limit in bytes/s
+func (rc *RuntimeConfig) GetPerDownloadSpeedLimitBytes() int64 {
+	return rc.PerDownloadSpeedLimit * 1024 * 1024
+}
+
+// GetGlobalSpeedLimitBytes returns the global speed limit in bytes/s
+func (rc *RuntimeConfig) GetGlobalSpeedLimitBytes() int64 {
+	return rc.GlobalSpeedLimit * 1024 * 1024
 }
 
 // ToRuntimeConfig creates a RuntimeConfig from user Settings
