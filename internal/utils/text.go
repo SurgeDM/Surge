@@ -5,7 +5,6 @@ import (
 	"unicode"
 
 	"github.com/mattn/go-runewidth"
-	"charm.land/lipgloss/v2"
 )
 
 // WrapText wraps a string to a specified maximum width.
@@ -88,7 +87,7 @@ func truncateToWidth(s string, width int) string {
 		res.WriteRune(info.r)
 		currentW += info.w
 	}
-	
+
 	return res.String()
 }
 
@@ -150,7 +149,11 @@ func getAnsiState(infos []charInfo, endIdx int) string {
 }
 
 func stringWidth(s string) int {
-	return lipgloss.Width(s)
+	var width int
+	for _, info := range getCharInfos(s) {
+		width += info.w
+	}
+	return width
 }
 
 // Truncate truncates a string to a maximum visual width and adds an ellipsis if needed.
@@ -158,7 +161,7 @@ func Truncate(s string, limit int) string {
 	if limit <= 0 {
 		return ""
 	}
-	if runewidth.StringWidth(s) <= limit {
+	if stringWidth(s) <= limit {
 		return s
 	}
 	if limit <= 1 {
@@ -244,12 +247,17 @@ func TruncateTwoLines(s string, width int) string {
 	var lines []string
 	var currentLine strings.Builder
 	currentW := 0
-	
-	for _, info := range infos {
+
+	for i, info := range infos {
 		if info.w > 0 && currentW+info.w > width {
 			if len(lines) < 1 { // We only need 2 lines max
+				state := getAnsiState(infos, i)
+				if state != "" {
+					currentLine.WriteString("\x1b[0m")
+				}
 				lines = append(lines, currentLine.String())
 				currentLine.Reset()
+				currentLine.WriteString(state)
 				currentW = 0
 			} else {
 				// We already have one line and this would start a third line

@@ -169,13 +169,27 @@ func TestAnsiAwareness(t *testing.T) {
 	red := "\x1b[31m"
 	reset := "\x1b[0m"
 	text := red + "hello" + reset // visual width 5
-	
+
 	t.Run("truncateToWidth", func(t *testing.T) {
 		assert.Equal(t, red+"hel"+reset, truncateToWidth(text, 3))
 	})
-	
+
 	t.Run("TruncateMiddle", func(t *testing.T) {
 		// limit 4: left 1, right 2
 		assert.Equal(t, red+"h"+reset+"…"+red+"lo"+reset, TruncateMiddle(text, 4))
+	})
+
+	t.Run("Truncate ANSI Guard", func(t *testing.T) {
+		// This should not be truncated because visual width is 5
+		assert.Equal(t, text, Truncate(text, 10))
+		// This should be truncated
+		assert.Equal(t, red+"hel"+reset+"…", Truncate(text, 4))
+	})
+
+	t.Run("TruncateTwoLines ANSI carry-over", func(t *testing.T) {
+		// width 3: first line "hel", second line should have "lo" with red color
+		// Expected: red+"hel"+reset + "\n" + red+"lo"+reset
+		expected := red + "hel" + reset + "\n" + red + "lo" + reset
+		assert.Equal(t, expected, TruncateTwoLines(text, 3))
 	})
 }

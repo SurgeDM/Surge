@@ -332,13 +332,13 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	valueLabelStyle := lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
 	valueContentStyle := lipgloss.NewStyle().Foreground(colors.White())
-	
+
 	labelRendered := valueLabelStyle.Render(valueLabel)
 	availableValueWidth := innerWidth - lipgloss.Width(labelRendered)
 	if availableValueWidth < 5 {
 		availableValueWidth = 5
 	}
-	
+
 	valueDisplay := lipgloss.JoinHorizontal(lipgloss.Top,
 		labelRendered,
 		valueContentStyle.Render(utils.TruncateTwoLines(valueStr, availableValueWidth)),
