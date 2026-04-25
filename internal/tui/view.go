@@ -405,6 +405,22 @@ func (m RootModel) View() tea.View {
 		hasChunks := len(bitmap) > 0 && bitmapWidth > 0
 		showActualChunkMap := layout.ShowChunkMap && hasChunks && selected != nil && !selected.done
 
+		// Measure whether the detail content actually fits in the allocated
+		// DetailHeight. If it doesn't, the chunk map would cause details to
+		// be clipped — so give the chunk map's space back to details.
+		if showActualChunkMap {
+			detailInnerH := layout.DetailHeight - components.BorderFrameHeight
+			if detailInnerH < 1 {
+				detailInnerH = 1
+			}
+			contentH := lipgloss.Height(detailContent)
+			if contentH > detailInnerH {
+				// Detail content is taller than what's allocated; reclaim
+				// chunk map space so nothing gets cut off.
+				showActualChunkMap = false
+			}
+		}
+
 		// If we reserved space for chunk map but aren't showing it, give it to details
 		if !showActualChunkMap && layout.ShowChunkMap {
 			layout.DetailHeight += layout.ChunkMapHeight

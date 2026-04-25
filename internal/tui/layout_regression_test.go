@@ -16,6 +16,7 @@ import (
 
 	"charm.land/bubbles/v2/list"
 	"charm.land/lipgloss/v2"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/version"
@@ -471,5 +472,227 @@ func TestLayout_GetDynamicModalDimensions_BoundedByTerminal(t *testing.T) {
 		if h < 1 {
 			t.Errorf("[%s] modal height %d < 1", label, h)
 		}
+	}
+}
+
+// ─────────────────────────────────────────────────────────────
+// 10. Right column height – graph + details + chunkmap ≤ available
+// ─────────────────────────────────────────────────────────────
+
+// makeDownloadWithChunks creates a download model that has an active bitmap,
+// mirrors, an error, and verbose fields — everything that makes the detail
+// pane as tall as possible.
+func makeDownloadWithChunks(longURL bool) *DownloadModel {
+	url := "https://cdn.example.com/releases/v1.2.3/file.iso"
+	filename := "file.iso"
+	dest := "/home/user/Downloads/file.iso"
+	if longURL {
+		url = "https://cdn.example.com/releases/v1.2.3/" + strings.Repeat("segment/", 20) + "ubuntu-22.04.iso"
+		filename = strings.Repeat("very-long-filename-", 6) + ".iso"
+		dest = "/home/user/" + strings.Repeat("deep/nested/path/", 6) + "file.iso"
+	}
+
+	dm := NewDownloadModel("dl-chunked", url, filename, 500*MB)
+	dm.Destination = dest
+	dm.Downloaded = 200 * MB
+	dm.Speed = 10 * MB
+	dm.Connections = 8
+
+	// Initialize the bitmap so GetBitmap() returns data
+	dm.state.InitBitmap(500*MB, 10*MB) // 50 chunks
+	// Mark some chunks as downloading/completed
+	for i := 0; i < 20; i++ {
+		dm.state.SetChunkState(i, 2) // ChunkCompleted
+	}
+	for i := 20; i < 28; i++ {
+		dm.state.SetChunkState(i, 1) // ChunkDownloading
+	}
+
+	// Add mirrors and an error to make the detail pane taller
+	dm.state.SetMirrors([]types.MirrorStatus{
+		{URL: "https://mirror1.example.com", Active: true},
+		{URL: "https://mirror2.example.com", Active: true},
+		{URL: "https://mirror3.example.com", Error: true},
+	})
+	dm.err = fmt.Errorf("connection reset by peer (retrying)")
+
+	return dm
+}
+
+func TestLayout_RightColumnHeightNeverExceedsAvailable(t *testing.T) {
+	// Test across a wide range of heights — the invariant must hold for ALL of them.
+	for termH := 18; termH <= 60; termH++ {
+		for _, termW := range []int{200, 160, 140} {
+			t.Run(fmt.Sprintf("%dx%d", termW, termH), func(t *testing.T) {
+				m := InitialRootModel(1701, "test", nil, processing.NewLifecycleManager(nil, nil), false)
+				m.width = termW
+				m.height = termH
+				m.activeTab = TabActive // download has Speed > 0
+
+				dm := makeDownloadWithChunks(true)
+				m.downloads = []*DownloadModel{dm}
+				m.UpdateListItems()
+
+				view := m.View()
+				assertNoLineExceedsWidth(t, fmt.Sprintf("%dx%d", termW, termH), view.Content, termW)
+				assertHeightNotExceeded(t, fmt.Sprintf("%dx%d", termW, termH), view.Content, termH)
+			})
+		}
+	}
+}
+
+// ─────────────────────────────────────────────────────────────
+// 11. Chunk map suppression – when details is big, chunk map must NOT render
+// ─────────────────────────────────────────────────────────────
+
+func TestLayout_ChunkMapSuppressedWhenDetailsTall(t *testing.T) {
+	// At various "medium" terminal heights where the chunk map might try to
+	// render, verify it is dynamically suppressed when the detail content
+	// is too tall to fit alongside it.
+	for termH := 18; termH <= 45; termH++ {
+		t.Run(fmt.Sprintf("h%d", termH), func(t *testing.T) {
+			m := InitialRootModel(1701, "test", nil, processing.NewLifecycleManager(nil, nil), false)
+			m.width = 160
+			m.height = termH
+			m.activeTab = TabActive
+
+			dm := makeDownloadWithChunks(true) // long URL + mirrors + error = very tall detail
+			m.downloads = []*DownloadModel{dm}
+			m.UpdateListItems()
+
+			layout := CalculateDashboardLayout(m.width, m.height)
+
+			if layout.HideRightColumn {
+				t.Skip("right column hidden at this size, chunk map irrelevant")
+			}
+
+			// Measure what the detail content would look like
+			selected := m.GetSelectedDownload()
+			if selected == nil {
+				t.Skip("no selected download")
+			}
+			detailContent := renderFocusedDetails(
+				selected,
+				layout.RightWidth-components.BorderFrameWidth,
+				"⠋",
+			)
+			contentH := lipgloss.Height(detailContent)
+
+			// Compute the inner height if chunk map IS shown
+			detailInnerH := layout.DetailHeight - components.BorderFrameHeight
+
+			if contentH > detailInnerH {
+				// Content is taller than what chunk map allocation allows.
+				// The view MUST suppress the chunk map in this case.
+				view := m.View()
+				rendered := view.Content
+
+				// "Chunk Map" title must NOT appear in the rendered output
+				if strings.Contains(rendered, "Chunk Map") {
+					t.Errorf("h=%d: chunk map rendered but detail content (%d lines) exceeds allocated inner height (%d lines)",
+						termH, contentH, detailInnerH)
+				}
+			}
+		})
+	}
+}
+
+// ─────────────────────────────────────────────────────────────
+// 12. Detail content NOT clipped – every section must be visible
+// ─────────────────────────────────────────────────────────────
+
+func TestLayout_DetailContentNotClippedByChunkMap(t *testing.T) {
+	// Render the dashboard at every height from 18..50 and verify that
+	// when the detail pane has enough room for the full content,
+	// all key sections are visible — none cut off by the chunk map.
+	for termH := 18; termH <= 50; termH++ {
+		t.Run(fmt.Sprintf("h%d", termH), func(t *testing.T) {
+			m := InitialRootModel(1701, "test", nil, processing.NewLifecycleManager(nil, nil), false)
+			m.width = 160
+			m.height = termH
+			m.activeTab = TabActive
+
+			dm := makeDownloadWithChunks(false) // normal URL, with mirrors + error
+			m.downloads = []*DownloadModel{dm}
+			m.UpdateListItems()
+
+			layout := CalculateDashboardLayout(m.width, m.height)
+			if layout.HideRightColumn {
+				t.Skip("right column hidden")
+			}
+
+			// Measure the actual detail content height
+			selected := m.GetSelectedDownload()
+			if selected == nil {
+				t.Skip("no selected download")
+			}
+			detailContent := renderFocusedDetails(
+				selected,
+				layout.RightWidth-components.BorderFrameWidth,
+				"⠋",
+			)
+			contentH := lipgloss.Height(detailContent)
+
+			// The maximum possible detail height (no chunk map) is
+			// AvailableHeight - GraphHeight, minus the border frame.
+			maxDetailInnerH := layout.AvailableHeight - layout.GraphHeight - components.BorderFrameHeight
+
+			if contentH > maxDetailInnerH {
+				// Even at full allocation (no chunk map), the content is
+				// taller than the detail pane. Clipping is expected — skip.
+				t.Skipf("content (%d lines) exceeds max detail inner height (%d) — terminal too short", contentH, maxDetailInnerH)
+			}
+
+			view := m.View()
+			rendered := stripANSI.ReplaceAllString(view.Content, "")
+
+			// These key labels must always be present in the rendered output
+			// when the detail pane has enough room. If any is missing,
+			// the chunk map stole space that should have gone to details.
+			requiredLabels := []string{
+				"URL:",
+				"File:",
+				"Path:",
+				"Speed:",
+				"ETA:",
+			}
+			for _, label := range requiredLabels {
+				if !strings.Contains(rendered, label) {
+					t.Errorf("h=%d: label %q not found in rendered view — detail content was clipped (contentH=%d, maxInnerH=%d)",
+						termH, label, contentH, maxDetailInnerH)
+				}
+			}
+		})
+	}
+}
+
+// ─────────────────────────────────────────────────────────────
+// 13. Dynamic suppression sweep – chunk map space always reclaimed
+// ─────────────────────────────────────────────────────────────
+
+func TestLayout_ChunkMapSpaceReclaimedForDetails(t *testing.T) {
+	// At every height where CalculateDashboardLayout says ShowChunkMap=true,
+	// verify that the final rendered right column still fits within
+	// AvailableHeight — proving that either the chunk map rendered within
+	// budget or was suppressed and its space reclaimed.
+	for termH := 18; termH <= 60; termH++ {
+		t.Run(fmt.Sprintf("h%d", termH), func(t *testing.T) {
+			m := InitialRootModel(1701, "test", nil, processing.NewLifecycleManager(nil, nil), false)
+			m.width = 160
+			m.height = termH
+			m.activeTab = TabActive
+
+			dm := makeDownloadWithChunks(true)
+			m.downloads = []*DownloadModel{dm}
+			m.UpdateListItems()
+
+			layout := CalculateDashboardLayout(m.width, m.height)
+			if layout.HideRightColumn {
+				t.Skip("right column hidden")
+			}
+
+			view := m.View()
+			assertHeightNotExceeded(t, fmt.Sprintf("h%d", termH), view.Content, termH)
+		})
 	}
 }
