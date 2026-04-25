@@ -76,15 +76,19 @@ func truncateToWidth(s string, width int) string {
 	infos := getCharInfos(s)
 	var res strings.Builder
 	var currentW int
-	for _, info := range infos {
+	for i, info := range infos {
 		if info.w > 0 && currentW+info.w > width {
-			break
+			// Check if we need to add a reset
+			state := getAnsiState(infos, i)
+			if state != "" {
+				res.WriteString("\x1b[0m")
+			}
+			return res.String()
 		}
 		res.WriteRune(info.r)
 		currentW += info.w
 	}
 	
-	// Return the result as-is to allow ANSI states (colors) to bleed into the next line
 	return res.String()
 }
 
@@ -114,6 +118,35 @@ func getCharInfos(s string) []charInfo {
 		}
 	}
 	return infos
+}
+
+func getAnsiState(infos []charInfo, endIdx int) string {
+	var state strings.Builder
+	var currentAnsi strings.Builder
+	inAnsi := false
+	for i := 0; i < endIdx && i < len(infos); i++ {
+		r := infos[i].r
+		if r == '\x1b' {
+			inAnsi = true
+			currentAnsi.WriteRune(r)
+			continue
+		}
+		if inAnsi {
+			currentAnsi.WriteRune(r)
+			if r == 'm' {
+				inAnsi = false
+				seq := currentAnsi.String()
+				if seq == "\x1b[0m" || seq == "\x1b[m" {
+					state.Reset()
+				} else {
+					state.WriteString(seq)
+				}
+				currentAnsi.Reset()
+			}
+			continue
+		}
+	}
+	return state.String()
 }
 
 func stringWidth(s string) int {
@@ -156,12 +189,14 @@ func TruncateMiddle(s string, limit int) string {
 	infos := getCharInfos(s)
 	var left strings.Builder
 	currentW := 0
-	for _, info := range infos {
+	leftEndIdx := 0
+	for i, info := range infos {
 		if info.w > 0 && currentW+info.w > leftLimit {
 			break
 		}
 		left.WriteRune(info.r)
 		currentW += info.w
+		leftEndIdx = i + 1
 	}
 
 	var right strings.Builder
@@ -183,8 +218,12 @@ func TruncateMiddle(s string, limit int) string {
 	}
 
 	lStr := left.String()
-	if strings.Contains(lStr, "\x1b[") && !strings.HasSuffix(lStr, "\x1b[0m") {
-		lStr += "\x1b[0m"
+	state := getAnsiState(infos, leftEndIdx)
+	if state != "" {
+		if !strings.HasSuffix(lStr, "\x1b[0m") {
+			lStr += "\x1b[0m"
+		}
+		return lStr + "…" + state + right.String()
 	}
 
 	return lStr + "…" + right.String()
