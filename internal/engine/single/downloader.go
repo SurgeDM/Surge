@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/engine/throttle"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -18,14 +19,14 @@ import (
 // NOTE: Pause/resume is NOT supported because this downloader is only used when
 // the server doesn't support Range headers. If interrupted, the download must restart.
 type SingleDownloader struct {
-	ProgressChan chan<- any           // Channel for events (start/complete/error)
-	ID           string               // Download ID
-	State        *types.ProgressState // Shared state for TUI polling
-	Runtime      *types.RuntimeConfig
-	TotalSize    int64
-	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
-	PerDownloadLimiter *engine.Limiter
-	GlobalLimiter      *engine.Limiter
+	ProgressChan       chan<- any           // Channel for events (start/complete/error)
+	ID                 string               // Download ID
+	State              *types.ProgressState // Shared state for TUI polling
+	Runtime            *types.RuntimeConfig
+	TotalSize          int64
+	Headers            map[string]string // Custom HTTP headers (cookies, auth, etc.)
+	perDownloadLimiter *throttle.Limiter
+	globalLimiter      *throttle.Limiter
 }
 
 var bufPool = sync.Pool{
@@ -42,12 +43,17 @@ func NewSingleDownloader(id string, progressCh chan<- any, state *types.Progress
 	}
 
 	return &SingleDownloader{
-		ProgressChan: progressCh,
-		ID:           id,
-		State:        state,
-		Runtime:      runtime,
-		PerDownloadLimiter: engine.NewLimiter(runtime.GetPerDownloadSpeedLimit()),
+		ProgressChan:       progressCh,
+		ID:                 id,
+		State:              state,
+		Runtime:            runtime,
+		perDownloadLimiter: throttle.NewLimiter(runtime.GetPerDownloadSpeedLimit()),
 	}
+}
+
+// SetGlobalLimiter sets the global speed limiter for the downloader
+func (d *SingleDownloader) SetGlobalLimiter(l *throttle.Limiter) {
+	d.globalLimiter = l
 }
 
 func (d *SingleDownloader) applyClientSettings(client *http.Client) {
@@ -140,13 +146,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	var written int64
 
 	// Apply speed limiters
-	var bodyReader io.Reader = resp.Body
-	if d.PerDownloadLimiter != nil || d.GlobalLimiter != nil {
-		bodyReader = engine.NewThrottledReader(ctx, resp.Body, d.PerDownloadLimiter, d.GlobalLimiter)
-		if bodyReader == nil {
-			bodyReader = resp.Body
-		}
-	}
+	bodyReader := throttle.NewThrottledReader(ctx, resp.Body, d.perDownloadLimiter, d.globalLimiter)
 
 	bufPtr := bufPool.Get().(*[]byte)
 	buf := *bufPtr

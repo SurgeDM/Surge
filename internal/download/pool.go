@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/engine/throttle"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -21,14 +22,15 @@ type activeDownload struct {
 }
 
 type WorkerPool struct {
-	taskChan     chan types.DownloadConfig
-	progressCh   chan<- any
-	progressDone chan struct{}                   // closed when progressCh must no longer be sent to
-	downloads    map[string]*activeDownload      // Track active downloads for pause/resume
-	queued       map[string]types.DownloadConfig // Track queued downloads
-	mu           sync.RWMutex
-	wg           sync.WaitGroup // We use this to wait for all active downloads to pause before exiting the program
-	maxDownloads int
+	taskChan      chan types.DownloadConfig
+	progressCh    chan<- any
+	progressDone  chan struct{}                   // closed when progressCh must no longer be sent to
+	downloads     map[string]*activeDownload      // Track active downloads for pause/resume
+	queued        map[string]types.DownloadConfig // Track queued downloads
+	mu            sync.RWMutex
+	wg            sync.WaitGroup // We use this to wait for all active downloads to pause before exiting the program
+	maxDownloads  int
+	globalLimiter *throttle.Limiter
 }
 
 var (
@@ -58,10 +60,20 @@ func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
 		queued:       make(map[string]types.DownloadConfig),
 		maxDownloads: maxDownloads,
 	}
+	pool.globalLimiter = throttle.NewLimiter(1)
+	pool.globalLimiter.SetRate(0)
 	for i := 0; i < maxDownloads; i++ {
 		go pool.worker()
 	}
 	return pool
+}
+
+// UpdateGlobalSpeedLimit updates the global download speed limit (rate in bytes/sec)
+func (p *WorkerPool) UpdateGlobalSpeedLimit(rate int64) {
+	if p == nil {
+		return
+	}
+	p.globalLimiter.SetRate(rate)
 }
 
 // syncConfigFromState syncs Filename, DestPath, and Mirrors from the associated state.
@@ -356,6 +368,7 @@ func (p *WorkerPool) worker() {
 		p.downloads[cfg.ID] = ad
 		p.mu.Unlock()
 
+		ad.config.GlobalLimiter = p.globalLimiter
 		err := TUIDownload(ctx, &ad.config)
 		ad.running.Store(false)
 

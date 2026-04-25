@@ -16,25 +16,26 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/throttle"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // ConcurrentDownloader handles multi-connection downloads
 type ConcurrentDownloader struct {
-	ProgressChan chan<- any           // Channel for events (start/complete/error)
-	ID           string               // Download ID
-	State        *types.ProgressState // Shared state for TUI polling
-	activeTasks  map[int]*ActiveTask
-	activeMu     sync.Mutex
-	URL          string // For pause/resume
-	DestPath     string // For pause/resume
-	Runtime      *types.RuntimeConfig
-	TotalSize    int64
-	bufPool      sync.Pool
-	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
-	PerDownloadLimiter *engine.Limiter // Per-download speed limiter
-	GlobalLimiter      *engine.Limiter // Global speed limiter
+	ProgressChan       chan<- any           // Channel for events (start/complete/error)
+	ID                 string               // Download ID
+	State              *types.ProgressState // Shared state for TUI polling
+	activeTasks        map[int]*ActiveTask
+	activeMu           sync.Mutex
+	URL                string // For pause/resume
+	DestPath           string // For pause/resume
+	Runtime            *types.RuntimeConfig
+	TotalSize          int64
+	bufPool            sync.Pool
+	Headers            map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
+	perDownloadLimiter *throttle.Limiter // Per-download speed limiter
+	globalLimiter      *throttle.Limiter // Global speed limiter
 }
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
@@ -62,8 +63,13 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 				return &buf
 			},
 		},
-		PerDownloadLimiter: engine.NewLimiter(runtime.GetPerDownloadSpeedLimit()),
+		perDownloadLimiter: throttle.NewLimiter(runtime.GetPerDownloadSpeedLimit()),
 	}
+}
+
+// SetGlobalLimiter sets the global speed limiter for the downloader
+func (d *ConcurrentDownloader) SetGlobalLimiter(l *throttle.Limiter) {
+	d.globalLimiter = l
 }
 
 // getInitialConnections returns the starting number of connections based on file size

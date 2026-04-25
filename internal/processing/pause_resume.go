@@ -30,6 +30,8 @@ type EngineHooks struct {
 	UpdateURL func(id, newURL string) error
 	// PublishEvent sends an event into the service's broadcast channel.
 	PublishEvent func(msg interface{}) error
+	// UpdateGlobalSpeedLimit updates the global speed limit on the executor.
+	UpdateGlobalSpeedLimit func(rate int64)
 }
 
 // Pause pauses an active download.

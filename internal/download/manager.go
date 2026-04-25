@@ -8,11 +8,9 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/engine"
 	"github.com/SurgeDM/Surge/internal/engine/concurrent"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/single"
@@ -72,22 +70,6 @@ func uniqueFilePath(path string) string {
 	// Fallback: just append a large random number or give up (original behavior essentially gave up or made ugly names)
 	// Here we fallback to original behavior of appending if the clean one failed 100 times
 	return path
-}
-
-// globalLimiter is a package-level singleton shared across all downloads.
-var (
-	globalLimiter     *engine.Limiter
-	globalLimiterOnce sync.Once
-)
-
-func getGlobalLimiter(rate int64) *engine.Limiter {
-	globalLimiterOnce.Do(func() {
-		globalLimiter = engine.NewLimiter(rate)
-	})
-	if globalLimiter != nil {
-		globalLimiter.SetRate(rate)
-	}
-	return globalLimiter
 }
 
 // TUIDownload is the main entry point for downloads executed by the Engine pool
@@ -172,11 +154,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	var downloadErr error
 	useConcurrent := cfg.SupportsRange
 
-	// Resolve global limiter
-	var gl *engine.Limiter
-	if cfg.Runtime != nil && cfg.Runtime.GetGlobalSpeedLimit() > 0 {
-		gl = getGlobalLimiter(cfg.Runtime.GetGlobalSpeedLimit())
-	}
+	gl := cfg.GlobalLimiter
 
 	if useConcurrent {
 		utils.Debug("Using concurrent downloader")
@@ -209,7 +187,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 
 		d := concurrent.NewConcurrentDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
-		d.GlobalLimiter = gl
+		d.SetGlobalLimiter(gl)
 		utils.Debug("Calling Download with mirrors: %v", mirrors)
 		// Pass effectiveTotalSize to avoid unnecessary bootstrap if state already knows the size
 		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, effectiveTotalSize)
@@ -241,7 +219,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		utils.Debug("Using single-threaded downloader")
 		d := single.NewSingleDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
-		d.GlobalLimiter = gl
+		d.SetGlobalLimiter(gl)
 		// Pass effectiveTotalSize here as well
 		downloadErr = d.Download(ctx, cfg.URL, finalDestPath, effectiveTotalSize, finalFilename)
 		if d.TotalSize > 0 {

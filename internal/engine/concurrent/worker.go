@@ -9,7 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/engine/throttle"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -215,13 +215,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 	}()
 
 	// Apply speed limiters (per-download + global)
-	var body io.Reader = resp.Body
-	if d.PerDownloadLimiter != nil || d.GlobalLimiter != nil {
-		body = engine.NewThrottledReader(ctx, resp.Body, d.PerDownloadLimiter, d.GlobalLimiter)
-		if body == nil {
-			body = resp.Body // Passthrough if both are nil or inactive
-		}
-	}
+	body := throttle.NewThrottledReader(ctx, resp.Body, d.perDownloadLimiter, d.globalLimiter)
 
 	// Handle rate limiting explicitly
 	if resp.StatusCode == http.StatusTooManyRequests {

@@ -1,4 +1,4 @@
-package engine
+package throttle
 
 import (
 	"context"
@@ -17,29 +17,19 @@ type Limiter struct {
 }
 
 // NewLimiter creates a new rate limiter. rate is in bytes per second.
-// If rate is 0, it acts as unlimited.
+// If rate is 0, it acts as unlimited (returns nil).
 func NewLimiter(rate int64) *Limiter {
 	if rate <= 0 {
 		return nil
 	}
-	// Burst capacity is 1MB or 2x rate, whichever is smaller, but at least 32KB
-	burst := rate * 2
-	if burst > 1024*1024 {
-		burst = 1024 * 1024
-	}
-	if burst < 1 {
-		burst = 1
-	}
-
-	return &Limiter{
-		rate:       rate,
-		burst:      burst,
-		tokens:     burst,
-		lastRefill: time.Now(),
-	}
+	l := &Limiter{}
+	l.SetRate(rate)
+	l.tokens = l.burst // Start full
+	l.lastRefill = time.Now()
+	return l
 }
 
-// SetRate dynamically updates the rate.
+// SetRate dynamically updates the rate. If rate <= 0, the limiter is effectively disabled.
 func (l *Limiter) SetRate(rate int64) {
 	if l == nil {
 		return
@@ -48,7 +38,13 @@ func (l *Limiter) SetRate(rate int64) {
 	defer l.mu.Unlock()
 
 	l.rate = rate
-	// Update burst as well
+	if rate <= 0 {
+		l.burst = 0
+		l.tokens = 0
+		return
+	}
+
+	// Burst capacity is 1MB or 2x rate, whichever is smaller.
 	burst := rate * 2
 	if burst > 1024*1024 {
 		burst = 1024 * 1024
@@ -64,17 +60,21 @@ func (l *Limiter) SetRate(rate int64) {
 
 // waitN blocks until n tokens are available or context is cancelled.
 func (l *Limiter) waitN(ctx context.Context, n int) error {
-	if l == nil || l.rate <= 0 {
+	if l == nil {
 		return nil
 	}
 
 	for {
 		l.mu.Lock()
+		if l.rate <= 0 {
+			l.mu.Unlock()
+			return nil
+		}
+
 		now := time.Now()
 		elapsed := now.Sub(l.lastRefill)
 
-		// Refill tokens: (elapsed * rate) / second
-		// Using nanoseconds to avoid early truncation
+		// Refill tokens
 		refill := int64(float64(elapsed.Nanoseconds()) * float64(l.rate) / float64(time.Second.Nanoseconds()))
 
 		if refill > 0 {
@@ -82,8 +82,6 @@ func (l *Limiter) waitN(ctx context.Context, n int) error {
 			if l.tokens > l.burst {
 				l.tokens = l.burst
 			}
-			// Important: don't just set lastRefill to now, only advance by the amount we refilled
-			// to avoid losing sub-token time.
 			l.lastRefill = l.lastRefill.Add(time.Duration(float64(refill) * float64(time.Second.Nanoseconds()) / float64(l.rate)))
 		}
 
@@ -93,12 +91,10 @@ func (l *Limiter) waitN(ctx context.Context, n int) error {
 			return nil
 		}
 
-		// Calculate wait time for the remaining tokens
 		needed := int64(n) - l.tokens
 		waitDuration := time.Duration(float64(needed) * float64(time.Second.Nanoseconds()) / float64(l.rate))
 		l.mu.Unlock()
 
-		// Sleep at least a tiny bit to avoid busy loops if waitDuration is very small
 		if waitDuration < 1*time.Millisecond {
 			waitDuration = 1 * time.Millisecond
 		}
@@ -119,8 +115,7 @@ type ThrottledReader struct {
 }
 
 // NewThrottledReader creates a new throttled reader.
-func NewThrottledReader(ctx context.Context, r io.Reader, limiters ...*Limiter) *ThrottledReader {
-	// Filter out nil limiters
+func NewThrottledReader(ctx context.Context, r io.Reader, limiters ...*Limiter) io.Reader {
 	var active []*Limiter
 	for _, l := range limiters {
 		if l != nil {
@@ -129,7 +124,7 @@ func NewThrottledReader(ctx context.Context, r io.Reader, limiters ...*Limiter) 
 	}
 
 	if len(active) == 0 {
-		return nil // Should handle this in caller or return a passthrough
+		return r
 	}
 
 	return &ThrottledReader{
@@ -140,13 +135,8 @@ func NewThrottledReader(ctx context.Context, r io.Reader, limiters ...*Limiter) 
 }
 
 func (t *ThrottledReader) Read(p []byte) (int, error) {
-	if t == nil {
-		return 0, io.ErrUnexpectedEOF
-	}
-
 	n, err := t.r.Read(p)
 	if n > 0 {
-		// Wait for tokens from all limiters
 		for _, l := range t.limiters {
 			if waitErr := l.waitN(t.ctx, n); waitErr != nil {
 				return n, waitErr

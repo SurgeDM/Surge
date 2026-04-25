@@ -238,6 +238,7 @@ func ensureGlobalLocalServiceAndLifecycle() error {
 			Cancel:              GlobalPool.Cancel,
 			UpdateURL:           GlobalPool.UpdateURL,
 			PublishEvent:        localService.Publish,
+			UpdateGlobalSpeedLimit: GlobalPool.UpdateGlobalSpeedLimit,
 		})
 
 		localService.SetLifecycleHooks(core.LifecycleHooks{
@@ -436,6 +437,7 @@ var rootCmd = &cobra.Command{
 		GlobalProgressCh = make(chan any, 100)
 		globalSettings = getSettings()
 		GlobalPool = download.NewWorkerPool(GlobalProgressCh, globalSettings.Network.MaxConcurrentDownloads)
+		GlobalPool.UpdateGlobalSpeedLimit(globalSettings.Network.GlobalSpeedLimit * 1024 * 1024)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if ranRemote, err := maybeRunRemoteTUI(cmd, args); err != nil {
