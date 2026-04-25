@@ -94,3 +94,17 @@ func TestDualLimiter(t *testing.T) {
 	// That's 1s wait.
 	assert.True(t, time.Since(start) >= 800*time.Millisecond, "Should be limited by tighter limiter, got %v", time.Since(start))
 }
+
+func TestBurstExceeded(t *testing.T) {
+	rate := int64(100) // 100 bytes per second
+	l := NewLimiter(rate)
+	// burst is 200
+
+	ctx, cancel := context.WithTimeout(context.Background(), 1*time.Second)
+	defer cancel()
+
+	// Requesting 300 bytes (exceeds burst of 200).
+	// Without the fix, this deadlocks. With the fix, it consumes 200 and returns.
+	err := l.waitN(ctx, 300)
+	assert.NoError(t, err)
+}

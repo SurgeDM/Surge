@@ -82,15 +82,19 @@ func (l *Limiter) waitN(ctx context.Context, n int) error {
 			l.lastRefill = l.lastRefill.Add(time.Duration(float64(refill) * float64(time.Second.Nanoseconds()) / float64(l.rate)))
 		}
 
-		if l.tokens >= int64(n) {
-			l.tokens -= int64(n)
+		// Clamp to burst so the condition is always reachable for large reads.
+		want := int64(n)
+		if want > l.burst {
+			want = l.burst
+		}
+
+		if l.tokens >= want {
+			l.tokens -= want
 			l.mu.Unlock()
 			return nil
 		}
 
-		// Calculate wait time for the remaining tokens.
-		// Division by l.rate is safe here because l.rate > 0 is checked at the top of the for-loop.
-		needed := int64(n) - l.tokens
+		needed := want - l.tokens
 		waitDuration := time.Duration(float64(needed) * float64(time.Second.Nanoseconds()) / float64(l.rate))
 		l.mu.Unlock()
 
