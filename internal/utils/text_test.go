@@ -124,7 +124,7 @@ func TestTruncateMiddle(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, truncateMiddle(tt.text, tt.limit))
+			assert.Equal(t, tt.expected, TruncateMiddle(tt.text, tt.limit))
 		})
 	}
 }
@@ -142,7 +142,7 @@ func TestTruncateMiddleEdgeCases(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.expected, truncateMiddle(tt.text, tt.limit))
+			assert.Equal(t, tt.expected, TruncateMiddle(tt.text, tt.limit))
 		})
 	}
 }

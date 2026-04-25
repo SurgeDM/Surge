@@ -149,7 +149,7 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 		availableWidth = 10
 	}
 
-	title := utils.Truncate(i.Title(), availableWidth)
+	title := utils.TruncateMiddle(i.Title(), availableWidth)
 	description := utils.Truncate(i.Description(), availableWidth)
 
 	// Render lines

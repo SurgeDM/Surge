@@ -100,8 +100,8 @@ func Truncate(s string, limit int) string {
 	return sub + "…"
 }
 
-// truncateMiddle truncates a string in the middle to a maximum visual width.
-func truncateMiddle(s string, limit int) string {
+// TruncateMiddle truncates a string in the middle to a maximum visual width.
+func TruncateMiddle(s string, limit int) string {
 	if limit <= 0 {
 		return ""
 	}
@@ -131,4 +131,18 @@ func truncateMiddle(s string, limit int) string {
 	}
 
 	return left + "…" + right
+}
+
+// TruncateTwoLines middle-truncates a string to fit in at most 2 lines of a given width.
+func TruncateTwoLines(s string, width int) string {
+	if width <= 0 {
+		return s
+	}
+	truncated := TruncateMiddle(s, 2*width)
+	wrapped := WrapText(truncated, width)
+	lines := strings.Split(wrapped, "\n")
+	if len(lines) > 2 {
+		lines = lines[:2]
+	}
+	return strings.Join(lines, "\n")
 }
