@@ -72,13 +72,13 @@ type NetworkSettings struct {
 	GlobalSpeedLimit       int64  `json:"global_speed_limit" ui_label:"Global Speed Limit" ui_desc:"Maximum total download speed in MB/s (0 = unlimited)."`
 }
 
-// GlobalLimitBytes returns the global limit in bytes per second.
-func (n *NetworkSettings) GlobalLimitBytes() int64 {
+// GetGlobalLimitBytes returns the global limit in bytes per second.
+func (n *NetworkSettings) GetGlobalLimitBytes() int64 {
 	return n.GlobalSpeedLimit * 1024 * 1024
 }
 
-// PerDownloadLimitBytes returns the per-download limit in bytes per second.
-func (n *NetworkSettings) PerDownloadLimitBytes() int64 {
+// GetPerDownloadLimitBytes returns the per-download limit in bytes per second.
+func (n *NetworkSettings) GetPerDownloadLimitBytes() int64 {
 	return n.PerDownloadSpeedLimit * 1024 * 1024
 }
 
