@@ -64,7 +64,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 			},
 		},
 	}
-	if rate := runtime.GetPerDownloadSpeedLimit(); rate > 0 {
+	if rate := runtime.GetPerDownloadLimitBytes(); rate > 0 {
 		d.perDownloadLimiter = throttle.NewLimiter(rate)
 	}
 	return d

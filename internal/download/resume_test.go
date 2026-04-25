@@ -99,7 +99,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	// Start download
 	errCh := make(chan error)
 	go func() {
-		errCh <- download.TUIDownload(ctx, &cfg)
+		errCh <- download.TUIDownload(ctx, &cfg, nil)
 	}()
 
 	// Wait for some progress
@@ -179,7 +179,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	// Reset pause flag before resume
 	progState.Resume()
 
-	err = download.TUIDownload(resumeCtx, &cfg)
+	err = download.TUIDownload(resumeCtx, &cfg, nil)
 	if err != nil {
 		t.Fatalf("Resume failed: %v", err)
 	}

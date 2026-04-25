@@ -367,8 +367,7 @@ func (p *WorkerPool) worker() {
 		p.downloads[cfg.ID] = ad
 		p.mu.Unlock()
 
-		ad.config.GlobalLimiter = p.globalLimiter
-		err := TUIDownload(ctx, &ad.config)
+		err := TUIDownload(ctx, &ad.config, p.globalLimiter)
 		ad.running.Store(false)
 
 		// Logic:

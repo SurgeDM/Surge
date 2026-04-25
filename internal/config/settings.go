@@ -72,6 +72,16 @@ type NetworkSettings struct {
 	GlobalSpeedLimit       int64  `json:"global_speed_limit" ui_label:"Global Speed Limit" ui_desc:"Maximum total download speed in MB/s (0 = unlimited)."`
 }
 
+// GlobalLimitBytes returns the global limit in bytes per second.
+func (n *NetworkSettings) GlobalLimitBytes() int64 {
+	return n.GlobalSpeedLimit * 1024 * 1024
+}
+
+// PerDownloadLimitBytes returns the per-download limit in bytes per second.
+func (n *NetworkSettings) PerDownloadLimitBytes() int64 {
+	return n.PerDownloadSpeedLimit * 1024 * 1024
+}
+
 // PerformanceSettings contains performance tuning parameters.
 type PerformanceSettings struct {
 	MaxTaskRetries        int           `json:"max_task_retries" ui_label:"Max Task Retries" ui_desc:"Number of times to retry a failed chunk before giving up."`
@@ -315,16 +325,6 @@ type RuntimeConfig struct {
 	SpeedEmaAlpha         float64
 	PerDownloadSpeedLimit int64
 	GlobalSpeedLimit      int64
-}
-
-// GetPerDownloadSpeedLimitBytes returns the per-download speed limit in bytes/s
-func (rc *RuntimeConfig) GetPerDownloadSpeedLimitBytes() int64 {
-	return rc.PerDownloadSpeedLimit * 1024 * 1024
-}
-
-// GetGlobalSpeedLimitBytes returns the global speed limit in bytes/s
-func (rc *RuntimeConfig) GetGlobalSpeedLimitBytes() int64 {
-	return rc.GlobalSpeedLimit * 1024 * 1024
 }
 
 // ToRuntimeConfig creates a RuntimeConfig from user Settings

@@ -48,7 +48,7 @@ func NewSingleDownloader(id string, progressCh chan<- any, state *types.Progress
 		State:              state,
 		Runtime:            runtime,
 	}
-	if rate := runtime.GetPerDownloadSpeedLimit(); rate > 0 {
+	if rate := runtime.GetPerDownloadLimitBytes(); rate > 0 {
 		d.perDownloadLimiter = throttle.NewLimiter(rate)
 	}
 	return d

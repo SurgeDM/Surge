@@ -14,6 +14,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/concurrent"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/single"
+	"github.com/SurgeDM/Surge/internal/engine/throttle"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -73,7 +74,7 @@ func uniqueFilePath(path string) string {
 }
 
 // TUIDownload is the main entry point for downloads executed by the Engine pool
-func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
+func TUIDownload(ctx context.Context, cfg *types.DownloadConfig, gl *throttle.Limiter) error {
 	start := time.Now()
 	// Engine expects cfg.OutputPath and cfg.Filename to be fully resolved by the processing layer
 	destPath := cfg.OutputPath
@@ -153,8 +154,6 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	// Choose downloader based on probe results
 	var downloadErr error
 	useConcurrent := cfg.SupportsRange
-
-	gl := cfg.GlobalLimiter
 
 	if useConcurrent {
 		utils.Debug("Using concurrent downloader")
@@ -296,5 +295,5 @@ func Download(ctx context.Context, url string, outPath string, progressCh chan<-
 		MinChunkSize:          types.MinChunk,
 		WorkerBufferSize:      types.WorkerBuffer,
 	}
-	return TUIDownload(ctx, &cfg)
+	return TUIDownload(ctx, &cfg, nil)
 }

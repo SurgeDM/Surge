@@ -2,8 +2,6 @@ package types
 
 import (
 	"time"
-
-	"github.com/SurgeDM/Surge/internal/engine/throttle"
 )
 
 // Size constants
@@ -72,7 +70,6 @@ type DownloadConfig struct {
 	IsExplicitCategory bool              // Used to override category routing from TUI
 	TotalSize          int64             // Total size in bytes of the required download
 	SupportsRange      bool              // Indicates whether the server supports range requests for concurrency
-	GlobalLimiter      *throttle.Limiter // Shared global speed limiter
 }
 
 // RuntimeConfig holds dynamic settings that can override defaults
@@ -191,18 +188,18 @@ func (r *RuntimeConfig) GetSpeedEmaAlpha() float64 {
 	return r.SpeedEmaAlpha
 }
 
-// GetPerDownloadSpeedLimit returns configured value or 0 (unlimited)
-func (r *RuntimeConfig) GetPerDownloadSpeedLimit() int64 {
-	if r == nil {
-		return 0
-	}
-	return r.PerDownloadSpeedLimit
-}
-
-// GetGlobalSpeedLimit returns configured value or 0 (unlimited)
-func (r *RuntimeConfig) GetGlobalSpeedLimit() int64 {
+// GetGlobalLimitBytes returns configured value or 0
+func (r *RuntimeConfig) GetGlobalLimitBytes() int64 {
 	if r == nil {
 		return 0
 	}
 	return r.GlobalSpeedLimit
+}
+
+// GetPerDownloadLimitBytes returns configured value or 0
+func (r *RuntimeConfig) GetPerDownloadLimitBytes() int64 {
+	if r == nil {
+		return 0
+	}
+	return r.PerDownloadSpeedLimit
 }
