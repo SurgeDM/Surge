@@ -146,3 +146,21 @@ func TestTruncateMiddleEdgeCases(t *testing.T) {
 		})
 	}
 }
+
+func TestTruncateTwoLines(t *testing.T) {
+	tests := []struct {
+		name     string
+		text     string
+		width    int
+		expected string
+	}{
+		{"Single Line", "abc", 10, "abc"},
+		{"Exactly Two Lines", "abcdefghij", 5, "abcde\nfghij"},
+		{"With Spaces", "abc def", 4, "abc \ndef"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, TruncateTwoLines(tt.text, tt.width))
+		})
+	}
+}

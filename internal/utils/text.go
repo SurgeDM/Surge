@@ -134,15 +134,26 @@ func TruncateMiddle(s string, limit int) string {
 }
 
 // TruncateTwoLines middle-truncates a string to fit in at most 2 lines of a given width.
+// It uses character-based wrapping (ignoring word boundaries) to maximize space usage.
 func TruncateTwoLines(s string, width int) string {
 	if width <= 0 {
 		return s
 	}
+
+	// 1. Truncate in the middle if it exceeds 2 lines of visual width
 	truncated := TruncateMiddle(s, 2*width)
-	wrapped := WrapText(truncated, width)
-	lines := strings.Split(wrapped, "\n")
-	if len(lines) > 2 {
-		lines = lines[:2]
+
+	// 2. Wrap based on characters (visual width)
+	var lines []string
+	current := truncated
+	for i := 0; i < 2 && current != ""; i++ {
+		sub := truncateToWidth(current, width)
+		if sub == "" {
+			break
+		}
+		lines = append(lines, sub)
+		current = current[len(sub):]
 	}
+
 	return strings.Join(lines, "\n")
 }
