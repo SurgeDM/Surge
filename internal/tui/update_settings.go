@@ -15,6 +15,9 @@ import (
 type extensionTokenFlashFadeMsg struct{}
 
 func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.SettingsBaseline == nil {
+		m.snapshotSettings()
+	}
 	m.normalizeSettingsSelection()
 
 	categories := config.CategoryOrder()
@@ -48,9 +51,16 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// Not editing - handle navigation
 	if key.Matches(msg, m.keys.Settings.Close) {
+		requiresRestart := m.checkRestartRequirement()
 		// Save settings and exit
 		_ = m.persistSettings()
+		if requiresRestart {
+			m.state = RestartConfirmState
+			m.quitConfirmFocused = 0
+			return m, nil
+		}
 		m.state = DashboardState
+		m.SettingsBaseline = nil
 		return m, nil
 	}
 	tabBindings := []key.Binding{

@@ -217,6 +217,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.Settings) {
+		m.snapshotSettings()
 		m.state = SettingsState
 		m.SettingsActiveTab = 0
 		m.SettingsSelectedRow = 0

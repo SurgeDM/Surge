@@ -326,3 +326,34 @@ func (m RootModel) resetBugReportFlow() RootModel {
 	m.state = DashboardState
 	return m
 }
+
+func (m RootModel) updateRestartConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	confirmRestart := func() (tea.Model, tea.Cmd) {
+		if m.cancelEnqueue != nil {
+			m.cancelEnqueue()
+		}
+		m.shuttingDown = true
+		m.RestartRequested = true
+		return m, shutdownCmd(m.Service)
+	}
+	cancelRestart := func() (tea.Model, tea.Cmd) {
+		m.state = DashboardState
+		m.quitConfirmFocused = 0
+		m.SettingsBaseline = nil
+		return m, nil
+	}
+
+	m, decision, handled := m.handleYesNoSelection(msg)
+	if !handled {
+		return m, nil
+	}
+
+	switch decision {
+	case yesNoYes:
+		return confirmRestart()
+	case yesNoNo, yesNoCancel:
+		return cancelRestart()
+	}
+
+	return m, nil
+}

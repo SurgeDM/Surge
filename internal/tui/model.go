@@ -51,10 +51,11 @@ const (
 	URLUpdateState                             // URLUpdateState is 12
 	CategoryManagerState                       // CategoryManagerState is 13
 	QuitConfirmState                           // QuitConfirmState is 14
-	HelpModalState                             // HelpModalState is 15
-	BugReportTargetState                       // BugReportTargetState is 16
-	BugReportSystemDetailsState                // BugReportSystemDetailsState is 17
-	BugReportLogPathState                      // BugReportLogPathState is 18
+	RestartConfirmState                        // RestartConfirmState is 15
+	HelpModalState                             // HelpModalState is 16
+	BugReportTargetState                       // BugReportTargetState is 17
+	BugReportSystemDetailsState                // BugReportSystemDetailsState is 18
+	BugReportLogPathState                      // BugReportLogPathState is 19
 )
 
 type FilePickerOrigin int
@@ -148,6 +149,7 @@ type RootModel struct {
 
 	// Settings
 	Settings             *config.Settings // Application settings
+	SettingsBaseline     *config.Settings // Snapshot of settings when entering the settings view
 	SettingsActiveTab    int              // Active category tab (0-3)
 	SettingsSelectedRow  int              // Selected setting within current tab
 	SettingsIsEditing    bool             // Whether currently editing a value
@@ -203,7 +205,8 @@ type RootModel struct {
 
 	enqueueCtx    context.Context
 	cancelEnqueue context.CancelFunc
-	shuttingDown  bool
+	shuttingDown     bool
+	RestartRequested bool // [NEW] Flag to signal process re-exec after TUI shutdown
 
 	spinner spinner.Model
 }

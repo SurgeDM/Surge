@@ -347,7 +347,16 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2500", innerWidth))
 
-	wrappedDesc := utils.TruncateTwoLines(meta.Description, innerWidth)
+	desc := meta.Description
+	if meta.RequiresRestart {
+		restartNotice := lipgloss.NewStyle().
+			Foreground(colors.Orange()).
+			Bold(true).
+			Render("(*) Requires Restart")
+		desc = restartNotice + "\n" + desc
+	}
+
+	wrappedDesc := utils.WrapText(desc, innerWidth)
 	descDisplay := lipgloss.NewStyle().
 		Foreground(colors.LightGray()).
 		Width(innerWidth).

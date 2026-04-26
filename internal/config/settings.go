@@ -24,14 +24,14 @@ type GeneralSettings struct {
 	DefaultDownloadDir           string `json:"default_download_dir" ui_label:"Default Download Dir" ui_desc:"Default directory for new downloads. Leave empty to use current directory."`
 	WarnOnDuplicate              bool   `json:"warn_on_duplicate" ui_label:"Warn on Duplicate" ui_desc:"Show warning when adding a download that already exists."`
 	DownloadCompleteNotification bool   `json:"download_complete_notification" ui_label:"Download Complete Notification" ui_desc:"Show system notification when a download finishes."`
-	AllowRemoteOpenActions       bool   `json:"allow_remote_open_actions" ui_label:"Allow Remote Open Actions" ui_desc:"Allow /open-file and /open-folder API calls from non-loopback clients. Disabled by default for security."`
-	AutoResume                   bool   `json:"auto_resume" ui_label:"Auto Resume" ui_desc:"Automatically resume paused downloads on startup."`
-	SkipUpdateCheck              bool   `json:"skip_update_check" ui_label:"Skip Update Check" ui_desc:"Disable automatic check for new versions on startup."`
+	AllowRemoteOpenActions       bool   `json:"allow_remote_open_actions" ui_label:"Allow Remote Open Actions" ui_desc:"Allow /open-file and /open-folder API calls from non-loopback clients. Disabled by default for security." ui_restart:"true"`
+	AutoResume                   bool   `json:"auto_resume" ui_label:"Auto Resume" ui_desc:"Automatically resume paused downloads on startup." ui_restart:"true"`
+	SkipUpdateCheck              bool   `json:"skip_update_check" ui_label:"Skip Update Check" ui_desc:"Disable automatic check for new versions on startup." ui_restart:"true"`
 
-	ClipboardMonitor  bool   `json:"clipboard_monitor" ui_label:"Clipboard Monitor" ui_desc:"Watch clipboard for URLs and prompt to download them."`
+	ClipboardMonitor  bool   `json:"clipboard_monitor" ui_label:"Clipboard Monitor" ui_desc:"Watch clipboard for URLs and prompt to download them." ui_restart:"true"`
 	Theme             int    `json:"theme" ui_label:"App Theme" ui_desc:"UI Theme (System, Light, Dark)."`
 	ThemePath         string `json:"theme_path" ui_label:"Theme File" ui_desc:"Path to a custom .toml color scheme."`
-	LogRetentionCount int    `json:"log_retention_count" ui_label:"Log Retention Count" ui_desc:"Number of recent log files to keep."`
+	LogRetentionCount int    `json:"log_retention_count" ui_label:"Log Retention Count" ui_desc:"Number of recent log files to keep." ui_restart:"true"`
 	LiveSpeedGraph    bool   `json:"live_speed_graph" ui_label:"Live Speed Graph" ui_desc:"Use live speed for graph instead of EMA smoothed speed."`
 }
 
@@ -59,8 +59,8 @@ type ExtensionSettings struct {
 // NetworkSettings contains network connection parameters.
 type NetworkSettings struct {
 	MaxConnectionsPerHost  int    `json:"max_connections_per_host" ui_label:"Max Connections/Host" ui_desc:"Maximum concurrent connections per host (1-64)."`
-	MaxConcurrentDownloads int    `json:"max_concurrent_downloads" ui_label:"Max Concurrent Downloads" ui_desc:"Maximum number of downloads running at once (1-10). Requires restart."`
-	MaxConcurrentProbes    int    `json:"max_concurrent_probes" ui_label:"Max Concurrent Probes" ui_desc:"Maximum number of simultaneous server probes when adding many downloads at once (1-10)."`
+	MaxConcurrentDownloads int    `json:"max_concurrent_downloads" ui_label:"Max Concurrent Downloads" ui_desc:"Maximum number of downloads running at once (1-10)." ui_restart:"true"`
+	MaxConcurrentProbes    int    `json:"max_concurrent_probes" ui_label:"Max Concurrent Probes" ui_desc:"Maximum number of simultaneous server probes when adding many downloads at once (1-10)." ui_restart:"true"`
 	UserAgent              string `json:"user_agent" ui_label:"User Agent" ui_desc:"Custom User-Agent string for HTTP requests. Leave empty for default."`
 	ProxyURL               string `json:"proxy_url" ui_label:"Proxy URL" ui_desc:"HTTP/HTTPS proxy URL (e.g. http://127.0.0.1:1700). Leave empty to use system default."`
 	CustomDNS              string `json:"custom_dns" ui_label:"Custom DNS Server" ui_desc:"Set custom DNS (e.g., 1.1.1.1:53, 94.140.14.14:53). Leave empty for system."`
@@ -81,10 +81,11 @@ type PerformanceSettings struct {
 
 // SettingMeta provides metadata for a single setting (for UI rendering).
 type SettingMeta struct {
-	Key         string // JSON key name
-	Label       string // Human-readable label
-	Description string // Help text displayed in right pane
-	Type        string // "string", "int", "int64", "bool", "duration", "float64", "auth_token", "link"
+	Key             string // JSON key name
+	Label           string // Human-readable label
+	Description     string // Help text displayed in right pane
+	Type            string // "string", "int", "int64", "bool", "duration", "float64", "auth_token", "link"
+	RequiresRestart bool   // Whether changing this setting requires an application restart
 }
 
 // GetSettingsMetadata returns metadata for all settings organized by category.
@@ -141,10 +142,11 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 				}
 
 				catMetas = append(catMetas, SettingMeta{
-					Key:         key,
-					Label:       label,
-					Description: desc,
-					Type:        typStr,
+					Key:             key,
+					Label:           label,
+					Description:     desc,
+					Type:            typStr,
+					RequiresRestart: settingField.Tag.Get("ui_restart") == "true",
 				})
 			}
 		}

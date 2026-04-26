@@ -208,6 +208,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case QuitConfirmState:
 			return m.updateQuitConfirm(msg)
 
+		case RestartConfirmState:
+			return m.updateRestartConfirm(msg)
+
 		case BatchConfirmState:
 			return m.updateBatchConfirm(msg)
 
