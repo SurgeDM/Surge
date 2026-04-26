@@ -112,3 +112,52 @@ func TestBurstExceeded(t *testing.T) {
 
 	assert.True(t, elapsed >= 800*time.Millisecond, "Should have waited for extra tokens, got %v", elapsed)
 }
+
+func TestWaitN_ContextCancellation(t *testing.T) {
+	l := NewLimiter(10) // 10 bytes/sec → slow enough to block
+	ctx, cancel := context.WithCancel(context.Background())
+	// Drain burst first
+	l.mu.Lock()
+	burst := l.burst
+	l.mu.Unlock()
+	_ = l.waitN(ctx, int(burst))
+
+	go func() {
+		time.Sleep(50 * time.Millisecond)
+		cancel()
+	}()
+
+	err := l.waitN(ctx, 100)
+	assert.ErrorIs(t, err, context.Canceled)
+}
+
+func TestWaitN_ConcurrentSetRate(t *testing.T) {
+	l := NewLimiter(10) // Very slow
+	ctx := context.Background()
+
+	// Drain burst
+	l.mu.Lock()
+	burst := l.burst
+	l.mu.Unlock()
+	_ = l.waitN(ctx, int(burst))
+
+	// Start a goroutine that waits for a lot of tokens
+	done := make(chan struct{})
+	start := time.Now()
+	go func() {
+		_ = l.waitN(ctx, 100) // Would take 10s at 10 bytes/sec
+		close(done)
+	}()
+
+	// Change rate concurrently to something very high
+	time.Sleep(50 * time.Millisecond)
+	l.SetRate(1000000)
+
+	select {
+	case <-done:
+		// Success: should finish almost immediately after rate increase
+		assert.True(t, time.Since(start) < 500*time.Millisecond, "Wait should have completed quickly after rate increase")
+	case <-time.After(1 * time.Second):
+		t.Fatal("waitN did not react to rate increase")
+	}
+}

@@ -55,6 +55,16 @@ func (l *Limiter) SetRate(rate int64) {
 	}
 }
 
+// IsActive returns true if the limiter has a rate > 0.
+func (l *Limiter) IsActive() bool {
+	if l == nil {
+		return false
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.rate > 0
+}
+
 // waitN blocks until n tokens are available or context is cancelled.
 func (l *Limiter) waitN(ctx context.Context, n int) error {
 	if l == nil {
@@ -63,9 +73,13 @@ func (l *Limiter) waitN(ctx context.Context, n int) error {
 
 	remaining := int64(n)
 	for remaining > 0 {
+		l.mu.Lock()
+		currentBurst := l.burst
+		l.mu.Unlock()
+
 		charge := remaining
-		if charge > l.burst {
-			charge = l.burst
+		if charge > currentBurst {
+			charge = currentBurst
 		}
 
 		for {
@@ -123,7 +137,7 @@ type ThrottledReader struct {
 func NewThrottledReader(ctx context.Context, r io.Reader, limiters ...*Limiter) io.Reader {
 	var active []*Limiter
 	for _, l := range limiters {
-		if l != nil {
+		if l != nil && l.IsActive() {
 			active = append(active, l)
 		}
 	}
