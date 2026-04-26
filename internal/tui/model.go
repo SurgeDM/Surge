@@ -203,8 +203,8 @@ type RootModel struct {
 
 	logoCache string // Cached logo with gradient applied
 
-	enqueueCtx    context.Context
-	cancelEnqueue context.CancelFunc
+	enqueueCtx       context.Context
+	cancelEnqueue    context.CancelFunc
 	shuttingDown     bool
 	RestartRequested bool // [NEW] Flag to signal process re-exec after TUI shutdown
 
