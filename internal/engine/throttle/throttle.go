@@ -55,16 +55,6 @@ func (l *Limiter) SetRate(rate int64) {
 	}
 }
 
-// IsActive returns true if the limiter has a rate > 0.
-func (l *Limiter) IsActive() bool {
-	if l == nil {
-		return false
-	}
-	l.mu.Lock()
-	defer l.mu.Unlock()
-	return l.rate > 0
-}
-
 // waitN blocks until n tokens are available or context is cancelled.
 func (l *Limiter) waitN(ctx context.Context, n int) error {
 	if l == nil {
@@ -141,7 +131,7 @@ type ThrottledReader struct {
 func NewThrottledReader(ctx context.Context, r io.Reader, limiters ...*Limiter) io.Reader {
 	var active []*Limiter
 	for _, l := range limiters {
-		if l != nil && l.IsActive() {
+		if l != nil {
 			active = append(active, l)
 		}
 	}

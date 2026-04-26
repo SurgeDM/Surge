@@ -19,6 +19,5 @@ func ConvertRuntimeConfig(rc *config.RuntimeConfig) *RuntimeConfig {
 		StallTimeout:          rc.StallTimeout,
 		SpeedEmaAlpha:         rc.SpeedEmaAlpha,
 		PerDownloadSpeedLimit: rc.PerDownloadSpeedLimit * 1024 * 1024,
-		GlobalSpeedLimit:      rc.GlobalSpeedLimit * 1024 * 1024,
 	}
 }

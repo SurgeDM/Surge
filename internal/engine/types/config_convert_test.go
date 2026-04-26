@@ -26,7 +26,6 @@ func TestConvertRuntimeConfig_AllFieldsCopied(t *testing.T) {
 		SpeedEmaAlpha:         0.4,
 		DialHedgeCount:        12,
 		PerDownloadSpeedLimit: 10,
-		GlobalSpeedLimit:      25,
 	}
 
 	result := ConvertRuntimeConfig(input)
@@ -74,9 +73,6 @@ func TestConvertRuntimeConfig_AllFieldsCopied(t *testing.T) {
 	if result.PerDownloadSpeedLimit != input.PerDownloadSpeedLimit*1024*1024 {
 		t.Errorf("PerDownloadSpeedLimit: got %d, want %d", result.PerDownloadSpeedLimit, input.PerDownloadSpeedLimit*1024*1024)
 	}
-	if result.GlobalSpeedLimit != input.GlobalSpeedLimit*1024*1024 {
-		t.Errorf("GlobalSpeedLimit: got %d, want %d", result.GlobalSpeedLimit, input.GlobalSpeedLimit*1024*1024)
-	}
 }
 
 // TestConvertRuntimeConfig_EmptyProxyURL ensures empty proxy doesn't cause issues.
@@ -113,7 +109,6 @@ func TestConvertRuntimeConfig_Exhaustive(t *testing.T) {
 		StallTimeout:          1 * time.Second,
 		SpeedEmaAlpha:         0.1,
 		PerDownloadSpeedLimit: 1,
-		GlobalSpeedLimit:      1,
 	}
 
 	result := ConvertRuntimeConfig(input)

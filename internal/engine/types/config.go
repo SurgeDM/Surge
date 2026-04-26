@@ -89,7 +89,6 @@ type RuntimeConfig struct {
 	StallTimeout          time.Duration
 	SpeedEmaAlpha         float64
 	PerDownloadSpeedLimit int64
-	GlobalSpeedLimit      int64
 }
 
 // GetUserAgent returns the configured user agent or the default
@@ -186,14 +185,6 @@ func (r *RuntimeConfig) GetSpeedEmaAlpha() float64 {
 		return SpeedEMAAlpha
 	}
 	return r.SpeedEmaAlpha
-}
-
-// GetGlobalLimitBytes returns configured value or 0
-func (r *RuntimeConfig) GetGlobalLimitBytes() int64 {
-	if r == nil {
-		return 0
-	}
-	return r.GlobalSpeedLimit
 }
 
 // GetPerDownloadLimitBytes returns configured value or 0
