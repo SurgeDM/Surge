@@ -113,6 +113,10 @@ func (l *Limiter) waitN(ctx context.Context, n int) error {
 			if waitDuration < time.Millisecond {
 				waitDuration = time.Millisecond
 			}
+			// Cap sleep duration to stay responsive to rate changes
+			if waitDuration > 100*time.Millisecond {
+				waitDuration = 100 * time.Millisecond
+			}
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
