@@ -906,6 +906,10 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.Network.WorkerBufferSize = defaults.Network.WorkerBufferSize
 		case "dial_hedge_count":
 			m.Settings.Network.DialHedgeCount = defaults.Network.DialHedgeCount
+		case "per_download_speed_limit":
+			m.Settings.Network.PerDownloadSpeedLimit = defaults.Network.PerDownloadSpeedLimit
+		case "global_speed_limit":
+			m.Settings.Network.GlobalSpeedLimit = defaults.Network.GlobalSpeedLimit
 		}
 	case "Performance":
 		switch key {
