@@ -62,6 +62,12 @@ func (l *Limiter) waitN(ctx context.Context, n int) error {
 	}
 
 	remaining := int64(n)
+	timer := time.NewTimer(0)
+	if !timer.Stop() {
+		<-timer.C
+	}
+	defer timer.Stop()
+
 	for remaining > 0 {
 		l.mu.Lock()
 		currentBurst := l.burst
@@ -107,10 +113,11 @@ func (l *Limiter) waitN(ctx context.Context, n int) error {
 			if waitDuration > 100*time.Millisecond {
 				waitDuration = 100 * time.Millisecond
 			}
+			timer.Reset(waitDuration)
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(waitDuration):
+			case <-timer.C:
 			}
 		}
 

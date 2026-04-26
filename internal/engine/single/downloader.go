@@ -48,10 +48,12 @@ func NewSingleDownloader(id string, progressCh chan<- any, state *types.Progress
 		State:        state,
 		Runtime:      runtime,
 	}
-	if rate := runtime.GetPerDownloadLimitBytes(); rate > 0 {
-		d.perDownloadLimiter = throttle.NewLimiter(rate)
-	}
 	return d
+}
+
+// SetPerDownloadLimiter sets the per-download speed limiter for the downloader
+func (d *SingleDownloader) SetPerDownloadLimiter(l *throttle.Limiter) {
+	d.perDownloadLimiter = l
 }
 
 // SetGlobalLimiter sets the global speed limiter for the downloader

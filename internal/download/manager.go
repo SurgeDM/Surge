@@ -74,7 +74,7 @@ func uniqueFilePath(path string) string {
 }
 
 // TUIDownload is the main entry point for downloads executed by the Engine pool
-func TUIDownload(ctx context.Context, cfg *types.DownloadConfig, gl *throttle.Limiter) error {
+func TUIDownload(ctx context.Context, cfg *types.DownloadConfig, gl *throttle.Limiter, pdl *throttle.Limiter) error {
 	start := time.Now()
 	// Engine expects cfg.OutputPath and cfg.Filename to be fully resolved by the processing layer
 	destPath := cfg.OutputPath
@@ -187,6 +187,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig, gl *throttle.Li
 		d := concurrent.NewConcurrentDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.SetGlobalLimiter(gl)
+		d.SetPerDownloadLimiter(pdl)
 		utils.Debug("Calling Download with mirrors: %v", mirrors)
 		// Pass effectiveTotalSize to avoid unnecessary bootstrap if state already knows the size
 		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, effectiveTotalSize)
@@ -219,6 +220,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig, gl *throttle.Li
 		d := single.NewSingleDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.SetGlobalLimiter(gl)
+		d.SetPerDownloadLimiter(pdl)
 		// Pass effectiveTotalSize here as well
 		downloadErr = d.Download(ctx, cfg.URL, finalDestPath, effectiveTotalSize, finalFilename)
 		if d.TotalSize > 0 {
@@ -295,5 +297,5 @@ func Download(ctx context.Context, url string, outPath string, progressCh chan<-
 		MinChunkSize:          types.MinChunk,
 		WorkerBufferSize:      types.WorkerBuffer,
 	}
-	return TUIDownload(ctx, &cfg, nil)
+	return TUIDownload(ctx, &cfg, nil, nil)
 }

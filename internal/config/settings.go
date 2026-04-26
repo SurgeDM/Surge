@@ -326,7 +326,6 @@ type RuntimeConfig struct {
 	StallTimeout          time.Duration
 	SpeedEmaAlpha         float64
 	PerDownloadSpeedLimit int64
-	GlobalSpeedLimit      int64
 }
 
 // ToRuntimeConfig creates a RuntimeConfig from user Settings
@@ -347,6 +346,5 @@ func (s *Settings) ToRuntimeConfig() *RuntimeConfig {
 		StallTimeout:          s.Performance.StallTimeout,
 		SpeedEmaAlpha:         s.Performance.SpeedEmaAlpha,
 		PerDownloadSpeedLimit: s.Network.PerDownloadSpeedLimit,
-		GlobalSpeedLimit:      s.Network.GlobalSpeedLimit,
 	}
 }
