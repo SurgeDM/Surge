@@ -58,7 +58,7 @@ func (mgr *LifecycleManager) Pause(id string) error {
 		return nil // Already stopped
 	}
 
-	return fmt.Errorf("download not found")
+	return types.ErrNotFound
 }
 
 // hydrateConfigFromDisk loads the latest persisted pause snapshot from disk
@@ -116,7 +116,7 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	// Cold path: download from a prior session (only in DB).
 	entry, err := state.GetDownload(id)
 	if err != nil || entry == nil {
-		return fmt.Errorf("download not found")
+		return types.ErrNotFound
 	}
 
 	if entry.Status == "completed" {
@@ -269,6 +269,9 @@ func (mgr *LifecycleManager) Cancel(id string) error {
 	}
 
 	if !found {
+		// It's safe to treat a missing download as success during cancellation
+		// because it may have been deleted in a prior session or removed
+		// during a race condition (e.g. TUI refresh vs engine deletion).
 		utils.Debug("Cancel: download %s not found in pool or DB, treating as success", id)
 		return nil
 	}

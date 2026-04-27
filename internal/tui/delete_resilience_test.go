@@ -39,8 +39,11 @@ func (m *mockService) GetStatus(id string) (*types.DownloadStatus, error) { retu
 func (m *mockService) Shutdown() error { return nil }
 
 func TestUpdateDashboard_DeleteResilience(t *testing.T) {
+	// This test validates the TUI's defensive layer independently of the service
+	// implementation. Even though Service.Delete currently returns nil for missing
+	// IDs, the TUI should still gracefully handle ErrNotFound if it occurs.
 	dm := &DownloadModel{ID: "ghost-id", Filename: "ghost.zip"}
-	svc := &mockService{deleteErr: errors.New("download not found")}
+	svc := &mockService{deleteErr: types.ErrNotFound}
 	
 	m := RootModel{
 		state:     DashboardState,
