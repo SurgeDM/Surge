@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"strings"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -122,7 +124,13 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 			// Call Service Delete
 			if err := m.Service.Delete(targetID); err != nil {
-				m.addLogEntry(LogStyleError.Render("✖ Delete failed: " + err.Error()))
+				// If the download is not found, it's already gone from the engine/DB.
+				// We still remove it from our local list to avoid it being "stuck".
+				if strings.Contains(strings.ToLower(err.Error()), "not found") {
+					m.removeDownloadByID(targetID)
+				} else {
+					m.addLogEntry(LogStyleError.Render("✖ Delete failed: " + err.Error()))
+				}
 			} else {
 				m.removeDownloadByID(targetID)
 			}

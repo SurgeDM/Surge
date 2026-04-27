@@ -8,6 +8,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // EngineHooks defines the minimal callbacks Processing needs to orchestrate the worker pool.
@@ -268,7 +269,8 @@ func (mgr *LifecycleManager) Cancel(id string) error {
 	}
 
 	if !found {
-		return fmt.Errorf("download not found")
+		utils.Debug("Cancel: download %s not found in pool or DB, treating as success", id)
+		return nil
 	}
 
 	// Emit removal event — event worker handles DB deletion and file cleanup.
