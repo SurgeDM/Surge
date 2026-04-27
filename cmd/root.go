@@ -6,6 +6,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"runtime"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -564,9 +565,11 @@ func performRestart() error {
 		return fmt.Errorf("could not get executable path: %w", err)
 	}
 
-	// Use syscall.Exec to replace the current process with a fresh instance.
-	// This ensures settings requiring restart take effect immediately.
-	return syscall.Exec(executable, os.Args, os.Environ())
+	if runtime.GOOS == "windows" {
+		_ = ReleaseLock()
+	}
+
+	return utils.Run(executable, os.Args, os.Environ())
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
