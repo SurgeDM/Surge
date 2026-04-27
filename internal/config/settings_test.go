@@ -520,7 +520,7 @@ func TestCategoryOrder(t *testing.T) {
 	}
 
 	// Should have all expected categories
-	expectedCount := 5 // General, Network, Performance, Categories, Extension
+	expectedCount := 6 // General, Post-Download, Network, Performance, Categories, Extension
 	if len(order) != expectedCount {
 		t.Errorf("Expected %d categories, got %d", expectedCount, len(order))
 	}

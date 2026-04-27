@@ -947,5 +947,12 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 		case "-":
 			m.Settings.Extension.AuthToken = defaults.Extension.AuthToken
 		}
+	case "Post-Download":
+		switch key {
+		case "on_complete_command":
+			m.Settings.PostDownload.OnCompleteCommand = defaults.PostDownload.OnCompleteCommand
+		case "on_error_command":
+			m.Settings.PostDownload.OnErrorCommand = defaults.PostDownload.OnErrorCommand
+		}
 	}
 }

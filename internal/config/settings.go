@@ -12,11 +12,12 @@ import (
 
 // Settings holds all user-configurable application settings organized by category.
 type Settings struct {
-	General     GeneralSettings     `json:"general" ui_label:"General"`
-	Network     NetworkSettings     `json:"network" ui_label:"Network"`
-	Performance PerformanceSettings `json:"performance" ui_label:"Performance"`
-	Categories  CategorySettings    `json:"categories" ui_label:"Categories"`
-	Extension   ExtensionSettings   `json:"extension" ui_label:"Extension"`
+	General      GeneralSettings     `json:"general" ui_label:"General"`
+	PostDownload PostDownloadActions `json:"post_download" ui_label:"Post-Download"`
+	Network      NetworkSettings     `json:"network" ui_label:"Network"`
+	Performance  PerformanceSettings `json:"performance" ui_label:"Performance"`
+	Categories   CategorySettings    `json:"categories" ui_label:"Categories"`
+	Extension    ExtensionSettings   `json:"extension" ui_label:"Extension"`
 }
 
 // GeneralSettings contains application behavior settings.
@@ -33,6 +34,12 @@ type GeneralSettings struct {
 	ThemePath         string `json:"theme_path" ui_label:"Theme File" ui_desc:"Path to a custom .toml color scheme."`
 	LogRetentionCount int    `json:"log_retention_count" ui_label:"Log Retention Count" ui_desc:"Number of recent log files to keep." ui_restart:"true"`
 	LiveSpeedGraph    bool   `json:"live_speed_graph" ui_label:"Live Speed Graph" ui_desc:"Use live speed for graph instead of EMA smoothed speed."`
+}
+
+// PostDownloadActions holds shell hooks that run after downloads complete or fail.
+type PostDownloadActions struct {
+	OnCompleteCommand string `json:"on_complete_command" ui_label:"On Complete Command" ui_desc:"Shell command to run after a download completes. Variables: {filename}, {filepath}, {size}, {speed}, {duration}, {id}"`
+	OnErrorCommand    string `json:"on_error_command" ui_label:"On Error Command" ui_desc:"Shell command to run when a download fails. Variables: {filename}, {filepath}, {id}, {error}"`
 }
 
 const (

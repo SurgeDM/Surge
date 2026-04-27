@@ -271,7 +271,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			if err := state.DeleteTasks(m.DownloadID); err != nil {
 				utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)
 			}
-			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
+			settings := mgr.GetSettings()
+			if settings != nil && settings.General.DownloadCompleteNotification {
 
 				if filename == "" {
 					filename = m.Filename
@@ -288,10 +289,29 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 					notify(title, fmt.Sprintf("Download complete in %s (%.2f MB/s)", m.Elapsed.Truncate(time.Second), avgSpeed/float64(types.MB)))
 				}
 			}
+			if settings != nil && settings.PostDownload.OnCompleteCommand != "" {
+				go RunPostActions(settings.PostDownload, PostActionContext{
+					Filename: filename,
+					FilePath: destPath,
+					Size:     m.Total,
+					Speed:    avgSpeed,
+					Duration: m.Elapsed,
+					ID:       m.DownloadID,
+					Error:    "",
+				}, false)
+
+			}
 
 		case events.DownloadErrorMsg:
 			existing, _ := state.GetDownload(m.DownloadID)
 			destPath := m.DestPath
+			filename := m.Filename
+			if filename == "" && existing != nil {
+				filename = existing.Filename
+			}
+			if filename == "" {
+				filename = m.DownloadID
+			}
 			if existing != nil {
 				existing.Status = "error"
 				if err := state.AddToMasterList(*existing); err != nil {
@@ -306,22 +326,28 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 					utils.Debug("Lifecycle: Failed to remove incomplete file after error: %v", err)
 				}
 			}
-			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
-
-				filename := m.Filename
-				if filename == "" && existing != nil {
-					filename = existing.Filename
-				}
-				if filename == "" {
-					filename = m.DownloadID
-				}
-
+			settings := mgr.GetSettings()
+			if settings != nil && settings.General.DownloadCompleteNotification {
 				msg := "Download failed"
 				if m.Err != nil {
 					msg = m.Err.Error()
 				}
 
 				notify(fmt.Sprintf("Download failed: %s", filename), msg)
+			}
+			// Fire the on-error hook for every DownloadError event when a command
+			// is configured, independent of the notification setting.
+			if settings != nil && settings.PostDownload.OnErrorCommand != "" {
+				errMsg := ""
+				if m.Err != nil {
+					errMsg = m.Err.Error()
+				}
+				go RunPostActions(settings.PostDownload, PostActionContext{
+					Filename: filename,
+					FilePath: destPath,
+					ID:       m.DownloadID,
+					Error:    errMsg,
+				}, true)
 			}
 
 		case events.DownloadRemovedMsg:
