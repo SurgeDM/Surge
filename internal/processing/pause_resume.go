@@ -37,7 +37,7 @@ type EngineHooks struct {
 func (mgr *LifecycleManager) Pause(id string) error {
 	hooks := mgr.getEngineHooks()
 	if hooks.Pause == nil {
-		return fmt.Errorf("engine not initialized")
+		return types.ErrEngineNotInit
 	}
 
 	if hooks.Pause(id) {
@@ -91,7 +91,7 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	// Guard: still transitioning to paused
 	if hooks.GetStatus != nil {
 		if st := hooks.GetStatus(id); st != nil && st.Status == "pausing" {
-			return fmt.Errorf("download is still pausing, try again in a moment")
+			return types.ErrPausing
 		}
 	}
 
@@ -120,7 +120,7 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	}
 
 	if entry.Status == "completed" {
-		return fmt.Errorf("download already completed")
+		return types.ErrCompleted
 	}
 
 	settings := mgr.GetSettings()
@@ -168,7 +168,7 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 	for i, id := range ids {
 		if hooks.GetStatus != nil {
 			if st := hooks.GetStatus(id); st != nil && st.Status == "pausing" {
-				errs[i] = fmt.Errorf("download is still pausing, try again in a moment")
+				errs[i] = types.ErrPausing
 				continue
 			}
 		}

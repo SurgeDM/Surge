@@ -50,7 +50,7 @@ func NewSingleDownloader(id string, progressCh chan<- any, state *types.Progress
 func (d *SingleDownloader) applyClientSettings(client *http.Client) {
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
-			return fmt.Errorf("stopped after 10 redirects")
+			return types.ErrMaxRedirects
 		}
 		if len(via) > 0 {
 			utils.CopyRedirectHeaders(req, via[0])
