@@ -76,10 +76,10 @@ func GetRuntimeDir() string {
 		}
 	}
 
-	// In headless Linux sessions, XDG_RUNTIME_DIR is often unset and xdg.RuntimeDir
-	// may point to /run/user/<uid>, which can be absent/unwritable. Use a writable
-	// state-dir fallback in that case.
-	if runtime.GOOS == "linux" && runtimeEnv == "" {
+	// In headless Linux sessions and Android/Termux, XDG_RUNTIME_DIR is often unset
+	// and xdg.RuntimeDir may point to /run/user/<uid>, which can be absent/unwritable.
+	// Use a writable state-dir fallback in that case.
+	if (runtime.GOOS == "linux" || runtime.GOOS == "android") && runtimeEnv == "" {
 		runtimeBase = ""
 	}
 
@@ -124,8 +124,8 @@ func EnsureDirs() error {
 			return err
 		}
 	}
-	// On Linux runtime dir, we might want stricter permissions (0700) if it's in /run/user
-	if runtime.GOOS == "linux" && os.Getenv("XDG_RUNTIME_DIR") != "" {
+	// On Linux/Android runtime dir, we might want stricter permissions (0700) if it's in /run/user
+	if (runtime.GOOS == "linux" || runtime.GOOS == "android") && os.Getenv("XDG_RUNTIME_DIR") != "" {
 		_ = os.Chmod(GetRuntimeDir(), 0o700)
 	}
 
