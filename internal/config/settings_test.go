@@ -911,7 +911,7 @@ func TestSettings_FutureProofValidation(t *testing.T) {
 		_, ok := field.Type.MethodByName("Validate")
 		if !ok {
 			// If the type itself doesn't have it, check if a pointer to it does
-			_, ok = reflect.PtrTo(field.Type).MethodByName("Validate")
+			_, ok = reflect.PointerTo(field.Type).MethodByName("Validate")
 		}
 
 		if !ok {
