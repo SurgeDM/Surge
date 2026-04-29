@@ -395,7 +395,7 @@ func publishStartupWarnings() {
 		return
 	}
 	for _, warning := range globalSettings.StartupWarnings {
-		GlobalService.Publish(events.SystemLogMsg{
+		_ = GlobalService.Publish(events.SystemLogMsg{
 			Message: warning,
 		})
 	}

@@ -78,7 +78,7 @@ func runBugReportCommand(cmd *cobra.Command) error {
 		return nil
 	}
 
-	fmt.Fprintln(out, "Opening browser to file bug report...")
+	_, _ = fmt.Fprintln(out, "Opening browser to file bug report...")
 	if err := openBrowser(reportURL); err != nil {
 		printManualURL(out, "Could not open browser. Please open this URL manually:", reportURL)
 		return nil
@@ -88,15 +88,15 @@ func runBugReportCommand(cmd *cobra.Command) error {
 }
 
 func printManualURL(out io.Writer, message, reportURL string) {
-	fmt.Fprintf(out, "%s\n\n%s\n", message, reportURL)
+	_, _ = fmt.Fprintf(out, "%s\n\n%s\n", message, reportURL)
 }
 
 func promptBugReportTarget(reader *bufio.Reader, out io.Writer) (bugReportTarget, error) {
 	for {
-		fmt.Fprintln(out, "What would you like to report?")
-		fmt.Fprintln(out, "  1) Surge Core (CLI/TUI/server)")
-		fmt.Fprintln(out, "  2) Browser Extension")
-		fmt.Fprint(out, "Choose [1/2] (default 1): ")
+		_, _ = fmt.Fprintln(out, "What would you like to report?")
+		_, _ = fmt.Fprintln(out, "  1) Surge Core (CLI/TUI/server)")
+		_, _ = fmt.Fprintln(out, "  2) Browser Extension")
+		_, _ = fmt.Fprint(out, "Choose [1/2] (default 1): ")
 
 		choice, eof, err := readPromptLine(reader)
 		if err != nil {
@@ -109,7 +109,7 @@ func promptBugReportTarget(reader *bufio.Reader, out io.Writer) (bugReportTarget
 		case "2", "extension", "ext", "e":
 			return bugReportExtension, nil
 		default:
-			fmt.Fprintln(out, "Invalid selection. Enter 1 for Core or 2 for Extension.")
+			_, _ = fmt.Fprintln(out, "Invalid selection. Enter 1 for Core or 2 for Extension.")
 			if eof {
 				return 0, fmt.Errorf("invalid bug report target: %q", choice)
 			}
@@ -119,7 +119,7 @@ func promptBugReportTarget(reader *bufio.Reader, out io.Writer) (bugReportTarget
 
 func promptYesNo(reader *bufio.Reader, out io.Writer, prompt string, defaultYes bool) (bool, error) {
 	for {
-		fmt.Fprint(out, prompt)
+		_, _ = fmt.Fprint(out, prompt)
 
 		choice, eof, err := readPromptLine(reader)
 		if err != nil {
@@ -134,7 +134,7 @@ func promptYesNo(reader *bufio.Reader, out io.Writer, prompt string, defaultYes 
 		case "n", "no":
 			return false, nil
 		default:
-			fmt.Fprintln(out, "Invalid selection. Enter y or n.")
+			_, _ = fmt.Fprintln(out, "Invalid selection. Enter y or n.")
 			if eof {
 				return false, fmt.Errorf("invalid yes/no selection: %q", choice)
 			}
