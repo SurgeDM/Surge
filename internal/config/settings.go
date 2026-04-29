@@ -355,40 +355,47 @@ func (ns *NetworkSettings) Validate() []string {
 
 	// Validate ProxyURL if set
 	if ns.ProxyURL != "" {
-		if _, err := url.Parse(ns.ProxyURL); err != nil {
+		u, err := url.Parse(ns.ProxyURL)
+		if err != nil || u.Scheme == "" || u.Host == "" {
 			ns.ProxyURL = defaults.ProxyURL
-			warnings = append(warnings, "Invalid proxy URL reset to empty")
+			warnings = append(warnings, "Invalid proxy URL reset to default")
 		}
 	}
 
 	// Validate CustomDNS if set
 	if ns.CustomDNS != "" {
-		parts := strings.Split(ns.CustomDNS, ",")
-		allValid := true
-		for _, part := range parts {
-			p := strings.TrimSpace(part)
-			if p == "" {
-				continue
-			}
-			host, _, err := net.SplitHostPort(p)
-			if err != nil {
-				if net.ParseIP(p) == nil {
-					allValid = false
-					break
-				}
-			} else {
-				if net.ParseIP(host) == nil {
-					allValid = false
-					break
-				}
-			}
-		}
-		if !allValid {
+		if err := ValidateDNSList(ns.CustomDNS); err != nil {
 			ns.CustomDNS = defaults.CustomDNS
-			warnings = append(warnings, "Invalid DNS configuration reset to empty")
+			warnings = append(warnings, "Invalid DNS configuration reset to default")
 		}
 	}
 	return warnings
+}
+
+// ValidateDNSList checks if a comma-separated list of DNS servers (IP or IP:port) is valid.
+func ValidateDNSList(s string) error {
+	trimmed := strings.TrimSpace(s)
+	if trimmed == "" {
+		return nil
+	}
+	parts := strings.Split(trimmed, ",")
+	for _, part := range parts {
+		p := strings.TrimSpace(part)
+		if p == "" {
+			continue
+		}
+		host, _, err := net.SplitHostPort(p)
+		if err != nil {
+			if net.ParseIP(p) == nil {
+				return fmt.Errorf("invalid DNS: %s", p)
+			}
+		} else {
+			if net.ParseIP(host) == nil {
+				return fmt.Errorf("invalid DNS IP: %s", host)
+			}
+		}
+	}
+	return nil
 }
 
 // Validate checks PerformanceSettings for valid floating point ranges and durations.

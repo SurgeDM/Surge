@@ -361,8 +361,8 @@ func (m RootModel) updateRestartConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 
 func (m RootModel) updateCategoryResetConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	confirmReset := func() (tea.Model, tea.Cmd) {
-		m.Settings.Categories.Categories = config.DefaultCategories()
-		m.Settings.Categories.CategoryEnabled = false
+		defaults := config.DefaultSettings()
+		m.Settings.Categories = defaults.Categories
 		m.addLogEntry(LogStyleStarted.Render("\u2714 Categories reset to defaults"))
 		utils.Debug("Categories Reset to Defaults")
 		m.state = SettingsState
