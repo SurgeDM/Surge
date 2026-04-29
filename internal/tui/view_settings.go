@@ -78,20 +78,34 @@ func (m RootModel) viewSettings() string {
 	helpHeight := lipgloss.Height(helpText)
 
 	errorLine := ""
+	errorHeight := 0
 	if m.settingsError != "" {
+		// Use MaxWidth to prevent horizontal overflow from long error messages
 		errorLine = lipgloss.NewStyle().
 			Foreground(colors.StateError()).
 			Bold(true).
 			Padding(0, 2).
+			MaxWidth(width - 6).
 			Render("\u2716 " + m.settingsError)
+		errorHeight = lipgloss.Height(errorLine)
 	}
 
-	errorHeight := lipgloss.Height(errorLine)
+	// Calculate gaps. We want:
+	// tabBar
+	// <gap>
+	// errorLine (if present)
+	// <gap if error present>
+	// content
+	// <padding flex space>
+	// <gap before help if space allows>
+	// helpText
+
+	fixedOverhead := tabBarHeight + helpHeight + 1 // 1 for the gap after tab bar
 	if errorHeight > 0 {
-		errorHeight += 1 // Gap after error
+		fixedOverhead += errorHeight + 1 // another gap after error
 	}
 
-	bodyHeight := innerHeight - tabBarHeight - helpHeight - errorHeight - (LayoutGapStyle.GetVerticalFrameSize() * 2)
+	bodyHeight := innerHeight - fixedOverhead
 	if bodyHeight < 3 {
 		bodyHeight = 3
 	}
@@ -104,18 +118,24 @@ func (m RootModel) viewSettings() string {
 	}
 
 	contentHeight := lipgloss.Height(content)
-	usedHeight := tabBarHeight + LayoutGapStyle.GetVerticalFrameSize() + errorHeight + contentHeight + LayoutGapStyle.GetVerticalFrameSize() + helpHeight
+	usedHeight := fixedOverhead + contentHeight
+
 	paddingLines := innerHeight - usedHeight
 	if paddingLines < 0 {
 		paddingLines = 0
 	}
-	padding := strings.Repeat("\n", paddingLines)
 
-	parts := []string{tabBar, ""}
+	parts := []string{tabBar, ""} // tabBar and first gap
 	if errorLine != "" {
-		parts = append(parts, errorLine, "")
+		parts = append(parts, errorLine, "") // errorLine and second gap
 	}
-	parts = append(parts, content, padding, helpText)
+	parts = append(parts, content)
+
+	// Add flexible padding to push help text to bottom
+	for i := 0; i < paddingLines; i++ {
+		parts = append(parts, "")
+	}
+	parts = append(parts, helpText)
 
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
