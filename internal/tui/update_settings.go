@@ -2,6 +2,8 @@ package tui
 
 import (
 	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -301,6 +303,35 @@ func (m *RootModel) validateSetting(key, value string) error {
 		v, err := strconv.Atoi(trimmed)
 		if err != nil || v < 1 || v > 100 {
 			return fmt.Errorf("must be between 1 and 100")
+		}
+	case "proxy_url":
+		if trimmed == "" {
+			return nil
+		}
+		u, err := url.Parse(trimmed)
+		if err != nil || u.Scheme == "" || u.Host == "" {
+			return fmt.Errorf("invalid URL (e.g. http://127.0.0.1:1080)")
+		}
+	case "custom_dns":
+		if trimmed == "" {
+			return nil
+		}
+		parts := strings.Split(trimmed, ",")
+		for _, part := range parts {
+			p := strings.TrimSpace(part)
+			if p == "" {
+				continue
+			}
+			host, _, err := net.SplitHostPort(p)
+			if err != nil {
+				if net.ParseIP(p) == nil {
+					return fmt.Errorf("invalid DNS: %s", p)
+				}
+			} else {
+				if net.ParseIP(host) == nil {
+					return fmt.Errorf("invalid DNS IP: %s", host)
+				}
+			}
 		}
 	}
 	return nil
