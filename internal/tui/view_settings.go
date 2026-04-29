@@ -76,7 +76,22 @@ func (m RootModel) viewSettings() string {
 	innerHeight := height - BoxStyle.GetVerticalFrameSize()
 	tabBarHeight := lipgloss.Height(tabBar)
 	helpHeight := lipgloss.Height(helpText)
-	bodyHeight := innerHeight - tabBarHeight - helpHeight - (LayoutGapStyle.GetVerticalFrameSize() * 2) // one line gap above body and help
+
+	errorLine := ""
+	if m.settingsError != "" {
+		errorLine = lipgloss.NewStyle().
+			Foreground(colors.StateError()).
+			Bold(true).
+			Padding(0, 2).
+			Render("\u2716 " + m.settingsError)
+	}
+
+	errorHeight := lipgloss.Height(errorLine)
+	if errorHeight > 0 {
+		errorHeight += 1 // Gap after error
+	}
+
+	bodyHeight := innerHeight - tabBarHeight - helpHeight - errorHeight - (LayoutGapStyle.GetVerticalFrameSize() * 2)
 	if bodyHeight < 3 {
 		bodyHeight = 3
 	}
@@ -89,20 +104,20 @@ func (m RootModel) viewSettings() string {
 	}
 
 	contentHeight := lipgloss.Height(content)
-	usedHeight := tabBarHeight + LayoutGapStyle.GetVerticalFrameSize() + contentHeight + LayoutGapStyle.GetVerticalFrameSize() + helpHeight
+	usedHeight := tabBarHeight + LayoutGapStyle.GetVerticalFrameSize() + errorHeight + contentHeight + LayoutGapStyle.GetVerticalFrameSize() + helpHeight
 	paddingLines := innerHeight - usedHeight
 	if paddingLines < 0 {
 		paddingLines = 0
 	}
 	padding := strings.Repeat("\n", paddingLines)
 
-	fullContent := lipgloss.JoinVertical(lipgloss.Left,
-		tabBar,
-		"",
-		content,
-		padding,
-		helpText,
-	)
+	parts := []string{tabBar, ""}
+	if errorLine != "" {
+		parts = append(parts, errorLine, "")
+	}
+	parts = append(parts, content, padding, helpText)
+
+	fullContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, colors.Magenta())
 	return m.renderModalWithOverlay(box)

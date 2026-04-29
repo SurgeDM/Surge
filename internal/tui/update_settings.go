@@ -1,8 +1,11 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -37,8 +40,17 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, m.keys.SettingsEditor.Confirm) {
 			currentCategory := categories[m.SettingsActiveTab]
 			settingKey := m.getCurrentSettingKey()
-			_ = m.setSettingValue(currentCategory, settingKey, m.SettingsInput.Value())
+			val := m.SettingsInput.Value()
+
+			if err := m.validateSetting(settingKey, val); err != nil {
+				m.settingsError = err.Error()
+				utils.Debug("Settings Validation Error: %s = %s (%v)", settingKey, val, err)
+				return m, nil
+			}
+
+			_ = m.setSettingValue(currentCategory, settingKey, val)
 			m.SettingsIsEditing = false
+			m.settingsError = ""
 			m.SettingsInput.Blur()
 			return m, nil
 		}
@@ -46,6 +58,10 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		// Pass to text input
 		var cmd tea.Cmd
 		m.SettingsInput, cmd = m.SettingsInput.Update(msg)
+		// Clear error when typing
+		if m.SettingsInput.Value() != "" && m.settingsError != "" {
+			m.settingsError = ""
+		}
 		return m, cmd
 	}
 
@@ -74,6 +90,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if key.Matches(msg, binding) {
 			if categoryCount > i {
 				m.SettingsActiveTab = i
+				m.settingsError = ""
 			}
 			m.SettingsSelectedRow = 0
 			return m, nil
@@ -84,11 +101,13 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Settings.NextTab) {
 		m.SettingsActiveTab = (m.SettingsActiveTab + 1) % categoryCount
 		m.SettingsSelectedRow = 0
+		m.settingsError = ""
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Settings.PrevTab) {
 		m.SettingsActiveTab = (m.SettingsActiveTab - 1 + categoryCount) % categoryCount
 		m.SettingsSelectedRow = 0
+		m.settingsError = ""
 		return m, nil
 	}
 
@@ -131,6 +150,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Settings.Up) {
 		if m.SettingsSelectedRow > 0 {
 			m.SettingsSelectedRow--
+			m.settingsError = ""
 		}
 		return m, nil
 	}
@@ -138,6 +158,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		maxRow := m.getSettingsCount() - 1
 		if m.SettingsSelectedRow < maxRow {
 			m.SettingsSelectedRow++
+			m.settingsError = ""
 		}
 		return m, nil
 	}
@@ -229,4 +250,58 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m *RootModel) validateSetting(key, value string) error {
+	trimmed := strings.TrimSpace(value)
+	switch key {
+	case "max_connections_per_host":
+		v, err := strconv.Atoi(trimmed)
+		if err != nil || v < 1 || v > 64 {
+			return fmt.Errorf("must be between 1 and 64")
+		}
+	case "max_concurrent_downloads", "max_concurrent_probes":
+		v, err := strconv.Atoi(trimmed)
+		if err != nil || v < 1 || v > 10 {
+			return fmt.Errorf("must be between 1 and 10")
+		}
+	case "min_chunk_size":
+		v, err := strconv.ParseFloat(trimmed, 64)
+		if err != nil || v < 0.1 {
+			return fmt.Errorf("must be at least 0.1 MB")
+		}
+	case "worker_buffer_size":
+		v, err := strconv.Atoi(trimmed)
+		if err != nil || v < 1 {
+			return fmt.Errorf("must be at least 1 KB")
+		}
+	case "dial_hedge_count":
+		v, err := strconv.Atoi(trimmed)
+		if err != nil || v < 0 || v > 16 {
+			return fmt.Errorf("must be between 0 and 16")
+		}
+	case "max_task_retries":
+		v, err := strconv.Atoi(trimmed)
+		if err != nil || v < 0 || v > 10 {
+			return fmt.Errorf("must be between 0 and 10")
+		}
+	case "slow_worker_threshold", "speed_ema_alpha":
+		v, err := strconv.ParseFloat(trimmed, 64)
+		if err != nil || v < 0.0 || v > 1.0 {
+			return fmt.Errorf("must be between 0.0 and 1.0")
+		}
+	case "slow_worker_grace_period", "stall_timeout":
+		if _, err := strconv.ParseFloat(trimmed, 64); err == nil {
+			return nil
+		}
+		if _, err := time.ParseDuration(trimmed); err != nil {
+			return fmt.Errorf("invalid duration (e.g. 5s or 5)")
+		}
+	case "log_retention_count":
+		v, err := strconv.Atoi(trimmed)
+		if err != nil || v < 1 || v > 100 {
+			return fmt.Errorf("must be between 1 and 100")
+		}
+	}
+	return nil
 }

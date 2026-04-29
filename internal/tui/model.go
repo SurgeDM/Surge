@@ -155,6 +155,7 @@ type RootModel struct {
 	SettingsSelectedRow  int              // Selected setting within current tab
 	SettingsIsEditing    bool             // Whether currently editing a value
 	SettingsInput        textinput.Model  // Input for editing string/int values
+	settingsError        string           // Current validation error in settings
 	ExtensionTokenCopied bool             // Flash message for "Token Copied!"
 
 	// Selection persistence
