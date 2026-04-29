@@ -137,6 +137,23 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 			m.catMgrInputs[m.catMgrEditField].Focus()
 			return m, nil
 		}
+		if key.Matches(msg, m.keys.CategoryMgr.Up) {
+			m.catMgrError = ""
+			m.catMgrInputs[m.catMgrEditField].Blur()
+			m.catMgrEditField--
+			if m.catMgrEditField < 0 {
+				m.catMgrEditField = 3
+			}
+			m.catMgrInputs[m.catMgrEditField].Focus()
+			return m, nil
+		}
+		if key.Matches(msg, m.keys.CategoryMgr.Down) {
+			m.catMgrError = ""
+			m.catMgrInputs[m.catMgrEditField].Blur()
+			m.catMgrEditField = (m.catMgrEditField + 1) % 4
+			m.catMgrInputs[m.catMgrEditField].Focus()
+			return m, nil
+		}
 		if key.Matches(msg, m.keys.CategoryMgr.Edit) {
 			// Save edits
 			if m.catMgrCursor < 0 || m.catMgrCursor >= len(m.Settings.Categories.Categories) {
