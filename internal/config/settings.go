@@ -284,14 +284,13 @@ func LoadSettings() (*Settings, error) {
 	return settings, nil
 }
 
-// Validate ensures all settings are within reasonable bounds, resetting
-// individual invalid fields to their default values.
 func (s *Settings) Validate() {
 	s.StartupWarnings = nil
 	s.StartupWarnings = append(s.StartupWarnings, s.General.Validate()...)
 	s.StartupWarnings = append(s.StartupWarnings, s.Network.Validate()...)
 	s.StartupWarnings = append(s.StartupWarnings, s.Performance.Validate()...)
 	s.StartupWarnings = append(s.StartupWarnings, s.Categories.Validate(s.General.DefaultDownloadDir)...)
+	s.StartupWarnings = append(s.StartupWarnings, s.Extension.Validate()...)
 }
 
 // Validate checks GeneralSettings for invalid paths or out-of-bounds values.
@@ -449,6 +448,15 @@ func (cs *CategorySettings) Validate(fallbackDir string) []string {
 	}
 
 	cs.Categories = validCats
+	return warnings
+}
+
+// Validate checks ExtensionSettings for any necessary field sanitization.
+func (es *ExtensionSettings) Validate() []string {
+	var warnings []string
+	// Extension settings are currently mostly URLs or booleans that don't
+	// require strict range enforcement, but we maintain the Validate method
+	// for future consistency and testing.
 	return warnings
 }
 

@@ -892,3 +892,30 @@ func TestSettings_Validate(t *testing.T) {
 		})
 	}
 }
+
+func TestSettings_FutureProofValidation(t *testing.T) {
+	s := Settings{}
+	v := reflect.ValueOf(s)
+	tpe := v.Type()
+
+	for i := 0; i < tpe.NumField(); i++ {
+		field := tpe.Field(i)
+		// Skip unexported fields or non-struct fields
+		if field.PkgPath != "" || field.Type.Kind() != reflect.Struct {
+			continue
+		}
+
+		// Ensure the field type has a Validate method
+		// Some might take parameters (like Categories), some don't.
+		// We just check if a method named "Validate" exists.
+		_, ok := field.Type.MethodByName("Validate")
+		if !ok {
+			// If the type itself doesn't have it, check if a pointer to it does
+			_, ok = reflect.PtrTo(field.Type).MethodByName("Validate")
+		}
+
+		if !ok {
+			t.Errorf("Field %s (type %s) does not have a Validate method. Every settings group MUST implement validation to ensure application stability.", field.Name, field.Type.Name())
+		}
+	}
+}
