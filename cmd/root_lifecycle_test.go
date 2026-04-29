@@ -235,6 +235,9 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 
 	defaultDir := t.TempDir()
 	customDir := filepath.Join(t.TempDir(), "bin-artifacts")
+	if err := os.MkdirAll(customDir, 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
 	settings := config.DefaultSettings()
 	settings.General.DefaultDownloadDir = defaultDir
 	settings.Categories.CategoryEnabled = true
@@ -336,6 +339,9 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 	}
 
 	customDir := filepath.Join(t.TempDir(), "bin-updated")
+	if err := os.MkdirAll(customDir, 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
 	updated := config.DefaultSettings()
 	updated.General.DefaultDownloadDir = defaultDir
 	updated.Categories.CategoryEnabled = true

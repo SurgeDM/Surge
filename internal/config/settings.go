@@ -291,7 +291,7 @@ func (s *Settings) Validate() {
 	s.StartupWarnings = append(s.StartupWarnings, s.General.Validate()...)
 	s.StartupWarnings = append(s.StartupWarnings, s.Network.Validate()...)
 	s.StartupWarnings = append(s.StartupWarnings, s.Performance.Validate()...)
-	s.StartupWarnings = append(s.StartupWarnings, s.Categories.Validate()...)
+	s.StartupWarnings = append(s.StartupWarnings, s.Categories.Validate(s.General.DefaultDownloadDir)...)
 }
 
 // Validate checks GeneralSettings for invalid paths or out-of-bounds values.
@@ -427,7 +427,7 @@ func (ps *PerformanceSettings) Validate() []string {
 }
 
 // Validate checks CategorySettings and ensures all defined categories are valid.
-func (cs *CategorySettings) Validate() []string {
+func (cs *CategorySettings) Validate(fallbackDir string) []string {
 	var warnings []string
 	validCats := make([]Category, 0, len(cs.Categories))
 	for _, cat := range cs.Categories {
@@ -436,8 +436,8 @@ func (cs *CategorySettings) Validate() []string {
 			catPath := strings.TrimSpace(cat.Path)
 			if catPath != "" {
 				if info, err := os.Stat(catPath); err != nil || !info.IsDir() {
-					// Fallback to default download dir for this category if path is broken
-					cat.Path = DefaultSettings().General.DefaultDownloadDir
+					// Fallback to validated default download dir for this category if path is broken
+					cat.Path = fallbackDir
 					warnings = append(warnings, fmt.Sprintf("Category %q path is broken; reset to default", cat.Name))
 				}
 			}
