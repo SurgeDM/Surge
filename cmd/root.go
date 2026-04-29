@@ -384,7 +384,21 @@ func initializeRootLocalRuntime() error {
 	if err := ensureGlobalLocalServiceAndLifecycle(); err != nil {
 		return fmt.Errorf("error creating lifecycle event stream: %w", err)
 	}
+
+	publishStartupWarnings()
+
 	return nil
+}
+
+func publishStartupWarnings() {
+	if globalSettings == nil || len(globalSettings.StartupWarnings) == 0 {
+		return
+	}
+	for _, warning := range globalSettings.StartupWarnings {
+		GlobalService.Publish(events.SystemLogMsg{
+			Message: warning,
+		})
+	}
 }
 
 func startRootHTTPServer(opts rootRunOptions) (int, func(), error) {

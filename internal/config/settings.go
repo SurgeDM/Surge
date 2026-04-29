@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"fmt"
 	"net"
 	"net/url"
 	"os"
@@ -20,6 +21,10 @@ type Settings struct {
 	Performance PerformanceSettings `json:"performance" ui_label:"Performance"`
 	Categories  CategorySettings    `json:"categories" ui_label:"Categories"`
 	Extension   ExtensionSettings   `json:"extension" ui_label:"Extension"`
+
+	// StartupWarnings holds validation messages from the most recent LoadSettings call.
+	// It is ignored during JSON serialization.
+	StartupWarnings []string `json:"-"`
 }
 
 // GeneralSettings contains application behavior settings.
@@ -282,21 +287,25 @@ func LoadSettings() (*Settings, error) {
 // Validate ensures all settings are within reasonable bounds, resetting
 // individual invalid fields to their default values.
 func (s *Settings) Validate() {
-	s.General.Validate()
-	s.Network.Validate()
-	s.Performance.Validate()
-	s.Categories.Validate()
+	s.StartupWarnings = nil
+	s.StartupWarnings = append(s.StartupWarnings, s.General.Validate()...)
+	s.StartupWarnings = append(s.StartupWarnings, s.Network.Validate()...)
+	s.StartupWarnings = append(s.StartupWarnings, s.Performance.Validate()...)
+	s.StartupWarnings = append(s.StartupWarnings, s.Categories.Validate()...)
 }
 
 // Validate checks GeneralSettings for invalid paths or out-of-bounds values.
-func (gs *GeneralSettings) Validate() {
+func (gs *GeneralSettings) Validate() []string {
+	var warnings []string
 	defaults := DefaultSettings().General
 
 	if gs.Theme < 0 || gs.Theme > 2 {
 		gs.Theme = defaults.Theme
+		warnings = append(warnings, "Invalid theme reset to default")
 	}
 	if gs.LogRetentionCount < 1 || gs.LogRetentionCount > 100 {
 		gs.LogRetentionCount = defaults.LogRetentionCount
+		warnings = append(warnings, fmt.Sprintf("Log retention count reset to default (%d)", defaults.LogRetentionCount))
 	}
 
 	// Validate DefaultDownloadDir
@@ -305,39 +314,50 @@ func (gs *GeneralSettings) Validate() {
 		if info, err := os.Stat(trimmed); err != nil {
 			// If path is invalid or inaccessible, fallback to default system downloads dir
 			gs.DefaultDownloadDir = defaults.DefaultDownloadDir
+			warnings = append(warnings, fmt.Sprintf("Download directory %q is inaccessible; reset to default", trimmed))
 		} else if !info.IsDir() {
 			gs.DefaultDownloadDir = defaults.DefaultDownloadDir
+			warnings = append(warnings, fmt.Sprintf("Download directory %q is not a folder; reset to default", trimmed))
 		}
 	}
+	return warnings
 }
 
 // Validate checks NetworkSettings for valid IPs, URLs, and numeric bounds.
-func (ns *NetworkSettings) Validate() {
+func (ns *NetworkSettings) Validate() []string {
+	var warnings []string
 	defaults := DefaultSettings().Network
 
 	if ns.MaxConnectionsPerHost < 1 || ns.MaxConnectionsPerHost > 64 {
 		ns.MaxConnectionsPerHost = defaults.MaxConnectionsPerHost
+		warnings = append(warnings, fmt.Sprintf("Max connections/host reset to default (%d)", defaults.MaxConnectionsPerHost))
 	}
 	if ns.MaxConcurrentDownloads < 1 || ns.MaxConcurrentDownloads > 10 {
 		ns.MaxConcurrentDownloads = defaults.MaxConcurrentDownloads
+		warnings = append(warnings, fmt.Sprintf("Max concurrent downloads reset to default (%d)", defaults.MaxConcurrentDownloads))
 	}
 	if ns.MaxConcurrentProbes < 1 || ns.MaxConcurrentProbes > 10 {
 		ns.MaxConcurrentProbes = defaults.MaxConcurrentProbes
+		warnings = append(warnings, fmt.Sprintf("Max concurrent probes reset to default (%d)", defaults.MaxConcurrentProbes))
 	}
 	if ns.MinChunkSize < 100*KB {
 		ns.MinChunkSize = defaults.MinChunkSize
+		warnings = append(warnings, "Min chunk size reset to default")
 	}
 	if ns.WorkerBufferSize < 1*KB {
 		ns.WorkerBufferSize = defaults.WorkerBufferSize
+		warnings = append(warnings, "Worker buffer size reset to default")
 	}
 	if ns.DialHedgeCount < 0 || ns.DialHedgeCount > 16 {
 		ns.DialHedgeCount = defaults.DialHedgeCount
+		warnings = append(warnings, "Dial hedge count reset to default")
 	}
 
 	// Validate ProxyURL if set
 	if ns.ProxyURL != "" {
 		if _, err := url.Parse(ns.ProxyURL); err != nil {
 			ns.ProxyURL = defaults.ProxyURL
+			warnings = append(warnings, "Invalid proxy URL reset to empty")
 		}
 	}
 
@@ -365,33 +385,43 @@ func (ns *NetworkSettings) Validate() {
 		}
 		if !allValid {
 			ns.CustomDNS = defaults.CustomDNS
+			warnings = append(warnings, "Invalid DNS configuration reset to empty")
 		}
 	}
+	return warnings
 }
 
 // Validate checks PerformanceSettings for valid floating point ranges and durations.
-func (ps *PerformanceSettings) Validate() {
+func (ps *PerformanceSettings) Validate() []string {
+	var warnings []string
 	defaults := DefaultSettings().Performance
 
 	if ps.MaxTaskRetries < 0 || ps.MaxTaskRetries > 10 {
 		ps.MaxTaskRetries = defaults.MaxTaskRetries
+		warnings = append(warnings, fmt.Sprintf("Max task retries reset to default (%d)", defaults.MaxTaskRetries))
 	}
 	if ps.SlowWorkerThreshold < 0.0 || ps.SlowWorkerThreshold > 1.0 {
 		ps.SlowWorkerThreshold = defaults.SlowWorkerThreshold
+		warnings = append(warnings, "Slow worker threshold reset to default")
 	}
 	if ps.SpeedEmaAlpha < 0.0 || ps.SpeedEmaAlpha > 1.0 {
 		ps.SpeedEmaAlpha = defaults.SpeedEmaAlpha
+		warnings = append(warnings, "Speed smoothing factor reset to default")
 	}
 	if ps.SlowWorkerGracePeriod < 0 {
 		ps.SlowWorkerGracePeriod = defaults.SlowWorkerGracePeriod
+		warnings = append(warnings, "Slow worker grace period reset to default")
 	}
 	if ps.StallTimeout < 0 {
 		ps.StallTimeout = defaults.StallTimeout
+		warnings = append(warnings, "Stall timeout reset to default")
 	}
+	return warnings
 }
 
 // Validate checks CategorySettings and ensures all defined categories are valid.
-func (cs *CategorySettings) Validate() {
+func (cs *CategorySettings) Validate() []string {
+	var warnings []string
 	validCats := make([]Category, 0, len(cs.Categories))
 	for _, cat := range cs.Categories {
 		if err := cat.Validate(); err == nil {
@@ -401,15 +431,18 @@ func (cs *CategorySettings) Validate() {
 				if info, err := os.Stat(catPath); err != nil || !info.IsDir() {
 					// Fallback to default download dir for this category if path is broken
 					cat.Path = DefaultSettings().General.DefaultDownloadDir
+					warnings = append(warnings, fmt.Sprintf("Category %q path is broken; reset to default", cat.Name))
 				}
 			}
 			validCats = append(validCats, cat)
 		} else {
+			warnings = append(warnings, fmt.Sprintf("Removed invalid category %q: %v", cat.Name, err))
 			utils.Debug("Config: Removing invalid category %q: %v", cat.Name, err)
 		}
 	}
 
 	cs.Categories = validCats
+	return warnings
 }
 
 // SaveSettings saves settings to disk atomically.
