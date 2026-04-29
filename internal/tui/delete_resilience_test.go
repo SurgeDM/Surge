@@ -19,7 +19,7 @@ func (m *mockService) Delete(id string) error {
 	return m.deleteErr
 }
 
-func (m *mockService) List() ([]types.DownloadStatus, error) { return nil, nil }
+func (m *mockService) List() ([]types.DownloadStatus, error)   { return nil, nil }
 func (m *mockService) History() ([]types.DownloadEntry, error) { return nil, nil }
 func (m *mockService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
 	return "", nil
@@ -31,12 +31,12 @@ func (m *mockService) ResumeBatch(ids []string) []error { return nil }
 func (m *mockService) StreamEvents(ctx context.Context) (<-chan interface{}, func(), error) {
 	return nil, nil, nil
 }
-func (m *mockService) Publish(msg interface{}) error { return nil }
-func (m *mockService) Pause(id string) error { return nil }
-func (m *mockService) Resume(id string) error { return nil }
-func (m *mockService) UpdateURL(id string, newURL string) error { return nil }
+func (m *mockService) Publish(msg interface{}) error                      { return nil }
+func (m *mockService) Pause(id string) error                              { return nil }
+func (m *mockService) Resume(id string) error                             { return nil }
+func (m *mockService) UpdateURL(id string, newURL string) error           { return nil }
 func (m *mockService) GetStatus(id string) (*types.DownloadStatus, error) { return nil, nil }
-func (m *mockService) Shutdown() error { return nil }
+func (m *mockService) Shutdown() error                                    { return nil }
 
 func TestUpdateDashboard_DeleteResilience(t *testing.T) {
 	// This test validates the TUI's defensive layer independently of the service
@@ -44,7 +44,7 @@ func TestUpdateDashboard_DeleteResilience(t *testing.T) {
 	// IDs, the TUI should still gracefully handle ErrNotFound if it occurs.
 	dm := &DownloadModel{ID: "ghost-id", Filename: "ghost.zip"}
 	svc := &mockService{deleteErr: types.ErrNotFound}
-	
+
 	m := RootModel{
 		state:     DashboardState,
 		downloads: []*DownloadModel{dm},
@@ -71,7 +71,7 @@ func TestUpdateDashboard_DeleteResilience(t *testing.T) {
 func TestUpdateDashboard_DeleteSuccess(t *testing.T) {
 	dm := &DownloadModel{ID: "real-id", Filename: "real.zip"}
 	svc := &mockService{deleteErr: nil}
-	
+
 	m := RootModel{
 		state:     DashboardState,
 		downloads: []*DownloadModel{dm},
@@ -94,7 +94,7 @@ func TestUpdateDashboard_DeleteSuccess(t *testing.T) {
 func TestUpdateDashboard_DeleteOtherError(t *testing.T) {
 	dm := &DownloadModel{ID: "error-id", Filename: "error.zip"}
 	svc := &mockService{deleteErr: errors.New("some other error")}
-	
+
 	m := RootModel{
 		state:     DashboardState,
 		downloads: []*DownloadModel{dm},

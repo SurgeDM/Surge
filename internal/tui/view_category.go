@@ -78,6 +78,14 @@ func (m RootModel) viewCategoryManager() string {
 		bodyHeight = 3
 	}
 
+	var errorLine string
+	if m.catMgrError != "" {
+		errorLine = lipgloss.NewStyle().
+			Foreground(colors.StateError()).
+			Bold(true).
+			Render("  \u2716 " + m.catMgrError)
+	}
+
 	var content string
 	if width >= 76 && bodyHeight >= 9 {
 		content = m.renderCategoryTwoColumn(cats, cursor, width, bodyHeight)
@@ -86,7 +94,8 @@ func (m RootModel) viewCategoryManager() string {
 	}
 
 	contentHeight := lipgloss.Height(content)
-	usedHeight := toggleBarHeight + infoHeight + LayoutGapStyle.GetVerticalFrameSize() + contentHeight + helpHeight
+	errorHeight := lipgloss.Height(errorLine)
+	usedHeight := toggleBarHeight + infoHeight + errorHeight + LayoutGapStyle.GetVerticalFrameSize() + contentHeight + helpHeight
 	paddingLines := innerHeight - usedHeight
 	if paddingLines < 0 {
 		paddingLines = 0
@@ -96,6 +105,7 @@ func (m RootModel) viewCategoryManager() string {
 	fullContent := lipgloss.JoinVertical(lipgloss.Left,
 		toggleLine,
 		infoLine,
+		errorLine,
 		"",
 		content,
 		padding+helpText,

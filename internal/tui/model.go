@@ -179,6 +179,7 @@ type RootModel struct {
 	catMgrEditField int                // 0=Name, 1=Description, 2=Pattern, 3=Path
 	catMgrInputs    [4]textinput.Model // Inputs for Name, Description, Pattern, Path
 	catMgrIsNew     bool               // Whether adding a new category
+	catMgrError     string             // Error message for display in category manager
 	// Quit confirm button focus (0 = Yep!, 1 = Nope)
 	quitConfirmFocused int
 
@@ -206,7 +207,7 @@ type RootModel struct {
 	enqueueCtx       context.Context
 	cancelEnqueue    context.CancelFunc
 	shuttingDown     bool
-	RestartRequested bool // [NEW] Flag to signal process re-exec after TUI shutdown
+	RestartRequested bool // Flag to signal process re-exec after TUI shutdown
 
 	spinner spinner.Model
 }
