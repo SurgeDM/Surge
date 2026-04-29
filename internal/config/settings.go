@@ -2,9 +2,12 @@ package config
 
 import (
 	"encoding/json"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -270,7 +273,143 @@ func LoadSettings() (*Settings, error) {
 		return DefaultSettings(), nil
 	}
 
+	// Validate settings and roll back individual invalid fields to defaults
+	settings.Validate()
+
 	return settings, nil
+}
+
+// Validate ensures all settings are within reasonable bounds, resetting
+// individual invalid fields to their default values.
+func (s *Settings) Validate() {
+	s.General.Validate()
+	s.Network.Validate()
+	s.Performance.Validate()
+	s.Categories.Validate()
+}
+
+// Validate checks GeneralSettings for invalid paths or out-of-bounds values.
+func (gs *GeneralSettings) Validate() {
+	defaults := DefaultSettings().General
+
+	if gs.Theme < 0 || gs.Theme > 2 {
+		gs.Theme = defaults.Theme
+	}
+	if gs.LogRetentionCount < 1 || gs.LogRetentionCount > 100 {
+		gs.LogRetentionCount = defaults.LogRetentionCount
+	}
+
+	// Validate DefaultDownloadDir
+	trimmed := strings.TrimSpace(gs.DefaultDownloadDir)
+	if trimmed != "" {
+		if info, err := os.Stat(trimmed); err != nil {
+			// If path is invalid or inaccessible, fallback to default system downloads dir
+			gs.DefaultDownloadDir = defaults.DefaultDownloadDir
+		} else if !info.IsDir() {
+			gs.DefaultDownloadDir = defaults.DefaultDownloadDir
+		}
+	}
+}
+
+// Validate checks NetworkSettings for valid IPs, URLs, and numeric bounds.
+func (ns *NetworkSettings) Validate() {
+	defaults := DefaultSettings().Network
+
+	if ns.MaxConnectionsPerHost < 1 || ns.MaxConnectionsPerHost > 64 {
+		ns.MaxConnectionsPerHost = defaults.MaxConnectionsPerHost
+	}
+	if ns.MaxConcurrentDownloads < 1 || ns.MaxConcurrentDownloads > 10 {
+		ns.MaxConcurrentDownloads = defaults.MaxConcurrentDownloads
+	}
+	if ns.MaxConcurrentProbes < 1 || ns.MaxConcurrentProbes > 10 {
+		ns.MaxConcurrentProbes = defaults.MaxConcurrentProbes
+	}
+	if ns.MinChunkSize < 100*KB {
+		ns.MinChunkSize = defaults.MinChunkSize
+	}
+	if ns.WorkerBufferSize < 1*KB {
+		ns.WorkerBufferSize = defaults.WorkerBufferSize
+	}
+	if ns.DialHedgeCount < 0 || ns.DialHedgeCount > 16 {
+		ns.DialHedgeCount = defaults.DialHedgeCount
+	}
+
+	// Validate ProxyURL if set
+	if ns.ProxyURL != "" {
+		if _, err := url.Parse(ns.ProxyURL); err != nil {
+			ns.ProxyURL = defaults.ProxyURL
+		}
+	}
+
+	// Validate CustomDNS if set
+	if ns.CustomDNS != "" {
+		parts := strings.Split(ns.CustomDNS, ",")
+		allValid := true
+		for _, part := range parts {
+			p := strings.TrimSpace(part)
+			if p == "" {
+				continue
+			}
+			host, _, err := net.SplitHostPort(p)
+			if err != nil {
+				if net.ParseIP(p) == nil {
+					allValid = false
+					break
+				}
+			} else {
+				if net.ParseIP(host) == nil {
+					allValid = false
+					break
+				}
+			}
+		}
+		if !allValid {
+			ns.CustomDNS = defaults.CustomDNS
+		}
+	}
+}
+
+// Validate checks PerformanceSettings for valid floating point ranges and durations.
+func (ps *PerformanceSettings) Validate() {
+	defaults := DefaultSettings().Performance
+
+	if ps.MaxTaskRetries < 0 || ps.MaxTaskRetries > 10 {
+		ps.MaxTaskRetries = defaults.MaxTaskRetries
+	}
+	if ps.SlowWorkerThreshold < 0.0 || ps.SlowWorkerThreshold > 1.0 {
+		ps.SlowWorkerThreshold = defaults.SlowWorkerThreshold
+	}
+	if ps.SpeedEmaAlpha < 0.0 || ps.SpeedEmaAlpha > 1.0 {
+		ps.SpeedEmaAlpha = defaults.SpeedEmaAlpha
+	}
+	if ps.SlowWorkerGracePeriod < 0 {
+		ps.SlowWorkerGracePeriod = defaults.SlowWorkerGracePeriod
+	}
+	if ps.StallTimeout < 0 {
+		ps.StallTimeout = defaults.StallTimeout
+	}
+}
+
+// Validate checks CategorySettings and ensures all defined categories are valid.
+func (cs *CategorySettings) Validate() {
+	validCats := make([]Category, 0, len(cs.Categories))
+	for _, cat := range cs.Categories {
+		if err := cat.Validate(); err == nil {
+			// Extra path check for each category
+			catPath := strings.TrimSpace(cat.Path)
+			if catPath != "" {
+				if info, err := os.Stat(catPath); err != nil || !info.IsDir() {
+					// Fallback to default download dir for this category if path is broken
+					cat.Path = DefaultSettings().General.DefaultDownloadDir
+				}
+			}
+			validCats = append(validCats, cat)
+		} else {
+			utils.Debug("Config: Removing invalid category %q: %v", cat.Name, err)
+		}
+	}
+
+	cs.Categories = validCats
 }
 
 // SaveSettings saves settings to disk atomically.
