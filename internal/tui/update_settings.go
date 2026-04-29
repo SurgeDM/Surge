@@ -211,6 +211,14 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if settingKey == "max_global_connections" {
 			return m, nil
 		}
+
+		// Categories tab → 'Manage Categories' selected → confirm full reset
+		if m.SettingsActiveTab < len(categories) && categories[m.SettingsActiveTab] == "Categories" && settingKey == "category_enabled" {
+			m.state = CategoryResetConfirmState
+			m.quitConfirmFocused = 0
+			return m, nil
+		}
+
 		defaults := config.DefaultSettings()
 		currentCategory := categories[m.SettingsActiveTab]
 		m.resetSettingToDefault(currentCategory, settingKey, defaults)

@@ -242,6 +242,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case BugReportLogPathState:
 			return m.updateBugReportLogPath(msg)
 
+		case CategoryResetConfirmState:
+			return m.updateCategoryResetConfirm(msg)
+
 		default:
 			return m, nil
 		}

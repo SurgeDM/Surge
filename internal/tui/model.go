@@ -56,6 +56,7 @@ const (
 	BugReportTargetState                       // BugReportTargetState is 17
 	BugReportSystemDetailsState                // BugReportSystemDetailsState is 18
 	BugReportLogPathState                      // BugReportLogPathState is 19
+	CategoryResetConfirmState                  // CategoryResetConfirmState is 20
 )
 
 type FilePickerOrigin int

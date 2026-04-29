@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/bugreport"
 	"github.com/SurgeDM/Surge/internal/clipboard"
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -353,6 +354,37 @@ func (m RootModel) updateRestartConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 		return confirmRestart()
 	case yesNoNo, yesNoCancel:
 		return cancelRestart()
+	}
+
+	return m, nil
+}
+
+func (m RootModel) updateCategoryResetConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	confirmReset := func() (tea.Model, tea.Cmd) {
+		m.Settings.Categories.Categories = config.DefaultCategories()
+		m.Settings.Categories.CategoryEnabled = false
+		m.addLogEntry(LogStyleStarted.Render("\u2714 Categories reset to defaults"))
+		utils.Debug("Categories Reset to Defaults")
+		m.state = SettingsState
+		m.quitConfirmFocused = 0
+		return m, nil
+	}
+	cancelReset := func() (tea.Model, tea.Cmd) {
+		m.state = SettingsState
+		m.quitConfirmFocused = 0
+		return m, nil
+	}
+
+	m, decision, handled := m.handleYesNoSelection(msg)
+	if !handled {
+		return m, nil
+	}
+
+	switch decision {
+	case yesNoYes:
+		return confirmReset()
+	case yesNoNo, yesNoCancel:
+		return cancelReset()
 	}
 
 	return m, nil
