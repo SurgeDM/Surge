@@ -292,11 +292,16 @@ func (m *RootModel) validateSetting(key, value string) error {
 			return fmt.Errorf("must be between 0.0 and 1.0")
 		}
 	case "slow_worker_grace_period", "stall_timeout":
-		if _, err := strconv.ParseFloat(trimmed, 64); err == nil {
+		if v, err := strconv.ParseFloat(trimmed, 64); err == nil {
+			if v < 0 {
+				return fmt.Errorf("must be non-negative")
+			}
 			return nil
 		}
-		if _, err := time.ParseDuration(trimmed); err != nil {
+		if d, err := time.ParseDuration(trimmed); err != nil {
 			return fmt.Errorf("invalid duration (e.g. 5s or 5)")
+		} else if d < 0 {
+			return fmt.Errorf("must be non-negative")
 		}
 	case "log_retention_count":
 		v, err := strconv.Atoi(trimmed)
