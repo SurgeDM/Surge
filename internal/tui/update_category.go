@@ -142,7 +142,6 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 			if m.catMgrCursor < 0 || m.catMgrCursor >= len(m.Settings.Categories.Categories) {
 				m.catMgrError = "Invalid category selection"
 				utils.Debug("Category Manager Error: %s", m.catMgrError)
-				m.addLogEntry(LogStyleError.Render("\u2716 " + m.catMgrError))
 				return m, nil
 			}
 
@@ -154,25 +153,21 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 			if name == "" {
 				m.catMgrError = "Category name cannot be empty"
 				utils.Debug("Category Manager Error: %s", m.catMgrError)
-				m.addLogEntry(LogStyleError.Render("\u2716 " + m.catMgrError))
 				return m, nil
 			}
 			if pattern == "" {
 				m.catMgrError = "Category pattern cannot be empty"
 				utils.Debug("Category Manager Error: %s", m.catMgrError)
-				m.addLogEntry(LogStyleError.Render("\u2716 " + m.catMgrError))
 				return m, nil
 			}
 			if _, err := regexp.Compile(pattern); err != nil {
 				m.catMgrError = fmt.Sprintf("Invalid regex pattern: %v", err)
 				utils.Debug("Category Manager Error: %s", m.catMgrError)
-				m.addLogEntry(LogStyleError.Render("\u2716 " + m.catMgrError))
 				return m, nil
 			}
 			if path == "" {
 				m.catMgrError = "Category path cannot be empty"
 				utils.Debug("Category Manager Error: %s", m.catMgrError)
-				m.addLogEntry(LogStyleError.Render("\u2716 " + m.catMgrError))
 				return m, nil
 			}
 
