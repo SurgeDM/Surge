@@ -501,8 +501,13 @@ func startTUI(port int, exitWhenDone bool, noResume bool) error {
 
 		m.ToggleServiceFunc = func(enable bool) error {
 			if enable {
-				return s.Install()
+				if err := s.Install(); err != nil {
+					return err
+				}
+				return s.Start()
 			}
+			// Best effort stop before uninstall
+			_ = s.Stop()
 			return s.Uninstall()
 		}
 	}

@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"testing"
+	"time"
 
 	"github.com/kardianos/service"
 	"github.com/stretchr/testify/assert"
@@ -47,11 +48,20 @@ func TestProgramLifecycle(t *testing.T) {
 	assert.NotNil(t, p.cancel)
 	assert.NotNil(t, p.exit)
 
-	// Test Stop
-	err = p.Stop(s)
-	assert.NoError(t, err)
+	// Test Stop - should return quickly because --help exits immediately
+	stopErr := make(chan error, 1)
+	go func() {
+		stopErr <- p.Stop(s)
+	}()
 
-	// Ensure goroutine finished
+	select {
+	case err := <-stopErr:
+		assert.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("p.Stop timed out")
+	}
+
+	// Verify p.exit is closed
 	_, ok := <-p.exit
 	assert.False(t, ok, "p.exit should be closed")
 }

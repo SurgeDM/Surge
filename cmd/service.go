@@ -19,6 +19,7 @@ var serviceConfig = &service.Config{
 type program struct {
 	exit   chan struct{}
 	cancel context.CancelFunc
+	errCh  chan error
 }
 
 func (p *program) Start(s service.Service) error {
@@ -28,14 +29,16 @@ func (p *program) Start(s service.Service) error {
 	ctx, cancel := context.WithCancel(context.Background())
 	p.cancel = cancel
 	p.exit = make(chan struct{})
+	p.errCh = make(chan error, 1)
 
 	go func() {
 		defer close(p.exit)
 		if err := rootCmd.ExecuteContext(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Service error: %v\n", err)
-			// Notify the service manager that the service has stopped due to error.
-			// Use a goroutine to avoid deadlock on some platforms (like Windows)
-			// where s.Stop() might wait for p.Stop() to return.
+			p.errCh <- err
+			// Notify the service manager that the service should stop.
+			// Use a goroutine to avoid deadlock on Windows where s.Stop()
+			// might wait for p.Stop() to return.
 			go func() { _ = s.Stop() }()
 		}
 	}()
@@ -44,14 +47,20 @@ func (p *program) Start(s service.Service) error {
 
 func (p *program) Stop(s service.Service) error {
 	// Gracefully stop the service by canceling the context.
-	// This works cross-platform (including Windows) where os.Interrupt signal may not be supported.
 	if p.cancel != nil {
 		p.cancel()
 	}
 	if p.exit != nil {
 		<-p.exit
 	}
-	return nil
+
+	// Return the error that caused the stop if any, so the service manager logs it.
+	select {
+	case err := <-p.errCh:
+		return err
+	default:
+		return nil
+	}
 }
 
 func GetService() (service.Service, error) {
