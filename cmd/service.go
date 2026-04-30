@@ -52,14 +52,14 @@ func (p *program) Stop(s service.Service) error {
 	return nil
 }
 
-func getService() (service.Service, error) {
+func GetService() (service.Service, error) {
 	prg := &program{}
 	return service.New(prg, serviceConfig)
 }
 
 // RunService handles the application execution, checking if it should run as a service.
 func RunService() error {
-	s, err := getService()
+	s, err := GetService()
 	if err != nil {
 		return rootCmd.Execute()
 	}
@@ -80,7 +80,7 @@ var serviceInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install Surge as a system service",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := getService()
+		s, err := GetService()
 		if err != nil {
 			return err
 		}
@@ -96,7 +96,7 @@ var serviceUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "Uninstall the Surge system service",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := getService()
+		s, err := GetService()
 		if err != nil {
 			return err
 		}
@@ -112,7 +112,7 @@ var serviceStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the Surge system service",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := getService()
+		s, err := GetService()
 		if err != nil {
 			return err
 		}
@@ -128,7 +128,7 @@ var serviceStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop the Surge system service",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := getService()
+		s, err := GetService()
 		if err != nil {
 			return err
 		}
@@ -144,7 +144,7 @@ var serviceStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Check the status of the Surge system service",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := getService()
+		s, err := GetService()
 		if err != nil {
 			return err
 		}

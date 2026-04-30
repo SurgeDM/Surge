@@ -34,6 +34,7 @@ type GeneralSettings struct {
 	DownloadCompleteNotification bool   `json:"download_complete_notification" ui_label:"Download Complete Notification" ui_desc:"Show system notification when a download finishes."`
 	AllowRemoteOpenActions       bool   `json:"allow_remote_open_actions" ui_label:"Allow Remote Open Actions" ui_desc:"Allow /open-file and /open-folder API calls from non-loopback clients. Disabled by default for security." ui_restart:"true"`
 	AutoResume                   bool   `json:"auto_resume" ui_label:"Auto Resume" ui_desc:"Automatically resume paused downloads on startup." ui_restart:"true"`
+	AutoStart                    bool   `json:"auto_start" ui_label:"Automatic Startup" ui_desc:"Start Surge automatically when the system boots (requires service installation)."`
 	SkipUpdateCheck              bool   `json:"skip_update_check" ui_label:"Skip Update Check" ui_desc:"Disable automatic check for new versions on startup." ui_restart:"true"`
 
 	ClipboardMonitor  bool   `json:"clipboard_monitor" ui_label:"Clipboard Monitor" ui_desc:"Watch clipboard for URLs and prompt to download them." ui_restart:"true"`

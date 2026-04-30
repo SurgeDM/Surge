@@ -106,6 +106,28 @@ surge server https://url.com/file.zip
 surge server --token <token>
 ```
 
+### 3. Auto-Start Service
+
+Surge provides an official way to manage it as a system service (daemon). This is the recommended way for servers and reproducible deployments.
+
+```bash
+# Install Surge as a system service
+surge service install
+
+# Manage the service
+surge service start
+surge service stop
+surge service status
+
+# Uninstall the service
+surge service uninstall
+```
+
+> [!NOTE]
+> On Linux, these commands may require `sudo`. On Windows, they should be run in an elevated (Administrator) terminal.
+
+### 4. Remote TUI
+
 `surge` and `surge server` bind the HTTP API to `0.0.0.0` (all interfaces) by default.
 This means the server is accessible via `localhost` (127.0.0.1) as well as your local network IP.
 

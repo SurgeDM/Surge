@@ -211,6 +211,8 @@ type RootModel struct {
 	shuttingDown     bool
 	RestartRequested bool // Flag to signal process re-exec after TUI shutdown
 
+	ToggleServiceFunc func(bool) error
+
 	spinner spinner.Model
 }
 

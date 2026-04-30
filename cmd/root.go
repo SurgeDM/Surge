@@ -26,6 +26,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/google/uuid"
+	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
 
@@ -492,6 +493,21 @@ func startTUI(port int, exitWhenDone bool, noResume bool) error {
 
 	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), noResume, Commit)
 	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())
+
+	// Sync service auto-start state and bind toggle function
+	if s, err := GetService(); err == nil {
+		status, _ := s.Status()
+		// If service is installed (running or stopped), consider auto-start as enabled
+		m.Settings.General.AutoStart = (status != service.StatusUnknown && status != 0) // 0 often means not installed in some platforms
+
+		m.ToggleServiceFunc = func(enable bool) error {
+			if enable {
+				return s.Install()
+			}
+			return s.Uninstall()
+		}
+	}
+
 	m.ServerHost = serverBindHost
 	if m.ServerHost == "" {
 		m.ServerHost = "127.0.0.1"
