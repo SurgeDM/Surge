@@ -231,6 +231,9 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 		case sig := <-sigChan:
 			fmt.Printf("\nReceived %s. Shutting down...\n", sig)
 			_ = executeGlobalShutdown(fmt.Sprintf("server signal: %s", sig))
+		case <-cmd.Context().Done():
+			fmt.Printf("\nService stop requested. Shutting down...\n")
+			_ = executeGlobalShutdown("server: service context cancelled")
 		case <-exitWhenDoneCh:
 			fmt.Println("All downloads finished. Exiting...")
 			_ = executeGlobalShutdown("server: exit when done")
@@ -241,10 +244,15 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer signal.Stop(sigChan)
-	sig := <-sigChan
 
-	fmt.Printf("\nReceived %s. Shutting down...\n", sig)
-	_ = executeGlobalShutdown(fmt.Sprintf("server signal: %s", sig))
+	select {
+	case sig := <-sigChan:
+		fmt.Printf("\nReceived %s. Shutting down...\n", sig)
+		_ = executeGlobalShutdown(fmt.Sprintf("server signal: %s", sig))
+	case <-cmd.Context().Done():
+		fmt.Printf("\nService stop requested. Shutting down...\n")
+		_ = executeGlobalShutdown("server: service context cancelled")
+	}
 	return nil
 }
 

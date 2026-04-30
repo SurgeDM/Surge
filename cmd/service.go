@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -15,25 +16,38 @@ var serviceConfig = &service.Config{
 	Arguments:   []string{"server", "start"},
 }
 
-type program struct{}
+type program struct {
+	exit   chan struct{}
+	cancel context.CancelFunc
+}
 
 func (p *program) Start(s service.Service) error {
-	// The service library handles the running of the executable with the specified arguments.
-	// When running as a service, Surge is invoked with "server start".
+	// We run rootCmd.Execute() directly in a goroutine rather than starting
+	// a subprocess to ensure the service manager tracks the correct PID
+	// and to allow for shared state/lifecycle management if needed.
+	ctx, cancel := context.WithCancel(context.Background())
+	p.cancel = cancel
+	p.exit = make(chan struct{})
+
 	go func() {
-		if err := rootCmd.Execute(); err != nil {
+		defer close(p.exit)
+		if err := rootCmd.ExecuteContext(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Service error: %v\n", err)
-			os.Exit(1)
+			// Notify the service manager that the service has stopped due to error.
+			_ = s.Stop()
 		}
 	}()
 	return nil
 }
 
 func (p *program) Stop(s service.Service) error {
-	// Stop should be graceful. Surge handles SIGTERM/SIGINT.
-	proc, err := os.FindProcess(os.Getpid())
-	if err == nil {
-		_ = proc.Signal(os.Interrupt)
+	// Gracefully stop the service by canceling the context.
+	// This works cross-platform (including Windows) where os.Interrupt signal may not be supported.
+	if p.cancel != nil {
+		p.cancel()
+	}
+	if p.exit != nil {
+		<-p.exit
 	}
 	return nil
 }
@@ -143,8 +157,10 @@ var serviceStatusCmd = &cobra.Command{
 			fmt.Println("Service is running")
 		case service.StatusStopped:
 			fmt.Println("Service is stopped")
-		default:
+		case service.StatusUnknown:
 			fmt.Println("Service status: unknown")
+		default:
+			fmt.Println("Service is not installed")
 		}
 		return nil
 	},
