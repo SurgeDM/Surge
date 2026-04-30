@@ -214,7 +214,9 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 		currentCategory := categories[m.SettingsActiveTab]
 		if typ == "bool" {
-			_ = m.setSettingValue(currentCategory, settingKey, "")
+			if err := m.setSettingValue(currentCategory, settingKey, ""); err != nil {
+				m.settingsError = err.Error()
+			}
 		} else {
 			// Enter edit mode
 			m.SettingsIsEditing = true
