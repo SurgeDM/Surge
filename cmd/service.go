@@ -34,7 +34,9 @@ func (p *program) Start(s service.Service) error {
 		if err := rootCmd.ExecuteContext(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Service error: %v\n", err)
 			// Notify the service manager that the service has stopped due to error.
-			_ = s.Stop()
+			// Use a goroutine to avoid deadlock on some platforms (like Windows)
+			// where s.Stop() might wait for p.Stop() to return.
+			go s.Stop()
 		}
 	}()
 	return nil

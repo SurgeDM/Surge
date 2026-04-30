@@ -10,11 +10,23 @@ import (
 
 type mockService struct {
 	service.Service
-	stopCalled bool
+	stopCalled      bool
+	installCalled   bool
+	uninstallCalled bool
 }
 
 func (m *mockService) Stop() error {
 	m.stopCalled = true
+	return nil
+}
+
+func (m *mockService) Install() error {
+	m.installCalled = true
+	return nil
+}
+
+func (m *mockService) Uninstall() error {
+	m.uninstallCalled = true
 	return nil
 }
 
@@ -47,21 +59,22 @@ func TestProgramLifecycle(t *testing.T) {
 
 func TestToggleServiceFunc(t *testing.T) {
 	// This test verifies the logic we bind to m.ToggleServiceFunc in root.go
+	s := &mockService{}
 
 	toggleFunc := func(enable bool) error {
 		if enable {
-			// In a real scenario this calls s.Install()
-			return nil
+			return s.Install()
 		}
-		// In a real scenario this calls s.Uninstall()
-		return nil
+		return s.Uninstall()
 	}
 
 	err := toggleFunc(true)
 	assert.NoError(t, err)
+	assert.True(t, s.installCalled)
 
 	err = toggleFunc(false)
 	assert.NoError(t, err)
+	assert.True(t, s.uninstallCalled)
 }
 
 func TestProgramContextCancellation(t *testing.T) {

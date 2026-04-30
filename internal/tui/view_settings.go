@@ -921,6 +921,9 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 		case "auto_resume":
 			m.Settings.General.AutoResume = defaults.General.AutoResume
 		case "auto_start":
+			if m.ToggleServiceFunc != nil {
+				_ = m.ToggleServiceFunc(defaults.General.AutoStart)
+			}
 			m.Settings.General.AutoStart = defaults.General.AutoStart
 		case "skip_update_check":
 			m.Settings.General.SkipUpdateCheck = defaults.General.SkipUpdateCheck
