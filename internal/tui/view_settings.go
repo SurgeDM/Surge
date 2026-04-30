@@ -917,6 +917,8 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.General.DownloadCompleteNotification = defaults.General.DownloadCompleteNotification
 		case "auto_resume":
 			m.Settings.General.AutoResume = defaults.General.AutoResume
+		case "auto_start":
+			m.Settings.General.AutoStart = defaults.General.AutoStart
 		case "skip_update_check":
 			m.Settings.General.SkipUpdateCheck = defaults.General.SkipUpdateCheck
 
