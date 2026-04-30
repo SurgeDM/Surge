@@ -97,6 +97,10 @@ func TestProgramContextCancellation(t *testing.T) {
 	p := &program{}
 	s := &mockService{}
 
+	// Set args to something safe so rootCmd.ExecuteContext doesn't fail on test flags
+	rootCmd.SetArgs([]string{"--help"})
+	defer rootCmd.SetArgs(nil)
+
 	// Start the program
 	_ = p.Start(s)
 
