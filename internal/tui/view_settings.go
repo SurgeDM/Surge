@@ -667,7 +667,10 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			case reflect.Bool:
 				// Typically toggled unless explicitly typed out
 				if value == "" {
-					if key == "auto_start" && m.ToggleServiceFunc != nil {
+					if key == "auto_start" {
+						if m.ToggleServiceFunc == nil {
+							return fmt.Errorf("service management is not available on this platform")
+						}
 						newVal := !targetField.Bool()
 						if err := m.ToggleServiceFunc(newVal); err != nil {
 							return fmt.Errorf("failed to update service: %w", err)

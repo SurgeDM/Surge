@@ -494,11 +494,10 @@ func startTUI(port int, exitWhenDone bool, noResume bool) error {
 	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), noResume, Commit)
 	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())
 
-	// Sync service auto-start state and bind toggle function
 	if s, err := GetService(); err == nil {
 		status, _ := s.Status()
 		// If service is installed (running or stopped), consider auto-start as enabled
-		m.Settings.General.AutoStart = (status != service.StatusUnknown && status != 0) // 0 often means not installed in some platforms
+		m.Settings.General.AutoStart = (status == service.StatusRunning || status == service.StatusStopped)
 
 		m.ToggleServiceFunc = func(enable bool) error {
 			if enable {
