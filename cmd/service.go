@@ -36,7 +36,7 @@ func (p *program) Start(s service.Service) error {
 			// Notify the service manager that the service has stopped due to error.
 			// Use a goroutine to avoid deadlock on some platforms (like Windows)
 			// where s.Stop() might wait for p.Stop() to return.
-			go s.Stop()
+			go func() { _ = s.Stop() }()
 		}
 	}()
 	return nil
