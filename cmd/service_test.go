@@ -34,6 +34,20 @@ func (m *mockService) Status() (service.Status, error) {
 	return service.StatusRunning, nil
 }
 
+func waitStop(t *testing.T, p *program, s service.Service) {
+	stopErr := make(chan error, 1)
+	go func() {
+		stopErr <- p.Stop(s)
+	}()
+
+	select {
+	case err := <-stopErr:
+		assert.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("p.Stop timed out")
+	}
+}
+
 func TestProgramLifecycle(t *testing.T) {
 	p := &program{}
 	s := &mockService{}
@@ -48,18 +62,8 @@ func TestProgramLifecycle(t *testing.T) {
 	assert.NotNil(t, p.cancel)
 	assert.NotNil(t, p.exit)
 
-	// Test Stop - should return quickly because --help exits immediately
-	stopErr := make(chan error, 1)
-	go func() {
-		stopErr <- p.Stop(s)
-	}()
-
-	select {
-	case err := <-stopErr:
-		assert.NoError(t, err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("p.Stop timed out")
-	}
+	// Test Stop with timeout
+	waitStop(t, p, s)
 
 	// Verify p.exit is closed
 	_, ok := <-p.exit
@@ -101,17 +105,7 @@ func TestProgramContextCancellation(t *testing.T) {
 	assert.NotNil(t, cancel)
 
 	// Test Stop with timeout
-	stopErr := make(chan error, 1)
-	go func() {
-		stopErr <- p.Stop(s)
-	}()
-
-	select {
-	case err := <-stopErr:
-		assert.NoError(t, err)
-	case <-time.After(5 * time.Second):
-		t.Fatal("p.Stop timed out during context cancellation test")
-	}
+	waitStop(t, p, s)
 }
 
 func TestServiceCommandRegistration(t *testing.T) {

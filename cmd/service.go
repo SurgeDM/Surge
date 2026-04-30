@@ -82,6 +82,22 @@ func RunService() error {
 	return s.Run()
 }
 
+func runAction(action func(service.Service) error, successMsg string) func(*cobra.Command, []string) error {
+	return func(cmd *cobra.Command, args []string) error {
+		s, err := GetService()
+		if err != nil {
+			return err
+		}
+		if err := action(s); err != nil {
+			return err
+		}
+		if successMsg != "" {
+			fmt.Println(successMsg)
+		}
+		return nil
+	}
+}
+
 var serviceCmd = &cobra.Command{
 	Use:   "service",
 	Short: "Manage Surge as a system service",
@@ -90,78 +106,35 @@ var serviceCmd = &cobra.Command{
 var serviceInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install Surge as a system service",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := GetService()
-		if err != nil {
-			return err
-		}
-		err = s.Install()
-		if err == nil {
-			fmt.Println("Service installed successfully")
-		}
-		return err
-	},
+	RunE:  runAction(func(s service.Service) error { return s.Install() }, "Service installed successfully"),
 }
 
 var serviceUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "Uninstall the Surge system service",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		if s, err := GetService(); err == nil {
-			// Best effort stop before uninstall (Windows SCM rejects uninstall of running service)
-			_ = s.Stop()
-			err = s.Uninstall()
-			if err != nil {
-				fmt.Printf("Error: %v\n", err)
-			} else {
-				fmt.Println("Service uninstalled successfully")
-			}
-			return err
-		}
-		return fmt.Errorf("could not get service")
-	},
+	RunE: runAction(func(s service.Service) error {
+		// Best effort stop before uninstall (Windows SCM rejects uninstall of running service)
+		_ = s.Stop()
+		return s.Uninstall()
+	}, "Service uninstalled successfully"),
 }
 
 var serviceStartCmd = &cobra.Command{
 	Use:   "start",
 	Short: "Start the Surge system service",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := GetService()
-		if err != nil {
-			return err
-		}
-		err = s.Start()
-		if err == nil {
-			fmt.Println("Service started successfully")
-		}
-		return err
-	},
+	RunE:  runAction(func(s service.Service) error { return s.Start() }, "Service started successfully"),
 }
 
 var serviceStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop the Surge system service",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := GetService()
-		if err != nil {
-			return err
-		}
-		err = s.Stop()
-		if err == nil {
-			fmt.Println("Service stopped successfully")
-		}
-		return err
-	},
+	RunE:  runAction(func(s service.Service) error { return s.Stop() }, "Service stopped successfully"),
 }
 
 var serviceStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Check the status of the Surge system service",
-	RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := GetService()
-		if err != nil {
-			return err
-		}
+	RunE: runAction(func(s service.Service) error {
 		status, err := s.Status()
 		if err != nil {
 			return err
@@ -171,13 +144,11 @@ var serviceStatusCmd = &cobra.Command{
 			fmt.Println("Service is running")
 		case service.StatusStopped:
 			fmt.Println("Service is stopped")
-		case service.StatusUnknown:
-			fmt.Println("Service status: unknown")
 		default:
-			fmt.Println("Service is not installed")
+			fmt.Println("Service is not installed or status is unknown")
 		}
 		return nil
-	},
+	}, ""),
 }
 
 func init() {
