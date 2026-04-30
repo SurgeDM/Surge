@@ -495,16 +495,14 @@ func startTUI(port int, exitWhenDone bool, noResume bool) error {
 	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())
 
 	if s, err := GetService(); err == nil {
-		status, _ := s.Status()
-		// If service is installed (running or stopped), consider auto-start as enabled
-		m.Settings.General.AutoStart = (status == service.StatusRunning || status == service.StatusStopped)
+		if status, statusErr := s.Status(); statusErr == nil {
+			// If service is installed (running or stopped), consider auto-start as enabled
+			m.Settings.General.AutoStart = (status == service.StatusRunning || status == service.StatusStopped)
+		}
 
 		m.ToggleServiceFunc = func(enable bool) error {
 			if enable {
-				if err := s.Install(); err != nil {
-					return err
-				}
-				return s.Start()
+				return s.Install()
 			}
 			// Best effort stop before uninstall
 			_ = s.Stop()

@@ -74,6 +74,8 @@ func TestToggleServiceFunc(t *testing.T) {
 		if enable {
 			return s.Install()
 		}
+		// Best effort stop before uninstall
+		_ = s.Stop()
 		return s.Uninstall()
 	}
 
@@ -83,6 +85,7 @@ func TestToggleServiceFunc(t *testing.T) {
 
 	err = toggleFunc(false)
 	assert.NoError(t, err)
+	assert.True(t, s.stopCalled)
 	assert.True(t, s.uninstallCalled)
 }
 
