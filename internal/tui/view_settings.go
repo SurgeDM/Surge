@@ -908,7 +908,7 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 }
 
 // resetSettingToDefault resets a specific setting to its default value
-func (m *RootModel) resetSettingToDefault(category, key string, defaults *config.Settings) {
+func (m *RootModel) resetSettingToDefault(category, key string, defaults *config.Settings) error {
 	switch category {
 	case "General":
 		switch key {
@@ -922,7 +922,9 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.General.AutoResume = defaults.General.AutoResume
 		case "auto_start":
 			if m.ToggleServiceFunc != nil {
-				_ = m.ToggleServiceFunc(defaults.General.AutoStart)
+				if err := m.ToggleServiceFunc(defaults.General.AutoStart); err != nil {
+					return fmt.Errorf("failed to update service: %w", err)
+				}
 			}
 			m.Settings.General.AutoStart = defaults.General.AutoStart
 		case "skip_update_check":
@@ -999,4 +1001,5 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.Extension.AuthToken = defaults.Extension.AuthToken
 		}
 	}
+	return nil
 }

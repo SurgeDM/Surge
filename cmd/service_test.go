@@ -2,7 +2,6 @@ package cmd
 
 import (
 	"testing"
-	"time"
 
 	"github.com/kardianos/service"
 	"github.com/stretchr/testify/assert"
@@ -38,6 +37,10 @@ func TestProgramLifecycle(t *testing.T) {
 	p := &program{}
 	s := &mockService{}
 
+	// Set args to something safe so rootCmd.ExecuteContext doesn't fail on test flags
+	rootCmd.SetArgs([]string{"--help"})
+	defer rootCmd.SetArgs(nil)
+
 	// Test Start
 	err := p.Start(s)
 	assert.NoError(t, err)
@@ -48,13 +51,9 @@ func TestProgramLifecycle(t *testing.T) {
 	err = p.Stop(s)
 	assert.NoError(t, err)
 
-	// Ensure goroutine finished (it should have closed p.exit)
-	select {
-	case <-p.exit:
-		// success
-	case <-time.After(1 * time.Second):
-		t.Fatal("program did not signal exit within timeout")
-	}
+	// Ensure goroutine finished
+	_, ok := <-p.exit
+	assert.False(t, ok, "p.exit should be closed")
 }
 
 func TestToggleServiceFunc(t *testing.T) {

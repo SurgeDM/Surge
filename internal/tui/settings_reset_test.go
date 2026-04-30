@@ -28,7 +28,9 @@ func TestSettingsResetExhaustive(t *testing.T) {
 					setNonDefaultValue(t, m.Settings, catName, setting.Key)
 
 					// 2. Call reset logic
-					m.resetSettingToDefault(catName, setting.Key, defaults)
+					if err := m.resetSettingToDefault(catName, setting.Key, defaults); err != nil {
+						t.Errorf("Failed to reset setting %s: %v", setting.Key, err)
+					}
 
 					// 3. Verify it was reset correctly
 					verifyIsDefault(t, m.Settings, defaults, catName, setting.Key)

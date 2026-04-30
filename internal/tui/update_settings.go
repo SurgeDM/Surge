@@ -243,7 +243,10 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 		defaults := config.DefaultSettings()
 		currentCategory := categories[m.SettingsActiveTab]
-		m.resetSettingToDefault(currentCategory, settingKey, defaults)
+		if err := m.resetSettingToDefault(currentCategory, settingKey, defaults); err != nil {
+			m.settingsError = err.Error()
+			return m, nil
+		}
 		if settingKey == "theme" || settingKey == "theme_path" {
 			m.ApplyTheme(m.Settings.General.Theme, m.Settings.General.ThemePath)
 		}
