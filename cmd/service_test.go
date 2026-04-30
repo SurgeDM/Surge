@@ -100,8 +100,18 @@ func TestProgramContextCancellation(t *testing.T) {
 	cancel := p.cancel
 	assert.NotNil(t, cancel)
 
-	// Stopping should call cancel
-	_ = p.Stop(s)
+	// Test Stop with timeout
+	stopErr := make(chan error, 1)
+	go func() {
+		stopErr <- p.Stop(s)
+	}()
+
+	select {
+	case err := <-stopErr:
+		assert.NoError(t, err)
+	case <-time.After(5 * time.Second):
+		t.Fatal("p.Stop timed out during context cancellation test")
+	}
 }
 
 func TestServiceCommandRegistration(t *testing.T) {

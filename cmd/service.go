@@ -107,15 +107,18 @@ var serviceUninstallCmd = &cobra.Command{
 	Use:   "uninstall",
 	Short: "Uninstall the Surge system service",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		s, err := GetService()
-		if err != nil {
+		if s, err := GetService(); err == nil {
+			// Best effort stop before uninstall (Windows SCM rejects uninstall of running service)
+			_ = s.Stop()
+			err = s.Uninstall()
+			if err != nil {
+				fmt.Printf("Error: %v\n", err)
+			} else {
+				fmt.Println("Service uninstalled successfully")
+			}
 			return err
 		}
-		err = s.Uninstall()
-		if err == nil {
-			fmt.Println("Service uninstalled successfully")
-		}
-		return err
+		return fmt.Errorf("could not get service")
 	},
 }
 

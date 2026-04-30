@@ -921,7 +921,7 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 		case "auto_resume":
 			m.Settings.General.AutoResume = defaults.General.AutoResume
 		case "auto_start":
-			if m.ToggleServiceFunc != nil {
+			if m.ToggleServiceFunc != nil && m.Settings.General.AutoStart != defaults.General.AutoStart {
 				if err := m.ToggleServiceFunc(defaults.General.AutoStart); err != nil {
 					return fmt.Errorf("failed to update service: %w", err)
 				}
