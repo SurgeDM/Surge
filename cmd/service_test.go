@@ -29,4 +29,3 @@ func TestServiceCommandRegistration(t *testing.T) {
 	}
 	assert.True(t, found, "service command not found in rootCmd")
 }
-
