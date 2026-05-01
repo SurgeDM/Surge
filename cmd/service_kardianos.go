@@ -1,3 +1,5 @@
+//go:build !android
+
 package cmd
 
 import (
@@ -68,20 +70,6 @@ func GetService() (service.Service, error) {
 	return service.New(prg, serviceConfig)
 }
 
-// RunService handles the application execution, checking if it should run as a service.
-func RunService() error {
-	s, err := GetService()
-	if err != nil {
-		return rootCmd.Execute()
-	}
-
-	if service.Interactive() {
-		return rootCmd.Execute()
-	}
-
-	return s.Run()
-}
-
 func runAction(action func(service.Service) error, successMsg string) func(*cobra.Command, []string) error {
 	return func(cmd *cobra.Command, args []string) error {
 		s, err := GetService()
@@ -96,11 +84,6 @@ func runAction(action func(service.Service) error, successMsg string) func(*cobr
 		}
 		return nil
 	}
-}
-
-var serviceCmd = &cobra.Command{
-	Use:   "service",
-	Short: "Manage Surge as a system service",
 }
 
 var serviceInstallCmd = &cobra.Command{
@@ -149,6 +132,11 @@ var serviceStatusCmd = &cobra.Command{
 		}
 		return nil
 	}, ""),
+}
+
+var serviceCmd = &cobra.Command{
+	Use:   "service",
+	Short: "Manage Surge as a system service",
 }
 
 func init() {
