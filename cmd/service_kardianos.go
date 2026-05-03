@@ -36,7 +36,10 @@ func (p *program) Start(s service.Service) error {
 	go func() {
 		defer close(p.exit)
 		// Re-enter cobra as `server start` instead of replaying os.Args
-		// (which would re-match __run and recurse into RunService).
+		// (which would re-match __run and recurse into RunService). This
+		// permanently overrides rootCmd's args for the rest of the process
+		// lifetime, which is fine: the process is owned by the service
+		// manager from here until shutdown.
 		rootCmd.SetArgs([]string{"server", "start"})
 		if err := rootCmd.ExecuteContext(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Service error: %v\n", err)
