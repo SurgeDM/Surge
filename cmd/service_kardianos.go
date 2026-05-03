@@ -15,7 +15,7 @@ var serviceConfig = &service.Config{
 	Name:        "surge",
 	DisplayName: "Surge Download Manager",
 	Description: "Blazing fast TUI download manager built in Go.",
-	Arguments:   []string{"server", "start"},
+	Arguments:   []string{"service", "__run"},
 }
 
 type program struct {
@@ -35,6 +35,9 @@ func (p *program) Start(s service.Service) error {
 
 	go func() {
 		defer close(p.exit)
+		// Re-enter cobra as `server start` instead of replaying os.Args
+		// (which would re-match __run and recurse into RunService).
+		rootCmd.SetArgs([]string{"server", "start"})
 		if err := rootCmd.ExecuteContext(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Service error: %v\n", err)
 			p.errCh <- err
@@ -139,6 +142,13 @@ var serviceCmd = &cobra.Command{
 	Short: "Manage Surge as a system service",
 }
 
+// __run is the entry point the installer writes into ExecStart
+var serviceRunCmd = &cobra.Command{
+	Use:    "__run",
+	Hidden: true,
+	RunE:   func(cmd *cobra.Command, args []string) error { return RunService() },
+}
+
 func init() {
 	rootCmd.AddCommand(serviceCmd)
 	serviceCmd.AddCommand(serviceInstallCmd)
@@ -146,4 +156,5 @@ func init() {
 	serviceCmd.AddCommand(serviceStartCmd)
 	serviceCmd.AddCommand(serviceStopCmd)
 	serviceCmd.AddCommand(serviceStatusCmd)
+	serviceCmd.AddCommand(serviceRunCmd)
 }
