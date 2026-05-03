@@ -591,7 +591,7 @@ func performRestart() error {
 
 // Execute adds all child commands to the root command and sets flags appropriately.
 func Execute() error {
-	return RunService()
+	return rootCmd.Execute()
 }
 
 func init() {
