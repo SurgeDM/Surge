@@ -50,6 +50,9 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 
 			_ = m.setSettingValue(currentCategory, settingKey, val)
+			if settingKey == "custom_dns" {
+				m.dnsCycleOriginalValue = ""
+			}
 			m.SettingsIsEditing = false
 			m.settingsError = ""
 			m.SettingsInput.Blur()
@@ -71,6 +74,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		requiresRestart := m.checkRestartRequirement()
 		// Save settings and exit
 		_ = m.persistSettings()
+		m.dnsCycleOriginalValue = ""
 		if requiresRestart {
 			m.state = RestartConfirmState
 			m.quitConfirmFocused = 0
@@ -140,6 +144,20 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			cmd := m.openDirectoryPicker(FilePickerOriginTheme, originalPath, browseDir, true, false)
 			m.filepicker.AllowedTypes = []string{".toml"}
 			return m, cmd
+		case "custom_dns":
+			// Cycle DNS presets
+			current := m.Settings.Network.CustomDNS
+			if m.dnsCycleOriginalValue == "" && config.MatchDNSPreset(current).Name == "Custom" {
+				m.dnsCycleOriginalValue = current
+			}
+			nextIP, isCustom := config.GetNextDNSPreset(current)
+			if isCustom {
+				m.Settings.Network.CustomDNS = m.dnsCycleOriginalValue
+				m.dnsCycleOriginalValue = "" // Reset
+			} else {
+				m.Settings.Network.CustomDNS = nextIP
+			}
+			return m, nil
 		}
 		return m, nil
 	}
@@ -251,6 +269,9 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		if settingKey == "theme" || settingKey == "theme_path" {
 			m.ApplyTheme(m.Settings.General.Theme, m.Settings.General.ThemePath)
+		}
+		if settingKey == "custom_dns" {
+			m.dnsCycleOriginalValue = ""
 		}
 		return m, nil
 	}

@@ -354,12 +354,19 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 			if meta.Key == "max_global_connections" {
 				valueStr += " (Ignored)"
 			}
+			if meta.Key == "custom_dns" {
+				preset := config.MatchDNSPreset(m.Settings.Network.CustomDNS)
+				valueStr += lipgloss.NewStyle().Foreground(colors.Gray()).Render(fmt.Sprintf(" (%s)", preset.Name))
+			}
 		}
 	}
 
 	valueLabel := "Value: "
 	if (meta.Key == "default_download_dir" || meta.Key == "theme_path") && !m.SettingsIsEditing {
 		valueLabel = "[Tab] Browse: "
+	}
+	if meta.Key == "custom_dns" && !m.SettingsIsEditing {
+		valueLabel = "[Tab] Preset: "
 	}
 	if meta.Type == "link" {
 		valueLabel = "Action: "

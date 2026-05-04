@@ -157,6 +157,7 @@ type RootModel struct {
 	SettingsInput        textinput.Model  // Input for editing string/int values
 	settingsError        string           // Current validation error in settings
 	ExtensionTokenCopied bool             // Flash message for "Token Copied!"
+	dnsCycleOriginalValue string          // Original value before cycling DNS presets
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download
