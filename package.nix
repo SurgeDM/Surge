@@ -1,18 +1,12 @@
 { lib
 , buildGoModule
-, fetchFromGitHub
+, src
+, version
 }:
 
-buildGoModule rec {
+buildGoModule {
   pname = "surge";
-  version = "0.8.5";
-
-  src = fetchFromGitHub {
-    owner = "SurgeDM";
-    repo = "Surge";
-    rev = "v${version}";
-    hash = "sha256-ZQeShqNf/vhD5IoZp2grNo0YBzAObIXZIw2kQIaPKWc=";
-  };
+  inherit version src;
 
   vendorHash = "sha256-XHsp2zxLOh9FB93w/g24M7II0yseOUXQGLFkX9BG96A=";
 

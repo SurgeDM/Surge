@@ -5,25 +5,29 @@
 
   outputs = { self, nixpkgs }:
     let
+      version = "0.8.5";
       systems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
       forEachSystem = f: nixpkgs.lib.genAttrs systems (system:
         f nixpkgs.legacyPackages.${system}
       );
     in
     {
-      packages = forEachSystem (pkgs: {
-        surge = pkgs.callPackage ./package.nix { };
-        default = self.packages.${pkgs.system}.surge;
+      packages = forEachSystem (pkgs: rec {
+        surge = pkgs.callPackage ./package.nix { inherit (self) src; inherit version; };
+        default = surge;
       });
 
       overlays.default = final: _prev: {
-        surge = final.callPackage ./package.nix { };
+        surge = final.callPackage ./package.nix { inherit (self) src; inherit version; };
       };
 
-      # Applies the overlay so pkgs.surge is available system-wide.
-      nixosModules.default = { pkgs, ... }: {
-        nixpkgs.overlays = [ self.overlays.default ];
-        environment.systemPackages = [ pkgs.surge ];
+      nixosModules.default = { lib, pkgs, config, ... }: {
+        options.programs.surge.enable = lib.mkEnableOption "surge download manager";
+
+        config = lib.mkIf config.programs.surge.enable {
+          nixpkgs.overlays = [ self.overlays.default ];
+          environment.systemPackages = [ pkgs.surge ];
+        };
       };
     };
 }
