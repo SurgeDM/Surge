@@ -13,12 +13,12 @@
     in
     {
       packages = forEachSystem (pkgs: rec {
-        surge = pkgs.callPackage ./package.nix { inherit (self) src; inherit version; };
+        surge = pkgs.callPackage ./package.nix { src = self; inherit version; };
         default = surge;
       });
 
       overlays.default = final: _prev: {
-        surge = final.callPackage ./package.nix { inherit (self) src; inherit version; };
+        surge = final.callPackage ./package.nix { src = self; inherit version; };
       };
 
       nixosModules.default = { lib, pkgs, config, ... }: {
