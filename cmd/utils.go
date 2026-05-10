@@ -17,19 +17,31 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// readActivePort reads the port from the port file
-func readActivePort() int {
+// getActiveConnectionDetails returns the auto-detected port and the corresponding token file to read from.
+// It returns port 0 if no local service is found.
+func getActiveConnectionDetails() (int, string) {
 	portFile := filepath.Join(config.GetRuntimeDir(), "port")
-	data, err := os.ReadFile(portFile)
-	if err != nil {
-		systemPortFile := filepath.Join(config.GetSystemRuntimeDir(), "port")
-		data, err = os.ReadFile(systemPortFile)
-		if err != nil {
-			return 0
+	if data, err := os.ReadFile(portFile); err == nil {
+		var port int
+		if _, err := fmt.Sscanf(string(data), "%d", &port); err == nil && port > 0 {
+			return port, filepath.Join(config.GetStateDir(), "token")
 		}
 	}
-	var port int
-	_, _ = fmt.Sscanf(string(data), "%d", &port)
+
+	systemPortFile := filepath.Join(config.GetSystemRuntimeDir(), "port")
+	if data, err := os.ReadFile(systemPortFile); err == nil {
+		var port int
+		if _, err := fmt.Sscanf(string(data), "%d", &port); err == nil && port > 0 {
+			return port, filepath.Join(config.GetSystemStateDir(), "token")
+		}
+	}
+
+	return 0, filepath.Join(config.GetStateDir(), "token")
+}
+
+// readActivePort reads the port from the port file
+func readActivePort() int {
+	port, _ := getActiveConnectionDetails()
 	return port
 }
 
@@ -57,15 +69,8 @@ func resolveLocalToken() string {
 		return token
 	}
 
-	stateTokenFile := filepath.Join(config.GetStateDir(), "token")
-	if data, err := os.ReadFile(stateTokenFile); err == nil {
-		if t := strings.TrimSpace(string(data)); t != "" {
-			return t
-		}
-	}
-
-	systemTokenFile := filepath.Join(config.GetSystemStateDir(), "token")
-	if data, err := os.ReadFile(systemTokenFile); err == nil {
+	_, tokenFile := getActiveConnectionDetails()
+	if data, err := os.ReadFile(tokenFile); err == nil {
 		if t := strings.TrimSpace(string(data)); t != "" {
 			return t
 		}

@@ -133,8 +133,11 @@ func EnsureDirs() error {
 	return nil
 }
 
-// GetSystemStateDir returns the state directory for the system service.
-// This is used as a fallback when running client commands as root/admin.
+// GetSystemStateDir returns the state directory for the system service
+// (the service installed and running as LocalSystem/root). Client commands
+// use this as a fallback to auto-detect a system-wide daemon; access to
+// the returned path is restricted by OS filesystem permissions (e.g. 0700
+// on /root), so in practice only a privileged caller can read its contents.
 func GetSystemStateDir() string {
 	if runtime.GOOS == "windows" {
 		systemRoot := os.Getenv("SystemRoot")

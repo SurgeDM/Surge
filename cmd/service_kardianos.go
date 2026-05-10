@@ -77,7 +77,10 @@ func GetService() (service.Service, error) {
 	prg := &program{}
 	cfg := *serviceConfig
 	if userLevelService {
-		cfg.Option = service.KeyValue{"UserService": true}
+		if cfg.Option == nil {
+			cfg.Option = service.KeyValue{}
+		}
+		cfg.Option["UserService"] = true
 	}
 	return service.New(prg, &cfg)
 }
