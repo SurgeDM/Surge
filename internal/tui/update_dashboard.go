@@ -267,7 +267,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Dashboard.PinTab) {
 		if m.pinnedTab == m.activeTab {
 			m.pinnedTab = -1
-			m.addLogEntry(LogStyleStarted.Render("📌 Tab Unpinned"))
+			m.addLogEntry(LogStyleStarted.Render("\u25c6 Tab Unpinned"))
 		} else {
 			m.pinnedTab = m.activeTab
 			var tabName string
@@ -279,7 +279,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			default:
 				tabName = "Queued"
 			}
-			m.addLogEntry(LogStyleStarted.Render("📌 Tab Pinned: " + tabName))
+			m.addLogEntry(LogStyleStarted.Render("\u25c6 Tab Pinned: " + tabName))
 		}
 		return m, nil
 	}

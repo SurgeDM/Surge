@@ -27,7 +27,7 @@ func RenderTabBar(tabs []Tab, activeIndex int, activeStyle, inactiveStyle lipglo
 		}
 
 		if t.Pinned {
-			label = "\U0001f4cc " + label
+			label = "\u25c6 " + label
 		}
 
 		var tabStyle lipgloss.Style
@@ -64,7 +64,7 @@ func RenderNumberedTabBar(tabs []Tab, activeIndex int, activeStyle, inactiveStyl
 		}
 
 		if t.Pinned {
-			label = "\U0001f4cc " + label
+			label = "\u25c6 " + label
 		}
 
 		var tabStyle lipgloss.Style
