@@ -17,9 +17,15 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// readActivePort reads the port from the port file
-func readActivePort() int {
-	portFile := filepath.Join(config.GetRuntimeDir(), "port")
+type activeConnectionDetails struct {
+	port       int
+	token      string
+	runtimeDir string
+	stateDir   string
+}
+
+func readPortFile(runtimeDir string) int {
+	portFile := filepath.Join(runtimeDir, "port")
 	data, err := os.ReadFile(portFile)
 	if err != nil {
 		return 0
@@ -27,6 +33,50 @@ func readActivePort() int {
 	var port int
 	_, _ = fmt.Sscanf(string(data), "%d", &port)
 	return port
+}
+
+func readStateToken(stateDir string) string {
+	token, err := readTokenFromFile(filepath.Join(stateDir, "token"))
+	if err != nil {
+		return ""
+	}
+	return token
+}
+
+func activeConnectionCandidates() []activeConnectionDetails {
+	return []activeConnectionDetails{
+		{
+			runtimeDir: config.GetRuntimeDir(),
+			stateDir:   config.GetStateDir(),
+		},
+		{
+			runtimeDir: config.GetSystemRuntimeDir(),
+			stateDir:   config.GetSystemStateDir(),
+		},
+	}
+}
+
+func getActiveConnectionDetails() (activeConnectionDetails, bool) {
+	for _, candidate := range activeConnectionCandidates() {
+		port := readPortFile(candidate.runtimeDir)
+		if port <= 0 {
+			continue
+		}
+		candidate.port = port
+		candidate.token = readStateToken(candidate.stateDir)
+		return candidate, true
+	}
+	return activeConnectionDetails{}, false
+}
+
+// readActivePort reads the active port and keeps legacy callers on the same
+// user-first/system-fallback resolution path as token resolution.
+func readActivePort() int {
+	details, ok := getActiveConnectionDetails()
+	if !ok {
+		return 0
+	}
+	return details.port
 }
 
 // ParseURLArg parses a command line argument that might contain comma-separated mirrors
@@ -46,10 +96,17 @@ func ParseURLArg(arg string) (string, []string) {
 }
 
 func resolveLocalToken() string {
+	return resolveLocalTokenForDetails(activeConnectionDetails{})
+}
+
+func resolveLocalTokenForDetails(details activeConnectionDetails) string {
 	if token := strings.TrimSpace(globalToken); token != "" {
 		return token
 	}
 	if token := strings.TrimSpace(os.Getenv("SURGE_TOKEN")); token != "" {
+		return token
+	}
+	if token := strings.TrimSpace(details.token); token != "" {
 		return token
 	}
 	return ensureAuthToken()
@@ -83,9 +140,9 @@ func resolveClientOutputPath(outputDir string) string {
 func resolveAPIConnection(requireServer bool) (string, string, error) {
 	target := resolveHostTarget()
 	if target == "" {
-		port := readActivePort()
-		if port > 0 {
-			return fmt.Sprintf("http://127.0.0.1:%d", port), resolveLocalToken(), nil
+		details, ok := getActiveConnectionDetails()
+		if ok {
+			return fmt.Sprintf("http://127.0.0.1:%d", details.port), resolveLocalTokenForDetails(details), nil
 		}
 		if !requireServer {
 			return "", "", nil

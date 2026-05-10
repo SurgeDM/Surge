@@ -31,6 +31,7 @@ func TestConvertRuntimeConfig_AllFieldsCopied(t *testing.T) {
 
 	if result == nil {
 		t.Fatal("ConvertRuntimeConfig returned nil")
+		return
 	}
 
 	if result.MaxConnectionsPerHost != input.MaxConnectionsPerHost {

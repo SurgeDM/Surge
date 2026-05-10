@@ -1,0 +1,9 @@
+version: "2"
+
+linters:
+  exclusions:
+    rules:
+      - path: _test\.go
+        linters:
+          - staticcheck
+        text: "SA5011"

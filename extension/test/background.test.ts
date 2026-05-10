@@ -108,4 +108,56 @@ describe('background auth persistence', () => {
 
     expect(__test__.getCachedState().authToken).toBe('fresh-token');
   });
+
+  it('skips healthy local servers that reject the token during discovery', async () => {
+    storageGet.mockResolvedValue({});
+
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url === 'http://127.0.0.1:1700/health' || url === 'http://127.0.0.1:1701/health') {
+        return new Response('ok', { status: 200 });
+      }
+      if (url === 'http://127.0.0.1:1700/list') {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      if (url === 'http://127.0.0.1:1701/list') {
+        return new Response('[]', { status: 200 });
+      }
+      throw new Error('connection refused');
+    });
+    vi.stubGlobal('fetch', fetchImpl);
+
+    const result = await __test__.discoverBaseUrlForToken('good-token');
+
+    expect(result).toEqual({
+      base: 'http://127.0.0.1:1701',
+      sawUnauthorized: true,
+      sawReachable: true,
+    });
+    expect(fetchImpl).toHaveBeenCalledWith('http://127.0.0.1:1700/list', {
+      headers: { Authorization: 'Bearer good-token' },
+      signal: expect.any(AbortSignal),
+    });
+  });
+
+  it('reports unauthorized discovery separately from no-server discovery', async () => {
+    storageGet.mockResolvedValue({});
+
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === 'http://127.0.0.1:1700/health') {
+        return new Response('ok', { status: 200 });
+      }
+      if (url === 'http://127.0.0.1:1700/list') {
+        return new Response('Unauthorized', { status: 401 });
+      }
+      throw new Error('connection refused');
+    }));
+
+    const result = await __test__.discoverBaseUrlForToken('bad-token');
+
+    expect(result).toEqual({
+      base: null,
+      sawUnauthorized: true,
+      sawReachable: true,
+    });
+  });
 });

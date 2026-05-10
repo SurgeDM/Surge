@@ -39,6 +39,7 @@ func TestWorkerPool_GetStatus_Active(t *testing.T) {
 	status := pool.GetStatus(id)
 	if status == nil {
 		t.Fatal("Expected status to be returned")
+		return
 	}
 
 	if status.ID != id {
@@ -77,6 +78,7 @@ func TestWorkerPool_GetStatus_Paused(t *testing.T) {
 	status := pool.GetStatus(id)
 	if status == nil {
 		t.Fatal("Expected status to be returned")
+		return
 	}
 
 	if status.Status != "paused" {

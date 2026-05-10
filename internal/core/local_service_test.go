@@ -348,6 +348,7 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 			}
 			if entry == nil {
 				t.Fatal("expected persisted download entry after shutdown")
+				return
 			}
 			if entry.Status != "paused" {
 				t.Fatalf("status = %q, want paused", entry.Status)

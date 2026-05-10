@@ -3,6 +3,7 @@ import { STORAGE_KEYS } from '../../../lib/storage';
 import {
   serverUrl, setServerUrl,
   serverUrlLocked, setServerUrlLocked,
+  serverConnected,
   authToken, setAuthToken,
   authTokenLocked, setAuthTokenLocked,
   authValid, setAuthValid,
@@ -66,10 +67,14 @@ export default function SettingsView() {
       });
       setAuthTokenLocked(token.length > 0);
       showTokenStatus('Saved');
-      const res = await browser.runtime.sendMessage({ type: 'validateAuth', token }).catch(() => null) as { ok?: boolean } | null;
+      const res = await browser.runtime.sendMessage({ type: 'validateAuth', token }).catch(() => null) as { ok?: boolean; error?: string } | null;
       setAuthValid(res?.ok ?? false);
       if (res?.ok) {
         await browser.storage.local.set({ [STORAGE_KEYS.VERIFIED]: 'true' });
+      } else if (res?.error === 'no_server') {
+        showTokenStatus('Server unavailable');
+      } else if (res?.error === 'invalid_token') {
+        showTokenStatus('Invalid Token');
       }
     } catch {
       showTokenStatus('Failed to save');
@@ -142,7 +147,7 @@ export default function SettingsView() {
               disabled={serverUrlLocked()}
               onInput={(e) => { setServerUrl((e.target as HTMLInputElement).value); }}
             />
-            <button onClick={serverUrlLocked() ? handleServerDelete : handleServerSave}>
+            <button onClick={() => { void (serverUrlLocked() ? handleServerDelete() : handleServerSave()); }}>
               {serverUrlLocked() ? 'Delete' : 'Save'}
             </button>
           </div>
@@ -167,7 +172,7 @@ export default function SettingsView() {
               onFocus={() => setTokenFocused(true)}
               onBlur={() => setTokenFocused(false)}
             />
-            <button onClick={authTokenLocked() ? handleDeleteToken : handleSaveToken}>
+            <button onClick={() => { void (authTokenLocked() ? handleDeleteToken() : handleSaveToken()); }}>
               {authTokenLocked() ? 'Delete' : 'Save'}
             </button>
           </div>
@@ -177,8 +182,11 @@ export default function SettingsView() {
           {tokenStatus() && !tokenFocused() && (
             <div class={`auth-status below${tokenStatus() === 'Saved' || tokenStatus() === 'Removed' ? ' ok' : tokenStatus().endsWith('...') ? '' : ' err'}`}>{tokenStatus()}</div>
           )}
-          {authTokenLocked() && !authValid() && !tokenFocused() && !tokenStatus() && (
+          {authTokenLocked() && !authValid() && serverConnected() && !tokenFocused() && !tokenStatus() && (
             <div class="auth-status below err">Invalid Token</div>
+          )}
+          {authTokenLocked() && !authValid() && !serverConnected() && !tokenFocused() && !tokenStatus() && (
+            <div class="auth-status below err">Server unavailable</div>
           )}
           {!authToken() && !tokenFocused() && !tokenStatus() && (
             <div class="auth-status below err">Token is Required</div>

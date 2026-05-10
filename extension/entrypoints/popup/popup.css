@@ -258,6 +258,9 @@ body {
 
 .downloads-list-header {
   flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 10px 12px 8px;
   border-bottom: 1px solid var(--border-subtle);
   background: var(--bg-surface);
@@ -273,12 +276,51 @@ body {
 }
 
 .view-switch {
+  flex: 1 1 auto;
   display: flex;
   gap: 6px;
   padding: 4px;
   background: var(--bg-base);
   border-radius: 10px;
   border: 1px solid var(--border-subtle);
+}
+
+.refresh-btn {
+  flex: 0 0 38px;
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border-subtle);
+  border-radius: 8px;
+  background: var(--bg-base);
+  color: rgba(228, 228, 235, 0.78);
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.refresh-btn:hover:not(:disabled) {
+  color: #faf8ff;
+  background: rgba(255, 255, 255, 0.05);
+  border-color: var(--border-default);
+}
+
+.refresh-btn:disabled {
+  cursor: default;
+  opacity: 0.68;
+}
+
+.refresh-icon {
+  width: 17px;
+  height: 17px;
+}
+
+.refresh-btn.refreshing .refresh-icon {
+  animation: refresh-spin 0.8s linear infinite;
+}
+
+@keyframes refresh-spin {
+  to { transform: rotate(360deg); }
 }
 
 .view-tab {

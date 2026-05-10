@@ -1,4 +1,4 @@
-import { onMount, onCleanup } from 'solid-js';
+import { createSignal, onMount, onCleanup } from 'solid-js';
 import { readStoredBoolean, readStoredString, STORAGE_KEYS } from '../../lib/storage';
 import {
   serverConnected,
@@ -32,6 +32,7 @@ const SSE_REFRESH_DEBOUNCE_MS = 2_000;
 type RuntimeMessage = Record<string, unknown>;
 
 export default function App() {
+  const [refreshing, setRefreshing] = createSignal(false);
   let pollInterval: ReturnType<typeof setInterval> | null = null;
   let healthInterval: ReturnType<typeof setInterval> | null = null;
   let refreshDebounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -110,6 +111,21 @@ export default function App() {
         setHistoryDownloads(response.history);
       }
     } catch { /* ignore */ }
+  }
+
+  async function refreshNow(): Promise<void> {
+    if (refreshing()) return;
+    setRefreshing(true);
+    try {
+      const healthResp = await sendMessage<{ healthy?: boolean }>({ type: 'checkHealth' }).catch(() => null);
+      if (healthResp && typeof healthResp.healthy === 'boolean') {
+        setServerConnected(healthResp.healthy);
+      }
+      await fetchDownloads();
+      if (currentView() === 'history') await fetchHistory();
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   const handleViewChange = (view: ViewMode) => {
@@ -206,7 +222,12 @@ export default function App() {
       </header>
 
       <section class="downloads-section">
-        <DownloadList activeDownloads={activeDownloads()} onViewChange={handleViewChange} />
+        <DownloadList
+          activeDownloads={activeDownloads()}
+          onViewChange={handleViewChange}
+          onRefresh={() => { void refreshNow(); }}
+          refreshing={refreshing()}
+        />
       </section>
 
       <DuplicateModal />

@@ -41,6 +41,7 @@ func waitForDownloadStatus(
 	}
 	if last == nil {
 		t.Fatalf("timeout waiting for status for %s; last status: <nil>", id)
+		return nil
 	}
 	t.Fatalf(
 		"timeout waiting for status for %s; last status: status=%s downloaded=%d total=%d speed=%.4f conns=%d progress=%.3f",
@@ -241,6 +242,7 @@ func TestIntegration_PauseResume_HotPath_Aggregates(t *testing.T) {
 	}
 	if entry1 == nil {
 		t.Fatal("missing master-list entry after pause")
+		return
 	}
 	if entry1.Status != "paused" {
 		t.Fatalf("entry status mismatch: got=%q want=paused", entry1.Status)
@@ -422,6 +424,7 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 
 	if savedFinal == nil {
 		t.Fatalf("missing final saved state")
+		return
 	}
 
 	if savedFinal.Downloaded != paused2.Downloaded {
@@ -434,6 +437,7 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	}
 	if entry2 == nil {
 		t.Fatal("missing entry after second pause")
+		return
 	}
 	if entry2.Status != "paused" {
 		t.Fatalf("entry status mismatch after cold resume: got=%q", entry2.Status)
@@ -524,6 +528,7 @@ func TestIntegration_PauseResume_ResumeBatchRejectsPausing(t *testing.T) {
 	}
 	if st == nil {
 		t.Fatal("missing status for pausing download")
+		return
 	}
 	if st.Status != "pausing" {
 		t.Fatalf("status changed unexpectedly after rejected resume-batch: got=%q", st.Status)
@@ -689,6 +694,7 @@ func TestIntegration_PauseResume_ConcreteSnapshotDebugString(t *testing.T) {
 	}
 	if entry == nil {
 		t.Fatal("missing DB entry")
+		return
 	}
 
 	snapshot := fmt.Sprintf(

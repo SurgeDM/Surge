@@ -89,6 +89,7 @@ func TestStateSync(t *testing.T) {
 
 	if target == nil {
 		t.Fatal("Download model not found")
+		return
 	}
 
 	// Without fix: TUI creates its own state, so Downloaded stays 0

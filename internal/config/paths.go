@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -40,6 +41,41 @@ func GetStateDir() string {
 		return GetSurgeDir()
 	}
 	return filepath.Join(getXDGBaseDir("XDG_STATE_HOME", xdg.StateHome), "surge")
+}
+
+func GetSystemSurgeDir() string {
+	if runtime.GOOS == "windows" {
+		systemRoot := strings.TrimSpace(os.Getenv("SystemRoot"))
+		if systemRoot == "" {
+			systemRoot = `C:\Windows`
+		}
+		return filepath.Join(systemRoot, "System32", "config", "systemprofile", "AppData", "Roaming", "surge")
+	}
+
+	rootUser, err := user.Lookup("root")
+	if err == nil && strings.TrimSpace(rootUser.HomeDir) != "" {
+		return filepath.Join(rootUser.HomeDir, ".config", "surge")
+	}
+	return filepath.Join(string(filepath.Separator), "root", ".config", "surge")
+}
+
+func GetSystemStateDir() string {
+	if runtime.GOOS == "windows" {
+		return GetSystemSurgeDir()
+	}
+
+	rootUser, err := user.Lookup("root")
+	if err == nil && strings.TrimSpace(rootUser.HomeDir) != "" {
+		return filepath.Join(rootUser.HomeDir, ".local", "state", "surge")
+	}
+	return filepath.Join(string(filepath.Separator), "root", ".local", "state", "surge")
+}
+
+func GetSystemRuntimeDir() string {
+	if runtime.GOOS == "windows" {
+		return filepath.Join(GetSystemStateDir(), "runtime")
+	}
+	return filepath.Join(GetSystemStateDir(), "runtime")
 }
 
 func GetDownloadsDir() string {

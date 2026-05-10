@@ -108,6 +108,7 @@ func TestUpdate_DownloadStartedKeepsResuming(t *testing.T) {
 	}
 	if d == nil {
 		t.Fatal("Expected download id-1 to exist")
+		return
 	}
 	if d.paused || d.pausing || !d.resuming {
 		t.Fatalf("Expected paused/pausing cleared and resuming preserved on DownloadStartedMsg, got paused=%v pausing=%v resuming=%v", d.paused, d.pausing, d.resuming)

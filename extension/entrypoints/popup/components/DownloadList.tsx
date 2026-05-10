@@ -9,6 +9,8 @@ import SettingsView from './SettingsView';
 interface Props {
   activeDownloads: DownloadStatus[];
   onViewChange?: (view: ViewMode) => void;
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }
 
 const STATUS_ORDER: Record<DownloadStatus['status'], number> = {
@@ -86,13 +88,28 @@ export default function DownloadList(props: Props) {
     <div class="downloads-list" id="downloadsList">
       <div class="downloads-list-header">
         <ViewSwitch currentView={currentView()} onChange={props.onViewChange || setCurrentView} />
+        <button
+          type="button"
+          class={`refresh-btn${props.refreshing ? ' refreshing' : ''}`}
+          title="Refresh"
+          aria-label="Refresh"
+          disabled={props.refreshing}
+          onClick={() => props.onRefresh?.()}
+        >
+          <svg viewBox="0 0 24 24" class="refresh-icon" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M21 12a9 9 0 0 1-15.5 6.2" />
+            <path d="M3 12A9 9 0 0 1 18.5 5.8" />
+            <path d="M18 2v4h4" />
+            <path d="M6 22v-4H2" />
+          </svg>
+        </button>
       </div>
       <div class="downloads-list-content">
         {currentView() === 'settings'
           ? <SettingsView />
           : currentView() === 'active'
-            ? <For each={sortedActiveDownloadIds()}>{(id) => <DownloadItem download={() => activeDownloadById().get(id)!} />}</For>
-            : <For each={sortedHistoryDownloads()}>{(download) => <DownloadItem download={() => download} />}</For>
+            ? <For each={sortedActiveDownloadIds()}>{(id) => <DownloadItem download={() => activeDownloadById().get(id)!} onActionComplete={props.onRefresh} />}</For>
+            : <For each={sortedHistoryDownloads()}>{(download) => <DownloadItem download={() => download} onActionComplete={props.onRefresh} />}</For>
         }
 
         {currentView() === 'active' && sortedActiveDownloadIds().length === 0 && (

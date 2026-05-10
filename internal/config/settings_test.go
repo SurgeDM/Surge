@@ -292,6 +292,7 @@ func TestLoadSettings_CorruptedJSON_FallsBackToDefaults(t *testing.T) {
 	}
 	if settings == nil {
 		t.Fatal("LoadSettings should return defaults, got nil")
+		return
 	}
 
 	defaults := DefaultSettings()
@@ -330,6 +331,7 @@ func TestLoadSettings_TruncatedJSON_FallsBackToDefaults(t *testing.T) {
 	}
 	if settings == nil {
 		t.Fatal("LoadSettings should return defaults, got nil")
+		return
 	}
 	if settings.Network.MaxConnectionsPerHost != DefaultSettings().Network.MaxConnectionsPerHost {
 		t.Error("Expected default settings after truncated JSON")
@@ -392,6 +394,7 @@ func TestToRuntimeConfig(t *testing.T) {
 
 	if runtime == nil {
 		t.Fatal("ToRuntimeConfig returned nil")
+		return
 	}
 
 	// Verify all fields are correctly mapped

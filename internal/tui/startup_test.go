@@ -110,6 +110,7 @@ func TestTUI_Startup_LoadsCompletedTiming(t *testing.T) {
 	}
 	if found == nil {
 		t.Fatal("TUI Model failed to load completed download")
+		return
 	}
 	if !found.done {
 		t.Error("Expected completed download to be marked done")
@@ -158,6 +159,7 @@ func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
 	}
 	if found == nil {
 		t.Fatal("TUI Model failed to load errored download")
+		return
 	}
 	if !found.done {
 		t.Fatal("expected errored download to appear in done tab")
