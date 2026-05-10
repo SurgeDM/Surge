@@ -103,9 +103,15 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Next Tab
+	// Next / Prev Tab
 	if key.Matches(msg, m.keys.Dashboard.NextTab) {
 		m.activeTab = (m.activeTab + 1) % 3
+		m.ManualTabSwitch = true
+		m.UpdateListItems()
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.Dashboard.PrevTab) {
+		m.activeTab = (m.activeTab + 2) % 3 // +2 mod 3 = prev
 		m.ManualTabSwitch = true
 		m.UpdateListItems()
 		return m, nil

@@ -24,6 +24,7 @@ type DashboardKeyMap struct {
 	TabActive      key.Binding
 	TabDone        key.Binding
 	NextTab        key.Binding
+	PrevTab        key.Binding
 	Add            key.Binding
 	BatchImport    key.Binding
 	Search         key.Binding
@@ -167,8 +168,12 @@ var Keys = KeyMap{
 			key.WithHelp("e", "done tab"),
 		),
 		NextTab: key.NewBinding(
-			key.WithKeys("tab"),
-			key.WithHelp("tab", "next tab"),
+			key.WithKeys("tab", "right"),
+			key.WithHelp("tab/→", "next tab"),
+		),
+		PrevTab: key.NewBinding(
+			key.WithKeys("left"),
+			key.WithHelp("←", "prev tab"),
 		),
 		Add: key.NewBinding(
 			key.WithKeys("a"),
@@ -231,20 +236,20 @@ var Keys = KeyMap{
 			key.WithHelp("t", "pin tab"),
 		),
 		Up: key.NewBinding(
-			key.WithKeys("up", "k"),
-			key.WithHelp("\u2191/k", "up"),
+			key.WithKeys("up"),
+			key.WithHelp("\u2191", "up"),
 		),
 		Down: key.NewBinding(
-			key.WithKeys("down", "j"),
-			key.WithHelp("\u2193/j", "down"),
+			key.WithKeys("down"),
+			key.WithHelp("\u2193", "down"),
 		),
 		LogUp: key.NewBinding(
-			key.WithKeys("up", "k"),
-			key.WithHelp("\u2191/k", "scroll up"),
+			key.WithKeys("up"),
+			key.WithHelp("↑", "scroll up"),
 		),
 		LogDown: key.NewBinding(
-			key.WithKeys("down", "j"),
-			key.WithHelp("\u2193/j", "scroll down"),
+			key.WithKeys("down"),
+			key.WithHelp("↓", "scroll down"),
 		),
 		LogTop: key.NewBinding(
 			key.WithKeys("g"),
@@ -385,12 +390,12 @@ var Keys = KeyMap{
 			key.WithHelp("enter", "edit"),
 		),
 		Up: key.NewBinding(
-			key.WithKeys("up", "k"),
-			key.WithHelp("\u2191/k", "up"),
+			key.WithKeys("up"),
+			key.WithHelp("\u2191", "up"),
 		),
 		Down: key.NewBinding(
-			key.WithKeys("down", "j"),
-			key.WithHelp("\u2193/j", "down"),
+			key.WithKeys("down"),
+			key.WithHelp("\u2193", "down"),
 		),
 		Reset: key.NewBinding(
 			key.WithKeys("r", "R"),
@@ -450,8 +455,8 @@ var Keys = KeyMap{
 		),
 	},
 	CategoryMgr: CategoryManagerKeyMap{
-		Up:     key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("\u2191/k", "up")),
-		Down:   key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("\u2193/j", "down")),
+		Up:     key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", "up")),
+		Down:   key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", "down")),
 		Edit:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "edit")),
 		Add:    key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add")),
 		Delete: key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),
@@ -491,7 +496,7 @@ func (k DashboardKeyMap) ShortHelp() []key.Binding {
 // FullHelp returns keybindings for the expanded help view
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab},
+		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab, k.PrevTab},
 		{k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings, k.PinTab},
 		{k.Log, k.OpenFile, k.ReportBug, k.Quit},
 	}
