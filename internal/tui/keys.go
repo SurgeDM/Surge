@@ -227,8 +227,8 @@ var Keys = KeyMap{
 			key.WithHelp("c", "category"),
 		),
 		PinTab: key.NewBinding(
-			key.WithKeys("ctrl+tab"),
-			key.WithHelp("ctrl+tab", "pin tab"),
+			key.WithKeys("t"),
+			key.WithHelp("t", "pin tab"),
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
