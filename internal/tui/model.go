@@ -98,6 +98,7 @@ type DownloadModel struct {
 	state *types.ProgressState // Keep for now if needed for details view, but mostly passive
 
 	done     bool
+	started  bool // Engine has confirmed start
 	err      error
 	paused   bool
 	pausing  bool // UI state: transitioning to pause
@@ -320,11 +321,14 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 				switch s.Status {
 				case "completed":
 					dm.done = true
+					dm.started = true
 					dm.progress.SetPercent(1.0)
 				case "error":
 					dm.done = true
+					dm.started = true
 				case "pausing":
 					dm.pausing = true
+					dm.started = true
 				case "paused":
 					if settings.General.AutoResume {
 						dm.resuming = true
@@ -332,10 +336,14 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 					} else {
 						dm.paused = true
 					}
+					dm.started = true
 				case "queued":
 					// Always resume queued items
 					dm.resuming = true
 					dm.paused = true // Will update when resume event received
+					dm.started = false
+				case "downloading":
+					dm.started = true
 				}
 
 				if s.TotalSize > 0 {
@@ -528,12 +536,12 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 		switch m.activeTab {
 		case TabQueued:
 			// Queued includes paused downloads and anything not currently active or done
-			if d.done || (!d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming)) {
+			if d.done || (!d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming || d.started)) {
 				continue
 			}
 		case TabActive:
 			// Active excludes paused downloads and anything without current activity
-			if d.done || d.paused || d.pausing || (d.Speed == 0 && d.Connections == 0 && !d.resuming) {
+			if d.done || d.paused || d.pausing || (d.Speed == 0 && d.Connections == 0 && !d.resuming && !d.started) {
 				continue
 			}
 		case TabDone:
