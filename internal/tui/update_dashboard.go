@@ -264,6 +264,23 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if key.Matches(msg, m.keys.Dashboard.PinTab) {
+		if m.pinnedTab == m.activeTab {
+			m.pinnedTab = -1
+			m.addLogEntry(LogStyleStarted.Render("📌 Tab Unpinned"))
+		} else {
+			m.pinnedTab = m.activeTab
+			tabName := "Queued"
+			if m.activeTab == TabActive {
+				tabName = "Active"
+			} else if m.activeTab == TabDone {
+				tabName = "Done"
+			}
+			m.addLogEntry(LogStyleStarted.Render("📌 Tab Pinned: " + tabName))
+		}
+		return m, nil
+	}
+
 	if key.Matches(msg, m.keys.Dashboard.BatchImport) {
 		m.state = BatchFilePickerState
 		m.filepicker = newFilepicker(m.PWD)

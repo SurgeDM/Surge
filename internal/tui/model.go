@@ -110,6 +110,7 @@ type RootModel struct {
 	height       int
 	state        UIState
 	activeTab    int // 0=Queued, 1=Active, 2=Done
+	pinnedTab    int // -1=None, 0=Queued, 1=Active, 2=Done
 	inputs       []textinput.Model
 	focusedInput int
 	// Service Interface
@@ -412,6 +413,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	m := RootModel{
 		downloads:             downloads,
+		pinnedTab:             -1,
 		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
 		state:                 DashboardState,
 		filepicker:            fp,

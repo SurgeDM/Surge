@@ -177,6 +177,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 				newDownload.state = msg.State
 			}
 			m.downloads = append(m.downloads, newDownload)
+			m.SelectedDownloadID = msg.DownloadID
 			m.UpdateListItems()
 			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
 			return m, m.spinner.Tick
@@ -269,6 +270,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newDownload := NewDownloadModel(msg.DownloadID, msg.URL, msg.Filename, 0)
 			newDownload.Destination = msg.DestPath
 			m.downloads = append(m.downloads, newDownload)
+			m.SelectedDownloadID = msg.DownloadID
 			m.UpdateListItems()
 			return m, m.spinner.Tick
 		}

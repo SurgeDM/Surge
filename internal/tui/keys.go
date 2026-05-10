@@ -38,6 +38,7 @@ type DashboardKeyMap struct {
 	Quit           key.Binding
 	ForceQuit      key.Binding
 	CategoryFilter key.Binding
+	PinTab         key.Binding
 	// Navigation
 	Up   key.Binding
 	Down key.Binding
@@ -224,6 +225,10 @@ var Keys = KeyMap{
 		CategoryFilter: key.NewBinding(
 			key.WithKeys("c"),
 			key.WithHelp("c", "category"),
+		),
+		PinTab: key.NewBinding(
+			key.WithKeys("ctrl+tab"),
+			key.WithHelp("ctrl+tab", "pin tab"),
 		),
 		Up: key.NewBinding(
 			key.WithKeys("up", "k"),
@@ -487,7 +492,7 @@ func (k DashboardKeyMap) ShortHelp() []key.Binding {
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab},
-		{k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings},
+		{k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings, k.PinTab},
 		{k.Log, k.OpenFile, k.ReportBug, k.Quit},
 	}
 }

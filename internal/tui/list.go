@@ -278,8 +278,8 @@ func (m *RootModel) UpdateListItems() {
 						newTab = TabQueued
 					}
 
-					// If it belongs to a different tab, switch to it
-					if newTab != -1 && newTab != m.activeTab {
+					// If it belongs to a different tab, switch to it (unless current tab is pinned)
+					if m.pinnedTab == -1 && newTab != -1 && newTab != m.activeTab {
 						m.activeTab = newTab
 
 						// Force selection for the recursive call
