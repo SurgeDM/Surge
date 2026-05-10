@@ -16,7 +16,7 @@ Surge provides a robust Command Line Interface for automation and scripting. For
 | `surge refresh <id> <url>`  | Updates the source URL of a paused or errored download.                                | None                                                                                                | Reconnects using the new link.                                          |
 | `surge rm <id>`             | Removes a download by ID/prefix.                                                       | `--clean`                                                                                           | Alias: `kill`.                                                          |
 | `surge token`               | Prints current API auth token. (Also visible in TUI > Settings > Extension)            | None                                                                                                | Useful for remote clients.                                              |
-| `surge service <cmd>`       | Manages Surge as a system service (daemon).                                            | `install`, `uninstall`, `start`, `stop`, `status`                                                   | Cross-platform (Linux/Windows/macOS). See [Service Management](#service-management). |
+| `surge service <cmd>`       | Manages Surge as a system or user service (daemon).                                            | `install`, `uninstall`, `start`, `stop`, `status`                                                   | Cross-platform. See [Service Management](#service-management). |
 | `surge bug-report`          | Opens a pre-filled GitHub bug report. Prompts for target (Core/Extension) and optional system/log details. | None                                                                                                | Prints a manual URL fallback if browser open fails.                     |
 
 ## Service Management
@@ -29,7 +29,9 @@ The `service` command allows you to manage Surge as a background daemon that sta
 - `surge service stop`: Stops the background service.
 - `surge service status`: Checks if the service is installed and running.
 
-**Note**: On most systems, these commands require administrative privileges (e.g., `sudo surge service install`).
+You can also pass the `--user` flag to any of these commands to manage Surge as a user-level background service (e.g., `systemd --user` on Linux or LaunchAgents on macOS). This is the recommended approach for most users as it keeps configuration and downloaded files within your user directory.
+
+**Note**: When installing as a global system service, these commands require administrative privileges (e.g., `sudo surge service install`). When using `--user`, elevated privileges are not required.
 
 ## Server Subcommands (Compatibility)
 

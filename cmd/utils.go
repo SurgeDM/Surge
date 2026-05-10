@@ -56,7 +56,7 @@ func resolveLocalToken() string {
 	if token := strings.TrimSpace(os.Getenv("SURGE_TOKEN")); token != "" {
 		return token
 	}
-	
+
 	stateTokenFile := filepath.Join(config.GetStateDir(), "token")
 	if data, err := os.ReadFile(stateTokenFile); err == nil {
 		if t := strings.TrimSpace(string(data)); t != "" {

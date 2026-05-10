@@ -115,17 +115,20 @@ Surge provides an official way to manage it as a system service (daemon). This i
 # Install Surge as a system service
 surge service install
 
-# Manage the service
-surge service start
-surge service stop
-surge service status
+# Install Surge as a user-level service (Linux/macOS)
+surge service install --user
+
+# Manage the service (append --user if installed as a user service)
+surge service start [--user]
+surge service stop [--user]
+surge service status [--user]
 
 # Uninstall the service
-surge service uninstall
+surge service uninstall [--user]
 ```
 
 > [!NOTE]
-> On Linux, these commands may require `sudo`. On Windows, they should be run in an elevated (Administrator) terminal.
+> When installing as a global system service, these commands may require `sudo` on Linux/macOS, or an elevated (Administrator) terminal on Windows. Using `--user` does not require elevated privileges.
 
 ### 4. Remote TUI
 
