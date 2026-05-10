@@ -22,7 +22,11 @@ func readActivePort() int {
 	portFile := filepath.Join(config.GetRuntimeDir(), "port")
 	data, err := os.ReadFile(portFile)
 	if err != nil {
-		return 0
+		systemPortFile := filepath.Join(config.GetSystemRuntimeDir(), "port")
+		data, err = os.ReadFile(systemPortFile)
+		if err != nil {
+			return 0
+		}
 	}
 	var port int
 	_, _ = fmt.Sscanf(string(data), "%d", &port)
@@ -52,6 +56,21 @@ func resolveLocalToken() string {
 	if token := strings.TrimSpace(os.Getenv("SURGE_TOKEN")); token != "" {
 		return token
 	}
+	
+	stateTokenFile := filepath.Join(config.GetStateDir(), "token")
+	if data, err := os.ReadFile(stateTokenFile); err == nil {
+		if t := strings.TrimSpace(string(data)); t != "" {
+			return t
+		}
+	}
+
+	systemTokenFile := filepath.Join(config.GetSystemStateDir(), "token")
+	if data, err := os.ReadFile(systemTokenFile); err == nil {
+		if t := strings.TrimSpace(string(data)); t != "" {
+			return t
+		}
+	}
+
 	return ensureAuthToken()
 }
 

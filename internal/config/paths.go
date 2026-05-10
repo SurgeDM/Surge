@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -130,4 +131,26 @@ func EnsureDirs() error {
 	}
 
 	return nil
+}
+
+// GetSystemStateDir returns the state directory for the system service.
+// This is used as a fallback when running client commands as root/admin.
+func GetSystemStateDir() string {
+	if runtime.GOOS == "windows" {
+		systemRoot := os.Getenv("SystemRoot")
+		if systemRoot == "" {
+			systemRoot = "C:\\Windows"
+		}
+		return filepath.Join(systemRoot, "System32", "config", "systemprofile", "AppData", "Roaming", "surge")
+	}
+
+	if u, err := user.Lookup("root"); err == nil && u.HomeDir != "" {
+		return filepath.Join(u.HomeDir, ".local", "state", "surge")
+	}
+	return "/root/.local/state/surge"
+}
+
+// GetSystemRuntimeDir returns the runtime directory for the system service.
+func GetSystemRuntimeDir() string {
+	return filepath.Join(GetSystemStateDir(), "runtime")
 }

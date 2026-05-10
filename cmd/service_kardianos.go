@@ -11,6 +11,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var userLevelService bool
+
 var serviceConfig = &service.Config{
 	Name:        "surge",
 	DisplayName: "Surge Download Manager",
@@ -73,7 +75,11 @@ func (p *program) Stop(s service.Service) error {
 
 func GetService() (service.Service, error) {
 	prg := &program{}
-	return service.New(prg, serviceConfig)
+	cfg := *serviceConfig
+	if userLevelService {
+		cfg.Option = service.KeyValue{"UserService": true}
+	}
+	return service.New(prg, &cfg)
 }
 
 func runAction(action func(service.Service) error, successMsg string) func(*cobra.Command, []string) error {
@@ -160,4 +166,5 @@ func init() {
 	serviceCmd.AddCommand(serviceStopCmd)
 	serviceCmd.AddCommand(serviceStatusCmd)
 	serviceCmd.AddCommand(serviceRunCmd)
+	serviceCmd.PersistentFlags().BoolVar(&userLevelService, "user", false, "Manage the service at the user level (no root/admin required on POSIX)")
 }
