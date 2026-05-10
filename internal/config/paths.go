@@ -72,9 +72,6 @@ func GetSystemStateDir() string {
 }
 
 func GetSystemRuntimeDir() string {
-	if runtime.GOOS == "windows" {
-		return filepath.Join(GetSystemStateDir(), "runtime")
-	}
 	return filepath.Join(GetSystemStateDir(), "runtime")
 }
 

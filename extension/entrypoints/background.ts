@@ -637,7 +637,12 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
 
         resolvedBaseUrl = base;
         isConnected = true;
-        const headers = token ? { Authorization: `Bearer ${token}` } : await authHeaders();
+        
+        if (token) {
+          return { ok: true };
+        }
+
+        const headers = await authHeaders();
         try {
           const resp = await fetch(`${base}/list`, {
             headers,
