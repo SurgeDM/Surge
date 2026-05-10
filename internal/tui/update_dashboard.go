@@ -55,6 +55,14 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Tab switching
+	pinnedGuard := func() bool {
+		if m.pinnedTab != -1 {
+			m.addLogEntry(LogStyleError.Render("\u25c6 Tab is pinned \u2014 press t to unpin"))
+			return true
+		}
+		return false
+	}
+
 	switchTab := func(tab int) (tea.Model, tea.Cmd) {
 		m.activeTab = tab
 		m.ManualTabSwitch = true
@@ -63,12 +71,21 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.TabQueued) {
+		if pinnedGuard() {
+			return m, nil
+		}
 		return switchTab(TabQueued)
 	}
 	if key.Matches(msg, m.keys.Dashboard.TabActive) {
+		if pinnedGuard() {
+			return m, nil
+		}
 		return switchTab(TabActive)
 	}
 	if key.Matches(msg, m.keys.Dashboard.TabDone) {
+		if pinnedGuard() {
+			return m, nil
+		}
 		return switchTab(TabDone)
 	}
 	// Quit
@@ -105,12 +122,18 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// Next / Prev Tab
 	if key.Matches(msg, m.keys.Dashboard.NextTab) {
+		if pinnedGuard() {
+			return m, nil
+		}
 		m.activeTab = (m.activeTab + 1) % 3
 		m.ManualTabSwitch = true
 		m.UpdateListItems()
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.Dashboard.PrevTab) {
+		if pinnedGuard() {
+			return m, nil
+		}
 		m.activeTab = (m.activeTab + 2) % 3 // +2 mod 3 = prev
 		m.ManualTabSwitch = true
 		m.UpdateListItems()
