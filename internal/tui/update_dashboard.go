@@ -270,11 +270,14 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.addLogEntry(LogStyleStarted.Render("📌 Tab Unpinned"))
 		} else {
 			m.pinnedTab = m.activeTab
-			tabName := "Queued"
-			if m.activeTab == TabActive {
+			var tabName string
+			switch m.activeTab {
+			case TabActive:
 				tabName = "Active"
-			} else if m.activeTab == TabDone {
+			case TabDone:
 				tabName = "Done"
+			default:
+				tabName = "Queued"
 			}
 			m.addLogEntry(LogStyleStarted.Render("📌 Tab Pinned: " + tabName))
 		}
