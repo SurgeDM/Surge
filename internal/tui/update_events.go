@@ -64,12 +64,16 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if real.Destination == "" {
 					real.Destination = temp.Destination
 				}
+
+				if m.SelectedDownloadID == msg.tempID || (m.GetSelectedDownload() != nil && m.GetSelectedDownload().ID == msg.tempID) {
+					m.SelectedDownloadID = msg.id
+				}
 				_ = m.removeDownloadByID(msg.tempID)
 			} else if temp != nil {
+				if m.SelectedDownloadID == msg.tempID || (m.GetSelectedDownload() != nil && m.GetSelectedDownload().ID == msg.tempID) {
+					m.SelectedDownloadID = msg.id
+				}
 				temp.ID = msg.id
-			}
-			if m.SelectedDownloadID == msg.tempID {
-				m.SelectedDownloadID = msg.id
 			}
 		}
 		m.UpdateListItems()
@@ -165,6 +169,8 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if d.state != nil {
 				d.state.SetTotalSize(msg.Total) // Keep state updated for verification if needed
 			}
+			d.started = true
+			m.SelectedDownloadID = msg.DownloadID
 			m.UpdateListItems()
 			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
 			return m, tea.Batch(progressCmd, m.spinner.Tick)
@@ -176,7 +182,9 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if msg.State != nil {
 				newDownload.state = msg.State
 			}
+			newDownload.started = true
 			m.downloads = append(m.downloads, newDownload)
+			m.SelectedDownloadID = msg.DownloadID
 			m.UpdateListItems()
 			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
 			return m, m.spinner.Tick
@@ -269,6 +277,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newDownload := NewDownloadModel(msg.DownloadID, msg.URL, msg.Filename, 0)
 			newDownload.Destination = msg.DestPath
 			m.downloads = append(m.downloads, newDownload)
+			m.SelectedDownloadID = msg.DownloadID
 			m.UpdateListItems()
 			return m, m.spinner.Tick
 		}

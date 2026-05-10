@@ -272,14 +272,14 @@ func (m *RootModel) UpdateListItems() {
 					var newTab int
 					if d.done {
 						newTab = TabDone
-					} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming) {
+					} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming || d.started) {
 						newTab = TabActive
 					} else {
 						newTab = TabQueued
 					}
 
-					// If it belongs to a different tab, switch to it
-					if newTab != -1 && newTab != m.activeTab {
+					// If it belongs to a different tab, switch to it (unless current tab is pinned)
+					if m.pinnedTab == -1 && newTab != -1 && newTab != m.activeTab {
 						m.activeTab = newTab
 
 						// Force selection for the recursive call

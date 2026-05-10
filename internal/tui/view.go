@@ -765,11 +765,11 @@ func (m RootModel) ComputeViewStats() ViewStats {
 	return stats
 }
 
-func renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
+func (m RootModel) renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
 	tabs := []components.Tab{
-		{Label: "Queued", Count: queuedCount},
-		{Label: "Active", Count: activeCount},
-		{Label: "Done", Count: doneCount},
+		{Label: "Queued", Count: queuedCount, Pinned: m.pinnedTab == TabQueued},
+		{Label: "Active", Count: activeCount, Pinned: m.pinnedTab == TabActive},
+		{Label: "Done", Count: doneCount, Pinned: m.pinnedTab == TabDone},
 	}
 	return components.RenderTabBar(tabs, activeTab, ActiveTabStyle, TabStyle)
 }

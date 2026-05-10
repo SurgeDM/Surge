@@ -21,7 +21,7 @@ func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) strin
 
 	var leftTitle string
 	// Tab Bar
-	tabBar := renderTabs(m.activeTab, stats.ActiveCount, stats.QueuedCount, stats.DownloadedCount)
+	tabBar := m.renderTabs(m.activeTab, stats.ActiveCount, stats.QueuedCount, stats.DownloadedCount)
 
 	// Search bar (shown when search is active or has a query)
 	if m.searchActive || m.searchQuery != "" {

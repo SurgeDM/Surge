@@ -122,6 +122,7 @@ func TestUpdate_EnqueueSuccessMergesOptimisticEntryAfterStart(t *testing.T) {
 	m := RootModel{
 		downloads:          []*DownloadModel{optimistic},
 		SelectedDownloadID: "pending-1",
+		pinnedTab:          -1,
 		list:               NewDownloadList(80, 20),
 		logViewport:        viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
