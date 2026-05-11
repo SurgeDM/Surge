@@ -301,7 +301,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case startupConfigWarningMsg:
 		for _, w := range msg {
 			if w != "" {
-				m.addLogEntry(LogStyleError.Render("\u26a0 Config: " + w))
+				m.addLogEntry(LogStyleError.Render("\u26a0 " + w))
 			}
 		}
 		return m, nil

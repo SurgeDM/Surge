@@ -43,11 +43,16 @@ func TestConfigWarning_StartupConfigWarningMsg_AppearsInActivityLog(t *testing.T
 	}
 
 	entry := strings.Join(m2.logEntries, " ")
-	if !strings.Contains(entry, "Config:") {
-		t.Errorf("log entry should contain 'Config:' prefix, got: %q", entry)
-	}
 	if !strings.Contains(entry, "⚠") {
 		t.Errorf("log entry should contain warning glyph ⚠, got: %q", entry)
+	}
+	// The corrupt-JSON warning text itself contains "Config:" — confirm it is present.
+	if !strings.Contains(entry, "Config:") {
+		t.Errorf("log entry should contain 'Config:' from the warning text, got: %q", entry)
+	}
+	// Make sure the prefix is NOT doubled (handler must not add its own "Config:" prefix).
+	if strings.Contains(entry, "Config: Config:") {
+		t.Errorf("log entry has doubled 'Config:' prefix — handler is prepending it again: %q", entry)
 	}
 	if !strings.Contains(entry, "corrupt") {
 		t.Errorf("log entry should contain the original warning text, got: %q", entry)
