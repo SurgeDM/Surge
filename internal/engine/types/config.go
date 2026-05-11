@@ -25,7 +25,7 @@ const (
 )
 
 const (
-	PerDownloadMax = 64 // Max concurrent connections per download (default if not set by user)
+	PerDownloadMax = 32 // Max concurrent connections per download (default if not set by user)
 	DialHedgeCount = 4  // Extra connections to dial pre-emptively
 )
 
@@ -124,15 +124,15 @@ const (
 
 	// Health check constants
 	HealthCheckInterval = 1 * time.Second // How often to check worker health
-	SlowWorkerThreshold = 0.50            // Restart if speed < x times of mean
+	SlowWorkerThreshold = 0.30            // Restart if speed < x times of mean
 	SlowWorkerGrace     = 5 * time.Second // Grace period before checking speed
-	StallTimeout        = 5 * time.Second // Restart if no data for x seconds
+	StallTimeout        = 3 * time.Second // Restart if no data for x seconds
 	SpeedEMAAlpha       = 0.3             // EMA smoothing factor
 )
 
 // GetMaxTaskRetries returns configured value or default
 func (r *RuntimeConfig) GetMaxTaskRetries() int {
-	if r == nil || r.MaxTaskRetries <= 0 {
+	if r == nil || r.MaxTaskRetries < 0 {
 		return MaxTaskRetries
 	}
 	return r.MaxTaskRetries
@@ -152,7 +152,7 @@ func (r *RuntimeConfig) GetDialHedgeCount() int {
 
 // GetSlowWorkerThreshold returns configured value or default
 func (r *RuntimeConfig) GetSlowWorkerThreshold() float64 {
-	if r == nil || r.SlowWorkerThreshold <= 0 {
+	if r == nil || r.SlowWorkerThreshold < 0 || r.SlowWorkerThreshold > 1 {
 		return SlowWorkerThreshold
 	}
 	return r.SlowWorkerThreshold
@@ -160,7 +160,7 @@ func (r *RuntimeConfig) GetSlowWorkerThreshold() float64 {
 
 // GetSlowWorkerGracePeriod returns configured value or default
 func (r *RuntimeConfig) GetSlowWorkerGracePeriod() time.Duration {
-	if r == nil || r.SlowWorkerGracePeriod <= 0 {
+	if r == nil || r.SlowWorkerGracePeriod < 0 {
 		return SlowWorkerGrace
 	}
 	return r.SlowWorkerGracePeriod
@@ -168,7 +168,7 @@ func (r *RuntimeConfig) GetSlowWorkerGracePeriod() time.Duration {
 
 // GetStallTimeout returns configured value or default
 func (r *RuntimeConfig) GetStallTimeout() time.Duration {
-	if r == nil || r.StallTimeout <= 0 {
+	if r == nil || r.StallTimeout < 0 {
 		return StallTimeout
 	}
 	return r.StallTimeout
@@ -176,7 +176,7 @@ func (r *RuntimeConfig) GetStallTimeout() time.Duration {
 
 // GetSpeedEmaAlpha returns configured value or default
 func (r *RuntimeConfig) GetSpeedEmaAlpha() float64 {
-	if r == nil || r.SpeedEmaAlpha <= 0 {
+	if r == nil || r.SpeedEmaAlpha < 0 || r.SpeedEmaAlpha > 1 {
 		return SpeedEMAAlpha
 	}
 	return r.SpeedEmaAlpha

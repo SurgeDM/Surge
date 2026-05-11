@@ -53,6 +53,58 @@ func TestRuntimeConfig_Getters(t *testing.T) {
 		}
 	})
 
+	t.Run("explicit zero values are preserved where zero is valid", func(t *testing.T) {
+		r := &RuntimeConfig{
+			MaxTaskRetries:        0,
+			SlowWorkerThreshold:   0,
+			SlowWorkerGracePeriod: 0,
+			StallTimeout:          0,
+			SpeedEmaAlpha:         0,
+		}
+
+		if got := r.GetMaxTaskRetries(); got != 0 {
+			t.Errorf("GetMaxTaskRetries = %d, want 0", got)
+		}
+		if got := r.GetSlowWorkerThreshold(); got != 0 {
+			t.Errorf("GetSlowWorkerThreshold = %f, want 0", got)
+		}
+		if got := r.GetSlowWorkerGracePeriod(); got != 0 {
+			t.Errorf("GetSlowWorkerGracePeriod = %v, want 0", got)
+		}
+		if got := r.GetStallTimeout(); got != 0 {
+			t.Errorf("GetStallTimeout = %v, want 0", got)
+		}
+		if got := r.GetSpeedEmaAlpha(); got != 0 {
+			t.Errorf("GetSpeedEmaAlpha = %f, want 0", got)
+		}
+	})
+
+	t.Run("invalid values fall back to defaults", func(t *testing.T) {
+		r := &RuntimeConfig{
+			MaxTaskRetries:        -1,
+			SlowWorkerThreshold:   1.5,
+			SlowWorkerGracePeriod: -1 * time.Second,
+			StallTimeout:          -1 * time.Second,
+			SpeedEmaAlpha:         -0.1,
+		}
+
+		if got := r.GetMaxTaskRetries(); got != MaxTaskRetries {
+			t.Errorf("GetMaxTaskRetries = %d, want %d", got, MaxTaskRetries)
+		}
+		if got := r.GetSlowWorkerThreshold(); got != SlowWorkerThreshold {
+			t.Errorf("GetSlowWorkerThreshold = %f, want %f", got, SlowWorkerThreshold)
+		}
+		if got := r.GetSlowWorkerGracePeriod(); got != SlowWorkerGrace {
+			t.Errorf("GetSlowWorkerGracePeriod = %v, want %v", got, SlowWorkerGrace)
+		}
+		if got := r.GetStallTimeout(); got != StallTimeout {
+			t.Errorf("GetStallTimeout = %v, want %v", got, StallTimeout)
+		}
+		if got := r.GetSpeedEmaAlpha(); got != SpeedEMAAlpha {
+			t.Errorf("GetSpeedEmaAlpha = %f, want %f", got, SpeedEMAAlpha)
+		}
+	})
+
 	t.Run("custom values are returned", func(t *testing.T) {
 		r := &RuntimeConfig{
 			MaxConnectionsPerDownload: 128,

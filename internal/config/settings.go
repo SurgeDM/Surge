@@ -82,10 +82,10 @@ type NetworkSettings struct {
 // PerformanceSettings contains performance tuning parameters.
 type PerformanceSettings struct {
 	MaxTaskRetries        int           `json:"max_task_retries" ui_label:"Max Task Retries" ui_desc:"Number of times to retry a failed chunk before giving up."`
-	SlowWorkerThreshold   float64       `json:"slow_worker_threshold" ui_label:"Slow Worker Threshold" ui_desc:"Restart workers slower than this fraction of mean speed (0.0-1.0)."`
-	SlowWorkerGracePeriod time.Duration `json:"slow_worker_grace_period" ui_label:"Slow Worker Grace" ui_desc:"Grace period before checking worker speed (e.g., 5s)."`
-	StallTimeout          time.Duration `json:"stall_timeout" ui_label:"Stall Timeout" ui_desc:"Restart workers with no data for this duration (e.g., 5s)."`
-	SpeedEmaAlpha         float64       `json:"speed_ema_alpha" ui_label:"Speed EMA Alpha" ui_desc:"Exponential moving average smoothing factor (0.0-1.0)."`
+	SlowWorkerThreshold   float64       `json:"slow_worker_threshold" ui_label:"Slow Worker Threshold" ui_desc:"Restart workers slower than this fraction of mean speed (0.0-1.0, 0 disables relative slow-worker checks)."`
+	SlowWorkerGracePeriod time.Duration `json:"slow_worker_grace_period" ui_label:"Slow Worker Grace" ui_desc:"Grace period before checking worker speed (e.g., 5s, 0 checks immediately)."`
+	StallTimeout          time.Duration `json:"stall_timeout" ui_label:"Stall Timeout" ui_desc:"Restart workers with no data for this duration (e.g., 5s, 0 disables stall detection)."`
+	SpeedEmaAlpha         float64       `json:"speed_ema_alpha" ui_label:"Speed EMA Alpha" ui_desc:"Exponential moving average smoothing factor (0.0-1.0, 0 disables smoothing)."`
 }
 
 // SettingMeta provides metadata for a single setting (for UI rendering).

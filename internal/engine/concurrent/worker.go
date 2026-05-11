@@ -375,7 +375,8 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 
 				activeTask.SpeedMu.Lock()
 				alpha := d.Runtime.GetSpeedEmaAlpha()
-				if activeTask.Speed == 0 {
+				if alpha <= 0 || activeTask.Speed == 0 {
+					// Alpha 0 disables smoothing and uses the latest measured speed directly.
 					activeTask.Speed = recentSpeed
 				} else {
 					activeTask.Speed = (1-alpha)*activeTask.Speed + alpha*recentSpeed
