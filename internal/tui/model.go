@@ -151,15 +151,15 @@ type RootModel struct {
 	logFocused  bool           // Whether the log viewport is focused
 
 	// Settings
-	Settings             *config.Settings // Application settings
-	SettingsBaseline     *config.Settings // Snapshot of settings when entering the settings view
+	Settings              *config.Settings // Application settings
+	SettingsBaseline      *config.Settings // Snapshot of settings when entering the settings view
 	StartupConfigWarnings []string         // Config validation warnings to emit on first render
-	SettingsActiveTab    int              // Active category tab (0-3)
-	SettingsSelectedRow  int              // Selected setting within current tab
-	SettingsIsEditing    bool             // Whether currently editing a value
-	SettingsInput        textinput.Model  // Input for editing string/int values
-	settingsError        string           // Current validation error in settings
-	ExtensionTokenCopied bool             // Flash message for "Token Copied!"
+	SettingsActiveTab     int              // Active category tab (0-3)
+	SettingsSelectedRow   int              // Selected setting within current tab
+	SettingsIsEditing     bool             // Whether currently editing a value
+	SettingsInput         textinput.Model  // Input for editing string/int values
+	settingsError         string           // Current validation error in settings
+	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download

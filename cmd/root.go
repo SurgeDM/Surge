@@ -78,7 +78,7 @@ var (
 	GlobalService           core.DownloadService
 	GlobalLifecycleCleanup  func()
 	serverProgram           *tea.Program
-	startupIntegrityMessage  string
+	startupIntegrityMessage string
 	startupConfigWarnings   []string
 	globalSettings          *config.Settings
 	GlobalLifecycle         *processing.LifecycleManager
