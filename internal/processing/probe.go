@@ -41,7 +41,7 @@ type ProbeResult struct {
 // probeHeadersContextKey is used to pass custom headers to the HTTP client's CheckRedirect function
 type probeHeadersContextKey struct{}
 
-func resolveRuntimeConfig() *config.RuntimeConfig {
+func resolveRuntimeConfig() *types.RuntimeConfig {
 	settings, err := config.LoadSettings()
 	if err != nil {
 		settings = config.DefaultSettings()
@@ -74,7 +74,7 @@ func getProbeHostLock(rawurl string) *sync.Mutex {
 // ProbeServerWithProxy is the hot-path variant for callers that already know
 // the effective proxy and want probe traffic to match the eventual download path
 // without re-reading settings from disk.
-func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint string, headers map[string]string, runCfg *config.RuntimeConfig) (*ProbeResult, error) {
+func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint string, headers map[string]string, runCfg *types.RuntimeConfig) (*ProbeResult, error) {
 	utils.Debug("Probing server: %s", rawurl)
 
 	// Embed custom headers in context so CheckRedirect can use them
@@ -315,7 +315,7 @@ func ProbeMirrors(ctx context.Context, mirrors []string) (valid []string, errs m
 }
 
 // ProbeMirrorsWithProxy preserves caller order so mirror priority remains stable.
-func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, runCfg *config.RuntimeConfig) (valid []string, errs map[string]error) {
+func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, runCfg *types.RuntimeConfig) (valid []string, errs map[string]error) {
 	candidates := orderedUniqueMirrors(mirrors)
 	utils.Debug("Probing %d mirrors...", len(candidates))
 

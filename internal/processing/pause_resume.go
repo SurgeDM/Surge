@@ -366,7 +366,7 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadEntry, savedS
 		IsResume:      true,
 		State:         dmState,
 		SavedState:    savedState,
-		Runtime:       types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
+		Runtime:       settings.ToRuntimeConfig(),
 		Mirrors:       mirrorURLs,
 	}
 }

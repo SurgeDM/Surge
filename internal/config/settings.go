@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -484,30 +485,10 @@ func SaveSettings(s *Settings) error {
 	return os.Rename(tempPath, path)
 }
 
-// ToRuntimeConfig converts Settings to a downloader RuntimeConfig
-// This is used to pass user settings to the download engine
-type RuntimeConfig struct {
-	MaxConnectionsPerDownload int
-	MaxConcurrentProbes       int
-	UserAgent                 string
-	ProxyURL                  string
-	CustomDNS                 string
-	SequentialDownload        bool
-	MinChunkSize              int64
-	WorkerBufferSize          int
-	DialHedgeCount            int
-	MaxTaskRetries            int
-	SlowWorkerThreshold       float64
-	SlowWorkerGracePeriod     time.Duration
-	StallTimeout              time.Duration
-	SpeedEmaAlpha             float64
-}
-
-// ToRuntimeConfig creates a RuntimeConfig from user Settings
-func (s *Settings) ToRuntimeConfig() *RuntimeConfig {
-	return &RuntimeConfig{
+// ToRuntimeConfig creates the engine runtime config from validated settings.
+func (s *Settings) ToRuntimeConfig() *types.RuntimeConfig {
+	return &types.RuntimeConfig{
 		MaxConnectionsPerDownload: s.Network.MaxConnectionsPerDownload,
-		MaxConcurrentProbes:       s.Network.MaxConcurrentProbes,
 		UserAgent:                 s.Network.UserAgent,
 		ProxyURL:                  s.Network.ProxyURL,
 		CustomDNS:                 s.Network.CustomDNS,
