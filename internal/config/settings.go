@@ -369,6 +369,14 @@ func (ns *NetworkSettings) Validate() []string {
 		ns.DialHedgeCount = defaults.DialHedgeCount
 		warnings = append(warnings, "Dial hedge count reset to default")
 	}
+	if ns.PerDownloadSpeedLimit < 0 {
+		ns.PerDownloadSpeedLimit = 0
+		warnings = append(warnings, "Per-download speed limit cannot be negative; reset to unlimited")
+	}
+	if ns.GlobalSpeedLimit < 0 {
+		ns.GlobalSpeedLimit = 0
+		warnings = append(warnings, "Global speed limit cannot be negative; reset to unlimited")
+	}
 
 	// Validate ProxyURL if set
 	if ns.ProxyURL != "" {

@@ -806,6 +806,8 @@ func (m RootModel) getSettingUnit() string {
 		return " seconds"
 	case "slow_worker_threshold", "speed_ema_alpha":
 		return " (0.0-1.0)"
+	case "per_download_speed_limit", "global_speed_limit":
+		return " MB/s"
 	default:
 		return ""
 	}
