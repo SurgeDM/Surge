@@ -292,6 +292,7 @@ func TestLoadSettings_CorruptedJSON_FallsBackToDefaults(t *testing.T) {
 	}
 	if settings == nil {
 		t.Fatal("LoadSettings should return defaults, got nil")
+		return
 	}
 
 	defaults := DefaultSettings()
@@ -330,6 +331,7 @@ func TestLoadSettings_TruncatedJSON_FallsBackToDefaults(t *testing.T) {
 	}
 	if settings == nil {
 		t.Fatal("LoadSettings should return defaults, got nil")
+		return
 	}
 	if settings.Network.MaxConnectionsPerHost != DefaultSettings().Network.MaxConnectionsPerHost {
 		t.Error("Expected default settings after truncated JSON")
@@ -392,6 +394,7 @@ func TestToRuntimeConfig(t *testing.T) {
 
 	if runtime == nil {
 		t.Fatal("ToRuntimeConfig returned nil")
+		return
 	}
 
 	// Verify all fields are correctly mapped
@@ -622,7 +625,7 @@ func TestLoadSettings_RealFunction(t *testing.T) {
 	// Test LoadSettings actually reads from disk
 	// First save something
 	original := DefaultSettings()
-	original.Performance.MaxTaskRetries = 99
+	original.Performance.MaxTaskRetries = 9
 	err := SaveSettings(original)
 	if err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)
@@ -634,8 +637,8 @@ func TestLoadSettings_RealFunction(t *testing.T) {
 		t.Fatalf("LoadSettings failed: %v", err)
 	}
 
-	if loaded.Performance.MaxTaskRetries != 99 {
-		t.Errorf("MaxTaskRetries mismatch: got %d, want 99", loaded.Performance.MaxTaskRetries)
+	if loaded.Performance.MaxTaskRetries != 9 {
+		t.Errorf("MaxTaskRetries mismatch: got %d, want 9", loaded.Performance.MaxTaskRetries)
 	}
 
 	// Cleanup
@@ -744,6 +747,179 @@ func TestDefaultSettings_Fallback(t *testing.T) {
 	if dir != "" {
 		if info, err := os.Stat(dir); err != nil || !info.IsDir() {
 			t.Errorf("DefaultDownloadDir fallback returned invalid path: %s", dir)
+		}
+	}
+}
+
+func TestSettings_Validate(t *testing.T) {
+	defaults := DefaultSettings()
+
+	tests := []struct {
+		name     string
+		modify   func(*Settings)
+		validate func(*testing.T, *Settings)
+	}{
+		{
+			name: "Valid Settings Unchanged",
+			modify: func(s *Settings) {
+				s.Network.MaxConnectionsPerHost = 48
+				s.General.LogRetentionCount = 10
+				s.Performance.SlowWorkerThreshold = 0.5
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if s.Network.MaxConnectionsPerHost != 48 {
+					t.Errorf("Expected 48, got %d", s.Network.MaxConnectionsPerHost)
+				}
+				if s.General.LogRetentionCount != 10 {
+					t.Errorf("Expected 10, got %d", s.General.LogRetentionCount)
+				}
+				if s.Performance.SlowWorkerThreshold != 0.5 {
+					t.Errorf("Expected 0.5, got %f", s.Performance.SlowWorkerThreshold)
+				}
+			},
+		},
+		{
+			name: "Invalid Connections High Reset",
+			modify: func(s *Settings) {
+				s.Network.MaxConnectionsPerHost = 999
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if s.Network.MaxConnectionsPerHost != defaults.Network.MaxConnectionsPerHost {
+					t.Errorf("Expected default %d, got %d", defaults.Network.MaxConnectionsPerHost, s.Network.MaxConnectionsPerHost)
+				}
+			},
+		},
+		{
+			name: "Invalid Connections Low Reset",
+			modify: func(s *Settings) {
+				s.Network.MaxConnectionsPerHost = 0
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if s.Network.MaxConnectionsPerHost != defaults.Network.MaxConnectionsPerHost {
+					t.Errorf("Expected default %d, got %d", defaults.Network.MaxConnectionsPerHost, s.Network.MaxConnectionsPerHost)
+				}
+			},
+		},
+		{
+			name: "Invalid Concurrent Downloads Reset",
+			modify: func(s *Settings) {
+				s.Network.MaxConcurrentDownloads = 15
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if s.Network.MaxConcurrentDownloads != defaults.Network.MaxConcurrentDownloads {
+					t.Errorf("Expected default %d, got %d", defaults.Network.MaxConcurrentDownloads, s.Network.MaxConcurrentDownloads)
+				}
+			},
+		},
+		{
+			name: "Invalid Retention Count Reset",
+			modify: func(s *Settings) {
+				s.General.LogRetentionCount = 0
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if s.General.LogRetentionCount != defaults.General.LogRetentionCount {
+					t.Errorf("Expected default %d, got %d", defaults.General.LogRetentionCount, s.General.LogRetentionCount)
+				}
+			},
+		},
+		{
+			name: "Invalid Threshold Reset",
+			modify: func(s *Settings) {
+				s.Performance.SlowWorkerThreshold = 1.5
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if s.Performance.SlowWorkerThreshold != defaults.Performance.SlowWorkerThreshold {
+					t.Errorf("Expected default %f, got %f", defaults.Performance.SlowWorkerThreshold, s.Performance.SlowWorkerThreshold)
+				}
+			},
+		},
+		{
+			name: "Invalid Duration Reset",
+			modify: func(s *Settings) {
+				s.Performance.SlowWorkerGracePeriod = -1 * time.Second
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if s.Performance.SlowWorkerGracePeriod != defaults.Performance.SlowWorkerGracePeriod {
+					t.Errorf("Expected default, got %v", s.Performance.SlowWorkerGracePeriod)
+				}
+			},
+		},
+		{
+			name: "Broken Path Reset",
+			modify: func(s *Settings) {
+				s.General.DefaultDownloadDir = "/non/existent/path/that/should/fail"
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if s.General.DefaultDownloadDir != defaults.General.DefaultDownloadDir {
+					t.Errorf("Expected fallback to %q, got %q", defaults.General.DefaultDownloadDir, s.General.DefaultDownloadDir)
+				}
+			},
+		},
+		{
+			name: "Broken Category Regex Removal",
+			modify: func(s *Settings) {
+				s.Categories.Categories = []Category{
+					{Name: "Broken", Pattern: "[", Path: "/tmp"},
+					{Name: "Valid", Pattern: ".*", Path: "/tmp"},
+				}
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if len(s.Categories.Categories) != 1 {
+					t.Errorf("Expected 1 valid category, got %d", len(s.Categories.Categories))
+				}
+				if s.Categories.Categories[0].Name != "Valid" {
+					t.Errorf("Expected 'Valid' category, got %q", s.Categories.Categories[0].Name)
+				}
+			},
+		},
+		{
+			name: "All Broken Categories Removal",
+			modify: func(s *Settings) {
+				s.Categories.Categories = []Category{
+					{Name: "Broken", Pattern: "[", Path: "/tmp"},
+				}
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if len(s.Categories.Categories) != 0 {
+					t.Errorf("Expected 0 categories, got %d", len(s.Categories.Categories))
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := DefaultSettings()
+			tt.modify(s)
+			s.Validate()
+			tt.validate(t, s)
+		})
+	}
+}
+
+func TestSettings_FutureProofValidation(t *testing.T) {
+	s := Settings{}
+	v := reflect.ValueOf(s)
+	tpe := v.Type()
+
+	for i := 0; i < tpe.NumField(); i++ {
+		field := tpe.Field(i)
+		// Skip unexported fields or non-struct fields
+		if field.PkgPath != "" || field.Type.Kind() != reflect.Struct {
+			continue
+		}
+
+		// Ensure the field type has a Validate method
+		// Some might take parameters (like Categories), some don't.
+		// We just check if a method named "Validate" exists.
+		_, ok := field.Type.MethodByName("Validate")
+		if !ok {
+			// If the type itself doesn't have it, check if a pointer to it does
+			_, ok = reflect.PointerTo(field.Type).MethodByName("Validate")
+		}
+
+		if !ok {
+			t.Errorf("Field %s (type %s) does not have a Validate method. Every settings group MUST implement validation to ensure application stability.", field.Name, field.Type.Name())
 		}
 	}
 }

@@ -230,6 +230,7 @@ func TestSaveStateWithOptions_SkipsHashOnTimeoutButPersistsState(t *testing.T) {
 	}
 	if entry == nil {
 		t.Fatal("expected persisted download entry")
+		return
 	}
 	if entry.Status != "paused" {
 		t.Fatalf("entry status = %q, want paused", entry.Status)
@@ -1056,6 +1057,7 @@ func TestAvgSpeedPersistence(t *testing.T) {
 	}
 	if loaded == nil {
 		t.Fatal("GetDownload returned nil")
+		return
 	}
 	if loaded.AvgSpeed != entry.AvgSpeed {
 		t.Errorf("AvgSpeed = %f, want %f", loaded.AvgSpeed, entry.AvgSpeed)

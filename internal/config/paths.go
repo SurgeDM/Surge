@@ -2,6 +2,7 @@ package config
 
 import (
 	"os"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -42,6 +43,38 @@ func GetStateDir() string {
 	return filepath.Join(getXDGBaseDir("XDG_STATE_HOME", xdg.StateHome), "surge")
 }
 
+func GetSystemSurgeDir() string {
+	if runtime.GOOS == "windows" {
+		systemRoot := strings.TrimSpace(os.Getenv("SystemRoot"))
+		if systemRoot == "" {
+			systemRoot = `C:\Windows`
+		}
+		return filepath.Join(systemRoot, "System32", "config", "systemprofile", "AppData", "Roaming", "surge")
+	}
+
+	rootUser, err := user.Lookup("root")
+	if err == nil && strings.TrimSpace(rootUser.HomeDir) != "" {
+		return filepath.Join(rootUser.HomeDir, ".config", "surge")
+	}
+	return filepath.Join(string(filepath.Separator), "root", ".config", "surge")
+}
+
+func GetSystemStateDir() string {
+	if runtime.GOOS == "windows" {
+		return GetSystemSurgeDir()
+	}
+
+	rootUser, err := user.Lookup("root")
+	if err == nil && strings.TrimSpace(rootUser.HomeDir) != "" {
+		return filepath.Join(rootUser.HomeDir, ".local", "state", "surge")
+	}
+	return filepath.Join(string(filepath.Separator), "root", ".local", "state", "surge")
+}
+
+func GetSystemRuntimeDir() string {
+	return filepath.Join(GetSystemStateDir(), "runtime")
+}
+
 func GetDownloadsDir() string {
 	// Prefer XDG/user-dirs value when it points to a real directory.
 	if dir := strings.TrimSpace(xdg.UserDirs.Download); dir != "" {
@@ -76,10 +109,10 @@ func GetRuntimeDir() string {
 		}
 	}
 
-	// In headless Linux sessions, XDG_RUNTIME_DIR is often unset and xdg.RuntimeDir
-	// may point to /run/user/<uid>, which can be absent/unwritable. Use a writable
-	// state-dir fallback in that case.
-	if runtime.GOOS == "linux" && runtimeEnv == "" {
+	// In headless Linux sessions and Android/Termux, XDG_RUNTIME_DIR is often unset
+	// and xdg.RuntimeDir may point to /run/user/<uid>, which can be absent/unwritable.
+	// Use a writable state-dir fallback in that case.
+	if (runtime.GOOS == "linux" || runtime.GOOS == "android") && runtimeEnv == "" {
 		runtimeBase = ""
 	}
 
@@ -124,8 +157,8 @@ func EnsureDirs() error {
 			return err
 		}
 	}
-	// On Linux runtime dir, we might want stricter permissions (0700) if it's in /run/user
-	if runtime.GOOS == "linux" && os.Getenv("XDG_RUNTIME_DIR") != "" {
+	// On Linux/Android runtime dir, we might want stricter permissions (0700) if it's in /run/user
+	if (runtime.GOOS == "linux" || runtime.GOOS == "android") && os.Getenv("XDG_RUNTIME_DIR") != "" {
 		_ = os.Chmod(GetRuntimeDir(), 0o700)
 	}
 

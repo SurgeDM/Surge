@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -178,4 +179,45 @@ func renderEmptyMessage(width, height int, message string) string {
 	}
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center,
 		EmptyMessageStyle.Render(message))
+}
+
+func (m *RootModel) snapshotSettings() {
+	if m.Settings == nil {
+		return
+	}
+	// Shallow copy settings to compare restart-required fields later.
+	// Since Settings is a pointer, we clone the underlying struct.
+	baseline := *m.Settings
+	m.SettingsBaseline = &baseline
+}
+
+func (m *RootModel) checkRestartRequirement() bool {
+	if m.Settings == nil || m.SettingsBaseline == nil {
+		return false
+	}
+
+	val1 := reflect.ValueOf(m.Settings).Elem()
+	val2 := reflect.ValueOf(m.SettingsBaseline).Elem()
+	typ := val1.Type()
+
+	for i := 0; i < typ.NumField(); i++ {
+		catField1 := val1.Field(i)
+		catField2 := val2.Field(i)
+		if catField1.Kind() != reflect.Struct {
+			continue
+		}
+
+		catTyp := catField1.Type()
+		for j := 0; j < catTyp.NumField(); j++ {
+			field := catTyp.Field(j)
+			if field.Tag.Get("ui_restart") == "true" {
+				f1 := catField1.Field(j)
+				f2 := catField2.Field(j)
+				if !reflect.DeepEqual(f1.Interface(), f2.Interface()) {
+					return true
+				}
+			}
+		}
+	}
+	return false
 }

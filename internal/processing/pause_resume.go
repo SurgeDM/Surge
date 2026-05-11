@@ -8,6 +8,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // EngineHooks defines the minimal callbacks Processing needs to orchestrate the worker pool.
@@ -38,7 +39,7 @@ type EngineHooks struct {
 func (mgr *LifecycleManager) Pause(id string) error {
 	hooks := mgr.getEngineHooks()
 	if hooks.Pause == nil {
-		return fmt.Errorf("engine not initialized")
+		return types.ErrEngineNotInit
 	}
 
 	if hooks.Pause(id) {
@@ -59,7 +60,7 @@ func (mgr *LifecycleManager) Pause(id string) error {
 		return nil // Already stopped
 	}
 
-	return fmt.Errorf("download not found")
+	return types.ErrNotFound
 }
 
 // hydrateConfigFromDisk loads the latest persisted pause snapshot from disk
@@ -92,7 +93,7 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	// Guard: still transitioning to paused
 	if hooks.GetStatus != nil {
 		if st := hooks.GetStatus(id); st != nil && st.Status == "pausing" {
-			return fmt.Errorf("download is still pausing, try again in a moment")
+			return types.ErrPausing
 		}
 	}
 
@@ -117,11 +118,11 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	// Cold path: download from a prior session (only in DB).
 	entry, err := state.GetDownload(id)
 	if err != nil || entry == nil {
-		return fmt.Errorf("download not found")
+		return types.ErrNotFound
 	}
 
 	if entry.Status == "completed" {
-		return fmt.Errorf("download already completed")
+		return types.ErrCompleted
 	}
 
 	settings := mgr.GetSettings()
@@ -169,7 +170,7 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 	for i, id := range ids {
 		if hooks.GetStatus != nil {
 			if st := hooks.GetStatus(id); st != nil && st.Status == "pausing" {
-				errs[i] = fmt.Errorf("download is still pausing, try again in a moment")
+				errs[i] = types.ErrPausing
 				continue
 			}
 		}
@@ -270,7 +271,11 @@ func (mgr *LifecycleManager) Cancel(id string) error {
 	}
 
 	if !found {
-		return fmt.Errorf("download not found")
+		// It's safe to treat a missing download as success during cancellation
+		// because it may have been deleted in a prior session or removed
+		// during a race condition (e.g. TUI refresh vs engine deletion).
+		utils.Debug("Cancel: download %s not found in pool or DB, treating as success", id)
+		return nil
 	}
 
 	// Emit removal event — event worker handles DB deletion and file cleanup.

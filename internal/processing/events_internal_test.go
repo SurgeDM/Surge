@@ -128,6 +128,7 @@ func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing
 	}
 	if entry == nil {
 		t.Fatal("expected download entry to remain")
+		return
 	}
 	if entry.Status != "error" {
 		t.Fatalf("status = %q, want error", entry.Status)

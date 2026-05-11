@@ -64,6 +64,7 @@ Surge is available on multiple platforms. Choose the method that works best for 
 | **Prebuilt Binary**          | [Download from Releases](https://github.com/SurgeDM/Surge/releases/latest) | Easiest method. Just download and run.       |
 | **Arch Linux (AUR)**         | `yay -S surge`                                                                 | Managed via AUR.                             |
 | **macOS / Linux (Homebrew)** | `brew install SurgeDM/tap/surge`                                      | Recommended for Mac/Linux users.             |
+| **Nix / NixOS**              | `nix run github:SurgeDM/Surge`                                        | Via Nix flake. NixOS config: `inputs.surge.packages.${pkgs.system}.default` |
 | **Windows**         | `winget install surge-downloader.surge`<br />or<br />`scoop install surge` | Recommended for Windows users.               |
 | **Dockerfile**               | [See instructions](#4-server-mode-with-docker-compose)                              | Run Surge in server mode with Docker Compose |
 | **Go Install**               | `go install github.com/SurgeDM/Surge@latest`                          | Requires Go 1.25+                           |
@@ -105,6 +106,28 @@ surge server https://url.com/file.zip
 # Start with explicit API token
 surge server --token <token>
 ```
+
+### 3. Auto-Start Service
+
+Surge provides an official way to manage it as a system service (daemon). This is the recommended way for servers and reproducible deployments.
+
+```bash
+# Install Surge as a system service
+surge service install
+
+# Manage the service
+surge service start
+surge service stop
+surge service status
+
+# Uninstall the service
+surge service uninstall
+```
+
+> [!NOTE]
+> On Linux, these commands may require `sudo`. On Windows, they should be run in an elevated (Administrator) terminal.
+
+### 4. Remote TUI
 
 `surge` and `surge server` bind the HTTP API to `0.0.0.0` (all interfaces) by default.
 This means the server is accessible via `localhost` (127.0.0.1) as well as your local network IP.

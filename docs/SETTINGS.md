@@ -33,6 +33,16 @@ The `settings.json` file expects a nested structure divided into `general`, `net
 
 *Note: You do not need to specify all keys. Surge will automatically infer missing keys and use their internal default values.*
 
+## Configuration Validation
+
+Surge implements a self-healing configuration system to ensure the application remains stable even if the `settings.json` file is manually edited with invalid values.
+
+- **Range Enforcement**: Numeric values (like connection limits and concurrent downloads) are strictly enforced. If a value is set outside its safe operating range in the JSON file, Surge will automatically reset that specific field to its default value on startup while preserving your other valid settings.
+- **Path Verification**: Paths like `default_download_dir` and individual category paths are verified for existence and accessibility. Broken or inaccessible paths are rolled back to the system's default Downloads directory.
+- **Syntactic Validation**: Proxy URLs and DNS server lists are validated for correct syntax.
+- **Category Integrity**: If a custom category has an invalid regular expression pattern, it is automatically pruned from the active list to prevent engine crashes.
+- **Corrupt JSON Fallback**: If the `settings.json` file is completely unparseable (e.g., missing brackets or commas), Surge will log a warning and start with all factory default settings for that session.
+
 ## Directory Structure
 
 Surge follows OS conventions for storing its files. Below is a breakdown of every directory it uses and where to find it on each platform.
@@ -60,6 +70,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `warn_on_duplicate`    | bool   | Show a warning when adding a download that already exists in the list.                             | `true`  |
 | `extension_prompt`     | bool   | Prompt for confirmation in the TUI when adding downloads via the browser extension.                | `false` |
 | `auto_resume`          | bool   | Automatically resume paused downloads when Surge starts.                                           | `false` |
+| `auto_start`           | bool   | Automatically start Surge as a system service on boot. (See [USAGE.md](USAGE.md#service-management)).      | `false` |
 | `skip_update_check`    | bool   | Disable automatic check for new versions on startup.                                               | `false` |
 | `clipboard_monitor`    | bool   | Watch the system clipboard for URLs and prompt to download them.                                   | `true`  |
 | `theme`                | int    | UI Theme (0=Adaptive, 1=Light, 2=Dark).                                                            | `0`     |

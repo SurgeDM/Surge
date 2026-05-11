@@ -70,6 +70,7 @@ func TestServer_Startup_HandlesResume(t *testing.T) {
 		// Check if it's in queued map (GetStatus checks both active and queued internal maps)
 		// Wait, GetStatus implementation in pool.go checks p.downloads and p.queued
 		t.Fatal("Download not found in GlobalPool after resumePausedDownloads()")
+		return
 	}
 
 	if status.Status != "queued" && status.Status != "downloading" {

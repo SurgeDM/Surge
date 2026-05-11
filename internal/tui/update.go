@@ -208,6 +208,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case QuitConfirmState:
 			return m.updateQuitConfirm(msg)
 
+		case RestartConfirmState:
+			return m.updateRestartConfirm(msg)
+
 		case BatchConfirmState:
 			return m.updateBatchConfirm(msg)
 
@@ -238,6 +241,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case BugReportLogPathState:
 			return m.updateBugReportLogPath(msg)
+
+		case CategoryResetConfirmState:
+			return m.updateCategoryResetConfirm(msg)
 
 		default:
 			return m, nil

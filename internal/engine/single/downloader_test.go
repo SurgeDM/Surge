@@ -299,6 +299,7 @@ func TestNewSingleDownloader(t *testing.T) {
 
 	if downloader == nil {
 		t.Fatal("NewSingleDownloader returned nil")
+		return
 	}
 	if downloader.ID != "test-id" {
 		t.Errorf("ID mismatch: got %s, want test-id", downloader.ID)

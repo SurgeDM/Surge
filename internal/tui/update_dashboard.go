@@ -1,6 +1,8 @@
 package tui
 
 import (
+	"errors"
+
 	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -53,6 +55,14 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Tab switching
+	pinnedGuard := func() bool {
+		if m.pinnedTab != -1 {
+			m.addLogEntry(LogStyleError.Render("\u25c6 Tab is pinned \u2014 press t to unpin"))
+			return true
+		}
+		return false
+	}
+
 	switchTab := func(tab int) (tea.Model, tea.Cmd) {
 		m.activeTab = tab
 		m.ManualTabSwitch = true
@@ -61,12 +71,21 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.TabQueued) {
+		if pinnedGuard() {
+			return m, nil
+		}
 		return switchTab(TabQueued)
 	}
 	if key.Matches(msg, m.keys.Dashboard.TabActive) {
+		if pinnedGuard() {
+			return m, nil
+		}
 		return switchTab(TabActive)
 	}
 	if key.Matches(msg, m.keys.Dashboard.TabDone) {
+		if pinnedGuard() {
+			return m, nil
+		}
 		return switchTab(TabDone)
 	}
 	// Quit
@@ -101,9 +120,21 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Next Tab
+	// Next / Prev Tab
 	if key.Matches(msg, m.keys.Dashboard.NextTab) {
+		if pinnedGuard() {
+			return m, nil
+		}
 		m.activeTab = (m.activeTab + 1) % 3
+		m.ManualTabSwitch = true
+		m.UpdateListItems()
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.Dashboard.PrevTab) {
+		if pinnedGuard() {
+			return m, nil
+		}
+		m.activeTab = (m.activeTab + 2) % 3 // +2 mod 3 = prev
 		m.ManualTabSwitch = true
 		m.UpdateListItems()
 		return m, nil
@@ -122,7 +153,13 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 			// Call Service Delete
 			if err := m.Service.Delete(targetID); err != nil {
-				m.addLogEntry(LogStyleError.Render("✖ Delete failed: " + err.Error()))
+				// If the download is not found, it's already gone from the engine/DB.
+				// We still remove it from our local list to avoid it being "stuck".
+				if errors.Is(err, types.ErrNotFound) {
+					m.removeDownloadByID(targetID)
+				} else {
+					m.addLogEntry(LogStyleError.Render("✖ Delete failed: " + err.Error()))
+				}
 			} else {
 				m.removeDownloadByID(targetID)
 			}
@@ -217,6 +254,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.Settings) {
+		m.snapshotSettings()
 		m.state = SettingsState
 		m.SettingsActiveTab = 0
 		m.SettingsSelectedRow = 0
@@ -252,6 +290,26 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		m.addLogEntry(LogStyleStarted.Render("📂 Filter: " + label))
 		m.UpdateListItems()
+		return m, nil
+	}
+
+	if key.Matches(msg, m.keys.Dashboard.PinTab) {
+		if m.pinnedTab == m.activeTab {
+			m.pinnedTab = -1
+			m.addLogEntry(LogStyleStarted.Render("\u25c6 Tab Unpinned"))
+		} else {
+			m.pinnedTab = m.activeTab
+			var tabName string
+			switch m.activeTab {
+			case TabActive:
+				tabName = "Active"
+			case TabDone:
+				tabName = "Done"
+			default:
+				tabName = "Queued"
+			}
+			m.addLogEntry(LogStyleStarted.Render("\u25c6 Tab Pinned: " + tabName))
+		}
 		return m, nil
 	}
 

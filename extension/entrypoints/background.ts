@@ -180,8 +180,49 @@ async function discoverBaseUrl(): Promise<string | null> {
     [cachedDiscoveredServerUrl],
   );
 
-  const found = await findReachableCandidate(candidates, healthCheck, PORT_SCAN_BATCH_SIZE);
+  const token = cachedAuthToken;
+  const probe = token
+    ? (candidate: string) => authenticatedHealthCheck(candidate, token)
+    : healthCheck;
+  const found = await findReachableCandidate(candidates, probe, PORT_SCAN_BATCH_SIZE);
   return found;
+}
+
+async function discoverBaseUrlForToken(token: string): Promise<{ base: string | null; sawUnauthorized: boolean; sawReachable: boolean }> {
+  if (cachedServerUrl) {
+    if (!await healthCheck(cachedServerUrl)) return { base: null, sawUnauthorized: false, sawReachable: false };
+    const auth = await checkAuthAtBaseUrl(cachedServerUrl, token);
+    return {
+      base: auth.ok ? cachedServerUrl : null,
+      sawUnauthorized: auth.status === 401,
+      sawReachable: true,
+    };
+  }
+
+  const candidates = buildPortScanCandidates(
+    DEFAULT_PORT,
+    MAX_PORT_SCAN,
+    [cachedDiscoveredServerUrl],
+  );
+
+  let sawUnauthorized = false;
+  let sawReachable = false;
+  for (let index = 0; index < candidates.length; index += PORT_SCAN_BATCH_SIZE) {
+    const batch = candidates.slice(index, index + PORT_SCAN_BATCH_SIZE);
+    const results = await Promise.all(batch.map(async (candidate) => {
+      if (!await healthCheck(candidate)) return { candidate, ok: false, status: 0, reachable: false };
+      const auth = await checkAuthAtBaseUrl(candidate, token);
+      return { candidate, ok: auth.ok, status: auth.status, reachable: true };
+    }));
+
+    for (const result of results) {
+      sawReachable = sawReachable || result.reachable;
+      sawUnauthorized = sawUnauthorized || result.status === 401;
+      if (result.ok) return { base: result.candidate, sawUnauthorized, sawReachable };
+    }
+  }
+
+  return { base: null, sawUnauthorized, sawReachable };
 }
 
 async function getBaseUrl(): Promise<string | null> {
@@ -223,6 +264,23 @@ async function healthCheck(url: string): Promise<boolean> {
   } catch { /* ignore */ }
   if (resolvedBaseUrl === url) resolvedBaseUrl = null;
   return false;
+}
+
+async function checkAuthAtBaseUrl(url: string, token: string): Promise<{ ok: boolean; status: number }> {
+  try {
+    const resp = await fetch(`${url}/list`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(1000),
+    });
+    return { ok: resp.ok, status: resp.status };
+  } catch {
+    return { ok: false, status: 0 };
+  }
+}
+
+async function authenticatedHealthCheck(url: string, token: string): Promise<boolean> {
+  if (!await healthCheck(url)) return false;
+  return (await checkAuthAtBaseUrl(url, token)).ok;
 }
 
 async function checkHealthSilent(): Promise<boolean> {
@@ -565,11 +623,26 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
 
     case 'validateAuth':
       return (async () => {
-        const base = await getBaseUrl();
-        if (!base) return { ok: false, error: 'no_server' };
-
         const token = normalizeToken(message.token || '');
-        const headers = token ? { Authorization: `Bearer ${token}` } : await authHeaders();
+        const discovery = token
+          ? await discoverBaseUrlForToken(token)
+          : { base: await getBaseUrl(), sawUnauthorized: false, sawReachable: isConnected };
+        const base = discovery.base;
+        if (!base) {
+          return {
+            ok: false,
+            error: discovery.sawUnauthorized ? 'invalid_token' : 'no_server',
+          };
+        }
+
+        resolvedBaseUrl = base;
+        isConnected = true;
+        
+        if (token) {
+          return { ok: true };
+        }
+
+        const headers = await authHeaders();
         try {
           const resp = await fetch(`${base}/list`, {
             headers,
@@ -782,6 +855,7 @@ export const __test__ = {
   setCachedAuthToken(token: string | null): void {
     setCachedAuthTokenState(token);
   },
+  discoverBaseUrlForToken,
   resetState(): void {
     cachedServerUrl = null;
     cachedDiscoveredServerUrl = null;

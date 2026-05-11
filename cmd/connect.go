@@ -119,6 +119,10 @@ func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 
 	serverHost, _ := parseRemoteServerAddress(target.BaseURL)
 	if isLocalHost(serverHost) {
+		_, serverPort := parseRemoteServerAddress(target.BaseURL)
+		if details, ok := getActiveConnectionDetails(); ok && details.port == serverPort {
+			return resolveLocalTokenForDetails(details), nil
+		}
 		return ensureAuthToken(), nil
 	}
 	return "", fmt.Errorf("remote target %q requires authentication: use --token or set SURGE_TOKEN", target.BaseURL)

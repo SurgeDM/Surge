@@ -5,6 +5,7 @@ import type { DownloadStatus } from '../store/types';
 
 interface Props {
   download: Accessor<DownloadStatus>;
+  onActionComplete?: () => void;
 }
 
 const STATUS_LABELS: Record<DownloadStatus['status'], string> = {
@@ -84,6 +85,7 @@ export default function DownloadItem(props: Props) {
     btn.disabled = true;
     try {
       await browser.runtime.sendMessage({ type: action, id: dl().id });
+      props.onActionComplete?.();
     } finally {
       btn.disabled = false;
     }

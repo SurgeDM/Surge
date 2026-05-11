@@ -76,7 +76,36 @@ func (m RootModel) viewSettings() string {
 	innerHeight := height - BoxStyle.GetVerticalFrameSize()
 	tabBarHeight := lipgloss.Height(tabBar)
 	helpHeight := lipgloss.Height(helpText)
-	bodyHeight := innerHeight - tabBarHeight - helpHeight - (LayoutGapStyle.GetVerticalFrameSize() * 2) // one line gap above body and help
+
+	errorLine := ""
+	errorHeight := 0
+	if m.settingsError != "" {
+		// Use MaxWidth to prevent horizontal overflow from long error messages
+		errorLine = lipgloss.NewStyle().
+			Foreground(colors.StateError()).
+			Bold(true).
+			Padding(0, 2).
+			MaxWidth(width - 6).
+			Render("\u2716 " + m.settingsError)
+		errorHeight = lipgloss.Height(errorLine)
+	}
+
+	// Calculate gaps. We want:
+	// tabBar
+	// <gap>
+	// errorLine (if present)
+	// <gap if error present>
+	// content
+	// <padding flex space>
+	// <gap before help if space allows>
+	// helpText
+
+	fixedOverhead := tabBarHeight + helpHeight + 1 // 1 for the gap after tab bar
+	if errorHeight > 0 {
+		fixedOverhead += errorHeight + 1 // another gap after error
+	}
+
+	bodyHeight := innerHeight - fixedOverhead
 	if bodyHeight < 3 {
 		bodyHeight = 3
 	}
@@ -89,20 +118,26 @@ func (m RootModel) viewSettings() string {
 	}
 
 	contentHeight := lipgloss.Height(content)
-	usedHeight := tabBarHeight + LayoutGapStyle.GetVerticalFrameSize() + contentHeight + LayoutGapStyle.GetVerticalFrameSize() + helpHeight
+	usedHeight := fixedOverhead + contentHeight
+
 	paddingLines := innerHeight - usedHeight
 	if paddingLines < 0 {
 		paddingLines = 0
 	}
-	padding := strings.Repeat("\n", paddingLines)
 
-	fullContent := lipgloss.JoinVertical(lipgloss.Left,
-		tabBar,
-		"",
-		content,
-		padding,
-		helpText,
-	)
+	parts := []string{tabBar, ""} // tabBar and first gap
+	if errorLine != "" {
+		parts = append(parts, errorLine, "") // errorLine and second gap
+	}
+	parts = append(parts, content)
+
+	// Add flexible padding to push help text to bottom
+	for i := 0; i < paddingLines; i++ {
+		parts = append(parts, "")
+	}
+	parts = append(parts, helpText)
+
+	fullContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, colors.Magenta())
 	return m.renderModalWithOverlay(box)
@@ -347,7 +382,16 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.Repeat("\u2500", innerWidth))
 
-	wrappedDesc := utils.TruncateTwoLines(meta.Description, innerWidth)
+	desc := meta.Description
+	if meta.RequiresRestart {
+		restartNotice := lipgloss.NewStyle().
+			Foreground(colors.Orange()).
+			Bold(true).
+			Render("\u21ba Requires Restart")
+		desc = restartNotice + "\n" + desc
+	}
+
+	wrappedDesc := utils.WrapText(desc, innerWidth)
 	descDisplay := lipgloss.NewStyle().
 		Foreground(colors.LightGray()).
 		Width(innerWidth).
@@ -623,6 +667,17 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			case reflect.Bool:
 				// Typically toggled unless explicitly typed out
 				if value == "" {
+					if key == "auto_start" {
+						if m.ToggleServiceFunc == nil {
+							return fmt.Errorf("service management is not available on this platform")
+						}
+						newVal := !targetField.Bool()
+						if err := m.ToggleServiceFunc(newVal); err != nil {
+							return fmt.Errorf("failed to update service: %w", err)
+						}
+						targetField.SetBool(newVal)
+						return nil
+					}
 					targetField.SetBool(!targetField.Bool())
 				} else {
 					b, _ := strconv.ParseBool(value)
@@ -853,7 +908,7 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 }
 
 // resetSettingToDefault resets a specific setting to its default value
-func (m *RootModel) resetSettingToDefault(category, key string, defaults *config.Settings) {
+func (m *RootModel) resetSettingToDefault(category, key string, defaults *config.Settings) error {
 	switch category {
 	case "General":
 		switch key {
@@ -865,6 +920,13 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.General.DownloadCompleteNotification = defaults.General.DownloadCompleteNotification
 		case "auto_resume":
 			m.Settings.General.AutoResume = defaults.General.AutoResume
+		case "auto_start":
+			if m.ToggleServiceFunc != nil && m.Settings.General.AutoStart != defaults.General.AutoStart {
+				if err := m.ToggleServiceFunc(defaults.General.AutoStart); err != nil {
+					return fmt.Errorf("failed to update service: %w", err)
+				}
+			}
+			m.Settings.General.AutoStart = defaults.General.AutoStart
 		case "skip_update_check":
 			m.Settings.General.SkipUpdateCheck = defaults.General.SkipUpdateCheck
 
@@ -943,4 +1005,5 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 			m.Settings.Extension.AuthToken = defaults.Extension.AuthToken
 		}
 	}
+	return nil
 }

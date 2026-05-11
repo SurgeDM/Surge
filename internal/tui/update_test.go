@@ -108,6 +108,7 @@ func TestUpdate_DownloadStartedKeepsResuming(t *testing.T) {
 	}
 	if d == nil {
 		t.Fatal("Expected download id-1 to exist")
+		return
 	}
 	if d.paused || d.pausing || !d.resuming {
 		t.Fatalf("Expected paused/pausing cleared and resuming preserved on DownloadStartedMsg, got paused=%v pausing=%v resuming=%v", d.paused, d.pausing, d.resuming)
@@ -121,6 +122,7 @@ func TestUpdate_EnqueueSuccessMergesOptimisticEntryAfterStart(t *testing.T) {
 	m := RootModel{
 		downloads:          []*DownloadModel{optimistic},
 		SelectedDownloadID: "pending-1",
+		pinnedTab:          -1,
 		list:               NewDownloadList(80, 20),
 		logViewport:        viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}

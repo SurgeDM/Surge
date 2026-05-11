@@ -51,10 +51,12 @@ const (
 	URLUpdateState                             // URLUpdateState is 12
 	CategoryManagerState                       // CategoryManagerState is 13
 	QuitConfirmState                           // QuitConfirmState is 14
-	HelpModalState                             // HelpModalState is 15
-	BugReportTargetState                       // BugReportTargetState is 16
-	BugReportSystemDetailsState                // BugReportSystemDetailsState is 17
-	BugReportLogPathState                      // BugReportLogPathState is 18
+	RestartConfirmState                        // RestartConfirmState is 15
+	HelpModalState                             // HelpModalState is 16
+	BugReportTargetState                       // BugReportTargetState is 17
+	BugReportSystemDetailsState                // BugReportSystemDetailsState is 18
+	BugReportLogPathState                      // BugReportLogPathState is 19
+	CategoryResetConfirmState                  // CategoryResetConfirmState is 20
 )
 
 type FilePickerOrigin int
@@ -96,6 +98,7 @@ type DownloadModel struct {
 	state *types.ProgressState // Keep for now if needed for details view, but mostly passive
 
 	done     bool
+	started  bool // Engine has confirmed start
 	err      error
 	paused   bool
 	pausing  bool // UI state: transitioning to pause
@@ -108,6 +111,7 @@ type RootModel struct {
 	height       int
 	state        UIState
 	activeTab    int // 0=Queued, 1=Active, 2=Done
+	pinnedTab    int // -1=None, 0=Queued, 1=Active, 2=Done
 	inputs       []textinput.Model
 	focusedInput int
 	// Service Interface
@@ -147,12 +151,15 @@ type RootModel struct {
 	logFocused  bool           // Whether the log viewport is focused
 
 	// Settings
-	Settings             *config.Settings // Application settings
-	SettingsActiveTab    int              // Active category tab (0-3)
-	SettingsSelectedRow  int              // Selected setting within current tab
-	SettingsIsEditing    bool             // Whether currently editing a value
-	SettingsInput        textinput.Model  // Input for editing string/int values
-	ExtensionTokenCopied bool             // Flash message for "Token Copied!"
+	Settings              *config.Settings // Application settings
+	SettingsBaseline      *config.Settings // Snapshot of settings when entering the settings view
+	StartupConfigWarnings []string         // Config validation warnings to emit on first render
+	SettingsActiveTab     int              // Active category tab (0-3)
+	SettingsSelectedRow   int              // Selected setting within current tab
+	SettingsIsEditing     bool             // Whether currently editing a value
+	SettingsInput         textinput.Model  // Input for editing string/int values
+	settingsError         string           // Current validation error in settings
+	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download
@@ -177,6 +184,7 @@ type RootModel struct {
 	catMgrEditField int                // 0=Name, 1=Description, 2=Pattern, 3=Path
 	catMgrInputs    [4]textinput.Model // Inputs for Name, Description, Pattern, Path
 	catMgrIsNew     bool               // Whether adding a new category
+	catMgrError     string             // Error message for display in category manager
 	// Quit confirm button focus (0 = Yep!, 1 = Nope)
 	quitConfirmFocused int
 
@@ -201,9 +209,12 @@ type RootModel struct {
 
 	logoCache string // Cached logo with gradient applied
 
-	enqueueCtx    context.Context
-	cancelEnqueue context.CancelFunc
-	shuttingDown  bool
+	enqueueCtx       context.Context
+	cancelEnqueue    context.CancelFunc
+	shuttingDown     bool
+	RestartRequested bool // Flag to signal process re-exec after TUI shutdown
+
+	ToggleServiceFunc func(bool) error
 
 	spinner spinner.Model
 }
@@ -281,6 +292,13 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		settings = config.DefaultSettings()
 	}
 
+	// Capture any config warnings produced during load so Init() can surface
+	// them in the activity log once the viewport is ready.
+	var startupConfigWarnings []string
+	if len(settings.StartupWarnings) > 0 {
+		startupConfigWarnings = append([]string(nil), settings.StartupWarnings...)
+	}
+
 	// Override AutoResume if CLI flag provided
 	if noResume {
 		settings.General.AutoResume = false
@@ -311,11 +329,14 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 				switch s.Status {
 				case "completed":
 					dm.done = true
+					dm.started = true
 					dm.progress.SetPercent(1.0)
 				case "error":
 					dm.done = true
+					dm.started = true
 				case "pausing":
 					dm.pausing = true
+					dm.started = true
 				case "paused":
 					if settings.General.AutoResume {
 						dm.resuming = true
@@ -323,10 +344,14 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 					} else {
 						dm.paused = true
 					}
+					dm.started = true
 				case "queued":
 					// Always resume queued items
 					dm.resuming = true
 					dm.paused = true // Will update when resume event received
+					dm.started = false
+				case "downloading":
+					dm.started = true
 				}
 
 				if s.TotalSize > 0 {
@@ -404,6 +429,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	m := RootModel{
 		downloads:             downloads,
+		pinnedTab:             -1,
 		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
 		state:                 DashboardState,
 		filepicker:            fp,
@@ -413,6 +439,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		Orchestrator:          orchestrator,
 		PWD:                   pwd,
 		Settings:              settings,
+		StartupConfigWarnings: startupConfigWarnings,
 		SpeedHistory:          make([]float64, GraphHistoryPoints),                          // 60 points of history (30s at 0.5s interval)
 		logViewport:           viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)), // Default size, will be resized
 		logEntries:            make([]string, 0),
@@ -495,6 +522,14 @@ func (m RootModel) Init() tea.Cmd {
 		})
 	}
 
+	// Emit any config warnings from startup into the activity log
+	if len(m.StartupConfigWarnings) > 0 {
+		warnings := m.StartupConfigWarnings
+		cmds = append(cmds, func() tea.Msg {
+			return startupConfigWarningMsg(warnings)
+		})
+	}
+
 	return tea.Batch(cmds...)
 }
 
@@ -518,12 +553,12 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 		switch m.activeTab {
 		case TabQueued:
 			// Queued includes paused downloads and anything not currently active or done
-			if d.done || (!d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming)) {
+			if d.done || (!d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming || d.started)) {
 				continue
 			}
 		case TabActive:
 			// Active excludes paused downloads and anything without current activity
-			if d.done || d.paused || d.pausing || (d.Speed == 0 && d.Connections == 0 && !d.resuming) {
+			if d.done || d.paused || d.pausing || (d.Speed == 0 && d.Connections == 0 && !d.resuming && !d.started) {
 				continue
 			}
 		case TabDone:

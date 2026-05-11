@@ -8,8 +8,9 @@ import (
 
 // Tab represents a single tab item
 type Tab struct {
-	Label string
-	Count int // If >= 0, displays as "Label (Count)"; if < 0, displays just "Label"
+	Label  string
+	Count  int  // If >= 0, displays as "Label (Count)"; if < 0, displays just "Label"
+	Pinned bool // If true, displays with a pin icon
 }
 
 // RenderTabBar renders a horizontal tab bar with the given tabs
@@ -23,6 +24,10 @@ func RenderTabBar(tabs []Tab, activeIndex int, activeStyle, inactiveStyle lipglo
 			label = fmt.Sprintf("%s (%d)", t.Label, t.Count)
 		} else {
 			label = t.Label
+		}
+
+		if t.Pinned {
+			label = "\u25c6 " + label
 		}
 
 		var tabStyle lipgloss.Style
@@ -56,6 +61,10 @@ func RenderNumberedTabBar(tabs []Tab, activeIndex int, activeStyle, inactiveStyl
 			label = fmt.Sprintf("[%d] %s (%d)", i+1, t.Label, t.Count)
 		} else {
 			label = fmt.Sprintf("[%d] %s", i+1, t.Label)
+		}
+
+		if t.Pinned {
+			label = "\u25c6 " + label
 		}
 
 		var tabStyle lipgloss.Style

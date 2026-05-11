@@ -112,6 +112,7 @@ func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
 	selected := root.GetSelectedDownload()
 	if selected == nil {
 		t.Fatal("expected queued remote download to be selected")
+		return
 	}
 	if selected.ID != "remote-add-id" {
 		t.Fatalf("queued download ID = %q, want remote-add-id", selected.ID)

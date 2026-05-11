@@ -961,8 +961,8 @@ func TestLifecycleManager_Cancel_NotFound(t *testing.T) {
 	})
 
 	err := mgr.Cancel("ghost-id")
-	if err == nil {
-		t.Fatal("expected error for non-existent download")
+	if err != nil {
+		t.Fatalf("expected nil error for non-existent download (idempotent), got %v", err)
 	}
 }
 

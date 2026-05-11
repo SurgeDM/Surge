@@ -206,7 +206,7 @@ func (d *ConcurrentDownloader) applyClientSettings(client *http.Client) {
 	// Since these headers were explicitly provided by the browser for this download, we forward them.
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
-			return fmt.Errorf("stopped after 10 redirects")
+			return types.ErrMaxRedirects
 		}
 		// Copy headers from original request to redirect request
 		if len(via) > 0 {

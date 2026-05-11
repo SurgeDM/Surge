@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/bugreport"
 	"github.com/SurgeDM/Surge/internal/clipboard"
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -325,4 +326,66 @@ func (m RootModel) resetBugReportFlow() RootModel {
 	m.quitConfirmFocused = 0
 	m.state = DashboardState
 	return m
+}
+
+func (m RootModel) updateRestartConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	confirmRestart := func() (tea.Model, tea.Cmd) {
+		if m.cancelEnqueue != nil {
+			m.cancelEnqueue()
+		}
+		m.shuttingDown = true
+		m.RestartRequested = true
+		return m, shutdownCmd(m.Service)
+	}
+	cancelRestart := func() (tea.Model, tea.Cmd) {
+		m.state = DashboardState
+		m.quitConfirmFocused = 0
+		m.SettingsBaseline = nil
+		return m, nil
+	}
+
+	m, decision, handled := m.handleYesNoSelection(msg)
+	if !handled {
+		return m, nil
+	}
+
+	switch decision {
+	case yesNoYes:
+		return confirmRestart()
+	case yesNoNo, yesNoCancel:
+		return cancelRestart()
+	}
+
+	return m, nil
+}
+
+func (m RootModel) updateCategoryResetConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	confirmReset := func() (tea.Model, tea.Cmd) {
+		defaults := config.DefaultSettings()
+		m.Settings.Categories = defaults.Categories
+		m.addLogEntry(LogStyleStarted.Render("\u2714 Categories reset to defaults"))
+		utils.Debug("Categories Reset to Defaults")
+		m.state = SettingsState
+		m.quitConfirmFocused = 0
+		return m, nil
+	}
+	cancelReset := func() (tea.Model, tea.Cmd) {
+		m.state = SettingsState
+		m.quitConfirmFocused = 0
+		return m, nil
+	}
+
+	m, decision, handled := m.handleYesNoSelection(msg)
+	if !handled {
+		return m, nil
+	}
+
+	switch decision {
+	case yesNoYes:
+		return confirmReset()
+	case yesNoNo, yesNoCancel:
+		return cancelReset()
+	}
+
+	return m, nil
 }

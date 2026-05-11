@@ -467,7 +467,7 @@ func (s *LocalDownloadService) AddWithID(url string, path string, filename strin
 
 func (s *LocalDownloadService) add(url string, path string, filename string, mirrors []string, headers map[string]string, requestedID string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
 	if s.Pool == nil {
-		return "", fmt.Errorf("worker pool not initialized")
+		return "", types.ErrPoolNotInit
 	}
 
 	s.settingsMu.RLock()
@@ -489,12 +489,12 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 		id = uuid.New().String()
 	}
 	if st := s.Pool.GetStatus(id); st != nil {
-		return "", fmt.Errorf("download id already exists")
+		return "", types.ErrIDExists
 	}
 	if entry, err := state.GetDownload(id); err != nil {
 		return "", fmt.Errorf("failed to query download state: %w", err)
 	} else if entry != nil {
-		return "", fmt.Errorf("download id already exists")
+		return "", types.ErrIDExists
 	}
 
 	state := types.NewProgressState(id, 0)
@@ -561,7 +561,7 @@ func (s *LocalDownloadService) UpdateURL(id string, newURL string) error {
 	}
 	// Fallback: update pool in-memory only (no DB persistence)
 	if s.Pool == nil {
-		return fmt.Errorf("worker pool not initialized")
+		return types.ErrPoolNotInit
 	}
 	return s.Pool.UpdateURL(id, newURL)
 }
@@ -573,7 +573,7 @@ func (s *LocalDownloadService) Delete(id string) error {
 	}
 	// Fallback when lifecycle hooks not wired (e.g. tests)
 	if s.Pool == nil {
-		return fmt.Errorf("worker pool not initialized")
+		return types.ErrPoolNotInit
 	}
 	s.Pool.Cancel(id)
 	if entry, err := state.GetDownload(id); err == nil && entry != nil {
@@ -628,7 +628,7 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 		return &status, nil
 	}
 
-	return nil, fmt.Errorf("download not found")
+	return nil, types.ErrNotFound
 }
 
 // History returns completed downloads

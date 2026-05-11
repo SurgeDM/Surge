@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/SurgeDM/Surge/internal/config"
 )
 
 func TestResolveClientOutputPath(t *testing.T) {
@@ -135,5 +137,42 @@ func TestResolveAPIConnection_UsesSharedInsecureHTTPSetting(t *testing.T) {
 	}
 	if baseURL != "http://example.com:1700" {
 		t.Fatalf("resolveAPIConnection baseURL = %q, want %q", baseURL, "http://example.com:1700")
+	}
+}
+
+func TestResolveAPIConnection_PairsLocalPortAndTokenFromSameState(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_STATE_HOME", tmpDir)
+	t.Setenv("SURGE_TOKEN", "")
+
+	originalGlobalHost := globalHost
+	originalGlobalToken := globalToken
+	defer func() {
+		globalHost = originalGlobalHost
+		globalToken = originalGlobalToken
+	}()
+	globalHost = ""
+	globalToken = ""
+
+	if err := config.EnsureDirs(); err != nil {
+		t.Fatalf("config.EnsureDirs() failed: %v", err)
+	}
+	if err := writeTokenToFile(filepath.Join(config.GetStateDir(), "token"), "paired-token"); err != nil {
+		t.Fatalf("write token failed: %v", err)
+	}
+	saveActivePort(1777)
+	defer removeActivePort()
+
+	baseURL, token, err := resolveAPIConnection(true)
+	if err != nil {
+		t.Fatalf("resolveAPIConnection() returned error: %v", err)
+	}
+	if baseURL != "http://127.0.0.1:1777" {
+		t.Fatalf("baseURL = %q, want %q", baseURL, "http://127.0.0.1:1777")
+	}
+	if token != "paired-token" {
+		t.Fatalf("token = %q, want %q", token, "paired-token")
 	}
 }

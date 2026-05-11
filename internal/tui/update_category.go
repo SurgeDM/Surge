@@ -9,6 +9,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func (m *RootModel) catMgrBeginAdd() {
@@ -17,6 +18,7 @@ func (m *RootModel) catMgrBeginAdd() {
 	m.catMgrCursor = len(m.Settings.Categories.Categories) - 1
 	m.catMgrIsNew = true
 	m.catMgrEditing = true
+	m.catMgrError = ""
 	m.catMgrEditField = 0
 	m.catMgrInputs[0].SetValue(newCat.Name)
 	m.catMgrInputs[1].SetValue(newCat.Description)
@@ -112,9 +114,11 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 				}
 			}
 			m.catMgrIsNew = false
+			m.catMgrError = ""
 			return m, nil
 		}
 		if key.Matches(msg, m.keys.CategoryMgr.Tab) {
+			m.catMgrError = ""
 			// On Path field, open file picker for directory browsing
 			if m.catMgrEditField == 3 {
 				originalPath := m.catMgrInputs[3].Value()
@@ -133,10 +137,28 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 			m.catMgrInputs[m.catMgrEditField].Focus()
 			return m, nil
 		}
+		if key.Matches(msg, m.keys.CategoryMgr.Up) {
+			m.catMgrError = ""
+			m.catMgrInputs[m.catMgrEditField].Blur()
+			m.catMgrEditField--
+			if m.catMgrEditField < 0 {
+				m.catMgrEditField = 3
+			}
+			m.catMgrInputs[m.catMgrEditField].Focus()
+			return m, nil
+		}
+		if key.Matches(msg, m.keys.CategoryMgr.Down) {
+			m.catMgrError = ""
+			m.catMgrInputs[m.catMgrEditField].Blur()
+			m.catMgrEditField = (m.catMgrEditField + 1) % 4
+			m.catMgrInputs[m.catMgrEditField].Focus()
+			return m, nil
+		}
 		if key.Matches(msg, m.keys.CategoryMgr.Edit) {
 			// Save edits
 			if m.catMgrCursor < 0 || m.catMgrCursor >= len(m.Settings.Categories.Categories) {
-				m.addLogEntry(LogStyleError.Render("\u2716 Invalid category selection"))
+				m.catMgrError = "Invalid category selection"
+				utils.Debug("Category Manager Error: %s", m.catMgrError)
 				return m, nil
 			}
 
@@ -146,19 +168,23 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 			path := strings.TrimSpace(m.catMgrInputs[3].Value())
 
 			if name == "" {
-				m.addLogEntry(LogStyleError.Render("\u2716 Category name cannot be empty"))
+				m.catMgrError = "Category name cannot be empty"
+				utils.Debug("Category Manager Error: %s", m.catMgrError)
 				return m, nil
 			}
 			if pattern == "" {
-				m.addLogEntry(LogStyleError.Render("\u2716 Category pattern cannot be empty"))
+				m.catMgrError = "Category pattern cannot be empty"
+				utils.Debug("Category Manager Error: %s", m.catMgrError)
 				return m, nil
 			}
 			if _, err := regexp.Compile(pattern); err != nil {
-				m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Invalid category pattern: %v", err)))
+				m.catMgrError = fmt.Sprintf("Invalid regex pattern: %v", err)
+				utils.Debug("Category Manager Error: %s", m.catMgrError)
 				return m, nil
 			}
 			if path == "" {
-				m.addLogEntry(LogStyleError.Render("\u2716 Category path cannot be empty"))
+				m.catMgrError = "Category path cannot be empty"
+				utils.Debug("Category Manager Error: %s", m.catMgrError)
 				return m, nil
 			}
 
@@ -168,8 +194,15 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 			target.Pattern = pattern
 			target.Path = filepath.Clean(path)
 
+			if m.catMgrIsNew {
+				utils.Debug("Category Added: %s (Path: %s)", name, path)
+			} else {
+				utils.Debug("Category Updated: %s (Path: %s)", name, path)
+			}
+
 			m.catMgrEditing = false
 			m.catMgrIsNew = false
+			m.catMgrError = ""
 
 			m.blurAllCatInputs()
 
@@ -190,12 +223,14 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 	}
 
 	if key.Matches(msg, m.keys.CategoryMgr.Up) {
+		m.catMgrError = ""
 		if m.catMgrCursor > 0 {
 			m.catMgrCursor--
 		}
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.CategoryMgr.Down) {
+		m.catMgrError = ""
 		if m.catMgrCursor < len(cats) { // len(cats) = "+Add" row
 			m.catMgrCursor++
 		}
@@ -208,11 +243,14 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 	}
 
 	if key.Matches(msg, m.keys.CategoryMgr.Delete) {
+		m.catMgrError = ""
 		if m.catMgrCursor < len(cats) {
+			deletedName := cats[m.catMgrCursor].Name
 			m.Settings.Categories.Categories = append(
 				m.Settings.Categories.Categories[:m.catMgrCursor],
 				m.Settings.Categories.Categories[m.catMgrCursor+1:]...,
 			)
+			utils.Debug("Category Removed: %s", deletedName)
 			if m.catMgrCursor >= len(m.Settings.Categories.Categories) && m.catMgrCursor > 0 {
 				m.catMgrCursor--
 			}

@@ -318,6 +318,42 @@ func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 	}
 }
 
+func TestResolveTokenForConnectTarget_UsesActiveTokenForMatchingLocalPort(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_STATE_HOME", tmpDir)
+	t.Setenv("SURGE_TOKEN", "")
+
+	origToken := globalToken
+	globalToken = ""
+	t.Cleanup(func() {
+		globalToken = origToken
+	})
+
+	if err := config.EnsureDirs(); err != nil {
+		t.Fatalf("Failed to ensure dirs: %v", err)
+	}
+	if err := writeTokenToFile(filepath.Join(config.GetStateDir(), "token"), "connect-token"); err != nil {
+		t.Fatalf("write token failed: %v", err)
+	}
+	saveActivePort(1888)
+	defer removeActivePort()
+
+	target, err := parseConnectTarget("127.0.0.1:1888", false)
+	if err != nil {
+		t.Fatalf("parseConnectTarget returned error: %v", err)
+	}
+
+	token, err := resolveTokenForConnectTarget(target)
+	if err != nil {
+		t.Fatalf("resolveTokenForConnectTarget returned error: %v", err)
+	}
+	if token != "connect-token" {
+		t.Fatalf("token = %q, want %q", token, "connect-token")
+	}
+}
+
 func TestIsPrivateIPHost(t *testing.T) {
 	tests := []struct {
 		host string
@@ -722,6 +758,7 @@ func TestAddCmd_Flags(t *testing.T) {
 	outputFlag := addCmd.Flags().Lookup("output")
 	if outputFlag == nil {
 		t.Fatal("Missing 'output' flag")
+		return
 	}
 	if outputFlag.Shorthand != "o" {
 		t.Errorf("Expected shorthand 'o', got %q", outputFlag.Shorthand)
@@ -730,6 +767,7 @@ func TestAddCmd_Flags(t *testing.T) {
 	batchFlag := addCmd.Flags().Lookup("batch")
 	if batchFlag == nil {
 		t.Fatal("Missing 'batch' flag")
+		return
 	}
 	if batchFlag.Shorthand != "b" {
 		t.Errorf("Expected shorthand 'b', got %q", batchFlag.Shorthand)

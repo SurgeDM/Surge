@@ -10,6 +10,7 @@ func TestNewValidator(t *testing.T) {
 	v := NewValidator()
 	if v == nil {
 		t.Fatal("NewValidator() returned nil")
+		return
 	}
 	if v.allowedSchemes == nil {
 		t.Fatal("NewValidator() did not initialize allowedSchemes")
