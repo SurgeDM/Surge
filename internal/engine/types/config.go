@@ -14,10 +14,9 @@ const (
 	IncompleteSuffix = ".surge"
 )
 
-// Chunk size constants for concurrent downloads
 const (
-	MinChunk     = 2 * MB // Minimum chunk size
-	AlignSize    = 4 * KB // Align chunks to 4KB for filesystem
+	MinChunk     = 2 * MB
+	AlignSize    = 4 * KB
 	WorkerBuffer = 512 * KB
 
 	// Batching constants for worker updates
@@ -25,13 +24,11 @@ const (
 	WorkerBatchInterval = 200 * time.Millisecond // Or until 200ms passes
 )
 
-// Connection limits
 const (
-	PerHostMax     = 64 // Max concurrent connections per host
+	PerDownloadMax = 64 // Max concurrent connections per download (default if not set by user)
 	DialHedgeCount = 4  // Extra connections to dial pre-emptively
 )
 
-// HTTP Client Tuning
 const (
 	DefaultMaxIdleConns          = 100 // Standard fallback
 	DefaultIdleConnTimeout       = 90 * time.Second
@@ -48,7 +45,6 @@ const (
 	PoolMaxConnsPerHost     = 512
 )
 
-// Channel buffer sizes
 const (
 	ProgressChannelBuffer = 100
 )
@@ -74,12 +70,12 @@ type DownloadConfig struct {
 
 // RuntimeConfig holds dynamic settings that can override defaults
 type RuntimeConfig struct {
-	MaxConnectionsPerHost int
-	UserAgent             string
-	ProxyURL              string
-	CustomDNS             string
-	SequentialDownload    bool
-	MinChunkSize          int64
+	MaxConnectionsPerDownload int
+	UserAgent                 string
+	ProxyURL                  string
+	CustomDNS                 string
+	SequentialDownload        bool
+	MinChunkSize              int64
 
 	WorkerBufferSize      int
 	MaxTaskRetries        int
@@ -98,12 +94,12 @@ func (r *RuntimeConfig) GetUserAgent() string {
 	return r.UserAgent
 }
 
-// GetMaxConnectionsPerHost returns configured value or default
-func (r *RuntimeConfig) GetMaxConnectionsPerHost() int {
-	if r == nil || r.MaxConnectionsPerHost <= 0 {
-		return PerHostMax
+// GetMaxConnectionsPerDownload returns configured value or default
+func (r *RuntimeConfig) GetMaxConnectionsPerDownload() int {
+	if r == nil || r.MaxConnectionsPerDownload <= 0 {
+		return PerDownloadMax
 	}
-	return r.MaxConnectionsPerHost
+	return r.MaxConnectionsPerDownload
 }
 
 // GetMinChunkSize returns configured value or default

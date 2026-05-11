@@ -310,11 +310,11 @@ func TestNewSingleDownloader(t *testing.T) {
 }
 
 func TestNewSingleDownloader_TransportReuse(t *testing.T) {
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 8}
-	t1 := engine.DefaultNetworkPool.AcquireTransport(runtime.ProxyURL, runtime.CustomDNS, runtime.GetMaxConnectionsPerHost())
+	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 8}
+	t1 := engine.DefaultNetworkPool.AcquireTransport(runtime.ProxyURL, runtime.CustomDNS, runtime.GetMaxConnectionsPerDownload())
 	defer engine.DefaultNetworkPool.ReleaseTransport(t1)
 
-	t2 := engine.DefaultNetworkPool.AcquireTransport(runtime.ProxyURL, runtime.CustomDNS, runtime.GetMaxConnectionsPerHost())
+	t2 := engine.DefaultNetworkPool.AcquireTransport(runtime.ProxyURL, runtime.CustomDNS, runtime.GetMaxConnectionsPerDownload())
 	defer engine.DefaultNetworkPool.ReleaseTransport(t2)
 
 	if t1 != t2 {
@@ -326,10 +326,10 @@ func TestNewSingleDownloader_TransportIsolationByProxy(t *testing.T) {
 	r1 := &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:8080"}
 	r2 := &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:9090"}
 
-	t1 := engine.DefaultNetworkPool.AcquireTransport(r1.ProxyURL, r1.CustomDNS, r1.GetMaxConnectionsPerHost())
+	t1 := engine.DefaultNetworkPool.AcquireTransport(r1.ProxyURL, r1.CustomDNS, r1.GetMaxConnectionsPerDownload())
 	defer engine.DefaultNetworkPool.ReleaseTransport(t1)
 
-	t2 := engine.DefaultNetworkPool.AcquireTransport(r2.ProxyURL, r2.CustomDNS, r2.GetMaxConnectionsPerHost())
+	t2 := engine.DefaultNetworkPool.AcquireTransport(r2.ProxyURL, r2.CustomDNS, r2.GetMaxConnectionsPerDownload())
 	defer engine.DefaultNetworkPool.ReleaseTransport(t2)
 
 	if t1 == t2 {

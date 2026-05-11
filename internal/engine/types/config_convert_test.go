@@ -13,18 +13,18 @@ import (
 // This test would have caught the ProxyURL bug.
 func TestConvertRuntimeConfig_AllFieldsCopied(t *testing.T) {
 	input := &config.RuntimeConfig{
-		MaxConnectionsPerHost: 48,
-		UserAgent:             "TestAgent/1.0",
-		ProxyURL:              "http://127.0.0.1:8080",
-		SequentialDownload:    true,
-		MinChunkSize:          4 * 1024 * 1024,
-		WorkerBufferSize:      512 * 1024,
-		MaxTaskRetries:        5,
-		SlowWorkerThreshold:   0.25,
-		SlowWorkerGracePeriod: 10 * time.Second,
-		StallTimeout:          7 * time.Second,
-		SpeedEmaAlpha:         0.4,
-		DialHedgeCount:        12,
+		MaxConnectionsPerDownload: 48,
+		UserAgent:                 "TestAgent/1.0",
+		ProxyURL:                  "http://127.0.0.1:8080",
+		SequentialDownload:        true,
+		MinChunkSize:              4 * 1024 * 1024,
+		WorkerBufferSize:          512 * 1024,
+		MaxTaskRetries:            5,
+		SlowWorkerThreshold:       0.25,
+		SlowWorkerGracePeriod:     10 * time.Second,
+		StallTimeout:              7 * time.Second,
+		SpeedEmaAlpha:             0.4,
+		DialHedgeCount:            12,
 	}
 
 	result := ConvertRuntimeConfig(input)
@@ -34,8 +34,8 @@ func TestConvertRuntimeConfig_AllFieldsCopied(t *testing.T) {
 		return
 	}
 
-	if result.MaxConnectionsPerHost != input.MaxConnectionsPerHost {
-		t.Errorf("MaxConnectionsPerHost: got %d, want %d", result.MaxConnectionsPerHost, input.MaxConnectionsPerHost)
+	if result.MaxConnectionsPerDownload != input.MaxConnectionsPerDownload {
+		t.Errorf("MaxConnectionsPerDownload: got %d, want %d", result.MaxConnectionsPerDownload, input.MaxConnectionsPerDownload)
 	}
 	if result.UserAgent != input.UserAgent {
 		t.Errorf("UserAgent: got %q, want %q", result.UserAgent, input.UserAgent)
@@ -75,8 +75,8 @@ func TestConvertRuntimeConfig_AllFieldsCopied(t *testing.T) {
 // TestConvertRuntimeConfig_EmptyProxyURL ensures empty proxy doesn't cause issues.
 func TestConvertRuntimeConfig_EmptyProxyURL(t *testing.T) {
 	input := &config.RuntimeConfig{
-		MaxConnectionsPerHost: 32,
-		ProxyURL:              "",
+		MaxConnectionsPerDownload: 32,
+		ProxyURL:                  "",
 	}
 
 	result := ConvertRuntimeConfig(input)
@@ -91,20 +91,20 @@ func TestConvertRuntimeConfig_EmptyProxyURL(t *testing.T) {
 // This prevents "propagation gaps" when new fields are added to the config.
 func TestConvertRuntimeConfig_Exhaustive(t *testing.T) {
 	input := &config.RuntimeConfig{
-		MaxConnectionsPerHost: 1,
-		MaxConcurrentProbes:   1,
-		UserAgent:             "a",
-		ProxyURL:              "b",
-		CustomDNS:             "c",
-		SequentialDownload:    true,
-		MinChunkSize:          1,
-		WorkerBufferSize:      1,
-		DialHedgeCount:        1,
-		MaxTaskRetries:        1,
-		SlowWorkerThreshold:   0.1,
-		SlowWorkerGracePeriod: 1 * time.Second,
-		StallTimeout:          1 * time.Second,
-		SpeedEmaAlpha:         0.1,
+		MaxConnectionsPerDownload: 1,
+		MaxConcurrentProbes:       1,
+		UserAgent:                 "a",
+		ProxyURL:                  "b",
+		CustomDNS:                 "c",
+		SequentialDownload:        true,
+		MinChunkSize:              1,
+		WorkerBufferSize:          1,
+		DialHedgeCount:            1,
+		MaxTaskRetries:            1,
+		SlowWorkerThreshold:       0.1,
+		SlowWorkerGracePeriod:     1 * time.Second,
+		StallTimeout:              1 * time.Second,
+		SpeedEmaAlpha:             0.1,
 	}
 
 	result := ConvertRuntimeConfig(input)

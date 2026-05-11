@@ -63,7 +63,7 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	ctx1 := context.Background()
 	progressCh := make(chan any, 100)
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 4,
+		MaxConnectionsPerDownload: 4,
 	}
 	// Wire event persistence worker because pause state is persisted in processing layer.
 	mgr := processing.NewLifecycleManager(nil, nil)

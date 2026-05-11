@@ -12,8 +12,8 @@ func TestRuntimeConfig_Getters(t *testing.T) {
 		if got := r.GetUserAgent(); got == "" {
 			t.Error("GetUserAgent should return default, got empty")
 		}
-		if got := r.GetMaxConnectionsPerHost(); got != PerHostMax {
-			t.Errorf("GetMaxConnectionsPerHost = %d, want %d", got, PerHostMax)
+		if got := r.GetMaxConnectionsPerDownload(); got != PerDownloadMax {
+			t.Errorf("GetMaxConnectionsPerDownload = %d, want %d", got, PerDownloadMax)
 		}
 		if got := r.GetMinChunkSize(); got != MinChunk {
 			t.Errorf("GetMinChunkSize = %d, want %d", got, MinChunk)
@@ -41,8 +41,8 @@ func TestRuntimeConfig_Getters(t *testing.T) {
 	t.Run("zero values return defaults", func(t *testing.T) {
 		r := &RuntimeConfig{} // All zero values
 
-		if got := r.GetMaxConnectionsPerHost(); got != PerHostMax {
-			t.Errorf("GetMaxConnectionsPerHost = %d, want %d", got, PerHostMax)
+		if got := r.GetMaxConnectionsPerDownload(); got != PerDownloadMax {
+			t.Errorf("GetMaxConnectionsPerDownload = %d, want %d", got, PerDownloadMax)
 		}
 		if got := r.GetMinChunkSize(); got != MinChunk {
 			t.Errorf("GetMinChunkSize = %d, want %d", got, MinChunk)
@@ -55,19 +55,19 @@ func TestRuntimeConfig_Getters(t *testing.T) {
 
 	t.Run("custom values are returned", func(t *testing.T) {
 		r := &RuntimeConfig{
-			MaxConnectionsPerHost: 128,
-			UserAgent:             "CustomAgent/1.0",
-			MinChunkSize:          4 * MB,
-			WorkerBufferSize:      1 * MB,
-			MaxTaskRetries:        5,
-			SlowWorkerThreshold:   0.75,
-			SlowWorkerGracePeriod: 10 * time.Second,
-			StallTimeout:          15 * time.Second,
-			SpeedEmaAlpha:         0.5,
+			MaxConnectionsPerDownload: 128,
+			UserAgent:                 "CustomAgent/1.0",
+			MinChunkSize:              4 * MB,
+			WorkerBufferSize:          1 * MB,
+			MaxTaskRetries:            5,
+			SlowWorkerThreshold:       0.75,
+			SlowWorkerGracePeriod:     10 * time.Second,
+			StallTimeout:              15 * time.Second,
+			SpeedEmaAlpha:             0.5,
 		}
 
-		if got := r.GetMaxConnectionsPerHost(); got != 128 {
-			t.Errorf("GetMaxConnectionsPerHost = %d, want 128", got)
+		if got := r.GetMaxConnectionsPerDownload(); got != 128 {
+			t.Errorf("GetMaxConnectionsPerDownload = %d, want 128", got)
 		}
 		if got := r.GetUserAgent(); got != "CustomAgent/1.0" {
 			t.Errorf("GetUserAgent = %s, want CustomAgent/1.0", got)
@@ -145,11 +145,11 @@ func TestTimeoutConstants(t *testing.T) {
 }
 
 func TestConnectionLimits(t *testing.T) {
-	if PerHostMax <= 0 {
-		t.Error("PerHostMax should be positive")
+	if PerDownloadMax <= 0 {
+		t.Error("PerDownloadMax should be positive")
 	}
-	if PerHostMax > 256 {
-		t.Error("PerHostMax seems too high")
+	if PerDownloadMax > 256 {
+		t.Error("PerDownloadMax seems too high")
 	}
 	// Check DefaultMaxIdleConns if available (int type)
 	if DefaultMaxIdleConns <= 0 {
@@ -165,7 +165,7 @@ func TestChannelBufferSizes(t *testing.T) {
 
 func TestDownloadConfig_Fields(t *testing.T) {
 	state := NewProgressState("test", 1000)
-	runtime := &RuntimeConfig{MaxConnectionsPerHost: 8}
+	runtime := &RuntimeConfig{MaxConnectionsPerDownload: 8}
 
 	cfg := DownloadConfig{
 		URL:        "https://example.com/file.zip",

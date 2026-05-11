@@ -61,7 +61,7 @@ func TestConcurrentDownloader_CustomHeaders(t *testing.T) {
 
 	destPath := filepath.Join(tmpDir, "headers_test.bin")
 	progState := types.NewProgressState("headers-test", fileSize)
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 2}
+	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 2}
 
 	downloader := NewConcurrentDownloader("headers-test", nil, progState, runtime)
 
@@ -140,8 +140,8 @@ func TestConcurrentDownloader_DefaultUserAgent(t *testing.T) {
 	destPath := filepath.Join(tmpDir, "default_ua_test.bin")
 	progState := types.NewProgressState("ua-test", fileSize)
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 1,
-		UserAgent:             "SurgeDownloader/1.0",
+		MaxConnectionsPerDownload: 1,
+		UserAgent:                 "SurgeDownloader/1.0",
 	}
 
 	downloader := NewConcurrentDownloader("ua-test", nil, progState, runtime)
@@ -203,7 +203,7 @@ func TestConcurrentDownloader_RangeHeaderNotOverridden(t *testing.T) {
 
 	destPath := filepath.Join(tmpDir, "range_test.bin")
 	progState := types.NewProgressState("range-test", fileSize)
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 1}
+	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 1}
 
 	downloader := NewConcurrentDownloader("range-test", nil, progState, runtime)
 
@@ -283,7 +283,7 @@ func TestConcurrentDownloader_HeadersForwardedOnRedirect(t *testing.T) {
 
 	destPath := filepath.Join(tmpDir, "redirect_headers_test.bin")
 	progState := types.NewProgressState("redirect-headers-test", fileSize)
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 1}
+	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 1}
 
 	downloader := NewConcurrentDownloader("redirect-headers-test", nil, progState, runtime)
 

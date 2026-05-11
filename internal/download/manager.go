@@ -288,9 +288,9 @@ func Download(ctx context.Context, url string, outPath string, progressCh chan<-
 	}
 	// Default runtime config
 	cfg.Runtime = &types.RuntimeConfig{
-		MaxConnectionsPerHost: types.PerHostMax,
-		MinChunkSize:          types.MinChunk,
-		WorkerBufferSize:      types.WorkerBuffer,
+		MaxConnectionsPerDownload: types.PerDownloadMax,
+		MinChunkSize:              types.MinChunk,
+		WorkerBufferSize:          types.WorkerBuffer,
 	}
 	return TUIDownload(ctx, &cfg)
 }

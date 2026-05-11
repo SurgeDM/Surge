@@ -145,7 +145,7 @@ func forceSingleConnectionRuntime(svc *LocalDownloadService) {
 	// Keep integration behavior deterministic:
 	// - single worker connection (no hedging/stealing overlap effects),
 	// - conservative health settings to avoid synthetic task cancellation.
-	svc.settings.Network.MaxConnectionsPerHost = 1
+	svc.settings.Network.MaxConnectionsPerDownload = 1
 	svc.settings.Performance.SlowWorkerGracePeriod = 60 * time.Second
 	svc.settings.Performance.StallTimeout = 60 * time.Second
 }

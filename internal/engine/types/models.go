@@ -32,7 +32,7 @@ type DownloadState struct {
 	FileHash string `json:"file_hash,omitempty"` // SHA-256 hash of the .surge file at pause time
 }
 
-// DownloadEntry represents a download in the master list
+// DownloadEntry represents a download in the master list(in DB)
 type DownloadEntry struct {
 	ID          string   `json:"id"`       // Unique ID of the download
 	URLHash     string   `json:"url_hash"` // Hash of URL only (backward compatibility)
@@ -53,7 +53,7 @@ type MasterList struct {
 	Downloads []DownloadEntry `json:"downloads"`
 }
 
-// DownloadStatus represents the transient status of an active download
+// DownloadStatus represents the transient status of an active download(Used in TUI and API)
 type DownloadStatus struct {
 	ID          string  `json:"id"`
 	URL         string  `json:"url"`

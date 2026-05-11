@@ -948,7 +948,7 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 		// Handle Network-related keys
 		switch key {
 		case "max_connections_per_host":
-			m.Settings.Network.MaxConnectionsPerHost = defaults.Network.MaxConnectionsPerHost
+			m.Settings.Network.MaxConnectionsPerDownload = defaults.Network.MaxConnectionsPerDownload
 
 		case "max_concurrent_downloads":
 			m.Settings.Network.MaxConcurrentDownloads = defaults.Network.MaxConcurrentDownloads

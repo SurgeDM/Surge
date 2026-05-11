@@ -67,16 +67,16 @@ type ExtensionSettings struct {
 
 // NetworkSettings contains network connection parameters.
 type NetworkSettings struct {
-	MaxConnectionsPerHost  int    `json:"max_connections_per_host" ui_label:"Max Connections/Host" ui_desc:"Maximum concurrent connections per host (1-64)."`
-	MaxConcurrentDownloads int    `json:"max_concurrent_downloads" ui_label:"Max Concurrent Downloads" ui_desc:"Maximum number of downloads running at once (1-10)." ui_restart:"true"`
-	MaxConcurrentProbes    int    `json:"max_concurrent_probes" ui_label:"Max Concurrent Probes" ui_desc:"Maximum number of simultaneous server probes when adding many downloads at once (1-10)." ui_restart:"true"`
-	UserAgent              string `json:"user_agent" ui_label:"User Agent" ui_desc:"Custom User-Agent string for HTTP requests. Leave empty for default."`
-	ProxyURL               string `json:"proxy_url" ui_label:"Proxy URL" ui_desc:"HTTP/HTTPS proxy URL (e.g. http://127.0.0.1:1700). Leave empty to use system default."`
-	CustomDNS              string `json:"custom_dns" ui_label:"Custom DNS Server" ui_desc:"Set custom DNS (e.g., 1.1.1.1:53, 94.140.14.14:53). Leave empty for system."`
-	SequentialDownload     bool   `json:"sequential_download" ui_label:"Sequential Download" ui_desc:"Download pieces in order (Streaming Mode). May be slower."`
-	MinChunkSize           int64  `json:"min_chunk_size" ui_label:"Min Chunk Size" ui_desc:"Minimum download chunk size in MB (e.g., 2)."`
-	WorkerBufferSize       int    `json:"worker_buffer_size" ui_label:"Worker Buffer Size" ui_desc:"I/O buffer size per worker in KB (e.g., 512)."`
-	DialHedgeCount         int    `json:"dial_hedge_count" ui_label:"Dial Hedge Count" ui_desc:"Number of extra connections to dial pre-emptively to avoid slow connects (0-16)."`
+	MaxConnectionsPerDownload int    `json:"max_connections_per_host" ui_label:"Max Connections/Download" ui_desc:"Maximum concurrent connections per download (1-64)."`
+	MaxConcurrentDownloads    int    `json:"max_concurrent_downloads" ui_label:"Max Concurrent Downloads" ui_desc:"Maximum number of downloads running at once (1-10)." ui_restart:"true"`
+	MaxConcurrentProbes       int    `json:"max_concurrent_probes" ui_label:"Max Concurrent Probes" ui_desc:"Maximum number of simultaneous server probes when adding many downloads at once (1-10)." ui_restart:"true"`
+	UserAgent                 string `json:"user_agent" ui_label:"User Agent" ui_desc:"Custom User-Agent string for HTTP requests. Leave empty for default."`
+	ProxyURL                  string `json:"proxy_url" ui_label:"Proxy URL" ui_desc:"HTTP/HTTPS proxy URL (e.g. http://127.0.0.1:1700). Leave empty to use system default."`
+	CustomDNS                 string `json:"custom_dns" ui_label:"Custom DNS Server" ui_desc:"Set custom DNS (e.g., 1.1.1.1:53, 94.140.14.14:53). Leave empty for system."`
+	SequentialDownload        bool   `json:"sequential_download" ui_label:"Sequential Download" ui_desc:"Download pieces in order (Streaming Mode). May be slower."`
+	MinChunkSize              int64  `json:"min_chunk_size" ui_label:"Min Chunk Size" ui_desc:"Minimum download chunk size in MB (e.g., 2)."`
+	WorkerBufferSize          int    `json:"worker_buffer_size" ui_label:"Worker Buffer Size" ui_desc:"I/O buffer size per worker in KB (e.g., 512)."`
+	DialHedgeCount            int    `json:"dial_hedge_count" ui_label:"Dial Hedge Count" ui_desc:"Number of extra connections to dial pre-emptively to avoid slow connects (0-16)."`
 }
 
 // PerformanceSettings contains performance tuning parameters.
@@ -223,16 +223,16 @@ func DefaultSettings() *Settings {
 			LiveSpeedGraph:    false,
 		},
 		Network: NetworkSettings{
-			MaxConnectionsPerHost:  32,
-			MaxConcurrentDownloads: 3,
-			MaxConcurrentProbes:    3,
-			UserAgent:              "", // Empty means use default UA
-			ProxyURL:               "",
-			CustomDNS:              "",
-			SequentialDownload:     false,
-			MinChunkSize:           2 * MB,
-			WorkerBufferSize:       512 * KB,
-			DialHedgeCount:         4,
+			MaxConnectionsPerDownload: 32,
+			MaxConcurrentDownloads:    3,
+			MaxConcurrentProbes:       3,
+			UserAgent:                 "", // Empty means use default UA
+			ProxyURL:                  "",
+			CustomDNS:                 "",
+			SequentialDownload:        false,
+			MinChunkSize:              2 * MB,
+			WorkerBufferSize:          512 * KB,
+			DialHedgeCount:            4,
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        3,
@@ -328,9 +328,9 @@ func (ns *NetworkSettings) Validate() []string {
 	var warnings []string
 	defaults := DefaultSettings().Network
 
-	if ns.MaxConnectionsPerHost < 1 || ns.MaxConnectionsPerHost > 64 {
-		ns.MaxConnectionsPerHost = defaults.MaxConnectionsPerHost
-		warnings = append(warnings, fmt.Sprintf("Max connections/host reset to default (%d)", defaults.MaxConnectionsPerHost))
+	if ns.MaxConnectionsPerDownload < 1 || ns.MaxConnectionsPerDownload > 64 {
+		ns.MaxConnectionsPerDownload = defaults.MaxConnectionsPerDownload
+		warnings = append(warnings, fmt.Sprintf("Max connections/download reset to default (%d)", defaults.MaxConnectionsPerDownload))
 	}
 	if ns.MaxConcurrentDownloads < 1 || ns.MaxConcurrentDownloads > 10 {
 		ns.MaxConcurrentDownloads = defaults.MaxConcurrentDownloads
@@ -487,38 +487,38 @@ func SaveSettings(s *Settings) error {
 // ToRuntimeConfig converts Settings to a downloader RuntimeConfig
 // This is used to pass user settings to the download engine
 type RuntimeConfig struct {
-	MaxConnectionsPerHost int
-	MaxConcurrentProbes   int
-	UserAgent             string
-	ProxyURL              string
-	CustomDNS             string
-	SequentialDownload    bool
-	MinChunkSize          int64
-	WorkerBufferSize      int
-	DialHedgeCount        int
-	MaxTaskRetries        int
-	SlowWorkerThreshold   float64
-	SlowWorkerGracePeriod time.Duration
-	StallTimeout          time.Duration
-	SpeedEmaAlpha         float64
+	MaxConnectionsPerDownload int
+	MaxConcurrentProbes       int
+	UserAgent                 string
+	ProxyURL                  string
+	CustomDNS                 string
+	SequentialDownload        bool
+	MinChunkSize              int64
+	WorkerBufferSize          int
+	DialHedgeCount            int
+	MaxTaskRetries            int
+	SlowWorkerThreshold       float64
+	SlowWorkerGracePeriod     time.Duration
+	StallTimeout              time.Duration
+	SpeedEmaAlpha             float64
 }
 
 // ToRuntimeConfig creates a RuntimeConfig from user Settings
 func (s *Settings) ToRuntimeConfig() *RuntimeConfig {
 	return &RuntimeConfig{
-		MaxConnectionsPerHost: s.Network.MaxConnectionsPerHost,
-		MaxConcurrentProbes:   s.Network.MaxConcurrentProbes,
-		UserAgent:             s.Network.UserAgent,
-		ProxyURL:              s.Network.ProxyURL,
-		CustomDNS:             s.Network.CustomDNS,
-		SequentialDownload:    s.Network.SequentialDownload,
-		MinChunkSize:          s.Network.MinChunkSize,
-		WorkerBufferSize:      s.Network.WorkerBufferSize,
-		DialHedgeCount:        s.Network.DialHedgeCount,
-		MaxTaskRetries:        s.Performance.MaxTaskRetries,
-		SlowWorkerThreshold:   s.Performance.SlowWorkerThreshold,
-		SlowWorkerGracePeriod: s.Performance.SlowWorkerGracePeriod,
-		StallTimeout:          s.Performance.StallTimeout,
-		SpeedEmaAlpha:         s.Performance.SpeedEmaAlpha,
+		MaxConnectionsPerDownload: s.Network.MaxConnectionsPerDownload,
+		MaxConcurrentProbes:       s.Network.MaxConcurrentProbes,
+		UserAgent:                 s.Network.UserAgent,
+		ProxyURL:                  s.Network.ProxyURL,
+		CustomDNS:                 s.Network.CustomDNS,
+		SequentialDownload:        s.Network.SequentialDownload,
+		MinChunkSize:              s.Network.MinChunkSize,
+		WorkerBufferSize:          s.Network.WorkerBufferSize,
+		DialHedgeCount:            s.Network.DialHedgeCount,
+		MaxTaskRetries:            s.Performance.MaxTaskRetries,
+		SlowWorkerThreshold:       s.Performance.SlowWorkerThreshold,
+		SlowWorkerGracePeriod:     s.Performance.SlowWorkerGracePeriod,
+		StallTimeout:              s.Performance.StallTimeout,
+		SpeedEmaAlpha:             s.Performance.SpeedEmaAlpha,
 	}
 }
