@@ -78,7 +78,8 @@ var (
 	GlobalService           core.DownloadService
 	GlobalLifecycleCleanup  func()
 	serverProgram           *tea.Program
-	startupIntegrityMessage string
+	startupIntegrityMessage  string
+	startupConfigWarnings   []string
 	globalSettings          *config.Settings
 	GlobalLifecycle         *processing.LifecycleManager
 	globalLifecycleMu       sync.Mutex
@@ -381,24 +382,17 @@ func initializeRootLocalRuntime() error {
 
 	startupIntegrityMessage = runStartupIntegrityCheck()
 
+	// Capture config warnings now; publish them after TUI starts so they
+	// arrive in the live event stream rather than being dropped.
+	if globalSettings != nil {
+		startupConfigWarnings = globalSettings.StartupWarnings
+	}
+
 	if err := ensureGlobalLocalServiceAndLifecycle(); err != nil {
 		return fmt.Errorf("error creating lifecycle event stream: %w", err)
 	}
 
-	publishStartupWarnings()
-
 	return nil
-}
-
-func publishStartupWarnings() {
-	if globalSettings == nil || len(globalSettings.StartupWarnings) == 0 {
-		return
-	}
-	for _, warning := range globalSettings.StartupWarnings {
-		_ = GlobalService.Publish(events.SystemLogMsg{
-			Message: warning,
-		})
-	}
 }
 
 func startRootHTTPServer(opts rootRunOptions) (int, func(), error) {
@@ -524,6 +518,12 @@ func startTUI(port int, exitWhenDone bool, noResume bool) error {
 			Message: startupIntegrityMessage,
 		})
 		startupIntegrityMessage = ""
+	}
+	if len(startupConfigWarnings) > 0 && GlobalService != nil {
+		for _, w := range startupConfigWarnings {
+			_ = GlobalService.Publish(events.SystemLogMsg{Message: w})
+		}
+		startupConfigWarnings = nil
 	}
 
 	// Exit-when-done checker for TUI

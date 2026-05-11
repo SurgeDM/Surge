@@ -297,6 +297,14 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.addLogEntry(LogStyleStarted.Render("\u2139 " + msg.Message))
 		}
 		return m, nil
+
+	case startupConfigWarningMsg:
+		for _, w := range msg {
+			if w != "" {
+				m.addLogEntry(LogStyleError.Render("\u26a0 Config: " + w))
+			}
+		}
+		return m, nil
 	}
 
 	return m, nil

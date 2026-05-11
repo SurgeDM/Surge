@@ -33,3 +33,7 @@ type resumeResultMsg struct {
 	id  string
 	err error
 }
+
+// startupConfigWarningMsg carries config validation warnings to display in the
+// activity log during Init, after the viewport is sized and ready.
+type startupConfigWarningMsg []string
