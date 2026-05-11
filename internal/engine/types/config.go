@@ -1,36 +1,27 @@
 package types
 
-import (
-	"time"
-)
+import "time"
 
-// Size constants
 const (
 	KB = 1 << 10
 	MB = 1 << 20
 	GB = 1 << 30
-
-	// IncompleteSuffix is appended to files while downloading
-	IncompleteSuffix = ".surge"
 )
 
 const (
+	IncompleteSuffix = ".surge"
+
 	MinChunk     = 2 * MB
 	AlignSize    = 4 * KB
 	WorkerBuffer = 512 * KB
 
-	// Batching constants for worker updates
-	WorkerBatchSize     = 1 * MB                 // Batch updates until 1MB is downloaded
-	WorkerBatchInterval = 200 * time.Millisecond // Or until 200ms passes
-)
+	WorkerBatchSize     = 1 * MB
+	WorkerBatchInterval = 200 * time.Millisecond
 
-const (
-	PerDownloadMax = 32 // Max concurrent connections per download (default if not set by user)
-	DialHedgeCount = 4  // Extra connections to dial pre-emptively
-)
+	PerDownloadMax = 32
+	DialHedgeCount = 4
 
-const (
-	DefaultMaxIdleConns          = 100 // Standard fallback
+	DefaultMaxIdleConns          = 100
 	DefaultIdleConnTimeout       = 90 * time.Second
 	DefaultTLSHandshakeTimeout   = 10 * time.Second
 	DefaultResponseHeaderTimeout = 15 * time.Second
@@ -39,36 +30,41 @@ const (
 	KeepAliveDuration            = 30 * time.Second
 	ProbeTimeout                 = 30 * time.Second
 
-	// NetworkPool Tuning
 	PoolMaxIdleConns        = 512
 	PoolMaxIdleConnsPerHost = 128
 	PoolMaxConnsPerHost     = 512
-)
 
-const (
+	MaxTaskRetries = 3
+	RetryBaseDelay = 200 * time.Millisecond
+
+	HealthCheckInterval = 1 * time.Second
+	SlowWorkerThreshold = 0.30
+	SlowWorkerGrace     = 5 * time.Second
+	StallTimeout        = 3 * time.Second
+	SpeedEMAAlpha       = 0.3
+
 	ProgressChannelBuffer = 100
 )
 
-// DownloadConfig contains all parameters needed to start a download
 type DownloadConfig struct {
-	URL                string
-	OutputPath         string
-	DestPath           string // Full destination path (for resume state lookup)
-	ID                 string
-	Filename           string
-	IsResume           bool // True if this is explicitly a resume, not a fresh download
-	ProgressCh         chan<- any
-	State              *ProgressState
-	SavedState         *DownloadState    // Pre-loaded state for resume optimization
-	Runtime            *RuntimeConfig    // Dynamic settings from user config
-	Mirrors            []string          // List of mirror URLs (including primary)
-	Headers            map[string]string // Custom HTTP headers to include in download requests
-	IsExplicitCategory bool              // Used to override category routing from TUI
-	TotalSize          int64             // Total size in bytes of the required download
-	SupportsRange      bool              // Indicates whether the server supports range requests for concurrency
+	URL        string
+	OutputPath string
+	DestPath   string // Full destination path used for resume-state lookup.
+	ID         string
+	Filename   string
+	IsResume   bool // Distinguishes an explicit resume from a fresh download.
+	ProgressCh chan<- any
+	State      *ProgressState
+	SavedState *DownloadState // Preloaded resume state avoids a second lookup.
+	Runtime    *RuntimeConfig
+	Mirrors    []string
+	Headers    map[string]string
+
+	IsExplicitCategory bool // Preserves a user-selected category override.
+	TotalSize          int64
+	SupportsRange      bool // Determines whether concurrent ranged downloads are allowed.
 }
 
-// RuntimeConfig holds dynamic settings that can override defaults
 type RuntimeConfig struct {
 	MaxConnectionsPerDownload int
 	UserAgent                 string
@@ -86,7 +82,6 @@ type RuntimeConfig struct {
 	SpeedEmaAlpha         float64
 }
 
-// GetUserAgent returns the configured user agent or the default
 func (r *RuntimeConfig) GetUserAgent() string {
 	if r == nil || r.UserAgent == "" {
 		return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
@@ -94,7 +89,6 @@ func (r *RuntimeConfig) GetUserAgent() string {
 	return r.UserAgent
 }
 
-// GetMaxConnectionsPerDownload returns configured value or default
 func (r *RuntimeConfig) GetMaxConnectionsPerDownload() int {
 	if r == nil || r.MaxConnectionsPerDownload <= 0 {
 		return PerDownloadMax
@@ -102,7 +96,6 @@ func (r *RuntimeConfig) GetMaxConnectionsPerDownload() int {
 	return r.MaxConnectionsPerDownload
 }
 
-// GetMinChunkSize returns configured value or default
 func (r *RuntimeConfig) GetMinChunkSize() int64 {
 	if r == nil || r.MinChunkSize <= 0 {
 		return MinChunk
@@ -110,7 +103,6 @@ func (r *RuntimeConfig) GetMinChunkSize() int64 {
 	return r.MinChunkSize
 }
 
-// GetWorkerBufferSize returns configured value or default
 func (r *RuntimeConfig) GetWorkerBufferSize() int {
 	if r == nil || r.WorkerBufferSize <= 0 {
 		return WorkerBuffer
@@ -118,19 +110,6 @@ func (r *RuntimeConfig) GetWorkerBufferSize() int {
 	return r.WorkerBufferSize
 }
 
-const (
-	MaxTaskRetries = 3
-	RetryBaseDelay = 200 * time.Millisecond
-
-	// Health check constants
-	HealthCheckInterval = 1 * time.Second // How often to check worker health
-	SlowWorkerThreshold = 0.30            // Restart if speed < x times of mean
-	SlowWorkerGrace     = 5 * time.Second // Grace period before checking speed
-	StallTimeout        = 3 * time.Second // Restart if no data for x seconds
-	SpeedEMAAlpha       = 0.3             // EMA smoothing factor
-)
-
-// GetMaxTaskRetries returns configured value or default
 func (r *RuntimeConfig) GetMaxTaskRetries() int {
 	if r == nil || r.MaxTaskRetries < 0 {
 		return MaxTaskRetries
@@ -138,19 +117,13 @@ func (r *RuntimeConfig) GetMaxTaskRetries() int {
 	return r.MaxTaskRetries
 }
 
-// GetDialHedgeCount returns configured value or default
 func (r *RuntimeConfig) GetDialHedgeCount() int {
-	if r == nil {
-		return DialHedgeCount
-	}
-	// Note: 0 is a valid value meaning "disabled"
-	if r.DialHedgeCount < 0 {
+	if r == nil || r.DialHedgeCount < 0 {
 		return DialHedgeCount
 	}
 	return r.DialHedgeCount
 }
 
-// GetSlowWorkerThreshold returns configured value or default
 func (r *RuntimeConfig) GetSlowWorkerThreshold() float64 {
 	if r == nil || r.SlowWorkerThreshold < 0 || r.SlowWorkerThreshold > 1 {
 		return SlowWorkerThreshold
@@ -158,7 +131,6 @@ func (r *RuntimeConfig) GetSlowWorkerThreshold() float64 {
 	return r.SlowWorkerThreshold
 }
 
-// GetSlowWorkerGracePeriod returns configured value or default
 func (r *RuntimeConfig) GetSlowWorkerGracePeriod() time.Duration {
 	if r == nil || r.SlowWorkerGracePeriod < 0 {
 		return SlowWorkerGrace
@@ -166,7 +138,6 @@ func (r *RuntimeConfig) GetSlowWorkerGracePeriod() time.Duration {
 	return r.SlowWorkerGracePeriod
 }
 
-// GetStallTimeout returns configured value or default
 func (r *RuntimeConfig) GetStallTimeout() time.Duration {
 	if r == nil || r.StallTimeout < 0 {
 		return StallTimeout
@@ -174,7 +145,6 @@ func (r *RuntimeConfig) GetStallTimeout() time.Duration {
 	return r.StallTimeout
 }
 
-// GetSpeedEmaAlpha returns configured value or default
 func (r *RuntimeConfig) GetSpeedEmaAlpha() float64 {
 	if r == nil || r.SpeedEmaAlpha < 0 || r.SpeedEmaAlpha > 1 {
 		return SpeedEMAAlpha
