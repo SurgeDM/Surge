@@ -176,7 +176,7 @@ func TestTUIDownload_StartedEventUsesFullDestPath(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- TUIDownload(ctx, &cfg, nil)
+		errCh <- TUIDownload(ctx, &cfg, nil, nil)
 	}()
 
 	deadline := time.After(5 * time.Second)
@@ -232,7 +232,7 @@ func TestTUIDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
 		SupportsRange: true,
 	}
 
-	if err := TUIDownload(context.Background(), &cfg, nil); err != nil {
+	if err := TUIDownload(context.Background(), &cfg, nil, nil); err != nil {
 		t.Fatalf("TUIDownload failed: %v", err)
 	}
 	if cfg.TotalSize != fileSize {
@@ -294,7 +294,7 @@ func TestTUIDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
 		SupportsRange: true,
 	}
 
-	if err := TUIDownload(context.Background(), &cfg, nil); err != nil {
+	if err := TUIDownload(context.Background(), &cfg, nil, nil); err != nil {
 		t.Fatalf("TUIDownload failed: %v", err)
 	}
 
@@ -361,7 +361,7 @@ func TestTUIDownload_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T)
 		}
 	}()
 
-	if err := TUIDownload(context.Background(), &cfg, nil); err != nil {
+	if err := TUIDownload(context.Background(), &cfg, nil, nil); err != nil {
 		t.Fatalf("TUIDownload should have succeeded via fallback: %v", err)
 	}
 

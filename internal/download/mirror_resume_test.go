@@ -109,7 +109,7 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	// Start download and interrupt
 	errCh := make(chan error)
 	go func() {
-		errCh <- download.TUIDownload(ctx1, &cfg, nil)
+		errCh <- download.TUIDownload(ctx1, &cfg, nil, nil)
 	}()
 
 	// Wait until download really started so Pause() has an attached cancel func.
@@ -194,7 +194,7 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	// We can't easily hook into TUIDownload to verify it loaded mirrors without running it.
 	ctx2 := context.Background()
 	go func() {
-		errCh <- download.TUIDownload(ctx2, &resumeCfg, nil)
+		errCh <- download.TUIDownload(ctx2, &resumeCfg, nil, nil)
 	}()
 
 	// Give it enough time to start and restore mirrors from saved state.
