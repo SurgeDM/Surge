@@ -296,8 +296,8 @@ var Keys = KeyMap{
 			key.WithHelp("enter", "use current"),
 		),
 		GotoHome: key.NewBinding(
-			key.WithKeys("h", "H"),
-			key.WithHelp("h", "home"),
+			key.WithKeys("H"),
+			key.WithHelp("H", "home"),
 		),
 		Back: key.NewBinding(
 			key.WithKeys("left"),
@@ -312,8 +312,8 @@ var Keys = KeyMap{
 			key.WithHelp(".", "select highlighted"),
 		),
 		Cancel: key.NewBinding(
-			key.WithKeys("esc"),
-			key.WithHelp("esc", "cancel"),
+			key.WithKeys("esc", "q"),
+			key.WithHelp("esc/q", "cancel"),
 		),
 	},
 	Duplicate: DuplicateKeyMap{
@@ -374,12 +374,12 @@ var Keys = KeyMap{
 			key.WithHelp("5", "extension"),
 		),
 		NextTab: key.NewBinding(
-			key.WithKeys("right"),
-			key.WithHelp("\u2192", "next tab"),
+			key.WithKeys("right", "l"),
+			key.WithHelp("\u2192/l", "next tab"),
 		),
 		PrevTab: key.NewBinding(
-			key.WithKeys("left"),
-			key.WithHelp("\u2190", "prev tab"),
+			key.WithKeys("left", "h"),
+			key.WithHelp("\u2190/h", "prev tab"),
 		),
 		Browse: key.NewBinding(
 			key.WithKeys("tab"),
@@ -390,20 +390,20 @@ var Keys = KeyMap{
 			key.WithHelp("enter", "edit"),
 		),
 		Up: key.NewBinding(
-			key.WithKeys("up"),
-			key.WithHelp("\u2191", "up"),
+			key.WithKeys("up", "k"),
+			key.WithHelp("\u2191/k", "up"),
 		),
 		Down: key.NewBinding(
-			key.WithKeys("down"),
-			key.WithHelp("\u2193", "down"),
+			key.WithKeys("down", "j"),
+			key.WithHelp("\u2193/j", "down"),
 		),
 		Reset: key.NewBinding(
 			key.WithKeys("r", "R"),
 			key.WithHelp("r", "reset"),
 		),
 		Close: key.NewBinding(
-			key.WithKeys("esc"),
-			key.WithHelp("esc", "save & close"),
+			key.WithKeys("esc", "q"),
+			key.WithHelp("esc/q", "save & close"),
 		),
 	},
 	SettingsEditor: SettingsEditorKeyMap{
@@ -450,19 +450,19 @@ var Keys = KeyMap{
 			key.WithHelp("2", "extension report"),
 		),
 		Cancel: key.NewBinding(
-			key.WithKeys("esc"),
-			key.WithHelp("esc", "cancel"),
+			key.WithKeys("esc", "q"),
+			key.WithHelp("esc/q", "cancel"),
 		),
 	},
 	CategoryMgr: CategoryManagerKeyMap{
-		Up:     key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", "up")),
-		Down:   key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", "down")),
+		Up:     key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
+		Down:   key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 		Edit:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "edit")),
 		Add:    key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add")),
 		Delete: key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),
 		Toggle: key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "toggle")),
 		Tab:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next field")),
-		Close:  key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "save & close")),
+		Close:  key.NewBinding(key.WithKeys("esc", "q"), key.WithHelp("esc/q", "save & close")),
 	},
 	QuitConfirm: QuitConfirmKeyMap{
 		Left: key.NewBinding(
