@@ -296,8 +296,8 @@ var Keys = KeyMap{
 			key.WithHelp("enter", "use current"),
 		),
 		GotoHome: key.NewBinding(
-			key.WithKeys("H"),
-			key.WithHelp("H", "home"),
+			key.WithKeys("h", "H"),
+			key.WithHelp("h", "home"),
 		),
 		Back: key.NewBinding(
 			key.WithKeys("left"),
@@ -312,8 +312,8 @@ var Keys = KeyMap{
 			key.WithHelp(".", "select highlighted"),
 		),
 		Cancel: key.NewBinding(
-			key.WithKeys("esc", "q"),
-			key.WithHelp("esc/q", "cancel"),
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "cancel"),
 		),
 	},
 	Duplicate: DuplicateKeyMap{
