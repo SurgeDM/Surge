@@ -464,6 +464,7 @@ body {
 
 /* === Download Item === */
 .download-item {
+  flex-shrink: 0;
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.02), rgba(255, 255, 255, 0)),
     var(--bg-surface);
