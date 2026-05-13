@@ -265,14 +265,14 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		}
 	}()
 
+	// Initialize chunk visualization (must happen BEFORE setupTasks so RestoreBitmap can overwrite it)
+	if d.State != nil {
+		d.State.InitBitmap(fileSize, chunkSize)
+	}
+
 	tasks, err := d.setupTasks(destPath, fileSize, chunkSize, outFile)
 	if err != nil {
 		return err
-	}
-
-	// Initialize chunk visualization
-	if d.State != nil {
-		d.State.InitBitmap(fileSize, chunkSize)
 	}
 
 	queue := NewTaskQueue()
@@ -287,9 +287,11 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	// Handle pause request: must return types.ErrPaused to prevent finalization
 	if d.State != nil && d.State.IsPaused() {
 		pauseErr := d.handlePause(destPath, fileSize, queue, candidateMirrors)
-		if pauseErr != nil {
-			return pauseErr
+		if pauseErr == nil {
+			// Pause was requested at completion boundary, so handlePause finalized it.
+			return d.syncFile(outFile)
 		}
+		return pauseErr
 	}
 
 	// Handle cancel: context was cancelled but not via Pause()
@@ -600,13 +602,14 @@ func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *ht
 		return 0, fmt.Errorf("failed to create concurrent bootstrap request: %w", err)
 	}
 
-	// Forward custom headers (essential for authenticated mirrors)
+	// Preserve auth/session cookies from the browser across the bootstrap request;
+	// the server may reject unauthenticated probes with 401/403.
 	for key, val := range d.Headers {
 		if key != "Range" {
 			req.Header.Set(key, val)
 		}
 	}
-	// Ensure User-Agent and Range are set
+	// Range must come after custom headers so a caller-supplied Range can't override the probe byte
 	req.Header.Set("User-Agent", d.Runtime.GetUserAgent())
 	req.Header.Set("Range", "bytes=0-0")
 
