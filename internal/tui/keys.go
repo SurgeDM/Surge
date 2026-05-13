@@ -169,12 +169,12 @@ var Keys = KeyMap{
 			key.WithHelp("e", "done tab"),
 		),
 		NextTab: key.NewBinding(
-			key.WithKeys("tab", "right"),
-			key.WithHelp("tab/→", "next tab"),
+			key.WithKeys("tab", "right", "l"),
+			key.WithHelp("tab/→/l", "next tab"),
 		),
 		PrevTab: key.NewBinding(
-			key.WithKeys("left"),
-			key.WithHelp("←", "prev tab"),
+			key.WithKeys("shift+tab", "left", "h"),
+			key.WithHelp("←/h", "prev tab"),
 		),
 		Add: key.NewBinding(
 			key.WithKeys("a", "n"),
@@ -237,12 +237,12 @@ var Keys = KeyMap{
 			key.WithHelp("t", "pin tab"),
 		),
 		Up: key.NewBinding(
-			key.WithKeys("up"),
-			key.WithHelp("\u2191", "up"),
+			key.WithKeys("up", "k"),
+			key.WithHelp("\u2191/k", "up"),
 		),
 		Down: key.NewBinding(
-			key.WithKeys("down"),
-			key.WithHelp("\u2193", "down"),
+			key.WithKeys("down", "j"),
+			key.WithHelp("\u2193/j", "down"),
 		),
 		LogUp: key.NewBinding(
 			key.WithKeys("up"),
@@ -319,16 +319,16 @@ var Keys = KeyMap{
 	},
 	Duplicate: DuplicateKeyMap{
 		Continue: key.NewBinding(
-			key.WithKeys("c", "C"),
-			key.WithHelp("c", "continue"),
+			key.WithKeys("c", "C", "enter"),
+			key.WithHelp("c/enter", "continue"),
 		),
 		Focus: key.NewBinding(
-			key.WithKeys("f", "F"),
-			key.WithHelp("f", "focus existing"),
+			key.WithKeys("f", "F", "down", "j"),
+			key.WithHelp("f/j", "focus existing"),
 		),
 		Cancel: key.NewBinding(
-			key.WithKeys("x", "X", "esc"),
-			key.WithHelp("x", "cancel"),
+			key.WithKeys("x", "X", "esc", "q"),
+			key.WithHelp("x/q", "cancel"),
 		),
 	},
 	Extension: ExtensionKeyMap{
@@ -341,12 +341,12 @@ var Keys = KeyMap{
 			key.WithHelp("tab", "browse path"),
 		),
 		Next: key.NewBinding(
-			key.WithKeys("down"),
-			key.WithHelp("\u2193", "next field"),
+			key.WithKeys("down", "j", "tab"),
+			key.WithHelp("\u2193/j", "next field"),
 		),
 		Prev: key.NewBinding(
-			key.WithKeys("up"),
-			key.WithHelp("\u2191", "prev field"),
+			key.WithKeys("up", "k", "shift+tab"),
+			key.WithHelp("\u2191/k", "prev field"),
 		),
 		Cancel: key.NewBinding(
 			key.WithKeys("esc"),

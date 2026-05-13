@@ -186,6 +186,26 @@ func (m RootModel) updateBugReportTarget(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 		return m, nil
 	}
 
+	m, decision, handled := m.handleYesNoSelection(msg)
+	if handled {
+		switch decision {
+		case yesNoYes:
+			m.bugReportIncludeSystemInfo = true
+			m.bugReportIncludeLatestLog = true
+			m.quitConfirmFocused = 0
+			m.state = BugReportSystemDetailsState
+			return m, nil
+		case yesNoNo:
+			reportURL := bugreport.ExtensionBugReportURL()
+			m = m.tryOpenBugReportURL(reportURL)
+			m = m.resetBugReportFlow()
+			return m, nil
+		case yesNoCancel:
+			m = m.resetBugReportFlow()
+			return m, nil
+		}
+	}
+
 	if key.Matches(msg, m.keys.BugReport.Core) {
 		m.bugReportIncludeSystemInfo = true
 		m.bugReportIncludeLatestLog = true
