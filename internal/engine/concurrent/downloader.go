@@ -2,6 +2,7 @@ package concurrent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -213,107 +214,43 @@ func (d *ConcurrentDownloader) applyClientSettings(client *http.Client) {
 func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, candidateMirrors []string, activeMirrors []string, destPath string, fileSize int64) error {
 	utils.Debug("ConcurrentDownloader.Download: %s -> %s (size: %d, mirrors: %d)", rawurl, destPath, fileSize, len(activeMirrors))
 
-	// Store URL and path for pause/resume (final path without .surge)
-	d.URL = rawurl
-	d.DestPath = destPath
+	d.initMirrorStatus(rawurl, candidateMirrors, activeMirrors, destPath)
 
-	// Initialize mirror status in state
-	if d.State != nil {
-		d.State.SetURL(rawurl)
-		d.State.SetDestPath(destPath)
-
-		var statuses []types.MirrorStatus
-		// Add primary
-		statuses = append(statuses, types.MirrorStatus{URL: rawurl, Active: true})
-
-		// Add active mirrors (marked active)
-		activeMap := make(map[string]bool)
-		for _, m := range activeMirrors {
-			activeMap[m] = true
-			if m != rawurl {
-				statuses = append(statuses, types.MirrorStatus{URL: m, Active: true})
-			}
-		}
-
-		// Add inactive/failed mirrors (from candidate list that aren't active)
-		for _, m := range candidateMirrors {
-			if !activeMap[m] && m != rawurl {
-				// Mark as Error since they failed probing (passed as candidates but not active)
-				statuses = append(statuses, types.MirrorStatus{URL: m, Active: false, Error: true})
-			}
-		}
-
-		d.State.SetMirrors(statuses)
-	}
-
-	// Working file has .surge suffix until download completes
 	workingPath := destPath + types.IncompleteSuffix
-
-	// Create cancellable context for pause support
 	downloadCtx, cancel := context.WithCancel(ctx)
-
-	// Helper synchronization
-	var wgHelpers sync.WaitGroup
-	// Ensure we wait for helpers to finish; run wait AFTER cancel (LIFO: cancel runs first)
-	defer wgHelpers.Wait()
-	defer cancel()
 
 	if d.State != nil {
 		d.State.SetCancelFunc(cancel)
 	}
 
-	// Acquire a single stable transport for the entire download session.
-	var proxyURL, customDNS string
-	if d.Runtime != nil {
-		proxyURL = d.Runtime.ProxyURL
-		customDNS = d.Runtime.CustomDNS
-	}
-
-	// Standardize on PoolMaxConnsPerHost for probes to match the eventual download path
-	transport := engine.DefaultNetworkPool.AcquireTransport(proxyURL, customDNS, types.PoolMaxConnsPerHost)
+	client, transport := d.setupNetwork()
+	// Release transport back to the pool ONLY after all helpers and workers are joined (LIFO: runs last)
 	defer engine.DefaultNetworkPool.ReleaseTransport(transport)
 
-	bootstrapClient := &http.Client{Transport: transport}
-	d.applyClientSettings(bootstrapClient)
+	// Helper synchronization for monitors and balancer
+	var wgHelpers sync.WaitGroup
+	// Ensure we wait for helpers to finish; run wait AFTER cancel (LIFO: Wait runs second, cancel runs first)
+	defer wgHelpers.Wait()
+	defer cancel()
 
-	// Determine connections and chunk size
+	// Ensure we have the total file size
 	if fileSize <= 0 {
-		discoveredSize, err := d.bootstrapMetadata(downloadCtx, bootstrapClient, rawurl)
+		var err error
+		fileSize, err = d.bootstrapMetadata(downloadCtx, client, rawurl)
 		if err != nil {
 			return err
 		}
-		fileSize = discoveredSize
 	}
 	d.TotalSize = fileSize
 
 	numConns := d.getInitialConnections(fileSize)
 	chunkSize := d.determineChunkSize(fileSize, numConns)
 
-	// Create tuned HTTP client for concurrent downloads reusing the same transport
-	client := &http.Client{Transport: transport}
-	d.applyClientSettings(client)
+	workerMirrors := d.getWorkerMirrors(activeMirrors)
 
-	// Initialize chunk visualization
-	if d.State != nil {
-		d.State.InitBitmap(fileSize, chunkSize)
-	}
-
-	// Prepare list of targets for workers AND pre-warming
-	var workerMirrors []string
-	workerMirrors = append(workerMirrors, rawurl)
-	for _, v := range activeMirrors {
-		if v != rawurl {
-			workerMirrors = append(workerMirrors, v)
-		}
-	}
-	if len(workerMirrors) == 0 {
-		workerMirrors = []string{rawurl}
-	}
-
-	// HEDGED DIALING: Pre-warm connections to bypass slow dials
+	// Pre-warm connections if configured
 	hedgeCount := d.Runtime.GetDialHedgeCount()
 	if hedgeCount > 0 {
-		utils.Debug("Pre-warming %d connections (hedge=%d)", numConns, hedgeCount)
 		d.prewarmConnections(downloadCtx, client, numConns, hedgeCount, workerMirrors)
 	}
 
@@ -323,162 +260,240 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		return fmt.Errorf("failed to open working file: %w", err)
 	}
 	defer func() {
-		if err := outFile.Close(); err != nil {
-			utils.Debug("Error closing file: %v", err)
+		if outFile != nil {
+			_ = outFile.Close()
 		}
 	}()
-	finalizeCompletedDownload := func() error {
-		// Final sync
-		if err := outFile.Sync(); err != nil {
-			return fmt.Errorf("failed to sync file: %w", err)
-		}
 
-		// Close file before renaming
-		_ = outFile.Close()
-
-		return nil
+	tasks, err := d.setupTasks(destPath, fileSize, chunkSize, outFile)
+	if err != nil {
+		return err
 	}
 
-	tasks := createTasks(fileSize, chunkSize)
-
-	// Check for saved state BEFORE truncating (resume case)
-	savedState, err := state.LoadState(rawurl, destPath)
-	isResume := err == nil && savedState != nil && len(savedState.Tasks) > 0
-
-	if isResume {
-		// Resume: use saved tasks and restore downloaded counter
-		tasks = savedState.Tasks
-		if d.State != nil {
-			d.State.Downloaded.Store(savedState.Downloaded)
-			d.State.VerifiedProgress.Store(savedState.Downloaded)
-			// Restore elapsed time from previous sessions
-			d.State.SetSavedElapsed(time.Duration(savedState.Elapsed))
-			// Fix speed spike: sync session start so we don't count previous bytes as new speed
-			d.State.SyncSessionStart()
-
-			// RESTORE CHUNK BITMAP if available
-			if len(savedState.ChunkBitmap) > 0 && savedState.ActualChunkSize > 0 {
-				d.State.RestoreBitmap(savedState.ChunkBitmap, savedState.ActualChunkSize)
-
-				// Reconstruct internal progress from remaining tasks to ensure partial chunks are handled correctly
-				d.State.RecalculateProgress(savedState.Tasks)
-				// Keep counters aligned after reconstruction to avoid session speed spikes.
-				d.State.Downloaded.Store(d.State.VerifiedProgress.Load())
-				d.State.SyncSessionStart()
-
-				utils.Debug("Restored chunk map: size %d", savedState.ActualChunkSize)
-			}
-		}
-		utils.Debug("Resuming from saved state: %d tasks, %d bytes downloaded", len(tasks), savedState.Downloaded)
-	} else {
-		// Fresh download: preallocate file and create new tasks
-		if err := outFile.Truncate(fileSize); err != nil {
-			return fmt.Errorf("failed to preallocate file: %w", err)
-		}
-		// Robustness: ensure state counter starts at 0 for fresh download
-		if d.State != nil {
-			d.State.Downloaded.Store(0)
-			d.State.SyncSessionStart()
-		}
+	// Initialize chunk visualization
+	if d.State != nil {
+		d.State.InitBitmap(fileSize, chunkSize)
 	}
+
 	queue := NewTaskQueue()
 	queue.PushMultiple(tasks)
 
-	// Start balancer goroutine for dynamic chunk splitting
-	balancerCtx, cancelBalancer := context.WithCancel(downloadCtx)
-	defer cancelBalancer()
+	// Start monitoring and balancing helpers
+	d.startHelpers(downloadCtx, &wgHelpers, queue, fileSize, numConns)
 
-	wgHelpers.Add(1)
+	// Execute download workers
+	downloadErr := d.executeWorkers(downloadCtx, client, outFile, queue, fileSize, workerMirrors, numConns)
+
+	// Handle pause request: must return types.ErrPaused to prevent finalization
+	if d.State != nil && d.State.IsPaused() {
+		pauseErr := d.handlePause(destPath, fileSize, queue, candidateMirrors)
+		if pauseErr != nil {
+			return pauseErr
+		}
+	}
+
+	// Handle cancel: context was cancelled but not via Pause()
+	// Propagate cancellation so callers don't treat this as a successful completion.
+	if downloadCtx.Err() == context.Canceled {
+		return context.Canceled
+	}
+	if downloadErr != nil {
+		return downloadErr
+	}
+
+	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
+	return d.syncFile(outFile)
+}
+
+func (d *ConcurrentDownloader) initMirrorStatus(rawurl string, candidateMirrors []string, activeMirrors []string, destPath string) {
+	d.URL = rawurl
+	d.DestPath = destPath
+
+	if d.State == nil {
+		return
+	}
+
+	d.State.SetURL(rawurl)
+	d.State.SetDestPath(destPath)
+
+	var statuses []types.MirrorStatus
+	statuses = append(statuses, types.MirrorStatus{URL: rawurl, Active: true})
+
+	activeMap := make(map[string]bool)
+	for _, m := range activeMirrors {
+		activeMap[m] = true
+		if m != rawurl {
+			statuses = append(statuses, types.MirrorStatus{URL: m, Active: true})
+		}
+	}
+
+	for _, m := range candidateMirrors {
+		if !activeMap[m] && m != rawurl {
+			statuses = append(statuses, types.MirrorStatus{URL: m, Active: false, Error: true})
+		}
+	}
+
+	d.State.SetMirrors(statuses)
+}
+
+func (d *ConcurrentDownloader) setupNetwork() (*http.Client, *http.Transport) {
+	var proxyURL, customDNS string
+	if d.Runtime != nil {
+		proxyURL = d.Runtime.ProxyURL
+		customDNS = d.Runtime.CustomDNS
+	}
+
+	transport := engine.DefaultNetworkPool.AcquireTransport(proxyURL, customDNS, types.PoolMaxConnsPerHost)
+	client := &http.Client{Transport: transport}
+	d.applyClientSettings(client)
+	return client, transport
+}
+
+func (d *ConcurrentDownloader) getWorkerMirrors(activeMirrors []string) []string {
+	mirrors := make([]string, 0, len(activeMirrors)+1)
+	mirrors = append(mirrors, d.URL)
+	for _, v := range activeMirrors {
+		if v != d.URL {
+			mirrors = append(mirrors, v)
+		}
+	}
+	return mirrors
+}
+
+func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize int64, outFile *os.File) ([]types.Task, error) {
+	savedState, err := state.LoadState(d.URL, destPath)
+	isResume := err == nil && savedState != nil && len(savedState.Tasks) > 0
+
+	if isResume {
+		if d.State != nil {
+			d.State.Downloaded.Store(savedState.Downloaded)
+			d.State.VerifiedProgress.Store(savedState.Downloaded)
+			d.State.SetSavedElapsed(time.Duration(savedState.Elapsed))
+			d.State.SyncSessionStart()
+
+			if len(savedState.ChunkBitmap) > 0 && savedState.ActualChunkSize > 0 {
+				d.State.RestoreBitmap(savedState.ChunkBitmap, savedState.ActualChunkSize)
+				d.State.RecalculateProgress(savedState.Tasks)
+				d.State.Downloaded.Store(d.State.VerifiedProgress.Load())
+				d.State.SyncSessionStart()
+				utils.Debug("Restored chunk map: size %d", savedState.ActualChunkSize)
+			}
+		}
+		utils.Debug("Resuming from saved state: %d tasks, %d bytes downloaded", len(savedState.Tasks), savedState.Downloaded)
+		return savedState.Tasks, nil
+	}
+
+	if err := outFile.Truncate(fileSize); err != nil {
+		return nil, fmt.Errorf("failed to preallocate file: %w", err)
+	}
+	if d.State != nil {
+		d.State.Downloaded.Store(0)
+		d.State.SyncSessionStart()
+	}
+	return createTasks(fileSize, chunkSize), nil
+}
+
+func (d *ConcurrentDownloader) startHelpers(ctx context.Context, wg *sync.WaitGroup, queue *TaskQueue, fileSize int64, numConns int) {
+	// Balancer for dynamic chunk splitting and work stealing
+	wg.Add(1)
 	go func() {
-		defer wgHelpers.Done()
-		ticker := time.NewTicker(200 * time.Millisecond)
-		defer ticker.Stop()
+		defer wg.Done()
+		d.runBalancer(ctx, queue)
+	}()
 
-		for {
-			select {
-			case <-balancerCtx.Done():
-				return
-			case <-ticker.C:
-				// Aggressively fill idle workers
-				// Continue splitting/stealing as long as we have idle workers and are making progress
-				for queue.IdleWorkers() > 0 {
-					didWork := false
-					if queue.Len() == 0 {
-						// Try to steal from an active worker
-						if d.StealWork(queue) {
-							didWork = true
-						}
-					}
+	// Monitor for download completion
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		d.runCompletionMonitor(ctx, queue, fileSize, numConns)
+	}()
 
-					// If stealing failed (chunks too small), try hedged request:
-					// Duplicate a task so an idle worker races on a fresh connection
-					if !didWork && queue.Len() == 0 {
-						if d.HedgeWork(queue) {
-							didWork = true
-						}
-					}
+	// Health monitor for detecting slow workers
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		d.runHealthMonitor(ctx)
+	}()
+}
 
-					// If we couldn't split, steal, or hedge anything, stop trying for this tick
-					if !didWork {
-						break
+func (d *ConcurrentDownloader) runBalancer(ctx context.Context, queue *TaskQueue) {
+	ticker := time.NewTicker(200 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			for queue.IdleWorkers() > 0 {
+				didWork := false
+				if queue.Len() == 0 {
+					if d.StealWork(queue) {
+						didWork = true
 					}
+				}
+				if !didWork && queue.Len() == 0 {
+					if d.HedgeWork(queue) {
+						didWork = true
+					}
+				}
+				if !didWork {
+					break
 				}
 			}
 		}
-	}()
+	}
+}
 
-	// Monitor for completion
-	wgHelpers.Add(1)
-	go func() {
-		defer wgHelpers.Done()
-		ticker := time.NewTicker(50 * time.Millisecond)
-		defer ticker.Stop()
+func (d *ConcurrentDownloader) runCompletionMonitor(ctx context.Context, queue *TaskQueue, fileSize int64, numConns int) {
+	ticker := time.NewTicker(50 * time.Millisecond)
+	defer ticker.Stop()
 
-		for {
-			select {
-			case <-ctx.Done():
+	for {
+		select {
+		case <-ctx.Done():
+			queue.Close()
+			return
+		case <-ticker.C:
+			// Completion condition:
+			// 1. Queue is empty (no pending retries)
+			// AND
+			// 2. All workers are idle OR we've accounted for all bytes
+			// Ensure queue is empty (no pending retries) before considering byte count.
+			// This protects against cutting off active retries even if byte count seems high (due to overlaps etc).
+			isDone := queue.Len() == 0 && (int(queue.IdleWorkers()) == numConns || (d.State != nil && d.State.Downloaded.Load() >= fileSize))
+			if isDone {
 				queue.Close()
 				return
-			case <-balancerCtx.Done():
-				queue.Close()
-				return
-			case <-ticker.C:
-				// Ensure queue is empty (no pending retries) before considering byte count.
-				// This protects against cutting off active retries even if byte count seems high (due to overlaps etc).
-				if queue.Len() == 0 && (int(queue.IdleWorkers()) == numConns || d.State.Downloaded.Load() >= fileSize) {
-					queue.Close()
-					return
-				}
 			}
 		}
-	}()
+	}
+}
 
-	// Health monitor: detect slow workers
-	wgHelpers.Add(1)
-	go func() {
-		defer wgHelpers.Done()
-		ticker := time.NewTicker(types.HealthCheckInterval) // Fixed: using types constant
-		defer ticker.Stop()
+func (d *ConcurrentDownloader) runHealthMonitor(ctx context.Context) {
+	ticker := time.NewTicker(types.HealthCheckInterval)
+	defer ticker.Stop()
 
-		for {
-			select {
-			case <-balancerCtx.Done():
-				return
-			case <-ticker.C:
-				d.checkWorkerHealth()
-			}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			d.checkWorkerHealth()
 		}
-	}()
+	}
+}
 
-	// Start workers
+func (d *ConcurrentDownloader) executeWorkers(ctx context.Context, client *http.Client, outFile *os.File, queue *TaskQueue, fileSize int64, workerMirrors []string, numConns int) error {
 	var wg sync.WaitGroup
 	workerErrors := make(chan error, numConns)
 
+	// Start workers
 	for i := 0; i < numConns; i++ {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
-			err := d.worker(downloadCtx, workerID, workerMirrors, outFile, queue, fileSize, client)
+			err := d.worker(ctx, workerID, workerMirrors, outFile, queue, fileSize, client)
 			if err != nil && err != context.Canceled {
 				workerErrors <- err
 			}
@@ -494,91 +509,89 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Check for errors or pause
 	var downloadErr error
+	seenErrors := make(map[string]bool)
 	for err := range workerErrors {
 		if err != nil {
-			downloadErr = err
-		}
-	}
-
-	// Handle pause: state saved
-	if d.State != nil && d.State.IsPaused() {
-		// 1. Collect active tasks as remaining work FIRST
-		var activeRemaining []types.Task
-		d.activeMu.Lock()
-		for _, active := range d.activeTasks {
-			if remaining := active.RemainingTask(); remaining != nil {
-				activeRemaining = append(activeRemaining, *remaining)
+			errStr := err.Error()
+			if !seenErrors[errStr] {
+				downloadErr = errors.Join(downloadErr, err)
+				seenErrors[errStr] = true
 			}
 		}
-		d.activeMu.Unlock()
+	}
+	return downloadErr
+}
 
-		// 2. Collect remaining tasks from queue
-		remainingTasks := queue.DrainRemaining()
-		remainingTasks = append(remainingTasks, activeRemaining...)
-
-		// Calculate Downloaded from remaining tasks (ensures consistency)
-		var remainingBytes int64
-		for _, task := range remainingTasks {
-			remainingBytes += task.Length
+func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queue *TaskQueue, candidateMirrors []string) error {
+	// 1. Collect active tasks as remaining work FIRST
+	var activeRemaining []types.Task
+	d.activeMu.Lock()
+	for _, active := range d.activeTasks {
+		if remaining := active.RemainingTask(); remaining != nil {
+			activeRemaining = append(activeRemaining, *remaining)
 		}
-		if remainingBytes == 0 {
-			utils.Debug("Download pause requested at completion boundary; finalizing as completed")
-			d.State.Resume()
-			_, _ = d.State.FinalizeSession(fileSize)
-			return finalizeCompletedDownload()
+	}
+	d.activeMu.Unlock()
+
+	// 2. Collect remaining tasks from queue
+	remainingTasks := queue.DrainRemaining()
+	remainingTasks = append(remainingTasks, activeRemaining...)
+
+	// Calculate Downloaded from remaining tasks (ensures consistency)
+	var remainingBytes int64
+	for _, task := range remainingTasks {
+		remainingBytes += task.Length
+	}
+	if remainingBytes == 0 {
+		utils.Debug("Download pause requested at completion boundary; finalizing as completed")
+		d.State.Resume()
+		_, _ = d.State.FinalizeSession(fileSize)
+		return nil
+	}
+	computedDownloaded := fileSize - remainingBytes
+
+	// Calculate total elapsed time
+	totalElapsed := d.State.FinalizePauseSession(computedDownloaded)
+
+	// Get persisted bitmap data
+	bitmap, _, _, chunkSize, _ := d.State.GetBitmapSnapshot(false)
+
+	// Save state for resume (use computed value for consistency)
+	s := &types.DownloadState{
+		URL:             d.URL,
+		ID:              d.ID,
+		DestPath:        destPath,
+		TotalSize:       fileSize,
+		Downloaded:      computedDownloaded,
+		Tasks:           remainingTasks,
+		Filename:        filepath.Base(destPath),
+		Elapsed:         totalElapsed.Nanoseconds(),
+		Mirrors:         candidateMirrors,
+		ChunkBitmap:     bitmap,
+		ActualChunkSize: chunkSize,
+	}
+	if d.ProgressChan != nil {
+		d.ProgressChan <- events.DownloadPausedMsg{
+			DownloadID: d.ID,
+			Filename:   filepath.Base(destPath),
+			Downloaded: computedDownloaded,
+			State:      s,
 		}
-		computedDownloaded := fileSize - remainingBytes
-
-		// Calculate total elapsed time
-		totalElapsed := d.State.FinalizePauseSession(computedDownloaded)
-		var chunkBitmap []byte
-		var actualChunkSize int64
-
-		// Get persisted bitmap data
-		bitmap, _, _, chunkSize, _ := d.State.GetBitmapSnapshot(false)
-		chunkBitmap = bitmap
-		actualChunkSize = chunkSize
-
-		// Save state for resume (use computed value for consistency)
-		s := &types.DownloadState{
-			URL:             d.URL,
-			ID:              d.ID,
-			DestPath:        destPath,
-			TotalSize:       fileSize,
-			Downloaded:      computedDownloaded,
-			Tasks:           remainingTasks,
-			Filename:        filepath.Base(destPath),
-			Elapsed:         totalElapsed.Nanoseconds(),
-			Mirrors:         candidateMirrors,
-			ChunkBitmap:     chunkBitmap,
-			ActualChunkSize: actualChunkSize,
-		}
-		if d.ProgressChan != nil {
-			d.ProgressChan <- events.DownloadPausedMsg{
-				DownloadID: d.ID,
-				Filename:   filepath.Base(destPath),
-				Downloaded: computedDownloaded,
-				State:      s,
-			}
-		}
-
-		utils.Debug("Download paused, state saved (Downloaded=%d, RemainingTasks=%d, RemainingBytes=%d)",
-			computedDownloaded, len(remainingTasks), remainingBytes)
-		return types.ErrPaused // Signal valid pause to caller
 	}
 
-	// Handle cancel: context was cancelled but not via Pause()
-	// Propagate cancellation so callers don't treat this as a successful completion.
-	if downloadCtx.Err() == context.Canceled {
-		return context.Canceled
-	}
+	utils.Debug("Download paused, state saved (Downloaded=%d, RemainingTasks=%d, RemainingBytes=%d)",
+		computedDownloaded, len(remainingTasks), remainingBytes)
+	return types.ErrPaused
+}
 
-	if downloadErr != nil {
-		return downloadErr
+func (d *ConcurrentDownloader) syncFile(outFile *os.File) error {
+	if outFile == nil {
+		return nil
 	}
-
-	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
-	return finalizeCompletedDownload()
+	if err := outFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+	return nil
 }
 
 func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *http.Client, rawurl string) (int64, error) {
@@ -587,11 +600,13 @@ func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *ht
 		return 0, fmt.Errorf("failed to create concurrent bootstrap request: %w", err)
 	}
 
+	// Forward custom headers (essential for authenticated mirrors)
 	for key, val := range d.Headers {
 		if key != "Range" {
 			req.Header.Set(key, val)
 		}
 	}
+	// Ensure User-Agent and Range are set
 	req.Header.Set("User-Agent", d.Runtime.GetUserAgent())
 	req.Header.Set("Range", "bytes=0-0")
 
