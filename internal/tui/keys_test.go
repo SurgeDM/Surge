@@ -87,3 +87,27 @@ func TestCategoryManagerKeyMap_AllKeysInHelp(t *testing.T) {
 func TestQuitConfirmKeyMap_AllKeysInHelp(t *testing.T) {
 	testKeyMapInHelp(t, "QuitConfirm", Keys.QuitConfirm, nil)
 }
+
+func TestDuplicateKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "Duplicate", Keys.Duplicate, nil)
+}
+
+func TestExtensionKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "Extension", Keys.Extension, nil)
+}
+
+func TestSettingsEditorKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "SettingsEditor", Keys.SettingsEditor, nil)
+}
+
+func TestBatchConfirmKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "BatchConfirm", Keys.BatchConfirm, nil)
+}
+
+func TestUpdateKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "Update", Keys.Update, nil)
+}
+
+func TestBugReportKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "BugReport", Keys.BugReport, nil)
+}
