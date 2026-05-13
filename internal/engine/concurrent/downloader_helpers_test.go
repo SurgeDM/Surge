@@ -68,7 +68,7 @@ func TestSetupTasks_NewDownload(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	state := types.NewProgressState("test-id", fileSize)
 	downloader := &ConcurrentDownloader{
@@ -159,7 +159,7 @@ func TestSetupTasks_BitmapRestoration(t *testing.T) {
 	}
 
 	f, _ := os.Create(destPath + types.IncompleteSuffix)
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	progState := types.NewProgressState("test-id", fileSize)
 	downloader := &ConcurrentDownloader{
