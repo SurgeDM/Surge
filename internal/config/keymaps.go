@@ -171,20 +171,20 @@ type KeyBindingConfig struct {
 	Help string   `json:"help"`
 }
 
-// KeyMapConfig mirrors the structure of tui.KeyMap for configuration.
+// KeyMapConfig mirrors the structure of KeyMap for configuration.
 type KeyMapConfig struct {
 	Dashboard      map[string]KeyBindingConfig `json:"dashboard"`
 	Input          map[string]KeyBindingConfig `json:"input"`
-	FilePicker     map[string]KeyBindingConfig `json:"filePicker"`
+	FilePicker     map[string]KeyBindingConfig `json:"file_picker"`
 	Duplicate      map[string]KeyBindingConfig `json:"duplicate"`
 	Extension      map[string]KeyBindingConfig `json:"extension"`
 	Settings       map[string]KeyBindingConfig `json:"settings"`
-	SettingsEditor map[string]KeyBindingConfig `json:"settingsEditor"`
-	BatchConfirm   map[string]KeyBindingConfig `json:"batchConfirm"`
+	SettingsEditor map[string]KeyBindingConfig `json:"settings_editor"`
+	BatchConfirm   map[string]KeyBindingConfig `json:"batch_confirm"`
 	Update         map[string]KeyBindingConfig `json:"update"`
-	BugReport      map[string]KeyBindingConfig `json:"bugReport"`
-	CategoryMgr    map[string]KeyBindingConfig `json:"categoryMgr"`
-	QuitConfirm    map[string]KeyBindingConfig `json:"quitConfirm"`
+	BugReport      map[string]KeyBindingConfig `json:"bug_report"`
+	CategoryMgr    map[string]KeyBindingConfig `json:"category_mgr"`
+	QuitConfirm    map[string]KeyBindingConfig `json:"quit_confirm"`
 }
 
 // GetKeyMapConfigPath returns the path to the Keymaps JSON file.
@@ -192,79 +192,162 @@ func GetKeyMapConfigPath() string {
 	return filepath.Join(GetSurgeDir(), "keymap.json")
 }
 
-// LoadKeyMapConfig loads the keymap configuration from file.
-func LoadKeyMapConfig() (*KeyMapConfig, error) {
+// LoadKeyMap loads the keymap configuration from file.
+func LoadKeyMap() (*KeyMap, error) {
 	path := GetKeyMapConfigPath()
-	if _, err := os.Stat(path); os.IsNotExist(err) {
-		return nil, nil // No config file yet
-	}
 	data, err := os.ReadFile(path)
 	if err != nil {
+		if os.IsNotExist(err) {
+			defaults := DefaultKeyMap()
+			utils.Debug("Warning: Created New %s file \u2014 using defaults", path)
+			SaveKeyMap(defaults)
+			return defaults, nil
+		}
 		return nil, err
 	}
+
 	var cfg KeyMapConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
-		return nil, err
+		utils.Debug("Warning: corrupt keymap file %s: %v \u2014 using defaults", path, err)
+		defaults := DefaultKeyMap()
+		defaults.StartupWarnings = append(defaults.StartupWarnings,
+			fmt.Sprintf("Config: keymap file is corrupt (%v) — all keybindings reset to defaults", err))
+		return defaults, nil
 	}
-	return &cfg, nil
+
+	keymap := DefaultKeyMap()
+	keymap.ApplyConfig(&cfg)
+	SaveKeyMap(keymap)
+	return keymap, nil
 }
 
-// SaveKeyMapConfig saves the keymap configuration to file.
-func SaveKeyMapConfig(cfg *KeyMapConfig) error {
+// SaveKeyMap saves the keymap configuration to file.
+func SaveKeyMap(k *KeyMap) error {
 	path := GetKeyMapConfigPath()
+
+	// Ensure directory exists
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+
+	cfg := k.ToConfig()
 	data, err := json.MarshalIndent(cfg, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0644)
+
+	// Atomic write: write to temp file, then rename
+	tempPath := path + ".tmp"
+	if err := os.WriteFile(tempPath, data, 0o644); err != nil {
+		return err
+	}
+
+	return os.Rename(tempPath, path)
+}
+
+// ApplyConfig applies configuration from KeyMapConfig to KeyMap.
+func (k *KeyMap) ApplyConfig(cfg *KeyMapConfig) {
+	if cfg == nil {
+		return
+	}
+
+	applyToStruct := func(s any, m map[string]KeyBindingConfig) {
+		v := reflect.ValueOf(s).Elem()
+		t := v.Type()
+		for i := 0; i < v.NumField(); i++ {
+			field := v.Field(i)
+			if field.Type() == reflect.TypeFor[key.Binding]() {
+				fieldName := t.Field(i).Name
+				if bCfg, ok := m[fieldName]; ok {
+					if len(bCfg.Keys) > 0 {
+						helpDesc := bCfg.Help
+						if helpDesc == "" {
+							helpDesc = field.Interface().(key.Binding).Help().Desc
+						}
+						helpKey := bCfg.Keys[0] // this should be `helpKey := strings.Join(bCfg.Keys, "/")` but now it will break the help view of the Dashboard
+						newBinding := key.NewBinding(
+							key.WithKeys(bCfg.Keys...),
+							key.WithHelp(helpKey, helpDesc),
+						)
+						field.Set(reflect.ValueOf(newBinding))
+					}
+				}
+			}
+		}
+	}
+
+	applyToStruct(&k.Dashboard, cfg.Dashboard)
+	applyToStruct(&k.Input, cfg.Input)
+	applyToStruct(&k.FilePicker, cfg.FilePicker)
+	applyToStruct(&k.Duplicate, cfg.Duplicate)
+	applyToStruct(&k.Extension, cfg.Extension)
+	applyToStruct(&k.Settings, cfg.Settings)
+	applyToStruct(&k.SettingsEditor, cfg.SettingsEditor)
+	applyToStruct(&k.BatchConfirm, cfg.BatchConfirm)
+	applyToStruct(&k.Update, cfg.Update)
+	applyToStruct(&k.BugReport, cfg.BugReport)
+	applyToStruct(&k.CategoryMgr, cfg.CategoryMgr)
+	applyToStruct(&k.QuitConfirm, cfg.QuitConfirm)
+}
+
+// ToConfig converts KeyMap to KeyMapConfig for serialization.
+func (k *KeyMap) ToConfig() *KeyMapConfig {
+	structToMap := func(s any) map[string]KeyBindingConfig {
+		v := reflect.ValueOf(s)
+		t := v.Type()
+		m := make(map[string]KeyBindingConfig)
+		for i := 0; i < v.NumField(); i++ {
+			field := v.Field(i)
+			if field.Type() == reflect.TypeFor[key.Binding]() {
+				binding := field.Interface().(key.Binding)
+				m[t.Field(i).Name] = KeyBindingConfig{
+					Keys: binding.Keys(),
+					Help: binding.Help().Desc,
+				}
+			}
+		}
+		return m
+	}
+
+	return &KeyMapConfig{
+		Dashboard:      structToMap(k.Dashboard),
+		Input:          structToMap(k.Input),
+		FilePicker:     structToMap(k.FilePicker),
+		Duplicate:      structToMap(k.Duplicate),
+		Extension:      structToMap(k.Extension),
+		Settings:       structToMap(k.Settings),
+		SettingsEditor: structToMap(k.SettingsEditor),
+		BatchConfirm:   structToMap(k.BatchConfirm),
+		Update:         structToMap(k.Update),
+		BugReport:      structToMap(k.BugReport),
+		CategoryMgr:    structToMap(k.CategoryMgr),
+		QuitConfirm:    structToMap(k.QuitConfirm),
+	}
 }
 
 // Validate checks keymap for missing or invalid bindings and fills with defaults.
 func (k *KeyMap) Validate() {
-	defaults := GetDefaultKeyMap()
+	defaults := DefaultKeyMap()
 	if k == nil {
 		return
 	}
-	// Add per-section validation as needed, e.g.:
-	if reflect.ValueOf(k.Dashboard) == reflect.Zero(reflect.TypeFor[DashboardKeyMap]()) {
-		k.Dashboard = defaults.Dashboard
-	}
-	if reflect.ValueOf(k.Input) == reflect.Zero(reflect.TypeFor[InputKeyMap]()) {
-		k.Input = defaults.Input
-	}
-	if reflect.ValueOf(k.FilePicker) == reflect.Zero(reflect.TypeFor[FilePickerKeyMap]()) {
-		k.FilePicker = defaults.FilePicker
-	}
-	if reflect.ValueOf(k.Duplicate) == reflect.Zero(reflect.TypeFor[DuplicateKeyMap]()) {
-		k.Duplicate = defaults.Duplicate
-	}
-	if reflect.ValueOf(k.Extension) == reflect.Zero(reflect.TypeFor[ExtensionKeyMap]()) {
-		k.Extension = defaults.Extension
-	}
-	if reflect.ValueOf(k.Settings) == reflect.Zero(reflect.TypeFor[SettingsKeyMap]()) {
-		k.Settings = defaults.Settings
-	}
-	if reflect.ValueOf(k.SettingsEditor) == reflect.Zero(reflect.TypeFor[SettingsEditorKeyMap]()) {
-		k.SettingsEditor = defaults.SettingsEditor
-	}
-	if reflect.ValueOf(k.BatchConfirm) == reflect.Zero(reflect.TypeFor[BatchConfirmKeyMap]()) {
-		k.BatchConfirm = defaults.BatchConfirm
-	}
-	if reflect.ValueOf(k.Update) == reflect.Zero(reflect.TypeFor[UpdateKeyMap]()) {
-		k.Update = defaults.Update
-	}
-	if reflect.ValueOf(k.BugReport) == reflect.Zero(reflect.TypeFor[BugReportKeyMap]()) {
-		k.BugReport = defaults.BugReport
-	}
-	if reflect.ValueOf(k.CategoryMgr) == reflect.Zero(reflect.TypeFor[CategoryManagerKeyMap]()) {
-		k.CategoryMgr = defaults.CategoryMgr
-	}
-	if reflect.ValueOf(k.QuitConfirm) == reflect.Zero(reflect.TypeFor[QuitConfirmKeyMap]()) {
-		k.QuitConfirm = defaults.QuitConfirm
+
+	v := reflect.ValueOf(k).Elem()
+	dV := reflect.ValueOf(defaults).Elem()
+	t := v.Type()
+
+	for i := 0; i < v.NumField(); i++ {
+		field := v.Field(i)
+		fieldType := t.Field(i).Type
+		if fieldType.Kind() == reflect.Struct && fieldType != reflect.TypeFor[[]string]() {
+			if reflect.DeepEqual(field.Interface(), reflect.Zero(fieldType).Interface()) {
+				field.Set(dV.Field(i))
+			}
+		}
 	}
 }
 
-func GetDefaultKeyMap() *KeyMap {
+func DefaultKeyMap() *KeyMap {
 	return &KeyMap{
 		Dashboard: DashboardKeyMap{
 			TabQueued: key.NewBinding(
@@ -598,35 +681,8 @@ func GetDefaultKeyMap() *KeyMap {
 				key.WithHelp("n/esc", "cancel"),
 			),
 		},
+		StartupWarnings: nil,
 	}
-}
-
-// LoadKeyMap loads settings from disk. Returns defaults if file doesn't exist
-// or if the JSON is corrupt, so the application can always start.
-func LoadKeyMap() (*KeyMap, error) {
-	path := GetKeyMapConfigPath()
-
-	data, err := os.ReadFile(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return GetDefaultKeyMap(), nil
-		}
-		return nil, err
-	}
-
-	keymap := GetDefaultKeyMap() // Start with defaults to fill any missing fields
-	if err := json.Unmarshal(data, keymap); err != nil {
-		utils.Debug("Warning: corrupt keymap file %s: %v \u2014 using defaults", path, err)
-		defaults := GetDefaultKeyMap()
-		defaults.StartupWarnings = append(defaults.StartupWarnings,
-			fmt.Sprintf("Config: settings file is corrupt (%v) — all settings reset to defaults", err))
-		return defaults, nil
-	}
-
-	// Validate settings and roll back individual invalid fields to defaults
-	keymap.Validate()
-
-	return keymap, nil
 }
 
 // ShortHelp returns keybindings to show in the mini help view

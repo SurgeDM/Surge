@@ -193,7 +193,7 @@ type RootModel struct {
 	bugReportIncludeLatestLog  bool
 
 	// Keybindings
-	keys KeyMap
+	keys *config.KeyMap
 
 	// Server port for display
 	ServerPort int
@@ -292,11 +292,19 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		settings = config.DefaultSettings()
 	}
 
+	keys, _ := config.LoadKeyMap()
+	if keys == nil {
+		keys = config.DefaultKeyMap()
+	}
+
 	// Capture any config warnings produced during load so Init() can surface
 	// them in the activity log once the viewport is ready.
 	var startupConfigWarnings []string
 	if len(settings.StartupWarnings) > 0 {
-		startupConfigWarnings = append([]string(nil), settings.StartupWarnings...)
+		startupConfigWarnings = append(startupConfigWarnings, settings.StartupWarnings...)
+	}
+	if len(keys.StartupWarnings) > 0 {
+		startupConfigWarnings = append(startupConfigWarnings, keys.StartupWarnings...)
 	}
 
 	// Override AutoResume if CLI flag provided
@@ -447,7 +455,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		searchInput:           searchInput,
 		urlUpdateInput:        urlUpdateInput,
 		catMgrInputs:          [4]textinput.Model{catNameInput, catDescInput, catPatternInput, catPathInput},
-		keys:                  Keys,
+		keys:                  keys,
 		ServerPort:            serverPort,
 		CurrentVersion:        currentVersion,
 		CurrentCommit:         commitValue,

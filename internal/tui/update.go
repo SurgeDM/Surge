@@ -54,6 +54,10 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.Settings = config.DefaultSettings()
 	}
 
+	if m.keys == nil {
+		m.keys = config.DefaultKeyMap()
+	}
+
 	if m.shuttingDown {
 		switch msg := msg.(type) {
 		case shutdownCompleteMsg:
