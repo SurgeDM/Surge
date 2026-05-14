@@ -194,13 +194,13 @@ func GetKeyMapConfigPath() string {
 
 // LoadKeyMap loads the keymap configuration from file.
 func LoadKeyMap() (*KeyMap, error) {
+	defaults := DefaultKeyMap()
 	path := GetKeyMapConfigPath()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			defaults := DefaultKeyMap()
 			utils.Debug("Warning: Created New %s file \u2014 using defaults", path)
-			SaveKeyMap(defaults)
+			err = SaveKeyMap(defaults)
 			return defaults, nil
 		}
 		return nil, err
@@ -209,15 +209,14 @@ func LoadKeyMap() (*KeyMap, error) {
 	var cfg KeyMapConfig
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		utils.Debug("Warning: corrupt keymap file %s: %v \u2014 using defaults", path, err)
-		defaults := DefaultKeyMap()
 		defaults.StartupWarnings = append(defaults.StartupWarnings,
-			fmt.Sprintf("Config: keymap file is corrupt (%v) — all keybindings reset to defaults", err))
-		return defaults, nil
+			fmt.Sprintf("Config: keymap file is corrupt (%v) — all keybindings reset to defaults & rewrite the file", err))
+		err = SaveKeyMap(defaults)
+		return defaults, err
 	}
 
-	keymap := DefaultKeyMap()
-	keymap.ApplyConfig(&cfg)
-	return keymap, nil
+	defaults.ApplyConfig(&cfg)
+	return defaults, nil
 }
 
 // SaveKeyMap saves the keymap configuration to file.
