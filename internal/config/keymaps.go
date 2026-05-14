@@ -263,7 +263,7 @@ func (k *KeyMap) ApplyConfig(cfg *KeyMapConfig) {
 						if helpDesc == "" {
 							helpDesc = field.Interface().(key.Binding).Help().Desc
 						}
-						helpKey := bCfg.Keys[0] // this should be `helpKey := strings.Join(bCfg.Keys, "/")` but now it will break the help view of the Dashboard
+						helpKey := bCfg.Keys[0] // TODO: `helpKey := strings.Join(bCfg.Keys, "/")` but now it will break the help view of the Dashboard
 						newBinding := key.NewBinding(
 							key.WithKeys(bCfg.Keys...),
 							key.WithHelp(helpKey, helpDesc),
