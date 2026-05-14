@@ -217,7 +217,6 @@ func LoadKeyMap() (*KeyMap, error) {
 
 	keymap := DefaultKeyMap()
 	keymap.ApplyConfig(&cfg)
-	SaveKeyMap(keymap)
 	return keymap, nil
 }
 
