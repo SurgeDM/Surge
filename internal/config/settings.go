@@ -69,6 +69,9 @@ type ExtensionSettings struct {
 // NetworkSettings contains network connection parameters.
 type NetworkSettings struct {
 	MaxConnectionsPerDownload int    `json:"max_connections_per_host" ui_label:"Max Connections/Download" ui_desc:"Maximum concurrent connections per download (1-64)."`
+	// Deprecated: use MaxConnectionsPerDownload.
+	// Kept as a non-serialized compatibility alias for older code paths and tests.
+	MaxConnectionsPerHost     int    `json:"-" ui_ignored:"true"`
 	MaxConcurrentDownloads    int    `json:"max_concurrent_downloads" ui_label:"Max Concurrent Downloads" ui_desc:"Maximum number of downloads running at once (1-10)." ui_restart:"true"`
 	MaxConcurrentProbes       int    `json:"max_concurrent_probes" ui_label:"Max Concurrent Probes" ui_desc:"Maximum number of simultaneous server probes when adding many downloads at once (1-10)." ui_restart:"true"`
 	UserAgent                 string `json:"user_agent" ui_label:"User Agent" ui_desc:"Custom User-Agent string for HTTP requests. Leave empty for default."`
@@ -329,10 +332,18 @@ func (ns *NetworkSettings) Validate() []string {
 	var warnings []string
 	defaults := DefaultSettings().Network
 
+	switch {
+	case ns.MaxConnectionsPerDownload <= 0 && ns.MaxConnectionsPerHost > 0:
+		ns.MaxConnectionsPerDownload = ns.MaxConnectionsPerHost
+	case ns.MaxConnectionsPerDownload > 0:
+		ns.MaxConnectionsPerHost = ns.MaxConnectionsPerDownload
+	}
+
 	if ns.MaxConnectionsPerDownload < 1 || ns.MaxConnectionsPerDownload > 64 {
 		ns.MaxConnectionsPerDownload = defaults.MaxConnectionsPerDownload
 		warnings = append(warnings, fmt.Sprintf("Max connections/download reset to default (%d)", defaults.MaxConnectionsPerDownload))
 	}
+	ns.MaxConnectionsPerHost = ns.MaxConnectionsPerDownload
 	if ns.MaxConcurrentDownloads < 1 || ns.MaxConcurrentDownloads > 10 {
 		ns.MaxConcurrentDownloads = defaults.MaxConcurrentDownloads
 		warnings = append(warnings, fmt.Sprintf("Max concurrent downloads reset to default (%d)", defaults.MaxConcurrentDownloads))
