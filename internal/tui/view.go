@@ -622,7 +622,11 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		speedStr = fmt.Sprintf("%.2f MB/s", d.ActualSpeed/float64(config.MB))
 		if d.Total > 0 {
 			remaining := d.Total - d.Downloaded
-			etaSeconds := float64(remaining) / d.ActualSpeed
+			etaSpeed := d.ActualSpeed
+			if etaSpeed == 0 {
+				etaSpeed = d.Speed // EMA fallback so ETA stays stable during brief stall ticks
+			}
+			etaSeconds := float64(remaining) / etaSpeed
 			// Clamp ETA to 24 hours max to prevent bonkers values
 			const maxETASeconds = 24 * 60 * 60
 			if etaSeconds > maxETASeconds || etaSeconds < 0 {
