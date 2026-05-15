@@ -282,8 +282,9 @@ func TestUpdate_SettingsIgnoresMissingFourthTab(t *testing.T) {
 
 func TestUpdate_DashboardWithNilSettingsDoesNotPanic(t *testing.T) {
 	m := RootModel{
-		state: DashboardState,
-		list:  NewDownloadList(80, 20),
+		state:  DashboardState,
+		list:   NewDownloadList(80, 20),
+		inputs: newInputModels(),
 	}
 
 	updated, _ := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
