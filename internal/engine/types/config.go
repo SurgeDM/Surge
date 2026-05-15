@@ -49,22 +49,27 @@ const (
 type DownloadConfig struct {
 	URL        string
 	OutputPath string
-	DestPath   string // Full destination path used for resume-state lookup.
+	DestPath   string
 	ID         string
 	Filename   string
-	IsResume   bool // Distinguishes an explicit resume from a fresh download.
+	IsResume   bool
 	ProgressCh chan<- any
 	State      *ProgressState
-	SavedState *DownloadState // Preloaded resume state avoids a second lookup.
+	SavedState *DownloadState
 	Runtime    *RuntimeConfig
 	Mirrors    []string
 	Headers    map[string]string
 
-	IsExplicitCategory bool // Preserves a user-selected category override.
+	IsExplicitCategory bool
 	TotalSize          int64
-	SupportsRange      bool // Determines whether concurrent ranged downloads are allowed.
+	SupportsRange      bool
 }
 
+// RuntimeConfig carries network and downloader tuning knobs.
+// Fields used by the downloader getters fall into two groups:
+// zero means "use package default" for capacity-style settings such as
+// connections, chunk size, buffer size, and retries; zero is preserved for
+// opt-out settings where disabling a behavior is meaningful.
 type RuntimeConfig struct {
 	MaxConnectionsPerDownload int
 	UserAgent                 string
@@ -111,7 +116,7 @@ func (r *RuntimeConfig) GetWorkerBufferSize() int {
 }
 
 func (r *RuntimeConfig) GetMaxTaskRetries() int {
-	if r == nil || r.MaxTaskRetries < 0 {
+	if r == nil || r.MaxTaskRetries <= 0 {
 		return MaxTaskRetries
 	}
 	return r.MaxTaskRetries

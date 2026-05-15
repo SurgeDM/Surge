@@ -62,9 +62,6 @@ func TestRuntimeConfig_Getters(t *testing.T) {
 			SpeedEmaAlpha:         0,
 		}
 
-		if got := r.GetMaxTaskRetries(); got != 0 {
-			t.Errorf("GetMaxTaskRetries = %d, want 0", got)
-		}
 		if got := r.GetSlowWorkerThreshold(); got != 0 {
 			t.Errorf("GetSlowWorkerThreshold = %f, want 0", got)
 		}
