@@ -74,6 +74,9 @@ func uniqueFilePath(path string) string {
 // TUIDownload is the main entry point for downloads executed by the Engine pool
 func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	start := time.Now()
+	if cfg.Runtime == nil {
+		cfg.Runtime = types.DefaultRuntimeConfig()
+	}
 	// Engine expects cfg.OutputPath and cfg.Filename to be fully resolved by the processing layer
 	destPath := cfg.OutputPath
 	finalFilename := cfg.Filename
@@ -286,10 +289,6 @@ func Download(ctx context.Context, url string, outPath string, progressCh chan<-
 		State:      nil,
 	}
 	// Default runtime config
-	cfg.Runtime = &types.RuntimeConfig{
-		MaxConnectionsPerDownload: types.PerDownloadMax,
-		MinChunkSize:              types.MinChunk,
-		WorkerBufferSize:          types.WorkerBuffer,
-	}
+	cfg.Runtime = types.DefaultRuntimeConfig()
 	return TUIDownload(ctx, &cfg)
 }

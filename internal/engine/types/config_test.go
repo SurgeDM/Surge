@@ -146,6 +146,44 @@ func TestRuntimeConfig_Getters(t *testing.T) {
 	})
 }
 
+func TestDefaultRuntimeConfig_PopulatesDefaults(t *testing.T) {
+	r := DefaultRuntimeConfig()
+	if r == nil {
+		t.Fatal("DefaultRuntimeConfig returned nil")
+	}
+
+	if r.MaxConnectionsPerDownload != PerDownloadMax {
+		t.Errorf("MaxConnectionsPerDownload = %d, want %d", r.MaxConnectionsPerDownload, PerDownloadMax)
+	}
+	if r.UserAgent != DefaultUserAgent {
+		t.Errorf("UserAgent = %q, want %q", r.UserAgent, DefaultUserAgent)
+	}
+	if r.MinChunkSize != MinChunk {
+		t.Errorf("MinChunkSize = %d, want %d", r.MinChunkSize, MinChunk)
+	}
+	if r.WorkerBufferSize != WorkerBuffer {
+		t.Errorf("WorkerBufferSize = %d, want %d", r.WorkerBufferSize, WorkerBuffer)
+	}
+	if r.MaxTaskRetries != MaxTaskRetries {
+		t.Errorf("MaxTaskRetries = %d, want %d", r.MaxTaskRetries, MaxTaskRetries)
+	}
+	if r.DialHedgeCount != DialHedgeCount {
+		t.Errorf("DialHedgeCount = %d, want %d", r.DialHedgeCount, DialHedgeCount)
+	}
+	if r.SlowWorkerThreshold != SlowWorkerThreshold {
+		t.Errorf("SlowWorkerThreshold = %f, want %f", r.SlowWorkerThreshold, SlowWorkerThreshold)
+	}
+	if r.SlowWorkerGracePeriod != SlowWorkerGrace {
+		t.Errorf("SlowWorkerGracePeriod = %v, want %v", r.SlowWorkerGracePeriod, SlowWorkerGrace)
+	}
+	if r.StallTimeout != StallTimeout {
+		t.Errorf("StallTimeout = %v, want %v", r.StallTimeout, StallTimeout)
+	}
+	if r.SpeedEmaAlpha != SpeedEMAAlpha {
+		t.Errorf("SpeedEmaAlpha = %f, want %f", r.SpeedEmaAlpha, SpeedEMAAlpha)
+	}
+}
+
 func TestSizeConstants(t *testing.T) {
 	// Verify size constant relationships
 	if KB != 1024 {

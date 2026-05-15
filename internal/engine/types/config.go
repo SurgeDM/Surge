@@ -87,9 +87,11 @@ type RuntimeConfig struct {
 	SpeedEmaAlpha         float64
 }
 
+const DefaultUserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
 func (r *RuntimeConfig) GetUserAgent() string {
 	if r == nil || r.UserAgent == "" {
-		return "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+		return DefaultUserAgent
 	}
 	return r.UserAgent
 }
@@ -155,4 +157,24 @@ func (r *RuntimeConfig) GetSpeedEmaAlpha() float64 {
 		return SpeedEMAAlpha
 	}
 	return r.SpeedEmaAlpha
+}
+
+// DefaultRuntimeConfig returns a fully-populated runtime config for callers
+// that want engine defaults rather than relying on zero-value semantics.
+func DefaultRuntimeConfig() *RuntimeConfig {
+	return &RuntimeConfig{
+		MaxConnectionsPerDownload: PerDownloadMax,
+		UserAgent:                 DefaultUserAgent,
+		ProxyURL:                  "",
+		CustomDNS:                 "",
+		SequentialDownload:        false,
+		MinChunkSize:              MinChunk,
+		WorkerBufferSize:          WorkerBuffer,
+		MaxTaskRetries:            MaxTaskRetries,
+		DialHedgeCount:            DialHedgeCount,
+		SlowWorkerThreshold:       SlowWorkerThreshold,
+		SlowWorkerGracePeriod:     SlowWorkerGrace,
+		StallTimeout:              StallTimeout,
+		SpeedEmaAlpha:             SpeedEMAAlpha,
+	}
 }
