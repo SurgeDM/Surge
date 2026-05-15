@@ -23,7 +23,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		needsSpinner := false
 		for _, d := range m.downloads {
-			if d.pausing || d.resuming || components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded) == components.StatusQueued {
+			if d.pausing || d.resuming || components.DetermineStatus(d.done, d.paused, d.err != nil, d.ActualSpeed, d.Downloaded) == components.StatusQueued {
 				needsSpinner = true
 				break
 			}

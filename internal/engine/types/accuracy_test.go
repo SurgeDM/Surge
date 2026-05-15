@@ -94,7 +94,7 @@ func TestRestoreBitmap_ShortBitmapRecoversWithoutPanic(t *testing.T) {
 
 	state := types.NewProgressState("test-short-restore", totalSize)
 	malformed := []byte{0x02} // Too short: only enough storage for 4 chunks.
-	expectedBytes := 25      // 100 chunks * 2 bits = 25 bytes.
+	expectedBytes := 25       // 100 chunks * 2 bits = 25 bytes.
 
 	defer func() {
 		if r := recover(); r != nil {

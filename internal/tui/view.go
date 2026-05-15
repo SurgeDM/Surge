@@ -615,7 +615,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	} else if d.resuming {
 		speedStr = "Resuming..."
 		etaStr = "..."
-	} else if d.paused || d.ActualSpeed == 0 {
+	} else if d.paused || (d.ActualSpeed == 0 && d.Speed == 0) {
 		speedStr = "Paused"
 		etaStr = "\u221e"
 	} else {
@@ -650,7 +650,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Size:"), StatsValueStyle.Render(sizeStr)),
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Speed:"), StatsValueStyle.Render(speedStr)),
 	}
-	isActive := !d.done && !d.paused && !d.pausing && d.Speed > 0
+	isActive := !d.done && !d.paused && !d.pausing && (d.ActualSpeed > 0 || d.Speed > 0)
 	if isActive {
 		conns := d.Connections
 		if conns == 0 {
@@ -734,7 +734,7 @@ func getDownloadStatus(d *DownloadModel, spinnerView string) string {
 	if d.resuming {
 		return lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(spinnerView + " Resuming...")
 	}
-	status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
+	status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.ActualSpeed, d.Downloaded)
 	return status.RenderWithSpinner(spinnerView)
 }
 
@@ -755,7 +755,7 @@ func (m RootModel) ComputeViewStats() ViewStats {
 	for _, d := range m.downloads {
 		if d.done {
 			stats.DownloadedCount++
-		} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming) {
+		} else if !d.paused && !d.pausing && (d.ActualSpeed > 0 || d.Speed > 0 || d.Connections > 0 || d.resuming || d.started) {
 			stats.ActiveCount++
 		} else {
 			stats.QueuedCount++

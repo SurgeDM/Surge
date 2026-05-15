@@ -39,7 +39,7 @@ func (i DownloadItem) Description() string {
 	} else if d.resuming {
 		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(i.spinnerView + " Resuming...")
 	} else {
-		status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
+		status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.ActualSpeed, d.Downloaded)
 		styledStatus = status.RenderWithSpinner(i.spinnerView)
 	}
 
@@ -273,7 +273,7 @@ func (m *RootModel) UpdateListItems() {
 					var newTab int
 					if d.done {
 						newTab = TabDone
-					} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming || d.started) {
+					} else if !d.paused && !d.pausing && (d.ActualSpeed > 0 || d.Speed > 0 || d.Connections > 0 || d.resuming || d.started) {
 						newTab = TabActive
 					} else {
 						newTab = TabQueued
