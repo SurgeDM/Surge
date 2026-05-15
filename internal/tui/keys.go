@@ -89,19 +89,20 @@ type ExtensionKeyMap struct {
 
 // SettingsKeyMap defines keybindings for the settings view
 type SettingsKeyMap struct {
-	Tab1    key.Binding
-	Tab2    key.Binding
-	Tab3    key.Binding
-	Tab4    key.Binding
-	Tab5    key.Binding
-	NextTab key.Binding
-	PrevTab key.Binding
-	Browse  key.Binding
-	Edit    key.Binding
-	Up      key.Binding
-	Down    key.Binding
-	Reset   key.Binding
-	Close   key.Binding
+	Tab1      key.Binding
+	Tab2      key.Binding
+	Tab3      key.Binding
+	Tab4      key.Binding
+	Tab5      key.Binding
+	NextTab   key.Binding
+	PrevTab   key.Binding
+	Browse    key.Binding
+	Edit      key.Binding
+	Up        key.Binding
+	Down      key.Binding
+	Reset     key.Binding
+	Close     key.Binding
+	ReportBug key.Binding
 }
 
 // SettingsEditorKeyMap defines keybindings for editing a setting
@@ -168,16 +169,16 @@ var Keys = KeyMap{
 			key.WithHelp("e", "done tab"),
 		),
 		NextTab: key.NewBinding(
-			key.WithKeys("tab", "right"),
-			key.WithHelp("tab/→", "next tab"),
+			key.WithKeys("tab", "right", "l"),
+			key.WithHelp("tab/→/l", "next tab"),
 		),
 		PrevTab: key.NewBinding(
-			key.WithKeys("left"),
-			key.WithHelp("←", "prev tab"),
+			key.WithKeys("shift+tab", "left", "h"),
+			key.WithHelp("←/h", "prev tab"),
 		),
 		Add: key.NewBinding(
-			key.WithKeys("a"),
-			key.WithHelp("a", "add download"),
+			key.WithKeys("a", "n"),
+			key.WithHelp("a/n", "add download"),
 		),
 		BatchImport: key.NewBinding(
 			key.WithKeys("b", "B"),
@@ -213,7 +214,7 @@ var Keys = KeyMap{
 		),
 		ReportBug: key.NewBinding(
 			key.WithKeys("?"),
-			key.WithHelp("?", "report bug"),
+			key.WithHelp("shift+?", "report bug"),
 		),
 		OpenFile: key.NewBinding(
 			key.WithKeys("o"),
@@ -236,12 +237,12 @@ var Keys = KeyMap{
 			key.WithHelp("t", "pin tab"),
 		),
 		Up: key.NewBinding(
-			key.WithKeys("up"),
-			key.WithHelp("\u2191", "up"),
+			key.WithKeys("up", "k"),
+			key.WithHelp("\u2191/k", "up"),
 		),
 		Down: key.NewBinding(
-			key.WithKeys("down"),
-			key.WithHelp("\u2193", "down"),
+			key.WithKeys("down", "j"),
+			key.WithHelp("\u2193/j", "down"),
 		),
 		LogUp: key.NewBinding(
 			key.WithKeys("up"),
@@ -297,7 +298,7 @@ var Keys = KeyMap{
 		),
 		GotoHome: key.NewBinding(
 			key.WithKeys("h", "H"),
-			key.WithHelp("h", "home"),
+			key.WithHelp("h/H", "home"),
 		),
 		Back: key.NewBinding(
 			key.WithKeys("left"),
@@ -318,16 +319,16 @@ var Keys = KeyMap{
 	},
 	Duplicate: DuplicateKeyMap{
 		Continue: key.NewBinding(
-			key.WithKeys("c", "C"),
-			key.WithHelp("c", "continue"),
+			key.WithKeys("c", "C", "enter"),
+			key.WithHelp("c/enter", "continue"),
 		),
 		Focus: key.NewBinding(
-			key.WithKeys("f", "F"),
-			key.WithHelp("f", "focus existing"),
+			key.WithKeys("f", "F", "down", "j"),
+			key.WithHelp("f/j", "focus existing"),
 		),
 		Cancel: key.NewBinding(
-			key.WithKeys("x", "X", "esc"),
-			key.WithHelp("x", "cancel"),
+			key.WithKeys("x", "X", "esc", "q"),
+			key.WithHelp("x/q", "cancel"),
 		),
 	},
 	Extension: ExtensionKeyMap{
@@ -340,12 +341,12 @@ var Keys = KeyMap{
 			key.WithHelp("tab", "browse path"),
 		),
 		Next: key.NewBinding(
-			key.WithKeys("down"),
-			key.WithHelp("\u2193", "next field"),
+			key.WithKeys("down", "j", "tab"),
+			key.WithHelp("\u2193/j", "next field"),
 		),
 		Prev: key.NewBinding(
-			key.WithKeys("up"),
-			key.WithHelp("\u2191", "prev field"),
+			key.WithKeys("up", "k", "shift+tab"),
+			key.WithHelp("\u2191/k", "prev field"),
 		),
 		Cancel: key.NewBinding(
 			key.WithKeys("esc"),
@@ -374,12 +375,12 @@ var Keys = KeyMap{
 			key.WithHelp("5", "extension"),
 		),
 		NextTab: key.NewBinding(
-			key.WithKeys("right"),
-			key.WithHelp("\u2192", "next tab"),
+			key.WithKeys("right", "l"),
+			key.WithHelp("\u2192/l", "next tab"),
 		),
 		PrevTab: key.NewBinding(
-			key.WithKeys("left"),
-			key.WithHelp("\u2190", "prev tab"),
+			key.WithKeys("left", "h"),
+			key.WithHelp("\u2190/h", "prev tab"),
 		),
 		Browse: key.NewBinding(
 			key.WithKeys("tab"),
@@ -390,20 +391,24 @@ var Keys = KeyMap{
 			key.WithHelp("enter", "edit"),
 		),
 		Up: key.NewBinding(
-			key.WithKeys("up"),
-			key.WithHelp("\u2191", "up"),
+			key.WithKeys("up", "k"),
+			key.WithHelp("\u2191/k", "up"),
 		),
 		Down: key.NewBinding(
-			key.WithKeys("down"),
-			key.WithHelp("\u2193", "down"),
+			key.WithKeys("down", "j"),
+			key.WithHelp("\u2193/j", "down"),
 		),
 		Reset: key.NewBinding(
 			key.WithKeys("r", "R"),
 			key.WithHelp("r", "reset"),
 		),
 		Close: key.NewBinding(
-			key.WithKeys("esc"),
-			key.WithHelp("esc", "save & close"),
+			key.WithKeys("esc", "q"),
+			key.WithHelp("esc/q", "save & close"),
+		),
+		ReportBug: key.NewBinding(
+			key.WithKeys("?"),
+			key.WithHelp("shift+?", "report bug"),
 		),
 	},
 	SettingsEditor: SettingsEditorKeyMap{
@@ -450,19 +455,19 @@ var Keys = KeyMap{
 			key.WithHelp("2", "extension report"),
 		),
 		Cancel: key.NewBinding(
-			key.WithKeys("esc"),
-			key.WithHelp("esc", "cancel"),
+			key.WithKeys("esc", "q"),
+			key.WithHelp("esc/q", "cancel"),
 		),
 	},
 	CategoryMgr: CategoryManagerKeyMap{
-		Up:     key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", "up")),
-		Down:   key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", "down")),
+		Up:     key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
+		Down:   key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
 		Edit:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "edit")),
 		Add:    key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add")),
 		Delete: key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),
 		Toggle: key.NewBinding(key.WithKeys("t"), key.WithHelp("t", "toggle")),
 		Tab:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next field")),
-		Close:  key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "save & close")),
+		Close:  key.NewBinding(key.WithKeys("esc", "q"), key.WithHelp("esc/q", "save & close")),
 	},
 	QuitConfirm: QuitConfirmKeyMap{
 		Left: key.NewBinding(
@@ -541,7 +546,7 @@ func (k SettingsKeyMap) ShortHelp() []key.Binding {
 func (k SettingsKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Tab1, k.Tab2, k.Tab3, k.Tab4, k.Tab5},
-		{k.PrevTab, k.NextTab, k.Up, k.Down, k.Edit, k.Reset, k.Browse, k.Close},
+		{k.PrevTab, k.NextTab, k.Up, k.Down, k.Edit, k.Reset, k.Browse, k.ReportBug, k.Close},
 	}
 }
 

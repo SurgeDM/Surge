@@ -235,14 +235,18 @@ func (m RootModel) View() tea.View {
 	if m.state == BugReportTargetState {
 		w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 64, 12)
 		modal := components.ConfirmationModal{
-			Title:       "Bug Report",
-			Message:     "What would you like to report?",
-			Detail:      "1) Surge Core (CLI/TUI/server)\n2) Browser Extension",
-			Keys:        m.keys.BugReport,
-			Help:        m.help,
-			BorderColor: colors.Cyan(),
-			Width:       w,
-			Height:      h,
+			Title:            "Bug Report",
+			Message:          "What would you like to report?",
+			Detail:           "Surge Core includes CLI/TUI/server components.",
+			Keys:             m.keys.BugReport,
+			Help:             m.help,
+			BorderColor:      colors.Cyan(),
+			Width:            w,
+			Height:           h,
+			ShowYesNoButtons: true,
+			YesNoFocused:     m.quitConfirmFocused,
+			YesLabel:         "Surge Core",
+			NoLabel:          "Extension",
 		}
 		box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 		return m.wrapView(m.renderModalWithOverlay(box))

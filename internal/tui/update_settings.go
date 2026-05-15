@@ -80,6 +80,17 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.SettingsBaseline = nil
 		return m, nil
 	}
+	if key.Matches(msg, m.keys.Settings.ReportBug) {
+		// Save settings and exit before going to bug report
+		_ = m.persistSettings()
+		m.SettingsBaseline = nil
+
+		m.quitConfirmFocused = 0
+		m.bugReportIncludeSystemInfo = true
+		m.bugReportIncludeLatestLog = true
+		m.state = BugReportTargetState
+		return m, nil
+	}
 	tabBindings := []key.Binding{
 		m.keys.Settings.Tab1,
 		m.keys.Settings.Tab2,
