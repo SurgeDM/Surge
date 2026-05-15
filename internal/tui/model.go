@@ -151,14 +151,15 @@ type RootModel struct {
 	logFocused  bool           // Whether the log viewport is focused
 
 	// Settings
-	Settings             *config.Settings // Application settings
-	SettingsBaseline     *config.Settings // Snapshot of settings when entering the settings view
-	SettingsActiveTab    int              // Active category tab (0-3)
-	SettingsSelectedRow  int              // Selected setting within current tab
-	SettingsIsEditing    bool             // Whether currently editing a value
-	SettingsInput        textinput.Model  // Input for editing string/int values
-	settingsError        string           // Current validation error in settings
-	ExtensionTokenCopied bool             // Flash message for "Token Copied!"
+	Settings              *config.Settings // Application settings
+	SettingsBaseline      *config.Settings // Snapshot of settings when entering the settings view
+	StartupConfigWarnings []string         // Config validation warnings to emit on first render
+	SettingsActiveTab     int              // Active category tab (0-3)
+	SettingsSelectedRow   int              // Selected setting within current tab
+	SettingsIsEditing     bool             // Whether currently editing a value
+	SettingsInput         textinput.Model  // Input for editing string/int values
+	settingsError         string           // Current validation error in settings
+	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download
@@ -289,6 +290,13 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	settings, _ := config.LoadSettings()
 	if settings == nil {
 		settings = config.DefaultSettings()
+	}
+
+	// Capture any config warnings produced during load so Init() can surface
+	// them in the activity log once the viewport is ready.
+	var startupConfigWarnings []string
+	if len(settings.StartupWarnings) > 0 {
+		startupConfigWarnings = append([]string(nil), settings.StartupWarnings...)
 	}
 
 	// Override AutoResume if CLI flag provided
@@ -431,6 +439,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		Orchestrator:          orchestrator,
 		PWD:                   pwd,
 		Settings:              settings,
+		StartupConfigWarnings: startupConfigWarnings,
 		SpeedHistory:          make([]float64, GraphHistoryPoints),                          // 60 points of history (30s at 0.5s interval)
 		logViewport:           viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)), // Default size, will be resized
 		logEntries:            make([]string, 0),
@@ -510,6 +519,14 @@ func (m RootModel) Init() tea.Cmd {
 				})
 			}
 			return tea.Batch(batch...)()
+		})
+	}
+
+	// Emit any config warnings from startup into the activity log
+	if len(m.StartupConfigWarnings) > 0 {
+		warnings := m.StartupConfigWarnings
+		cmds = append(cmds, func() tea.Msg {
+			return startupConfigWarningMsg(warnings)
 		})
 	}
 
