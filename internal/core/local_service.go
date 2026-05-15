@@ -177,6 +177,8 @@ func (s *LocalDownloadService) broadcastLoop() {
 
 func (s *LocalDownloadService) reportProgressLoop() {
 	lastSpeeds := make(map[string]float64)
+	lastDownloaded := make(map[string]int64)
+	lastTick := make(map[string]time.Time)
 	lastChunkSnapshot := make(map[string]time.Time)
 
 	if s.reportTicker == nil {
@@ -198,30 +200,42 @@ func (s *LocalDownloadService) reportProgressLoop() {
 		var batch events.BatchProgressMsg
 
 		activeConfigs := s.Pool.GetAll()
+		now := time.Now()
 		for _, cfg := range activeConfigs {
 			if cfg.State == nil || cfg.State.IsPaused() || cfg.State.Done.Load() {
-				// Clean up speed history for inactive
+				// Clean up history for inactive
 				delete(lastSpeeds, cfg.ID)
+				delete(lastDownloaded, cfg.ID)
+				delete(lastTick, cfg.ID)
 				delete(lastChunkSnapshot, cfg.ID)
 				continue
 			}
 
 			// Calculate Progress
-			downloaded, total, totalElapsed, sessionElapsed, connections, sessionStart := cfg.State.GetProgress()
+			downloaded, total, totalElapsed, _, connections, _ := cfg.State.GetProgress()
 
-			// Calculate Speed with EMA
-			sessionDownloaded := downloaded - sessionStart
-			var instantSpeed float64
-			if sessionElapsed.Seconds() > 0 && sessionDownloaded > 0 {
-				instantSpeed = float64(sessionDownloaded) / sessionElapsed.Seconds()
+			// Calculate Live Actual Speed (raw delta)
+			var liveSpeed float64
+			prevDownloaded := lastDownloaded[cfg.ID]
+			prevTick := lastTick[cfg.ID]
+
+			if !prevTick.IsZero() && downloaded > prevDownloaded {
+				deltaBytes := downloaded - prevDownloaded
+				deltaTime := now.Sub(prevTick).Seconds()
+				if deltaTime > 0 {
+					liveSpeed = float64(deltaBytes) / deltaTime
+				}
 			}
+			lastDownloaded[cfg.ID] = downloaded
+			lastTick[cfg.ID] = now
 
+			// Calculate Smoothed Speed with EMA for graphs
 			lastSpeed := lastSpeeds[cfg.ID]
 			var currentSpeed float64
 			if lastSpeed == 0 {
-				currentSpeed = instantSpeed
+				currentSpeed = liveSpeed
 			} else {
-				currentSpeed = alpha*instantSpeed + (1-alpha)*lastSpeed
+				currentSpeed = alpha*liveSpeed + (1-alpha)*lastSpeed
 			}
 			lastSpeeds[cfg.ID] = currentSpeed
 
@@ -231,6 +245,7 @@ func (s *LocalDownloadService) reportProgressLoop() {
 				Downloaded:        downloaded,
 				Total:             total,
 				Speed:             currentSpeed,
+				ActualSpeed:       liveSpeed,
 				Elapsed:           totalElapsed,
 				ActiveConnections: int(connections),
 			}

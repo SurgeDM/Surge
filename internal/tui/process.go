@@ -23,6 +23,7 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 	d.Downloaded = msg.Downloaded
 	d.Total = msg.Total
 	d.Speed = msg.Speed
+	d.ActualSpeed = msg.ActualSpeed
 	d.Elapsed = msg.Elapsed
 	d.Connections = msg.ActiveConnections
 

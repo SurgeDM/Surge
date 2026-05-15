@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -54,8 +55,8 @@ func (i DownloadItem) Description() string {
 		utils.ConvertBytesToHumanReadable(d.Total))
 
 	speedInfo := ""
-	if d.Speed > 0 {
-		speedInfo = fmt.Sprintf(" \u2022 %.2f MB/s", d.Speed/float64(MB))
+	if d.ActualSpeed > 0 {
+		speedInfo = fmt.Sprintf(" \u2022 %.2f MB/s", d.ActualSpeed/float64(config.MB))
 	}
 
 	return fmt.Sprintf("%s \u2022 %.0f%%%s \u2022 %s", styledStatus, pct, speedInfo, sizeInfo)

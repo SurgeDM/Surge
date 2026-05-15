@@ -13,7 +13,8 @@ type ProgressMsg struct {
 	DownloadID        string
 	Downloaded        int64
 	Total             int64
-	Speed             float64 // bytes per second
+	Speed             float64 // smoothed speed (EMA)
+	ActualSpeed       float64 // instant speed (raw)
 	Elapsed           time.Duration
 	ActiveConnections int
 	ChunkBitmap       []byte

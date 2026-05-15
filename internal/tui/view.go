@@ -615,14 +615,14 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	} else if d.resuming {
 		speedStr = "Resuming..."
 		etaStr = "..."
-	} else if d.paused || d.Speed == 0 {
+	} else if d.paused || d.ActualSpeed == 0 {
 		speedStr = "Paused"
 		etaStr = "\u221e"
 	} else {
-		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/float64(config.MB))
+		speedStr = fmt.Sprintf("%.2f MB/s", d.ActualSpeed/float64(config.MB))
 		if d.Total > 0 {
 			remaining := d.Total - d.Downloaded
-			etaSeconds := float64(remaining) / d.Speed
+			etaSeconds := float64(remaining) / d.ActualSpeed
 			// Clamp ETA to 24 hours max to prevent bonkers values
 			const maxETASeconds = 24 * 60 * 60
 			if etaSeconds > maxETASeconds || etaSeconds < 0 {
@@ -745,7 +745,7 @@ func (m RootModel) calcTotalSpeed() float64 {
 		if d.done {
 			continue
 		}
-		total += d.Speed
+		total += d.ActualSpeed
 	}
 	return total / float64(config.MB)
 }

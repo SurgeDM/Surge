@@ -84,7 +84,8 @@ type DownloadModel struct {
 	Destination   string // Full path to the destination file
 	Total         int64
 	Downloaded    int64
-	Speed         float64
+	Speed         float64 // EMA smoothed speed for graphs
+	ActualSpeed   float64 // Live actual speed for TUI display
 	Connections   int
 
 	StartTime time.Time
