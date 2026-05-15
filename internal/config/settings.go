@@ -334,16 +334,20 @@ func (gs *GeneralSettings) Validate() []string {
 func (ns *NetworkSettings) Validate() []string {
 	var warnings []string
 	defaults := DefaultSettings().Network
+	aliasValue := ns.MaxConnectionsPerHost
 
 	switch {
-	case ns.MaxConnectionsPerDownload <= 0 && ns.MaxConnectionsPerHost > 0:
-		ns.MaxConnectionsPerDownload = ns.MaxConnectionsPerHost
+	case ns.MaxConnectionsPerDownload <= 0 && aliasValue > 0:
+		ns.MaxConnectionsPerDownload = aliasValue
 	case ns.MaxConnectionsPerDownload > 0:
 		ns.MaxConnectionsPerHost = ns.MaxConnectionsPerDownload
 	}
 
 	if ns.MaxConnectionsPerDownload < 1 || ns.MaxConnectionsPerDownload > 64 {
 		ns.MaxConnectionsPerDownload = defaults.MaxConnectionsPerDownload
+		warnings = append(warnings, fmt.Sprintf("Max connections/download reset to default (%d)", defaults.MaxConnectionsPerDownload))
+	}
+	if aliasValue != 0 && (aliasValue < 1 || aliasValue > 64) {
 		warnings = append(warnings, fmt.Sprintf("Max connections/download reset to default (%d)", defaults.MaxConnectionsPerDownload))
 	}
 	ns.MaxConnectionsPerHost = ns.MaxConnectionsPerDownload
