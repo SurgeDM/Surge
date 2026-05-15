@@ -61,10 +61,10 @@ func TestConcurrentDownloader_ProxySupport(t *testing.T) {
 
 	// 3. Configure Downloader with Proxy
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 1,
-		MinChunkSize:          1024,
-		WorkerBufferSize:      1024,
-		ProxyURL:              proxyServer.URL,
+		MaxConnectionsPerDownload: 1,
+		MinChunkSize:              1024,
+		WorkerBufferSize:          1024,
+		ProxyURL:                  proxyServer.URL,
 	}
 
 	// Create temp dir for output
@@ -112,8 +112,8 @@ func TestConcurrentDownloader_InvalidProxy(t *testing.T) {
 	defer targetServer.Close()
 
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 1,
-		ProxyURL:              "://invalid-url",
+		MaxConnectionsPerDownload: 1,
+		ProxyURL:                  "://invalid-url",
 	}
 
 	tmpDir, cleanup, _ := testutil.TempDir("proxy-fail-test")

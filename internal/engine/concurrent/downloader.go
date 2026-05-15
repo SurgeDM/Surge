@@ -39,12 +39,7 @@ type ConcurrentDownloader struct {
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
 func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.ProgressState, runtime *types.RuntimeConfig) *ConcurrentDownloader {
 	if runtime == nil {
-		runtime = &types.RuntimeConfig{
-			MaxConnectionsPerHost: types.PerHostMax,
-			MinChunkSize:          types.MinChunk,
-			WorkerBufferSize:      types.WorkerBuffer,
-			DialHedgeCount:        types.DialHedgeCount,
-		}
+		runtime = types.DefaultRuntimeConfig()
 	}
 
 	return &ConcurrentDownloader{
@@ -66,7 +61,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 
 // getInitialConnections returns the starting number of connections based on file size
 func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
-	maxConns := d.Runtime.GetMaxConnectionsPerHost()
+	maxConns := d.Runtime.GetMaxConnectionsPerDownload()
 	minChunkSize := d.Runtime.GetMinChunkSize() // e.g., 1MB or 5MB
 
 	if fileSize <= 0 {

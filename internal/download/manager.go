@@ -10,7 +10,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/concurrent"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/single"
@@ -75,6 +74,9 @@ func uniqueFilePath(path string) string {
 // TUIDownload is the main entry point for downloads executed by the Engine pool
 func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	start := time.Now()
+	if cfg.Runtime == nil {
+		cfg.Runtime = types.DefaultRuntimeConfig()
+	}
 	// Engine expects cfg.OutputPath and cfg.Filename to be fully resolved by the processing layer
 	destPath := cfg.OutputPath
 	finalFilename := cfg.Filename
@@ -163,7 +165,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			utils.Debug("Probing %d mirrors", len(mirrors))
 			// Always check primary + mirrors to ensure we are using the best set
 			allToCheck := append([]string{cfg.URL}, mirrors...)
-			runCfg := &config.RuntimeConfig{
+			runCfg := &types.RuntimeConfig{
 				ProxyURL:  cfg.Runtime.ProxyURL,
 				CustomDNS: cfg.Runtime.CustomDNS,
 			}
@@ -287,10 +289,6 @@ func Download(ctx context.Context, url string, outPath string, progressCh chan<-
 		State:      nil,
 	}
 	// Default runtime config
-	cfg.Runtime = &types.RuntimeConfig{
-		MaxConnectionsPerHost: types.PerHostMax,
-		MinChunkSize:          types.MinChunk,
-		WorkerBufferSize:      types.WorkerBuffer,
-	}
+	cfg.Runtime = types.DefaultRuntimeConfig()
 	return TUIDownload(ctx, &cfg)
 }

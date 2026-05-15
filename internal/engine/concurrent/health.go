@@ -68,7 +68,7 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 		// Check for absolute stall: no data received for StallTimeout
 		// This catches dead connections that the relative speed check misses
 		lastActivity := active.LastActivity.Load()
-		if lastActivity > 0 {
+		if stallTimeout > 0 && lastActivity > 0 {
 			timeSinceData := now.Sub(time.Unix(0, lastActivity))
 			if timeSinceData >= stallTimeout {
 				utils.Debug("Health: Worker %d stalled (no data for %v), cancelling",
@@ -85,7 +85,7 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 		if meanSpeed > 0 {
 			workerSpeed := active.GetSpeed()
 			threshold := d.Runtime.GetSlowWorkerThreshold()
-			isBelowThreshold := workerSpeed > 0 && workerSpeed < threshold*meanSpeed
+			isBelowThreshold := threshold > 0 && workerSpeed > 0 && workerSpeed < threshold*meanSpeed
 
 			if isBelowThreshold {
 				utils.Debug("Health: Worker %d slow (%.2f KB/s vs mean %.2f KB/s), cancelling",

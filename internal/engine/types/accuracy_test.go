@@ -86,6 +86,55 @@ func TestRestoreBitmap(t *testing.T) {
 	}
 }
 
+func TestRestoreBitmap_ShortBitmapRecoversWithoutPanic(t *testing.T) {
+	const (
+		totalSize = 100 * 1024 * 1024
+		chunkSize = 1 * 1024 * 1024
+	)
+
+	state := types.NewProgressState("test-short-restore", totalSize)
+	malformed := []byte{0x02} // Too short: only enough storage for 4 chunks.
+	expectedBytes := 25      // 100 chunks * 2 bits = 25 bytes.
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("RestoreBitmap/RecalculateProgress panicked with short bitmap: %v", r)
+		}
+	}()
+
+	state.RestoreBitmap(malformed, chunkSize)
+
+	bitmap, width, _, actualChunkSize, _ := state.GetBitmap()
+	if width != 100 {
+		t.Fatalf("BitmapWidth = %d, want 100", width)
+	}
+	if actualChunkSize != chunkSize {
+		t.Fatalf("ActualChunkSize = %d, want %d", actualChunkSize, chunkSize)
+	}
+	if len(bitmap) != expectedBytes {
+		t.Fatalf("bitmap len = %d, want %d after normalization", len(bitmap), expectedBytes)
+	}
+
+	if got := state.GetChunkState(0); got != types.ChunkCompleted {
+		t.Fatalf("chunk 0 state = %v, want Completed after copying available bits", got)
+	}
+	if got := state.GetChunkState(99); got != types.ChunkPending {
+		t.Fatalf("chunk 99 state = %v, want Pending", got)
+	}
+
+	state.RecalculateProgress([]types.Task{{Offset: 0, Length: chunkSize}})
+
+	if got := state.GetChunkState(0); got != types.ChunkPending {
+		t.Fatalf("chunk 0 state after recalc = %v, want Pending", got)
+	}
+	if got := state.GetChunkState(1); got != types.ChunkCompleted {
+		t.Fatalf("chunk 1 state after recalc = %v, want Completed", got)
+	}
+	if got := state.GetChunkState(99); got != types.ChunkCompleted {
+		t.Fatalf("chunk 99 state after recalc = %v, want Completed", got)
+	}
+}
+
 func TestRecalculateProgress(t *testing.T) {
 	// 30MB total, 10MB chunks -> 3 chunks
 	state := types.NewProgressState("test-recalc", 30*1024*1024)

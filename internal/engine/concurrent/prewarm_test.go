@@ -50,9 +50,9 @@ func TestConcurrentDownloader_PrewarmConnections(t *testing.T) {
 
 	state := types.NewProgressState("prewarm-test", fileSize)
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 2,
-		DialHedgeCount:        2, // Enable hedging
-		MinChunkSize:          256 * types.KB,
+		MaxConnectionsPerDownload: 2,
+		DialHedgeCount:            2, // Enable hedging
+		MinChunkSize:              256 * types.KB,
 	}
 
 	downloader := NewConcurrentDownloader("prewarm-id", nil, state, runtime)

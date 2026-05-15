@@ -508,7 +508,7 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 		Filename:           filename, // If empty, will be auto-detected
 		ProgressCh:         s.InputCh,
 		State:              state,
-		Runtime:            types.ConvertRuntimeConfig(settings.ToRuntimeConfig()),
+		Runtime:            settings.ToRuntimeConfig(),
 		Headers:            headers,
 		IsExplicitCategory: isExplicitCategory,
 		TotalSize:          totalSize,

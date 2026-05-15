@@ -36,7 +36,7 @@ var bufPool = sync.Pool{
 // NewSingleDownloader creates a new single-threaded downloader with all required parameters
 func NewSingleDownloader(id string, progressCh chan<- any, state *types.ProgressState, runtime *types.RuntimeConfig) *SingleDownloader {
 	if runtime == nil {
-		runtime = &types.RuntimeConfig{}
+		runtime = types.DefaultRuntimeConfig()
 	}
 
 	return &SingleDownloader{

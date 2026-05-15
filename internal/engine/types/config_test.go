@@ -12,8 +12,8 @@ func TestRuntimeConfig_Getters(t *testing.T) {
 		if got := r.GetUserAgent(); got == "" {
 			t.Error("GetUserAgent should return default, got empty")
 		}
-		if got := r.GetMaxConnectionsPerHost(); got != PerHostMax {
-			t.Errorf("GetMaxConnectionsPerHost = %d, want %d", got, PerHostMax)
+		if got := r.GetMaxConnectionsPerDownload(); got != PerDownloadMax {
+			t.Errorf("GetMaxConnectionsPerDownload = %d, want %d", got, PerDownloadMax)
 		}
 		if got := r.GetMinChunkSize(); got != MinChunk {
 			t.Errorf("GetMinChunkSize = %d, want %d", got, MinChunk)
@@ -41,8 +41,8 @@ func TestRuntimeConfig_Getters(t *testing.T) {
 	t.Run("zero values return defaults", func(t *testing.T) {
 		r := &RuntimeConfig{} // All zero values
 
-		if got := r.GetMaxConnectionsPerHost(); got != PerHostMax {
-			t.Errorf("GetMaxConnectionsPerHost = %d, want %d", got, PerHostMax)
+		if got := r.GetMaxConnectionsPerDownload(); got != PerDownloadMax {
+			t.Errorf("GetMaxConnectionsPerDownload = %d, want %d", got, PerDownloadMax)
 		}
 		if got := r.GetMinChunkSize(); got != MinChunk {
 			t.Errorf("GetMinChunkSize = %d, want %d", got, MinChunk)
@@ -53,21 +53,70 @@ func TestRuntimeConfig_Getters(t *testing.T) {
 		}
 	})
 
-	t.Run("custom values are returned", func(t *testing.T) {
+	t.Run("explicit zero values are preserved where zero is valid", func(t *testing.T) {
 		r := &RuntimeConfig{
-			MaxConnectionsPerHost: 128,
-			UserAgent:             "CustomAgent/1.0",
-			MinChunkSize:          4 * MB,
-			WorkerBufferSize:      1 * MB,
-			MaxTaskRetries:        5,
-			SlowWorkerThreshold:   0.75,
-			SlowWorkerGracePeriod: 10 * time.Second,
-			StallTimeout:          15 * time.Second,
-			SpeedEmaAlpha:         0.5,
+			MaxTaskRetries:        0,
+			SlowWorkerThreshold:   0,
+			SlowWorkerGracePeriod: 0,
+			StallTimeout:          0,
+			SpeedEmaAlpha:         0,
 		}
 
-		if got := r.GetMaxConnectionsPerHost(); got != 128 {
-			t.Errorf("GetMaxConnectionsPerHost = %d, want 128", got)
+		if got := r.GetSlowWorkerThreshold(); got != 0 {
+			t.Errorf("GetSlowWorkerThreshold = %f, want 0", got)
+		}
+		if got := r.GetSlowWorkerGracePeriod(); got != 0 {
+			t.Errorf("GetSlowWorkerGracePeriod = %v, want 0", got)
+		}
+		if got := r.GetStallTimeout(); got != 0 {
+			t.Errorf("GetStallTimeout = %v, want 0", got)
+		}
+		if got := r.GetSpeedEmaAlpha(); got != 0 {
+			t.Errorf("GetSpeedEmaAlpha = %f, want 0", got)
+		}
+	})
+
+	t.Run("invalid values fall back to defaults", func(t *testing.T) {
+		r := &RuntimeConfig{
+			MaxTaskRetries:        -1,
+			SlowWorkerThreshold:   1.5,
+			SlowWorkerGracePeriod: -1 * time.Second,
+			StallTimeout:          -1 * time.Second,
+			SpeedEmaAlpha:         -0.1,
+		}
+
+		if got := r.GetMaxTaskRetries(); got != MaxTaskRetries {
+			t.Errorf("GetMaxTaskRetries = %d, want %d", got, MaxTaskRetries)
+		}
+		if got := r.GetSlowWorkerThreshold(); got != SlowWorkerThreshold {
+			t.Errorf("GetSlowWorkerThreshold = %f, want %f", got, SlowWorkerThreshold)
+		}
+		if got := r.GetSlowWorkerGracePeriod(); got != SlowWorkerGrace {
+			t.Errorf("GetSlowWorkerGracePeriod = %v, want %v", got, SlowWorkerGrace)
+		}
+		if got := r.GetStallTimeout(); got != StallTimeout {
+			t.Errorf("GetStallTimeout = %v, want %v", got, StallTimeout)
+		}
+		if got := r.GetSpeedEmaAlpha(); got != SpeedEMAAlpha {
+			t.Errorf("GetSpeedEmaAlpha = %f, want %f", got, SpeedEMAAlpha)
+		}
+	})
+
+	t.Run("custom values are returned", func(t *testing.T) {
+		r := &RuntimeConfig{
+			MaxConnectionsPerDownload: 128,
+			UserAgent:                 "CustomAgent/1.0",
+			MinChunkSize:              4 * MB,
+			WorkerBufferSize:          1 * MB,
+			MaxTaskRetries:            5,
+			SlowWorkerThreshold:       0.75,
+			SlowWorkerGracePeriod:     10 * time.Second,
+			StallTimeout:              15 * time.Second,
+			SpeedEmaAlpha:             0.5,
+		}
+
+		if got := r.GetMaxConnectionsPerDownload(); got != 128 {
+			t.Errorf("GetMaxConnectionsPerDownload = %d, want 128", got)
 		}
 		if got := r.GetUserAgent(); got != "CustomAgent/1.0" {
 			t.Errorf("GetUserAgent = %s, want CustomAgent/1.0", got)
@@ -95,6 +144,44 @@ func TestRuntimeConfig_Getters(t *testing.T) {
 			t.Errorf("GetSpeedEmaAlpha = %f, want 0.5", got)
 		}
 	})
+}
+
+func TestDefaultRuntimeConfig_PopulatesDefaults(t *testing.T) {
+	r := DefaultRuntimeConfig()
+	if r == nil {
+		t.Fatal("DefaultRuntimeConfig returned nil")
+	}
+
+	if r.MaxConnectionsPerDownload != PerDownloadMax {
+		t.Errorf("MaxConnectionsPerDownload = %d, want %d", r.MaxConnectionsPerDownload, PerDownloadMax)
+	}
+	if r.UserAgent != DefaultUserAgent {
+		t.Errorf("UserAgent = %q, want %q", r.UserAgent, DefaultUserAgent)
+	}
+	if r.MinChunkSize != MinChunk {
+		t.Errorf("MinChunkSize = %d, want %d", r.MinChunkSize, MinChunk)
+	}
+	if r.WorkerBufferSize != WorkerBuffer {
+		t.Errorf("WorkerBufferSize = %d, want %d", r.WorkerBufferSize, WorkerBuffer)
+	}
+	if r.MaxTaskRetries != MaxTaskRetries {
+		t.Errorf("MaxTaskRetries = %d, want %d", r.MaxTaskRetries, MaxTaskRetries)
+	}
+	if r.DialHedgeCount != DialHedgeCount {
+		t.Errorf("DialHedgeCount = %d, want %d", r.DialHedgeCount, DialHedgeCount)
+	}
+	if r.SlowWorkerThreshold != SlowWorkerThreshold {
+		t.Errorf("SlowWorkerThreshold = %f, want %f", r.SlowWorkerThreshold, SlowWorkerThreshold)
+	}
+	if r.SlowWorkerGracePeriod != SlowWorkerGrace {
+		t.Errorf("SlowWorkerGracePeriod = %v, want %v", r.SlowWorkerGracePeriod, SlowWorkerGrace)
+	}
+	if r.StallTimeout != StallTimeout {
+		t.Errorf("StallTimeout = %v, want %v", r.StallTimeout, StallTimeout)
+	}
+	if r.SpeedEmaAlpha != SpeedEMAAlpha {
+		t.Errorf("SpeedEmaAlpha = %f, want %f", r.SpeedEmaAlpha, SpeedEMAAlpha)
+	}
 }
 
 func TestSizeConstants(t *testing.T) {
@@ -145,11 +232,11 @@ func TestTimeoutConstants(t *testing.T) {
 }
 
 func TestConnectionLimits(t *testing.T) {
-	if PerHostMax <= 0 {
-		t.Error("PerHostMax should be positive")
+	if PerDownloadMax <= 0 {
+		t.Error("PerDownloadMax should be positive")
 	}
-	if PerHostMax > 256 {
-		t.Error("PerHostMax seems too high")
+	if PerDownloadMax > 256 {
+		t.Error("PerDownloadMax seems too high")
 	}
 	// Check DefaultMaxIdleConns if available (int type)
 	if DefaultMaxIdleConns <= 0 {
@@ -165,7 +252,7 @@ func TestChannelBufferSizes(t *testing.T) {
 
 func TestDownloadConfig_Fields(t *testing.T) {
 	state := NewProgressState("test", 1000)
-	runtime := &RuntimeConfig{MaxConnectionsPerHost: 8}
+	runtime := &RuntimeConfig{MaxConnectionsPerDownload: 8}
 
 	cfg := DownloadConfig{
 		URL:        "https://example.com/file.zip",

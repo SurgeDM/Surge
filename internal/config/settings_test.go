@@ -39,11 +39,11 @@ func TestDefaultSettings(t *testing.T) {
 
 	// Verify Connection settings
 	t.Run("NetworkSettings", func(t *testing.T) {
-		if settings.Network.MaxConnectionsPerHost <= 0 {
-			t.Errorf("MaxConnectionsPerHost should be positive, got: %d", settings.Network.MaxConnectionsPerHost)
+		if settings.Network.MaxConnectionsPerDownload <= 0 {
+			t.Errorf("MaxConnectionsPerDownload should be positive, got: %d", settings.Network.MaxConnectionsPerDownload)
 		}
-		if settings.Network.MaxConnectionsPerHost > 64 {
-			t.Errorf("MaxConnectionsPerHost shouldn't exceed 64, got: %d", settings.Network.MaxConnectionsPerHost)
+		if settings.Network.MaxConnectionsPerDownload > 64 {
+			t.Errorf("MaxConnectionsPerDownload shouldn't exceed 64, got: %d", settings.Network.MaxConnectionsPerDownload)
 		}
 
 		// UserAgent can be empty (means use default)
@@ -112,7 +112,7 @@ func TestDefaultSettings_Consistency(t *testing.T) {
 	}
 
 	// Values should be equal
-	if s1.Network.MaxConnectionsPerHost != s2.Network.MaxConnectionsPerHost {
+	if s1.Network.MaxConnectionsPerDownload != s2.Network.MaxConnectionsPerDownload {
 		t.Error("Default settings should be consistent")
 	}
 }
@@ -160,12 +160,12 @@ func TestSaveAndLoadSettings(t *testing.T) {
 			ExtensionPrompt: true,
 		},
 		Network: NetworkSettings{
-			MaxConnectionsPerHost:  16,
-			MaxConcurrentDownloads: 7,
-			UserAgent:              "TestAgent/1.0",
-			MinChunkSize:           1 * MB,
-			WorkerBufferSize:       256 * KB,
-			DialHedgeCount:         6,
+			MaxConnectionsPerDownload: 16,
+			MaxConcurrentDownloads:    7,
+			UserAgent:                 "TestAgent/1.0",
+			MinChunkSize:              1 * MB,
+			WorkerBufferSize:          256 * KB,
+			DialHedgeCount:            6,
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        5,
@@ -213,8 +213,8 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	if loaded.Network.MaxConcurrentDownloads != original.Network.MaxConcurrentDownloads {
 		t.Errorf("MaxConcurrentDownloads mismatch: got %d, want %d", loaded.Network.MaxConcurrentDownloads, original.Network.MaxConcurrentDownloads)
 	}
-	if loaded.Network.MaxConnectionsPerHost != original.Network.MaxConnectionsPerHost {
-		t.Error("MaxConnectionsPerHost mismatch")
+	if loaded.Network.MaxConnectionsPerDownload != original.Network.MaxConnectionsPerDownload {
+		t.Error("MaxConnectionsPerDownload mismatch")
 	}
 	if loaded.Network.UserAgent != original.Network.UserAgent {
 		t.Error("UserAgent mismatch")
@@ -240,7 +240,7 @@ func TestLoadSettings_MissingFile(t *testing.T) {
 
 	if settings != nil {
 		// If we got settings, they should have sensible defaults
-		if settings.Network.MaxConnectionsPerHost <= 0 {
+		if settings.Network.MaxConnectionsPerDownload <= 0 {
 			t.Error("Should return default settings with valid values")
 		}
 	}
@@ -296,9 +296,9 @@ func TestLoadSettings_CorruptedJSON_FallsBackToDefaults(t *testing.T) {
 	}
 
 	defaults := DefaultSettings()
-	if settings.Network.MaxConnectionsPerHost != defaults.Network.MaxConnectionsPerHost {
-		t.Errorf("Expected default MaxConnectionsPerHost %d, got %d",
-			defaults.Network.MaxConnectionsPerHost, settings.Network.MaxConnectionsPerHost)
+	if settings.Network.MaxConnectionsPerDownload != defaults.Network.MaxConnectionsPerDownload {
+		t.Errorf("Expected default MaxConnectionsPerDownload %d, got %d",
+			defaults.Network.MaxConnectionsPerDownload, settings.Network.MaxConnectionsPerDownload)
 	}
 	if settings.Performance.MaxTaskRetries != defaults.Performance.MaxTaskRetries {
 		t.Errorf("Expected default MaxTaskRetries %d, got %d",
@@ -333,7 +333,7 @@ func TestLoadSettings_TruncatedJSON_FallsBackToDefaults(t *testing.T) {
 		t.Fatal("LoadSettings should return defaults, got nil")
 		return
 	}
-	if settings.Network.MaxConnectionsPerHost != DefaultSettings().Network.MaxConnectionsPerHost {
+	if settings.Network.MaxConnectionsPerDownload != DefaultSettings().Network.MaxConnectionsPerDownload {
 		t.Error("Expected default settings after truncated JSON")
 	}
 }
@@ -383,7 +383,7 @@ func TestLoadSettings_PartialJSON(t *testing.T) {
 	}
 
 	// Default field should remain (from the defaults we started with)
-	if settings.Network.MaxConnectionsPerHost <= 0 {
+	if settings.Network.MaxConnectionsPerDownload <= 0 {
 		t.Error("Default values should be preserved for missing fields")
 	}
 }
@@ -398,8 +398,8 @@ func TestToRuntimeConfig(t *testing.T) {
 	}
 
 	// Verify all fields are correctly mapped
-	if runtime.MaxConnectionsPerHost != settings.Network.MaxConnectionsPerHost {
-		t.Error("MaxConnectionsPerHost not correctly mapped")
+	if runtime.MaxConnectionsPerDownload != settings.Network.MaxConnectionsPerDownload {
+		t.Error("MaxConnectionsPerDownload not correctly mapped")
 	}
 
 	if runtime.UserAgent != settings.Network.UserAgent {
@@ -438,7 +438,7 @@ func TestToRuntimeConfig_Exhaustive(t *testing.T) {
 	settings := DefaultSettings()
 
 	// Fill ALL network and performance settings with non-zero values
-	settings.Network.MaxConnectionsPerHost = 1
+	settings.Network.MaxConnectionsPerDownload = 1
 	settings.Network.MaxConcurrentDownloads = 1
 	settings.Network.MaxConcurrentProbes = 1
 	settings.Network.UserAgent = "f"
@@ -562,8 +562,8 @@ func TestSettingsJSON_Serialization(t *testing.T) {
 	}
 
 	// Verify round-trip
-	if loaded.Network.MaxConnectionsPerHost != original.Network.MaxConnectionsPerHost {
-		t.Error("Round-trip failed for MaxConnectionsPerHost")
+	if loaded.Network.MaxConnectionsPerDownload != original.Network.MaxConnectionsPerDownload {
+		t.Error("Round-trip failed for MaxConnectionsPerDownload")
 	}
 	if loaded.Performance.StallTimeout != original.Performance.StallTimeout {
 		t.Error("Round-trip failed for StallTimeout (duration)")
@@ -583,7 +583,7 @@ func TestConstants(t *testing.T) {
 func TestSaveSettings_RealFunction(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	original := DefaultSettings()
-	original.Network.MaxConnectionsPerHost = 48
+	original.Network.MaxConnectionsPerDownload = 48
 	original.General.AutoResume = true
 	original.Network.UserAgent = "TestAgent/3.0"
 
@@ -605,8 +605,8 @@ func TestSaveSettings_RealFunction(t *testing.T) {
 	}
 
 	// Verify values match
-	if loaded.Network.MaxConnectionsPerHost != 48 {
-		t.Errorf("MaxConnectionsPerHost mismatch: got %d, want 48", loaded.Network.MaxConnectionsPerHost)
+	if loaded.Network.MaxConnectionsPerDownload != 48 {
+		t.Errorf("MaxConnectionsPerDownload mismatch: got %d, want 48", loaded.Network.MaxConnectionsPerDownload)
 	}
 	if !loaded.General.AutoResume {
 		t.Error("AutoResume should be true")
@@ -688,11 +688,11 @@ func TestSaveAndLoadSettings_RoundTrip(t *testing.T) {
 			ExtensionPrompt: true,
 		},
 		Network: NetworkSettings{
-			MaxConnectionsPerHost: 64,
-			UserAgent:             "RoundTripTest/1.0",
-			SequentialDownload:    true,
-			MinChunkSize:          1 * MB,
-			WorkerBufferSize:      1 * MB,
+			MaxConnectionsPerDownload: 64,
+			UserAgent:                 "RoundTripTest/1.0",
+			SequentialDownload:        true,
+			MinChunkSize:              1 * MB,
+			WorkerBufferSize:          1 * MB,
 		},
 		Performance: PerformanceSettings{
 			MaxTaskRetries:        10,
@@ -761,13 +761,13 @@ func TestSettings_Validate(t *testing.T) {
 		{
 			name: "Valid Settings Unchanged",
 			modify: func(s *Settings) {
-				s.Network.MaxConnectionsPerHost = 48
+				s.Network.MaxConnectionsPerDownload = 48
 				s.General.LogRetentionCount = 10
 				s.Performance.SlowWorkerThreshold = 0.5
 			},
 			validate: func(t *testing.T, s *Settings) {
-				if s.Network.MaxConnectionsPerHost != 48 {
-					t.Errorf("Expected 48, got %d", s.Network.MaxConnectionsPerHost)
+				if s.Network.MaxConnectionsPerDownload != 48 {
+					t.Errorf("Expected 48, got %d", s.Network.MaxConnectionsPerDownload)
 				}
 				if s.General.LogRetentionCount != 10 {
 					t.Errorf("Expected 10, got %d", s.General.LogRetentionCount)
@@ -780,22 +780,22 @@ func TestSettings_Validate(t *testing.T) {
 		{
 			name: "Invalid Connections High Reset",
 			modify: func(s *Settings) {
-				s.Network.MaxConnectionsPerHost = 999
+				s.Network.MaxConnectionsPerDownload = 999
 			},
 			validate: func(t *testing.T, s *Settings) {
-				if s.Network.MaxConnectionsPerHost != defaults.Network.MaxConnectionsPerHost {
-					t.Errorf("Expected default %d, got %d", defaults.Network.MaxConnectionsPerHost, s.Network.MaxConnectionsPerHost)
+				if s.Network.MaxConnectionsPerDownload != defaults.Network.MaxConnectionsPerDownload {
+					t.Errorf("Expected default %d, got %d", defaults.Network.MaxConnectionsPerDownload, s.Network.MaxConnectionsPerDownload)
 				}
 			},
 		},
 		{
 			name: "Invalid Connections Low Reset",
 			modify: func(s *Settings) {
-				s.Network.MaxConnectionsPerHost = 0
+				s.Network.MaxConnectionsPerDownload = 0
 			},
 			validate: func(t *testing.T, s *Settings) {
-				if s.Network.MaxConnectionsPerHost != defaults.Network.MaxConnectionsPerHost {
-					t.Errorf("Expected default %d, got %d", defaults.Network.MaxConnectionsPerHost, s.Network.MaxConnectionsPerHost)
+				if s.Network.MaxConnectionsPerDownload != defaults.Network.MaxConnectionsPerDownload {
+					t.Errorf("Expected default %d, got %d", defaults.Network.MaxConnectionsPerDownload, s.Network.MaxConnectionsPerDownload)
 				}
 			},
 		},
