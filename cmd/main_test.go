@@ -33,6 +33,7 @@ func TestMain(m *testing.M) {
 
 		if ensureErr := resetSharedStateDB(); ensureErr != nil {
 			fmt.Fprintf(os.Stderr, "TestMain: failed to create isolated Surge test directories: %v\n", ensureErr)
+			_ = os.RemoveAll(tmpDir)
 			os.Exit(1)
 		}
 	}
