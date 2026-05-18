@@ -110,11 +110,11 @@ func TestReportBugAndToggleHelpKeymaps(t *testing.T) {
 
 	// 1. Dashboard.ToggleHelp
 	toggleHelpKeys := km.Dashboard.ToggleHelp.Keys()
-	if len(toggleHelpKeys) != 2 || toggleHelpKeys[0] != "h" || toggleHelpKeys[1] != "/" {
-		t.Errorf("Expected Dashboard.ToggleHelp default keys to be ['h', '/'], got %v", toggleHelpKeys)
+	if len(toggleHelpKeys) != 1 || toggleHelpKeys[0] != "/" {
+		t.Errorf("Expected Dashboard.ToggleHelp default keys to be ['/'], got %v", toggleHelpKeys)
 	}
-	if km.Dashboard.ToggleHelp.Help().Key != "h" {
-		t.Errorf("Expected Dashboard.ToggleHelp help key to be 'h', got %q", km.Dashboard.ToggleHelp.Help().Key)
+	if km.Dashboard.ToggleHelp.Help().Key != "/" {
+		t.Errorf("Expected Dashboard.ToggleHelp help key to be '/', got %q", km.Dashboard.ToggleHelp.Help().Key)
 	}
 
 	// 2. Dashboard.ReportBug
