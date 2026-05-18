@@ -18,6 +18,16 @@ buildGoModule {
     "-X main.version=${version}"
   ];
 
+  postInstall = ''
+    ln -s Surge $out/bin/surge
+  '';
+
+  doInstallCheck = true;
+  installCheckPhase = ''
+    $out/bin/Surge --version
+    $out/bin/surge --version
+  '';
+
   # Tests write to $HOME/.config; redirect to a writable tmpdir.
   preCheck = ''
     export HOME=$TMPDIR
