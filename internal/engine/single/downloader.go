@@ -4,35 +4,27 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
 	"sync"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // SingleDownloader handles single-threaded downloads for servers that don't support range requests.
 // NOTE: Pause/resume is NOT supported because this downloader is only used when
 // the server doesn't support Range headers. If interrupted, the download must restart.
 type SingleDownloader struct {
-	Client       *http.Client
 	ProgressChan chan<- any           // Channel for events (start/complete/error)
 	ID           string               // Download ID
 	State        *types.ProgressState // Shared state for TUI polling
 	Runtime      *types.RuntimeConfig
+	TotalSize    int64
 	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
 }
-
-type singleTransportKey struct {
-	proxyURL string
-	maxConns int
-}
-
-var singleTransportCache sync.Map // map[singleTransportKey]*http.Transport
 
 var bufPool = sync.Pool{
 	New: func() any {
@@ -44,92 +36,45 @@ var bufPool = sync.Pool{
 // NewSingleDownloader creates a new single-threaded downloader with all required parameters
 func NewSingleDownloader(id string, progressCh chan<- any, state *types.ProgressState, runtime *types.RuntimeConfig) *SingleDownloader {
 	if runtime == nil {
-		runtime = &types.RuntimeConfig{}
+		runtime = types.DefaultRuntimeConfig()
 	}
 
-	sd := &SingleDownloader{
+	return &SingleDownloader{
 		ProgressChan: progressCh,
 		ID:           id,
 		State:        state,
 		Runtime:      runtime,
 	}
-	sd.Client = newSingleClient(runtime, sd)
-	return sd
 }
 
-func newSingleClient(runtime *types.RuntimeConfig, sd *SingleDownloader) *http.Client {
-	transport := getSharedSingleTransport(runtime)
-
-	return &http.Client{
-		Transport: transport,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
-			}
-			if len(via) > 0 {
-				utils.CopyRedirectHeaders(req, via[0])
-			}
-			if sd != nil && sd.Headers != nil {
-				for key, val := range sd.Headers {
-					if key != "Range" {
-						req.Header.Set(key, val)
-					}
+func (d *SingleDownloader) applyClientSettings(client *http.Client) {
+	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
+		if len(via) >= 10 {
+			return types.ErrMaxRedirects
+		}
+		if len(via) > 0 {
+			utils.CopyRedirectHeaders(req, via[0])
+		}
+		if d.Headers != nil {
+			for key, val := range d.Headers {
+				if key != "Range" {
+					req.Header.Set(key, val)
 				}
 			}
-			return nil
-		},
-	}
-}
-
-func getSharedSingleTransport(runtime *types.RuntimeConfig) *http.Transport {
-	key := singleTransportKey{
-		proxyURL: runtime.ProxyURL,
-		maxConns: runtime.GetMaxConnectionsPerHost(),
-	}
-
-	if cached, ok := singleTransportCache.Load(key); ok {
-		return cached.(*http.Transport)
-	}
-
-	transport := newSingleTransport(runtime)
-	actual, _ := singleTransportCache.LoadOrStore(key, transport)
-	return actual.(*http.Transport)
-}
-
-func newSingleTransport(runtime *types.RuntimeConfig) *http.Transport {
-	proxyFunc := http.ProxyFromEnvironment
-	if runtime.ProxyURL != "" {
-		if parsedURL, err := url.Parse(runtime.ProxyURL); err == nil {
-			proxyFunc = http.ProxyURL(parsedURL)
-		} else {
-			utils.Debug("Invalid proxy URL %s: %v", runtime.ProxyURL, err)
 		}
-	}
-
-	return &http.Transport{
-		MaxIdleConns:        types.DefaultMaxIdleConns,
-		MaxIdleConnsPerHost: runtime.GetMaxConnectionsPerHost(),
-		MaxConnsPerHost:     runtime.GetMaxConnectionsPerHost(),
-		Proxy:               proxyFunc,
-
-		IdleConnTimeout:       types.DefaultIdleConnTimeout,
-		TLSHandshakeTimeout:   types.DefaultTLSHandshakeTimeout,
-		ResponseHeaderTimeout: types.DefaultResponseHeaderTimeout,
-		ExpectContinueTimeout: types.DefaultExpectContinueTimeout,
-
-		DisableCompression: true,
-		DialContext: (&net.Dialer{
-			Timeout:   types.DialTimeout,
-			KeepAlive: types.KeepAliveDuration,
-		}).DialContext,
+		return nil
 	}
 }
 
 // Download downloads a file using a single connection.
 // This is used for servers that don't support Range requests.
 // If interrupted, the download cannot be resumed and must restart from the beginning.
-func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string, fileSize int64, filename string) error {
-	defer d.Client.CloseIdleConnections()
+func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string, fileSize int64, filename string) (err error) {
+	transport := engine.DefaultNetworkPool.AcquireTransport(d.Runtime.ProxyURL, d.Runtime.CustomDNS, types.PoolMaxConnsPerHost)
+	defer engine.DefaultNetworkPool.ReleaseTransport(transport)
+
+	client := &http.Client{Transport: transport}
+	d.applyClientSettings(client)
 
 	if d.State != nil {
 		d.State.SetURL(rawurl)
@@ -146,7 +91,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	}
 	req.Header.Set("User-Agent", d.Runtime.GetUserAgent())
 
-	resp, err := d.Client.Do(req)
+	resp, err := client.Do(req)
 	if err != nil {
 		return err
 	}
@@ -160,12 +105,25 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
+	if fileSize <= 0 && resp.ContentLength > 0 {
+		fileSize = resp.ContentLength
+	}
+	d.TotalSize = fileSize
+	if d.State != nil && fileSize > 0 {
+		d.State.SetTotalSize(fileSize)
+	}
+
 	// Use .surge extension for incomplete file (must be pre-created by processing layer)
 	workingPath := destPath + types.IncompleteSuffix
 	outFile, err := os.OpenFile(workingPath, os.O_RDWR, 0)
 	if err != nil {
 		return err
 	}
+	defer func() {
+		if cerr := outFile.Close(); cerr != nil && err == nil {
+			err = fmt.Errorf("close error: %w", cerr)
+		}
+	}()
 
 	preallocated := false
 	if fileSize > 0 {
@@ -174,10 +132,6 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		}
 		preallocated = true
 	}
-
-	defer func() {
-		_ = outFile.Close()
-	}()
 
 	start := time.Now()
 	var written int64
@@ -208,9 +162,6 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 	if err := outFile.Sync(); err != nil {
 		return fmt.Errorf("sync error: %w", err)
-	}
-	if err := outFile.Close(); err != nil {
-		return fmt.Errorf("close error: %w", err)
 	}
 
 	if d.State != nil {

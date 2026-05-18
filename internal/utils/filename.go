@@ -7,18 +7,20 @@ import (
 	"io"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/h2non/filetype"
 	"github.com/vfaronov/httpheader"
 )
 
+const MaxFilenameLength = 240
+
 // DetermineFilename extracts the filename from a URL and HTTP response,
 // applying various heuristics. It returns the determined filename,
 // a new io.Reader that includes any sniffed header bytes, and an error.
-func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string, io.Reader, error) {
+func DetermineFilename(rawurl string, resp *http.Response) (string, io.Reader, error) {
 	parsed, err := url.Parse(rawurl)
 	if err != nil {
 		return "", nil, err
@@ -31,9 +33,7 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 	// 1. Content-Disposition
 	if _, name, err := httpheader.ContentDisposition(resp.Header); err == nil && name != "" {
 		candidate = name
-		if verbose {
-			fmt.Fprintf(os.Stderr, "Filename from Content-Disposition: %s\n", candidate)
-		}
+		Debug("Filename from Content-Disposition: %s", candidate)
 	}
 
 	// 2. Query Parameters (if no Content-Disposition)
@@ -41,20 +41,17 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 		q := parsed.Query()
 		if name := q.Get("filename"); name != "" {
 			candidate = name
-			if verbose {
-				fmt.Fprintf(os.Stderr, "Filename from query param 'filename': %s\n", candidate)
-			}
+			Debug("Filename from query param 'filename': %s", candidate)
 		} else if name := q.Get("file"); name != "" {
 			candidate = name
-			if verbose {
-				fmt.Fprintf(os.Stderr, "Filename from query param 'file': %s\n", candidate)
-			}
+			Debug("Filename from query param 'file': %s", candidate)
 		}
 	}
 
 	// 3. URL Path
 	if candidate == "" {
 		candidate = filepath.Base(parsed.Path)
+		Debug("Filename from URL path: %s", candidate)
 	}
 
 	filename := sanitizeFilename(candidate)
@@ -76,12 +73,14 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 
 	body := io.MultiReader(bytes.NewReader(header), resp.Body)
 
-	if verbose {
-		mimeType := http.DetectContentType(header)
-		fmt.Fprintln(os.Stderr, "Detected MIME:", mimeType)
+	kind, _ := filetype.Match(header)
 
-		if kind, _ := filetype.Match(header); kind != filetype.Unknown {
-			fmt.Fprintln(os.Stderr, "Magic Type:", kind.Extension, kind.MIME)
+	if IsLoggingEnabled() {
+		mimeType := http.DetectContentType(header)
+		Debug("Detected MIME: %s", mimeType)
+
+		if kind != filetype.Unknown {
+			Debug("Magic Type: %s %s", kind.Extension, kind.MIME)
 		}
 	}
 
@@ -93,21 +92,15 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 			zipName := string(header[start:end])
 			if zipName != "" {
 				filename = filepath.Base(zipName)
-				if verbose {
-					fmt.Fprintln(os.Stderr, "ZIP internal filename:", zipName)
-				}
+				Debug("ZIP internal filename: %s", zipName)
 			}
 		}
 	}
 
 	if filepath.Ext(filename) == "" {
-		if kind, _ := filetype.Match(header); kind != filetype.Unknown {
-			if kind.Extension != "" {
-				filename = filename + "." + kind.Extension
-				if verbose {
-					fmt.Fprintf(os.Stderr, "Added extension from magic type: %s\n", kind.Extension)
-				}
-			}
+		if kind != filetype.Unknown && kind.Extension != "" {
+			filename = filename + "." + kind.Extension
+			Debug("Added extension from magic type: %s", kind.Extension)
 		}
 	}
 
@@ -117,10 +110,10 @@ func DetermineFilename(rawurl string, resp *http.Response, verbose bool) (string
 
 	if filename == "" || filename == "." || filename == "/" || filename == "_" {
 		filename = "download.bin"
-		if verbose {
-			fmt.Fprintln(os.Stderr, "Falling back to default filename: download.bin")
-		}
+		Debug("Falling back to default filename: download.bin")
 	}
+
+	Debug("Final resolved filename: %s", filename)
 
 	return filename, body, nil
 }
@@ -136,6 +129,35 @@ func sanitizedBecameExtensionOnly(original, sanitized string) bool {
 		return true
 	}
 	return !strings.HasPrefix(originalBase, ".")
+}
+
+// TruncateFilename ensures a filename does not exceed MaxFilenameLength
+// while preserving the extension and being UTF-8 safe.
+func TruncateFilename(name string) string {
+	if len(name) <= MaxFilenameLength {
+		return name
+	}
+	ext := filepath.Ext(name)
+	extBytes := len(ext)
+	maxBase := MaxFilenameLength - extBytes
+
+	if maxBase < 1 {
+		// Extension alone is too long — hard-truncate by rune so we don't split mid-char
+		b := []byte(name)
+		for len(b) > MaxFilenameLength {
+			_, size := utf8.DecodeLastRune(b)
+			b = b[:len(b)-size]
+		}
+		return string(b)
+	}
+
+	base := strings.TrimSuffix(name, ext)
+	b := []byte(base)
+	for len(b) > maxBase {
+		_, size := utf8.DecodeLastRune(b)
+		b = b[:len(b)-size]
+	}
+	return string(b) + ext
 }
 
 func sanitizeFilename(name string) string {
@@ -167,6 +189,11 @@ func sanitizeFilename(name string) string {
 
 	if name == "" {
 		return "_"
+	}
+
+	if len(name) > MaxFilenameLength {
+		name = TruncateFilename(name)
+		Debug("Truncated extremely long filename to %d bytes", MaxFilenameLength)
 	}
 
 	return name

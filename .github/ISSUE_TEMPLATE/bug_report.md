@@ -1,6 +1,6 @@
 ---
-name: Bug report
-about: Create a report to help us improve
+name: Surge Bug report
+about: Report a bug for the Surge Core app (CLI/TUI/Backend)
 title: ""
 labels: bug
 assignees: ""
@@ -24,22 +24,19 @@ A clear and concise description of what you expected to happen.
 If applicable, add screenshots to help explain your problem.
 
 **Logs**
-Surge only writes log files when run with `--verbose`. To capture a log:
+Surge automatically writes debug log files.
 
-1. Reproduce the bug with the `--verbose` flag:
-   ```
-   surge --verbose [your command]
-   ```
-2. The log file is written to:
+1. The log file is written to:
    - **Linux:** `~/.local/state/surge/logs/`
    - **macOS:** `~/Library/Application Support/surge/logs/`
    - **Windows:** `%APPDATA%\surge\logs\`
-3. Attach the most recent `debug-*.log` file by dragging it into this issue, or paste relevant excerpts in a code block.
+2. Attach the most recent `debug-*.log` file by dragging it into this issue, or paste relevant excerpts in a code block.
 
 **Please complete the following information:**
 
 - OS: [e.g. Windows 11 / macOS 14 / Ubuntu 24.04]
-- Surge Version: [e.g. 1.2.0 — run `surge --version`]
+- Surge Version: [e.g. 1.2.0 - run surge --version]
+- Commit: [e.g. 9f3d2ab]
 - Installed From: [e.g. Brew / GitHub Release / built from source]
 
 **Additional context**

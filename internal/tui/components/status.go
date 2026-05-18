@@ -1,9 +1,12 @@
 package components
 
 import (
-	"github.com/surge-downloader/surge/internal/tui/colors"
+	"image/color"
+	"sync"
 
-	"github.com/charmbracelet/lipgloss"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
+
+	"charm.land/lipgloss/v2"
 )
 
 // DownloadStatus represents the state of a download
@@ -19,32 +22,44 @@ const (
 
 // statusInfo holds the display properties for each status
 type statusInfo struct {
-	icon         string
-	label        string
-	color        lipgloss.TerminalColor
-	renderedFull string
-	renderedIcon string
+	icon  string
+	label string
 }
 
-func initStatusMap() map[DownloadStatus]statusInfo {
-	m := map[DownloadStatus]statusInfo{
-		StatusQueued:      {"⋯", "Queued", colors.StatePaused, "", ""},
-		StatusDownloading: {"⬇", "Downloading", colors.StateDownloading, "", ""},
-		StatusPaused:      {"⏸", "Paused", colors.StatePaused, "", ""},
-		StatusComplete:    {"✔", "Completed", colors.StateDone, "", ""},
-		StatusError:       {"✖", "Error", colors.StateError, "", ""},
-	}
-
-	// Pre-render the styled strings so we don't allocate per-frame
-	for status, info := range m {
-		info.renderedFull = lipgloss.NewStyle().Foreground(info.color).Render(info.icon + " " + info.label)
-		info.renderedIcon = lipgloss.NewStyle().Foreground(info.color).Render(info.icon)
-		m[status] = info
-	}
-	return m
+var statusMap = map[DownloadStatus]statusInfo{
+	StatusQueued:      {icon: "\u22ef", label: "Queued"},
+	StatusDownloading: {icon: "\u2b07", label: "Downloading"},
+	StatusPaused:      {icon: "\u23f8", label: "Paused"},
+	StatusComplete:    {icon: "\u2714", label: "Completed"},
+	StatusError:       {icon: "\u2716", label: "Error"},
 }
 
-var statusMap = initStatusMap()
+var (
+	statusRenderCache  [StatusError + 1][2]string // [status][0:full,1:icon]
+	queuedSpinnerStyle lipgloss.Style
+	statusOnce         sync.Once
+	cacheMu            sync.RWMutex
+)
+
+func InitializeStatusCache() {
+	statusOnce.Do(func() {
+		rebuildStatusCache()
+		colors.RegisterThemeChangeHook(rebuildStatusCache)
+	})
+}
+
+func rebuildStatusCache() {
+	cacheMu.Lock()
+	defer cacheMu.Unlock()
+
+	for status := StatusQueued; status <= StatusError; status++ {
+		info := statusMap[status]
+		style := lipgloss.NewStyle().Foreground(status.Color())
+		statusRenderCache[status][0] = style.Render(info.icon + " " + info.label)
+		statusRenderCache[status][1] = style.Render(info.icon)
+	}
+	queuedSpinnerStyle = lipgloss.NewStyle().Foreground(StatusQueued.Color())
+}
 
 // Icon returns the status icon
 func (s DownloadStatus) Icon() string {
@@ -63,25 +78,48 @@ func (s DownloadStatus) Label() string {
 }
 
 // Color returns the status color
-func (s DownloadStatus) Color() lipgloss.TerminalColor {
-	if info, ok := statusMap[s]; ok {
-		return info.color
+func (s DownloadStatus) Color() color.Color {
+	switch s {
+	case StatusQueued, StatusPaused:
+		return colors.StatePaused()
+	case StatusDownloading:
+		return colors.StateDownloading()
+	case StatusComplete:
+		return colors.StateDone()
+	case StatusError:
+		return colors.StateError()
+	default:
+		return colors.Gray()
 	}
-	return colors.Gray
 }
 
 // Render returns the styled icon + label combination
 func (s DownloadStatus) Render() string {
-	if info, ok := statusMap[s]; ok {
-		return info.renderedFull
+	cacheMu.RLock()
+	defer cacheMu.RUnlock()
+	if s >= StatusQueued && s <= StatusError {
+		return statusRenderCache[s][0]
 	}
 	return "Unknown"
 }
 
+// RenderWithSpinner returns the styled icon + label combination, conditionally substituting a dynamic spinner for the Queued state
+func (s DownloadStatus) RenderWithSpinner(spinnerView string) string {
+	if s == StatusQueued {
+		cacheMu.RLock()
+		style := queuedSpinnerStyle
+		cacheMu.RUnlock()
+		return style.Render(spinnerView + " " + s.Label())
+	}
+	return s.Render()
+}
+
 // RenderIcon returns just the styled icon
 func (s DownloadStatus) RenderIcon() string {
-	if info, ok := statusMap[s]; ok {
-		return info.renderedIcon
+	cacheMu.RLock()
+	defer cacheMu.RUnlock()
+	if s >= StatusQueued && s <= StatusError {
+		return statusRenderCache[s][1]
 	}
 	return "?"
 }

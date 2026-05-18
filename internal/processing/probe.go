@@ -2,9 +2,9 @@ package processing
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
-	"net"
 	"net/http"
 	neturl "net/url"
 	"strconv"
@@ -12,9 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
@@ -22,45 +23,41 @@ var ua = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) " +
 	"Chrome/120.0.0.0 Safari/537.36"
 
 var (
-	probeClientsMu   sync.Mutex
-	probeClients     = make(map[string]*http.Client)
-	probeClientOrder []string
+	probeHostLocks sync.Map // map[string]*sync.Mutex
 )
 
-const maxProbeClients = 8
+// ErrProbeRequestCreation is returned when a probe request cannot be initialized.
+var ErrProbeRequestCreation = errors.New("failed to create probe request")
 
 // ProbeResult contains all metadata from server probe
 type ProbeResult struct {
-	FileSize      int64
-	SupportsRange bool
-	Filename      string
-	ContentType   string
+	FileSize         int64
+	SupportsRange    bool
+	Filename         string
+	DetectedFilename string
+	ContentType      string
 }
 
 // probeHeadersContextKey is used to pass custom headers to the HTTP client's CheckRedirect function
 type probeHeadersContextKey struct{}
 
-func resolveProxyURL() string {
+func resolveRuntimeConfig() *types.RuntimeConfig {
 	settings, err := config.LoadSettings()
 	if err != nil {
 		settings = config.DefaultSettings()
 	}
 	if settings != nil {
-		return settings.Network.ProxyURL
+		return settings.ToRuntimeConfig()
 	}
-	return ""
+	return nil
 }
 
 // ProbeServer is the convenience entry point for callers that do not already
 // hold a settings snapshot; it reloads persisted settings so probe traffic can
 // honor the saved proxy configuration.
 func ProbeServer(ctx context.Context, rawurl string, filenameHint string, headers map[string]string) (*ProbeResult, error) {
-	return ProbeServerWithProxy(ctx, rawurl, filenameHint, headers, resolveProxyURL())
+	return ProbeServerWithProxy(ctx, rawurl, filenameHint, headers, resolveRuntimeConfig())
 }
-
-var (
-	probeHostLocks sync.Map // map[string]*sync.Mutex
-)
 
 // getProbeHostLock returns a mutex for a specific host to sequentialize probes
 func getProbeHostLock(rawurl string) *sync.Mutex {
@@ -77,7 +74,7 @@ func getProbeHostLock(rawurl string) *sync.Mutex {
 // ProbeServerWithProxy is the hot-path variant for callers that already know
 // the effective proxy and want probe traffic to match the eventual download path
 // without re-reading settings from disk.
-func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint string, headers map[string]string, proxyURL string) (*ProbeResult, error) {
+func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint string, headers map[string]string, runCfg *types.RuntimeConfig) (*ProbeResult, error) {
 	utils.Debug("Probing server: %s", rawurl)
 
 	// Embed custom headers in context so CheckRedirect can use them
@@ -87,7 +84,37 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 
 	var resp *http.Response
 
-	client := getProbeClient(proxyURL)
+	var proxyURL, customDNS string
+	if runCfg != nil {
+		proxyURL = runCfg.ProxyURL
+		customDNS = runCfg.CustomDNS
+	}
+
+	// Standardize on PoolMaxConnsPerHost for probes to match the eventual download path
+	transport := engine.DefaultNetworkPool.AcquireTransport(proxyURL, customDNS, types.PoolMaxConnsPerHost)
+	defer engine.DefaultNetworkPool.ReleaseTransport(transport)
+
+	client := &http.Client{
+		Transport: transport,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if len(via) >= 10 {
+				return fmt.Errorf("stopped after 10 redirects")
+			}
+			if len(via) > 0 {
+				copyProbeRedirectHeaders(req, via[0])
+			}
+
+			// Re-apply custom explicitly provided headers on cross-origin redirects
+			if customHeaders, ok := req.Context().Value(probeHeadersContextKey{}).(map[string]string); ok {
+				for k, v := range customHeaders {
+					if !strings.EqualFold(k, "Range") {
+						req.Header.Set(k, v)
+					}
+				}
+			}
+			return nil
+		},
+	}
 
 	// Sequentialize probes to the same host to prevent rate limiting (e.g., Google Drive)
 	hostLock := getProbeHostLock(rawurl)
@@ -122,7 +149,7 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 		req, reqErr := newProbeRequest(probeCtx, rawurl, headers, true)
 		if reqErr != nil {
 			cancel()
-			err = fmt.Errorf("failed to create probe request: %w", reqErr)
+			err = fmt.Errorf("%w: %w", ErrProbeRequestCreation, reqErr)
 			break
 		}
 
@@ -137,7 +164,7 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 			reqNoRange, reqNoRangeErr := newProbeRequest(probeCtx, rawurl, headers, false)
 			if reqNoRangeErr != nil {
 				cancel()
-				err = fmt.Errorf("failed to create probe request without range: %w", reqNoRangeErr)
+				err = fmt.Errorf("%w without range: %w", ErrProbeRequestCreation, reqNoRangeErr)
 				break
 			}
 
@@ -200,11 +227,13 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 		return nil, fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
-	name, _, err := utils.DetermineFilename(rawurl, resp, false)
+	name, _, err := utils.DetermineFilename(rawurl, resp)
 	if err != nil {
 		utils.Debug("Error determining filename: %v", err)
 		name = "download.bin"
 	}
+
+	result.DetectedFilename = name
 
 	if filenameHint != "" {
 		result.Filename = filenameHint
@@ -249,75 +278,6 @@ func applyProbeHeaders(req *http.Request, headers map[string]string, includeRang
 	}
 }
 
-func getProbeClient(proxyURL string) *http.Client {
-	probeClientsMu.Lock()
-	defer probeClientsMu.Unlock()
-
-	if cached, ok := probeClients[proxyURL]; ok {
-		return cached
-	}
-
-	client := &http.Client{
-		Transport: newProbeTransport(proxyURL),
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			if len(via) >= 10 {
-				return fmt.Errorf("stopped after 10 redirects")
-			}
-			if len(via) > 0 {
-				copyProbeRedirectHeaders(req, via[0])
-			}
-
-			// Re-apply custom explicitly provided headers on cross-origin redirects
-			if customHeaders, ok := req.Context().Value(probeHeadersContextKey{}).(map[string]string); ok {
-				for k, v := range customHeaders {
-					if !strings.EqualFold(k, "Range") {
-						req.Header.Set(k, v)
-					}
-				}
-			}
-			return nil
-		},
-	}
-
-	if len(probeClients) >= maxProbeClients && len(probeClientOrder) > 0 {
-		evictedKey := probeClientOrder[0]
-		probeClientOrder = probeClientOrder[1:]
-		if evictedClient, ok := probeClients[evictedKey]; ok {
-			evictedClient.CloseIdleConnections()
-			delete(probeClients, evictedKey)
-		}
-	}
-
-	probeClients[proxyURL] = client
-	probeClientOrder = append(probeClientOrder, proxyURL)
-	return client
-}
-
-func newProbeTransport(proxyURL string) *http.Transport {
-	proxyFunc := http.ProxyFromEnvironment
-	if strings.TrimSpace(proxyURL) != "" {
-		if parsedURL, err := neturl.Parse(proxyURL); err == nil {
-			proxyFunc = http.ProxyURL(parsedURL)
-		} else {
-			utils.Debug("Invalid probe proxy URL %s: %v", proxyURL, err)
-		}
-	}
-
-	return &http.Transport{
-		Proxy:                 proxyFunc,
-		MaxIdleConns:          types.DefaultMaxIdleConns,
-		MaxIdleConnsPerHost:   types.PerHostMax,
-		IdleConnTimeout:       types.DefaultIdleConnTimeout,
-		TLSHandshakeTimeout:   types.DefaultTLSHandshakeTimeout,
-		ResponseHeaderTimeout: types.DefaultResponseHeaderTimeout,
-		ExpectContinueTimeout: types.DefaultExpectContinueTimeout,
-		DialContext: (&net.Dialer{
-			Timeout:   types.DialTimeout,
-			KeepAlive: types.KeepAliveDuration,
-		}).DialContext,
-	}
-}
-
 func copyProbeRedirectHeaders(dst, src *http.Request) {
 	if dst == nil || src == nil {
 		return
@@ -351,11 +311,11 @@ func sameProbeRedirectOrigin(a, b *neturl.URL) bool {
 // ProbeMirrors is the convenience wrapper for callers that need mirror probing
 // to honor the saved proxy setting but do not already hold a live settings snapshot.
 func ProbeMirrors(ctx context.Context, mirrors []string) (valid []string, errs map[string]error) {
-	return ProbeMirrorsWithProxy(ctx, mirrors, resolveProxyURL())
+	return ProbeMirrorsWithProxy(ctx, mirrors, resolveRuntimeConfig())
 }
 
 // ProbeMirrorsWithProxy preserves caller order so mirror priority remains stable.
-func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, proxyURL string) (valid []string, errs map[string]error) {
+func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, runCfg *types.RuntimeConfig) (valid []string, errs map[string]error) {
 	candidates := orderedUniqueMirrors(mirrors)
 	utils.Debug("Probing %d mirrors...", len(candidates))
 
@@ -380,7 +340,7 @@ func ProbeMirrorsWithProxy(ctx context.Context, mirrors []string, proxyURL strin
 			probeCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 
-			result, err := ProbeServerWithProxy(probeCtx, target, "", nil, proxyURL)
+			result, err := ProbeServerWithProxy(probeCtx, target, "", nil, runCfg)
 
 			outcome := mirrorProbeResult{}
 			if err != nil {

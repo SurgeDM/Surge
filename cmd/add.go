@@ -2,10 +2,9 @@ package cmd
 
 import (
 	"fmt"
-	"os"
 
+	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/spf13/cobra"
-	"github.com/surge-downloader/surge/internal/utils"
 )
 
 var addCmd = &cobra.Command{
@@ -13,51 +12,47 @@ var addCmd = &cobra.Command{
 	Aliases: []string{"get"},
 	Short:   "Add a new download to the running Surge instance",
 	Long:    `Add one or more URLs to the download queue of a running Surge instance.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		// Initialize Global State (needed for config/paths)
-		mustInitializeGlobalState()
+	RunE: func(cmd *cobra.Command, args []string) error {
+		//initializeGlobally is required to ensure that the config and logger are set up before we attempt to resolve the API connection or read the batch file.
+		if err := initializeGlobalState(); err != nil {
+			return err
+		}
 
 		batchFile, _ := cmd.Flags().GetString("batch")
 		output, _ := cmd.Flags().GetString("output")
 
-		// Collect URLs
 		var urls []string
-
-		// 1. URLs from args
 		urls = append(urls, args...)
 
 		// 2. URLs from batch file
 		if batchFile != "" {
 			fileUrls, err := utils.ReadURLsFromFile(batchFile)
 			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading batch file: %v\n", err)
-				os.Exit(1)
+				return fmt.Errorf("error reading batch file: %w", err)
 			}
 			urls = append(urls, fileUrls...)
 		}
 
 		if len(urls) == 0 {
 			_ = cmd.Help()
-			return
+			return nil
 		}
 
 		baseURL, token, err := resolveAPIConnection(true)
 		if err != nil {
-			fmt.Printf("Error: %v\n", err)
-			os.Exit(1)
+			return err
 		}
-
-		// Resolve once before the loop so all downloads in this batch share
-		// the same absolute output path, avoiding per-URL CWD drift.
 		resolvedOutput := resolveClientOutputPath(output)
 
 		// Send downloads to server
 		count := 0
+		attempted := 0
 		for _, arg := range urls {
 			url, mirrors := ParseURLArg(arg)
 			if url == "" {
 				continue
 			}
+			attempted++
 			if err := sendToServer(url, mirrors, resolvedOutput, baseURL, token); err != nil {
 				fmt.Printf("Error adding %s: %v\n", url, err)
 				continue
@@ -67,7 +62,14 @@ var addCmd = &cobra.Command{
 
 		if count > 0 {
 			fmt.Printf("Successfully added %d downloads.\n", count)
+			return nil
 		}
+
+		if attempted > 0 {
+			return fmt.Errorf("failed to add any downloads")
+		}
+
+		return fmt.Errorf("no valid URLs to add")
 	},
 }
 

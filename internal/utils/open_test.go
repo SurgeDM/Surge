@@ -80,3 +80,40 @@ func TestOpenContainingFolder_Validation(t *testing.T) {
 		})
 	}
 }
+
+func TestOpenBrowser_Validation(t *testing.T) {
+	tests := []struct {
+		name       string
+		url        string
+		errorHints []string
+	}{
+		{
+			name:       "empty url",
+			url:        "",
+			errorHints: []string{"empty"},
+		},
+		{
+			name:       "whitespace url",
+			url:        "   ",
+			errorHints: []string{"empty"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := OpenBrowser(tc.url)
+			if err == nil {
+				t.Fatalf("expected validation error for %q", tc.url)
+			}
+
+			lower := strings.ToLower(err.Error())
+			for _, hint := range tc.errorHints {
+				if strings.Contains(lower, strings.ToLower(hint)) {
+					return
+				}
+			}
+
+			t.Fatalf("expected error containing one of %v, got: %v", tc.errorHints, err)
+		})
+	}
+}

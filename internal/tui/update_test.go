@@ -3,22 +3,45 @@ package tui
 import (
 	"context"
 	"errors"
+	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/download"
-	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/processing"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/download"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/processing"
 )
 
 var errTest = errors.New("test error")
+
+func newInputModels() []textinput.Model {
+	inputs := []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()}
+	for i := range inputs {
+		inputs[i].Prompt = ""
+	}
+	return inputs
+}
+
+func unwrapRootModel(t *testing.T, model tea.Model) RootModel {
+	t.Helper()
+	switch v := model.(type) {
+	case RootModel:
+		return v
+	case *RootModel:
+		return *v
+	default:
+		t.Fatalf("unexpected tea.Model type %T", model)
+		return RootModel{}
+	}
+}
 
 func TestUpdate_ResumeResultSetsResuming(t *testing.T) {
 	m := RootModel{
@@ -62,7 +85,7 @@ func TestUpdate_DownloadStartedKeepsResuming(t *testing.T) {
 	m := RootModel{
 		downloads:   []*DownloadModel{dm},
 		list:        NewDownloadList(80, 20),
-		logViewport: viewport.New(40, 5),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	msg := events.DownloadStartedMsg{
@@ -85,6 +108,7 @@ func TestUpdate_DownloadStartedKeepsResuming(t *testing.T) {
 	}
 	if d == nil {
 		t.Fatal("Expected download id-1 to exist")
+		return
 	}
 	if d.paused || d.pausing || !d.resuming {
 		t.Fatalf("Expected paused/pausing cleared and resuming preserved on DownloadStartedMsg, got paused=%v pausing=%v resuming=%v", d.paused, d.pausing, d.resuming)
@@ -98,8 +122,9 @@ func TestUpdate_EnqueueSuccessMergesOptimisticEntryAfterStart(t *testing.T) {
 	m := RootModel{
 		downloads:          []*DownloadModel{optimistic},
 		SelectedDownloadID: "pending-1",
+		pinnedTab:          -1,
 		list:               NewDownloadList(80, 20),
-		logViewport:        viewport.New(40, 5),
+		logViewport:        viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	updated, _ := m.Update(events.DownloadStartedMsg{
@@ -142,7 +167,7 @@ func TestUpdate_PauseResumeEventsNormalizeFlags(t *testing.T) {
 			{ID: "id-1", paused: false, pausing: true, resuming: true},
 		},
 		list:        NewDownloadList(80, 20),
-		logViewport: viewport.New(40, 5),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	updated, _ := m.Update(events.DownloadPausedMsg{
@@ -205,7 +230,7 @@ func TestUpdate_DownloadComplete_UsesAverageSpeed(t *testing.T) {
 	m := RootModel{
 		downloads:   []*DownloadModel{dm},
 		list:        NewDownloadList(80, 20),
-		logViewport: viewport.New(40, 5),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	elapsed := 4 * time.Second
@@ -240,7 +265,7 @@ func TestUpdate_SettingsIgnoresMissingFourthTab(t *testing.T) {
 		Settings: config.DefaultSettings(),
 	}
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'4'}})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: '4', Text: "4"})
 	m2 := updated.(RootModel)
 
 	if m2.SettingsActiveTab >= len(config.CategoryOrder()) {
@@ -248,7 +273,7 @@ func TestUpdate_SettingsIgnoresMissingFourthTab(t *testing.T) {
 	}
 
 	// Ensure subsequent navigation does not panic with this state.
-	updated, _ = m2.Update(tea.KeyMsg{Type: tea.KeyDown})
+	updated, _ = m2.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	m3 := updated.(RootModel)
 	if m3.SettingsActiveTab >= len(config.CategoryOrder()) {
 		t.Fatalf("invalid settings tab index after down: %d", m3.SettingsActiveTab)
@@ -261,7 +286,7 @@ func TestUpdate_DashboardWithNilSettingsDoesNotPanic(t *testing.T) {
 		list:  NewDownloadList(80, 20),
 	}
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'a'}})
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'a', Text: "a"})
 	m2 := updated.(RootModel)
 	if m2.Settings == nil {
 		t.Fatal("expected default settings to be initialized")
@@ -273,7 +298,7 @@ func TestUpdate_DownloadRemovedRemovesFromModelAndList(t *testing.T) {
 	m := RootModel{
 		downloads:   []*DownloadModel{dm},
 		list:        NewDownloadList(80, 20),
-		logViewport: viewport.New(40, 5),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 	m.UpdateListItems()
 
@@ -297,7 +322,7 @@ func TestUpdate_DownloadRemoved_NoOpWhenUnknownID(t *testing.T) {
 	m := RootModel{
 		downloads:   []*DownloadModel{dm},
 		list:        NewDownloadList(80, 20),
-		logViewport: viewport.New(40, 5),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 	m.UpdateListItems()
 
@@ -350,13 +375,13 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	m := RootModel{
 		Settings:    config.DefaultSettings(),
 		Service:     svc,
-		logViewport: viewport.New(40, 5),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 		list:        NewDownloadList(40, 10),
 		inputs:      []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
 	}
 
 	// 1. Test Extension Prompt Enabled
-	m.Settings.General.ExtensionPrompt = true
+	m.Settings.Extension.ExtensionPrompt = true
 	m.Settings.General.WarnOnDuplicate = true
 
 	msg := events.DownloadRequestMsg{
@@ -382,7 +407,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 2. Test Duplicate Warning (when prompt disabled but duplicate exists)
-	m.Settings.General.ExtensionPrompt = false
+	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = true
 
 	// Add existing download
@@ -399,7 +424,7 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 3. Test No Prompt (Direct Download)
-	m.Settings.General.ExtensionPrompt = false
+	m.Settings.Extension.ExtensionPrompt = false
 	m.Settings.General.WarnOnDuplicate = true
 	m.downloads = nil // Clear downloads
 
@@ -467,7 +492,7 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 		enqueueCtx:    ctx,
 		cancelEnqueue: func() {},
 		list:          NewDownloadList(80, 20),
-		logViewport:   viewport.New(40, 5),
+		logViewport:   viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	updated, cmd := m.startDownload("https://example.com/file.bin", nil, nil, t.TempDir(), false, "file.bin", "")
@@ -507,7 +532,7 @@ func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *te
 		Service:      svc,
 		Orchestrator: orchestrator,
 		list:         NewDownloadList(80, 20),
-		logViewport:  viewport.New(40, 5),
+		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	updated, _ := m.startDownload("https://example.com/100MB.bin", nil, nil, targetDir, true, "", "")
@@ -543,7 +568,7 @@ func TestStartDownload_UsesGenericQueuedNameForExplicitFilenameUntilLifecycleCon
 		Service:      svc,
 		Orchestrator: orchestrator,
 		list:         NewDownloadList(80, 20),
-		logViewport:  viewport.New(40, 5),
+		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
 	updated, _ := m.startDownload("https://example.com/archive.zip", nil, nil, targetDir, false, "archive.zip", "")
@@ -568,7 +593,7 @@ func TestUpdate_EnqueueErrorKeepsFailedDownloadVisibleInDoneTab(t *testing.T) {
 		activeTab:      TabDone,
 		downloads:      []*DownloadModel{optimistic},
 		list:           NewDownloadList(80, 20),
-		logViewport:    viewport.New(40, 5),
+		logViewport:    viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 		Settings:       config.DefaultSettings(),
 		searchQuery:    "",
 		categoryFilter: "",
@@ -605,16 +630,201 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 		cancelEnqueue: cancel,
 	}
 
-	updated, _ := m.Update(tea.KeyMsg{Type: tea.KeyCtrlC})
+	// ctrl+c should open the quit confirmation modal, not shut down immediately
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
 	m2 := updated.(RootModel)
 
-	if !m2.shuttingDown {
-		t.Fatal("expected model to enter shutdown state")
+	if m2.state != QuitConfirmState {
+		t.Fatal("expected model to enter quit confirmation state")
+	}
+	if m2.shuttingDown {
+		t.Fatal("expected model to not be shutting down yet")
+	}
+
+	// confirming with enter (Yes button focused by default) should cancel the context and begin shutdown
+	updated, _ = m2.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m3 := updated.(RootModel)
+
+	if !m3.shuttingDown {
+		t.Fatal("expected model to enter shutdown state after confirmation")
 	}
 	select {
 	case <-ctx.Done():
 	default:
 		t.Fatal("expected quit to cancel enqueue context")
+	}
+}
+
+func newQuitConfirmModel() RootModel {
+	return RootModel{
+		state: QuitConfirmState,
+		keys:  Keys,
+	}
+}
+
+func TestQuitConfirm_RightMovesToNo(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyRight})
+	m2 := updated.(RootModel)
+	if m2.quitConfirmFocused != 1 {
+		t.Fatal("expected focus to move to No button")
+	}
+}
+
+func TestQuitConfirm_LeftMovesToYes(t *testing.T) {
+	m := newQuitConfirmModel()
+	m.quitConfirmFocused = 1
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	m2 := updated.(RootModel)
+	if m2.quitConfirmFocused != 0 {
+		t.Fatal("expected focus to move to Yes button")
+	}
+}
+
+func TestQuitConfirm_TabWrapsFromNoToYes(t *testing.T) {
+	m := newQuitConfirmModel()
+	m.quitConfirmFocused = 1
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m2 := unwrapRootModel(t, updated)
+	if m2.quitConfirmFocused != 0 {
+		t.Fatal("expected tab on Nope to wrap back to Yep!")
+	}
+}
+
+func TestQuitConfirm_EscCancels(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m2 := updated.(RootModel)
+	if m2.state != DashboardState {
+		t.Fatal("expected esc to return to dashboard")
+	}
+	if m2.shuttingDown {
+		t.Fatal("expected no shutdown on cancel")
+	}
+}
+
+func TestQuitConfirm_NShortcutCancels(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'n'})
+	m2 := updated.(RootModel)
+	if m2.state != DashboardState {
+		t.Fatal("expected n to return to dashboard")
+	}
+	if m2.shuttingDown {
+		t.Fatal("expected no shutdown on n")
+	}
+}
+
+func TestQuitConfirm_YShortcutConfirms(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	m := newQuitConfirmModel()
+	m.enqueueCtx = ctx
+	m.cancelEnqueue = cancel
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'y'})
+	m2 := updated.(RootModel)
+	if !m2.shuttingDown {
+		t.Fatal("expected y to begin shutdown")
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatal("expected y to cancel enqueue context")
+	}
+}
+
+func TestQuitConfirm_EnterWithNoFocusedCancels(t *testing.T) {
+	m := newQuitConfirmModel()
+	m.quitConfirmFocused = 1
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m2 := updated.(RootModel)
+	if m2.state != DashboardState {
+		t.Fatal("expected enter on No button to return to dashboard")
+	}
+	if m2.shuttingDown {
+		t.Fatal("expected no shutdown when No is selected")
+	}
+	if m2.quitConfirmFocused != 0 {
+		t.Fatal("expected focus to reset to Yes after cancel")
+	}
+}
+
+func TestQuitConfirm_SpaceWithYesFocusedConfirms(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	m := newQuitConfirmModel()
+	m.enqueueCtx = ctx
+	m.cancelEnqueue = cancel
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeySpace})
+	m2 := updated.(RootModel)
+	if !m2.shuttingDown {
+		t.Fatal("expected space on Yes button to begin shutdown")
+	}
+	select {
+	case <-ctx.Done():
+	default:
+		t.Fatal("expected space to cancel enqueue context")
+	}
+}
+
+func TestQuitConfirm_TabMovesToNo(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m2 := updated.(RootModel)
+	if m2.quitConfirmFocused != 1 {
+		t.Fatal("expected tab to move focus to No button")
+	}
+}
+
+func TestQuitConfirm_HMovesToYes(t *testing.T) {
+	m := newQuitConfirmModel()
+	m.quitConfirmFocused = 1
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'h'})
+	m2 := updated.(RootModel)
+	if m2.quitConfirmFocused != 0 {
+		t.Fatal("expected h to move focus to Yes button")
+	}
+}
+
+func TestQuitConfirm_LMovesToNo(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'l'})
+	m2 := updated.(RootModel)
+	if m2.quitConfirmFocused != 1 {
+		t.Fatal("expected l to move focus to No button")
+	}
+}
+
+func TestQuitConfirm_CtrlCCancels(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'c', Mod: tea.ModCtrl})
+	m2 := updated.(RootModel)
+	if m2.state != DashboardState {
+		t.Fatal("expected ctrl+c to return to dashboard from quit confirm modal")
+	}
+	if m2.shuttingDown {
+		t.Fatal("expected no shutdown on ctrl+c cancel")
+	}
+}
+
+func TestQuitConfirm_CtrlQCancels(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'q', Mod: tea.ModCtrl})
+	m2 := updated.(RootModel)
+	if m2.state != DashboardState {
+		t.Fatal("expected ctrl+q to return to dashboard from quit confirm modal")
+	}
+	if m2.shuttingDown {
+		t.Fatal("expected no shutdown on ctrl+q cancel")
+	}
+}
+
+func TestQuitConfirm_UnrelatedKeyIgnored(t *testing.T) {
+	m := newQuitConfirmModel()
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'x'})
+	m2 := updated.(RootModel)
+	if m2.state != QuitConfirmState {
+		t.Fatal("expected unrelated key to keep modal open")
 	}
 }
 
@@ -669,7 +879,7 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 	m.list.Select(0) // Select the paused download
 
 	// Simulate pressing 'r' (Refresh)
-	msg := tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'r'}}
+	msg := tea.KeyPressMsg{Code: 'r', Text: "r"}
 
 	updated, _ := m.Update(msg)
 	newRoot := updated.(RootModel)
@@ -679,5 +889,336 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 	}
 	if newRoot.urlUpdateInput.Value() != "http://example.com/file" {
 		t.Errorf("Expected urlUpdateInput to be pre-filled with 'http://example.com/file', got '%s'", newRoot.urlUpdateInput.Value())
+	}
+}
+
+func TestUpdate_InputStatePasteRoutesToFocusedField(t *testing.T) {
+	m := RootModel{
+		state:        InputState,
+		focusedInput: 0,
+		inputs:       newInputModels(),
+	}
+	m.inputs[0].Focus()
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "https://example.com/file.zip"})
+	m2 := updated.(RootModel)
+	if got := m2.inputs[0].Value(); got != "https://example.com/file.zip" {
+		t.Fatalf("url input paste = %q, want %q", got, "https://example.com/file.zip")
+	}
+
+	m2.inputs[0].Blur()
+	m2.focusedInput = 3
+	m2.inputs[3].Focus()
+
+	updated, _ = m2.Update(tea.PasteMsg{Content: "custom-name.zip"})
+	m3 := updated.(RootModel)
+	if got := m3.inputs[3].Value(); got != "custom-name.zip" {
+		t.Fatalf("filename input paste = %q, want %q", got, "custom-name.zip")
+	}
+
+	m3.inputs[3].Blur()
+	m3.state = ExtensionConfirmationState
+	m3.focusedInput = 2
+	m3.inputs[2].Focus()
+
+	updated, _ = m3.Update(tea.PasteMsg{Content: "/tmp/downloads"})
+	m4 := updated.(RootModel)
+	if got := m4.inputs[2].Value(); got != "/tmp/downloads" {
+		t.Fatalf("extension path input paste = %q, want %q", got, "/tmp/downloads")
+	}
+}
+
+func TestUpdate_AddPathBrowseUsesCurrentPathAndEscReturnsToInput(t *testing.T) {
+	browseDir := t.TempDir()
+
+	m := RootModel{
+		state:        InputState,
+		focusedInput: 2,
+		inputs:       newInputModels(),
+		keys:         Keys,
+		PWD:          filepath.Dir(browseDir),
+		Settings:     config.DefaultSettings(),
+	}
+	m.inputs[2].SetValue(browseDir)
+	m.inputs[2].Focus()
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	m2 := updated.(RootModel)
+
+	if got, want := m2.state, FilePickerState; got != want {
+		t.Fatalf("state = %v, want %v", got, want)
+	}
+	if got, want := m2.filepickerOrigin, FilePickerOriginAdd; got != want {
+		t.Fatalf("filepickerOrigin = %v, want %v", got, want)
+	}
+	if got, want := m2.filepicker.CurrentDirectory, browseDir; got != want {
+		t.Fatalf("current directory = %q, want %q", got, want)
+	}
+
+	updated, _ = m2.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	m3 := unwrapRootModel(t, updated)
+
+	if got, want := m3.state, InputState; got != want {
+		t.Fatalf("state after esc = %v, want %v", got, want)
+	}
+	if got := m3.filepickerOrigin; got != FilePickerOriginNone {
+		t.Fatalf("filepickerOrigin after esc = %v, want none", got)
+	}
+	if got, want := m3.focusedInput, 2; got != want {
+		t.Fatalf("focusedInput after esc = %d, want %d", got, want)
+	}
+	if got, want := m3.inputs[2].Value(), browseDir; got != want {
+		t.Fatalf("path input after esc = %q, want %q", got, want)
+	}
+}
+
+func TestUpdate_FilePickerUseDirReturnsToAddInput(t *testing.T) {
+	browseDir := t.TempDir()
+
+	m := RootModel{
+		state:            FilePickerState,
+		focusedInput:     2,
+		inputs:           newInputModels(),
+		keys:             Keys,
+		Settings:         config.DefaultSettings(),
+		filepicker:       newFilepicker(browseDir),
+		filepickerOrigin: FilePickerOriginAdd,
+	}
+	m.filepicker.CurrentDirectory = browseDir
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m2 := unwrapRootModel(t, updated)
+
+	if got, want := m2.state, InputState; got != want {
+		t.Fatalf("state after use dir = %v, want %v", got, want)
+	}
+	if got, want := m2.inputs[2].Value(), browseDir; got != want {
+		t.Fatalf("path input after use dir = %q, want %q", got, want)
+	}
+	if got, want := m2.focusedInput, 2; got != want {
+		t.Fatalf("focusedInput after use dir = %d, want %d", got, want)
+	}
+}
+
+func TestNewFilepickerEscIsCancelOnly(t *testing.T) {
+	fp := newFilepicker(t.TempDir())
+	esc := tea.KeyPressMsg{Code: tea.KeyEscape}
+
+	if key.Matches(esc, fp.KeyMap.Back) {
+		t.Fatal("expected esc not to match filepicker back key")
+	}
+}
+
+func TestUpdate_FilePickerLeftAtRootStaysOpen(t *testing.T) {
+	rootDir := string(os.PathSeparator)
+	if volume := filepath.VolumeName(t.TempDir()); volume != "" {
+		rootDir = volume + string(os.PathSeparator)
+	}
+
+	m := RootModel{
+		state:            FilePickerState,
+		inputs:           newInputModels(),
+		keys:             Keys,
+		Settings:         config.DefaultSettings(),
+		filepicker:       newFilepicker(rootDir),
+		filepickerOrigin: FilePickerOriginAdd,
+	}
+	m.filepicker.CurrentDirectory = rootDir
+
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	m2 := unwrapRootModel(t, updated)
+
+	if got, want := m2.state, FilePickerState; got != want {
+		t.Fatalf("state after left at root = %v, want %v", got, want)
+	}
+	if got, want := filepath.Clean(m2.filepicker.CurrentDirectory), filepath.Clean(rootDir); got != want {
+		t.Fatalf("current directory after left at root = %q, want %q", got, want)
+	}
+}
+
+func TestUpdate_DashboardSearchPasteRoutesToSearchInput(t *testing.T) {
+	search := textinput.New()
+	search.Focus()
+	m := RootModel{
+		state:        DashboardState,
+		searchActive: true,
+		searchInput:  search,
+		Settings:     config.DefaultSettings(),
+		list:         NewDownloadList(80, 20),
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "ubuntu"})
+	m2 := updated.(RootModel)
+
+	if got := m2.searchInput.Value(); got != "ubuntu" {
+		t.Fatalf("search input paste = %q, want %q", got, "ubuntu")
+	}
+	if got := m2.searchQuery; got != "ubuntu" {
+		t.Fatalf("search query = %q, want %q", got, "ubuntu")
+	}
+}
+
+func TestUpdate_URLUpdateStatePasteRoutesToURLInput(t *testing.T) {
+	urlInput := textinput.New()
+	urlInput.Focus()
+	m := RootModel{
+		state:          URLUpdateState,
+		urlUpdateInput: urlInput,
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "https://mirror.example/new.zip"})
+	m2 := updated.(RootModel)
+	if got := m2.urlUpdateInput.Value(); got != "https://mirror.example/new.zip" {
+		t.Fatalf("url update paste = %q, want %q", got, "https://mirror.example/new.zip")
+	}
+}
+
+func TestUpdate_SettingsEditingPasteRoutesToSettingsInput(t *testing.T) {
+	settingsInput := textinput.New()
+	settingsInput.Focus()
+	m := RootModel{
+		state:             SettingsState,
+		SettingsIsEditing: true,
+		SettingsInput:     settingsInput,
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "/mnt/storage"})
+	m2 := updated.(RootModel)
+	if got := m2.SettingsInput.Value(); got != "/mnt/storage" {
+		t.Fatalf("settings input paste = %q, want %q", got, "/mnt/storage")
+	}
+}
+
+func TestUpdate_CategoryEditorPasteRoutesToCategoryInput(t *testing.T) {
+	var catInputs [4]textinput.Model
+	for i := range catInputs {
+		catInputs[i] = textinput.New()
+	}
+	catInputs[1].Focus()
+
+	m := RootModel{
+		state:           CategoryManagerState,
+		catMgrEditing:   true,
+		catMgrEditField: 1,
+		catMgrInputs:    catInputs,
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "Audio files"})
+	m2 := updated.(RootModel)
+	if got := m2.catMgrInputs[1].Value(); got != "Audio files" {
+		t.Fatalf("category editor paste = %q, want %q", got, "Audio files")
+	}
+}
+
+func TestUpdate_DashboardInactivePasteIsIgnored(t *testing.T) {
+	search := textinput.New()
+	search.SetValue("existing")
+
+	m := RootModel{
+		state:        DashboardState,
+		searchActive: false,
+		searchInput:  search,
+		Settings:     config.DefaultSettings(),
+		list:         NewDownloadList(80, 20),
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "ubuntu"})
+	m2 := updated.(RootModel)
+
+	if got := m2.searchInput.Value(); got != "existing" {
+		t.Fatalf("expected no paste when search inactive, got %q", got)
+	}
+}
+
+func TestUpdate_SettingsNotEditingPasteIsIgnored(t *testing.T) {
+	settingsInput := textinput.New()
+	settingsInput.SetValue("keep")
+
+	m := RootModel{
+		state:             SettingsState,
+		SettingsIsEditing: false,
+		SettingsInput:     settingsInput,
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "/tmp/new"})
+	m2 := updated.(RootModel)
+
+	if got := m2.SettingsInput.Value(); got != "keep" {
+		t.Fatalf("expected no paste when settings editor inactive, got %q", got)
+	}
+}
+
+func TestUpdate_CategoryManagerNotEditingPasteIsIgnored(t *testing.T) {
+	var catInputs [4]textinput.Model
+	for i := range catInputs {
+		catInputs[i] = textinput.New()
+	}
+	catInputs[2].SetValue("keep-pattern")
+
+	m := RootModel{
+		state:           CategoryManagerState,
+		catMgrEditing:   false,
+		catMgrEditField: 2,
+		catMgrInputs:    catInputs,
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "new-pattern"})
+	m2 := updated.(RootModel)
+
+	if got := m2.catMgrInputs[2].Value(); got != "keep-pattern" {
+		t.Fatalf("expected no paste when category editor inactive, got %q", got)
+	}
+}
+
+func TestUpdate_WindowSizeNormalizesCategoryManagerSelection(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = []config.Category{
+		{Name: "Docs", Pattern: `(?i)\\.txt$`, Path: "docs"},
+	}
+
+	var catInputs [4]textinput.Model
+	for i := range catInputs {
+		catInputs[i] = textinput.New()
+	}
+
+	m := RootModel{
+		state:           CategoryManagerState,
+		Settings:        settings,
+		catMgrCursor:    99,
+		catMgrEditing:   true,
+		catMgrEditField: 99,
+		catMgrInputs:    catInputs,
+		list:            NewDownloadList(80, 20),
+	}
+
+	updated, _ := m.Update(tea.WindowSizeMsg{Width: 58, Height: 16})
+	m2 := updated.(RootModel)
+
+	if got, want := m2.catMgrCursor, 0; got != want {
+		t.Fatalf("catMgrCursor = %d, want %d", got, want)
+	}
+	if got, want := m2.catMgrEditField, 3; got != want {
+		t.Fatalf("catMgrEditField = %d, want %d", got, want)
+	}
+}
+
+func TestUpdate_UnlistedStatePasteIsIgnored(t *testing.T) {
+	urlInput := textinput.New()
+	urlInput.SetValue("https://example.com/original")
+
+	m := RootModel{
+		state:          DetailState,
+		urlUpdateInput: urlInput,
+		searchActive:   true,
+	}
+
+	updated, _ := m.Update(tea.PasteMsg{Content: "https://example.com/new"})
+	m2 := updated.(RootModel)
+
+	if m2.state != DetailState {
+		t.Fatalf("state changed on ignored paste: got %v", m2.state)
+	}
+	if got := m2.urlUpdateInput.Value(); got != "https://example.com/original" {
+		t.Fatalf("expected unlisted state paste to be ignored, got %q", got)
 	}
 }

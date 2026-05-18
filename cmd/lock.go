@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/gofrs/flock"
-	"github.com/surge-downloader/surge/internal/config"
 )
 
 // InstanceLock wraps the file locking mechanism

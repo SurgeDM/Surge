@@ -1,11 +1,14 @@
 package components
 
 import (
-	"github.com/surge-downloader/surge/internal/tui/colors"
+	"image/color"
 
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/utils"
+
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/lipgloss/v2"
 )
 
 // AddDownloadModal renders input-driven download forms (add download / extension prompt).
@@ -19,30 +22,48 @@ type AddDownloadModal struct {
 	BrowseHintIndex int
 	Help            help.Model
 	HelpKeys        help.KeyMap
-	BorderColor     lipgloss.TerminalColor
+	BorderColor     color.Color
 	Width           int
 	Height          int
 }
 
 // View renders the inner content (without border box).
 func (m AddDownloadModal) View() string {
-	labelStyle := lipgloss.NewStyle().Width(10).Foreground(colors.LightGray)
-	hintBase := lipgloss.NewStyle().MarginLeft(1).Foreground(colors.LightGray)
+	labelStyle := lipgloss.NewStyle().Width(10).Foreground(colors.LightGray())
+	hintBase := lipgloss.NewStyle().MarginLeft(1).Foreground(colors.LightGray())
 	content := []string{""}
 
 	if m.ShowURL && m.URL != "" {
+		horizontalPadding := lipgloss.NewStyle().Padding(0, 2).GetHorizontalFrameSize()
+		innerWidth := m.Width - BorderFrameWidth - horizontalPadding
+		wrappedURL := utils.TruncateTwoLines(m.URL, innerWidth-5) // Offset for "URL: "
 		content = append(content,
-			lipgloss.NewStyle().Foreground(colors.LightGray).Render("URL: "+m.URL),
+			lipgloss.NewStyle().Foreground(colors.LightGray()).Render("URL: "+wrappedURL),
 			"",
 		)
 	}
 
 	for i := 0; i < len(m.Inputs) && i < len(m.Labels); i++ {
-		row := lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render(m.Labels[i]), m.Inputs[i].View())
+		// Calculate available width for inputs
+		// Accounts for: horizontal padding (4), label (10), and box borders (2)
+		const labelWidth = 10
+		horizontalPadding := lipgloss.NewStyle().Padding(0, 2).GetHorizontalFrameSize()
+		inputW := m.Width - BorderFrameWidth - horizontalPadding - labelWidth
+
+		if m.BrowseHintIndex == i {
+			inputW -= 13 // Margin (1) + "[Tab] Browse" (12)
+		}
+		if inputW < 10 {
+			inputW = 10
+		}
+		ti := m.Inputs[i]
+		ti.SetWidth(inputW)
+
+		row := lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render(m.Labels[i]), ti.View())
 		if m.BrowseHintIndex == i {
 			hintStyle := hintBase
 			if m.FocusedInput == i {
-				hintStyle = hintStyle.Foreground(colors.NeonPink)
+				hintStyle = hintStyle.Foreground(colors.Pink())
 			}
 			row = lipgloss.JoinHorizontal(lipgloss.Left, row, hintStyle.Render("[Tab] Browse"))
 		}
@@ -55,7 +76,7 @@ func (m AddDownloadModal) View() string {
 
 // RenderWithBtopBox renders the modal with btop-style border.
 func (m AddDownloadModal) RenderWithBtopBox(
-	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor lipgloss.TerminalColor) string,
+	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
 	titleStyle lipgloss.Style,
 ) string {
 	return renderBox(titleStyle.Render(" "+m.Title+" "), "", m.View(), m.Width, m.Height, m.BorderColor)

@@ -11,7 +11,7 @@ from the `settings.json` file located in the application data directory:
 - **macOS:** `~/Library/Application Support/surge/settings.json`
 - **Linux:** `~/.config/surge/settings.json`
 
-The `settings.json` file expects a nested structure divided into `general`, `network`, and `performance` categories. For example:
+The `settings.json` file expects a nested structure divided into `general`, `network`, `performance`, and `categories` sections. For example:
 
 ```json
 {
@@ -24,11 +24,24 @@ The `settings.json` file expects a nested structure divided into `general`, `net
   },
   "performance": {
     "max_task_retries": 5
+  },
+  "categories": {
+    "category_enabled": true
   }
 }
 ```
 
 *Note: You do not need to specify all keys. Surge will automatically infer missing keys and use their internal default values.*
+
+## Configuration Validation
+
+Surge implements a self-healing configuration system to ensure the application remains stable even if the `settings.json` file is manually edited with invalid values.
+
+- **Range Enforcement**: Numeric values (like connection limits and concurrent downloads) are strictly enforced. If a value is set outside its safe operating range in the JSON file, Surge will automatically reset that specific field to its default value on startup while preserving your other valid settings.
+- **Path Verification**: Paths like `default_download_dir` and individual category paths are verified for existence and accessibility. Broken or inaccessible paths are rolled back to the system's default Downloads directory.
+- **Syntactic Validation**: Proxy URLs and DNS server lists are validated for correct syntax.
+- **Category Integrity**: If a custom category has an invalid regular expression pattern, it is automatically pruned from the active list to prevent engine crashes.
+- **Corrupt JSON Fallback**: If the `settings.json` file is completely unparseable (e.g., missing brackets or commas), Surge will log a warning and start with all factory default settings for that session.
 
 ## Directory Structure
 
@@ -39,6 +52,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | **Config**  | `settings.json`                   | `~/.config/surge/`           | `~/Library/Application Support/surge/`      | `%APPDATA%\surge\`      |
 | **State**   | Database (`surge.db`), auth token | `~/.local/state/surge/`      | `~/Library/Application Support/surge/`      | `%APPDATA%\surge\`      |
 | **Logs**    | Timestamped `.log` files          | `~/.local/state/surge/logs/` | `~/Library/Application Support/surge/logs/` | `%APPDATA%\surge\logs\` |
+| **Themes**  | Custom `.toml` theme files        | `~/.config/surge/themes/`    | `~/Library/Application Support/surge/themes/` | `%APPDATA%\surge\themes\` |
 | **Runtime** | PID file, port file, lock         | `$XDG_RUNTIME_DIR/surge/`¹   | `$TMPDIR/surge-runtime/`                    | `%TEMP%\surge\`         |
 
 > ¹ Falls back to `~/.local/state/surge/` when `$XDG_RUNTIME_DIR` is not set (e.g. Docker / headless).
@@ -56,10 +70,13 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `warn_on_duplicate`    | bool   | Show a warning when adding a download that already exists in the list.                             | `true`  |
 | `extension_prompt`     | bool   | Prompt for confirmation in the TUI when adding downloads via the browser extension.                | `false` |
 | `auto_resume`          | bool   | Automatically resume paused downloads when Surge starts.                                           | `false` |
+| `auto_start`           | bool   | Automatically start Surge as a system service on boot. (See [USAGE.md](USAGE.md#service-management)).      | `false` |
 | `skip_update_check`    | bool   | Disable automatic check for new versions on startup.                                               | `false` |
 | `clipboard_monitor`    | bool   | Watch the system clipboard for URLs and prompt to download them.                                   | `true`  |
 | `theme`                | int    | UI Theme (0=Adaptive, 1=Light, 2=Dark).                                                            | `0`     |
+| `theme_path`           | string | Path to a custom `.toml` color scheme or name of theme in the `themes` directory. See [THEMES.md](THEMES.md). | `""`    |
 | `log_retention_count`  | int    | Number of recent log files to keep.                                                                | `5`     |
+| `live_speed_graph`     | bool   | Use live speed for graph instead of EMA smoothed speed.                                            | `false` |
 
 ### Connection Settings
 
@@ -67,6 +84,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | :------------------------- | :----- | :---------------------------------------------------------------------------------------------------- | :------ |
 | `max_connections_per_host` | int    | Maximum concurrent connections allowed to a single host (1-64).                                       | `32`    |
 | `max_concurrent_downloads` | int    | Maximum number of downloads running simultaneously (requires restart).                                | `3`     |
+| `max_concurrent_probes`    | int    | Maximum number of simultaneous server probes when many downloads are added at once (1-10). Requires restart. | `3`     |
 | `user_agent`               | string | Custom User-Agent string for HTTP requests. Leave empty for default.                                  | `""`    |
 | `proxy_url`                | string | HTTP/HTTPS proxy URL (e.g., `http://127.0.0.1:8080`). Leave empty to use system settings.             | `""`    |
 | `sequential_download`      | bool   | Download file pieces in strict order (Streaming Mode). Useful for previewing media but may be slower. | `false` |
@@ -82,3 +100,9 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `slow_worker_grace_period` | duration | Time to wait before checking a worker's speed (e.g., `5s`).                  | `5s`    |
 | `stall_timeout`            | duration | Restart workers that haven't received data for this duration (e.g., `3s`).   | `3s`    |
 | `speed_ema_alpha`          | float    | Exponential moving average smoothing factor for speed calculation (0.0-1.0). | `0.3`   |
+
+### Category Settings
+
+| Key                    | Type   | Description                                                                                              | Default |
+| :--------------------- | :----- | :------------------------------------------------------------------------------------------------------- | :------ |
+| `category_enabled`     | bool   | Enable automatic sorting of downloads into subfolders based on file type categories.                     | `false` |

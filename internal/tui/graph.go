@@ -2,12 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"strings"
 
-	"github.com/surge-downloader/surge/internal/tui/colors"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/utils"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 )
 
 // GraphStats contains the statistics to overlay on the graph
@@ -17,11 +18,15 @@ type GraphStats struct {
 	DownloadTotal int64   // Total downloaded bytes
 }
 
-var graphGradient = []lipgloss.TerminalColor{
-	lipgloss.AdaptiveColor{Light: "#ce93d8", Dark: "#5f005f"}, // Bottom
-	lipgloss.AdaptiveColor{Light: "#ab47bc", Dark: "#8700af"},
-	lipgloss.AdaptiveColor{Light: "#8e24aa", Dark: "#af00d7"},
-	lipgloss.AdaptiveColor{Light: "#4a148c", Dark: "#ff00ff"}, // Top
+// graphColors returns the gradient slice for the graph from the current palette.
+// Called per-render so it always reflects the active theme.
+func graphColors() []color.Color {
+	return []color.Color{
+		colors.ProgressStart(), // Bottom
+		colors.Magenta(),
+		colors.Pink(),
+		colors.ProgressEnd(), // Top
+	}
 }
 
 // renderMultiLineGraph creates a multi-line bar graph with grid lines.
@@ -29,16 +34,14 @@ var graphGradient = []lipgloss.TerminalColor{
 // data: speed history data points
 // width, height: dimensions of the graph
 // maxVal: maximum value for scaling
-// color: color for the data bars
 // stats: stats to display in overlay box (pass nil to skip)
-func renderMultiLineGraph(data []float64, width, height int, maxVal float64, color lipgloss.TerminalColor, stats *GraphStats) string {
+func renderMultiLineGraph(data []float64, width, height int, maxVal float64, stats *GraphStats) string {
 	if width < 1 || height < 1 {
 		return ""
 	}
 
 	// Styles
-	gridStyle := lipgloss.NewStyle().Foreground(colors.Gray)
-	// barStyle := lipgloss.NewStyle().Foreground(color)
+	gridStyle := lipgloss.NewStyle().Foreground(colors.Gray())
 
 	// 1. Prepare the canvas with a Grid
 	rows := make([][]string, height)
@@ -47,9 +50,9 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, col
 		for j := range rows[i] {
 			if i == height-1 {
 				// Bottom row: solid baseline
-				rows[i][j] = gridStyle.Render("─")
+				rows[i][j] = gridStyle.Render("\u2500")
 			} else if i%2 == 0 {
-				rows[i][j] = gridStyle.Render("╌")
+				rows[i][j] = gridStyle.Render("\u254c")
 			} else {
 				rows[i][j] = " "
 			}
@@ -57,30 +60,24 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, col
 	}
 
 	// Block characters for partial fills
-	blocks := []string{" ", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
+	blocks := []string{" ", "\u2581", "\u2582", "\u2583", "\u2584", "\u2585", "\u2586", "\u2588"}
+
+	// Snapshot current palette colors once per render so the gradient is consistent
+	// across all rows and doesn't allocate on every iteration.
+	gradient := graphColors()
 
 	// Pre-calculate styles for every row to avoid re-creating them in the loop
 	// Optimization: Pre-render all possible block characters for each row style
 	// This avoids calling style.Render() width*height times
 	rowChars := make([][]string, height)
 	for y := 0; y < height; y++ {
-		// Map height 'y' to an index in graphGradient
-		colorIdx := (y * len(graphGradient)) / height
-		if colorIdx >= len(graphGradient) {
-			colorIdx = len(graphGradient) - 1
+		// Map height 'y' to an index in gradient
+		colorIdx := (y * len(gradient)) / height
+		if colorIdx >= len(gradient) {
+			colorIdx = len(gradient) - 1
 		}
-		style := lipgloss.NewStyle().Foreground(graphGradient[colorIdx])
+		style := lipgloss.NewStyle().Foreground(gradient[colorIdx])
 
-		// Pre-render the 8 block characters + space
-		rowChars[y] = make([]string, 9)
-		rowChars[y][0] = " " // Empty
-		for k := 1; k <= 8; k++ {
-			rowChars[y][k] = style.Render(blocks[k-1]) // blocks is 0-indexed (space is 0) but we use 1-8 for blocks
-		}
-		// rowChars[y][0] = " " (unstyled or styled space)
-		// rowChars[y][1..8] = styled blocks
-
-		// blocks := []string{" ", "▂", "▃", "▄", "▅", "▆", "▇", "█"}
 		rowChars[y] = make([]string, len(blocks))
 		for k, b := range blocks {
 			rowChars[y][k] = style.Render(b)
@@ -155,10 +152,10 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, col
 // overlayStatsBox renders stats on top of the graph in the top-right area
 func overlayStatsBox(graph string, stats *GraphStats, width, height int) string {
 	// Create the stats box content - btop style
-	valueStyle := lipgloss.NewStyle().Foreground(colors.NeonCyan).Bold(true)
-	labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray)
-	headerStyle := lipgloss.NewStyle().Foreground(colors.NeonPink).Bold(true)
-	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray)
+	valueStyle := lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
+	labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray())
+	headerStyle := lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true)
+	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray())
 
 	speedMbps := stats.DownloadSpeed * 8
 	topMbps := stats.DownloadTop * 8
@@ -167,18 +164,18 @@ func overlayStatsBox(graph string, stats *GraphStats, width, height int) string 
 	statsLines := []string{
 		headerStyle.Render("download"),
 		fmt.Sprintf("%s %s  %s",
-			valueStyle.Render("▼"),
+			valueStyle.Render("\u25bc"),
 			valueStyle.Render(fmt.Sprintf("%.2f MB/s", stats.DownloadSpeed)),
 			dimStyle.Render(fmt.Sprintf("(%.0f Mbps)", speedMbps)),
 		),
 		fmt.Sprintf("%s %s %s  %s",
-			labelStyle.Render("▼"),
+			labelStyle.Render("\u25bc"),
 			labelStyle.Render("Top:"),
 			valueStyle.Render(fmt.Sprintf("%.2f MB/s", stats.DownloadTop)),
 			dimStyle.Render(fmt.Sprintf("(%.0f Mbps)", topMbps)),
 		),
 		fmt.Sprintf("%s %s %s",
-			labelStyle.Render("▼"),
+			labelStyle.Render("\u25bc"),
 			labelStyle.Render("Total:"),
 			valueStyle.Render(utils.ConvertBytesToHumanReadable(stats.DownloadTotal)),
 		),
@@ -200,7 +197,7 @@ func overlayStatsBox(graph string, stats *GraphStats, width, height int) string 
 		graphLineWidth := lipgloss.Width(graphLines[i])
 		statsLineWidth := lipgloss.Width(statsBoxLines[i])
 
-		keepWidth := graphLineWidth - statsLineWidth - 1
+		keepWidth := graphLineWidth - statsLineWidth - DividerHeight
 		if keepWidth < 0 {
 			keepWidth = 0
 		}

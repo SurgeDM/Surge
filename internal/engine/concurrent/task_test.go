@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 func TestActiveTask_RemainingBytes(t *testing.T) {
@@ -44,6 +44,7 @@ func TestActiveTask_RemainingTask(t *testing.T) {
 	remaining := at.RemainingTask()
 	if remaining == nil {
 		t.Fatal("RemainingTask returned nil")
+		return
 	}
 	if remaining.Offset != 0 || remaining.Length != 1000 {
 		t.Errorf("RemainingTask = %+v, want Offset=0, Length=1000", remaining)

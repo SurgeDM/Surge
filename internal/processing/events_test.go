@@ -6,11 +6,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/processing"
-	"github.com/surge-downloader/surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/testutil"
 )
 
 func TestStartEventWorker_FinalizesCompletedFileUsingDestPath(t *testing.T) {
@@ -70,6 +70,7 @@ func TestStartEventWorker_FinalizesCompletedFileUsingDestPath(t *testing.T) {
 	}
 	if entry == nil {
 		t.Fatal("expected completed entry to exist")
+		return
 	}
 	if entry.Status != "completed" {
 		t.Fatalf("status = %q, want completed", entry.Status)
@@ -114,6 +115,7 @@ func TestStartEventWorker_PersistsQueuedMirrorsForResume(t *testing.T) {
 	}
 	if queuedState == nil {
 		t.Fatal("expected queued state entry to exist")
+		return
 	}
 	if len(queuedState.Mirrors) != 2 {
 		t.Fatalf("mirrors = %v, want 2 queued mirrors", queuedState.Mirrors)
@@ -159,6 +161,7 @@ func TestStartEventWorker_PreservesQueuedMirrorsAcrossStartedThenError(t *testin
 	}
 	if entry == nil {
 		t.Fatal("expected errored entry to exist")
+		return
 	}
 	if entry.Status != "error" {
 		t.Fatalf("status = %q, want error", entry.Status)

@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/testutil"
 )
 
 func TestMirrors_HappyPath(t *testing.T) {
@@ -35,7 +35,7 @@ func TestMirrors_HappyPath(t *testing.T) {
 	destPath := filepath.Join(tmpDir, "mirror_test.bin")
 	state := types.NewProgressState("mirror-test", fileSize)
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 4, // Enough connections to use both
+		MaxConnectionsPerDownload: 4, // Enough connections to use both
 	}
 
 	downloader := NewConcurrentDownloader("mirror-test-id", nil, state, runtime)
@@ -95,8 +95,8 @@ func TestMirrors_Failover(t *testing.T) {
 	destPath := filepath.Join(tmpDir, "failover_test.bin")
 	state := types.NewProgressState("failover-test", fileSize)
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 4,
-		MaxTaskRetries:        5, // Need retries to switch
+		MaxConnectionsPerDownload: 4,
+		MaxTaskRetries:            5, // Need retries to switch
 	}
 
 	downloader := NewConcurrentDownloader("failover-test-id", nil, state, runtime)

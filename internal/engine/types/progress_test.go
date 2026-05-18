@@ -44,6 +44,30 @@ func TestProgressState_SetTotalSize(t *testing.T) {
 	}
 }
 
+func TestProgressState_SetTotalSize_Idempotent(t *testing.T) {
+	ps := NewProgressState("test-idempotent", 100)
+
+	// Simulate a session that started 5 seconds ago
+	originalStartTime := time.Now().Add(-5 * time.Second)
+	ps.StartTime = originalStartTime
+
+	// Call SetTotalSize with the SAME size
+	ps.SetTotalSize(100)
+
+	// Verify StartTime was NOT reset to Now
+	if !ps.StartTime.Equal(originalStartTime) {
+		t.Errorf("StartTime was reset despite same size: got %v, want %v", ps.StartTime, originalStartTime)
+	}
+
+	// Call SetTotalSize with a DIFFERENT size
+	ps.SetTotalSize(200)
+
+	// Verify StartTime WAS reset (should be later than original)
+	if !ps.StartTime.After(originalStartTime) {
+		t.Errorf("StartTime was NOT reset for new size: got %v, want > %v", ps.StartTime, originalStartTime)
+	}
+}
+
 func TestProgressState_SyncSessionStart(t *testing.T) {
 	ps := NewProgressState("test", 100)
 	ps.Downloaded.Store(75)
@@ -252,5 +276,51 @@ func TestProgressState_FinalizePauseSession_UsesVerifiedWhenDownloadedUnknown(t 
 	}
 	if ps.VerifiedProgress.Load() != 55 {
 		t.Fatalf("VerifiedProgress = %d, want 55", ps.VerifiedProgress.Load())
+	}
+}
+
+func TestProgressState_SessionReset(t *testing.T) {
+	ps := NewProgressState("test-reset", 1000)
+	ps.Downloaded.Store(500)
+	ps.VerifiedProgress.Store(450)
+	ps.SessionStartBytes = 100
+	ps.SavedElapsed = 10 * time.Second
+	ps.Done.Store(true)
+	ps.InitBitmap(1000, 100)
+
+	// Simulate some activity
+	ps.UpdateChunkStatus(0, 100, ChunkCompleted)
+
+	ps.SessionReset()
+
+	if ps.Downloaded.Load() != 0 {
+		t.Errorf("Downloaded = %d, want 0", ps.Downloaded.Load())
+	}
+	if ps.VerifiedProgress.Load() != 0 {
+		t.Errorf("VerifiedProgress = %d, want 0", ps.VerifiedProgress.Load())
+	}
+	if ps.SessionStartBytes != 0 {
+		t.Errorf("SessionStartBytes = %d, want 0", ps.SessionStartBytes)
+	}
+	if ps.SavedElapsed != 0 {
+		t.Errorf("SavedElapsed = %v, want 0", ps.SavedElapsed)
+	}
+	if ps.Done.Load() {
+		t.Error("Done should be false after reset")
+	}
+
+	// Verify bitmap was cleared
+	bitmap, _, _, _, progress := ps.GetBitmap()
+	for _, b := range bitmap {
+		if b != 0 {
+			t.Error("Bitmap should be all zeros after reset")
+			break
+		}
+	}
+	for _, p := range progress {
+		if p != 0 {
+			t.Error("ChunkProgress should be all zeros after reset")
+			break
+		}
 	}
 }

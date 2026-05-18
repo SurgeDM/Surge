@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"sync"
 
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 var (

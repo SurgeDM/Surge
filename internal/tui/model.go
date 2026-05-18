@@ -7,40 +7,67 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/bubbles/filepicker"
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/progress"
-	"github.com/charmbracelet/bubbles/textinput"
-	"github.com/charmbracelet/bubbles/viewport"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/filepicker"
+	"charm.land/bubbles/v2/help"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/progress"
+	"charm.land/bubbles/v2/spinner"
+	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/processing"
-	"github.com/surge-downloader/surge/internal/tui/colors"
-	"github.com/surge-downloader/surge/internal/version"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/tui/components"
+	"github.com/SurgeDM/Surge/internal/version"
 )
+
+// InitializeTUI prepares global TUI state like styles and component caches.
+// This should be called exactly once before any TUI elements are rendered.
+func InitializeTUI() {
+	InitializeStyles()
+	components.InitializeStatusCache()
+}
 
 type UIState int // Defines UIState as int to be used in rootModel
 
 const (
-	DashboardState             UIState = iota // DashboardState is 0 increments after each line
-	InputState                                // InputState is 1
-	DetailState                               // DetailState is 2
-	FilePickerState                           // FilePickerState is 3
-	HistoryState                              // HistoryState is 4
-	DuplicateWarningState                     // DuplicateWarningState is 5
-	SearchState                               // SearchState is 6
-	SettingsState                             // SettingsState is 7
-	ExtensionConfirmationState                // ExtensionConfirmationState is 8
-	BatchFilePickerState                      // BatchFilePickerState is 9
-	BatchConfirmState                         // BatchConfirmState is 10
-	UpdateAvailableState                      // UpdateAvailableState is 11
-	URLUpdateState                            // URLUpdateState is 12
-	CategoryManagerState                      // CategoryManagerState is 13
+	DashboardState              UIState = iota // DashboardState is 0 increments after each line
+	InputState                                 // InputState is 1
+	DetailState                                // DetailState is 2
+	FilePickerState                            // FilePickerState is 3
+	DuplicateWarningState                      // DuplicateWarningState is 4
+	SearchState                                // SearchState is 6
+	SettingsState                              // SettingsState is 7
+	ExtensionConfirmationState                 // ExtensionConfirmationState is 8
+	BatchFilePickerState                       // BatchFilePickerState is 9
+	BatchConfirmState                          // BatchConfirmState is 10
+	UpdateAvailableState                       // UpdateAvailableState is 11
+	URLUpdateState                             // URLUpdateState is 12
+	CategoryManagerState                       // CategoryManagerState is 13
+	QuitConfirmState                           // QuitConfirmState is 14
+	RestartConfirmState                        // RestartConfirmState is 15
+	HelpModalState                             // HelpModalState is 16
+	BugReportTargetState                       // BugReportTargetState is 17
+	BugReportSystemDetailsState                // BugReportSystemDetailsState is 18
+	BugReportLogPathState                      // BugReportLogPathState is 19
+	CategoryResetConfirmState                  // CategoryResetConfirmState is 20
+)
+
+type FilePickerOrigin int
+
+const (
+	FilePickerOriginNone FilePickerOrigin = iota
+	FilePickerOriginAdd
+	FilePickerOriginSettings
+	FilePickerOriginExtension
+	FilePickerOriginCategory
+	FilePickerOriginTheme
 )
 
 const (
@@ -71,6 +98,7 @@ type DownloadModel struct {
 	state *types.ProgressState // Keep for now if needed for details view, but mostly passive
 
 	done     bool
+	started  bool // Engine has confirmed start
 	err      error
 	paused   bool
 	pausing  bool // UI state: transitioning to pause
@@ -83,6 +111,7 @@ type RootModel struct {
 	height       int
 	state        UIState
 	activeTab    int // 0=Queued, 1=Active, 2=Done
+	pinnedTab    int // -1=None, 0=Queued, 1=Active, 2=Done
 	inputs       []textinput.Model
 	focusedInput int
 	// Service Interface
@@ -91,7 +120,9 @@ type RootModel struct {
 	Orchestrator *processing.LifecycleManager
 
 	// File picker for directory selection
-	filepicker filepicker.Model
+	filepicker             filepicker.Model
+	filepickerOriginalPath string
+	filepickerOrigin       FilePickerOrigin
 
 	// Bubbles help component
 	help help.Model
@@ -100,10 +131,6 @@ type RootModel struct {
 	list list.Model
 
 	PWD string
-
-	// History view
-	historyEntries []types.DownloadEntry
-	historyCursor  int
 
 	// Duplicate detection
 	pendingURL           string // URL pending confirmation
@@ -125,12 +152,14 @@ type RootModel struct {
 
 	// Settings
 	Settings              *config.Settings // Application settings
+	SettingsBaseline      *config.Settings // Snapshot of settings when entering the settings view
+	StartupConfigWarnings []string         // Config validation warnings to emit on first render
 	SettingsActiveTab     int              // Active category tab (0-3)
 	SettingsSelectedRow   int              // Selected setting within current tab
 	SettingsIsEditing     bool             // Whether currently editing a value
 	SettingsInput         textinput.Model  // Input for editing string/int values
-	SettingsFileBrowsing  bool             // Whether browsing for a directory
-	ExtensionFileBrowsing bool             // Whether browsing for extension prompt path
+	settingsError         string           // Current validation error in settings
+	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download
@@ -149,13 +178,19 @@ type RootModel struct {
 	urlUpdateInput textinput.Model // Text input for updating URL
 
 	// Category manager
-	categoryFilter     string             // Dashboard filter ("" = all)
-	catMgrCursor       int                // Selected category index
-	catMgrEditing      bool               // Whether editing a category
-	catMgrEditField    int                // 0=Name, 1=Description, 2=Pattern, 3=Path
-	catMgrInputs       [4]textinput.Model // Inputs for Name, Description, Pattern, Path
-	catMgrIsNew        bool               // Whether adding a new category
-	catMgrFileBrowsing bool               // Whether browsing for a category path
+	categoryFilter  string             // Dashboard filter ("" = all)
+	catMgrCursor    int                // Selected category index
+	catMgrEditing   bool               // Whether editing a category
+	catMgrEditField int                // 0=Name, 1=Description, 2=Pattern, 3=Path
+	catMgrInputs    [4]textinput.Model // Inputs for Name, Description, Pattern, Path
+	catMgrIsNew     bool               // Whether adding a new category
+	catMgrError     string             // Error message for display in category manager
+	// Quit confirm button focus (0 = Yep!, 1 = Nope)
+	quitConfirmFocused int
+
+	// Bug report flow context
+	bugReportIncludeSystemInfo bool
+	bugReportIncludeLatestLog  bool
 
 	// Keybindings
 	keys KeyMap
@@ -168,14 +203,20 @@ type RootModel struct {
 	// Update check
 	UpdateInfo     *version.UpdateInfo // Update information (nil if no update available)
 	CurrentVersion string              // Current version of Surge
+	CurrentCommit  string              // Current commit hash of Surge
 
 	InitialDarkBackground bool // Captured at startup for "System" theme
 
 	logoCache string // Cached logo with gradient applied
 
-	enqueueCtx    context.Context
-	cancelEnqueue context.CancelFunc
-	shuttingDown  bool
+	enqueueCtx       context.Context
+	cancelEnqueue    context.CancelFunc
+	shuttingDown     bool
+	RestartRequested bool // Flag to signal process re-exec after TUI shutdown
+
+	ToggleServiceFunc func(bool) error
+
+	spinner spinner.Model
 }
 
 // NewDownloadModel creates a new download model
@@ -189,33 +230,45 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 		FilenameLower: strings.ToLower(filename),
 		Total:         total,
 		StartTime:     time.Now(),
-		progress:      progress.New(progress.WithSpringOptions(0.5, 0.1)),
-		state:         state,
+		progress: progress.New(
+			progress.WithSpringOptions(0.5, 0.1),
+			progress.WithColors(colors.ProgressStart(), colors.ProgressEnd()),
+			progress.WithScaled(true),
+		),
+		state: state,
 	}
 }
 
-func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, orchestrator *processing.LifecycleManager, noResume bool) RootModel {
+func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, orchestrator *processing.LifecycleManager, noResume bool, currentCommit ...string) RootModel {
+	initialDarkBackground := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	commitValue := "unknown"
+	if len(currentCommit) > 0 {
+		if trimmed := strings.TrimSpace(currentCommit[0]); trimmed != "" {
+			commitValue = trimmed
+		}
+	}
+
 	// Initialize inputs
 	urlInput := textinput.New()
 	urlInput.Placeholder = "https://example.com/file.zip"
 	urlInput.Focus()
-	urlInput.Width = InputWidth
+	urlInput.SetWidth(InputWidth)
 	urlInput.Prompt = ""
 
 	pathInput := textinput.New()
 	pathInput.Placeholder = "."
-	pathInput.Width = InputWidth
+	pathInput.SetWidth(InputWidth)
 	pathInput.Prompt = ""
 	pathInput.SetValue(".")
 
 	filenameInput := textinput.New()
 	filenameInput.Placeholder = "(auto-detect)"
-	filenameInput.Width = InputWidth
+	filenameInput.SetWidth(InputWidth)
 	filenameInput.Prompt = ""
 
 	mirrorsInput := textinput.New()
 	mirrorsInput.Placeholder = "http://mirror1.com, http://mirror2.com"
-	mirrorsInput.Width = InputWidth
+	mirrorsInput.SetWidth(InputWidth)
 	mirrorsInput.Prompt = ""
 
 	pwd, _ := os.Getwd()
@@ -231,6 +284,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	fp.ShowSize = true
 	fp.ShowPermissions = true
 	fp.SetHeight(FilePickerHeight)
+	applyFilepickerTheme(&fp)
 
 	// Load settings for auto resume
 	settings, _ := config.LoadSettings()
@@ -238,10 +292,19 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		settings = config.DefaultSettings()
 	}
 
+	// Capture any config warnings produced during load so Init() can surface
+	// them in the activity log once the viewport is ready.
+	var startupConfigWarnings []string
+	if len(settings.StartupWarnings) > 0 {
+		startupConfigWarnings = append([]string(nil), settings.StartupWarnings...)
+	}
+
 	// Override AutoResume if CLI flag provided
 	if noResume {
 		settings.General.AutoResume = false
 	}
+
+	applyColorModeForTheme(settings.General.Theme, settings.General.ThemePath, initialDarkBackground)
 
 	// Load paused downloads from master list (now uses global config directory)
 	var downloads []*DownloadModel
@@ -266,11 +329,14 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 				switch s.Status {
 				case "completed":
 					dm.done = true
+					dm.started = true
 					dm.progress.SetPercent(1.0)
 				case "error":
 					dm.done = true
+					dm.started = true
 				case "pausing":
 					dm.pausing = true
+					dm.started = true
 				case "paused":
 					if settings.General.AutoResume {
 						dm.resuming = true
@@ -278,10 +344,14 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 					} else {
 						dm.paused = true
 					}
+					dm.started = true
 				case "queued":
 					// Always resume queued items
 					dm.resuming = true
 					dm.paused = true // Will update when resume event received
+					dm.started = false
+				case "downloading":
+					dm.started = true
 				}
 
 				if s.TotalSize > 0 {
@@ -306,51 +376,60 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	// Initialize help
 	helpModel := help.New()
-	helpModel.Styles.ShortKey = lipgloss.NewStyle().Foreground(colors.LightGray)
-	helpModel.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.Gray)
+	helpModel.Styles.ShortKey = lipgloss.NewStyle().Foreground(colors.LightGray())
+	helpModel.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.Gray())
+	helpModel.Styles.FullKey = lipgloss.NewStyle().Foreground(colors.Pink())
+	helpModel.Styles.FullDesc = lipgloss.NewStyle().Foreground(colors.LightGray())
 
 	// Initialize settings input for editing
 	settingsInput := textinput.New()
-	settingsInput.Width = 40
+	settingsInput.SetWidth(40)
 	settingsInput.Prompt = ""
 
 	// Initialize search input
 	searchInput := textinput.New()
 	searchInput.Placeholder = "Type to search..."
-	searchInput.Width = 30
+	searchInput.SetWidth(30)
 	searchInput.Prompt = ""
 
 	// Initialize URL update input
 	urlUpdateInput := textinput.New()
 	urlUpdateInput.Placeholder = "https://example.com/newlink.zip"
-	urlUpdateInput.Width = InputWidth
+	urlUpdateInput.SetWidth(InputWidth)
 	urlUpdateInput.Prompt = ""
 
 	// Initialize Category Manager inputs
 	catNameInput := textinput.New()
 	catNameInput.Placeholder = "Videos"
-	catNameInput.Width = 30
+	catNameInput.SetWidth(30)
 	catNameInput.Prompt = ""
 
 	catDescInput := textinput.New()
 	catDescInput.Placeholder = "Video files (.mp4, .mkv)"
-	catDescInput.Width = 50
+	catDescInput.SetWidth(50)
 	catDescInput.Prompt = ""
 
 	catPatternInput := textinput.New()
 	catPatternInput.Placeholder = "(?i)\\.(mp4|mkv)$"
-	catPatternInput.Width = 50
+	catPatternInput.SetWidth(50)
 	catPatternInput.Prompt = ""
 
 	catPathInput := textinput.New()
 	catPathInput.Placeholder = "/home/user/Videos"
-	catPathInput.Width = 50
+	catPathInput.SetWidth(50)
 	catPathInput.Prompt = ""
 
 	enqueueCtx, cancelEnqueue := context.WithCancel(context.Background())
 
+	// A single root-level spinner provides a shared animation frame for rendering,
+	// avoiding the CPU and redraw overhead of independent per-item spinners on
+	// large download lists.
+	s := spinner.New()
+	s.Spinner = spinner.MiniDot
+
 	m := RootModel{
 		downloads:             downloads,
+		pinnedTab:             -1,
 		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
 		state:                 DashboardState,
 		filepicker:            fp,
@@ -360,8 +439,9 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		Orchestrator:          orchestrator,
 		PWD:                   pwd,
 		Settings:              settings,
-		SpeedHistory:          make([]float64, GraphHistoryPoints), // 60 points of history (30s at 0.5s interval)
-		logViewport:           viewport.New(40, 5),                 // Default size, will be resized
+		StartupConfigWarnings: startupConfigWarnings,
+		SpeedHistory:          make([]float64, GraphHistoryPoints),                          // 60 points of history (30s at 0.5s interval)
+		logViewport:           viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)), // Default size, will be resized
 		logEntries:            make([]string, 0),
 		SettingsInput:         settingsInput,
 		searchInput:           searchInput,
@@ -370,20 +450,16 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		keys:                  Keys,
 		ServerPort:            serverPort,
 		CurrentVersion:        currentVersion,
-		InitialDarkBackground: lipgloss.HasDarkBackground(),
+		CurrentCommit:         commitValue,
+		InitialDarkBackground: initialDarkBackground,
 		enqueueCtx:            enqueueCtx,
 		cancelEnqueue:         cancelEnqueue,
+		spinner:               s,
 	}
 
-	// Apply configured theme
-	// We can't call m.ApplyTheme yet as m is returned, so apply logic directly
-	switch settings.General.Theme {
-	case config.ThemeLight:
-		lipgloss.SetHasDarkBackground(false)
-	case config.ThemeDark:
-		lipgloss.SetHasDarkBackground(true)
-		// ThemeAdaptive: do nothing, already set by system detection
-	}
+	InitAuthToken() // Cache auth token for TUI to avoid per-frame disk I/O
+
+	m.refreshThemeCaches()
 
 	return m
 }
@@ -411,6 +487,8 @@ type ViewStats struct {
 
 func (m RootModel) Init() tea.Cmd {
 	var cmds []tea.Cmd
+
+	cmds = append(cmds, m.spinner.Tick)
 
 	// Trigger update check if not disabled in settings
 	if !m.Settings.General.SkipUpdateCheck {
@@ -444,12 +522,15 @@ func (m RootModel) Init() tea.Cmd {
 		})
 	}
 
-	return tea.Batch(cmds...)
-}
+	// Emit any config warnings from startup into the activity log
+	if len(m.StartupConfigWarnings) > 0 {
+		warnings := m.StartupConfigWarnings
+		cmds = append(cmds, func() tea.Msg {
+			return startupConfigWarningMsg(warnings)
+		})
+	}
 
-type resumeResultMsg struct {
-	id  string
-	err error
+	return tea.Batch(cmds...)
 }
 
 // FindDownloadByID finds a download by its ID
@@ -471,11 +552,13 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 		// Apply tab filter first
 		switch m.activeTab {
 		case TabQueued:
-			if d.done || d.Speed > 0 {
+			// Queued includes paused downloads and anything not currently active or done
+			if d.done || (!d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming || d.started)) {
 				continue
 			}
 		case TabActive:
-			if d.done || (d.Speed == 0 && d.Connections == 0) {
+			// Active excludes paused downloads and anything without current activity
+			if d.done || d.paused || d.pausing || (d.Speed == 0 && d.Connections == 0 && !d.resuming && !d.started) {
 				continue
 			}
 		case TabDone:
@@ -485,7 +568,7 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 		}
 
 		// Apply dashboard category filter.
-		if m.categoryFilter != "" && m.Settings != nil && m.Settings.General.CategoryEnabled {
+		if m.categoryFilter != "" && m.Settings != nil && m.Settings.Categories.CategoryEnabled {
 			if !m.matchesCategoryFilter(d) {
 				continue
 			}
@@ -521,7 +604,7 @@ func (m RootModel) matchesCategoryFilter(d *DownloadModel) bool {
 		filename = processing.InferFilenameFromURL(d.URL)
 	}
 
-	cat, err := config.GetCategoryForFile(filename, m.Settings.General.Categories)
+	cat, err := config.GetCategoryForFile(filename, m.Settings.Categories.Categories)
 	if filter == "Uncategorized" {
 		return err != nil || cat == nil
 	}
@@ -542,19 +625,71 @@ func newFilepicker(currentDir string) filepicker.Model {
 	fp.ShowSize = true
 	fp.ShowPermissions = true
 	fp.SetHeight(FilePickerHeight)
+
+	// Re-bind Select and Open to '.' per user preference.
+	// We also keep 'right' for Open to allow directory navigation.
+	fp.KeyMap.Select = key.NewBinding(key.WithKeys("."))
+	fp.KeyMap.Open = key.NewBinding(key.WithKeys(".", "right"))
+	// Keep ESC reserved for dismissing the modal; use left/backspace/h to go up.
+	fp.KeyMap.Back = key.NewBinding(key.WithKeys("h", "backspace", "left"))
+
+	applyFilepickerTheme(&fp)
+
 	return fp
 }
 
 // ApplyTheme applies the selected theme mode
-func (m *RootModel) ApplyTheme(mode int) {
+func (m *RootModel) ApplyTheme(mode int, path string) {
+	applyColorModeForTheme(mode, path, m.InitialDarkBackground)
+	m.refreshThemeCaches()
+}
+
+func applyColorModeForTheme(mode int, themePath string, initialDarkBackground bool) {
+	isDark := initialDarkBackground
+
 	switch mode {
-	case config.ThemeAdaptive:
-		// Restore initial system state
-		lipgloss.SetHasDarkBackground(m.InitialDarkBackground)
 	case config.ThemeLight:
-		lipgloss.SetHasDarkBackground(false)
+		isDark = false
 	case config.ThemeDark:
-		lipgloss.SetHasDarkBackground(true)
+		isDark = true
 	}
-	m.logoCache = "" // Invalidate logo cache
+
+	colors.LoadTheme(themePath, isDark)
+}
+
+func (m *RootModel) refreshThemeCaches() {
+	rebuildStyles()
+	m.help.Styles.ShortKey = lipgloss.NewStyle().Foreground(colors.LightGray())
+	m.help.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.Gray())
+	m.help.Styles.FullKey = lipgloss.NewStyle().Foreground(colors.Pink())
+	m.help.Styles.FullDesc = lipgloss.NewStyle().Foreground(colors.LightGray())
+	applyListTheme(&m.list)
+	applyFilepickerTheme(&m.filepicker)
+	m.logoCache = ""
+	// Rebuild progress bar colors for all existing downloads so the gradient
+	// matches the newly loaded palette rather than the one active at creation time.
+	for _, d := range m.downloads {
+		d.progress = progress.New(
+			progress.WithSpringOptions(0.5, 0.1),
+			progress.WithColors(colors.ProgressStart(), colors.ProgressEnd()),
+			progress.WithScaled(true),
+		)
+	}
+}
+
+func applyFilepickerTheme(fp *filepicker.Model) {
+	if fp == nil {
+		return
+	}
+
+	fp.Styles.Cursor = lipgloss.NewStyle().Foreground(colors.Pink())
+	fp.Styles.Symlink = lipgloss.NewStyle().Foreground(colors.Cyan())
+	fp.Styles.Directory = lipgloss.NewStyle().Foreground(colors.Blue())
+	fp.Styles.File = lipgloss.NewStyle().Foreground(colors.White())
+	fp.Styles.DisabledFile = lipgloss.NewStyle().Foreground(colors.Gray())
+	fp.Styles.Permission = lipgloss.NewStyle().Foreground(colors.Gray())
+	fp.Styles.Selected = lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true)
+	fp.Styles.DisabledSelected = lipgloss.NewStyle().Foreground(colors.LightGray())
+	fp.Styles.FileSize = lipgloss.NewStyle().Foreground(colors.Gray()).Width(7).Align(lipgloss.Right)
+	fp.Styles.EmptyDirectory = lipgloss.NewStyle().Foreground(colors.Gray()).Padding(0, 2)
 }

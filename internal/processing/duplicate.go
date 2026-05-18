@@ -3,9 +3,8 @@ package processing
 import (
 	"strings"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 // DuplicateResult represents the outcome of a duplicate check
@@ -17,11 +16,11 @@ type DuplicateResult struct {
 }
 
 // CheckForDuplicate inspects active and persisted downloads for duplicate URLs.
-func CheckForDuplicate(url string, settings *config.Settings, activeDownloads func() map[string]*types.DownloadConfig) *DuplicateResult {
-	if !settings.General.WarnOnDuplicate {
-		return nil
-	}
-
+// It always performs the scan regardless of settings.General.WarnOnDuplicate.
+// Policy decisions (whether to warn, block, or auto-approve) are the caller's
+// responsibility. This separation is required so that headless mode can always
+// distinguish duplicates from new downloads, even when WarnOnDuplicate is off.
+func CheckForDuplicate(url string, activeDownloads func() map[string]*types.DownloadConfig) *DuplicateResult {
 	normalizedInputURL := strings.TrimRight(url, "/")
 
 	// Check active downloads

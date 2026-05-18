@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 func TestHealth_LastManStanding(t *testing.T) {
@@ -179,5 +179,35 @@ func TestHealth_StallDetection(t *testing.T) {
 		// Success: stall detected and cancelled
 	default:
 		t.Error("Stalled worker should have been cancelled")
+	}
+}
+
+func TestHealth_ZeroStallTimeoutDisablesStallDetection(t *testing.T) {
+	runtime := &types.RuntimeConfig{
+		SlowWorkerThreshold:   0,
+		SlowWorkerGracePeriod: 0,
+		StallTimeout:          0,
+	}
+	state := types.NewProgressState("test", 1000)
+	d := NewConcurrentDownloader("test", nil, state, runtime)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	now := time.Now()
+	active := &ActiveTask{
+		StartTime: now.Add(-10 * time.Second),
+		Cancel:    cancel,
+	}
+	active.LastActivity.Store(now.Add(-2 * time.Second).UnixNano())
+	active.Speed = 5 * 1024 * 1024
+	d.activeTasks[0] = active
+
+	d.checkWorkerHealth()
+
+	select {
+	case <-ctx.Done():
+		t.Error("worker should not have been cancelled when stall timeout is disabled")
+	default:
 	}
 }

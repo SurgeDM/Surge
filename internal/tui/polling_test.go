@@ -6,13 +6,13 @@ import (
 	"testing"
 	"time"
 
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/download"
-	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/processing"
+	tea "charm.land/bubbletea/v2"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/download"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/processing"
 )
 
 // TestStateSync verifies that the TUI uses the shared state object
@@ -89,6 +89,7 @@ func TestStateSync(t *testing.T) {
 
 	if target == nil {
 		t.Fatal("Download model not found")
+		return
 	}
 
 	// Without fix: TUI creates its own state, so Downloaded stays 0

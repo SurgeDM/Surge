@@ -5,7 +5,7 @@ import (
 	"errors"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 // ProgressMsg represents a progress update from the downloader

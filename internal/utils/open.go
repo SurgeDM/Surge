@@ -6,8 +6,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 )
 
+// OpenFile opens a file in the system's default file explorer or editor.
 func OpenFile(path string) error {
 	if path == "" {
 		return fmt.Errorf("path is empty")
@@ -25,6 +27,7 @@ func OpenFile(path string) error {
 	return openWithSystem(path)
 }
 
+// OpenContainingFolder opens the containing folder of a file in the system's default file explorer.
 func OpenContainingFolder(path string) error {
 	if path == "" {
 		return fmt.Errorf("path is empty")
@@ -50,6 +53,7 @@ func OpenContainingFolder(path string) error {
 	return openWithSystem(targetPath)
 }
 
+// openWithSystem opens a path using the system's default command.
 func openWithSystem(path string) error {
 	cmd := buildOpenCommand(path)
 	err := cmd.Start()
@@ -61,6 +65,7 @@ func openWithSystem(path string) error {
 	return err
 }
 
+// buildOpenCommand builds the system-specific command for opening a path.
 func buildOpenCommand(path string) *exec.Cmd {
 	switch runtime.GOOS {
 	case "darwin":
@@ -70,4 +75,19 @@ func buildOpenCommand(path string) *exec.Cmd {
 	default:
 		return exec.Command("xdg-open", path)
 	}
+}
+
+// OpenBrowser opens a URL in the system's default web browser.
+func OpenBrowser(url string) error {
+	if strings.TrimSpace(url) == "" {
+		return fmt.Errorf("url is empty")
+	}
+	return openWithSystem(url)
+}
+
+// Run executes an executable with the given arguments and environment.
+// On Unix-like systems, it replaces the current process using syscall.Exec.
+// On Windows, it starts a new process and exits the current one.
+func Run(executable string, args []string, env []string) error {
+	return run(executable, args, env)
 }

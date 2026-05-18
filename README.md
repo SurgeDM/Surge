@@ -4,14 +4,14 @@
 
 **Blazing fast TUI download manager built in Go for power users**
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/surge-downloader/surge)
-[![Release](https://img.shields.io/github/v/release/surge-downloader/surge?style=flat-square&color=blue)](https://github.com/surge-downloader/surge/releases)
-[![Go Version](https://img.shields.io/github/go-mod/go-version/surge-downloader/surge?style=flat-square&color=cyan)](go.mod)
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/SurgeDM/Surge)
+[![Release](https://img.shields.io/github/v/release/SurgeDM/Surge?style=flat-square&color=blue)](https://github.com/SurgeDM/Surge/releases)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/SurgeDM/Surge?style=flat-square&color=cyan)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-grey.svg?style=flat-square)](LICENSE)
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-violet.svg)](https://www.buymeacoffee.com/surge.downloader)
-[![Stars](https://img.shields.io/github/stars/surge-downloader/surge?style=social)](https://github.com/surge-downloader/surge/stargazers)
+[![Stars](https://img.shields.io/github/stars/SurgeDM/Surge?style=social)](https://github.com/SurgeDM/Surge/stargazers)
 
-[Installation](#installation) • [Usage](#usage) • [Fonts](docs/FONTS.md) • [Benchmarks](#benchmarks) • [Extension](#browser-extension) • [Settings](docs/SETTINGS.md) • [CLI Reference](docs/USAGE.md)
+[Installation](#installation) • [Usage](#usage) • [Themes](docs/THEMES.md) • [Fonts](docs/FONTS.md) • [Benchmarks](#benchmarks) • [Extension](#browser-extension) • [Settings](docs/SETTINGS.md) • [CLI Reference](docs/USAGE.md)
 
 </div>
 
@@ -33,7 +33,7 @@ Most browsers open a single connection for a download. Surge opens multiple (up 
 - **Multiple Mirrors:** Download from multiple sources simultaneously. Surge distributes workers across all available mirrors and automatically handles failover.
 - **Sequential Download:** Option to download files in strict order (Streaming Mode). Ideal for media files that you want to preview while downloading.
 - **Daemon Architecture:** Surge runs a single background "engine." You can open 10 different terminal tabs and queue downloads; they all funnel into one efficient manager.
-- **Beautiful TUI:** Built with Bubble Tea & Lipgloss, it looks good while it works.
+- **Beautiful TUI:** Built with Bubble Tea & Lipgloss, featuring customizable palettes and full theme engine support.
 
 For a deep dive into how we make downloads faster (like work stealing and slow worker handling), check out our **[Optimization Guide](docs/OPTIMIZATIONS.md)**.
 
@@ -59,14 +59,15 @@ _Totally optional—your stars, issues, and contributions already mean the world
 
 Surge is available on multiple platforms. Choose the method that works best for you.
 
-| Platform / Method            | Command / Instructions                                                              | Notes                                        |
-| :--------------------------- | :---------------------------------------------------------------------------------- | :------------------------------------------- |
-| **Prebuilt Binary**          | [Download from Releases](https://github.com/surge-downloader/surge/releases/latest) | Easiest method. Just download and run.       |
-| **Arch Linux (AUR)**         | `yay -S surge`                                                                      | Managed via AUR.                             |
-| **macOS / Linux (Homebrew)** | `brew install surge-downloader/tap/surge`                                           | Recommended for Mac/Linux users.             |
-| **Windows (Winget)**         | `winget install surge-downloader.surge`                                             | Recommended for Windows users.               |
+| Platform / Method                  | Command / Instructions                                                           | Notes                                        |
+| :--------------------------------- | :------------------------------------------------------------------------------- | :------------------------------------------- |
+| **Prebuilt Binary**          | [Download from Releases](https://github.com/SurgeDM/Surge/releases/latest) | Easiest method. Just download and run.       |
+| **Arch Linux (AUR)**         | `yay -S surge`                                                                 | Managed via AUR.                             |
+| **macOS / Linux (Homebrew)** | `brew install SurgeDM/tap/surge`                                      | Recommended for Mac/Linux users.             |
+| **Nix / NixOS**              | `nix run github:SurgeDM/Surge`                                        | Via Nix flake. NixOS config: `inputs.surge.packages.${pkgs.system}.default` |
+| **Windows**         | `winget install surge-downloader.surge`<br />or<br />`scoop install surge` | Recommended for Windows users.               |
 | **Dockerfile**               | [See instructions](#4-server-mode-with-docker-compose)                              | Run Surge in server mode with Docker Compose |
-| **Go Install**               | `go install github.com/surge-downloader/surge@latest`                               | Requires Go 1.21+.                           |
+| **Go Install**               | `go install github.com/SurgeDM/Surge@latest`                          | Requires Go 1.25+                           |
 
 ---
 
@@ -74,11 +75,11 @@ Surge is available on multiple platforms. Choose the method that works best for 
 
 Surge has two main modes: **TUI (Interactive)** and **Server (Headless)**.
 
-For a full reference, see the **[Settings & Configuration Guide](docs/SETTINGS.md)** and the **[CLI Usage Guide](docs/USAGE.md)**.
+For a full reference, see the **[Themes Guide](docs/THEMES.md)**, **[Settings &amp; Configuration Guide](docs/SETTINGS.md)** and the **[CLI Usage Guide](docs/USAGE.md)**.
 
 ### 1. Interactive TUI Mode
 
-Just run `surge` to enter the dashboard. This is where you can visualize progress, manage the queue, and see speed graphs.
+Just run `surge` to enter the dashboard. This is where you can visualize progress, manage the queue, and see speed graphs. If you encounter any issues, press `?` to open the bug reporting wizard.
 
 ```bash
 # Start the TUI
@@ -106,6 +107,28 @@ surge server https://url.com/file.zip
 surge server --token <token>
 ```
 
+### 3. Auto-Start Service
+
+Surge provides an official way to manage it as a system service (daemon). This is the recommended way for servers and reproducible deployments.
+
+```bash
+# Install Surge as a system service
+surge service install
+
+# Manage the service
+surge service start
+surge service stop
+surge service status
+
+# Uninstall the service
+surge service uninstall
+```
+
+> [!NOTE]
+> On Linux, these commands may require `sudo`. On Windows, they should be run in an elevated (Administrator) terminal.
+
+### 4. Remote TUI
+
 `surge` and `surge server` bind the HTTP API to `0.0.0.0` (all interfaces) by default.
 This means the server is accessible via `localhost` (127.0.0.1) as well as your local network IP.
 
@@ -114,6 +137,8 @@ The API is token-protected. Generate/read your token by running:
 ```bash
 surge token
 ```
+
+Alternatively, you can find it in the TUI under **Settings > Extension**.
 
 ### 3. Remote TUI
 
@@ -152,7 +177,7 @@ Environment variable fallbacks:
 Download the compose file and start the container:
 
 ```bash
-wget https://raw.githubusercontent.com/surge-downloader/surge/refs/heads/main/docker/compose.yml
+wget https://raw.githubusercontent.com/SurgeDM/Surge/refs/heads/main/docker/compose.yml
 docker compose up -d
 ```
 
@@ -190,12 +215,12 @@ licensing details.
 
 We tested Surge against standard tools. Because of our connection optimization logic, Surge significantly outperforms single-connection tools.
 
-| Tool      | Time       | Speed          | Comparison   |
-| --------- | ---------- | -------------- | ------------ |
-| **Surge** | **28.93s** | **35.40 MB/s** | **—**        |
-| aria2c    | 40.04s     | 25.57 MB/s     | 1.38× slower |
-| curl      | 57.57s     | 17.79 MB/s     | 1.99× slower |
-| wget      | 61.81s     | 16.57 MB/s     | 2.14× slower |
+| Tool            | Time             | Speed                | Comparison    |
+| --------------- | ---------------- | -------------------- | ------------- |
+| **Surge** | **28.93s** | **35.40 MB/s** | **—**  |
+| aria2c          | 40.04s           | 25.57 MB/s           | 1.38× slower |
+| curl            | 57.57s           | 17.79 MB/s           | 1.99× slower |
+| wget            | 61.81s           | 16.57 MB/s           | 2.14× slower |
 
 > _Test details: 1GB file, Windows 11, Ryzen 5 5600X, 360 Mbps Network. Results averaged over 5 runs._
 
@@ -207,23 +232,37 @@ We would love to see you benchmark Surge on your system!
 
 The Surge extension intercepts browser downloads and sends them straight to your terminal. It communicates with the Surge client on port **1700** by default.
 
+> [!IMPORTANT]
+> An **Auth Token** is required to connect the extension to your Surge server. This can be obtained from the TUI under **Settings > Extension** or by running `surge token`.
+
 ### Chrome / Edge / Brave
 
-1.  Download `extension-chrome.zip` from the latest GitHub release.
-2.  Unzip it somewhere on disk.
-3.  Open your browser and navigate to `chrome://extensions`.
-4.  Enable **"Developer mode"** in the top right corner.
-5.  Click **"Load unpacked"**.
-6.  Select the unzipped `extension-chrome` folder.
+1. Download `extension-chrome.zip` from the latest GitHub release.
+2. Unzip it somewhere on disk.
+3. Open your browser and navigate to `chrome://extensions`.
+4. Enable **"Developer mode"** in the top right corner.
+5. Click **"Load unpacked"**.
+6. Select the unzipped `extension-chrome` folder.
+7. Click the Surge icon in your browser toolbar and enter your **Auth Token** in the settings.
 
 ### Firefox
 
-1.  **Stable:** [Get the Add-on](https://addons.mozilla.org/en-US/firefox/addon/surge/)
-2.  **Development:**
-    - Download `extension-firefox.zip` from the latest GitHub release.
-    - Navigate to `about:debugging#/runtime/this-firefox`.
-    - Click **"Load Temporary Add-on..."**.
-    - Select the zip file (or unzip and select `manifest.json`).
+1. **Stable:** [Get the Add-on](https://addons.mozilla.org/en-US/firefox/addon/surge/)
+2. **Development:**
+   - Download `extension-firefox.zip` from the latest GitHub release.
+   - Navigate to `about:debugging#/runtime/this-firefox`.
+   - Click **"Load Temporary Add-on..."**.
+   - Select the zip file (or unzip and select `manifest.json`).
+   - Click the Surge icon in your browser toolbar and enter your **Auth Token** in the settings.
+
+---
+
+## Acknowledgements
+
+Huge thanks to the teams and sponsors helping us build and ship Surge:
+
+- [Charm](https://charm.sh/) for the incredible terminal UI ecosystem (Bubble Tea, Lip Gloss, and more).
+- [GoReleaser Pro](https://goreleaser.com/pro/) for release automation (provided free for open source).
 
 ---
 
@@ -232,23 +271,23 @@ The Surge extension intercepts browser downloads and sends them straight to your
 We love community contributions! Whether it's a bug fix, a new feature, or just cleaning up typos.
 PRs are always welcome. For a quick guide, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
-You can check out the [Discussions](https://github.com/surge-downloader/surge/discussions) for any questions or ideas, or follow us on [X (Twitter)](https://x.com/SurgeDownloader)!
+You can check out the [Discussions](https://github.com/SurgeDM/Surge/discussions) for any questions or ideas, or follow us on [X (Twitter)](https://x.com/SurgeDownloader)!
 
 ## License
 
-Distributed under the MIT License. See [LICENSE](https://github.com/surge-downloader/surge/blob/main/LICENSE) for more information.
+Distributed under the MIT License. See [LICENSE](https://github.com/SurgeDM/Surge/blob/main/LICENSE) for more information.
 
 ---
 
 <div align="center">
-<a href="https://star-history.com/#surge-downloader/surge&Date">
+<a href="https://star-history.com/#SurgeDM/Surge&Date">
  <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=surge-downloader/surge&type=Date&theme=dark" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=surge-downloader/surge&type=Date" />
-   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=surge-downloader/surge&type=Date" />
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/svg?repos=SurgeDM/Surge&type=Date&theme=dark" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/svg?repos=SurgeDM/Surge&type=Date" />
+   <img alt="Star History Chart" src="https://api.star-history.com/svg?repos=SurgeDM/Surge&type=Date" />
  </picture>
 </a>
-  
+
 <br />
 If Surge saved you some time, consider giving it a ⭐ to help others find it!
 </div>

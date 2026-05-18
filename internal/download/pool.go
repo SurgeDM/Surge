@@ -2,16 +2,13 @@ package download
 
 import (
 	"context"
-	"fmt"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // activeDownload tracks a download that's currently running
@@ -101,7 +98,8 @@ func resolveDestPath(cfg *types.DownloadConfig) string {
 	return destPath
 }
 
-// Add adds a new download task to the pool
+// Add adds a new download task to the pool. The caller (LifecycleManager) is
+// responsible for emitting any lifecycle events (e.g. DownloadQueuedMsg).
 func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 	if cfg.ProgressCh == nil {
 		cfg.ProgressCh = p.progressCh
@@ -109,16 +107,6 @@ func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 	p.mu.Lock()
 	p.queued[cfg.ID] = cfg
 	p.mu.Unlock()
-
-	if !cfg.IsResume {
-		p.trySendProgress(events.DownloadQueuedMsg{
-			DownloadID: cfg.ID,
-			Filename:   cfg.Filename,
-			URL:        cfg.URL,
-			DestPath:   resolveDestPath(&cfg),
-			Mirrors:    append([]string(nil), cfg.Mirrors...),
-		})
-	}
 
 	p.taskChan <- cfg
 }
@@ -177,7 +165,8 @@ func (p *WorkerPool) GetAll() []types.DownloadConfig {
 	return configs
 }
 
-// Pause pauses a specific download by ID. Returns true if found and pause initiated (or already paused), false otherwise.
+// Pause pauses a specific download by ID. Returns true if found and pause initiated
+// (or already paused), false otherwise. Pure mechanical operation — no events emitted.
 func (p *WorkerPool) Pause(downloadID string) bool {
 	p.mu.RLock()
 	ad, exists := p.downloads[downloadID]
@@ -230,8 +219,10 @@ func (p *WorkerPool) PauseAll() {
 	}
 }
 
-// Cancel cancels and removes a download by ID
-func (p *WorkerPool) Cancel(downloadID string) {
+// Cancel cancels and removes a download by ID. Returns metadata about what was
+// removed so the caller (LifecycleManager) can emit events and handle cleanup.
+// No events are emitted by the pool itself.
+func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
 	p.mu.Lock()
 	ad, activeExists := p.downloads[downloadID]
 	qCfg, queuedExists := p.queued[downloadID]
@@ -244,16 +235,15 @@ func (p *WorkerPool) Cancel(downloadID string) {
 	p.mu.Unlock()
 
 	if !activeExists && !queuedExists {
-		return
+		return types.CancelResult{}
 	}
 
-	removedFilename := ""
-	removedDestPath := ""
-	removedCompleted := false
+	result := types.CancelResult{Found: true, WasQueued: queuedExists && !activeExists}
+
 	if activeExists && ad != nil {
-		removedFilename = ad.config.Filename
-		removedDestPath = resolveDestPath(&ad.config)
-		removedCompleted = ad.config.State != nil && ad.config.State.Done.Load()
+		result.Filename = ad.config.Filename
+		result.DestPath = resolveDestPath(&ad.config)
+		result.Completed = ad.config.State != nil && ad.config.State.Done.Load()
 
 		// Cancel the context to stop workers
 		if ad.cancel != nil {
@@ -272,101 +262,69 @@ func (p *WorkerPool) Cancel(downloadID string) {
 			ad.config.State.Done.Store(true)
 		}
 	} else if queuedExists {
-		removedFilename = qCfg.Filename
-		removedDestPath = resolveDestPath(&qCfg)
+		result.Filename = qCfg.Filename
+		result.DestPath = resolveDestPath(&qCfg)
 	}
 
-	// Send removal message
-	p.trySendProgress(events.DownloadRemovedMsg{
-		DownloadID: downloadID,
-		Filename:   removedFilename,
-		DestPath:   removedDestPath,
-		Completed:  removedCompleted,
-	})
+	return result
 }
 
-// Resume resumes a paused download by ID. Returns true if found and resumed (or already running), false otherwise.
-func (p *WorkerPool) Resume(downloadID string) bool {
-	p.mu.RLock()
+// ExtractPausedConfig atomically removes a paused download from the pool and returns
+// its config (with state cleared for re-enqueue) so the LifecycleManager can resume it.
+// Returns nil if the download is not found, not paused, or still transitioning (pausing).
+func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfig {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
 	ad, exists := p.downloads[downloadID]
-	p.mu.RUnlock()
-
 	if !exists || ad == nil {
-		return false
+		return nil
 	}
 
-	// Prevent race: Don't resume if still pausing
-	if ad.config.State != nil && ad.config.State.IsPausing() {
-		utils.Debug("Resume ignored: download %s is still pausing", downloadID)
-		return false
+	// Cannot extract if still pausing or not actually paused
+	if ad.config.State == nil || !ad.config.State.IsPaused() || ad.config.State.IsPausing() {
+		return nil
 	}
 
-	// Idempotency: If already running (not paused), do nothing
-	if ad.config.State != nil && !ad.config.State.IsPaused() {
-		utils.Debug("Resume ignored: download %s is already running", downloadID)
-		return true
-	}
+	// Sync latest filename/path/mirrors from live state before handing off
+	syncConfigFromState(&ad.config)
 
-	// Clear paused flag and reset session start to avoid speed spikes/dips checks
+	cfg := ad.config
+	delete(p.downloads, downloadID)
 	if ad.config.State != nil {
 		ad.config.State.Resume()
-		ad.config.State.SyncSessionStart()
-		syncConfigFromState(&ad.config)
 	}
-
-	// Hydrate resume config from persisted pause snapshot when available.
-	if ad.config.URL != "" && ad.config.DestPath != "" {
-		if saved, err := state.LoadState(ad.config.URL, ad.config.DestPath); err == nil && saved != nil {
-			ad.config.SavedState = saved
-			if saved.TotalSize > 0 {
-				ad.config.TotalSize = saved.TotalSize
-			}
-			if len(saved.Tasks) > 0 {
-				ad.config.SupportsRange = true
-			}
-		}
-	}
-
-	// Re-queue the download
-	ad.config.IsResume = true
-	p.Add(ad.config)
-
-	// Send resume message
-	p.trySendProgress(events.DownloadResumedMsg{
-		DownloadID: downloadID,
-		Filename:   ad.config.Filename,
-	})
-	return true
+	return &cfg
 }
 
-// UpdateURL updates the URL of a download by ID.
+// UpdateURL updates the in-memory URL of a download by ID.
+// The caller (LifecycleManager) is responsible for persisting the change to the DB.
 // It fails if the download is actively downloading (not paused or errored).
 func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
-	p.mu.RLock()
+	p.mu.Lock()
 	ad, exists := p.downloads[downloadID]
 	_, qExists := p.queued[downloadID]
-	p.mu.RUnlock()
 
 	if qExists {
-		return fmt.Errorf("cannot update URL for a queued download, please cancel or wait for it to start")
+		p.mu.Unlock()
+		return types.ErrQueuedUpdate
 	}
 
 	if exists && ad != nil {
-		// If it exists in the active pool, it must be paused
 		if ad.config.State != nil && !ad.config.State.IsPaused() {
 			if ad.running.Load() {
-				return fmt.Errorf("download is currently active, please pause it before updating the URL")
+				p.mu.Unlock()
+				return types.ErrActiveUpdate
 			}
 		}
-
-		// Update the active download's config
 		ad.config.URL = newURL
 		if ad.config.State != nil {
 			ad.config.State.SetURL(newURL)
 		}
 	}
+	p.mu.Unlock()
 
-	return state.UpdateURL(downloadID, newURL)
+	return nil
 }
 
 func (p *WorkerPool) worker() {
@@ -413,17 +371,12 @@ func (p *WorkerPool) worker() {
 
 		if isPaused {
 			utils.Debug("WorkerPool: Download %s paused cleanly", cfg.ID)
-			// If paused, we keep it in downloads map for potential resume
+			// If paused, we keep it in downloads map for potential resume via ExtractPausedConfig
 		} else if err != nil {
 			if cfg.State != nil {
 				cfg.State.SetError(err)
 			}
-			p.trySendProgress(events.DownloadErrorMsg{
-				DownloadID: cfg.ID,
-				Filename:   cfg.Filename,
-				DestPath:   resolveDestPath(&cfg),
-				Err:        err,
-			})
+			// Note: DownloadErrorMsg is already emitted by TUIDownload on the same progressCh.
 			// Clean up errored download from tracking (don't save to .surge)
 			p.mu.Lock()
 			delete(p.downloads, cfg.ID)
@@ -527,31 +480,30 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 	return status
 }
 
-// trySendProgress sends msg on progressCh unless progressDone has been closed,
-// preventing a panic from sending on a closed channel after shutdown.
-func (p *WorkerPool) trySendProgress(msg any) {
-	if p.progressCh == nil {
-		return
-	}
-	select {
-	case <-p.progressDone:
-		return
-	default:
-	}
-	select {
-	case <-p.progressDone:
-		return
-	case p.progressCh <- msg:
-	}
-}
-
 // GracefulShutdown pauses all downloads and waits for them to save state
 func (p *WorkerPool) GracefulShutdown() {
-	// Persist queued downloads first so they don't disappear on process shutdown.
-	// These entries may not have started yet, so they do not have a .surge state snapshot.
-	p.persistQueuedForShutdown()
-
 	p.PauseAll()
+
+	// Discard all queued-but-not-yet-started downloads so that idle workers
+	// do not pick them up and begin downloading after shutdown is initiated.
+	// Workers already guard against this with the p.queued check at loop entry,
+	// so clearing the map here is sufficient; draining taskChan is belt-and-suspenders.
+	p.mu.Lock()
+	for id := range p.queued {
+		delete(p.queued, id)
+	}
+	p.mu.Unlock()
+
+	// Drain taskChan to discard any configs that were already written into the
+	// buffered channel but not yet consumed by a worker.
+drainLoop:
+	for {
+		select {
+		case <-p.taskChan:
+		default:
+			break drainLoop
+		}
+	}
 
 	// Wait for any downloads in "Pausing" state to finish transitioning
 	// This ensures we don't exit while a database write is pending/active
@@ -598,9 +550,4 @@ func (p *WorkerPool) GracefulShutdown() {
 	// so worker goroutines exit their range loop.
 	close(p.progressDone)
 	close(p.taskChan)
-}
-
-func (p *WorkerPool) persistQueuedForShutdown() {
-	// No-op: queued items are persisted when Add emits DownloadQueuedMsg,
-	// so shutdown only needs to drain active workers.
 }

@@ -13,13 +13,13 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/download"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/testutil"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/download"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // TestResolveDownloadID_Remote verifies that resolveDownloadID queries the server
@@ -460,7 +460,9 @@ func TestRmClean_Offline_Works(t *testing.T) {
 	defer func() { _ = rmCmd.Flags().Set("clean", "false") }()
 
 	_ = captureStdout(t, func() {
-		rmCmd.Run(rmCmd, []string{})
+		if err := rmCmd.RunE(rmCmd, []string{}); err != nil {
+			t.Fatalf("rm clean failed: %v", err)
+		}
 	})
 
 	entry, err := state.GetDownload(completed.ID)
@@ -469,6 +471,248 @@ func TestRmClean_Offline_Works(t *testing.T) {
 	}
 	if entry != nil {
 		t.Fatalf("expected completed entry to be removed by offline --clean, got %+v", entry)
+	}
+}
+
+func TestAddCmdRunE_ReturnsExpectedErrors(t *testing.T) {
+	t.Run("no running server", func(t *testing.T) {
+		setupIsolatedCmdState(t)
+		resetCommandConnectionState(t)
+
+		if err := addCmd.Flags().Set("batch", ""); err != nil {
+			t.Fatalf("failed to clear batch flag: %v", err)
+		}
+
+		err := addCmd.RunE(addCmd, []string{"https://example.com/file.zip"})
+		if err == nil {
+			t.Fatal("expected add command to return an error when no server is running")
+		}
+		if !strings.Contains(err.Error(), "surge is not running locally") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("invalid batch file", func(t *testing.T) {
+		setupIsolatedCmdState(t)
+		resetCommandConnectionState(t)
+
+		missingBatchPath := filepath.Join(t.TempDir(), "missing-urls.txt")
+		if err := addCmd.Flags().Set("batch", missingBatchPath); err != nil {
+			t.Fatalf("failed to set batch flag: %v", err)
+		}
+		t.Cleanup(func() {
+			_ = addCmd.Flags().Set("batch", "")
+		})
+
+		err := addCmd.RunE(addCmd, nil)
+		if err == nil {
+			t.Fatal("expected add command to return an error for a missing batch file")
+		}
+		if !strings.Contains(err.Error(), "error reading batch file") {
+			t.Fatalf("unexpected error: %v", err)
+		}
+	})
+}
+
+func TestActionCommandsRunE_ReturnNoServerErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{
+			name: "pause",
+			run: func() error {
+				if err := pauseCmd.Flags().Set("all", "false"); err != nil {
+					return err
+				}
+				return pauseCmd.RunE(pauseCmd, []string{"deadbeef"})
+			},
+		},
+		{
+			name: "resume",
+			run: func() error {
+				if err := resumeCmd.Flags().Set("all", "false"); err != nil {
+					return err
+				}
+				return resumeCmd.RunE(resumeCmd, []string{"deadbeef"})
+			},
+		},
+		{
+			name: "rm",
+			run: func() error {
+				if err := rmCmd.Flags().Set("clean", "false"); err != nil {
+					return err
+				}
+				return rmCmd.RunE(rmCmd, []string{"deadbeef"})
+			},
+		},
+		{
+			name: "refresh",
+			run: func() error {
+				return refreshCmd.RunE(refreshCmd, []string{"deadbeef", "https://example.com/new.zip"})
+			},
+		},
+		{
+			name: "connect",
+			run: func() error {
+				return connectCmd.RunE(connectCmd, nil)
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setupIsolatedCmdState(t)
+			resetCommandConnectionState(t)
+
+			err := tt.run()
+			if err == nil {
+				t.Fatalf("expected %s command to return an error", tt.name)
+			}
+
+			want := "surge is not running locally"
+			if tt.name == "connect" {
+				want = "no local Surge server detected"
+			}
+			if !strings.Contains(err.Error(), want) {
+				t.Fatalf("unexpected %s error: %v", tt.name, err)
+			}
+		})
+	}
+}
+
+func TestConnectCmd_HostSourcesBypassLocalAutodetect(t *testing.T) {
+	tests := []struct {
+		name  string
+		args  []string
+		setup func(t *testing.T)
+	}{
+		{
+			name:  "host flag",
+			args:  []string{"connect", "--host", "198.1.1.1:7800"},
+			setup: func(_ *testing.T) {},
+		},
+		{
+			name: "SURGE_HOST env",
+			args: []string{"connect"},
+			setup: func(t *testing.T) {
+				t.Setenv("SURGE_HOST", "198.1.1.1:7800")
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origSettings := globalSettings
+			origPool := GlobalPool
+			origProgressCh := GlobalProgressCh
+			t.Cleanup(func() {
+				globalSettings = origSettings
+				GlobalPool = origPool
+				GlobalProgressCh = origProgressCh
+			})
+
+			setupIsolatedCmdState(t)
+			resetCommandConnectionState(t)
+			_ = rootCmd.PersistentFlags().Set("host", "")
+			t.Cleanup(func() {
+				_ = rootCmd.PersistentFlags().Set("host", "")
+			})
+
+			tt.setup(t)
+			rootCmd.SetArgs(tt.args)
+
+			err := rootCmd.Execute()
+			if err == nil {
+				t.Fatal("expected connect command to return an error")
+			}
+
+			if strings.Contains(err.Error(), "no local Surge server detected") {
+				t.Fatalf("connect command ignored configured host source: %v", err)
+			}
+
+			if !strings.Contains(err.Error(), "requires authentication") {
+				t.Fatalf("expected remote target auth error, got: %v", err)
+			}
+			if !strings.Contains(err.Error(), "https://198.1.1.1:7800") {
+				t.Fatalf("expected remote target path with token error, got: %v", err)
+			}
+		})
+	}
+}
+
+func TestActionCommandsRunE_ReturnAmbiguousIDErrors(t *testing.T) {
+	tests := []struct {
+		name string
+		run  func() error
+	}{
+		{
+			name: "pause",
+			run: func() error {
+				if err := pauseCmd.Flags().Set("all", "false"); err != nil {
+					return err
+				}
+				return pauseCmd.RunE(pauseCmd, []string{"deadbe"})
+			},
+		},
+		{
+			name: "resume",
+			run: func() error {
+				if err := resumeCmd.Flags().Set("all", "false"); err != nil {
+					return err
+				}
+				return resumeCmd.RunE(resumeCmd, []string{"deadbe"})
+			},
+		},
+		{
+			name: "rm",
+			run: func() error {
+				if err := rmCmd.Flags().Set("clean", "false"); err != nil {
+					return err
+				}
+				return rmCmd.RunE(rmCmd, []string{"deadbe"})
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			setupIsolatedCmdState(t)
+			resetCommandConnectionState(t)
+
+			server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.URL.Path == "/list" {
+					http.Error(w, "boom", http.StatusInternalServerError)
+					return
+				}
+				http.NotFound(w, r)
+			}))
+			defer server.Close()
+
+			_, portStr, _ := net.SplitHostPort(server.Listener.Addr().String())
+			var port int
+			_, _ = fmt.Sscanf(portStr, "%d", &port)
+			saveActivePort(port)
+			t.Cleanup(removeActivePort)
+
+			entries := []types.DownloadEntry{
+				{ID: "deadbeef-1234-5678-90ab-cdef12345678", Filename: "first.bin"},
+				{ID: "deadbead-1234-5678-90ab-cdef12345678", Filename: "second.bin"},
+			}
+			for _, entry := range entries {
+				if err := state.AddToMasterList(entry); err != nil {
+					t.Fatalf("failed to seed db entry %s: %v", entry.ID, err)
+				}
+			}
+
+			err := tt.run()
+			if err == nil {
+				t.Fatalf("expected %s command to return an ambiguous ID error", tt.name)
+			}
+			if !strings.Contains(err.Error(), "ambiguous ID prefix") {
+				t.Fatalf("unexpected %s error: %v", tt.name, err)
+			}
+		})
 	}
 }
 
@@ -489,7 +733,9 @@ func TestPrintDownloads_FromDatabase_TableAndJSON(t *testing.T) {
 	}
 
 	tableOut := captureStdout(t, func() {
-		printDownloads(false, "", "", false)
+		if err := printDownloads(false, "", "", false); err != nil {
+			t.Fatalf("printDownloads table failed: %v", err)
+		}
 	})
 	if !strings.Contains(tableOut, "ID") {
 		t.Fatalf("expected table header in output, got: %s", tableOut)
@@ -505,7 +751,9 @@ func TestPrintDownloads_FromDatabase_TableAndJSON(t *testing.T) {
 	}
 
 	jsonOut := captureStdout(t, func() {
-		printDownloads(true, "", "", false)
+		if err := printDownloads(true, "", "", false); err != nil {
+			t.Fatalf("printDownloads json failed: %v", err)
+		}
 	})
 	var infos []downloadInfo
 	if err := json.Unmarshal([]byte(jsonOut), &infos); err != nil {
@@ -525,7 +773,9 @@ func TestPrintDownloads_JSONEmpty(t *testing.T) {
 	removeActivePort()
 
 	out := captureStdout(t, func() {
-		printDownloads(true, "", "", false)
+		if err := printDownloads(true, "", "", false); err != nil {
+			t.Fatalf("printDownloads empty json failed: %v", err)
+		}
 	})
 	var infos []any
 	if err := json.Unmarshal([]byte(out), &infos); err != nil {
@@ -559,7 +809,9 @@ func TestPrintDownloads_StrictRemoteEmpty_DoesNotFallbackToDB(t *testing.T) {
 	defer server.Close()
 
 	out := captureStdout(t, func() {
-		printDownloads(true, server.URL, "", true)
+		if err := printDownloads(true, server.URL, "", true); err != nil {
+			t.Fatalf("printDownloads strict remote failed: %v", err)
+		}
 	})
 	if strings.TrimSpace(out) != "[]" {
 		t.Fatalf("expected strict remote empty json array, got %q", strings.TrimSpace(out))
@@ -583,7 +835,9 @@ func TestShowDownloadDetails_UsesDatabaseFallback(t *testing.T) {
 	}
 
 	out := captureStdout(t, func() {
-		showDownloadDetails("87654321", true, "", "")
+		if err := showDownloadDetails("87654321", true, "", ""); err != nil {
+			t.Fatalf("showDownloadDetails fallback failed: %v", err)
+		}
 	})
 
 	var decoded types.DownloadStatus
@@ -823,6 +1077,22 @@ func setupIsolatedCmdState(t *testing.T) {
 
 	state.CloseDB()
 	state.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
+}
+
+func resetCommandConnectionState(t *testing.T) {
+	t.Helper()
+	origHost := globalHost
+	origToken := globalToken
+	globalHost = ""
+	globalToken = ""
+	t.Setenv("SURGE_HOST", "")
+	t.Setenv("SURGE_TOKEN", "")
+	removeActivePort()
+	t.Cleanup(func() {
+		globalHost = origHost
+		globalToken = origToken
+		removeActivePort()
+	})
 }
 
 func captureStdout(t *testing.T, fn func()) string {

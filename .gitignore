@@ -1,5 +1,9 @@
-# binary
+# surge stuff
 surge
+*.surge
+Surge
+surge_bin
+*.trace
 
 # python + uv stuff
 .python-version
@@ -10,7 +14,7 @@ uv.lock
 # analysis files
 speed_graph.png
 worker_speeds.png
-logs/
+*.log
 
 # Added by goreleaser init:
 dist/
@@ -21,5 +25,9 @@ build/
 .github_token
 .env
 
-# temp markdowns
-implementation_plan.md
+# extension
+.wxt/
+
+# Nix binaries
+result
+result-*

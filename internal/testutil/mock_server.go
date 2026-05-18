@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 // MockServer is a configurable HTTP test server for download testing.

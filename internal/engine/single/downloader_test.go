@@ -2,15 +2,18 @@ package single
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/testutil"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func TestCopyFile(t *testing.T) {
@@ -296,6 +299,7 @@ func TestNewSingleDownloader(t *testing.T) {
 
 	if downloader == nil {
 		t.Fatal("NewSingleDownloader returned nil")
+		return
 	}
 	if downloader.ID != "test-id" {
 		t.Errorf("ID mismatch: got %s, want test-id", downloader.ID)
@@ -306,35 +310,28 @@ func TestNewSingleDownloader(t *testing.T) {
 }
 
 func TestNewSingleDownloader_TransportReuse(t *testing.T) {
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 8}
-	d1 := NewSingleDownloader("test-id-1", nil, nil, runtime)
-	d2 := NewSingleDownloader("test-id-2", nil, nil, runtime)
+	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 8}
+	t1 := engine.DefaultNetworkPool.AcquireTransport(runtime.ProxyURL, runtime.CustomDNS, runtime.GetMaxConnectionsPerDownload())
+	defer engine.DefaultNetworkPool.ReleaseTransport(t1)
 
-	t1, ok := d1.Client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("expected downloader client transport to be *http.Transport")
-	}
-	t2, ok := d2.Client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("expected downloader client transport to be *http.Transport")
-	}
+	t2 := engine.DefaultNetworkPool.AcquireTransport(runtime.ProxyURL, runtime.CustomDNS, runtime.GetMaxConnectionsPerDownload())
+	defer engine.DefaultNetworkPool.ReleaseTransport(t2)
+
 	if t1 != t2 {
 		t.Fatal("expected transport reuse for identical runtime config")
 	}
 }
 
 func TestNewSingleDownloader_TransportIsolationByProxy(t *testing.T) {
-	d1 := NewSingleDownloader("test-id-1", nil, nil, &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:8080"})
-	d2 := NewSingleDownloader("test-id-2", nil, nil, &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:9090"})
+	r1 := &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:8080"}
+	r2 := &types.RuntimeConfig{ProxyURL: "http://127.0.0.1:9090"}
 
-	t1, ok := d1.Client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("expected downloader client transport to be *http.Transport")
-	}
-	t2, ok := d2.Client.Transport.(*http.Transport)
-	if !ok {
-		t.Fatal("expected downloader client transport to be *http.Transport")
-	}
+	t1 := engine.DefaultNetworkPool.AcquireTransport(r1.ProxyURL, r1.CustomDNS, r1.GetMaxConnectionsPerDownload())
+	defer engine.DefaultNetworkPool.ReleaseTransport(t1)
+
+	t2 := engine.DefaultNetworkPool.AcquireTransport(r2.ProxyURL, r2.CustomDNS, r2.GetMaxConnectionsPerDownload())
+	defer engine.DefaultNetworkPool.ReleaseTransport(t2)
+
 	if t1 == t2 {
 		t.Fatal("expected different transports for different proxy settings")
 	}
@@ -600,6 +597,61 @@ func TestSingleDownloader_Download_ContentIntegrity(t *testing.T) {
 }
 
 // =============================================================================
+// PreallocateFailure — file handle release
+// =============================================================================
+
+func TestSingleDownloader_PreallocateFailure_ReleasesFileHandle(t *testing.T) {
+	// Cenário
+	tmpDir, cleanup, _ := testutil.TempDir("surge-prealloc-fail")
+	defer cleanup()
+
+	fileSize := int64(64 * types.KB)
+	server := testutil.NewMockServerT(t,
+		testutil.WithFileSize(fileSize),
+		testutil.WithRangeSupport(false),
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "prealloc_fail.bin")
+	runtime := &types.RuntimeConfig{}
+
+	downloader := NewSingleDownloader("prealloc-fail-id", nil, nil, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	// Cenário: criar o .surge como read-only para que preallocateFile (Truncate) falhe
+	surgePath := destPath + types.IncompleteSuffix
+	f, err := os.Create(surgePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = f.Close()
+	if err := os.Chmod(surgePath, 0o444); err != nil {
+		t.Fatal(err)
+	}
+	// Restaurar permissões no cleanup para que TempDir possa remover
+	defer func() { _ = os.Chmod(surgePath, 0o644) }()
+
+	// Ação
+	err = downloader.Download(ctx, server.URL(), destPath, fileSize, "prealloc_fail.bin")
+
+	// Validação
+	if err == nil {
+		t.Fatal("Expected error when preallocate fails on read-only file")
+	}
+	if !strings.Contains(err.Error(), "preallocate") && !strings.Contains(err.Error(), "permission") {
+		t.Logf("Got error: %v (acceptable — file handle should still be released)", err)
+	}
+
+	// Verificar que o file handle foi liberado: o arquivo pode ser removido
+	_ = os.Chmod(surgePath, 0o644)
+	if err := os.Remove(surgePath); err != nil {
+		t.Errorf("Failed to remove .surge file after preallocate failure — possible file handle leak: %v", err)
+	}
+}
+
+// =============================================================================
 // Benchmarks
 // =============================================================================
 
@@ -636,5 +688,43 @@ func BenchmarkSingleDownloader(b *testing.B) {
 		}
 		cancel()
 		_ = os.Remove(destPath)
+	}
+}
+
+func TestSingleDownloader_Download_BootstrapSize(t *testing.T) {
+	tmpDir, cleanup, _ := testutil.TempDir("surge-bootstrap-single")
+	defer cleanup()
+
+	expectedSize := int64(1024)
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", expectedSize))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(make([]byte, 1024))
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "bootstrap_single.bin")
+	state := types.NewProgressState("bootstrap-id", 0) // Unknown size
+	runtime := &types.RuntimeConfig{}
+
+	downloader := NewSingleDownloader("bootstrap-id", nil, state, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	err := downloader.Download(ctx, server.URL, destPath, 0, "bootstrap.bin")
+	if err != nil {
+		t.Fatalf("Download failed: %v", err)
+	}
+
+	if downloader.TotalSize != expectedSize {
+		t.Errorf("Expected TotalSize %d, got %d", expectedSize, downloader.TotalSize)
+	}
+	if state.TotalSize != expectedSize {
+		t.Errorf("Expected state.TotalSize %d, got %d", expectedSize, state.TotalSize)
 	}
 }

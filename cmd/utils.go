@@ -11,15 +11,21 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// readActivePort reads the port from the port file
-func readActivePort() int {
-	portFile := filepath.Join(config.GetRuntimeDir(), "port")
+type activeConnectionDetails struct {
+	port       int
+	token      string
+	runtimeDir string
+	stateDir   string
+}
+
+func readPortFile(runtimeDir string) int {
+	portFile := filepath.Join(runtimeDir, "port")
 	data, err := os.ReadFile(portFile)
 	if err != nil {
 		return 0
@@ -27,6 +33,50 @@ func readActivePort() int {
 	var port int
 	_, _ = fmt.Sscanf(string(data), "%d", &port)
 	return port
+}
+
+func readStateToken(stateDir string) string {
+	token, err := readTokenFromFile(filepath.Join(stateDir, "token"))
+	if err != nil {
+		return ""
+	}
+	return token
+}
+
+func activeConnectionCandidates() []activeConnectionDetails {
+	return []activeConnectionDetails{
+		{
+			runtimeDir: config.GetRuntimeDir(),
+			stateDir:   config.GetStateDir(),
+		},
+		{
+			runtimeDir: config.GetSystemRuntimeDir(),
+			stateDir:   config.GetSystemStateDir(),
+		},
+	}
+}
+
+func getActiveConnectionDetails() (activeConnectionDetails, bool) {
+	for _, candidate := range activeConnectionCandidates() {
+		port := readPortFile(candidate.runtimeDir)
+		if port <= 0 {
+			continue
+		}
+		candidate.port = port
+		candidate.token = readStateToken(candidate.stateDir)
+		return candidate, true
+	}
+	return activeConnectionDetails{}, false
+}
+
+// readActivePort reads the active port and keeps legacy callers on the same
+// user-first/system-fallback resolution path as token resolution.
+func readActivePort() int {
+	details, ok := getActiveConnectionDetails()
+	if !ok {
+		return 0
+	}
+	return details.port
 }
 
 // ParseURLArg parses a command line argument that might contain comma-separated mirrors
@@ -46,15 +96,23 @@ func ParseURLArg(arg string) (string, []string) {
 }
 
 func resolveLocalToken() string {
+	return resolveLocalTokenForDetails(activeConnectionDetails{})
+}
+
+func resolveLocalTokenForDetails(details activeConnectionDetails) string {
 	if token := strings.TrimSpace(globalToken); token != "" {
 		return token
 	}
 	if token := strings.TrimSpace(os.Getenv("SURGE_TOKEN")); token != "" {
 		return token
 	}
+	if token := strings.TrimSpace(details.token); token != "" {
+		return token
+	}
 	return ensureAuthToken()
 }
 
+// resolveHostTarget returns the target host, prioritizing the --host flag over the SURGE_HOST environment variable.
 func resolveHostTarget() string {
 	if host := strings.TrimSpace(globalHost); host != "" {
 		return host
@@ -63,8 +121,6 @@ func resolveHostTarget() string {
 }
 
 // resolveClientOutputPath resolves the output path for CLI client commands.
-// If connecting to a remote host, it passes the path through.
-// If running locally, it defaults to the CWD or resolves relative paths to absolute paths.
 func resolveClientOutputPath(outputDir string) string {
 	if resolveHostTarget() != "" {
 		// Pass-through for remote connections so the daemon uses its own default/CWD.
@@ -84,9 +140,9 @@ func resolveClientOutputPath(outputDir string) string {
 func resolveAPIConnection(requireServer bool) (string, string, error) {
 	target := resolveHostTarget()
 	if target == "" {
-		port := readActivePort()
-		if port > 0 {
-			return fmt.Sprintf("http://127.0.0.1:%d", port), resolveLocalToken(), nil
+		details, ok := getActiveConnectionDetails()
+		if ok {
+			return fmt.Sprintf("http://127.0.0.1:%d", details.port), resolveLocalTokenForDetails(details), nil
 		}
 		if !requireServer {
 			return "", "", nil
@@ -94,15 +150,16 @@ func resolveAPIConnection(requireServer bool) (string, string, error) {
 		return "", "", errors.New("surge is not running locally. start it or pass --host (or set SURGE_HOST)")
 	}
 
-	baseURL, err := resolveConnectBaseURL(target, false)
+	clientCfg := currentRemoteClientConfig()
+	parsed, err := parseConnectTarget(target, clientCfg.AllowInsecureHTTP)
 	if err != nil {
 		return "", "", err
 	}
-	token, err := resolveTokenForTarget(target)
+	token, err := resolveTokenForConnectTarget(parsed)
 	if err != nil {
 		return "", "", err
 	}
-	return baseURL, token, nil
+	return parsed.BaseURL, token, nil
 }
 
 func doAPIRequest(method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
@@ -119,7 +176,10 @@ func doAPIRequest(method string, baseURL string, token string, path string, body
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	client := &http.Client{}
+	client, err := newRemoteAPIHTTPClient()
+	if err != nil {
+		return nil, err
+	}
 	return client.Do(req)
 }
 
@@ -177,24 +237,20 @@ func GetRemoteDownloads(baseURL string, token string) ([]types.DownloadStatus, e
 }
 
 // ExecuteAPIAction connects to the server, resolves the ID, and sends a request.
-// It prints a success message and then exits if successful, or prints an error and exits on failure.
-func ExecuteAPIAction(rawID, endpoint, method, successMsg string) {
+func ExecuteAPIAction(rawID, endpoint, method, successMsg string) error {
 	baseURL, token, err := resolveAPIConnection(true)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to connect to Surge server: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to connect to Surge server: %w", err)
 	}
 
 	id, err := resolveDownloadID(rawID)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to resolve download ID: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to resolve download ID: %w", err)
 	}
 
 	resp, err := doAPIRequest(method, baseURL, token, fmt.Sprintf("%s/%s", endpoint, id), nil)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Failed to send request to server: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("failed to send request to server: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -204,12 +260,11 @@ func ExecuteAPIAction(rawID, endpoint, method, successMsg string) {
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
-		fmt.Fprintf(os.Stderr, "Server error: %s - %s\n", resp.Status, string(body))
-		os.Exit(1)
+		return fmt.Errorf("server error: %s - %s", resp.Status, string(body))
 	}
 
 	fmt.Println(successMsg)
-	os.Exit(0)
+	return nil
 }
 
 // resolveDownloadID resolves a partial ID (prefix) to a full download ID.

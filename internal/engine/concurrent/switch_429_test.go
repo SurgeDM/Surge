@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/testutil"
 )
 
 func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
@@ -43,9 +43,10 @@ func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
 	// Base delay is 200ms. 1st retry = 400ms.
 	// We want to be sure.
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 1, // Single worker to trace behavior easily
-		MaxTaskRetries:        5,
-		MinChunkSize:          64 * types.KB,
+		MaxConnectionsPerDownload: 1, // Single worker to trace behavior easily
+		MaxTaskRetries:            5,
+		MinChunkSize:              64 * types.KB,
+		DialHedgeCount:            0, // Disable hedging for deterministic failover test
 	}
 
 	downloader := NewConcurrentDownloader("switch429-id", nil, state, runtime)
@@ -111,9 +112,10 @@ func TestConcurrentDownloader_BackoffOnSingleMirror(t *testing.T) {
 	// Runtime with 1 connection and retries
 	// RetryBaseDelay is 200ms by default in types
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 1,
-		MaxTaskRetries:        5,
-		MinChunkSize:          64 * types.KB,
+		MaxConnectionsPerDownload: 1,
+		MaxTaskRetries:            5,
+		MinChunkSize:              64 * types.KB,
+		DialHedgeCount:            0, // Disable hedging for deterministic backoff timing
 	}
 
 	downloader := NewConcurrentDownloader("backoff-id", nil, state, runtime)

@@ -8,7 +8,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/surge-downloader/surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/testutil"
 )
 
 // TestMirrors_CLI_Integration verifies that the processDownloads function (used by CLI)

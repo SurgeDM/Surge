@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/processing"
 )
 
 func TestProbeServer_UsesConfiguredProxy(t *testing.T) {
@@ -77,7 +77,7 @@ func TestProbeMirrors_PreservesCallerOrderAfterDedupe(t *testing.T) {
 		fast.URL,
 		slow.URL,
 		invalid.URL,
-	}, "")
+	}, nil)
 
 	want := []string{slow.URL, fast.URL}
 	if len(valid) != len(want) {
@@ -116,7 +116,7 @@ func TestProbeServer_ReadsBodyBeforeContextCancel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	result, err := processing.ProbeServerWithProxy(ctx, server.URL, "", nil, "")
+	result, err := processing.ProbeServerWithProxy(ctx, server.URL, "", nil, nil)
 	if err != nil {
 		t.Fatalf("ProbeServerWithProxy() failed: %v", err)
 	}

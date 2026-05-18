@@ -24,11 +24,9 @@ func Configure(path string) {
 	configured = true
 }
 
-// InitDB initializes the SQLite database connection using the configured path
-func initDB() error {
-	dbMu.Lock()
-	defer dbMu.Unlock()
-
+// initDBLocked initialises the database connection.
+// Caller must hold dbMu.
+func initDBLocked() error {
 	if db != nil {
 		return nil
 	}
@@ -37,9 +35,6 @@ func initDB() error {
 		return fmt.Errorf("state database not configured: call state.Configure() first")
 	}
 
-	// Ensure directory exists - caller should perhaps do this, but safe to do here if path is provided
-
-	// Open database
 	var err error
 	db, err = sql.Open("sqlite", dbPath)
 	if err != nil {
@@ -99,6 +94,12 @@ func initDB() error {
 	return nil
 }
 
+func initDB() error {
+	dbMu.Lock()
+	defer dbMu.Unlock()
+	return initDBLocked()
+}
+
 // ensureDownloadsSchema checks if required columns exist in the downloads table and adds them if missing.
 func ensureDownloadsSchema() error {
 	rows, err := db.Query("PRAGMA table_info(downloads)")
@@ -154,10 +155,13 @@ func CloseDB() {
 	configured = false
 }
 
-// GetDB returns the database instance, initializing it if necessary
+// GetDB is safe for concurrent use; it lazily opens the database so callers
+// need not coordinate initialisation order with Configure().
 func GetDB() (*sql.DB, error) {
+	dbMu.Lock()
+	defer dbMu.Unlock()
 	if db == nil {
-		if err := initDB(); err != nil {
+		if err := initDBLocked(); err != nil {
 			return nil, err
 		}
 	}

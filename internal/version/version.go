@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 const (
 	// GitHubAPIURL is the endpoint for fetching the latest release
-	GitHubAPIURL = "https://api.github.com/repos/surge-downloader/surge/releases/latest"
+	GitHubAPIURL = "https://api.github.com/repos/SurgeDM/Surge/releases/latest"
 	// RequestTimeout is the timeout for the GitHub API request
 	RequestTimeout = 10 * time.Second
 )

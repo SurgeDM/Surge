@@ -12,14 +12,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/download"
-	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/processing"
-	"github.com/surge-downloader/surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/download"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/testutil"
 )
 
 type countingLifecycleService struct {
@@ -235,10 +235,13 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 
 	defaultDir := t.TempDir()
 	customDir := filepath.Join(t.TempDir(), "bin-artifacts")
+	if err := os.MkdirAll(customDir, 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
 	settings := config.DefaultSettings()
 	settings.General.DefaultDownloadDir = defaultDir
-	settings.General.CategoryEnabled = true
-	settings.General.Categories = append(settings.General.Categories, config.Category{
+	settings.Categories.CategoryEnabled = true
+	settings.Categories.Categories = append(settings.Categories.Categories, config.Category{
 		Name:    "Binary",
 		Pattern: `(?i)\.bin$`,
 		Path:    customDir,
@@ -323,7 +326,7 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 	defaultDir := t.TempDir()
 	initial := config.DefaultSettings()
 	initial.General.DefaultDownloadDir = defaultDir
-	initial.General.CategoryEnabled = false
+	initial.Categories.CategoryEnabled = false
 	if err := config.SaveSettings(initial); err != nil {
 		t.Fatalf("SaveSettings(initial) failed: %v", err)
 	}
@@ -336,10 +339,13 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 	}
 
 	customDir := filepath.Join(t.TempDir(), "bin-updated")
+	if err := os.MkdirAll(customDir, 0755); err != nil {
+		t.Fatalf("MkdirAll failed: %v", err)
+	}
 	updated := config.DefaultSettings()
 	updated.General.DefaultDownloadDir = defaultDir
-	updated.General.CategoryEnabled = true
-	updated.General.Categories = []config.Category{
+	updated.Categories.CategoryEnabled = true
+	updated.Categories.Categories = []config.Category{
 		{
 			Name:    "Binary",
 			Pattern: `(?i)\.bin$`,

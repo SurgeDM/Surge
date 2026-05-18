@@ -3,8 +3,8 @@ package concurrent
 import (
 	"testing"
 
+	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/stretchr/testify/assert"
-	"github.com/surge-downloader/surge/internal/engine/types"
 )
 
 func TestTaskRangeAssignment(t *testing.T) {

@@ -4,14 +4,16 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 type httpAPITestService struct {
@@ -19,6 +21,7 @@ type httpAPITestService struct {
 	historyErr   error
 	statusByID   map[string]*types.DownloadStatus
 	getStatusErr error
+	streamMsgs   []interface{}
 }
 
 func (s *httpAPITestService) List() ([]types.DownloadStatus, error) {
@@ -61,8 +64,12 @@ func (s *httpAPITestService) Delete(string) error {
 }
 
 func (s *httpAPITestService) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
-	channel := make(chan interface{})
-	cleanup := func() { close(channel) }
+	channel := make(chan interface{}, len(s.streamMsgs))
+	for _, msg := range s.streamMsgs {
+		channel <- msg
+	}
+	close(channel)
+	cleanup := func() {}
 	return channel, cleanup, nil
 }
 
@@ -143,6 +150,65 @@ func TestHistoryEndpoint_SortsMostRecentFirst(t *testing.T) {
 	}
 }
 
+func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
+	service := &httpAPITestService{
+		streamMsgs: []interface{}{
+			events.DownloadQueuedMsg{
+				DownloadID: "queue-1",
+				Filename:   "archive.zip",
+				URL:        "https://example.com/archive.zip",
+				DestPath:   "/tmp/archive.zip",
+			},
+		},
+	}
+
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", service)
+	handler := corsMiddleware(authMiddleware("test-token", mux))
+	server := httptest.NewServer(handler)
+	defer server.Close()
+
+	noAuthResp, err := server.Client().Get(server.URL + "/events")
+	if err != nil {
+		t.Fatalf("request without auth failed: %v", err)
+	}
+	defer func() { _ = noAuthResp.Body.Close() }()
+	if noAuthResp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("expected 401 without auth, got %d", noAuthResp.StatusCode)
+	}
+
+	req, err := http.NewRequest(http.MethodGet, server.URL+"/events", nil)
+	if err != nil {
+		t.Fatalf("failed to create authed request: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer test-token")
+
+	resp, err := server.Client().Do(req)
+	if err != nil {
+		t.Fatalf("authed request failed: %v", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("expected 200 with auth, got %d", resp.StatusCode)
+	}
+	if got := resp.Header.Get("Content-Type"); got != "text/event-stream" {
+		t.Fatalf("expected text/event-stream content type, got %q", got)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("failed to read SSE body: %v", err)
+	}
+	text := string(body)
+	if !strings.Contains(text, "event: queued") {
+		t.Fatalf("expected queued SSE event, got %q", text)
+	}
+	if !strings.Contains(text, `"DownloadID":"queue-1"`) {
+		t.Fatalf("expected queued payload in SSE body, got %q", text)
+	}
+}
+
 func TestResolveDownloadDestPath(t *testing.T) {
 	tests := []struct {
 		name           string
@@ -154,10 +220,10 @@ func TestResolveDownloadDestPath(t *testing.T) {
 		wantErrContain string
 	}{
 		{
-			name:      "service unavailable",
+			name:          "service unavailable",
 			useNilService: true,
-			id:        "x",
-			wantErrIs: ErrServiceUnavailable,
+			id:            "x",
+			wantErrIs:     ErrServiceUnavailable,
 		},
 		{
 			name: "status path present",
@@ -176,7 +242,7 @@ func TestResolveDownloadDestPath(t *testing.T) {
 					"fallback": {ID: "fallback", DestPath: ""},
 				},
 				history: []types.DownloadEntry{{ID: "fallback", DestPath: "C:\\tmp\\b.bin"}},
-			}, 
+			},
 			id:       "fallback",
 			wantPath: `C:\tmp\b.bin`,
 		},

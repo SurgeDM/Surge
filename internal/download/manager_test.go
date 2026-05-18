@@ -10,10 +10,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/processing"
-	"github.com/surge-downloader/surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/testutil"
 )
 
 func TestUniqueFilePath(t *testing.T) {
@@ -198,6 +198,187 @@ func TestTUIDownload_StartedEventUsesFullDestPath(t *testing.T) {
 		case <-deadline:
 			t.Fatal("timed out waiting for started event")
 		}
+	}
+}
+
+func TestTUIDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
+	tmpDir := t.TempDir()
+	fileSize := int64(2 * 1024 * 1024)
+	server := testutil.NewStreamingMockServerT(t,
+		fileSize,
+		testutil.WithRangeSupport(true),
+		testutil.WithByteLatency(10*time.Microsecond),
+	)
+	defer server.Close()
+
+	finalPath := filepath.Join(tmpDir, "file.bin")
+	surgePath := finalPath + types.IncompleteSuffix
+	f, err := os.Create(surgePath)
+	if err != nil {
+		t.Fatalf("failed to pre-create incomplete file: %v", err)
+	}
+	_ = f.Close()
+
+	progressCh := make(chan any, 16)
+	cfg := types.DownloadConfig{
+		URL:           server.URL(),
+		OutputPath:    tmpDir,
+		Filename:      "file.bin",
+		ID:            "bootstrap-test",
+		ProgressCh:    progressCh,
+		State:         types.NewProgressState("bootstrap-test", 0),
+		Runtime:       &types.RuntimeConfig{},
+		TotalSize:     0,
+		SupportsRange: true,
+	}
+
+	if err := TUIDownload(context.Background(), &cfg); err != nil {
+		t.Fatalf("TUIDownload failed: %v", err)
+	}
+	if cfg.TotalSize != fileSize {
+		t.Fatalf("cfg.TotalSize = %d, want %d", cfg.TotalSize, fileSize)
+	}
+	if got := cfg.State.TotalSize; got != fileSize {
+		t.Fatalf("state total size = %d, want %d", got, fileSize)
+	}
+
+	foundComplete := false
+	for len(progressCh) > 0 {
+		msg := <-progressCh
+		complete, ok := msg.(events.DownloadCompleteMsg)
+		if !ok {
+			continue
+		}
+		foundComplete = true
+		if complete.Total != fileSize {
+			t.Fatalf("complete total = %d, want %d", complete.Total, fileSize)
+		}
+	}
+	if !foundComplete {
+		t.Fatal("expected completion event")
+	}
+}
+
+func TestTUIDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := []byte("fallback download content")
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Range") != "" {
+			w.WriteHeader(http.StatusForbidden)
+			return
+		}
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write(content)
+	}))
+	defer server.Close()
+
+	finalPath := filepath.Join(tmpDir, "fallback.bin")
+	surgePath := finalPath + types.IncompleteSuffix
+	f, err := os.Create(surgePath)
+	if err != nil {
+		t.Fatalf("failed to pre-create incomplete file: %v", err)
+	}
+	_ = f.Close()
+
+	progressCh := make(chan any, 16)
+	cfg := types.DownloadConfig{
+		URL:           server.URL,
+		OutputPath:    tmpDir,
+		Filename:      "fallback.bin",
+		ID:            "optimistic-fallback-test",
+		ProgressCh:    progressCh,
+		State:         types.NewProgressState("optimistic-fallback-test", 0),
+		Runtime:       &types.RuntimeConfig{},
+		TotalSize:     0,
+		SupportsRange: true,
+	}
+
+	if err := TUIDownload(context.Background(), &cfg); err != nil {
+		t.Fatalf("TUIDownload failed: %v", err)
+	}
+
+	got, err := os.ReadFile(surgePath)
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+	if string(got) != string(content) {
+		t.Fatalf("downloaded content = %q, want %q", string(got), string(content))
+	}
+	if cfg.TotalSize != int64(len(content)) {
+		t.Fatalf("cfg.TotalSize = %d, want %d", cfg.TotalSize, len(content))
+	}
+
+	foundComplete := false
+	for len(progressCh) > 0 {
+		msg := <-progressCh
+		complete, ok := msg.(events.DownloadCompleteMsg)
+		if !ok {
+			continue
+		}
+		foundComplete = true
+		if complete.Total != int64(len(content)) {
+			t.Fatalf("complete total = %d, want %d", complete.Total, len(content))
+		}
+	}
+	if !foundComplete {
+		t.Fatal("expected completion event")
+	}
+}
+
+func TestTUIDownload_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T) {
+	tmpDir := t.TempDir()
+	fileSize := 10 * 1024
+	server := testutil.NewMockServerT(t,
+		testutil.WithFileSize(int64(fileSize)),
+		testutil.WithRangeSupport(true),
+		testutil.WithFailOnNthRequest(2), // Fail first worker GET
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "midfail.bin")
+	surgePath := destPath + types.IncompleteSuffix
+	if f, err := os.Create(surgePath); err == nil {
+		_ = f.Close()
+	}
+
+	progressCh := make(chan any, 100)
+	cfg := types.DownloadConfig{
+		URL:           server.URL(),
+		OutputPath:    tmpDir,
+		Filename:      "midfail.bin",
+		ID:            "mid-fail-test",
+		ProgressCh:    progressCh,
+		State:         types.NewProgressState("mid-fail-test", 0), // Simulating unknown size
+		Runtime:       &types.RuntimeConfig{MinChunkSize: 10240},
+		TotalSize:     0, // Force bootstrap attempt/failure
+		SupportsRange: true,
+	}
+
+	// Drain progress channel
+	go func() {
+		for range progressCh {
+		}
+	}()
+
+	if err := TUIDownload(context.Background(), &cfg); err != nil {
+		t.Fatalf("TUIDownload should have succeeded via fallback: %v", err)
+	}
+
+	// Verification:
+	// 1. Progress counter is correct
+	downloaded, _, _, _, _, _ := cfg.State.GetProgress()
+	if downloaded != int64(fileSize) {
+		t.Errorf("Progress counter = %d, want %d", downloaded, fileSize)
+	}
+
+	// 2. File on disk is exactly the right size (no stale tail bytes)
+	fi, err := os.Stat(surgePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if fi.Size() != int64(fileSize) {
+		t.Errorf("File size on disk = %d, want %d (potential stale bytes)", fi.Size(), fileSize)
 	}
 }
 
@@ -566,7 +747,7 @@ func TestProbeServer_LargeFile(t *testing.T) {
 }
 
 func TestProbeResult_Fields(t *testing.T) {
-	pr := &ProbeResult{
+	pr := &processing.ProbeResult{
 		FileSize:      123456789,
 		SupportsRange: true,
 		Filename:      "document.pdf",
@@ -588,7 +769,7 @@ func TestProbeResult_Fields(t *testing.T) {
 }
 
 func TestProbeResult_ZeroValues(t *testing.T) {
-	pr := &ProbeResult{}
+	pr := &processing.ProbeResult{}
 
 	if pr.FileSize != 0 {
 		t.Errorf("FileSize = %d, want 0", pr.FileSize)

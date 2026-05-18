@@ -11,22 +11,25 @@ builds:
     main: .
     ldflags:
       - -s -w 
-      - -X github.com/surge-downloader/surge/cmd.Version={{.Version}}
-      - -X github.com/surge-downloader/surge/cmd.BuildTime={{.Date}}
+      - -X github.com/SurgeDM/Surge/cmd.Version={{.Version}}
+      - -X github.com/SurgeDM/Surge/cmd.Commit={{.Commit}}
+      - -X github.com/SurgeDM/Surge/cmd.BuildTime={{.Date}}
 
 before:
   hooks:
-    - ./scripts/package-release-assets.sh
+    - ./scripts/package-fonts.sh
+    - ./scripts/package-themes.sh
 
 release:
   footer: |
     ---
     **Enjoying Surge?** Consider supporting the project to keep it blazing fast!
+    - [GitHub Sponsors](https://github.com/sponsors/SurgeDM)
     - [Buy Me a Coffee](https://buymeacoffee.com/surge.downloader)
+    - Release automation powered by [GoReleaser Pro](https://goreleaser.com/pro/)
   extra_files:
-    - glob: .goreleaser-extra/extension-chrome.zip
-    - glob: .goreleaser-extra/extension-firefox.zip
     - glob: .goreleaser-extra/fonts.zip
+    - glob: .goreleaser-extra/themes.zip
 
 changelog:
   sort: asc
@@ -49,10 +52,10 @@ archives:
 homebrew_casks:
   - name: surge
     repository:
-      owner: surge-downloader
+      owner: SurgeDM
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-    homepage: "https://github.com/surge-downloader/surge"
+    homepage: "https://github.com/SurgeDM/Surge"
     
     description: "Blazing fast TUI download manager built in Go for power users"
     license: "MIT"

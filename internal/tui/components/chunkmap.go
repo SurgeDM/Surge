@@ -3,9 +3,9 @@ package components
 import (
 	"strings"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/tui/colors"
+	"charm.land/lipgloss/v2"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
 
 // ChunkMapModel visualizes download chunks as a grid using a bitmap
@@ -196,12 +196,12 @@ func (m ChunkMapModel) View() string {
 	var s strings.Builder
 
 	// Styles
-	pendingStyle := lipgloss.NewStyle().Foreground(colors.DarkGray)           // Dark gray
-	downloadingStyle := lipgloss.NewStyle().Foreground(colors.NeonPink)       // Neon Pink
-	pausedStyle := lipgloss.NewStyle().Foreground(colors.StatePaused)         // Yellow/Gold for paused Partial
-	completedStyle := lipgloss.NewStyle().Foreground(colors.StateDownloading) // Neon Green / Cyan
+	pendingStyle := lipgloss.NewStyle().Foreground(colors.DarkGray())           // Dark gray
+	downloadingStyle := lipgloss.NewStyle().Foreground(colors.Pink())           // Neon Pink
+	pausedStyle := lipgloss.NewStyle().Foreground(colors.StatePaused())         // Yellow/Gold for paused Partial
+	completedStyle := lipgloss.NewStyle().Foreground(colors.StateDownloading()) // Neon Green / Cyan
 
-	block := "■"
+	block := "\u25a0"
 
 	for i, status := range visualChunks {
 		if i > 0 && i%cols == 0 {

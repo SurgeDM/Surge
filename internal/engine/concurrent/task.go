@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 // ActiveTask tracks a task currently being processed by a worker

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"io"
 	"net/http"
+	"os"
+	"strings"
 	"testing"
 )
 
@@ -44,6 +46,11 @@ func TestSanitizeFilename(t *testing.T) {
 		// Security test cases
 		{"ansi escape codes", "\x1b[31mred.zip", "[31mred.zip"},
 		{"control chars", "file\x07name.zip", "filename.zip"},
+		{"extremely long filename", strings.Repeat("a", 300) + ".zip", strings.Repeat("a", 236) + ".zip"},
+		{"long unicode filename", strings.Repeat("文件", 150) + ".zip", strings.Repeat("文件", 39) + ".zip"},
+		{"mid-length unicode filename", strings.Repeat("中", 100) + ".zip", strings.Repeat("中", 78) + ".zip"},
+		{"unicode filename over limit", strings.Repeat("中", 250) + ".zip", strings.Repeat("中", 78) + ".zip"},
+		{"unicode filename with long extension", strings.Repeat("中", 10) + "." + strings.Repeat("a", 250), strings.Repeat("中", 10) + "." + strings.Repeat("a", 209)},
 	}
 
 	for _, tt := range tests {
@@ -143,7 +150,7 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 				Body:   io.NopCloser(bytes.NewReader(tt.body)),
 			}
 
-			filename, _, err := DetermineFilename(tt.url, resp, false)
+			filename, _, err := DetermineFilename(tt.url, resp)
 			if err != nil {
 				t.Fatalf("Unexpected error: %v", err)
 			}
@@ -152,5 +159,31 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 				t.Errorf("got %q, want %q", filename, tt.expected)
 			}
 		})
+	}
+}
+
+func TestDetermineFilename_LoggingIntegration(t *testing.T) {
+	// Setup temp dir for logs
+	tempDir, err := os.MkdirTemp("", "surge-debug-integration")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() { _ = os.RemoveAll(tempDir) }()
+
+	// Enable logging
+	ConfigureDebug(tempDir)
+	defer ConfigureDebug("")
+
+	resp := &http.Response{
+		Header: http.Header{},
+		Body:   io.NopCloser(bytes.NewReader([]byte("%PDF-1.4\n"))),
+	}
+
+	filename, _, err := DetermineFilename("https://example.com/test", resp)
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	if filename != "test.pdf" {
+		t.Errorf("got %q, want test.pdf", filename)
 	}
 }

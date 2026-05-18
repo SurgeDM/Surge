@@ -6,20 +6,24 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func resetSharedStateDB() error {
 	// Reset any pre-existing global DB state (e.g. left by an init or an
 	// isolated test cleanup) before pointing the package at the shared suite DB.
 	state.CloseDB()
-	err := config.EnsureDirs()
+	if err := config.EnsureDirs(); err != nil {
+		return err
+	}
 	state.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
-	return err
+	return nil
 }
 
 func TestMain(m *testing.M) {
+	utils.SuppressNotifications = true
 	tmpDir, err := os.MkdirTemp("", "surge-cmd-test-*")
 	if err == nil {
 		_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)

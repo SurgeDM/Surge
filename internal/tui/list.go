@@ -4,19 +4,20 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/surge-downloader/surge/internal/tui/colors"
-	"github.com/surge-downloader/surge/internal/tui/components"
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/SurgeDM/Surge/internal/tui/components"
+	"github.com/SurgeDM/Surge/internal/utils"
 
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	tea "github.com/charmbracelet/bubbletea"
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/bubbles/v2/key"
+	"charm.land/bubbles/v2/list"
+	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 )
 
 // DownloadItem implements list.Item interface for downloads
 type DownloadItem struct {
-	download *DownloadModel
+	download    *DownloadModel
+	spinnerView string
 }
 
 func (i DownloadItem) Title() string {
@@ -33,11 +34,12 @@ func (i DownloadItem) Description() string {
 	var styledStatus string
 	if d.pausing {
 		// Custom "Pausing..." style using existing colors
-		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused).Render("⏸ Pausing...")
+		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused()).Render(i.spinnerView + " Pausing...")
 	} else if d.resuming {
-		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading).Render("▶ Resuming...")
+		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(i.spinnerView + " Resuming...")
 	} else {
-		styledStatus = components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded).Render()
+		status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
+		styledStatus = status.RenderWithSpinner(i.spinnerView)
 	}
 
 	// Build progress info
@@ -53,10 +55,10 @@ func (i DownloadItem) Description() string {
 
 	speedInfo := ""
 	if d.Speed > 0 {
-		speedInfo = fmt.Sprintf(" • %.2f MB/s", d.Speed/float64(MB))
+		speedInfo = fmt.Sprintf(" \u2022 %.2f MB/s", d.Speed/float64(MB))
 	}
 
-	return fmt.Sprintf("%s • %.0f%%%s • %s", styledStatus, pct, speedInfo, sizeInfo)
+	return fmt.Sprintf("%s \u2022 %.0f%%%s \u2022 %s", styledStatus, pct, speedInfo, sizeInfo)
 }
 
 func (i DownloadItem) FilterValue() string {
@@ -96,11 +98,11 @@ func newDelegateKeyMap() *delegateKeyMap {
 }
 
 func newDownloadDelegate() downloadDelegate {
-	baseTitle := lipgloss.NewStyle().Foreground(colors.White).Bold(true)
-	baseDesc := lipgloss.NewStyle().Foreground(colors.LightGray)
+	baseTitle := lipgloss.NewStyle().Foreground(colors.White()).Bold(true)
+	baseDesc := lipgloss.NewStyle().Foreground(colors.LightGray())
 
-	selTitle := lipgloss.NewStyle().Foreground(colors.NeonPink).Bold(true)
-	selDesc := lipgloss.NewStyle().Foreground(colors.NeonCyan)
+	selTitle := lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true)
+	selDesc := lipgloss.NewStyle().Foreground(colors.Cyan())
 
 	return downloadDelegate{
 		keys:           newDelegateKeyMap(),
@@ -109,7 +111,7 @@ func newDownloadDelegate() downloadDelegate {
 		selTitleStyle:  selTitle,
 		selDescStyle:   selDesc,
 		prefixNormal:   "  ",
-		prefixSelected: lipgloss.NewStyle().Foreground(colors.NeonPink).Render("▌ "),
+		prefixSelected: lipgloss.NewStyle().Foreground(colors.Pink()).Render("\u258c "),
 	}
 }
 
@@ -140,20 +142,23 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 		prefix = d.prefixNormal
 	}
 
-	// Truncate title if needed
-	width := m.Width() - 6
-	if width < 20 {
-		width = 20
+	// Measure the prefix so we can subtract it from the allowed content width.
+	prefixWidth := lipgloss.Width(prefix)
+
+	// Compute the content width available for title/description.
+	// We subtract the border frame allowance AND the prefix so the total
+	// rendered line (prefix + content) never exceeds m.Width().
+	availableWidth := m.Width() - prefixWidth - (components.BorderFrameWidth * 2)
+	if availableWidth < 1 {
+		availableWidth = 1
 	}
-	title := i.Title()
-	maxTitleWidth := width - 10
-	if len(title) > maxTitleWidth {
-		title = title[:maxTitleWidth-3] + "..."
-	}
+
+	title := utils.TruncateMiddle(i.Title(), availableWidth)
+	description := utils.Truncate(i.Description(), availableWidth)
 
 	// Render lines
 	line1 := prefix + titleStyle.Render(title)
-	line2 := prefix + descStyle.Render(i.Description())
+	line2 := prefix + descStyle.Render(description)
 
 	_, _ = fmt.Fprintf(w, "%s\n%s", line1, line2)
 }
@@ -181,37 +186,48 @@ func NewDownloadList(width, height int) list.Model {
 	l.SetShowHelp(false)
 	l.SetShowPagination(true)
 
-	// Style the list
-	l.Styles.Title = lipgloss.NewStyle().
-		Foreground(colors.NeonPink).
-		Bold(true).
-		Padding(0, 1)
-
-	l.Styles.FilterPrompt = lipgloss.NewStyle().
-		Foreground(colors.NeonCyan)
-
-	l.Styles.FilterCursor = lipgloss.NewStyle().
-		Foreground(colors.NeonPink)
-
-	// No items message - bright color for cyberpunk theme
-	l.Styles.NoItems = lipgloss.NewStyle().
-		Foreground(colors.NeonCyan).
-		Padding(2, 0)
-
-	l.SetStatusBarItemName("download", "downloads")
+	applyListTheme(&l)
 
 	return l
 }
 
+func applyListTheme(l *list.Model) {
+	if l == nil {
+		return
+	}
+
+	l.SetDelegate(newDownloadDelegate())
+	l.SetStatusBarItemName("download", "downloads")
+
+	l.Styles.Title = lipgloss.NewStyle().
+		Foreground(colors.Pink()).
+		Bold(true).
+		Padding(0, 1)
+
+	l.Styles.Filter.Focused.Prompt = lipgloss.NewStyle().Foreground(colors.Cyan())
+	l.Styles.Filter.Blurred.Prompt = lipgloss.NewStyle().Foreground(colors.Cyan())
+	l.Styles.Filter.Cursor.Color = colors.Pink()
+
+	l.Styles.NoItems = lipgloss.NewStyle().
+		Foreground(colors.Cyan()).
+		Padding(2, 0)
+}
+
 // UpdateListItems updates the list with filtered downloads based on active tab
 func (m *RootModel) UpdateListItems() {
+
+	if m.list.Width() == 0 {
+		return
+	}
+
 	// If the user manually switched tabs, don't try to preserve/follow selection
 	if m.ManualTabSwitch {
 		m.ManualTabSwitch = false
 		filtered := m.getFilteredDownloads()
 		items := make([]list.Item, len(filtered))
+		sv := m.spinner.View()
 		for i, d := range filtered {
-			items[i] = DownloadItem{download: d}
+			items[i] = DownloadItem{download: d, spinnerView: sv}
 		}
 		m.list.SetItems(items)
 		// Reset cursor to top when manually switching tabs (standard behavior)
@@ -229,8 +245,9 @@ func (m *RootModel) UpdateListItems() {
 
 	filtered := m.getFilteredDownloads()
 	items := make([]list.Item, len(filtered))
+	sv := m.spinner.View()
 	for i, d := range filtered {
-		items[i] = DownloadItem{download: d}
+		items[i] = DownloadItem{download: d, spinnerView: sv}
 	}
 	m.list.SetItems(items)
 
@@ -255,16 +272,15 @@ func (m *RootModel) UpdateListItems() {
 					var newTab int
 					if d.done {
 						newTab = TabDone
-					} else if d.Speed > 0 {
+					} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming || d.started) {
 						newTab = TabActive
 					} else {
 						newTab = TabQueued
 					}
 
-					// If it belongs to a different tab, switch to it
-					if newTab != -1 && newTab != m.activeTab {
+					// If it belongs to a different tab, switch to it (unless current tab is pinned)
+					if m.pinnedTab == -1 && newTab != -1 && newTab != m.activeTab {
 						m.activeTab = newTab
-						m.updateListTitle()
 
 						// Force selection for the recursive call
 						m.SelectedDownloadID = targetID

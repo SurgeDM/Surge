@@ -6,12 +6,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/core"
-	"github.com/surge-downloader/surge/internal/download"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/download"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/processing"
 )
 
 // TestTUI_Startup_HandlesResume verifies that TUI initialization handles resume logic correctly
@@ -110,6 +110,7 @@ func TestTUI_Startup_LoadsCompletedTiming(t *testing.T) {
 	}
 	if found == nil {
 		t.Fatal("TUI Model failed to load completed download")
+		return
 	}
 	if !found.done {
 		t.Error("Expected completed download to be marked done")
@@ -158,6 +159,7 @@ func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
 	}
 	if found == nil {
 		t.Fatal("TUI Model failed to load errored download")
+		return
 	}
 	if !found.done {
 		t.Fatal("expected errored download to appear in done tab")
@@ -166,15 +168,8 @@ func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
 
 // Helper functions (duplicated from cmd/startup_test.go because packages differ)
 func setupTestEnv(t *testing.T, tmpDir string) {
-	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
-	t.Cleanup(func() {
-		if originalXDG == "" {
-			_ = os.Unsetenv("XDG_CONFIG_HOME")
-		} else {
-			_ = os.Setenv("XDG_CONFIG_HOME", originalXDG)
-		}
-	})
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 
 	surgeDir := config.GetSurgeDir()
 	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
@@ -192,6 +187,7 @@ func setupTestEnv(t *testing.T, tmpDir string) {
 	dbPath := filepath.Join(surgeDir, "state", "surge.db")
 	_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
 	state.CloseDB()
+	t.Cleanup(state.CloseDB)
 	state.Configure(dbPath)
 }
 

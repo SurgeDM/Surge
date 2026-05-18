@@ -4,23 +4,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/charmbracelet/lipgloss"
-	"github.com/muesli/termenv"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/tui/colors"
+	"charm.land/lipgloss/v2"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
-
-func init() {
-	lipgloss.SetColorProfile(termenv.ANSI256)
-}
 
 // Helper to check for colors
-const (
-	ColorPending     = "236" // DarkGray (approx)
-	ColorDownloading = "198" // Neon Pink
-	ColorPaused      = "3"   // Warning (Yellow) - from lipgloss standard definition usually, checking components
-	ColorCompleted   = "14"  // Cyan
-)
 
 // Helper to set chunk state in a bitmap
 // Index is chunk index. Status: 0=Pending, 1=Downloading, 2=Completed
@@ -135,7 +124,8 @@ func TestChunkMap_LogicVerify(t *testing.T) {
 	model := NewChunkMapModel(bitmap, chunkCount, 2, 0, false, 2048, 1024, progress) // 1 col
 	out := model.View()
 
-	if strings.Contains(out, "38;5;198") { // 198 is NeonPink
+	pinkStyle := lipgloss.NewStyle().Foreground(colors.Pink())
+	if strings.Contains(out, pinkStyle.Render("■")) {
 		t.Error("Mixed state (Completed+Pending) should NOT render as Downloading (Pink)")
 	}
 }
@@ -156,7 +146,7 @@ func TestChunkMap_DownloadingPriority(t *testing.T) {
 	out := model.View()
 
 	// Dynamic check to avoid hardcoded color codes
-	pinkStyle := lipgloss.NewStyle().Foreground(colors.NeonPink)
+	pinkStyle := lipgloss.NewStyle().Foreground(colors.Pink())
 	expectedPink := pinkStyle.Render("■")
 
 	if !strings.Contains(out, expectedPink) {
@@ -202,10 +192,10 @@ func TestChunkMap_GranularProgress(t *testing.T) {
 		t.Fatalf("Expected 5 rows, got %d", len(rows))
 	}
 
-	pinkStyle := lipgloss.NewStyle().Foreground(colors.NeonPink)
+	pinkStyle := lipgloss.NewStyle().Foreground(colors.Pink())
 	pinkBlock := pinkStyle.Render("■")
 
-	pendingStyle := lipgloss.NewStyle().Foreground(colors.DarkGray)
+	pendingStyle := lipgloss.NewStyle().Foreground(colors.DarkGray())
 	grayBlock := pendingStyle.Render("■")
 
 	// Row 0 should be Pink
@@ -238,9 +228,9 @@ func TestChunkMap_BlockTurnsCompletedWhenItsByteRangeIsFullyDownloaded(t *testin
 		t.Fatalf("Expected 5 rows, got %d", len(rows))
 	}
 
-	completedStyle := lipgloss.NewStyle().Foreground(colors.StateDownloading)
+	completedStyle := lipgloss.NewStyle().Foreground(colors.StateDownloading())
 	completedBlock := completedStyle.Render("■")
-	downloadingStyle := lipgloss.NewStyle().Foreground(colors.NeonPink)
+	downloadingStyle := lipgloss.NewStyle().Foreground(colors.Pink())
 	downloadingBlock := downloadingStyle.Render("■")
 
 	if !strings.Contains(rows[0], completedBlock) {

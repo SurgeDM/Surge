@@ -1,26 +1,28 @@
 package components
 
 import (
-	"github.com/surge-downloader/surge/internal/tui/colors"
+	"image/color"
 
-	"github.com/charmbracelet/bubbles/filepicker"
-	"github.com/charmbracelet/bubbles/help"
-	"github.com/charmbracelet/lipgloss"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
+
+	"charm.land/bubbles/v2/filepicker"
+	"charm.land/bubbles/v2/help"
+	"charm.land/lipgloss/v2"
 )
 
 // FilePickerModal represents a styled file picker modal
 type FilePickerModal struct {
 	Title       string
-	Picker      filepicker.Model
+	Picker      *filepicker.Model
 	Help        help.Model
 	HelpKeys    help.KeyMap
-	BorderColor lipgloss.TerminalColor
+	BorderColor color.Color
 	Width       int
 	Height      int
 }
 
 // NewFilePickerModal creates a file picker modal with default styling
-func NewFilePickerModal(title string, picker filepicker.Model, helpModel help.Model, helpKeys help.KeyMap, borderColor lipgloss.TerminalColor) FilePickerModal {
+func NewFilePickerModal(title string, picker *filepicker.Model, helpModel help.Model, helpKeys help.KeyMap, borderColor color.Color) FilePickerModal {
 	return FilePickerModal{
 		Title:       title,
 		Picker:      picker,
@@ -34,7 +36,7 @@ func NewFilePickerModal(title string, picker filepicker.Model, helpModel help.Mo
 
 // View returns the inner content of the file picker (without the box)
 func (m FilePickerModal) View() string {
-	pathStyle := lipgloss.NewStyle().Foreground(colors.LightGray)
+	pathStyle := lipgloss.NewStyle().Foreground(colors.LightGray())
 
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		"",
@@ -50,13 +52,8 @@ func (m FilePickerModal) View() string {
 
 // RenderWithBtopBox renders the modal using the btop-style box
 func (m FilePickerModal) RenderWithBtopBox(
-	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor lipgloss.TerminalColor) string,
+	renderBox func(leftTitle, rightTitle, content string, width, height int, borderColor color.Color) string,
 	titleStyle lipgloss.Style,
 ) string {
 	return renderBox(titleStyle.Render(m.Title), "", m.View(), m.Width, m.Height, m.BorderColor)
-}
-
-// Centered returns the modal centered in the given dimensions
-func (m FilePickerModal) Centered(width, height int, box string) string {
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center, box)
 }

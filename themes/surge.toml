@@ -1,0 +1,53 @@
+[colors]
+name = "Surge"
+
+[colors.primary]
+background = '#282a36'
+foreground = '#f8f8f2'
+accent = '#ff79c6'
+
+[colors.normal]
+black =   '#44475a'
+red =     '#ff5555'
+green =   '#50fa7b'
+yellow =  '#ffb86c'
+blue =    '#58a6ff'
+magenta = '#bd93f9'
+cyan =    '#8be9fd'
+white =   '#f8f8f2'
+
+[colors.bright]
+black =   '#a9b1d6'
+red =     '#ff79c6'
+green =   '#50fa7b'
+yellow =  '#ffb86c'
+blue =    '#58a6ff'
+magenta = '#bd93f9'
+cyan =    '#8be9fd'
+white =   '#f8f8f2'
+
+# Standard Light
+[colors.light.primary]
+background = "#ffffff"
+foreground = "#1a1a1a"
+accent = "#d10074"
+
+[colors.light.normal]
+black = "#d0d0d0"
+red = "#d32f2f"
+green = "#2e7d32"
+yellow = "#f57c00"
+blue = "#005cc5"
+magenta = "#7b1fa2"
+cyan = "#0073a8"
+white = "#1a1a1a"
+
+[colors.light.bright]
+black = "#4a4a4a"
+red = "#d10074"
+green = "#2e7d32"
+yellow = "#f57c00"
+blue = "#005cc5"
+magenta = "#7b1fa2"
+cyan = "#0073a8"
+white = "#1a1a1a"

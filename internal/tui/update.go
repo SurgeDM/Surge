@@ -1,339 +1,55 @@
 package tui
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"os/exec"
-	"path/filepath"
-	"regexp"
-	"runtime"
-	"strings"
-	"time"
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/utils"
 
-	"github.com/surge-downloader/surge/internal/processing"
+	"charm.land/lipgloss/v2"
 
-	"github.com/surge-downloader/surge/internal/clipboard"
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/utils"
-	"github.com/surge-downloader/surge/internal/version"
-
-	"github.com/charmbracelet/bubbles/key"
-	"github.com/charmbracelet/bubbles/list"
-	"github.com/charmbracelet/bubbles/progress"
-	tea "github.com/charmbracelet/bubbletea"
+	tea "charm.land/bubbletea/v2"
 )
 
-// notificationTickMsg is sent to check if a notification should be cleared
-type notificationTickMsg struct{}
+func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 
-// UpdateCheckResultMsg is sent when the update check is complete
-type UpdateCheckResultMsg struct {
-	Info *version.UpdateInfo
-}
-
-type shutdownCompleteMsg struct {
-	err error
-}
-
-type enqueueSuccessMsg struct {
-	tempID   string
-	id       string
-	url      string
-	path     string
-	filename string
-}
-
-type enqueueErrorMsg struct {
-	tempID string
-	err    error
-}
-
-// checkForUpdateCmd performs an async update check
-func checkForUpdateCmd(currentVersion string) tea.Cmd {
-	return func() tea.Msg {
-		info, _ := version.CheckForUpdate(currentVersion)
-		return UpdateCheckResultMsg{Info: info}
-	}
-}
-
-func shutdownCmd(service interface{ Shutdown() error }) tea.Cmd {
-	return func() tea.Msg {
-		if service == nil {
-			return shutdownCompleteMsg{}
-		}
-		return shutdownCompleteMsg{err: service.Shutdown()}
-	}
-}
-
-// openWithSystem opens a file or URL with the system's default application
-func openWithSystem(path string) error {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", path)
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", "", path)
-	default: // linux and others
-		cmd = exec.Command("xdg-open", path)
-	}
-	err := cmd.Start()
-	if err == nil {
-		go func() {
-			_ = cmd.Wait()
-		}()
-	}
-	return err
-}
-
-// addLogEntry adds a log entry to the log viewport
-func (m *RootModel) addLogEntry(msg string) {
-	timestamp := time.Now().Format("15:04:05")
-	entry := fmt.Sprintf("[%s] %s", timestamp, msg)
-	m.logEntries = append(m.logEntries, entry)
-
-	// Keep only the last 100 entries to prevent memory issues
-	if len(m.logEntries) > 100 {
-		m.logEntries = m.logEntries[len(m.logEntries)-100:]
-	}
-
-	// Update viewport content
-	m.logViewport.SetContent(strings.Join(m.logEntries, "\n"))
-	// Auto-scroll to bottom
-	m.logViewport.GotoBottom()
-}
-
-// removeDownloadByID removes a download from the in-memory list.
-// Returns true if a download was removed.
-func (m *RootModel) removeDownloadByID(id string) bool {
-	for i, d := range m.downloads {
-		if d.ID == id {
-			m.downloads = append(m.downloads[:i], m.downloads[i+1:]...)
-			return true
-		}
-	}
-	return false
-}
-
-func (m *RootModel) handleFilePickerSelection(path string) (tea.Model, tea.Cmd) {
-	if m.SettingsFileBrowsing {
-		m.Settings.General.DefaultDownloadDir = path
-		m.SettingsFileBrowsing = false
-		m.state = SettingsState
-		return m, nil
-	}
-	if m.ExtensionFileBrowsing {
-		m.inputs[2].SetValue(path)
-		m.ExtensionFileBrowsing = false
-		m.state = ExtensionConfirmationState
-		return m, nil
-	}
-	if m.catMgrFileBrowsing {
-		m.catMgrInputs[3].SetValue(path)
-		m.catMgrFileBrowsing = false
-		m.state = CategoryManagerState
-		return m, nil
-	}
-	m.inputs[2].SetValue(path)
-	m.state = InputState
-	return m, nil
-}
-
-func (m *RootModel) handleFilePickerGotoHome() tea.Cmd {
-	defaultDir := m.Settings.General.DefaultDownloadDir
-	if defaultDir == "" {
-		homeDir, _ := os.UserHomeDir()
-		defaultDir = filepath.Join(homeDir, "Downloads")
-	}
-	m.filepicker = newFilepicker(defaultDir)
-	return m.filepicker.Init()
-}
-
-func (m *RootModel) resetFilepickerToDirMode() {
-	m.filepicker.FileAllowed = false
-	m.filepicker.DirAllowed = true
-	m.filepicker.AllowedTypes = nil
-}
-
-// checkForDuplicate checks if a compatible download already exists
-func (m RootModel) checkForDuplicate(url string) *processing.DuplicateResult {
-	activeDownloads := func() map[string]*types.DownloadConfig {
-		active := make(map[string]*types.DownloadConfig)
-		for _, d := range m.downloads {
-			if !d.done {
-				state := &types.ProgressState{}
-				// Create dummy config to pass into processing duplicate check
-				active[d.ID] = &types.DownloadConfig{
-					URL:      d.URL,
-					Filename: d.Filename,
-					State:    state,
-				}
-			}
-		}
-		return active
-	}
-	return processing.CheckForDuplicate(url, m.Settings, activeDownloads)
-}
-
-// startDownload initiates a new download
-func (m RootModel) startDownload(url string, mirrors []string, headers map[string]string, path string, isDefaultPath bool, filename, id string) (RootModel, tea.Cmd) {
-	if m.Service == nil {
-		m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
-		return m, nil
-	}
-
-	// Enforce absolute path
-	path = utils.EnsureAbsPath(path)
-
-	candidateFilename := strings.TrimSpace(filename)
-	requestID := strings.TrimSpace(id)
-
-	resolvedPath := path
-	resolvedFilename := candidateFilename
-	optimisticFilename := candidateFilename
-	if p, f, err := processing.ResolveDestination(url, candidateFilename, path, isDefaultPath, m.Settings, nil, nil); err == nil {
-		resolvedPath = p
-		resolvedFilename = f
-		if candidateFilename != "" {
-			// Only mirror the resolved filename into the optimistic row when the
-			// user already chose it; probe-derived names can legitimately change.
-			optimisticFilename = f
-		}
-	} else {
-		utils.Debug("Optimistic destination resolve failed for %s: %v", url, err)
-	}
-
-	// Call Orchestrator Enqueue
-	req := &processing.DownloadRequest{
-		URL:                url,
-		Filename:           candidateFilename,
-		Path:               path,
-		Mirrors:            mirrors,
-		Headers:            headers,
-		IsExplicitCategory: !isDefaultPath,
-		SkipApproval:       true,
-	}
-
-	optimisticID := requestID
-	if optimisticID == "" {
-		optimisticID = fmt.Sprintf("pending-%d", time.Now().UnixNano())
-	}
-	displayName := optimisticFilename
-	if displayName == "" {
-		displayName = processing.InferFilenameFromURL(url)
-	}
-	if displayName == "" {
-		displayName = "Queued"
-	}
-
-	newDownload := NewDownloadModel(optimisticID, url, displayName, 0)
-	if resolvedFilename != "" {
-		newDownload.Destination = filepath.Join(resolvedPath, resolvedFilename)
-	} else {
-		newDownload.Destination = resolvedPath
-	}
-	m.downloads = append(m.downloads, newDownload)
-	m.SelectedDownloadID = optimisticID
-	m.activeTab = TabQueued
-	m.UpdateListItems()
-
-	// Legacy path for tests or startup wiring where processing is not injected yet.
-	if m.Orchestrator == nil {
-		var (
-			newID string
-			err   error
-		)
-		if requestID != "" {
-			newID, err = m.Service.AddWithID(
-				url,
-				resolvedPath,
-				resolvedFilename,
-				mirrors,
-				headers,
-				requestID,
-				0,
-				false,
-			)
-		} else {
-			newID, err = m.Service.Add(
-				url,
-				resolvedPath,
-				resolvedFilename,
-				mirrors,
-				headers,
-				!isDefaultPath,
-				0,
-				false,
-			)
-		}
-		if err != nil {
-			m.removeDownloadByID(optimisticID)
-			m.UpdateListItems()
-			m.addLogEntry(LogStyleError.Render("✖ Failed to add download: " + err.Error()))
-			return m, nil
-		}
-
-		if d := m.FindDownloadByID(optimisticID); d != nil {
-			d.ID = newID
-		}
-		if m.SelectedDownloadID == optimisticID {
-			m.SelectedDownloadID = newID
-		}
+	if m.state == DashboardState && m.searchActive {
+		var cmd tea.Cmd
+		m.searchInput, cmd = m.searchInput.Update(msg)
+		m.searchQuery = m.searchInput.Value()
 		m.UpdateListItems()
+		return m, cmd
+	}
+
+	switch m.state {
+	case InputState, ExtensionConfirmationState:
+		var cmd tea.Cmd
+		m.inputs[m.focusedInput], cmd = m.inputs[m.focusedInput].Update(msg)
+		return m, cmd
+	case URLUpdateState:
+		var cmd tea.Cmd
+		m.urlUpdateInput, cmd = m.urlUpdateInput.Update(msg)
+		return m, cmd
+	case SettingsState:
+		if m.SettingsIsEditing {
+			var cmd tea.Cmd
+			m.SettingsInput, cmd = m.SettingsInput.Update(msg)
+			return m, cmd
+		}
+		return m, nil
+	case CategoryManagerState:
+		if m.catMgrEditing {
+			var cmd tea.Cmd
+			m.catMgrInputs[m.catMgrEditField], cmd = m.catMgrInputs[m.catMgrEditField].Update(msg)
+			return m, cmd
+		}
+		return m, nil
+	default:
 		return m, nil
 	}
-
-	cmd := func() tea.Msg {
-		ctx := m.downloadEnqueueContext()
-		var newID string
-		var err error
-		if requestID != "" {
-			newID, err = m.Orchestrator.EnqueueWithID(ctx, req, requestID)
-		} else {
-			newID, err = m.Orchestrator.Enqueue(ctx, req)
-		}
-		if err != nil {
-			return enqueueErrorMsg{tempID: optimisticID, err: err}
-		}
-		return enqueueSuccessMsg{
-			tempID:   optimisticID,
-			id:       newID,
-			url:      url,
-			path:     resolvedPath,
-			filename: optimisticFilename,
-		}
-	}
-
-	utils.Debug("Queued enqueue command (via Orchestrator): %s -> %s", url, optimisticFilename)
-	return m, cmd
-}
-
-func (m RootModel) defaultDownloadPath() string {
-	if m.Settings != nil {
-		if path := strings.TrimSpace(m.Settings.General.DefaultDownloadDir); path != "" {
-			return path
-		}
-	}
-	return "."
-}
-
-func (m RootModel) downloadEnqueueContext() context.Context {
-	if m.enqueueCtx != nil {
-		return m.enqueueCtx
-	}
-	return context.Background()
-}
-
-func (m RootModel) isDefaultDownloadPath(path string) bool {
-	return utils.EnsureAbsPath(path) == utils.EnsureAbsPath(m.defaultDownloadPath())
 }
 
 // Update handles messages and updates the model
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
+
 	if m.Settings == nil {
 		m.Settings = config.DefaultSettings()
 	}
@@ -356,280 +72,59 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	switch msg := msg.(type) {
 
-	case resumeResultMsg:
-		if msg.err != nil {
-			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Auto-resume failed for %s: %v", msg.id, msg.err)))
-			return m, nil
-		}
-		if d := m.FindDownloadByID(msg.id); d != nil {
-			d.paused = false
-			d.pausing = false
-			d.resuming = true
-		}
-		return m, nil
-
-	case enqueueSuccessMsg:
-		if msg.tempID != "" && msg.tempID != msg.id {
-			temp := m.FindDownloadByID(msg.tempID)
-			real := m.FindDownloadByID(msg.id)
-			if temp != nil && real != nil && temp != real {
-				if real.URL == "" {
-					real.URL = temp.URL
-				}
-				if real.Filename == "" {
-					real.Filename = msg.filename
-					if real.Filename == "" {
-						real.Filename = temp.Filename
-					}
-					real.FilenameLower = strings.ToLower(real.Filename)
-				}
-				if real.Destination == "" {
-					real.Destination = temp.Destination
-				}
-				_ = m.removeDownloadByID(msg.tempID)
-			} else if temp != nil {
-				temp.ID = msg.id
-			}
-			if m.SelectedDownloadID == msg.tempID {
-				m.SelectedDownloadID = msg.id
-			}
-		}
-		m.UpdateListItems()
-		return m, nil
-
-	case enqueueErrorMsg:
-		if msg.tempID != "" {
-			if d := m.FindDownloadByID(msg.tempID); d != nil {
-				d.err = msg.err
-				d.done = true
-				d.paused = false
-				d.pausing = false
-				d.resuming = false
-				d.Speed = 0
-				d.Connections = 0
-				if d.FilenameLower == "" {
-					d.FilenameLower = strings.ToLower(d.Filename)
-				}
-			} else {
-				failed := NewDownloadModel(msg.tempID, "", "", 0)
-				failed.err = msg.err
-				failed.done = true
-				m.downloads = append(m.downloads, failed)
-			}
-			m.UpdateListItems()
-		}
-		m.addLogEntry(LogStyleError.Render("✖ Failed to enqueue download: " + msg.err.Error()))
-		return m, nil
-
-	case events.DownloadRequestMsg:
-		// ... existing logic ...
-		path := strings.TrimSpace(msg.Path)
-		isDefaultPath := m.isDefaultDownloadPath(path)
-		if path == "" {
-			isDefaultPath = true
-			path = m.defaultDownloadPath()
-		}
-
-		duplicate := m.checkForDuplicate(msg.URL)
-
-		if duplicate != nil && m.Settings.General.WarnOnDuplicate {
-			utils.Debug("Duplicate download detected in TUI: %s", msg.URL)
-			m.pendingURL = msg.URL
-			m.pendingMirrors = msg.Mirrors
-			m.pendingHeaders = msg.Headers
-			m.pendingPath = path
-			m.pendingIsDefaultPath = isDefaultPath
-			m.pendingFilename = msg.Filename
-			m.duplicateInfo = duplicate.Filename
-			m.state = DuplicateWarningState
-			return m, nil
-		}
-
-		if m.Settings.General.ExtensionPrompt {
-			m.pendingURL = msg.URL
-			m.pendingMirrors = msg.Mirrors
-			m.pendingHeaders = msg.Headers
-			m.pendingPath = path
-			m.pendingIsDefaultPath = isDefaultPath
-			m.pendingFilename = msg.Filename
-			m.inputs[2].SetValue(path)
-			m.inputs[3].SetValue(msg.Filename)
-			m.focusedInput = 2
-			for i := range m.inputs {
-				m.inputs[i].Blur()
-			}
-			m.inputs[m.focusedInput].Focus()
-			m.state = ExtensionConfirmationState
-			return m, nil
-		}
-
-		return m.startDownload(msg.URL, msg.Mirrors, msg.Headers, path, isDefaultPath, msg.Filename, msg.ID)
-
-	case events.DownloadStartedMsg:
-		found := false
-		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
-			d.Filename = msg.Filename
-			d.FilenameLower = strings.ToLower(msg.Filename)
-			d.Total = msg.Total
-			d.Destination = msg.DestPath
-			d.StartTime = time.Now()
-			d.paused = false
-			d.pausing = false
-			// Keep resuming=true for resumed downloads until real transfer starts.
-			// Update progress bar
-			if d.Total > 0 {
-				d.progress.SetPercent(0)
-			}
-			if d.state == nil && msg.State != nil {
-				d.state = msg.State
-			}
-			if d.state != nil {
-				d.state.SetTotalSize(msg.Total) // Keep state updated for verification if needed
-			}
-			found = true
-		}
-
-		if !found {
-			newDownload := NewDownloadModel(msg.DownloadID, msg.URL, msg.Filename, msg.Total)
-			newDownload.Destination = msg.DestPath
-			if msg.State != nil {
-				newDownload.state = msg.State
-			}
-			m.downloads = append(m.downloads, newDownload)
-		}
-
-		m.UpdateListItems()
-		m.addLogEntry(LogStyleStarted.Render("⬇ Started: " + msg.Filename))
-		return m, tea.Batch(cmds...)
-
-	case events.ProgressMsg:
-		m.processProgressMsg(msg)
-		return m, nil
-
-	case events.BatchProgressMsg:
-		for _, msg := range msg {
-			m.processProgressMsg(msg)
-		}
-		// Only update UI once per batch
-		return m, nil
-
-	case events.DownloadCompleteMsg:
-		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
-			if !d.done {
-				d.Total = msg.Total
-				d.Downloaded = d.Total
-				d.Elapsed = msg.Elapsed
-				d.Speed = msg.AvgSpeed
-				d.done = true
-				cmds = append(cmds, d.progress.SetPercent(1.0))
-
-				speed := d.Speed
-				if msg.Elapsed.Seconds() >= 1 {
-					speed = float64(d.Total) / float64(int(msg.Elapsed.Seconds()))
-				} else if msg.Elapsed.Seconds() > 0 {
-					speed = float64(d.Total) / msg.Elapsed.Seconds()
-				}
-				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("✔ Done: %s (%.2f MB/s)", d.Filename, speed/float64(config.MB))))
-			}
-		}
-		m.UpdateListItems()
-		return m, tea.Batch(cmds...)
-
-	case events.DownloadErrorMsg:
-		found := false
-		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
-			d.err = msg.Err
-			d.done = true
-			m.addLogEntry(LogStyleError.Render("✖ Error: " + d.Filename))
-			found = true
-		}
-		if !found {
-			newDownload := NewDownloadModel(msg.DownloadID, "", msg.Filename, 0)
-			newDownload.err = msg.Err
-			newDownload.done = true
-			m.downloads = append(m.downloads, newDownload)
-			m.addLogEntry(LogStyleError.Render("✖ Error: " + msg.Filename))
-		}
-		m.UpdateListItems()
-		return m, tea.Batch(cmds...)
-
-	case events.DownloadPausedMsg:
-		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
-			d.paused = true
-			d.pausing = false
-			d.resuming = false
-			d.Downloaded = msg.Downloaded
-			d.Speed = 0
-			m.addLogEntry(LogStylePaused.Render("⏸ Paused: " + d.Filename))
-		}
-		m.UpdateListItems()
-		return m, tea.Batch(cmds...)
-
-	case events.DownloadResumedMsg:
-		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
-			d.paused = false
-			d.pausing = false
-			d.resuming = true
-			m.addLogEntry(LogStyleStarted.Render("▶ Resumed: " + d.Filename))
-		}
-		m.UpdateListItems()
-		return m, tea.Batch(cmds...)
-
-	case events.DownloadQueuedMsg:
-		// We optimistically added it, but if it came from elsewhere, handle it
-		found := false
-		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
-			found = true
-		}
-		if !found {
-			// Add placeholder
-			newDownload := NewDownloadModel(msg.DownloadID, msg.URL, msg.Filename, 0)
-			newDownload.Destination = msg.DestPath
-			m.downloads = append(m.downloads, newDownload)
-			m.UpdateListItems()
-		}
-		return m, tea.Batch(cmds...)
-
-	case events.DownloadRemovedMsg:
-		if m.removeDownloadByID(msg.DownloadID) {
-			if msg.Filename != "" {
-				m.addLogEntry(LogStyleError.Render("✖ Removed: " + msg.Filename))
-			}
-			m.UpdateListItems()
-		}
-		return m, tea.Batch(cmds...)
-
-	case events.SystemLogMsg:
-		if msg.Message != "" {
-			m.addLogEntry(LogStyleStarted.Render("ℹ " + msg.Message))
-		}
-		return m, tea.Batch(cmds...)
-
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Calculate list dimensions
-		// List goes in bottom-left pane
-		availableWidth := msg.Width - 4
-		leftWidth := int(float64(availableWidth) * ListWidthRatio)
-
-		// Calculate list height (total height - header row - margins)
-		topHeight := 9
-		bottomHeight := msg.Height - topHeight - 5
-		if bottomHeight < 10 {
-			bottomHeight = 10
+		if m.state == SettingsState {
+			m.normalizeSettingsSelection()
+			if m.SettingsIsEditing {
+				m.updateSettingsInputWidthForViewport()
+			}
 		}
 
-		m.list.SetSize(leftWidth-2, bottomHeight-4)
+		if m.state == CategoryManagerState {
+			m.normalizeCategoryManagerSelection()
+			if m.catMgrEditing {
+				m.updateCategoryInputWidthsForViewport()
+			}
+		}
 
-		// Update list title based on active tab
-		m.updateListTitle()
+		// Sync layout calculations with DashboardLayout to set dimensions correctly
+		layout := CalculateDashboardLayout(msg.Width, msg.Height)
+
+		// Update viewport width and re-wrap content to new bounds
+		logHeight := layout.HeaderHeight - BoxStyle.GetVerticalFrameSize()
+		if logHeight < 1 {
+			logHeight = 1
+		}
+		m.logViewport.SetWidth(layout.LogWidth - BoxStyle.GetHorizontalFrameSize())
+		m.logViewport.SetHeight(logHeight)
+		m.refreshLogViewportContent()
+
+		// Setup download list dimensions
+		listInnerPadding := lipgloss.NewStyle().Padding(1, 2)
+		m.list.SetSize(
+			layout.ListWidth-listInnerPadding.GetHorizontalFrameSize()-BoxStyle.GetHorizontalFrameSize(),
+			layout.ListHeight-layout.TabBarHeight-BoxStyle.GetVerticalFrameSize()-listInnerPadding.GetVerticalFrameSize(),
+		)
+
+		// Update list based on active tab
 		m.UpdateListItems()
+
+		// Update filepicker height (Account for 2 borders, 1 title, 1 path line, 2 padding, 2 help)
+		const pickerChromeHeight = 8
+		_, fpHeight := GetDynamicModalDimensions(m.width, m.height, 60, 10, 90, 20)
+		m.filepicker.SetHeight(fpHeight - pickerChromeHeight)
+
 		return m, nil
 
 	case notificationTickMsg:
 		// Notification tick is still used but logs don't expire
+		return m, nil
+
+	case extensionTokenFlashFadeMsg:
+		m.ExtensionTokenCopied = false
 		return m, nil
 
 	case UpdateCheckResultMsg:
@@ -645,347 +140,49 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, tea.Quit
 
+	case tea.PasteMsg:
+		return m.updatePaste(msg)
+
 	// Handle filepicker messages for all message types when in FilePickerState
 	default:
+		var cmds []tea.Cmd
+		for _, d := range m.downloads {
+			newProgress, cmd := d.progress.Update(msg)
+			d.progress = newProgress
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
+		}
 		if m.state == FilePickerState {
 			var cmd tea.Cmd
 			m.filepicker, cmd = m.filepicker.Update(msg)
-
-			// Check if a directory was selected
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-				return m.handleFilePickerSelection(path)
+				model, selCmd := m.handleFilePickerSelection(path)
+				return model, tea.Batch(append(cmds, selCmd)...)
 			}
-
-			return m, cmd
+			cmds = append(cmds, cmd)
+			return m, tea.Batch(cmds...)
 		}
 
 		if m.state == BatchFilePickerState {
 			var cmd tea.Cmd
 			m.filepicker, cmd = m.filepicker.Update(msg)
-
-			// Check if a file was selected
 			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-				// Read URLs from file
-				urls, err := utils.ReadURLsFromFile(path)
-				if err != nil {
-					m.addLogEntry(LogStyleError.Render("✖ Failed to read batch file: " + err.Error()))
-					m.resetFilepickerToDirMode()
-					m.state = DashboardState
-					return m, nil
-				}
-
-				// Store pending URLs and show confirmation
-				m.pendingBatchURLs = urls
-				m.batchFilePath = path
-
-				// Reset filepicker to directory mode
-				m.resetFilepickerToDirMode()
-
-				m.state = BatchConfirmState
-				return m, nil
+				model, selCmd := m.handleBatchFileSelection(path)
+				return model, tea.Batch(append(cmds, selCmd)...)
 			}
-
-			return m, cmd
-		}
-
-	case tea.KeyMsg:
-		switch m.state {
-		case DashboardState:
-			// Handle search input FIRST when active (intercepts ALL keys)
-			if m.searchActive {
-				switch msg.String() {
-				case "esc":
-					// Cancel search and clear query
-					m.searchActive = false
-					m.searchInput.Blur()
-					m.searchQuery = ""
-					m.searchInput.SetValue("")
-					m.UpdateListItems()
-					return m, nil
-				case "enter":
-					// Commit search (keep filter applied)
-					m.searchActive = false
-					m.searchInput.Blur()
-					return m, nil
-				default:
-					// All other keys go to search input
-					var cmd tea.Cmd
-					m.searchInput, cmd = m.searchInput.Update(msg)
-					m.searchQuery = m.searchInput.Value()
-					m.UpdateListItems()
-					return m, cmd
-				}
-			}
-
-			// Toggle search with F
-			if key.Matches(msg, m.keys.Dashboard.Search) {
-				if m.searchQuery != "" {
-					// Clear existing search
-					m.searchQuery = ""
-					m.searchInput.SetValue("")
-					m.UpdateListItems()
-				} else {
-					// Start new search
-					m.searchActive = true
-					m.searchInput.Focus()
-				}
-				return m, nil
-			}
-
-			// Tab switching
-			switchTab := func(tab int) (tea.Model, tea.Cmd) {
-				m.activeTab = tab
-				m.ManualTabSwitch = true
-				m.updateListTitle()
-				m.UpdateListItems()
-				return m, nil
-			}
-
-			if key.Matches(msg, m.keys.Dashboard.TabQueued) {
-				return switchTab(TabQueued)
-			}
-			if key.Matches(msg, m.keys.Dashboard.TabActive) {
-				return switchTab(TabActive)
-			}
-			if key.Matches(msg, m.keys.Dashboard.TabDone) {
-				return switchTab(TabDone)
-			}
-			// Quit
-			if key.Matches(msg, m.keys.Dashboard.Quit, m.keys.Dashboard.ForceQuit) {
-				if m.cancelEnqueue != nil {
-					m.cancelEnqueue()
-				}
-				m.shuttingDown = true
-				return m, shutdownCmd(m.Service)
-			}
-
-			// Add download
-			if key.Matches(msg, m.keys.Dashboard.Add) {
-				m.state = InputState
-				m.focusedInput = 0
-				m.inputs[0].Focus()
-				// Use default download dir from settings
-				defaultDir := m.Settings.General.DefaultDownloadDir
-				if defaultDir == "" {
-					defaultDir = "."
-				}
-				m.inputs[2].SetValue(defaultDir)
-				m.inputs[2].Blur()
-				m.inputs[3].SetValue("")
-				m.inputs[3].Blur()
-				m.inputs[1].SetValue("") // Clear mirrors
-				m.inputs[1].Blur()
-
-				url := ""
-				if m.Settings.General.ClipboardMonitor {
-					url = clipboard.ReadURL()
-				}
-				m.inputs[0].SetValue(url)
-				return m, nil
-			}
-
-			// Next Tab
-			if key.Matches(msg, m.keys.Dashboard.NextTab) {
-				m.activeTab = (m.activeTab + 1) % 3
-				m.ManualTabSwitch = true
-				m.updateListTitle()
-				m.UpdateListItems()
-				return m, nil
-			}
-
-			// Delete download
-			if key.Matches(msg, m.keys.Dashboard.Delete) {
-				if m.list.FilterState() == list.Filtering {
-					// Fall through
-				} else if d := m.GetSelectedDownload(); d != nil {
-					if m.Service == nil {
-						m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
-						return m, nil
-					}
-					targetID := d.ID
-
-					// Call Service Delete
-					if err := m.Service.Delete(targetID); err != nil {
-						m.addLogEntry(LogStyleError.Render("✖ Delete failed: " + err.Error()))
-					} else {
-						m.removeDownloadByID(targetID)
-					}
-					m.UpdateListItems()
-					return m, nil
-				}
-			}
-
-			// History
-			if key.Matches(msg, m.keys.Dashboard.History) {
-				// Note: accessing state directly here breaks abstraction.
-				// Ideally Service should provide History.
-				// For now, let's keep it as is, knowing "History"
-				// If Remote Service, we might need an API for history.
-				if m.Service == nil {
-					m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
-					return m, nil
-				}
-				if entries, err := m.Service.History(); err == nil {
-					m.historyEntries = entries
-					m.historyCursor = 0
-					m.state = HistoryState
-				}
-				return m, nil
-			}
-
-			// Pause/Resume toggle
-			if key.Matches(msg, m.keys.Dashboard.Pause) {
-				if d := m.GetSelectedDownload(); d != nil {
-					if m.Service == nil {
-						m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
-						return m, nil
-					}
-					if !d.done {
-						if d.paused {
-							// Resume
-							d.paused = false
-							d.resuming = true
-							if err := m.Service.Resume(d.ID); err != nil {
-								m.addLogEntry(LogStyleError.Render("✖ Resume failed: " + err.Error()))
-								d.paused = true // Revert
-								d.resuming = false
-							}
-						} else {
-							// Pause
-							if err := m.Service.Pause(d.ID); err != nil {
-								m.addLogEntry(LogStyleError.Render("✖ Pause failed: " + err.Error()))
-							} else {
-								d.resuming = false
-								d.pausing = true
-							}
-						}
-					}
-				}
-				m.UpdateListItems()
-				return m, nil
-			}
-
-			// Open file
-			if key.Matches(msg, m.keys.Dashboard.OpenFile) {
-				if d := m.GetSelectedDownload(); d != nil {
-					canOpen := d.done || (m.Settings.Network.SequentialDownload && !d.paused && d.Downloaded > 0)
-					if canOpen && d.Destination != "" {
-						filePath := d.Destination
-						if !d.done {
-							filePath = d.Destination + types.IncompleteSuffix
-						}
-						_ = openWithSystem(filePath)
-					}
-				}
-				return m, nil
-			}
-
-			// Refresh URL
-			if key.Matches(msg, m.keys.Dashboard.Refresh) {
-				if d := m.GetSelectedDownload(); d != nil {
-					if m.Service == nil {
-						m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
-						return m, nil
-					}
-					// Only allow refresh if download is paused or errored
-					if d.paused || d.err != nil {
-						m.state = URLUpdateState
-						m.urlUpdateInput.SetValue(d.URL)
-						m.urlUpdateInput.Focus()
-					} else {
-						m.addLogEntry(LogStyleError.Render("✖ Pause download before refreshing URL"))
-					}
-				}
-				return m, nil
-			}
-
-			// Other keys...
-			if key.Matches(msg, m.keys.Dashboard.Log) {
-				m.logFocused = !m.logFocused
-				return m, nil
-			}
-
-			if key.Matches(msg, m.keys.Dashboard.Settings) {
-				m.state = SettingsState
-				m.SettingsActiveTab = 0
-				m.SettingsSelectedRow = 0
-				m.SettingsIsEditing = false
-				return m, nil
-			}
-
-			if key.Matches(msg, m.keys.Dashboard.CategoryFilter) {
-				if !m.Settings.General.CategoryEnabled || len(m.Settings.General.Categories) == 0 {
-					if m.categoryFilter != "" {
-						m.categoryFilter = ""
-						m.addLogEntry(LogStyleStarted.Render("📂 Filter: All"))
-						m.UpdateListItems()
-						return m, nil
-					}
-					m.addLogEntry(LogStyleError.Render("✖ Enable categories in Settings first"))
-					return m, nil
-				}
-				names := config.CategoryNames(m.Settings.General.Categories)
-				cycle := append([]string{""}, names...)
-				cycle = append(cycle, "Uncategorized")
-				current := 0
-				for i, n := range cycle {
-					if n == m.categoryFilter {
-						current = i
-						break
-					}
-				}
-				m.categoryFilter = cycle[(current+1)%len(cycle)]
-				label := m.categoryFilter
-				if label == "" {
-					label = "All"
-				}
-				m.addLogEntry(LogStyleStarted.Render("📂 Filter: " + label))
-				m.UpdateListItems()
-				return m, nil
-			}
-
-			if key.Matches(msg, m.keys.Dashboard.BatchImport) {
-				m.state = BatchFilePickerState
-				m.filepicker = newFilepicker(m.PWD)
-				m.filepicker.FileAllowed = true
-				m.filepicker.DirAllowed = false
-				return m, m.filepicker.Init()
-			}
-
-			if m.logFocused {
-				if key.Matches(msg, m.keys.Dashboard.LogClose) {
-					m.logFocused = false
-					return m, nil
-				}
-				if key.Matches(msg, m.keys.Dashboard.LogDown) {
-					m.logViewport.ScrollDown(1)
-					return m, nil
-				}
-				if key.Matches(msg, m.keys.Dashboard.LogUp) {
-					m.logViewport.ScrollUp(1)
-					return m, nil
-				}
-				if key.Matches(msg, m.keys.Dashboard.LogTop) {
-					m.logViewport.GotoTop()
-					return m, nil
-				}
-				if key.Matches(msg, m.keys.Dashboard.LogBottom) {
-					m.logViewport.GotoBottom()
-					return m, nil
-				}
-				return m, nil
-			}
-
-			// Block bare ESC from propagating (only quit via ctrl+q/ctrl+c)
-			if msg.String() == "esc" {
-				return m, nil
-			}
-
-			// Pass messages to the list for navigation/filtering
-			var cmd tea.Cmd
-			m.list, cmd = m.list.Update(msg)
 			cmds = append(cmds, cmd)
 			return m, tea.Batch(cmds...)
+		}
+		model, cmd := m.updateEvents(msg)
+		cmds = append(cmds, cmd)
+		return model, tea.Batch(cmds...)
+
+	case tea.KeyPressMsg:
+		switch m.state {
+
+		case DashboardState:
+			return m.updateDashboard(msg)
 
 		case DetailState:
 			if msg.String() == "esc" || msg.String() == "q" || msg.String() == "enter" {
@@ -994,790 +191,64 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 
 		case InputState:
-			if key.Matches(msg, m.keys.Input.Esc) {
-				m.state = DashboardState
-				return m, nil
-			}
-			// Tab to open file picker when on path input
-			if key.Matches(msg, m.keys.Input.Tab) && m.focusedInput == 2 {
-				m.state = FilePickerState
-				m.filepicker = newFilepicker(m.PWD)
-				return m, m.filepicker.Init()
-			}
-			if key.Matches(msg, m.keys.Input.Enter) {
-				// Navigate through inputs: URL -> Mirrors -> Path -> Filename -> Start
-				if m.focusedInput < 3 {
-					m.inputs[m.focusedInput].Blur()
-					m.focusedInput++
-					m.inputs[m.focusedInput].Focus()
-					return m, nil
-				}
-				// Start download (on last input)
-				inputVal := m.inputs[0].Value()
-				if inputVal == "" {
-					// URL is mandatory - don't start
-					m.focusedInput = 0
-					m.inputs[0].Focus()
-					m.inputs[1].Blur()
-					m.inputs[2].Blur()
-					m.inputs[3].Blur()
-					return m, nil
-				}
-
-				// Parse comma-separated URLs from primary input (backward compatibility)
-				parts := strings.Split(inputVal, ",")
-				var url string
-				var mirrors []string
-
-				for _, part := range parts {
-					cleaned := strings.TrimSpace(part)
-					if cleaned == "" {
-						continue
-					}
-					// First valid URL is primary
-					if url == "" {
-						url = cleaned
-					} else {
-						// Add others as mirrors
-						mirrors = append(mirrors, cleaned)
-					}
-				}
-
-				// Parse mirrors from dedicated input
-				mirrorsVal := m.inputs[1].Value()
-				if mirrorsVal != "" {
-					mirrorParts := strings.Split(mirrorsVal, ",")
-					for _, part := range mirrorParts {
-						cleaned := strings.TrimSpace(part)
-						if cleaned != "" {
-							mirrors = append(mirrors, cleaned)
-						}
-					}
-				}
-
-				if url == "" {
-					// Should ideally check valid URL format here too
-					m.focusedInput = 0
-					m.inputs[0].Focus()
-					return m, nil
-				}
-
-				pathInput := strings.TrimSpace(m.inputs[2].Value())
-				path := pathInput
-				isDefaultPath := m.isDefaultDownloadPath(path)
-				if path == "" {
-					isDefaultPath = true
-					path = m.defaultDownloadPath()
-				}
-				filename := m.inputs[3].Value()
-
-				// Check for duplicate URL
-				if d := m.checkForDuplicate(url); d != nil {
-					m.pendingURL = url
-					m.pendingMirrors = mirrors
-					m.pendingHeaders = nil
-					m.pendingPath = path
-					m.pendingIsDefaultPath = isDefaultPath
-					m.pendingFilename = filename
-					m.duplicateInfo = d.Filename
-					m.state = DuplicateWarningState
-					return m, nil
-				}
-
-				m.state = DashboardState
-				// Clear inputs
-				m.inputs[0].SetValue("")
-				m.inputs[1].SetValue("")
-				m.inputs[2].SetValue(path) // Keep path
-				m.inputs[3].SetValue("")
-
-				return m.startDownload(url, mirrors, nil, path, isDefaultPath, filename, "")
-			}
-
-			// Up/Down navigation between inputs
-			if key.Matches(msg, m.keys.Input.Up) && m.focusedInput > 0 {
-				m.inputs[m.focusedInput].Blur()
-				m.focusedInput--
-				m.inputs[m.focusedInput].Focus()
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.Input.Down) && m.focusedInput < 3 {
-				m.inputs[m.focusedInput].Blur()
-				m.focusedInput++
-				m.inputs[m.focusedInput].Focus()
-				return m, nil
-			}
-
-			var cmd tea.Cmd
-			m.inputs[m.focusedInput], cmd = m.inputs[m.focusedInput].Update(msg)
-			return m, cmd
+			return m.updateInput(msg)
 
 		case FilePickerState:
-			if key.Matches(msg, m.keys.FilePicker.Cancel) {
-				// Cancel and return to appropriate state
-				if m.SettingsFileBrowsing {
-					m.SettingsFileBrowsing = false
-					m.state = SettingsState
-					return m, nil
-				}
-				if m.ExtensionFileBrowsing {
-					m.ExtensionFileBrowsing = false
-					m.state = ExtensionConfirmationState
-					return m, nil
-				}
-				if m.catMgrFileBrowsing {
-					m.catMgrFileBrowsing = false
-					m.state = CategoryManagerState
-					return m, nil
-				}
-				m.state = InputState
-				return m, nil
-			}
-
-			// H key to jump to default download directory
-			if key.Matches(msg, m.keys.FilePicker.GotoHome) {
-				return m, m.handleFilePickerGotoHome()
-			}
-
-			// '.' to select current directory
-			if key.Matches(msg, m.keys.FilePicker.UseDir) {
-				return m.handleFilePickerSelection(m.filepicker.CurrentDirectory)
-			}
-
-			// Pass key to filepicker
-			var cmd tea.Cmd
-			m.filepicker, cmd = m.filepicker.Update(msg)
-
-			// Check if a directory was selected
-			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-				if m.catMgrFileBrowsing {
-					m.catMgrInputs[3].SetValue(path)
-					m.catMgrFileBrowsing = false
-					m.state = CategoryManagerState
-					return m, nil
-				}
-				return m.handleFilePickerSelection(path)
-			}
-
-			return m, cmd
-
-		case HistoryState:
-			if key.Matches(msg, m.keys.History.Close) {
-				m.state = DashboardState
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.History.Up) {
-				if m.historyCursor > 0 {
-					m.historyCursor--
-				}
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.History.Down) {
-				if m.historyCursor < len(m.historyEntries)-1 {
-					m.historyCursor++
-				}
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.History.Delete) {
-				if m.historyCursor >= 0 && m.historyCursor < len(m.historyEntries) {
-					entry := m.historyEntries[m.historyCursor]
-					_ = state.RemoveFromMasterList(entry.ID)
-					m.historyEntries, _ = state.LoadCompletedDownloads()
-					if m.historyCursor >= len(m.historyEntries) && m.historyCursor > 0 {
-						m.historyCursor--
-					}
-				}
-				return m, nil
-			}
-			return m, nil
+			return m.updateFilePicker(msg)
 
 		case DuplicateWarningState:
-			if key.Matches(msg, m.keys.Duplicate.Continue) {
-				// Continue anyway - startDownload handles unique filename generation
-				m.state = DashboardState
-				return m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
-			}
-			if key.Matches(msg, m.keys.Duplicate.Cancel) {
-				// Cancel - don't add
-				m.state = DashboardState
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.Duplicate.Focus) {
-				// Focus existing download - find it and select in list
-				for i, d := range m.getFilteredDownloads() {
-					if d.URL == m.pendingURL {
-						m.list.Select(i)
-						break
-					}
-				}
-				m.state = DashboardState
-				return m, nil
-			}
-			return m, nil
+			return m.updateDuplicateWarning(msg)
 
 		case ExtensionConfirmationState:
-			if key.Matches(msg, m.keys.Extension.Browse) && m.focusedInput == 2 {
-				m.ExtensionFileBrowsing = true
-				browseDir := strings.TrimSpace(m.inputs[2].Value())
-				if browseDir == "" {
-					browseDir = m.PWD
-				}
-				m.state = FilePickerState
-				m.filepicker = newFilepicker(browseDir)
-				return m, m.filepicker.Init()
-			}
-			if key.Matches(msg, m.keys.Extension.Next) || key.Matches(msg, m.keys.Extension.Prev) {
-				if m.focusedInput == 2 {
-					m.focusedInput = 3
-				} else {
-					m.focusedInput = 2
-				}
-				for i := range m.inputs {
-					m.inputs[i].Blur()
-				}
-				m.inputs[m.focusedInput].Focus()
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.Extension.Confirm) {
-				m.pendingPath = strings.TrimSpace(m.inputs[2].Value())
-				m.pendingFilename = strings.TrimSpace(m.inputs[3].Value())
-				m.pendingIsDefaultPath = m.isDefaultDownloadPath(m.pendingPath)
-				if m.pendingPath == "" {
-					m.pendingIsDefaultPath = true
-					m.pendingPath = m.defaultDownloadPath()
-				}
-
-				// Confirmed - proceed to add (checking for duplicates first)
-				if d := m.checkForDuplicate(m.pendingURL); d != nil {
-					utils.Debug("Duplicate download detected after confirmation: %s", m.pendingURL)
-					m.duplicateInfo = d.Filename
-					m.state = DuplicateWarningState
-					return m, nil
-				}
-
-				// No duplicate (or warning disabled) - add to queue
-				m.state = DashboardState
-				return m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
-			}
-			if key.Matches(msg, m.keys.Extension.Cancel) {
-				// Cancelled
-				m.ExtensionFileBrowsing = false
-				for i := range m.inputs {
-					m.inputs[i].Blur()
-				}
-				m.state = DashboardState
-				return m, nil
-			}
-
-			var cmd tea.Cmd
-			m.inputs[m.focusedInput], cmd = m.inputs[m.focusedInput].Update(msg)
-			return m, cmd
+			return m.updateExtensionConfirmation(msg)
 
 		case BatchFilePickerState:
-			if key.Matches(msg, m.keys.FilePicker.Cancel) {
-				// Reset filepicker to directory mode and return
-				m.resetFilepickerToDirMode()
-				m.state = DashboardState
-				return m, nil
-			}
+			return m.updateBatchFilePicker(msg)
 
-			// H key to jump to default download directory
-			if key.Matches(msg, m.keys.FilePicker.GotoHome) {
-				cmd := m.handleFilePickerGotoHome()
-				m.filepicker.FileAllowed = true
-				m.filepicker.DirAllowed = false
-				return m, cmd
-			}
+		case QuitConfirmState:
+			return m.updateQuitConfirm(msg)
 
-			// Pass key to filepicker
-			var cmd tea.Cmd
-			m.filepicker, cmd = m.filepicker.Update(msg)
-
-			// Check if a file was selected
-			if didSelect, path := m.filepicker.DidSelectFile(msg); didSelect {
-				// Read URLs from file
-				urls, err := utils.ReadURLsFromFile(path)
-				if err != nil {
-					m.addLogEntry(LogStyleError.Render("✖ Failed to read batch file: " + err.Error()))
-					// Reset filepicker and return
-					m.resetFilepickerToDirMode()
-					m.state = DashboardState
-					return m, nil
-				}
-
-				// Store pending URLs and show confirmation
-				m.pendingBatchURLs = urls
-				m.batchFilePath = path
-
-				// Reset filepicker to directory mode
-				m.resetFilepickerToDirMode()
-
-				m.state = BatchConfirmState
-				return m, nil
-			}
-
-			return m, cmd
+		case RestartConfirmState:
+			return m.updateRestartConfirm(msg)
 
 		case BatchConfirmState:
-			if key.Matches(msg, m.keys.BatchConfirm.Confirm) {
-				// Add all URLs as downloads, skipping duplicates
-				path := m.Settings.General.DefaultDownloadDir
-				if path == "" {
-					path = "."
-				}
-
-				added := 0
-				skipped := 0
-				var batchCmds []tea.Cmd
-				for _, url := range m.pendingBatchURLs {
-					// Skip duplicate URLs
-					if m.checkForDuplicate(url) != nil {
-						skipped++
-						continue
-					}
-					var cmd tea.Cmd
-					m, cmd = m.startDownload(url, nil, nil, path, true, "", "")
-					if cmd != nil {
-						batchCmds = append(batchCmds, cmd)
-					}
-					added++
-				}
-
-				if skipped > 0 {
-					m.addLogEntry(LogStyleStarted.Render(fmt.Sprintf("⬇ Added %d downloads from batch (%d duplicates skipped)", added, skipped)))
-				} else {
-					m.addLogEntry(LogStyleStarted.Render(fmt.Sprintf("⬇ Added %d downloads from batch", added)))
-				}
-				m.pendingBatchURLs = nil
-				m.batchFilePath = ""
-				m.state = DashboardState
-				return m, tea.Batch(batchCmds...)
-			}
-			if key.Matches(msg, m.keys.BatchConfirm.Cancel) {
-				m.pendingBatchURLs = nil
-				m.batchFilePath = ""
-				m.state = DashboardState
-				return m, nil
-			}
-			return m, nil
+			return m.updateBatchConfirm(msg)
 
 		case SettingsState:
-			categoryCount := len(config.CategoryOrder())
-			if categoryCount == 0 {
-				return m, nil
-			}
-
-			// Handle editing mode first
-			if m.SettingsIsEditing {
-				if key.Matches(msg, m.keys.SettingsEditor.Cancel) {
-					// Cancel editing
-					m.SettingsIsEditing = false
-					m.SettingsInput.Blur()
-					return m, nil
-				}
-				if key.Matches(msg, m.keys.SettingsEditor.Confirm) {
-					// Commit the value
-					categories := config.CategoryOrder()
-					currentCategory := categories[m.SettingsActiveTab]
-					settingKey := m.getCurrentSettingKey()
-					_ = m.setSettingValue(currentCategory, settingKey, m.SettingsInput.Value())
-					m.SettingsIsEditing = false
-					m.SettingsInput.Blur()
-					return m, nil
-				}
-
-				// Pass to text input
-				var cmd tea.Cmd
-				m.SettingsInput, cmd = m.SettingsInput.Update(msg)
-				return m, cmd
-			}
-
-			// Not editing - handle navigation
-			if key.Matches(msg, m.keys.Settings.Close) {
-				// Save settings and exit
-				_ = m.persistSettings()
-				m.state = DashboardState
-				return m, nil
-			}
-			tabBindings := []key.Binding{m.keys.Settings.Tab1, m.keys.Settings.Tab2, m.keys.Settings.Tab3, m.keys.Settings.Tab4}
-			for i, binding := range tabBindings {
-				if key.Matches(msg, binding) {
-					if categoryCount > i {
-						m.SettingsActiveTab = i
-					}
-					m.SettingsSelectedRow = 0
-					return m, nil
-				}
-			}
-
-			// Tab Navigation
-			if key.Matches(msg, m.keys.Settings.NextTab) {
-				m.SettingsActiveTab = (m.SettingsActiveTab + 1) % categoryCount
-				m.SettingsSelectedRow = 0
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.Settings.PrevTab) {
-				m.SettingsActiveTab = (m.SettingsActiveTab - 1 + categoryCount) % categoryCount
-				m.SettingsSelectedRow = 0
-				return m, nil
-			}
-
-			// Open file browser for default_download_dir
-			if key.Matches(msg, m.keys.Settings.Browse) {
-				settingKey := m.getCurrentSettingKey()
-				if settingKey == "default_download_dir" {
-					m.SettingsFileBrowsing = true
-					m.state = FilePickerState
-					m.filepicker = newFilepicker(m.Settings.General.DefaultDownloadDir)
-					return m, m.filepicker.Init()
-				}
-				return m, nil
-			}
-
-			// Back tab - not currently bound, ignoring or could use Shift+Tab manual check if really needed
-			// For now, we rely on Tab (Browse) to cycle.
-
-			// Up/Down navigation
-			if key.Matches(msg, m.keys.Settings.Up) {
-				if m.SettingsSelectedRow > 0 {
-					m.SettingsSelectedRow--
-				}
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.Settings.Down) {
-				maxRow := m.getSettingsCount() - 1
-				if m.SettingsSelectedRow < maxRow {
-					m.SettingsSelectedRow++
-				}
-				return m, nil
-			}
-
-			// Edit / Toggle
-			if key.Matches(msg, m.keys.Settings.Edit) {
-				// Categories tab → open Category Manager
-				categories := config.CategoryOrder()
-				if m.SettingsActiveTab < len(categories) && categories[m.SettingsActiveTab] == "Categories" {
-					m.catMgrCursor = 0
-					m.state = CategoryManagerState
-					return m, nil
-				}
-
-				key := m.getCurrentSettingKey()
-				// Prevent editing ignored settings
-				if key == "max_global_connections" {
-					return m, nil
-				}
-
-				// Special handling for Theme cycling
-				if key == "theme" {
-					newTheme := (m.Settings.General.Theme + 1) % 3
-					m.Settings.General.Theme = newTheme
-					m.ApplyTheme(newTheme)
-					return m, nil
-				}
-
-				// Toggle bool or enter edit mode for other types
-				typ := m.getCurrentSettingType()
-				if typ == "bool" {
-					categories := config.CategoryOrder()
-					currentCategory := categories[m.SettingsActiveTab]
-					_ = m.setSettingValue(currentCategory, key, "")
-				} else {
-					// Enter edit mode
-					m.SettingsIsEditing = true
-					// Pre-fill with current value (without units)
-					categories := config.CategoryOrder()
-					currentCategory := categories[m.SettingsActiveTab]
-					values := m.getSettingsValues(currentCategory)
-					m.SettingsInput.SetValue(formatSettingValueForEdit(values[key], typ, key))
-					m.SettingsInput.Focus()
-				}
-				return m, nil
-			}
-
-			// Reset
-			if key.Matches(msg, m.keys.Settings.Reset) {
-				key := m.getCurrentSettingKey()
-				if key == "max_global_connections" {
-					return m, nil
-				}
-
-				// Reset current setting to default
-				defaults := config.DefaultSettings()
-				categories := config.CategoryOrder()
-				currentCategory := categories[m.SettingsActiveTab]
-				m.resetSettingToDefault(currentCategory, key, defaults)
-
-				// Special handling for Theme reset to ensure it applies immediately
-				if key == "theme" {
-					m.ApplyTheme(m.Settings.General.Theme)
-				}
-				return m, nil
-			}
-
-			return m, nil
+			return m.updateSettings(msg)
 
 		case UpdateAvailableState:
-			if key.Matches(msg, m.keys.Update.OpenGitHub) {
-				// Open the release page in browser
-				if m.UpdateInfo != nil && m.UpdateInfo.ReleaseURL != "" {
-					_ = openWithSystem(m.UpdateInfo.ReleaseURL)
-				}
-				m.state = DashboardState
-				m.UpdateInfo = nil
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.Update.IgnoreNow) {
-				// Just dismiss the modal
-				m.state = DashboardState
-				m.UpdateInfo = nil
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.Update.NeverRemind) {
-				// Persist the setting and dismiss
-				m.Settings.General.SkipUpdateCheck = true
-				_ = m.persistSettings()
-				m.state = DashboardState
-				m.UpdateInfo = nil
-				return m, nil
-			}
-			return m, nil
+			return m.updateUpdateAvailable(msg)
 
 		case URLUpdateState:
-			if key.Matches(msg, m.keys.Input.Esc) {
-				m.state = DashboardState
-				m.urlUpdateInput.SetValue("")
-				m.urlUpdateInput.Blur()
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.Input.Enter) {
-				newURL := strings.TrimSpace(m.urlUpdateInput.Value())
-				if newURL != "" {
-					if d := m.GetSelectedDownload(); d != nil {
-						if err := m.Service.UpdateURL(d.ID, newURL); err != nil {
-							m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Failed to update URL: %s", err.Error())))
-						} else {
-							m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("✔ URL Updated: %s", d.Filename)))
-							d.URL = newURL
-						}
-					}
-				}
-				m.state = DashboardState
-				m.urlUpdateInput.SetValue("")
-				m.urlUpdateInput.Blur()
-				return m, nil
-			}
-
-			var cmd tea.Cmd
-			m.urlUpdateInput, cmd = m.urlUpdateInput.Update(msg)
-			return m, cmd
+			return m.updateURLUpdate(msg)
 
 		case CategoryManagerState:
-			cats := m.Settings.General.Categories
+			return m.updateCategoryManager(msg)
 
-			// Handle editing mode
-			if m.catMgrEditing {
-				if key.Matches(msg, m.keys.CategoryMgr.Close) {
-					wasNew := m.catMgrIsNew
-					// Cancel editing
-					m.catMgrEditing = false
-					for i := range m.catMgrInputs {
-						m.catMgrInputs[i].Blur()
-					}
-					// If was adding new, remove the placeholder
-					if wasNew && m.catMgrCursor < len(m.Settings.General.Categories) {
-						m.Settings.General.Categories = append(
-							m.Settings.General.Categories[:m.catMgrCursor],
-							m.Settings.General.Categories[m.catMgrCursor+1:]...,
-						)
-						if m.catMgrCursor > 0 {
-							m.catMgrCursor--
-						}
-					}
-					m.catMgrIsNew = false
-					return m, nil
-				}
-				if key.Matches(msg, m.keys.CategoryMgr.Tab) {
-					// On Path field, open file picker for directory browsing
-					if m.catMgrEditField == 3 {
-						browseDir := strings.TrimSpace(m.catMgrInputs[3].Value())
-						if browseDir == "" {
-							browseDir = m.Settings.General.DefaultDownloadDir
-						}
-						if browseDir == "" {
-							browseDir = m.PWD
-						}
-						m.catMgrFileBrowsing = true
-						m.state = FilePickerState
-						m.filepicker = newFilepicker(browseDir)
-						return m, m.filepicker.Init()
-					}
-					// Cycle fields
-					m.catMgrInputs[m.catMgrEditField].Blur()
-					m.catMgrEditField = (m.catMgrEditField + 1) % 4
-					m.catMgrInputs[m.catMgrEditField].Focus()
-					return m, nil
-				}
-				if key.Matches(msg, m.keys.CategoryMgr.Edit) {
-					// Save edits
-					if m.catMgrCursor < 0 || m.catMgrCursor >= len(m.Settings.General.Categories) {
-						m.addLogEntry(LogStyleError.Render("✖ Invalid category selection"))
-						return m, nil
-					}
-
-					name := strings.TrimSpace(m.catMgrInputs[0].Value())
-					description := strings.TrimSpace(m.catMgrInputs[1].Value())
-					pattern := strings.TrimSpace(m.catMgrInputs[2].Value())
-					path := strings.TrimSpace(m.catMgrInputs[3].Value())
-
-					if name == "" {
-						m.addLogEntry(LogStyleError.Render("✖ Category name cannot be empty"))
-						return m, nil
-					}
-					if pattern == "" {
-						m.addLogEntry(LogStyleError.Render("✖ Category pattern cannot be empty"))
-						return m, nil
-					}
-					if _, err := regexp.Compile(pattern); err != nil {
-						m.addLogEntry(LogStyleError.Render(fmt.Sprintf("✖ Invalid category pattern: %v", err)))
-						return m, nil
-					}
-					if path == "" {
-						m.addLogEntry(LogStyleError.Render("✖ Category path cannot be empty"))
-						return m, nil
-					}
-
-					target := &m.Settings.General.Categories[m.catMgrCursor]
-					target.Name = name
-					target.Description = description
-					target.Pattern = pattern
-					target.Path = filepath.Clean(path)
-
-					m.catMgrEditing = false
-					m.catMgrIsNew = false
-					for i := range m.catMgrInputs {
-						m.catMgrInputs[i].Blur()
-					}
-					return m, nil
-				}
-
-				// Pass to active text input
-				var cmd tea.Cmd
-				m.catMgrInputs[m.catMgrEditField], cmd = m.catMgrInputs[m.catMgrEditField].Update(msg)
-				return m, cmd
-			}
-
-			// Not editing - handle navigation
-			if key.Matches(msg, m.keys.CategoryMgr.Close) {
-				_ = m.persistSettings()
+		case HelpModalState:
+			if msg.String() == "esc" {
 				m.state = DashboardState
 				return m, nil
 			}
+			return m, nil
 
-			if key.Matches(msg, m.keys.CategoryMgr.Up) {
-				if m.catMgrCursor > 0 {
-					m.catMgrCursor--
-				}
-				return m, nil
-			}
-			if key.Matches(msg, m.keys.CategoryMgr.Down) {
-				if m.catMgrCursor < len(cats) { // len(cats) = "+Add" row
-					m.catMgrCursor++
-				}
-				return m, nil
-			}
+		case BugReportTargetState:
+			return m.updateBugReportTarget(msg)
 
-			if key.Matches(msg, m.keys.CategoryMgr.Toggle) {
-				m.Settings.General.CategoryEnabled = !m.Settings.General.CategoryEnabled
-				return m, nil
-			}
+		case BugReportSystemDetailsState:
+			return m.updateBugReportSystemDetails(msg)
 
-			if key.Matches(msg, m.keys.CategoryMgr.Delete) {
-				if m.catMgrCursor < len(cats) {
-					m.Settings.General.Categories = append(
-						m.Settings.General.Categories[:m.catMgrCursor],
-						m.Settings.General.Categories[m.catMgrCursor+1:]...,
-					)
-					if m.catMgrCursor >= len(m.Settings.General.Categories) && m.catMgrCursor > 0 {
-						m.catMgrCursor--
-					}
-				}
-				return m, nil
-			}
+		case BugReportLogPathState:
+			return m.updateBugReportLogPath(msg)
 
-			if key.Matches(msg, m.keys.CategoryMgr.Add) {
-				// Add new blank category
-				newCat := config.Category{Name: "New Category"}
-				m.Settings.General.Categories = append(m.Settings.General.Categories, newCat)
-				m.catMgrCursor = len(m.Settings.General.Categories) - 1
-				m.catMgrIsNew = true
-				// Enter edit mode
-				m.catMgrEditing = true
-				m.catMgrEditField = 0
-				m.catMgrInputs[0].SetValue(newCat.Name)
-				m.catMgrInputs[1].SetValue(newCat.Description)
-				m.catMgrInputs[2].SetValue(newCat.Pattern)
-				m.catMgrInputs[3].SetValue(newCat.Path)
-				m.catMgrInputs[0].Focus()
-				return m, nil
-			}
+		case CategoryResetConfirmState:
+			return m.updateCategoryResetConfirm(msg)
 
-			if key.Matches(msg, m.keys.CategoryMgr.Edit) {
-				if m.catMgrCursor < len(cats) {
-					// Edit existing
-					cat := cats[m.catMgrCursor]
-					m.catMgrEditing = true
-					m.catMgrEditField = 0
-					m.catMgrInputs[0].SetValue(cat.Name)
-					m.catMgrInputs[1].SetValue(cat.Description)
-					m.catMgrInputs[2].SetValue(cat.Pattern)
-					m.catMgrInputs[3].SetValue(cat.Path)
-					m.catMgrInputs[0].Focus()
-				} else {
-					// On "+ Add Category" row, same as Add
-					newCat := config.Category{Name: "New Category"}
-					m.Settings.General.Categories = append(m.Settings.General.Categories, newCat)
-					m.catMgrCursor = len(m.Settings.General.Categories) - 1
-					m.catMgrIsNew = true
-					m.catMgrEditing = true
-					m.catMgrEditField = 0
-					m.catMgrInputs[0].SetValue(newCat.Name)
-					m.catMgrInputs[1].SetValue(newCat.Description)
-					m.catMgrInputs[2].SetValue(newCat.Pattern)
-					m.catMgrInputs[3].SetValue(newCat.Path)
-					m.catMgrInputs[0].Focus()
-				}
-				return m, nil
-			}
-
+		default:
 			return m, nil
 		}
 	}
 
-	// Propagate messages to progress bars - only update visible ones for performance
-	for _, d := range m.downloads {
-		var cmd tea.Cmd
-		var newModel tea.Model
-		newModel, cmd = d.progress.Update(msg)
-		if p, ok := newModel.(progress.Model); ok {
-			d.progress = p
-		}
-		if cmd != nil {
-			cmds = append(cmds, cmd)
-		}
-	}
-
-	return m, tea.Batch(cmds...)
-}
-
-// updateListTitle updates the list title based on active tab
-func (m *RootModel) updateListTitle() {
-	switch m.activeTab {
-	case TabQueued:
-		m.list.Title = "📋 Queued"
-	case TabActive:
-		m.list.Title = "⬇️ Active"
-	case TabDone:
-		m.list.Title = "✅ Completed"
-	}
+	return m, nil
 }

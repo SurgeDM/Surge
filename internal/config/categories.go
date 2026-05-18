@@ -7,7 +7,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/surge-downloader/surge/internal/utils"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // Category defines a download category for auto-sorting.

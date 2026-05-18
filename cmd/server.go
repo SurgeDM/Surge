@@ -12,34 +12,32 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/spf13/cobra"
-	"github.com/surge-downloader/surge/internal/config"
-	"github.com/surge-downloader/surge/internal/utils"
 )
 
 var serverCmd = &cobra.Command{
 	Use:   "server [url]...",
 	Short: "Manage the Surge background server (daemon)",
 	Long:  `Run the Surge background server in headless mode.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		serverStartCmd.Run(cmd, args)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		return serverStartCmd.RunE(cmd, args)
 	},
 }
 
 var serverStartCmd = &cobra.Command{
 	Use:   "start [url]...",
 	Short: "Start the Surge server in headless mode",
-	Run: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		// Attempt to acquire lock before any global state initialization
 		isMaster, err := AcquireLock()
 		if err != nil {
-			fmt.Printf("Error acquiring lock: %v\n", err)
-			os.Exit(1)
+			return fmt.Errorf("error acquiring lock: %w", err)
 		}
 
 		if !isMaster {
-			fmt.Fprintln(os.Stderr, "Error: Surge server is already running.")
-			os.Exit(1)
+			return fmt.Errorf("surge server is already running")
 		}
 		defer func() {
 			if err := ReleaseLock(); err != nil {
@@ -47,11 +45,15 @@ var serverStartCmd = &cobra.Command{
 			}
 		}()
 
-		mustInitializeGlobalState()
+		if err := initializeGlobalState(); err != nil {
+			return err
+		}
 
 		msg := runStartupIntegrityCheck()
-		utils.Debug("%s", msg)
-		fmt.Println(msg)
+		if msg != "" {
+			utils.Debug("%s", msg)
+			fmt.Println(msg)
+		}
 
 		portFlag, _ := cmd.Flags().GetInt("port")
 		batchFile, _ := cmd.Flags().GetString("batch")
@@ -65,7 +67,7 @@ var serverStartCmd = &cobra.Command{
 
 		// Get token flag
 		tokenFlag := resolveServerToken(cmd)
-		startServerLogic(cmd, args, portFlag, batchFile, outputDir, exitWhenDone, noResume, tokenFlag)
+		return startServerLogic(cmd, args, portFlag, batchFile, outputDir, exitWhenDone, noResume, tokenFlag)
 	},
 }
 
@@ -142,6 +144,10 @@ func init() {
 
 func savePID() {
 	pid := os.Getpid()
+	if err := os.MkdirAll(config.GetRuntimeDir(), 0o755); err != nil {
+		utils.Debug("Error creating runtime directory for PID file: %v", err)
+		return
+	}
 	pidFile := filepath.Join(config.GetRuntimeDir(), "pid")
 	if err := os.WriteFile(pidFile, []byte(fmt.Sprintf("%d", pid)), 0o644); err != nil {
 		utils.Debug("Error writing PID file: %v", err)
@@ -165,17 +171,15 @@ func readPID() int {
 	return pid
 }
 
-func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile string, outputDir string, exitWhenDone bool, noResume bool, tokenOverride string) {
+func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile string, outputDir string, exitWhenDone bool, noResume bool, tokenOverride string) error {
 	port, listener, err := bindServerListener(portFlag)
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-		os.Exit(1)
+		return err
 	}
 	resetGlobalEnqueueContext()
 
 	if err := ensureGlobalLocalServiceAndLifecycle(); err != nil {
-		fmt.Fprintf(os.Stderr, "Error creating lifecycle event stream: %v\n", err)
-		os.Exit(1)
+		return fmt.Errorf("error creating lifecycle event stream: %w", err)
 	}
 
 	saveActivePort(port)
@@ -183,25 +187,10 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 
 	go startHTTPServer(listener, port, outputDir, GlobalService, strings.TrimSpace(tokenOverride))
 
-	// Queue initial downloads
-	go func() {
-		var urls []string
-		urls = append(urls, args...)
-
-		if batchFile != "" {
-			fileURLs, err := utils.ReadURLsFromFile(batchFile)
-			if err != nil {
-				fmt.Fprintf(os.Stderr, "Error reading batch file: %v\n", err)
-			} else {
-				urls = append(urls, fileURLs...)
-			}
-		}
-
-		if len(urls) > 0 {
-			resolvedOutputDir := resolveClientOutputPath(outputDir)
-			processDownloads(urls, resolvedOutputDir, 0)
-		}
-	}()
+	queueInitialRootDownloads(args, rootRunOptions{
+		batchFile: batchFile,
+		outputDir: outputDir,
+	})
 
 	fmt.Printf("Surge %s running in server mode.\n", Version)
 	host := serverBindHost
@@ -222,7 +211,7 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
 			for range ticker.C {
-				if atomic.LoadInt32(&activeDownloads) == 0 {
+				if atomic.LoadInt32(&pendingEnqueue) == 0 && atomic.LoadInt32(&activeDownloads) == 0 {
 					if GlobalPool != nil && GlobalPool.ActiveCount() == 0 {
 						select {
 						case exitWhenDoneCh <- struct{}{}:
@@ -242,20 +231,29 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 		case sig := <-sigChan:
 			fmt.Printf("\nReceived %s. Shutting down...\n", sig)
 			_ = executeGlobalShutdown(fmt.Sprintf("server signal: %s", sig))
+		case <-cmd.Context().Done():
+			fmt.Printf("\nService stop requested. Shutting down...\n")
+			_ = executeGlobalShutdown("server: service context cancelled")
 		case <-exitWhenDoneCh:
 			fmt.Println("All downloads finished. Exiting...")
 			_ = executeGlobalShutdown("server: exit when done")
 		}
-		return
+		return nil
 	}
 
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM, syscall.SIGHUP)
 	defer signal.Stop(sigChan)
-	sig := <-sigChan
 
-	fmt.Printf("\nReceived %s. Shutting down...\n", sig)
-	_ = executeGlobalShutdown(fmt.Sprintf("server signal: %s", sig))
+	select {
+	case sig := <-sigChan:
+		fmt.Printf("\nReceived %s. Shutting down...\n", sig)
+		_ = executeGlobalShutdown(fmt.Sprintf("server signal: %s", sig))
+	case <-cmd.Context().Done():
+		fmt.Printf("\nService stop requested. Shutting down...\n")
+		_ = executeGlobalShutdown("server: service context cancelled")
+	}
+	return nil
 }
 
 func resolveServerToken(cmd *cobra.Command) string {

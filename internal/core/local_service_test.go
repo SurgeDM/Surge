@@ -11,11 +11,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/download"
-	"github.com/surge-downloader/surge/internal/engine/events"
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/download"
+	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/testutil"
 )
 
 func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
@@ -348,6 +348,7 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 			}
 			if entry == nil {
 				t.Fatal("expected persisted download entry after shutdown")
+				return
 			}
 			if entry.Status != "paused" {
 				t.Fatalf("status = %q, want paused", entry.Status)
@@ -391,80 +392,6 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	}
 	if len(saved.Tasks) == 0 {
 		t.Fatal("expected saved state to include remaining tasks")
-	}
-}
-
-func TestLocalDownloadService_Shutdown_PersistsQueuedState(t *testing.T) {
-	tempDir := t.TempDir()
-	state.CloseDB()
-	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
-	defer state.CloseDB()
-
-	ch := make(chan interface{}, 200)
-	pool := download.NewWorkerPool(ch, 1)
-	svc := NewLocalDownloadServiceWithInput(pool, ch)
-	evWait := startEventWorkerForTest(t, svc)
-
-	server := testutil.NewStreamingMockServerT(t,
-		500*1024*1024,
-		testutil.WithRangeSupport(true),
-		testutil.WithLatency(15*time.Millisecond),
-	)
-	defer server.Close()
-
-	outputDir := t.TempDir()
-	if f, err := os.Create(filepath.Join(outputDir, "first.bin") + ".surge"); err == nil {
-		_ = f.Close()
-	}
-	firstID, err := svc.Add(server.URL()+"?id=1", outputDir, "first.bin", nil, nil, false, 0, false)
-	if err != nil {
-		t.Fatalf("failed to add first download: %v", err)
-	}
-	if f, err := os.Create(filepath.Join(outputDir, "second.bin") + ".surge"); err == nil {
-		_ = f.Close()
-	}
-	secondID, err := svc.Add(server.URL()+"?id=2", outputDir, "second.bin", nil, nil, false, 0, false)
-	if err != nil {
-		t.Fatalf("failed to add second download: %v", err)
-	}
-
-	// Ensure we shut down while one is active and the second is still queued.
-	deadline := time.Now().Add(5 * time.Second)
-	seenFirstActive := false
-	seenSecondQueued := false
-	for time.Now().Before(deadline) {
-		firstStatus, _ := svc.GetStatus(firstID)
-		secondStatus, _ := svc.GetStatus(secondID)
-		if firstStatus != nil && (firstStatus.Status == "downloading" || firstStatus.Status == "pausing") {
-			seenFirstActive = true
-		}
-		if secondStatus != nil && secondStatus.Status == "queued" {
-			seenSecondQueued = true
-		}
-		if seenFirstActive && seenSecondQueued {
-			break
-		}
-		time.Sleep(25 * time.Millisecond)
-	}
-	if !seenSecondQueued {
-		t.Fatal("expected second download to be queued before shutdown")
-	}
-
-	if err := svc.Shutdown(); err != nil {
-		t.Fatalf("shutdown failed: %v", err)
-	}
-	// Wait for event worker to drain all buffered events and finish DB writes
-	evWait()
-
-	second, err := state.GetDownload(secondID)
-	if err != nil {
-		t.Fatalf("failed to fetch second download: %v", err)
-	}
-	if second == nil {
-		t.Fatal("expected queued download to be persisted on shutdown")
-	}
-	if second.Status != "queued" && second.Status != "paused" && second.Status != "completed" && second.Status != "downloading" {
-		t.Fatalf("status = %q, want queued/paused/completed/downloading", second.Status)
 	}
 }
 

@@ -3,14 +3,17 @@ package concurrent
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
-	"github.com/surge-downloader/surge/internal/engine/state"
-	"github.com/surge-downloader/surge/internal/engine/types"
-	"github.com/surge-downloader/surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/testutil"
 )
 
 // Helper to init state just for tests (avoiding global init if possible,
@@ -45,7 +48,7 @@ func TestConcurrentDownloader_Download(t *testing.T) {
 
 	destPath := filepath.Join(tmpDir, "test_download.bin")
 	state := types.NewProgressState("test-id", fileSize)
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 4}
+	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 4}
 
 	downloader := NewConcurrentDownloader("test-id", nil, state, runtime)
 
@@ -85,7 +88,7 @@ func TestConcurrentDownloader_WithLatency(t *testing.T) {
 
 	destPath := filepath.Join(tmpDir, "latency_test.bin")
 	state := types.NewProgressState("latency-test", fileSize)
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 2}
+	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 2}
 
 	downloader := NewConcurrentDownloader("latency-id", nil, state, runtime)
 
@@ -130,7 +133,7 @@ func TestConcurrentDownloader_SlowDownload(t *testing.T) {
 
 	destPath := filepath.Join(tmpDir, "slow_test.bin")
 	state := types.NewProgressState("slow-test", fileSize)
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 4}
+	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 4}
 
 	downloader := NewConcurrentDownloader("slow-id", nil, state, runtime)
 
@@ -173,8 +176,8 @@ func TestConcurrentDownloader_RespectServerConnectionLimit(t *testing.T) {
 	state := types.NewProgressState("connlimit-test", fileSize)
 	// Client configured for more connections than server allows
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 8, // More than server allows
-		MinChunkSize:          16 * types.KB,
+		MaxConnectionsPerDownload: 8, // More than server allows
+		MinChunkSize:              16 * types.KB,
 	}
 
 	downloader := NewConcurrentDownloader("connlimit-id", nil, state, runtime)
@@ -220,8 +223,8 @@ func TestConcurrentDownloader_ContentIntegrity(t *testing.T) {
 	destPath := filepath.Join(tmpDir, "integrity_test.bin")
 	state := types.NewProgressState("integrity-test", fileSize)
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 4,
-		MinChunkSize:          16 * types.KB,
+		MaxConnectionsPerDownload: 4,
+		MinChunkSize:              16 * types.KB,
 	}
 
 	downloader := NewConcurrentDownloader("integrity-id", nil, state, runtime)
@@ -293,10 +296,10 @@ func TestConcurrentDownloader_SmallFile(t *testing.T) {
 	destPath := filepath.Join(tmpDir, "small_test.bin")
 	state := types.NewProgressState("test-download", fileSize)
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 4,
-		MinChunkSize:          16 * types.KB,
-		WorkerBufferSize:      8 * types.KB,
-		MaxTaskRetries:        3,
+		MaxConnectionsPerDownload: 4,
+		MinChunkSize:              16 * types.KB,
+		WorkerBufferSize:          8 * types.KB,
+		MaxTaskRetries:            3,
 	}
 
 	downloader := NewConcurrentDownloader("test-id", nil, state, runtime)
@@ -334,10 +337,10 @@ func TestConcurrentDownloader_MediumFile(t *testing.T) {
 	destPath := filepath.Join(tmpDir, "medium_test.bin")
 	state := types.NewProgressState("test-download", fileSize)
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 8,
-		MinChunkSize:          64 * types.KB,
-		WorkerBufferSize:      32 * types.KB,
-		MaxTaskRetries:        3,
+		MaxConnectionsPerDownload: 8,
+		MinChunkSize:              64 * types.KB,
+		WorkerBufferSize:          32 * types.KB,
+		MaxTaskRetries:            3,
 	}
 
 	downloader := NewConcurrentDownloader("test-id", nil, state, runtime)
@@ -379,7 +382,7 @@ func TestConcurrentDownloader_Cancellation(t *testing.T) {
 
 	destPath := filepath.Join(tmpDir, "cancel_test.bin")
 	state := types.NewProgressState("cancel-test", fileSize)
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 4}
+	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 4}
 
 	downloader := NewConcurrentDownloader("cancel-id", nil, state, runtime)
 
@@ -423,8 +426,8 @@ func TestConcurrentDownloader_PauseAtCompletionFinalizesAsCompleted(t *testing.T
 	progressState := types.NewProgressState("pause-complete-test", fileSize)
 	progressState.Pause()
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 4,
-		MinChunkSize:          32 * types.KB,
+		MaxConnectionsPerDownload: 4,
+		MinChunkSize:              32 * types.KB,
 	}
 	downloader := NewConcurrentDownloader("pause-complete-id", nil, progressState, runtime)
 
@@ -462,7 +465,7 @@ func TestConcurrentDownloader_ProgressTracking(t *testing.T) {
 
 	destPath := filepath.Join(tmpDir, "progress_test.bin")
 	state := types.NewProgressState("progress-test", fileSize)
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 4}
+	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 4}
 
 	downloader := NewConcurrentDownloader("progress-id", nil, state, runtime)
 
@@ -506,9 +509,9 @@ func TestConcurrentDownloader_RetryOnFailure(t *testing.T) {
 	destPath := filepath.Join(tmpDir, "retry_test.bin")
 	state := types.NewProgressState("retry-test", fileSize)
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 2,
-		MaxTaskRetries:        10,            // Need more retries since each attempt only gets 20KB
-		MinChunkSize:          64 * types.KB, // Larger chunks to ensure failures occur
+		MaxConnectionsPerDownload: 2,
+		MaxTaskRetries:            10,            // Need more retries since each attempt only gets 20KB
+		MinChunkSize:              64 * types.KB, // Larger chunks to ensure failures occur
 	}
 
 	downloader := NewConcurrentDownloader("retry-id", nil, state, runtime)
@@ -552,9 +555,9 @@ func TestConcurrentDownloader_FailOnNthRequest(t *testing.T) {
 	destPath := filepath.Join(tmpDir, "failnth_test.bin")
 	state := types.NewProgressState("failnth-test", fileSize)
 	runtime := &types.RuntimeConfig{
-		MaxConnectionsPerHost: 1, // Single connection for predictable request order
-		MaxTaskRetries:        5,
-		MinChunkSize:          64 * types.KB, // 4 chunks = 4 requests minimum
+		MaxConnectionsPerDownload: 1, // Single connection for predictable request order
+		MaxTaskRetries:            5,
+		MinChunkSize:              64 * types.KB, // 4 chunks = 4 requests minimum
 	}
 
 	downloader := NewConcurrentDownloader("failnth-id", nil, state, runtime)
@@ -623,7 +626,7 @@ func TestConcurrentDownloader_ResumePartialDownload(t *testing.T) {
 
 	// Now resume download
 	progressState := types.NewProgressState("resume-test", fileSize)
-	runtime := &types.RuntimeConfig{MaxConnectionsPerHost: 2}
+	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 2}
 
 	downloader := NewConcurrentDownloader(downloadID, nil, progressState, runtime)
 
@@ -727,5 +730,105 @@ func TestCreateTasks_ZeroChunkSize(t *testing.T) {
 	tasks = createTasks(1000, -1)
 	if tasks != nil {
 		t.Error("createTasks should return nil for negative chunk size")
+	}
+}
+
+// =============================================================================
+// Bootstrap Metadata Tests
+// =============================================================================
+
+func TestConcurrentDownloader_Download_BootstrapSize(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	expectedSize := int64(1024)
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.Header.Get("Range") == "bytes=0-0" {
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-0/%d", expectedSize))
+			w.WriteHeader(http.StatusPartialContent)
+			_, _ = w.Write([]byte("x"))
+			return
+		}
+		// Subsequent chunk requests
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(make([]byte, 1024))
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "bootstrap_test.bin")
+	state := types.NewProgressState("bootstrap-id", 0) // Unknown size
+	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 1}
+
+	downloader := NewConcurrentDownloader("bootstrap-id", nil, state, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	err := downloader.Download(ctx, server.URL, nil, nil, destPath, 0)
+	if err != nil {
+		t.Fatalf("Download failed: %v", err)
+	}
+
+	if downloader.TotalSize != expectedSize {
+		t.Errorf("Expected TotalSize %d, got %d", expectedSize, downloader.TotalSize)
+	}
+}
+
+func TestConcurrentDownloader_Download_BootstrapFail_Non206(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK) // Not 206
+		_, _ = w.Write([]byte("full content"))
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "bootstrap_fail.bin")
+	state := types.NewProgressState("bootstrap-fail-id", 0)
+	downloader := NewConcurrentDownloader("bootstrap-fail-id", nil, state, nil)
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	err := downloader.Download(context.Background(), server.URL, nil, nil, destPath, 0)
+	if err == nil {
+		t.Fatal("Expected error when bootstrap fails (non-206)")
+	}
+	if !strings.Contains(err.Error(), "requires 206 response") {
+		t.Errorf("Expected 206 error, got: %v", err)
+	}
+}
+
+func TestConcurrentDownloader_Download_BootstrapFail_InvalidRange(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Range", "garbage")
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("x"))
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "bootstrap_invalid.bin")
+	state := types.NewProgressState("bootstrap-invalid-id", 0)
+	downloader := NewConcurrentDownloader("bootstrap-invalid-id", nil, state, nil)
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	err := downloader.Download(context.Background(), server.URL, nil, nil, destPath, 0)
+	if err == nil {
+		t.Fatal("Expected error when bootstrap fails (invalid range)")
+	}
+	if !strings.Contains(err.Error(), "invalid Content-Range header") {
+		t.Errorf("Expected range error, got: %v", err)
 	}
 }
