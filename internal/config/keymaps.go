@@ -218,6 +218,7 @@ func LoadKeyMap() (*KeyMap, error) {
 	}
 
 	defaults.ApplyConfig(&cfg)
+	defaults.Validate()
 	// Self-healing: save the fully-merged and validated keymap back to disk
 	// so that any new defaults, keys, or sections are immediately preserved.
 	_ = SaveKeyMap(defaults)
