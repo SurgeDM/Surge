@@ -10,9 +10,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/utils"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 var (
@@ -21,7 +21,7 @@ var (
 	ErrNoDestinationPath  = errors.New("download has no destination path")
 )
 
-func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service core.DownloadService) {
+func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service surge.DownloadService) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 			"status": "ok",
@@ -145,7 +145,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	})))
 }
 
-func eventsHandler(service core.DownloadService) http.HandlerFunc {
+func eventsHandler(service surge.DownloadService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
@@ -233,7 +233,7 @@ func writeJSONResponse(w http.ResponseWriter, status int, payload interface{}) {
 	}
 }
 
-func resolveDownloadDestPath(service core.DownloadService, id string) (string, error) {
+func resolveDownloadDestPath(service surge.DownloadService, id string) (string, error) {
 	if service == nil {
 		return "", ErrServiceUnavailable
 	}

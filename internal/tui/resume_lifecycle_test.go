@@ -9,11 +9,10 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 // TestResume_RespectsOriginalPath_WhenDefaultChanges verifies that a download
@@ -40,7 +39,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	state.Configure(dbPath)
 
 	ch := make(chan any, 10)
-	pool := download.NewWorkerPool(ch, 1)
+	pool := surge.NewWorkerPool(ch, 1)
 
 	// 2. Initialize Model with DefaultDir = DirA
 	settings := config.DefaultSettings()
@@ -48,7 +47,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 
 	m := RootModel{
 		Settings:  settings,
-		Service:   core.NewLocalDownloadServiceWithInput(pool, ch),
+		Service:   surge.NewLocalDownloadServiceWithInput(pool, ch),
 		downloads: []*DownloadModel{},
 		list:      NewDownloadList(80, 20), // Initialize list to prevent panic
 	}

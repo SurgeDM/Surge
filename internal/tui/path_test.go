@@ -6,9 +6,8 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/utils"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 // TestStartDownload_EnforcesAbsolutePath verifies that startDownload forces the path to be absolute.
@@ -18,11 +17,11 @@ func TestStartDownload_EnforcesAbsolutePath(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	ch := make(chan any, 10)
-	pool := download.NewWorkerPool(ch, 1)
+	pool := surge.NewWorkerPool(ch, 1)
 
 	m := RootModel{
 		Settings:  config.DefaultSettings(),
-		Service:   core.NewLocalDownloadServiceWithInput(pool, ch),
+		Service:   surge.NewLocalDownloadServiceWithInput(pool, ch),
 		downloads: []*DownloadModel{},
 		list:      NewDownloadList(80, 20), // Initialize list
 	}

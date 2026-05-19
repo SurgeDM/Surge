@@ -7,11 +7,10 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 // TestTUI_Startup_HandlesResume verifies that TUI initialization handles resume logic correctly
@@ -34,10 +33,10 @@ func TestTUI_Startup_HandlesResume(t *testing.T) {
 
 	// 3. Initialize TUI Model (Simulate StartTUI)
 	progressChan := make(chan any, 10)
-	pool := download.NewWorkerPool(progressChan, 3)
+	pool := surge.NewWorkerPool(progressChan, 3)
 
 	// PASSING noResume=false (default)
-	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1700, "test-version", surge.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
 
 	// 4. Verify Download is Active in Model
 	// InitialRootModel loads downloads and should set paused=false for "queued" items
@@ -98,8 +97,8 @@ func TestTUI_Startup_LoadsCompletedTiming(t *testing.T) {
 	}
 
 	progressChan := make(chan any, 10)
-	pool := download.NewWorkerPool(progressChan, 3)
-	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
+	pool := surge.NewWorkerPool(progressChan, 3)
+	m := InitialRootModel(1700, "test-version", surge.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
 
 	var found *DownloadModel
 	for _, d := range m.downloads {
@@ -147,8 +146,8 @@ func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
 	}
 
 	progressChan := make(chan any, 10)
-	pool := download.NewWorkerPool(progressChan, 3)
-	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
+	pool := surge.NewWorkerPool(progressChan, 3)
+	m := InitialRootModel(1700, "test-version", surge.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
 
 	var found *DownloadModel
 	for _, d := range m.downloads {

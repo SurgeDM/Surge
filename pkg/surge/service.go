@@ -2,6 +2,7 @@ package surge
 
 import (
 	"context"
+	"net/http"
 
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/download"
@@ -26,6 +27,21 @@ func NewLocalDownloadServiceWithInput(pool *WorkerPool, inputCh chan any) *Local
 // NewRemoteDownloadService creates a client for a remote Surge daemon.
 func NewRemoteDownloadService(baseURL string, token string, opts HTTPClientOptions) (*RemoteDownloadService, error) {
 	return core.NewRemoteDownloadService(baseURL, token, opts)
+}
+
+// NewHTTPClient creates an HTTP client with Surge's remote-client defaults.
+func NewHTTPClient(opts HTTPClientOptions) (*http.Client, error) {
+	return core.NewHTTPClient(opts)
+}
+
+// NewStreamingHTTPClient creates an HTTP client without a request timeout for event streams.
+func NewStreamingHTTPClient(opts HTTPClientOptions) (*http.Client, error) {
+	return core.NewStreamingHTTPClient(opts)
+}
+
+// NewHTTPTransport creates an HTTP transport with Surge's TLS and proxy handling.
+func NewHTTPTransport(opts HTTPClientOptions) (*http.Transport, error) {
+	return core.NewHTTPTransport(opts)
 }
 
 // ConfigureStateDB configures the SQLite state database used for history and resume metadata.

@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 func TestCmd_AutoResume_Execution(t *testing.T) {
@@ -78,8 +77,8 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 
 	// 5. Initialize GlobalPool + GlobalService
 	GlobalProgressCh = make(chan any, 10)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 4)
-	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
+	GlobalPool = surge.NewWorkerPool(GlobalProgressCh, 4)
+	GlobalService = surge.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 
 	GlobalLifecycle = processing.NewLifecycleManager(nil, nil, nil)
 	GlobalLifecycle.SetEngineHooks(processing.EngineHooks{
@@ -91,8 +90,8 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 		UpdateURL:           GlobalPool.UpdateURL,
 		PublishEvent:        GlobalService.Publish,
 	})
-	if svc, ok := GlobalService.(*core.LocalDownloadService); ok {
-		svc.SetLifecycleHooks(core.LifecycleHooks{
+	if svc, ok := GlobalService.(*surge.LocalDownloadService); ok {
+		svc.SetLifecycleHooks(surge.LifecycleHooks{
 			Pause:       GlobalLifecycle.Pause,
 			Resume:      GlobalLifecycle.Resume,
 			ResumeBatch: GlobalLifecycle.ResumeBatch,

@@ -15,14 +15,13 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/tui"
 	"github.com/SurgeDM/Surge/internal/utils"
+	"github.com/SurgeDM/Surge/pkg/surge"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/google/uuid"
@@ -73,9 +72,9 @@ var (
 
 // Globals for Unified Backend
 var (
-	GlobalPool              *download.WorkerPool
+	GlobalPool              *surge.WorkerPool
 	GlobalProgressCh        chan any
-	GlobalService           core.DownloadService
+	GlobalService           surge.DownloadService
 	GlobalLifecycleCleanup  func()
 	serverProgram           *tea.Program
 	startupIntegrityMessage string
@@ -130,7 +129,7 @@ func buildPoolIsNameActive(getAll func() []types.DownloadConfig) processing.IsNa
 	}
 }
 
-func newLocalLifecycleManager(service core.DownloadService, getAll func() []types.DownloadConfig) *processing.LifecycleManager {
+func newLocalLifecycleManager(service surge.DownloadService, getAll func() []types.DownloadConfig) *processing.LifecycleManager {
 	var addFunc processing.AddDownloadFunc
 	var addWithIDFunc processing.AddDownloadWithIDFunc
 	if service != nil {
@@ -141,7 +140,7 @@ func newLocalLifecycleManager(service core.DownloadService, getAll func() []type
 	return processing.NewLifecycleManager(addFunc, addWithIDFunc, buildPoolIsNameActive(getAll))
 }
 
-func startLifecycleEventWorker(service core.DownloadService, mgr *processing.LifecycleManager) (func(), error) {
+func startLifecycleEventWorker(service surge.DownloadService, mgr *processing.LifecycleManager) (func(), error) {
 	if service == nil || mgr == nil {
 		return nil, nil
 	}
@@ -213,7 +212,7 @@ func currentPoolConfigs() []types.DownloadConfig {
 	return GlobalPool.GetAll()
 }
 
-func lifecycleForLocalService(service core.DownloadService) (*processing.LifecycleManager, error) {
+func lifecycleForLocalService(service surge.DownloadService) (*processing.LifecycleManager, error) {
 	lifecycle := currentLifecycle()
 	if service == nil || GlobalService == nil || service != GlobalService {
 		return lifecycle, nil
@@ -223,7 +222,7 @@ func lifecycleForLocalService(service core.DownloadService) (*processing.Lifecyc
 
 func ensureGlobalLocalServiceAndLifecycle() error {
 	if GlobalService == nil {
-		localService := core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
+		localService := surge.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 		GlobalService = localService
 
 		lifecycle, err := ensureLocalLifecycle(localService, currentPoolConfigs)
@@ -241,7 +240,7 @@ func ensureGlobalLocalServiceAndLifecycle() error {
 			PublishEvent:        localService.Publish,
 		})
 
-		localService.SetLifecycleHooks(core.LifecycleHooks{
+		localService.SetLifecycleHooks(surge.LifecycleHooks{
 			Pause:       lifecycle.Pause,
 			Resume:      lifecycle.Resume,
 			ResumeBatch: lifecycle.ResumeBatch,
@@ -295,7 +294,7 @@ func recordPreflightDownloadError(url, outPath string, err error) {
 	}
 }
 
-func ensureLocalLifecycle(service core.DownloadService, getAll func() []types.DownloadConfig) (*processing.LifecycleManager, error) {
+func ensureLocalLifecycle(service surge.DownloadService, getAll func() []types.DownloadConfig) (*processing.LifecycleManager, error) {
 	globalLifecycleMu.Lock()
 	defer globalLifecycleMu.Unlock()
 
@@ -437,7 +436,7 @@ var rootCmd = &cobra.Command{
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		GlobalProgressCh = make(chan any, 100)
 		globalSettings = getSettings()
-		GlobalPool = download.NewWorkerPool(GlobalProgressCh, globalSettings.Network.MaxConcurrentDownloads)
+		GlobalPool = surge.NewWorkerPool(GlobalProgressCh, globalSettings.Network.MaxConcurrentDownloads)
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if ranRemote, err := maybeRunRemoteTUI(cmd, args); err != nil {

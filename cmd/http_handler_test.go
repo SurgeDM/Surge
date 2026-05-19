@@ -14,11 +14,10 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 func TestHandleDownload_PathResolution(t *testing.T) {
@@ -79,7 +78,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	}
 
 	// Initialize GlobalPool (required by handleDownload)
-	GlobalPool = download.NewWorkerPool(nil, 1)
+	GlobalPool = surge.NewWorkerPool(nil, 1)
 
 	tests := []struct {
 		name               string
@@ -169,7 +168,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			body, _ := json.Marshal(tt.request)
 			req := httptest.NewRequest("POST", "/download", bytes.NewBuffer(body))
 			w := httptest.NewRecorder()
-			svc := core.NewLocalDownloadService(GlobalPool)
+			svc := surge.NewLocalDownloadService(GlobalPool)
 
 			// We pass defaultDownloadDir as a fallback to handleDownload, but since we mocked settings,
 			// it should prioritize settings.General.DefaultDownloadDir
@@ -260,7 +259,7 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 
 	progressCh := make(chan any, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
+	GlobalPool = surge.NewWorkerPool(progressCh, 1)
 
 	origLifecycle := GlobalLifecycle
 	origService := GlobalService
@@ -318,7 +317,7 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 		return "queued-id", nil
 	}, nil)
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := surge.NewLocalDownloadService(nil)
 	GlobalService = svc
 	t.Cleanup(func() {
 		_ = svc.Shutdown()
@@ -359,7 +358,7 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 
 	progressCh := make(chan any, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
+	GlobalPool = surge.NewWorkerPool(progressCh, 1)
 
 	origLifecycle := GlobalLifecycle
 	origService := GlobalService
@@ -377,7 +376,7 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 		return "", nil
 	}, nil)
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := surge.NewLocalDownloadService(nil)
 	GlobalService = svc
 	t.Cleanup(func() {
 		_ = svc.Shutdown()
@@ -435,7 +434,7 @@ func TestHandleDownload_PublishError_RecordsPreflightError(t *testing.T) {
 		GlobalLifecycle = origLifecycle
 	})
 
-	GlobalPool = download.NewWorkerPool(nil, 1)
+	GlobalPool = surge.NewWorkerPool(nil, 1)
 
 	origServerProgram := serverProgram
 	serverProgram = &tea.Program{}

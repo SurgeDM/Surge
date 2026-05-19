@@ -13,13 +13,12 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 type countingLifecycleService struct {
@@ -30,7 +29,7 @@ type countingLifecycleService struct {
 	logs        []string
 }
 
-var _ core.DownloadService = (*countingLifecycleService)(nil)
+var _ surge.DownloadService = (*countingLifecycleService)(nil)
 
 func (s *countingLifecycleService) List() ([]types.DownloadStatus, error)   { return nil, nil }
 func (s *countingLifecycleService) History() ([]types.DownloadEntry, error) { return nil, nil }
@@ -120,8 +119,8 @@ func TestEnsureLocalLifecycle_StartsEventWorker(t *testing.T) {
 	GlobalLifecycle = nil
 	GlobalLifecycleCleanup = nil
 	GlobalProgressCh = make(chan any, 32)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 1)
-	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
+	GlobalPool = surge.NewWorkerPool(GlobalProgressCh, 1)
+	GlobalService = surge.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 	t.Cleanup(func() {
 		if GlobalLifecycleCleanup != nil {
 			GlobalLifecycleCleanup()
@@ -217,8 +216,8 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 	GlobalLifecycle = nil
 	GlobalLifecycleCleanup = nil
 	GlobalProgressCh = make(chan any, 32)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 1)
-	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
+	GlobalPool = surge.NewWorkerPool(GlobalProgressCh, 1)
+	GlobalService = surge.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 	t.Cleanup(func() {
 		if GlobalLifecycleCleanup != nil {
 			GlobalLifecycleCleanup()
@@ -307,8 +306,8 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 	GlobalLifecycle = nil
 	GlobalLifecycleCleanup = nil
 	GlobalProgressCh = make(chan any, 32)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 1)
-	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
+	GlobalPool = surge.NewWorkerPool(GlobalProgressCh, 1)
+	GlobalService = surge.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
 	t.Cleanup(func() {
 		if GlobalLifecycleCleanup != nil {
 			GlobalLifecycleCleanup()
@@ -451,7 +450,7 @@ func TestProcessDownloads_UsesSharedEnqueueContext(t *testing.T) {
 	setupIsolatedCmdState(t)
 	service := &countingLifecycleService{}
 	GlobalService = service
-	GlobalPool = download.NewWorkerPool(nil, 1)
+	GlobalPool = surge.NewWorkerPool(nil, 1)
 	GlobalLifecycleCleanup = nil
 	t.Cleanup(func() {
 		GlobalService = nil

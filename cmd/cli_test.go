@@ -14,12 +14,11 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/utils"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 // TestResolveDownloadID_Remote verifies that resolveDownloadID queries the server
@@ -1039,8 +1038,8 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 		atomic.StoreInt32(&activeDownloads, 0)
 
 		GlobalProgressCh = make(chan any, 10)
-		GlobalPool = download.NewWorkerPool(GlobalProgressCh, 2)
-		GlobalService = core.NewLocalDownloadService(GlobalPool)
+		GlobalPool = surge.NewWorkerPool(GlobalProgressCh, 2)
+		GlobalService = surge.NewLocalDownloadService(GlobalPool)
 
 		probeServer := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Length", "5")

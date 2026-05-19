@@ -13,11 +13,10 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 var errTest = errors.New("test error")
@@ -369,8 +368,8 @@ func TestGenerateUniqueFilename_IncompleteSuffixConstant(t *testing.T) {
 func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	// Setup initial model
 	ch := make(chan any, 100)
-	pool := download.NewWorkerPool(ch, 1)
-	svc := core.NewLocalDownloadServiceWithInput(pool, ch)
+	pool := surge.NewWorkerPool(ch, 1)
+	svc := surge.NewLocalDownloadServiceWithInput(pool, ch)
 	t.Cleanup(func() { _ = svc.Shutdown() })
 
 	m := RootModel{
@@ -444,8 +443,8 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 
 func TestStartDownload_UsesProvidedIDWhenServiceSupportsIt(t *testing.T) {
 	ch := make(chan any, 16)
-	pool := download.NewWorkerPool(ch, 1)
-	svc := core.NewLocalDownloadServiceWithInput(pool, ch)
+	pool := surge.NewWorkerPool(ch, 1)
+	svc := surge.NewLocalDownloadServiceWithInput(pool, ch)
 	t.Cleanup(func() {
 		_ = svc.Shutdown()
 	})
@@ -470,7 +469,7 @@ func TestStartDownload_UsesProvidedIDWhenServiceSupportsIt(t *testing.T) {
 }
 
 func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
-	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
+	svc := surge.NewLocalDownloadServiceWithInput(nil, nil)
 	t.Cleanup(func() {
 		_ = svc.Shutdown()
 	})
@@ -515,7 +514,7 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 }
 
 func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *testing.T) {
-	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
+	svc := surge.NewLocalDownloadServiceWithInput(nil, nil)
 	t.Cleanup(func() {
 		_ = svc.Shutdown()
 	})
@@ -551,7 +550,7 @@ func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *te
 }
 
 func TestStartDownload_UsesGenericQueuedNameForExplicitFilenameUntilLifecycleConfirms(t *testing.T) {
-	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
+	svc := surge.NewLocalDownloadServiceWithInput(nil, nil)
 	t.Cleanup(func() {
 		_ = svc.Shutdown()
 	})
@@ -830,7 +829,7 @@ func TestQuitConfirm_UnrelatedKeyIgnored(t *testing.T) {
 }
 
 func TestWithEnqueueContext_OverridesStartDownloadContext(t *testing.T) {
-	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
+	svc := surge.NewLocalDownloadServiceWithInput(nil, nil)
 	t.Cleanup(func() {
 		_ = svc.Shutdown()
 	})
@@ -874,7 +873,7 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 		state:          DashboardState,
 		keys:           Keys,
 		urlUpdateInput: textinput.New(),
-		Service:        core.NewLocalDownloadServiceWithInput(nil, nil),
+		Service:        surge.NewLocalDownloadServiceWithInput(nil, nil),
 	}
 	m.UpdateListItems()
 	m.list.Select(0) // Select the paused download

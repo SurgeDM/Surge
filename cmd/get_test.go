@@ -10,14 +10,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
-func startAuthedTestServer(t *testing.T, service core.DownloadService, token string) string {
+func startAuthedTestServer(t *testing.T, service surge.DownloadService, token string) string {
 	t.Helper()
 
 	mux := http.NewServeMux()
@@ -38,10 +37,10 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	}
 
 	GlobalProgressCh = make(chan any, 100)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 2)
+	GlobalPool = surge.NewWorkerPool(GlobalProgressCh, 2)
 
 	// Start server
-	svc := core.NewLocalDownloadService(GlobalPool)
+	svc := surge.NewLocalDownloadService(GlobalPool)
 	t.Cleanup(func() { _ = svc.Shutdown() })
 
 	lifecycle := processing.NewLifecycleManager(nil, nil)

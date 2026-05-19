@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/utils"
+	"github.com/SurgeDM/Surge/pkg/surge"
 	"github.com/google/uuid"
 )
 
@@ -68,7 +68,7 @@ func removeActivePort() {
 }
 
 // startHTTPServer starts the HTTP server using an existing listener
-func startHTTPServer(ln net.Listener, port int, defaultOutputDir string, service core.DownloadService, tokenOverride string) {
+func startHTTPServer(ln net.Listener, port int, defaultOutputDir string, service surge.DownloadService, tokenOverride string) {
 	authToken := strings.TrimSpace(tokenOverride)
 	if authToken == "" {
 		authToken = ensureAuthToken()

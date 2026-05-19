@@ -10,8 +10,8 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/tui"
+	"github.com/SurgeDM/Surge/pkg/surge"
 	"github.com/spf13/cobra"
 )
 
@@ -99,7 +99,7 @@ func connectAndRunTUI(_ *cobra.Command, target string) error {
 	return nil
 }
 
-func newRemoteRootModel(baseURL string, service core.DownloadService) tui.RootModel {
+func newRemoteRootModel(baseURL string, service surge.DownloadService) tui.RootModel {
 	serverHost, serverPort := parseRemoteServerAddress(baseURL)
 	m := tui.InitialRootModel(serverPort, Version, service, nil, false, Commit)
 	m.ServerHost = serverHost

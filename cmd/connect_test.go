@@ -4,10 +4,10 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/tui"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 type fakeRemoteDownloadService struct {
@@ -18,7 +18,7 @@ type fakeRemoteDownloadService struct {
 	lastExplicit bool
 }
 
-var _ core.DownloadService = (*fakeRemoteDownloadService)(nil)
+var _ surge.DownloadService = (*fakeRemoteDownloadService)(nil)
 
 func (f *fakeRemoteDownloadService) List() ([]types.DownloadStatus, error) {
 	return nil, nil

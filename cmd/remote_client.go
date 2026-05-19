@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 const (
@@ -22,14 +22,14 @@ var (
 type remoteClientConfig struct {
 	AllowInsecureHTTP bool
 	ConnectTimeout    time.Duration
-	HTTPOptions       core.HTTPClientOptions
+	HTTPOptions       surge.HTTPClientOptions
 }
 
 func currentRemoteClientConfig() remoteClientConfig {
 	return remoteClientConfig{
 		AllowInsecureHTTP: globalInsecureHTTP,
 		ConnectTimeout:    defaultRemoteConnectTimeout,
-		HTTPOptions: core.HTTPClientOptions{
+		HTTPOptions: surge.HTTPClientOptions{
 			Timeout:            defaultRemoteAPIRequestTimeout,
 			InsecureSkipVerify: globalInsecureTLS,
 			CAFile:             strings.TrimSpace(globalTLSCAFile),
@@ -37,12 +37,12 @@ func currentRemoteClientConfig() remoteClientConfig {
 	}
 }
 
-func newRemoteDownloadService(baseURL, token string) (*core.RemoteDownloadService, error) {
+func newRemoteDownloadService(baseURL, token string) (*surge.RemoteDownloadService, error) {
 	cfg := currentRemoteClientConfig()
-	return core.NewRemoteDownloadService(baseURL, token, cfg.HTTPOptions)
+	return surge.NewRemoteDownloadService(baseURL, token, cfg.HTTPOptions)
 }
 
 func newRemoteAPIHTTPClient() (*http.Client, error) {
 	cfg := currentRemoteClientConfig()
-	return core.NewHTTPClient(cfg.HTTPOptions)
+	return surge.NewHTTPClient(cfg.HTTPOptions)
 }

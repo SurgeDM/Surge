@@ -19,12 +19,12 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/version"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 // InitializeTUI prepares global TUI state like styles and component caches.
@@ -116,7 +116,7 @@ type RootModel struct {
 	focusedInput int
 	// Service Interface
 	// Core
-	Service      core.DownloadService
+	Service      surge.DownloadService
 	Orchestrator *processing.LifecycleManager
 
 	// File picker for directory selection
@@ -242,7 +242,7 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 	}
 }
 
-func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, orchestrator *processing.LifecycleManager, noResume bool, currentCommit ...string) RootModel {
+func InitialRootModel(serverPort int, currentVersion string, service surge.DownloadService, orchestrator *processing.LifecycleManager, noResume bool, currentCommit ...string) RootModel {
 	initialDarkBackground := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
 	commitValue := "unknown"
 	if len(currentCommit) > 0 {

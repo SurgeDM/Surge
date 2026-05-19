@@ -10,11 +10,11 @@ import (
 	"sync/atomic"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/utils"
+	"github.com/SurgeDM/Surge/pkg/surge"
 	"github.com/google/uuid"
 )
 
@@ -40,7 +40,7 @@ type resolvedDownloadRequest struct {
 	isActive      bool
 }
 
-func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir string, service core.DownloadService) {
+func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir string, service surge.DownloadService) {
 	if handleDownloadStatusRequest(w, r, service) {
 		return
 	}
@@ -82,7 +82,7 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 	})
 }
 
-func handleDownloadStatusRequest(w http.ResponseWriter, r *http.Request, service core.DownloadService) bool {
+func handleDownloadStatusRequest(w http.ResponseWriter, r *http.Request, service surge.DownloadService) bool {
 	if r.Method != http.MethodGet {
 		return false
 	}
@@ -190,7 +190,7 @@ func resolveDuplicateState(urlForAdd string, settings *config.Settings) (bool, b
 	return dupResult.Exists, dupResult.IsActive
 }
 
-func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadService, resolved *resolvedDownloadRequest) bool {
+func maybeRequireDownloadApproval(w http.ResponseWriter, service surge.DownloadService, resolved *resolvedDownloadRequest) bool {
 	req := resolved.request
 
 	// EXTENSION VETTING SHORTCUT:
@@ -248,7 +248,7 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 	return true
 }
 
-func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resolved *resolvedDownloadRequest) (string, string, error) {
+func enqueueDownloadRequest(r *http.Request, service surge.DownloadService, resolved *resolvedDownloadRequest) (string, string, error) {
 	lifecycle, err := lifecycleForLocalService(service)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to initialize lifecycle manager: %w", err)

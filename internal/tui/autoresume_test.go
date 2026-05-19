@@ -8,11 +8,10 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 func TestAutoResume_Enabled(t *testing.T) {
@@ -68,9 +67,9 @@ func TestAutoResume_Enabled(t *testing.T) {
 
 	// 5. Initialize Model
 	ch := make(chan any, 10)
-	pool := download.NewWorkerPool(ch, 1)
+	pool := surge.NewWorkerPool(ch, 1)
 
-	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, ch), processing.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1700, "test-version", surge.NewLocalDownloadServiceWithInput(pool, ch), processing.NewLifecycleManager(nil, nil), false)
 
 	// 6. Verify Download is Resumed
 	found := false
@@ -140,9 +139,9 @@ func TestAutoResume_Disabled(t *testing.T) {
 
 	// 5. Initialize Model
 	ch := make(chan any, 10)
-	pool := download.NewWorkerPool(ch, 1)
+	pool := surge.NewWorkerPool(ch, 1)
 
-	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, ch), processing.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1700, "test-version", surge.NewLocalDownloadServiceWithInput(pool, ch), processing.NewLifecycleManager(nil, nil), false)
 
 	// 6. Verify Download is Resumed
 	found := false

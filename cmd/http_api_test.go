@@ -11,9 +11,9 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 type httpAPITestService struct {
@@ -274,7 +274,7 @@ func TestResolveDownloadDestPath(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var service core.DownloadService
+			var service surge.DownloadService
 			if !test.useNilService {
 				service = test.service
 			}
@@ -345,7 +345,7 @@ func TestOpenEndpoints_ReturnMappedResolveStatuses(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			mux := http.NewServeMux()
-			var service core.DownloadService
+			var service surge.DownloadService
 			if !test.useNil {
 				service = test.service
 			}

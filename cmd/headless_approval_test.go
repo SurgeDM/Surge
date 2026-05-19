@@ -8,11 +8,10 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/pkg/surge"
 )
 
 func TestHandleDownload_HeadlessMode_AutoApprovesNonDuplicate(t *testing.T) {
@@ -51,14 +50,14 @@ func TestHandleDownload_HeadlessMode_AutoApprovesNonDuplicate(t *testing.T) {
 
 	progressCh := make(chan any, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
+	GlobalPool = surge.NewWorkerPool(progressCh, 1)
 
 	// Mock lifecycle to bypass real downloads
 	GlobalLifecycle = processing.NewLifecycleManager(func(url, path, filename string, _ []string, headers map[string]string, explicit bool, totalSize int64, supportsRange bool) (string, error) {
 		return "queued-id", nil
 	}, nil)
 
-	svc := core.NewLocalDownloadService(GlobalPool)
+	svc := surge.NewLocalDownloadService(GlobalPool)
 	GlobalService = svc
 
 	// Verify it auto-approves even with ExtensionPrompt=true
@@ -101,7 +100,7 @@ func TestHandleDownload_HeadlessMode_RejectsDuplicateWithWarn(t *testing.T) {
 
 	progressCh := make(chan any, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
+	GlobalPool = surge.NewWorkerPool(progressCh, 1)
 
 	// Seed the DB with a "duplicate" entry
 	url := "http://example.com/duplicate.bin"
@@ -112,7 +111,7 @@ func TestHandleDownload_HeadlessMode_RejectsDuplicateWithWarn(t *testing.T) {
 		Status:   "completed",
 	})
 
-	svc := core.NewLocalDownloadService(GlobalPool)
+	svc := surge.NewLocalDownloadService(GlobalPool)
 	GlobalService = svc
 
 	// Verify it still rejects duplicates when WarnOnDuplicate is on
@@ -158,8 +157,8 @@ func TestHandleDownload_HeadlessMode_RejectsExtensionPromptDuplicate(t *testing.
 
 	progressCh := make(chan any, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
-	svc := core.NewLocalDownloadService(GlobalPool)
+	GlobalPool = surge.NewWorkerPool(progressCh, 1)
+	svc := surge.NewLocalDownloadService(GlobalPool)
 	GlobalService = svc
 
 	body := fmt.Sprintf(`{"url": %q, "skip_approval": false}`, url)
