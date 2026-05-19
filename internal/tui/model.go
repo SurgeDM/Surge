@@ -194,7 +194,7 @@ type RootModel struct {
 	bugReportIncludeLatestLog  bool
 
 	// Keybindings
-	keys                *config.KeyMap
+	keys                *KeyMap
 	lastKeyMapModTime   time.Time
 	lastConfigCheckTime time.Time
 
@@ -295,12 +295,12 @@ func InitialRootModel(serverPort int, currentVersion string, service surge.Downl
 		settings = config.DefaultSettings()
 	}
 
-	keys, _ := config.LoadKeyMap()
+	keys, _ := LoadKeyMap()
 	if keys == nil {
-		keys = config.DefaultKeyMap()
+		keys = DefaultKeyMap()
 	}
 	var keyMapModTime time.Time
-	if info, err := os.Stat(config.GetKeyMapConfigPath()); err == nil {
+	if info, err := os.Stat(GetKeyMapConfigPath()); err == nil {
 		keyMapModTime = info.ModTime()
 	}
 

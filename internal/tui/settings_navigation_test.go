@@ -9,7 +9,7 @@ import (
 
 func TestSettingsNavigation_VimStylePaneTransitions(t *testing.T) {
 	// 1. Initialize RootModel with default keymap and settings
-	keys := config.DefaultKeyMap()
+	keys := DefaultKeyMap()
 	settings := config.DefaultSettings()
 
 	m := RootModel{
@@ -92,7 +92,7 @@ func TestSettingsNavigation_VimStylePaneTransitions(t *testing.T) {
 }
 
 func TestSettingsNavigation_ResetAndBrowseGuards(t *testing.T) {
-	keys := config.DefaultKeyMap()
+	keys := DefaultKeyMap()
 	settings := config.DefaultSettings()
 
 	m := RootModel{

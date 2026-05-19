@@ -142,7 +142,7 @@ func TestDynamicKeyMapReloading(t *testing.T) {
 	}
 
 	// 1. Initialize keymap and verify default state
-	km, err := config.LoadKeyMap()
+	km, err := LoadKeyMap()
 	if err != nil {
 		t.Fatalf("Failed to load keymap: %v", err)
 	}
@@ -158,20 +158,20 @@ func TestDynamicKeyMapReloading(t *testing.T) {
 	}
 
 	// 2. Simulate user editing keymap.json on disk
-	customKeyMap := config.DefaultKeyMap()
+	customKeyMap := DefaultKeyMap()
 	customKeyMap.Dashboard.ToggleHelp = key.NewBinding(
 		key.WithKeys("ctrl+x"),
 		key.WithHelp("ctrl+x", "keybindings"),
 	)
 
 	// Save custom keymap to temp directory
-	err = config.SaveKeyMap(customKeyMap)
+	err = SaveKeyMap(customKeyMap)
 	if err != nil {
 		t.Fatalf("Failed to save custom keymap: %v", err)
 	}
 
 	// Update modTime on disk to simulate fresh write in the past
-	keymapPath := config.GetKeyMapConfigPath()
+	keymapPath := GetKeyMapConfigPath()
 	now := time.Now()
 	err = os.Chtimes(keymapPath, now, now)
 	if err != nil {

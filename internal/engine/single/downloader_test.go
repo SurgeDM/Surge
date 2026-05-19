@@ -382,6 +382,42 @@ func TestSingleDownloader_Download_Success(t *testing.T) {
 	}
 }
 
+func TestSingleDownloader_Download_TruncatesStaleIncompleteFile(t *testing.T) {
+	tmpDir, cleanup, err := testutil.TempDir("surge-single-stale-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cleanup()
+
+	fileSize := int64(8 * types.KB)
+	server := testutil.NewMockServerT(t,
+		testutil.WithFileSize(fileSize),
+		testutil.WithRangeSupport(false),
+		testutil.WithFilename("single_stale.bin"),
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "single_stale.bin")
+	stalePath := destPath + types.IncompleteSuffix
+	if err := os.WriteFile(stalePath, []byte(strings.Repeat("x", int(fileSize*2))), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	state := types.NewProgressState("single-stale-test", fileSize)
+	downloader := NewSingleDownloader("single-stale-id", nil, state, &types.RuntimeConfig{})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if err := downloader.Download(ctx, server.URL(), destPath, fileSize, "single_stale.bin"); err != nil {
+		t.Fatalf("Download failed: %v", err)
+	}
+
+	if err := testutil.VerifyFileSize(stalePath, fileSize); err != nil {
+		t.Error(err)
+	}
+}
+
 func TestSingleDownloader_Download_Cancellation(t *testing.T) {
 	tmpDir, cleanup, _ := testutil.TempDir("surge-cancel-single")
 	defer cleanup()

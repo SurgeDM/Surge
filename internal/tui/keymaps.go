@@ -1,4 +1,4 @@
-package config
+package tui
 
 import (
 	"encoding/json"
@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/key"
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -191,7 +192,7 @@ type KeyMapConfig struct {
 
 // GetKeyMapConfigPath returns the path to the Keymaps JSON file.
 func GetKeyMapConfigPath() string {
-	return filepath.Join(GetSurgeDir(), "keymap.json")
+	return filepath.Join(config.GetSurgeDir(), "keymap.json")
 }
 
 // LoadKeyMap loads the keymap configuration from file.

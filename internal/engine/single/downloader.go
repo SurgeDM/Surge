@@ -119,7 +119,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	if err := os.MkdirAll(filepath.Dir(workingPath), 0755); err != nil {
 		return err
 	}
-	outFile, err := os.OpenFile(workingPath, os.O_RDWR|os.O_CREATE, 0644)
+	outFile, err := os.OpenFile(workingPath, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0644)
 	if err != nil {
 		return err
 	}

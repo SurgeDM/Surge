@@ -2,11 +2,12 @@ package surge_test
 
 import (
 	"context"
-	"go/build"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -93,15 +94,19 @@ func waitForFile(ctx context.Context, t *testing.T, path string) {
 }
 
 func TestPublicPackageHasNoUIImports(t *testing.T) {
-	pkg, err := build.ImportDir(".", 0)
+	cmd := exec.Command("go", "list", "-deps", "-f", "{{.ImportPath}}", ".")
+	output, err := cmd.CombinedOutput()
 	if err != nil {
-		t.Fatalf("ImportDir() error = %v", err)
+		t.Fatalf("go list deps failed: %v\n%s", err, string(output))
 	}
 
-	for _, imp := range pkg.Imports {
-		switch imp {
-		case "github.com/spf13/cobra", "charm.land/bubbletea/v2":
-			t.Fatalf("pkg/surge imports UI package %q", imp)
+	for _, imp := range strings.Fields(string(output)) {
+		if imp == "github.com/spf13/cobra" ||
+			imp == "charm.land/bubbletea/v2" ||
+			strings.HasPrefix(imp, "charm.land/bubbletea/v2/") ||
+			imp == "charm.land/bubbles/v2" ||
+			strings.HasPrefix(imp, "charm.land/bubbles/v2/") {
+			t.Fatalf("pkg/surge transitively imports UI package %q", imp)
 		}
 	}
 }

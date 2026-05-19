@@ -55,12 +55,12 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Dynamically reload keymap.json on the fly if it is updated on disk
 	if time.Since(m.lastConfigCheckTime) > 1*time.Second {
 		m.lastConfigCheckTime = time.Now()
-		if info, err := os.Stat(config.GetKeyMapConfigPath()); err == nil {
+		if info, err := os.Stat(GetKeyMapConfigPath()); err == nil {
 			if info.ModTime().After(m.lastKeyMapModTime) {
 				preLoadModTime := info.ModTime()
-				if newKeys, err := config.LoadKeyMap(); err == nil && newKeys != nil {
+				if newKeys, err := LoadKeyMap(); err == nil && newKeys != nil {
 					m.keys = newKeys
-					if postInfo, postErr := os.Stat(config.GetKeyMapConfigPath()); postErr == nil {
+					if postInfo, postErr := os.Stat(GetKeyMapConfigPath()); postErr == nil {
 						m.lastKeyMapModTime = postInfo.ModTime()
 					} else {
 						m.lastKeyMapModTime = preLoadModTime
@@ -76,7 +76,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.keys == nil {
-		m.keys = config.DefaultKeyMap()
+		m.keys = DefaultKeyMap()
 	}
 
 	if m.shuttingDown {
