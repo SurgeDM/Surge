@@ -12,6 +12,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
+var keyMapConfigStat = os.Stat
+
 func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 
 	if m.state == DashboardState && m.searchActive {
@@ -55,15 +57,14 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Dynamically reload keymap.json on the fly if it is updated on disk
 	if time.Since(m.lastConfigCheckTime) > 1*time.Second {
 		m.lastConfigCheckTime = time.Now()
-		if info, err := os.Stat(GetKeyMapConfigPath()); err == nil {
+		if info, err := keyMapConfigStat(GetKeyMapConfigPath()); err == nil {
 			if info.ModTime().After(m.lastKeyMapModTime) {
-				preLoadModTime := info.ModTime()
 				if newKeys, err := LoadKeyMap(); err == nil && newKeys != nil {
 					m.keys = newKeys
-					if postInfo, postErr := os.Stat(GetKeyMapConfigPath()); postErr == nil {
+					if postInfo, postErr := keyMapConfigStat(GetKeyMapConfigPath()); postErr == nil {
 						m.lastKeyMapModTime = postInfo.ModTime()
 					} else {
-						m.lastKeyMapModTime = preLoadModTime
+						m.lastKeyMapModTime = time.Now()
 					}
 					utils.Debug("TUI: dynamically reloaded keymap.json from disk")
 				}

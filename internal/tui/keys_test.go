@@ -188,3 +188,66 @@ func TestDynamicKeyMapReloading(t *testing.T) {
 		t.Errorf("Expected dynamic reload to update ToggleHelp key to 'ctrl+x', got %v", toggleHelpKeys)
 	}
 }
+
+func TestDynamicKeyMapReloading_PostLoadStatFailureUsesCurrentTime(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows: GetSurgeDir uses %APPDATA% and does not honor XDG_CONFIG_HOME")
+	}
+
+	tmpDir, err := os.MkdirTemp("", "surge-tui-keymap-stat-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	oldXDG := os.Getenv("XDG_CONFIG_HOME")
+	defer func() {
+		_ = os.Setenv("XDG_CONFIG_HOME", oldXDG)
+	}()
+	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	if err := config.EnsureDirs(); err != nil {
+		t.Fatalf("Failed to ensure directories: %v", err)
+	}
+	if err := SaveKeyMap(DefaultKeyMap()); err != nil {
+		t.Fatalf("Failed to save keymap: %v", err)
+	}
+
+	keymapPath := GetKeyMapConfigPath()
+	staleModTime := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(keymapPath, staleModTime, staleModTime); err != nil {
+		t.Fatalf("Failed to set file times: %v", err)
+	}
+
+	originalStat := keyMapConfigStat
+	statCalls := 0
+	keyMapConfigStat = func(name string) (os.FileInfo, error) {
+		statCalls++
+		if statCalls == 2 {
+			return nil, os.ErrNotExist
+		}
+		return originalStat(name)
+	}
+	t.Cleanup(func() {
+		keyMapConfigStat = originalStat
+	})
+
+	m := RootModel{
+		keys:                DefaultKeyMap(),
+		lastKeyMapModTime:   staleModTime.Add(-time.Second),
+		lastConfigCheckTime: time.Now().Add(-2 * time.Second),
+	}
+
+	beforeUpdate := time.Now().Add(-time.Millisecond)
+	res, _ := m.Update(struct{}{})
+	updatedModel := res.(RootModel)
+
+	if statCalls != 2 {
+		t.Fatalf("Expected keymap stat to be called twice, got %d", statCalls)
+	}
+	if updatedModel.lastKeyMapModTime.Before(beforeUpdate) {
+		t.Fatalf("Expected fallback modtime to use current time, got %s before %s", updatedModel.lastKeyMapModTime, beforeUpdate)
+	}
+}
