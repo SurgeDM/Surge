@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -113,9 +114,12 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		d.State.SetTotalSize(fileSize)
 	}
 
-	// Use .surge extension for incomplete file (must be pre-created by processing layer)
+	// Use .surge extension for incomplete file.
 	workingPath := destPath + types.IncompleteSuffix
-	outFile, err := os.OpenFile(workingPath, os.O_RDWR, 0)
+	if err := os.MkdirAll(filepath.Dir(workingPath), 0755); err != nil {
+		return err
+	}
+	outFile, err := os.OpenFile(workingPath, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		return err
 	}
