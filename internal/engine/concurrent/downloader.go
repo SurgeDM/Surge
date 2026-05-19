@@ -25,7 +25,7 @@ import (
 type ConcurrentDownloader struct {
 	ProgressChan chan<- any           // Channel for events (start/complete/error)
 	ID           string               // Download ID
-	State        *types.ProgressState // Shared state for TUI polling
+	State        *types.ProgressState // Shared state for progress reporting
 	activeTasks  map[int]*ActiveTask
 	activeMu     sync.Mutex
 	URL          string // For pause/resume
@@ -298,7 +298,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		return downloadErr
 	}
 
-	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
+	// Note: download completion notifications are handled by event consumers.
 	return d.syncFile(outFile)
 }
 

@@ -21,7 +21,7 @@ import (
 type SingleDownloader struct {
 	ProgressChan chan<- any           // Channel for events (start/complete/error)
 	ID           string               // Download ID
-	State        *types.ProgressState // Shared state for TUI polling
+	State        *types.ProgressState // Shared state for progress reporting
 	Runtime      *types.RuntimeConfig
 	TotalSize    int64
 	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)

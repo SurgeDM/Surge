@@ -71,8 +71,8 @@ func uniqueFilePath(path string) string {
 	return path
 }
 
-// TUIDownload is the main entry point for downloads executed by the Engine pool
-func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
+// Run is the main entry point for downloads executed by the worker pool.
+func Run(ctx context.Context, cfg *types.DownloadConfig) error {
 	start := time.Now()
 	if cfg.Runtime == nil {
 		cfg.Runtime = types.DefaultRuntimeConfig()
@@ -86,7 +86,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	mirrors := make([]string, len(cfg.Mirrors))
 	copy(mirrors, cfg.Mirrors)
 
-	// Check if this is a resume (explicitly marked by TUI)
+	// Check if this is a resume explicitly requested by the caller.
 	var savedState *types.DownloadState
 
 	if cfg.IsResume && cfg.DestPath != "" {
@@ -279,7 +279,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	return downloadErr
 }
 
-// Download is the CLI entry point (non-TUI) - convenience wrapper
+// Download is a convenience wrapper for a single download.
 func Download(ctx context.Context, url string, outPath string, progressCh chan<- any, id string) error {
 	cfg := types.DownloadConfig{
 		URL:        url,
@@ -290,5 +290,5 @@ func Download(ctx context.Context, url string, outPath string, progressCh chan<-
 	}
 	// Default runtime config
 	cfg.Runtime = types.DefaultRuntimeConfig()
-	return TUIDownload(ctx, &cfg)
+	return Run(ctx, &cfg)
 }

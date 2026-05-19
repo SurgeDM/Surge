@@ -7,7 +7,7 @@ import (
 )
 
 // DownloadService defines the interface for interacting with the download engine.
-// This abstraction allows the TUI to switch between a local embedded backend
+// This abstraction allows callers to switch between a local embedded backend
 // and a remote daemon connection.
 type DownloadService interface {
 	// List returns the status of all active and completed downloads.

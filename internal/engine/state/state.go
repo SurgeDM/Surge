@@ -788,7 +788,7 @@ func removeDownloadAndTasks(id string) error {
 // power loss, terminal close without graceful shutdown) while a download was
 // active, the entry remains in "downloading" status with no worker attached.
 // Without normalization these entries are invisible to resumePausedDownloads()
-// and appear as dead/frozen items in the TUI.
+// and appear as dead or frozen items in clients.
 func NormalizeStaleDownloads() (int, error) {
 	db := getDBHelper()
 	if db == nil {

@@ -454,7 +454,7 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 	return statuses, nil
 }
 
-// Add queues a new download on the local pool without TUI confirmation.
+// Add queues a new download on the local pool without interactive confirmation.
 func (s *LocalDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
 	return s.add(url, path, filename, mirrors, headers, "", isExplicitCategory, totalSize, supportsRange)
 }

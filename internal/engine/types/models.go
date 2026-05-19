@@ -51,7 +51,7 @@ type MasterList struct {
 	Downloads []DownloadEntry `json:"downloads"`
 }
 
-// DownloadStatus is the transient view returned to the TUI and API clients.
+// DownloadStatus is the transient view returned to clients.
 type DownloadStatus struct {
 	ID          string  `json:"id"`
 	URL         string  `json:"url"`

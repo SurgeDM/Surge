@@ -140,7 +140,7 @@ func TestUniqueFilePath_MultipleExtensions(t *testing.T) {
 	}
 }
 
-func TestTUIDownload_StartedEventUsesFullDestPath(t *testing.T) {
+func TestRun_StartedEventUsesFullDestPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	fileSize := int64(2 * 1024 * 1024)
 	server := testutil.NewStreamingMockServerT(t,
@@ -176,7 +176,7 @@ func TestTUIDownload_StartedEventUsesFullDestPath(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- TUIDownload(ctx, &cfg)
+		errCh <- Run(ctx, &cfg)
 	}()
 
 	deadline := time.After(5 * time.Second)
@@ -201,7 +201,7 @@ func TestTUIDownload_StartedEventUsesFullDestPath(t *testing.T) {
 	}
 }
 
-func TestTUIDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
+func TestRun_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
 	tmpDir := t.TempDir()
 	fileSize := int64(2 * 1024 * 1024)
 	server := testutil.NewStreamingMockServerT(t,
@@ -232,8 +232,8 @@ func TestTUIDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
 		SupportsRange: true,
 	}
 
-	if err := TUIDownload(context.Background(), &cfg); err != nil {
-		t.Fatalf("TUIDownload failed: %v", err)
+	if err := Run(context.Background(), &cfg); err != nil {
+		t.Fatalf("Run failed: %v", err)
 	}
 	if cfg.TotalSize != fileSize {
 		t.Fatalf("cfg.TotalSize = %d, want %d", cfg.TotalSize, fileSize)
@@ -259,7 +259,7 @@ func TestTUIDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
 	}
 }
 
-func TestTUIDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
+func TestRun_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
 	tmpDir := t.TempDir()
 	content := []byte("fallback download content")
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -294,8 +294,8 @@ func TestTUIDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
 		SupportsRange: true,
 	}
 
-	if err := TUIDownload(context.Background(), &cfg); err != nil {
-		t.Fatalf("TUIDownload failed: %v", err)
+	if err := Run(context.Background(), &cfg); err != nil {
+		t.Fatalf("Run failed: %v", err)
 	}
 
 	got, err := os.ReadFile(surgePath)
@@ -326,7 +326,7 @@ func TestTUIDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
 	}
 }
 
-func TestTUIDownload_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T) {
+func TestRun_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T) {
 	tmpDir := t.TempDir()
 	fileSize := 10 * 1024
 	server := testutil.NewMockServerT(t,
@@ -361,8 +361,8 @@ func TestTUIDownload_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T)
 		}
 	}()
 
-	if err := TUIDownload(context.Background(), &cfg); err != nil {
-		t.Fatalf("TUIDownload should have succeeded via fallback: %v", err)
+	if err := Run(context.Background(), &cfg); err != nil {
+		t.Fatalf("Run should have succeeded via fallback: %v", err)
 	}
 
 	// Verification:

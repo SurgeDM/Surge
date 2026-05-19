@@ -271,7 +271,7 @@ func (mgr *LifecycleManager) Cancel(id string) error {
 	if !found {
 		// It's safe to treat a missing download as success during cancellation
 		// because it may have been deleted in a prior session or removed
-		// during a race condition (e.g. TUI refresh vs engine deletion).
+		// during a race condition (e.g. status refresh vs engine deletion).
 		utils.Debug("Cancel: download %s not found in pool or DB, treating as success", id)
 		return nil
 	}

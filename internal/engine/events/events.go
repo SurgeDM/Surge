@@ -138,7 +138,7 @@ type SystemLogMsg struct {
 	Message string
 }
 
-// BatchProgressMsg represents a batch of progress updates to reduce TUI render calls
+// BatchProgressMsg represents a batch of progress updates to reduce render calls.
 type BatchProgressMsg []ProgressMsg
 
 // DownloadRequestMsg signals a request to start a download (e.g. from extension)
