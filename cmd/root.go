@@ -87,7 +87,11 @@ var (
 	globalEnqueueMu         sync.Mutex
 )
 
-func buildPoolIsNameActive(getAll func() []types.DownloadConfig) processing.IsNameActiveFunc {
+// buildActiveDownloadChecker constructs an IsNameActiveFunc callback used by the
+// lifecycle manager to detect file collisions with in-flight downloads. It queries
+// the provided getAll callback to check if any active download is writing to the
+// target directory and filename.
+func buildActiveDownloadChecker(getAll func() []types.DownloadConfig) processing.IsNameActiveFunc {
 	if getAll == nil {
 		return nil
 	}
@@ -138,7 +142,7 @@ func newLocalLifecycleManager(service core.DownloadService, getAll func() []type
 		addWithIDFunc = service.AddWithID
 	}
 
-	return processing.NewLifecycleManager(addFunc, addWithIDFunc, buildPoolIsNameActive(getAll))
+	return processing.NewLifecycleManager(addFunc, addWithIDFunc, buildActiveDownloadChecker(getAll))
 }
 
 func startLifecycleEventWorker(service core.DownloadService, mgr *processing.LifecycleManager) (func(), error) {

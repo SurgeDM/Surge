@@ -72,7 +72,7 @@ func (s *countingLifecycleService) StreamEvents(context.Context) (<-chan interfa
 	return ch, cleanup, nil
 }
 
-func TestBuildPoolIsNameActive(t *testing.T) {
+func TestBuildActiveDownloadChecker(t *testing.T) {
 	getAll := func() []types.DownloadConfig {
 		state := types.NewProgressState("dl-2", 0)
 		state.SetFilename("from-state.iso")
@@ -85,7 +85,7 @@ func TestBuildPoolIsNameActive(t *testing.T) {
 		}
 	}
 
-	isNameActive := buildPoolIsNameActive(getAll)
+	isNameActive := buildActiveDownloadChecker(getAll)
 	if isNameActive == nil {
 		t.Fatal("expected name activity callback")
 	}
