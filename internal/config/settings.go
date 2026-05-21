@@ -44,17 +44,15 @@ type GeneralSettings struct {
 
 type NetworkSettings struct {
 	MaxConnectionsPerDownload *Setting `json:"max_connections_per_host"`
-	// Kept for backward compatibility
-	MaxConnectionsPerHost  int      `json:"-"`
-	MaxConcurrentDownloads *Setting `json:"max_concurrent_downloads"`
-	MaxConcurrentProbes    *Setting `json:"max_concurrent_probes"`
-	UserAgent              *Setting `json:"user_agent"`
-	ProxyURL               *Setting `json:"proxy_url"`
-	CustomDNS              *Setting `json:"custom_dns"`
-	SequentialDownload     *Setting `json:"sequential_download"`
-	MinChunkSize           *Setting `json:"min_chunk_size"`
-	WorkerBufferSize       *Setting `json:"worker_buffer_size"`
-	DialHedgeCount         *Setting `json:"dial_hedge_count"`
+	MaxConcurrentDownloads    *Setting `json:"max_concurrent_downloads"`
+	MaxConcurrentProbes       *Setting `json:"max_concurrent_probes"`
+	UserAgent                 *Setting `json:"user_agent"`
+	ProxyURL                  *Setting `json:"proxy_url"`
+	CustomDNS                 *Setting `json:"custom_dns"`
+	SequentialDownload        *Setting `json:"sequential_download"`
+	MinChunkSize              *Setting `json:"min_chunk_size"`
+	WorkerBufferSize          *Setting `json:"worker_buffer_size"`
+	DialHedgeCount            *Setting `json:"dial_hedge_count"`
 }
 
 type PerformanceSettings struct {
