@@ -113,7 +113,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		duplicate := m.checkForDuplicate(msg.URL)
 
-		if duplicate != nil && m.Settings.General.WarnOnDuplicate {
+		if duplicate != nil && m.Settings.General.WarnOnDuplicate.AsBool() {
 			utils.Debug("Duplicate download detected in TUI: %s", msg.URL)
 			m.pendingURL = msg.URL
 			m.pendingMirrors = msg.Mirrors
@@ -126,7 +126,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		if m.Settings != nil && m.Settings.Extension.ExtensionPrompt {
+		if m.Settings != nil && m.Settings.Extension.ExtensionPrompt.AsBool() {
 			m.pendingURL = msg.URL
 			m.pendingMirrors = msg.Mirrors
 			m.pendingHeaders = msg.Headers

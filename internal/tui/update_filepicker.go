@@ -25,13 +25,13 @@ func (m RootModel) updateFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.FilePicker.Cancel) {
 		switch m.filepickerOrigin {
 		case FilePickerOriginTheme:
-			m.Settings.General.ThemePath = m.filepickerOriginalPath
+			m.Settings.General.ThemePath.Value = m.filepickerOriginalPath
 			m.filepickerOrigin = FilePickerOriginNone
 			m.state = SettingsState
 			m.resetFilepickerToDirMode()
 			return m, nil
 		case FilePickerOriginSettings:
-			m.Settings.General.DefaultDownloadDir = m.filepickerOriginalPath
+			m.Settings.General.DefaultDownloadDir.Value = m.filepickerOriginalPath
 			m.filepickerOrigin = FilePickerOriginNone
 			m.state = SettingsState
 			m.resetFilepickerToDirMode()

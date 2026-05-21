@@ -2,11 +2,6 @@ package config
 
 // Regression tests for: config problems must be surfaced in StartupWarnings,
 // never silently swallowed.
-//
-// Root causes fixed (branch fix-config-fails):
-//  1. Corrupt settings.json returned DefaultSettings() with no warning at all.
-//  2. publishStartupWarnings() fired before the TUI event stream was connected,
-//     so valid warnings were silently dropped.
 
 import (
 	"os"
@@ -127,31 +122,31 @@ func TestValidate_InvalidField_PopulatesStartupWarnings(t *testing.T) {
 	}{
 		{
 			name:   "MaxConnectionsPerHost out of range",
-			mutate: func(s *Settings) { s.Network.MaxConnectionsPerHost = 999 },
+			mutate: func(s *Settings) { s.Network.MaxConnectionsPerDownload.Value = 999 },
 		},
 		{
 			name:   "MaxConcurrentDownloads out of range",
-			mutate: func(s *Settings) { s.Network.MaxConcurrentDownloads = 99 },
+			mutate: func(s *Settings) { s.Network.MaxConcurrentDownloads.Value = 99 },
 		},
 		{
 			name:   "MaxTaskRetries out of range",
-			mutate: func(s *Settings) { s.Performance.MaxTaskRetries = 999 },
+			mutate: func(s *Settings) { s.Performance.MaxTaskRetries.Value = 999 },
 		},
 		{
 			name:   "SlowWorkerThreshold out of range",
-			mutate: func(s *Settings) { s.Performance.SlowWorkerThreshold = 5.0 },
+			mutate: func(s *Settings) { s.Performance.SlowWorkerThreshold.Value = 5.0 },
 		},
 		{
 			name:   "LogRetentionCount out of range",
-			mutate: func(s *Settings) { s.General.LogRetentionCount = 0 },
+			mutate: func(s *Settings) { s.General.LogRetentionCount.Value = 0 },
 		},
 		{
 			name:   "Invalid proxy URL",
-			mutate: func(s *Settings) { s.Network.ProxyURL = "not-a-url" },
+			mutate: func(s *Settings) { s.Network.ProxyURL.Value = "not-a-url" },
 		},
 		{
 			name:   "Invalid DNS server",
-			mutate: func(s *Settings) { s.Network.CustomDNS = "not.a.valid.ip.server.!!!" },
+			mutate: func(s *Settings) { s.Network.CustomDNS.Value = "not.a.valid.ip.server.!!!" },
 		},
 	}
 
@@ -172,9 +167,9 @@ func TestValidate_InvalidField_PopulatesStartupWarnings(t *testing.T) {
 // field independently contributes a warning (no short-circuiting).
 func TestValidate_MultipleInvalidFields_AllWarningsPresent(t *testing.T) {
 	s := DefaultSettings()
-	s.Network.MaxConnectionsPerHost = 999  // invalid
-	s.Network.MaxConcurrentDownloads = 99  // invalid
-	s.Performance.SlowWorkerThreshold = -1 // invalid
+	s.Network.MaxConnectionsPerDownload.Value = 999 // invalid
+	s.Network.MaxConcurrentDownloads.Value = 99     // invalid
+	s.Performance.SlowWorkerThreshold.Value = -1.0  // invalid
 	s.Validate()
 
 	if len(s.StartupWarnings) < 3 {
@@ -188,7 +183,7 @@ func TestValidate_MultipleInvalidFields_AllWarningsPresent(t *testing.T) {
 // on already-reset settings produces zero warnings rather than accumulating.
 func TestValidate_ClearsOldWarningsOnRevalidation(t *testing.T) {
 	s := DefaultSettings()
-	s.Network.MaxConnectionsPerHost = 999 // invalid — will be reset to default
+	s.Network.MaxConnectionsPerDownload.Value = 999 // invalid — will be reset to default
 	s.Validate()
 
 	firstCount := len(s.StartupWarnings)
@@ -196,7 +191,7 @@ func TestValidate_ClearsOldWarningsOnRevalidation(t *testing.T) {
 		t.Fatal("expected at least one warning on first Validate()")
 	}
 
-	// After Validate(), MaxConnectionsPerHost has been reset to the default (valid).
+	// After Validate(), MaxConnectionsPerDownload has been reset to the default (valid).
 	// A second Validate() should find nothing wrong and produce zero warnings.
 	// This confirms that warnings are cleared and not accumulated across calls.
 	s.Validate()
@@ -227,12 +222,12 @@ func TestLoadSettings_CorruptJSON_ReturnsDefaultValues(t *testing.T) {
 	if settings == nil {
 		t.Fatal("LoadSettings returned nil")
 	}
-	if settings.Network.MaxConnectionsPerHost != defaults.Network.MaxConnectionsPerHost {
-		t.Errorf("MaxConnectionsPerHost = %d, want default %d",
-			settings.Network.MaxConnectionsPerHost, defaults.Network.MaxConnectionsPerHost)
+	if settings.Network.MaxConnectionsPerDownload.AsInt() != defaults.Network.MaxConnectionsPerDownload.AsInt() {
+		t.Errorf("MaxConnectionsPerDownload = %d, want default %d",
+			settings.Network.MaxConnectionsPerDownload.AsInt(), defaults.Network.MaxConnectionsPerDownload.AsInt())
 	}
-	if settings.Performance.MaxTaskRetries != defaults.Performance.MaxTaskRetries {
+	if settings.Performance.MaxTaskRetries.AsInt() != defaults.Performance.MaxTaskRetries.AsInt() {
 		t.Errorf("MaxTaskRetries = %d, want default %d",
-			settings.Performance.MaxTaskRetries, defaults.Performance.MaxTaskRetries)
+			settings.Performance.MaxTaskRetries.AsInt(), defaults.Performance.MaxTaskRetries.AsInt())
 	}
 }

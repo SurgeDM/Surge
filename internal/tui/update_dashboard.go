@@ -101,7 +101,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.focusedInput = 0
 		m.inputs[0].Focus()
 		// Use default download dir from settings
-		defaultDir := m.Settings.General.DefaultDownloadDir
+		defaultDir := m.Settings.General.DefaultDownloadDir.AsString()
 		if defaultDir == "" {
 			defaultDir = "."
 		}
@@ -113,7 +113,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.inputs[1].Blur()
 
 		url := ""
-		if m.Settings.General.ClipboardMonitor {
+		if m.Settings.General.ClipboardMonitor.AsBool() {
 			url = clipboard.ReadURL()
 		}
 		m.inputs[0].SetValue(url)
@@ -203,7 +203,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Open file
 	if key.Matches(msg, m.keys.Dashboard.OpenFile) {
 		if d := m.GetSelectedDownload(); d != nil {
-			canOpen := d.done || (m.Settings.Network.SequentialDownload && !d.paused && d.Downloaded > 0)
+			canOpen := d.done || (m.Settings.Network.SequentialDownload.AsBool() && !d.paused && d.Downloaded > 0)
 			if canOpen && d.Destination != "" {
 				filePath := d.Destination
 				if !d.done {
@@ -263,7 +263,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.CategoryFilter) {
-		if !m.Settings.Categories.CategoryEnabled || len(m.Settings.Categories.Categories) == 0 {
+		if !m.Settings.Categories.CategoryEnabled.AsBool() || len(m.Settings.Categories.Categories) == 0 {
 			if m.categoryFilter != "" {
 				m.categoryFilter = ""
 				m.addLogEntry(LogStyleStarted.Render("📂 Filter: All"))

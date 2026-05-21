@@ -96,8 +96,8 @@ func NewLifecycleManager(addFunc AddDownloadFunc, addWithIDFunc AddDownloadWithI
 	}
 
 	probeCap := defaultMaxConcurrentProbes
-	if settings != nil && settings.Network.MaxConcurrentProbes > 0 {
-		probeCap = settings.Network.MaxConcurrentProbes
+	if settings != nil && settings.Network.MaxConcurrentProbes.AsInt() > 0 {
+		probeCap = settings.Network.MaxConcurrentProbes.AsInt()
 	}
 	sem := make(chan struct{}, probeCap)
 	for i := 0; i < probeCap; i++ {

@@ -16,7 +16,7 @@ func configureServiceUI(m *tui.RootModel) {
 	}
 	status, statusErr := s.Status()
 	if statusErr == nil {
-		m.Settings.General.AutoStart = (status == service.StatusRunning || status == service.StatusStopped)
+		m.Settings.General.AutoStart.Value = (status == service.StatusRunning || status == service.StatusStopped)
 	}
 
 	m.ToggleServiceFunc = func(enable bool) error {

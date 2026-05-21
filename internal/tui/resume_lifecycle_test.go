@@ -44,7 +44,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 
 	// 2. Initialize Model with DefaultDir = DirA
 	settings := config.DefaultSettings()
-	settings.General.DefaultDownloadDir = dirA
+	settings.General.DefaultDownloadDir.Value = dirA
 
 	m := RootModel{
 		Settings:  settings,
@@ -122,7 +122,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	}
 
 	// 6. Change Settings (Default Dir = DirB) and CWD
-	settings.General.DefaultDownloadDir = dirB
+	settings.General.DefaultDownloadDir.Value = dirB
 	if err := os.Chdir(dirB); err != nil {
 		t.Fatal(err)
 	}
@@ -150,7 +150,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	// Even if logic checks for empty/dot, filepath.Dir of absolute path is absolute path.
 	if outputPath == "" || outputPath == "." {
 		// This should NOT happen for absolute paths
-		outputPath = settings.General.DefaultDownloadDir
+		outputPath = settings.General.DefaultDownloadDir.AsString()
 	}
 
 	// Ensure outputPath resolves to DirA

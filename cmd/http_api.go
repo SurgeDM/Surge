@@ -291,7 +291,7 @@ func ensureOpenActionRequestAllowed(r *http.Request) error {
 	}
 
 	settings := getSettings()
-	if settings != nil && settings.General.AllowRemoteOpenActions {
+	if settings != nil && settings.General.AllowRemoteOpenActions.AsBool() {
 		return nil
 	}
 

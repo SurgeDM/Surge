@@ -7,7 +7,6 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"time"
 
@@ -15,246 +14,226 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// Settings holds all user-configurable application settings organized by category.
 type Settings struct {
-	General     GeneralSettings     `json:"general" ui_label:"General"`
-	Network     NetworkSettings     `json:"network" ui_label:"Network"`
-	Performance PerformanceSettings `json:"performance" ui_label:"Performance"`
-	Categories  CategorySettings    `json:"categories" ui_label:"Categories"`
-	Extension   ExtensionSettings   `json:"extension" ui_label:"Extension"`
+	General     GeneralSettings     `json:"general"`
+	Network     NetworkSettings     `json:"network"`
+	Performance PerformanceSettings `json:"performance"`
+	Categories  CategorySettings    `json:"categories"`
+	Extension   ExtensionSettings   `json:"extension"`
 
-	// StartupWarnings holds validation messages from the most recent LoadSettings call.
-	// It is ignored during JSON serialization.
+	// Schema-driven categories list populated on initialization
+	CategoriesList []*SettingsCategory `json:"-"`
+
 	StartupWarnings []string `json:"-"`
 }
 
-// GeneralSettings contains application behavior settings.
 type GeneralSettings struct {
-	DefaultDownloadDir           string `json:"default_download_dir" ui_label:"Default Download Dir" ui_desc:"Default directory for new downloads. Leave empty to use current directory."`
-	WarnOnDuplicate              bool   `json:"warn_on_duplicate" ui_label:"Warn on Duplicate" ui_desc:"Show warning when adding a download that already exists."`
-	DownloadCompleteNotification bool   `json:"download_complete_notification" ui_label:"Download Complete Notification" ui_desc:"Show system notification when a download finishes."`
-	AllowRemoteOpenActions       bool   `json:"allow_remote_open_actions" ui_label:"Allow Remote Open Actions" ui_desc:"Allow /open-file and /open-folder API calls from non-loopback clients. Disabled by default for security." ui_restart:"true"`
-	AutoResume                   bool   `json:"auto_resume" ui_label:"Auto Resume" ui_desc:"Automatically resume paused downloads on startup." ui_restart:"true"`
-	AutoStart                    bool   `json:"auto_start" ui_label:"Automatic Startup" ui_desc:"Start Surge automatically when the system boots (requires service installation)."`
-	SkipUpdateCheck              bool   `json:"skip_update_check" ui_label:"Skip Update Check" ui_desc:"Disable automatic check for new versions on startup." ui_restart:"true"`
-
-	ClipboardMonitor  bool   `json:"clipboard_monitor" ui_label:"Clipboard Monitor" ui_desc:"Watch clipboard for URLs and prompt to download them." ui_restart:"true"`
-	Theme             int    `json:"theme" ui_label:"App Theme" ui_desc:"UI Theme (System, Light, Dark)."`
-	ThemePath         string `json:"theme_path" ui_label:"Theme File" ui_desc:"Path to a custom .toml color scheme."`
-	LogRetentionCount int    `json:"log_retention_count" ui_label:"Log Retention Count" ui_desc:"Number of recent log files to keep." ui_restart:"true"`
-	LiveSpeedGraph    bool   `json:"live_speed_graph" ui_label:"Live Speed Graph" ui_desc:"Use live speed for graph instead of EMA smoothed speed."`
+	DefaultDownloadDir           *Setting `json:"default_download_dir"`
+	WarnOnDuplicate              *Setting `json:"warn_on_duplicate"`
+	DownloadCompleteNotification *Setting `json:"download_complete_notification"`
+	AllowRemoteOpenActions       *Setting `json:"allow_remote_open_actions"`
+	AutoResume                   *Setting `json:"auto_resume"`
+	AutoStart                    *Setting `json:"auto_start"`
+	SkipUpdateCheck              *Setting `json:"skip_update_check"`
+	ClipboardMonitor             *Setting `json:"clipboard_monitor"`
+	Theme                        *Setting `json:"theme"`
+	ThemePath                    *Setting `json:"theme_path"`
+	LogRetentionCount            *Setting `json:"log_retention_count"`
+	LiveSpeedGraph               *Setting `json:"live_speed_graph"`
 }
 
-const (
-	ThemeAdaptive = 0
-	ThemeLight    = 1
-	ThemeDark     = 2
-)
-
-// CategorySettings holds options specifically for categorizing files.
-type CategorySettings struct {
-	CategoryEnabled bool       `json:"category_enabled" ui_label:"Manage Categories" ui_desc:"Sort downloads into subfolders by file type. Press Enter to open Category Manager."`
-	Categories      []Category `json:"categories" ui_ignored:"true"`
-}
-
-// ExtensionSettings contains settings for the browser extension.
-type ExtensionSettings struct {
-	ExtensionPrompt     bool   `json:"extension_prompt" ui_label:"Extension Prompt" ui_desc:"Prompt for confirmation when adding downloads via browser extension."`
-	ChromeExtensionURL  string `json:"chrome_extension_url" ui_label:"Get Chrome Extension" ui_type:"link" ui_desc:"Open the Surge Chrome extension page."`
-	FirefoxExtensionURL string `json:"firefox_extension_url" ui_label:"Get Firefox Extension" ui_type:"link" ui_desc:"Open the Surge Firefox extension page."`
-	AuthToken           string `json:"-" ui_label:"Auth Token" ui_type:"auth_token" ui_desc:"Your authentication token. Use this to connect the Browser Extension to Surge."`
-	InstructionsURL     string `json:"instructions_url" ui_label:"Setup Instructions" ui_type:"link" ui_desc:"View detailed instructions on how to set up the Surge browser extension."`
-}
-
-// NetworkSettings contains network connection parameters.
 type NetworkSettings struct {
-	MaxConnectionsPerDownload int    `json:"max_connections_per_host" ui_label:"Max Connections/Download" ui_desc:"Maximum concurrent connections per download (1-64)."`
-	// Deprecated: use MaxConnectionsPerDownload.
-	// Kept as a non-serialized compatibility alias for older code paths and tests.
-	MaxConnectionsPerHost     int    `json:"-" ui_ignored:"true"`
-	MaxConcurrentDownloads    int    `json:"max_concurrent_downloads" ui_label:"Max Concurrent Downloads" ui_desc:"Maximum number of downloads running at once (1-10)." ui_restart:"true"`
-	MaxConcurrentProbes       int    `json:"max_concurrent_probes" ui_label:"Max Concurrent Probes" ui_desc:"Maximum number of simultaneous server probes when adding many downloads at once (1-10)." ui_restart:"true"`
-	UserAgent                 string `json:"user_agent" ui_label:"User Agent" ui_desc:"Custom User-Agent string for HTTP requests. Leave empty for default."`
-	ProxyURL                  string `json:"proxy_url" ui_label:"Proxy URL" ui_desc:"HTTP/HTTPS proxy URL (e.g. http://127.0.0.1:1700). Leave empty to use system default."`
-	CustomDNS                 string `json:"custom_dns" ui_label:"Custom DNS Server" ui_desc:"Set custom DNS (e.g., 1.1.1.1:53, 94.140.14.14:53). Leave empty for system."`
-	SequentialDownload        bool   `json:"sequential_download" ui_label:"Sequential Download" ui_desc:"Download pieces in order (Streaming Mode). May be slower."`
-	MinChunkSize              int64  `json:"min_chunk_size" ui_label:"Min Chunk Size" ui_desc:"Minimum download chunk size in MB (e.g., 2)."`
-	WorkerBufferSize          int    `json:"worker_buffer_size" ui_label:"Worker Buffer Size" ui_desc:"I/O buffer size per worker in KB (e.g., 512)."`
-	DialHedgeCount            int    `json:"dial_hedge_count" ui_label:"Dial Hedge Count" ui_desc:"Number of extra connections to dial pre-emptively to avoid slow connects (0-16)."`
+	MaxConnectionsPerDownload *Setting `json:"max_connections_per_host"`
+	// Kept for backward compatibility
+	MaxConnectionsPerHost  int      `json:"-"`
+	MaxConcurrentDownloads *Setting `json:"max_concurrent_downloads"`
+	MaxConcurrentProbes    *Setting `json:"max_concurrent_probes"`
+	UserAgent              *Setting `json:"user_agent"`
+	ProxyURL               *Setting `json:"proxy_url"`
+	CustomDNS              *Setting `json:"custom_dns"`
+	SequentialDownload     *Setting `json:"sequential_download"`
+	MinChunkSize           *Setting `json:"min_chunk_size"`
+	WorkerBufferSize       *Setting `json:"worker_buffer_size"`
+	DialHedgeCount         *Setting `json:"dial_hedge_count"`
 }
 
-// PerformanceSettings contains performance tuning parameters.
 type PerformanceSettings struct {
-	MaxTaskRetries        int           `json:"max_task_retries" ui_label:"Max Task Retries" ui_desc:"Number of times to retry a failed chunk before giving up."`
-	SlowWorkerThreshold   float64       `json:"slow_worker_threshold" ui_label:"Slow Worker Threshold" ui_desc:"Restart workers slower than this fraction of mean speed (0.0-1.0, 0 disables relative slow-worker checks)."`
-	SlowWorkerGracePeriod time.Duration `json:"slow_worker_grace_period" ui_label:"Slow Worker Grace" ui_desc:"Grace period before checking worker speed (e.g., 5s, 0 checks immediately)."`
-	StallTimeout          time.Duration `json:"stall_timeout" ui_label:"Stall Timeout" ui_desc:"Restart workers with no data for this duration (e.g., 5s, 0 disables stall detection)."`
-	SpeedEmaAlpha         float64       `json:"speed_ema_alpha" ui_label:"Speed EMA Alpha" ui_desc:"Exponential moving average smoothing factor (0.0-1.0, 0 disables smoothing)."`
+	MaxTaskRetries        *Setting `json:"max_task_retries"`
+	SlowWorkerThreshold   *Setting `json:"slow_worker_threshold"`
+	SlowWorkerGracePeriod *Setting `json:"slow_worker_grace_period"`
+	StallTimeout          *Setting `json:"stall_timeout"`
+	SpeedEmaAlpha         *Setting `json:"speed_ema_alpha"`
 }
 
-// SettingMeta provides metadata for a single setting (for UI rendering).
-type SettingMeta struct {
-	Key             string // JSON key name
-	Label           string // Human-readable label
-	Description     string // Help text displayed in right pane
-	Type            string // "string", "int", "int64", "bool", "duration", "float64", "auth_token", "link"
-	RequiresRestart bool   // Whether changing this setting requires an application restart
+type CategorySettings struct {
+	CategoryEnabled *Setting   `json:"category_enabled"`
+	Categories      []Category `json:"categories"`
 }
 
-// GetSettingsMetadata returns metadata for all settings organized by category.
-func GetSettingsMetadata() map[string][]SettingMeta {
-	meta := make(map[string][]SettingMeta)
-	t := reflect.TypeOf(Settings{})
+type ExtensionSettings struct {
+	ExtensionPrompt     *Setting `json:"extension_prompt"`
+	ChromeExtensionURL  *Setting `json:"chrome_extension_url"`
+	FirefoxExtensionURL *Setting `json:"firefox_extension_url"`
+	AuthToken           *Setting `json:"auth_token"`
+	InstructionsURL     *Setting `json:"instructions_url"`
+}
 
-	for i := 0; i < t.NumField(); i++ {
-		catField := t.Field(i)
-		catLabel := catField.Tag.Get("ui_label")
-		if catLabel == "" {
-			catLabel = catField.Name
-		}
-
-		var catMetas []SettingMeta
-		catType := catField.Type
-		if catType.Kind() == reflect.Struct {
-			for j := 0; j < catType.NumField(); j++ {
-				settingField := catType.Field(j)
-				if settingField.Tag.Get("ui_ignored") == "true" {
-					continue
-				}
-
-				key := settingField.Tag.Get("json")
-				if key == "" {
-					key = settingField.Name
-				}
-
-				label := settingField.Tag.Get("ui_label")
-				if label == "" {
-					label = settingField.Name
-				}
-
-				desc := settingField.Tag.Get("ui_desc")
-
-				// Determine implicit Type
-				typStr := settingField.Tag.Get("ui_type")
-				if typStr == "" {
-					typStr = "string"
-					switch settingField.Type.Kind() {
-					case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
-						typStr = "int"
-					case reflect.Int64:
-						if settingField.Type.String() == "time.Duration" {
-							typStr = "duration"
-						} else {
-							typStr = "int64"
-						}
-					case reflect.Bool:
-						typStr = "bool"
-					case reflect.Float32, reflect.Float64:
-						typStr = "float64"
-					}
-				}
-
-				catMetas = append(catMetas, SettingMeta{
-					Key:             key,
-					Label:           label,
-					Description:     desc,
-					Type:            typStr,
-					RequiresRestart: settingField.Tag.Get("ui_restart") == "true",
-				})
-			}
-		}
-		// Only output categories that have editable GUI parameters
-		if len(catMetas) > 0 {
-			meta[catLabel] = catMetas
-		}
+// UnmarshalJSON updates only the Value field of the initialized pointer.
+func (s *Setting) UnmarshalJSON(data []byte) error {
+	var val any
+	if err := json.Unmarshal(data, &val); err != nil {
+		return err
 	}
-	return meta
+	s.Value = val
+	return nil
 }
 
-// CategoryOrder returns the order of categories for UI tabs.
-func CategoryOrder() []string {
-	var order []string
-	t := reflect.TypeOf(Settings{})
-	for i := 0; i < t.NumField(); i++ {
-		field := t.Field(i)
-		label := field.Tag.Get("ui_label")
-		if label == "" {
-			label = field.Name
-		}
+// MarshalJSON serializes only the primitive value of this setting.
+func (s *Setting) MarshalJSON() ([]byte, error) {
+	return json.Marshal(s.Value)
+}
 
-		// Ensure category has UI elements before creating a tab!
-		catType := field.Type
-		hasUIElements := false
-		if catType.Kind() == reflect.Struct {
-			for j := 0; j < catType.NumField(); j++ {
-				if catType.Field(j).Tag.Get("ui_ignored") != "true" {
-					hasUIElements = true
-					break
-				}
-			}
-		}
-
-		// Only tabulate categories with active inputs
-		if hasUIElements {
-			order = append(order, label)
-		}
+func (s *Setting) AsBool() bool {
+	if s == nil {
+		return false
 	}
-	return order
+	if b, ok := s.Value.(bool); ok {
+		return b
+	}
+	return false
 }
 
-const (
-	KB = 1 << 10
-	MB = 1 << 20
-)
+func (s *Setting) AsInt() int {
+	if s == nil {
+		return 0
+	}
+	switch v := s.Value.(type) {
+	case int:
+		return v
+	case float64:
+		return int(v)
+	}
+	return 0
+}
 
-// DefaultSettings returns a new Settings instance with sensible defaults.
-func DefaultSettings() *Settings {
+func (s *Setting) AsInt64() int64 {
+	if s == nil {
+		return 0
+	}
+	switch v := s.Value.(type) {
+	case int64:
+		return v
+	case int:
+		return int64(v)
+	case float64:
+		return int64(v)
+	}
+	return 0
+}
 
-	defaultDir := GetDownloadsDir()
+func (s *Setting) AsFloat64() float64 {
+	if s == nil {
+		return 0.0
+	}
+	switch v := s.Value.(type) {
+	case float64:
+		return v
+	case float32:
+		return float64(v)
+	case int:
+		return float64(v)
+	}
+	return 0.0
+}
 
-	return &Settings{
-		General: GeneralSettings{
-			DefaultDownloadDir:           defaultDir,
-			WarnOnDuplicate:              true,
-			DownloadCompleteNotification: true,
-			AllowRemoteOpenActions:       false,
-			AutoResume:                   false,
+func (s *Setting) AsString() string {
+	if s == nil {
+		return ""
+	}
+	if str, ok := s.Value.(string); ok {
+		return str
+	}
+	return ""
+}
 
-			ClipboardMonitor:  true,
-			Theme:             ThemeAdaptive,
-			ThemePath:         "",
-			LogRetentionCount: 5,
-			LiveSpeedGraph:    false,
+func (s *Setting) AsDuration() time.Duration {
+	if s == nil {
+		return 0
+	}
+	switch v := s.Value.(type) {
+	case time.Duration:
+		return v
+	case string:
+		if d, err := time.ParseDuration(v); err == nil {
+			return d
+		}
+	case float64:
+		return time.Duration(v)
+	case int64:
+		return time.Duration(v)
+	}
+	return 0
+}
+
+func (s *Settings) initializeCategoriesList() {
+	s.CategoriesList = []*SettingsCategory{
+		{
+			Name: "General",
+			Settings: []*Setting{
+				s.General.DefaultDownloadDir,
+				s.General.WarnOnDuplicate,
+				s.General.DownloadCompleteNotification,
+				s.General.AllowRemoteOpenActions,
+				s.General.AutoResume,
+				s.General.AutoStart,
+				s.General.SkipUpdateCheck,
+				s.General.ClipboardMonitor,
+				s.General.Theme,
+				s.General.ThemePath,
+				s.General.LogRetentionCount,
+				s.General.LiveSpeedGraph,
+			},
 		},
-		Network: NetworkSettings{
-			MaxConnectionsPerDownload: 32,
-			MaxConcurrentDownloads:    3,
-			MaxConcurrentProbes:       3,
-			UserAgent:                 "", // Empty means use default UA
-			ProxyURL:                  "",
-			CustomDNS:                 "",
-			SequentialDownload:        false,
-			MinChunkSize:              2 * MB,
-			WorkerBufferSize:          512 * KB,
-			DialHedgeCount:            4,
+		{
+			Name: "Network",
+			Settings: []*Setting{
+				s.Network.MaxConnectionsPerDownload,
+				s.Network.MaxConcurrentDownloads,
+				s.Network.MaxConcurrentProbes,
+				s.Network.UserAgent,
+				s.Network.ProxyURL,
+				s.Network.CustomDNS,
+				s.Network.SequentialDownload,
+				s.Network.MinChunkSize,
+				s.Network.WorkerBufferSize,
+				s.Network.DialHedgeCount,
+			},
 		},
-		Performance: PerformanceSettings{
-			MaxTaskRetries:        3,
-			SlowWorkerThreshold:   0.3,
-			SlowWorkerGracePeriod: 5 * time.Second,
-			StallTimeout:          3 * time.Second,
-			SpeedEmaAlpha:         0.3,
+		{
+			Name: "Performance",
+			Settings: []*Setting{
+				s.Performance.MaxTaskRetries,
+				s.Performance.SlowWorkerThreshold,
+				s.Performance.SlowWorkerGracePeriod,
+				s.Performance.StallTimeout,
+				s.Performance.SpeedEmaAlpha,
+			},
 		},
-		Categories: CategorySettings{
-			CategoryEnabled: false,
-			Categories:      DefaultCategories(),
+		{
+			Name: "Categories",
+			Settings: []*Setting{
+				s.Categories.CategoryEnabled,
+			},
 		},
-		Extension: ExtensionSettings{
-			ExtensionPrompt:     true,
-			ChromeExtensionURL:  "https://github.com/SurgeDM/Surge/releases/latest",
-			FirefoxExtensionURL: "https://addons.mozilla.org/en-US/firefox/addon/surge/",
-			AuthToken:           "", // Handled specially in TUI
-			InstructionsURL:     "https://github.com/SurgeDM/Surge#browser-extension",
+		{
+			Name: "Extension",
+			Settings: []*Setting{
+				s.Extension.ExtensionPrompt,
+				s.Extension.ChromeExtensionURL,
+				s.Extension.FirefoxExtensionURL,
+				s.Extension.AuthToken,
+				s.Extension.InstructionsURL,
+			},
 		},
 	}
 }
@@ -279,7 +258,7 @@ func LoadSettings() (*Settings, error) {
 
 	settings := DefaultSettings() // Start with defaults to fill any missing fields
 	if err := json.Unmarshal(data, settings); err != nil {
-		utils.Debug("Warning: corrupt settings file %s: %v \u2014 using defaults", path, err)
+		utils.Debug("Warning: corrupt settings file %s: %v — using defaults", path, err)
 		defaults := DefaultSettings()
 		defaults.StartupWarnings = append(defaults.StartupWarnings,
 			fmt.Sprintf("Config: settings file is corrupt (%v) — all settings reset to defaults", err))
@@ -292,103 +271,608 @@ func LoadSettings() (*Settings, error) {
 	return settings, nil
 }
 
-func (s *Settings) Validate() {
+// SettingMeta provides metadata for a single setting (for UI rendering).
+type SettingMeta struct {
+	Key             string // JSON key name
+	Label           string // Human-readable label
+	Description     string // Help text displayed in right pane
+	Type            string // "string", "int", "int64", "bool", "duration", "float64", "auth_token", "link"
+	RequiresRestart bool   // Whether changing this setting requires an application restart
+}
+
+// GetSettingsMetadata returns metadata for all settings organized by category.
+func GetSettingsMetadata() map[string][]SettingMeta {
+	s := DefaultSettings()
+	meta := make(map[string][]SettingMeta)
+	for _, cat := range s.CategoriesList {
+		var list []SettingMeta
+		for _, set := range cat.Settings {
+			list = append(list, SettingMeta{
+				Key:             set.Key,
+				Label:           set.Label,
+				Description:     set.Description,
+				Type:            set.Type,
+				RequiresRestart: set.NeedsRestart,
+			})
+		}
+		meta[cat.Name] = list
+	}
+	return meta
+}
+
+// CategoryOrder returns the order of categories for UI tabs.
+func CategoryOrder() []string {
+	return []string{"General", "Network", "Performance", "Categories", "Extension"}
+}
+
+const (
+	KB = 1 << 10
+	MB = 1 << 20
+)
+
+const (
+	ThemeAdaptive = 0
+	ThemeLight    = 1
+	ThemeDark     = 2
+)
+
+// DefaultSettings returns a new Settings instance with sensible defaults.
+func DefaultSettings() *Settings {
+	defaultDir := GetDownloadsDir()
+
+	s := &Settings{
+		General: GeneralSettings{
+			DefaultDownloadDir: &Setting{
+				Key:          "default_download_dir",
+				Label:        "Default Download Dir",
+				Description:  "Default directory for new downloads. Leave empty to use current directory.",
+				Type:         "string",
+				DefaultValue: defaultDir,
+				Value:        defaultDir,
+				ValidateFunc: func(val any) error {
+					sVal, ok := val.(string)
+					if !ok {
+						return fmt.Errorf("must be a string")
+					}
+					trimmed := strings.TrimSpace(sVal)
+					if trimmed != "" {
+						if info, err := os.Stat(trimmed); err != nil {
+							return fmt.Errorf("directory %q is inaccessible", trimmed)
+						} else if !info.IsDir() {
+							return fmt.Errorf("directory %q is not a folder", trimmed)
+						}
+					}
+					return nil
+				},
+			},
+			WarnOnDuplicate: &Setting{
+				Key:          "warn_on_duplicate",
+				Label:        "Warn on Duplicate",
+				Description:  "Show warning when adding a download that already exists.",
+				Type:         "bool",
+				DefaultValue: true,
+				Value:        true,
+			},
+			DownloadCompleteNotification: &Setting{
+				Key:          "download_complete_notification",
+				Label:        "Download Complete Notification",
+				Description:  "Show system notification when a download finishes.",
+				Type:         "bool",
+				DefaultValue: true,
+				Value:        true,
+			},
+			AllowRemoteOpenActions: &Setting{
+				Key:          "allow_remote_open_actions",
+				Label:        "Allow Remote Open Actions",
+				Description:  "Allow /open-file and /open-folder API calls from non-loopback clients. Disabled by default for security.",
+				Type:         "bool",
+				NeedsRestart: true,
+				DefaultValue: false,
+				Value:        false,
+			},
+			AutoResume: &Setting{
+				Key:          "auto_resume",
+				Label:        "Auto Resume",
+				Description:  "Automatically resume paused downloads on startup.",
+				Type:         "bool",
+				NeedsRestart: true,
+				DefaultValue: false,
+				Value:        false,
+			},
+			AutoStart: &Setting{
+				Key:          "auto_start",
+				Label:        "Automatic Startup",
+				Description:  "Start Surge automatically when the system boots (requires service installation).",
+				Type:         "bool",
+				DefaultValue: false,
+				Value:        false,
+			},
+			SkipUpdateCheck: &Setting{
+				Key:          "skip_update_check",
+				Label:        "Skip Update Check",
+				Description:  "Disable automatic check for new versions on startup.",
+				Type:         "bool",
+				NeedsRestart: true,
+				DefaultValue: false,
+				Value:        false,
+			},
+			ClipboardMonitor: &Setting{
+				Key:          "clipboard_monitor",
+				Label:        "Clipboard Monitor",
+				Description:  "Watch clipboard for URLs and prompt to download them.",
+				Type:         "bool",
+				NeedsRestart: true,
+				DefaultValue: true,
+				Value:        true,
+			},
+			Theme: &Setting{
+				Key:          "theme",
+				Label:        "App Theme",
+				Description:  "UI Theme (System, Light, Dark).",
+				Type:         "int",
+				DefaultValue: ThemeAdaptive,
+				Value:        ThemeAdaptive,
+				ValidateFunc: func(val any) error {
+					v, ok := val.(int)
+					if !ok {
+						if f, ok := val.(float64); ok {
+							v = int(f)
+						} else {
+							return fmt.Errorf("invalid type")
+						}
+					}
+					if v < 0 || v > 2 {
+						return fmt.Errorf("theme must be 0, 1, or 2")
+					}
+					return nil
+				},
+			},
+			ThemePath: &Setting{
+				Key:          "theme_path",
+				Label:        "Theme File",
+				Description:  "Path to a custom .toml color scheme.",
+				Type:         "string",
+				DefaultValue: "",
+				Value:        "",
+			},
+			LogRetentionCount: &Setting{
+				Key:          "log_retention_count",
+				Label:        "Log Retention Count",
+				Description:  "Number of recent log files to keep.",
+				Type:         "int",
+				NeedsRestart: true,
+				DefaultValue: 5,
+				Value:        5,
+				ValidateFunc: func(val any) error {
+					v, ok := val.(int)
+					if !ok {
+						if f, ok := val.(float64); ok {
+							v = int(f)
+						} else {
+							return fmt.Errorf("invalid type")
+						}
+					}
+					if v < 1 || v > 100 {
+						return fmt.Errorf("must be between 1 and 100")
+					}
+					return nil
+				},
+			},
+			LiveSpeedGraph: &Setting{
+				Key:          "live_speed_graph",
+				Label:        "Live Speed Graph",
+				Description:  "Use live speed for graph instead of EMA smoothed speed.",
+				Type:         "bool",
+				DefaultValue: false,
+				Value:        false,
+			},
+		},
+		Network: NetworkSettings{
+			MaxConnectionsPerDownload: &Setting{
+				Key:          "max_connections_per_host",
+				Label:        "Max Connections/Download",
+				Description:  "Maximum concurrent connections per download (1-64).",
+				Type:         "int",
+				DefaultValue: 32,
+				Value:        32,
+				ValidateFunc: func(val any) error {
+					v, ok := val.(int)
+					if !ok {
+						if f, ok := val.(float64); ok {
+							v = int(f)
+						} else {
+							return fmt.Errorf("invalid type")
+						}
+					}
+					if v < 1 || v > 64 {
+						return fmt.Errorf("must be between 1 and 64")
+					}
+					return nil
+				},
+			},
+			MaxConcurrentDownloads: &Setting{
+				Key:          "max_concurrent_downloads",
+				Label:        "Max Concurrent Downloads",
+				Description:  "Maximum number of downloads running at once (1-10).",
+				Type:         "int",
+				NeedsRestart: true,
+				DefaultValue: 3,
+				Value:        3,
+				ValidateFunc: func(val any) error {
+					v, ok := val.(int)
+					if !ok {
+						if f, ok := val.(float64); ok {
+							v = int(f)
+						} else {
+							return fmt.Errorf("invalid type")
+						}
+					}
+					if v < 1 || v > 10 {
+						return fmt.Errorf("must be between 1 and 10")
+					}
+					return nil
+				},
+			},
+			MaxConcurrentProbes: &Setting{
+				Key:          "max_concurrent_probes",
+				Label:        "Max Concurrent Probes",
+				Description:  "Maximum number of simultaneous server probes when adding many downloads at once (1-10).",
+				Type:         "int",
+				NeedsRestart: true,
+				DefaultValue: 3,
+				Value:        3,
+				ValidateFunc: func(val any) error {
+					v, ok := val.(int)
+					if !ok {
+						if f, ok := val.(float64); ok {
+							v = int(f)
+						} else {
+							return fmt.Errorf("invalid type")
+						}
+					}
+					if v < 1 || v > 10 {
+						return fmt.Errorf("must be between 1 and 10")
+					}
+					return nil
+				},
+			},
+			UserAgent: &Setting{
+				Key:          "user_agent",
+				Label:        "User Agent",
+				Description:  "Custom User-Agent string for HTTP requests. Leave empty for default.",
+				Type:         "string",
+				DefaultValue: "",
+				Value:        "",
+			},
+			ProxyURL: &Setting{
+				Key:          "proxy_url",
+				Label:        "Proxy URL",
+				Description:  "HTTP/HTTPS proxy URL (e.g. http://127.0.0.1:1700). Leave empty to use system default.",
+				Type:         "string",
+				DefaultValue: "",
+				Value:        "",
+				ValidateFunc: func(val any) error {
+					sVal, ok := val.(string)
+					if !ok {
+						return fmt.Errorf("must be a string")
+					}
+					if sVal != "" {
+						u, err := url.Parse(sVal)
+						if err != nil || u.Scheme == "" || u.Host == "" {
+							return fmt.Errorf("invalid proxy URL")
+						}
+					}
+					return nil
+				},
+			},
+			CustomDNS: &Setting{
+				Key:          "custom_dns",
+				Label:        "Custom DNS Server",
+				Description:  "Set custom DNS (e.g., 1.1.1.1:53, 94.140.14.14:53). Leave empty for system.",
+				Type:         "string",
+				DefaultValue: "",
+				Value:        "",
+				ValidateFunc: func(val any) error {
+					sVal, ok := val.(string)
+					if !ok {
+						return fmt.Errorf("must be a string")
+					}
+					return ValidateDNSList(sVal)
+				},
+			},
+			SequentialDownload: &Setting{
+				Key:          "sequential_download",
+				Label:        "Sequential Download",
+				Description:  "Download pieces in order (Streaming Mode). May be slower.",
+				Type:         "bool",
+				DefaultValue: false,
+				Value:        false,
+			},
+			MinChunkSize: &Setting{
+				Key:          "min_chunk_size",
+				Label:        "Min Chunk Size",
+				Description:  "Minimum download chunk size in MB (e.g., 2).",
+				Type:         "int64",
+				DefaultValue: int64(2 * MB),
+				Value:        int64(2 * MB),
+				ValidateFunc: func(val any) error {
+					var v int64
+					switch actual := val.(type) {
+					case int64:
+						v = actual
+					case int:
+						v = int64(actual)
+					case float64:
+						v = int64(actual)
+					default:
+						return fmt.Errorf("invalid type")
+					}
+					if v < 100*KB {
+						return fmt.Errorf("min chunk size must be at least 100KB")
+					}
+					return nil
+				},
+			},
+			WorkerBufferSize: &Setting{
+				Key:          "worker_buffer_size",
+				Label:        "Worker Buffer Size",
+				Description:  "I/O buffer size per worker in KB (e.g., 512).",
+				Type:         "int",
+				DefaultValue: int(512 * KB),
+				Value:        int(512 * KB),
+				ValidateFunc: func(val any) error {
+					v, ok := val.(int)
+					if !ok {
+						if f, ok := val.(float64); ok {
+							v = int(f)
+						} else {
+							return fmt.Errorf("invalid type")
+						}
+					}
+					if v < 1*KB {
+						return fmt.Errorf("worker buffer size must be at least 1KB")
+					}
+					return nil
+				},
+			},
+			DialHedgeCount: &Setting{
+				Key:          "dial_hedge_count",
+				Label:        "Dial Hedge Count",
+				Description:  "Number of extra connections to dial pre-emptively to avoid slow connects (0-16).",
+				Type:         "int",
+				DefaultValue: 4,
+				Value:        4,
+				ValidateFunc: func(val any) error {
+					v, ok := val.(int)
+					if !ok {
+						if f, ok := val.(float64); ok {
+							v = int(f)
+						} else {
+							return fmt.Errorf("invalid type")
+						}
+					}
+					if v < 0 || v > 16 {
+						return fmt.Errorf("must be between 0 and 16")
+					}
+					return nil
+				},
+			},
+		},
+		Performance: PerformanceSettings{
+			MaxTaskRetries: &Setting{
+				Key:          "max_task_retries",
+				Label:        "Max Task Retries",
+				Description:  "Number of times to retry a failed chunk before giving up.",
+				Type:         "int",
+				DefaultValue: 3,
+				Value:        3,
+				ValidateFunc: func(val any) error {
+					v, ok := val.(int)
+					if !ok {
+						if f, ok := val.(float64); ok {
+							v = int(f)
+						} else {
+							return fmt.Errorf("invalid type")
+						}
+					}
+					if v < 0 || v > 10 {
+						return fmt.Errorf("must be between 0 and 10")
+					}
+					return nil
+				},
+			},
+			SlowWorkerThreshold: &Setting{
+				Key:          "slow_worker_threshold",
+				Label:        "Slow Worker Threshold",
+				Description:  "Restart workers slower than this fraction of mean speed (0.0-1.0, 0 disables relative slow-worker checks).",
+				Type:         "float64",
+				DefaultValue: 0.3,
+				Value:        0.3,
+				ValidateFunc: func(val any) error {
+					var v float64
+					switch actual := val.(type) {
+					case float64:
+						v = actual
+					case int:
+						v = float64(actual)
+					default:
+						return fmt.Errorf("invalid type")
+					}
+					if v < 0.0 || v > 1.0 {
+						return fmt.Errorf("must be between 0.0 and 1.0")
+					}
+					return nil
+				},
+			},
+			SlowWorkerGracePeriod: &Setting{
+				Key:          "slow_worker_grace_period",
+				Label:        "Slow Worker Grace",
+				Description:  "Grace period before checking worker speed (e.g., 5s, 0 checks immediately).",
+				Type:         "duration",
+				DefaultValue: 5 * time.Second,
+				Value:        5 * time.Second,
+				ValidateFunc: func(val any) error {
+					var v int64
+					switch actual := val.(type) {
+					case time.Duration:
+						v = int64(actual)
+					case float64:
+						v = int64(actual)
+					case int64:
+						v = actual
+					default:
+						return fmt.Errorf("invalid type")
+					}
+					if v < 0 {
+						return fmt.Errorf("must be non-negative")
+					}
+					return nil
+				},
+			},
+			StallTimeout: &Setting{
+				Key:          "stall_timeout",
+				Label:        "Stall Timeout",
+				Description:  "Restart workers with no data for this duration (e.g., 5s, 0 disables stall detection).",
+				Type:         "duration",
+				DefaultValue: 3 * time.Second,
+				Value:        3 * time.Second,
+				ValidateFunc: func(val any) error {
+					var v int64
+					switch actual := val.(type) {
+					case time.Duration:
+						v = int64(actual)
+					case float64:
+						v = int64(actual)
+					case int64:
+						v = actual
+					default:
+						return fmt.Errorf("invalid type")
+					}
+					if v < 0 {
+						return fmt.Errorf("must be non-negative")
+					}
+					return nil
+				},
+			},
+			SpeedEmaAlpha: &Setting{
+				Key:          "speed_ema_alpha",
+				Label:        "Speed EMA Alpha",
+				Description:  "Exponential moving average smoothing factor (0.0-1.0, 0 disables smoothing).",
+				Type:         "float64",
+				DefaultValue: 0.3,
+				Value:        0.3,
+				ValidateFunc: func(val any) error {
+					var v float64
+					switch actual := val.(type) {
+					case float64:
+						v = actual
+					case int:
+						v = float64(actual)
+					default:
+						return fmt.Errorf("invalid type")
+					}
+					if v < 0.0 || v > 1.0 {
+						return fmt.Errorf("must be between 0.0 and 1.0")
+					}
+					return nil
+				},
+			},
+		},
+		Categories: CategorySettings{
+			CategoryEnabled: &Setting{
+				Key:          "category_enabled",
+				Label:        "Manage Categories",
+				Description:  "Sort downloads into subfolders by file type. Press Enter to open Category Manager.",
+				Type:         "bool",
+				DefaultValue: false,
+				Value:        false,
+			},
+			Categories: DefaultCategories(),
+		},
+		Extension: ExtensionSettings{
+			ExtensionPrompt: &Setting{
+				Key:          "extension_prompt",
+				Label:        "Extension Prompt",
+				Description:  "Prompt for confirmation when adding downloads via browser extension.",
+				Type:         "bool",
+				DefaultValue: true,
+				Value:        true,
+			},
+			ChromeExtensionURL: &Setting{
+				Key:          "chrome_extension_url",
+				Label:        "Get Chrome Extension",
+				Description:  "Open the Surge Chrome extension page.",
+				Type:         "link",
+				DefaultValue: "https://github.com/SurgeDM/Surge/releases/latest",
+				Value:        "https://github.com/SurgeDM/Surge/releases/latest",
+			},
+			FirefoxExtensionURL: &Setting{
+				Key:          "firefox_extension_url",
+				Label:        "Get Firefox Extension",
+				Description:  "Open the Surge Firefox extension page.",
+				Type:         "link",
+				DefaultValue: "https://addons.mozilla.org/en-US/firefox/addon/surge/",
+				Value:        "https://addons.mozilla.org/en-US/firefox/addon/surge/",
+			},
+			AuthToken: &Setting{
+				Key:          "auth_token",
+				Label:        "Auth Token",
+				Description:  "Your authentication token. Use this to connect the Browser Extension to Surge.",
+				Type:         "auth_token",
+				DefaultValue: "",
+				Value:        "",
+			},
+			InstructionsURL: &Setting{
+				Key:          "instructions_url",
+				Label:        "Setup Instructions",
+				Description:  "View detailed instructions on how to set up the Surge browser extension.",
+				Type:         "link",
+				DefaultValue: "https://github.com/SurgeDM/Surge#browser-extension",
+				Value:        "https://github.com/SurgeDM/Surge#browser-extension",
+			},
+		},
+	}
+
+	s.initializeCategoriesList()
+	return s
+}
+
+func (s *Settings) Validate() []string {
 	s.StartupWarnings = nil
-	s.StartupWarnings = append(s.StartupWarnings, s.General.Validate()...)
-	s.StartupWarnings = append(s.StartupWarnings, s.Network.Validate()...)
-	s.StartupWarnings = append(s.StartupWarnings, s.Performance.Validate()...)
-	s.StartupWarnings = append(s.StartupWarnings, s.Categories.Validate(s.General.DefaultDownloadDir)...)
-	s.StartupWarnings = append(s.StartupWarnings, s.Extension.Validate()...)
-}
 
-// Validate checks GeneralSettings for invalid paths or out-of-bounds values.
-func (gs *GeneralSettings) Validate() []string {
-	var warnings []string
-	defaults := DefaultSettings().General
-
-	if gs.Theme < 0 || gs.Theme > 2 {
-		gs.Theme = defaults.Theme
-		warnings = append(warnings, "Invalid theme reset to default")
-	}
-	if gs.LogRetentionCount < 1 || gs.LogRetentionCount > 100 {
-		gs.LogRetentionCount = defaults.LogRetentionCount
-		warnings = append(warnings, fmt.Sprintf("Log retention count reset to default (%d)", defaults.LogRetentionCount))
-	}
-
-	// Validate DefaultDownloadDir
-	trimmed := strings.TrimSpace(gs.DefaultDownloadDir)
-	if trimmed != "" {
-		if info, err := os.Stat(trimmed); err != nil {
-			// If path is invalid or inaccessible, fallback to default system downloads dir
-			gs.DefaultDownloadDir = defaults.DefaultDownloadDir
-			warnings = append(warnings, fmt.Sprintf("Download directory %q is inaccessible; reset to default", trimmed))
-		} else if !info.IsDir() {
-			gs.DefaultDownloadDir = defaults.DefaultDownloadDir
-			warnings = append(warnings, fmt.Sprintf("Download directory %q is not a folder; reset to default", trimmed))
-		}
-	}
-	return warnings
-}
-
-// Validate checks NetworkSettings for valid IPs, URLs, and numeric bounds.
-func (ns *NetworkSettings) Validate() []string {
-	var warnings []string
-	defaults := DefaultSettings().Network
-	aliasValue := ns.MaxConnectionsPerHost
-
-	switch {
-	case ns.MaxConnectionsPerDownload <= 0 && aliasValue > 0:
-		ns.MaxConnectionsPerDownload = aliasValue
-	case ns.MaxConnectionsPerDownload > 0:
-		ns.MaxConnectionsPerHost = ns.MaxConnectionsPerDownload
-	}
-
-	if ns.MaxConnectionsPerDownload < 1 || ns.MaxConnectionsPerDownload > 64 {
-		ns.MaxConnectionsPerDownload = defaults.MaxConnectionsPerDownload
-		warnings = append(warnings, fmt.Sprintf("Max connections/download reset to default (%d)", defaults.MaxConnectionsPerDownload))
-	}
-	if aliasValue != 0 && (aliasValue < 1 || aliasValue > 64) {
-		warnings = append(warnings, fmt.Sprintf("Max connections/download reset to default (%d)", defaults.MaxConnectionsPerDownload))
-	}
-	ns.MaxConnectionsPerHost = ns.MaxConnectionsPerDownload
-	if ns.MaxConcurrentDownloads < 1 || ns.MaxConcurrentDownloads > 10 {
-		ns.MaxConcurrentDownloads = defaults.MaxConcurrentDownloads
-		warnings = append(warnings, fmt.Sprintf("Max concurrent downloads reset to default (%d)", defaults.MaxConcurrentDownloads))
-	}
-	if ns.MaxConcurrentProbes < 1 || ns.MaxConcurrentProbes > 10 {
-		ns.MaxConcurrentProbes = defaults.MaxConcurrentProbes
-		warnings = append(warnings, fmt.Sprintf("Max concurrent probes reset to default (%d)", defaults.MaxConcurrentProbes))
-	}
-	if ns.MinChunkSize < 100*KB {
-		ns.MinChunkSize = defaults.MinChunkSize
-		warnings = append(warnings, "Min chunk size reset to default")
-	}
-	if ns.WorkerBufferSize < 1*KB {
-		ns.WorkerBufferSize = defaults.WorkerBufferSize
-		warnings = append(warnings, "Worker buffer size reset to default")
-	}
-	if ns.DialHedgeCount < 0 || ns.DialHedgeCount > 16 {
-		ns.DialHedgeCount = defaults.DialHedgeCount
-		warnings = append(warnings, "Dial hedge count reset to default")
-	}
-
-	// Validate ProxyURL if set
-	if ns.ProxyURL != "" {
-		u, err := url.Parse(ns.ProxyURL)
-		if err != nil || u.Scheme == "" || u.Host == "" {
-			ns.ProxyURL = defaults.ProxyURL
-			warnings = append(warnings, "Invalid proxy URL reset to default")
+	// Loop over all settings in all categories
+	for _, cat := range s.CategoriesList {
+		for _, set := range cat.Settings {
+			// If validation fails, log a warning and rollback to DefaultValue
+			if err := set.Validate(set.Value); err != nil {
+				set.Value = set.DefaultValue
+				s.StartupWarnings = append(s.StartupWarnings, fmt.Sprintf("Reset setting '%s' to default: %v", set.Key, err))
+			}
 		}
 	}
 
-	// Validate CustomDNS if set
-	if ns.CustomDNS != "" {
-		if err := ValidateDNSList(ns.CustomDNS); err != nil {
-			ns.CustomDNS = defaults.CustomDNS
-			warnings = append(warnings, "Invalid DNS configuration reset to default")
+	// Dynamic extra validations for categories list in CategorySettings
+	validCats := make([]Category, 0, len(s.Categories.Categories))
+	for _, cat := range s.Categories.Categories {
+		if err := cat.Validate(); err == nil {
+			// Extra path check for each category
+			catPath := strings.TrimSpace(cat.Path)
+			if catPath != "" {
+				if info, err := os.Stat(catPath); err != nil || !info.IsDir() {
+					// Fallback to default download dir
+					cat.Path = s.General.DefaultDownloadDir.AsString()
+					s.StartupWarnings = append(s.StartupWarnings, fmt.Sprintf("Category %q path is broken; reset to default", cat.Name))
+				}
+			}
+			validCats = append(validCats, cat)
+		} else {
+			s.StartupWarnings = append(s.StartupWarnings, fmt.Sprintf("Removed invalid category %q: %v", cat.Name, err))
+			utils.Debug("Config: Removing invalid category %q: %v", cat.Name, err)
 		}
 	}
-	return warnings
+	s.Categories.Categories = validCats
+
+	return s.StartupWarnings
 }
 
 // ValidateDNSList checks if a comma-separated list of DNS servers (IP or IP:port) is valid.
@@ -417,69 +901,6 @@ func ValidateDNSList(s string) error {
 	return nil
 }
 
-// Validate checks PerformanceSettings for valid floating point ranges and durations.
-func (ps *PerformanceSettings) Validate() []string {
-	var warnings []string
-	defaults := DefaultSettings().Performance
-
-	if ps.MaxTaskRetries < 0 || ps.MaxTaskRetries > 10 {
-		ps.MaxTaskRetries = defaults.MaxTaskRetries
-		warnings = append(warnings, fmt.Sprintf("Max task retries reset to default (%d)", defaults.MaxTaskRetries))
-	}
-	if ps.SlowWorkerThreshold < 0.0 || ps.SlowWorkerThreshold > 1.0 {
-		ps.SlowWorkerThreshold = defaults.SlowWorkerThreshold
-		warnings = append(warnings, "Slow worker threshold reset to default")
-	}
-	if ps.SpeedEmaAlpha < 0.0 || ps.SpeedEmaAlpha > 1.0 {
-		ps.SpeedEmaAlpha = defaults.SpeedEmaAlpha
-		warnings = append(warnings, "Speed smoothing factor reset to default")
-	}
-	if ps.SlowWorkerGracePeriod < 0 {
-		ps.SlowWorkerGracePeriod = defaults.SlowWorkerGracePeriod
-		warnings = append(warnings, "Slow worker grace period reset to default")
-	}
-	if ps.StallTimeout < 0 {
-		ps.StallTimeout = defaults.StallTimeout
-		warnings = append(warnings, "Stall timeout reset to default")
-	}
-	return warnings
-}
-
-// Validate checks CategorySettings and ensures all defined categories are valid.
-func (cs *CategorySettings) Validate(fallbackDir string) []string {
-	var warnings []string
-	validCats := make([]Category, 0, len(cs.Categories))
-	for _, cat := range cs.Categories {
-		if err := cat.Validate(); err == nil {
-			// Extra path check for each category
-			catPath := strings.TrimSpace(cat.Path)
-			if catPath != "" {
-				if info, err := os.Stat(catPath); err != nil || !info.IsDir() {
-					// Fallback to validated default download dir for this category if path is broken
-					cat.Path = fallbackDir
-					warnings = append(warnings, fmt.Sprintf("Category %q path is broken; reset to default", cat.Name))
-				}
-			}
-			validCats = append(validCats, cat)
-		} else {
-			warnings = append(warnings, fmt.Sprintf("Removed invalid category %q: %v", cat.Name, err))
-			utils.Debug("Config: Removing invalid category %q: %v", cat.Name, err)
-		}
-	}
-
-	cs.Categories = validCats
-	return warnings
-}
-
-// Validate checks ExtensionSettings for any necessary field sanitization.
-func (es *ExtensionSettings) Validate() []string {
-	var warnings []string
-	// Extension settings are currently mostly URLs or booleans that don't
-	// require strict range enforcement, but we maintain the Validate method
-	// for future consistency and testing.
-	return warnings
-}
-
 // SaveSettings saves settings to disk atomically.
 func SaveSettings(s *Settings) error {
 	path := GetSettingsPath()
@@ -506,18 +927,32 @@ func SaveSettings(s *Settings) error {
 // ToRuntimeConfig creates the engine runtime config from validated settings.
 func (s *Settings) ToRuntimeConfig() *types.RuntimeConfig {
 	return &types.RuntimeConfig{
-		MaxConnectionsPerDownload: s.Network.MaxConnectionsPerDownload,
-		UserAgent:                 s.Network.UserAgent,
-		ProxyURL:                  s.Network.ProxyURL,
-		CustomDNS:                 s.Network.CustomDNS,
-		SequentialDownload:        s.Network.SequentialDownload,
-		MinChunkSize:              s.Network.MinChunkSize,
-		WorkerBufferSize:          s.Network.WorkerBufferSize,
-		DialHedgeCount:            s.Network.DialHedgeCount,
-		MaxTaskRetries:            s.Performance.MaxTaskRetries,
-		SlowWorkerThreshold:       s.Performance.SlowWorkerThreshold,
-		SlowWorkerGracePeriod:     s.Performance.SlowWorkerGracePeriod,
-		StallTimeout:              s.Performance.StallTimeout,
-		SpeedEmaAlpha:             s.Performance.SpeedEmaAlpha,
+		MaxConnectionsPerDownload: s.Network.MaxConnectionsPerDownload.AsInt(),
+		UserAgent:                 s.Network.UserAgent.AsString(),
+		ProxyURL:                  s.Network.ProxyURL.AsString(),
+		CustomDNS:                 s.Network.CustomDNS.AsString(),
+		SequentialDownload:        s.Network.SequentialDownload.AsBool(),
+		MinChunkSize:              s.Network.MinChunkSize.AsInt64(),
+		WorkerBufferSize:          s.Network.WorkerBufferSize.AsInt(),
+		DialHedgeCount:            s.Network.DialHedgeCount.AsInt(),
+		MaxTaskRetries:            s.Performance.MaxTaskRetries.AsInt(),
+		SlowWorkerThreshold:       s.Performance.SlowWorkerThreshold.AsFloat64(),
+		SlowWorkerGracePeriod:     s.Performance.SlowWorkerGracePeriod.AsDuration(),
+		StallTimeout:              s.Performance.StallTimeout.AsDuration(),
+		SpeedEmaAlpha:             s.Performance.SpeedEmaAlpha.AsFloat64(),
 	}
+}
+
+// Clone returns a deep copy of the settings.
+func (s *Settings) Clone() *Settings {
+	if s == nil {
+		return nil
+	}
+	data, err := json.Marshal(s)
+	if err != nil {
+		return nil
+	}
+	cloned := DefaultSettings()
+	_ = json.Unmarshal(data, cloned)
+	return cloned
 }

@@ -247,7 +247,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				if err != nil {
 					msg = err.Error()
 				}
-				if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
+				if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification.AsBool() {
 					notify(fmt.Sprintf("Download failed: %s", filename), msg)
 				}
 				break
@@ -271,7 +271,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			if err := state.DeleteTasks(m.DownloadID); err != nil {
 				utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)
 			}
-			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
+			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification.AsBool() {
 
 				if filename == "" {
 					filename = m.Filename
@@ -306,7 +306,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 					utils.Debug("Lifecycle: Failed to remove incomplete file after error: %v", err)
 				}
 			}
-			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification {
+			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification.AsBool() {
 
 				filename := m.Filename
 				if filename == "" && existing != nil {

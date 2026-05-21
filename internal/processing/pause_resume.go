@@ -125,7 +125,7 @@ func (mgr *LifecycleManager) Resume(id string) error {
 
 	settings := mgr.GetSettings()
 
-	outputPath := settings.General.DefaultDownloadDir
+	outputPath := settings.General.DefaultDownloadDir.AsString()
 	if outputPath == "" {
 		outputPath = "."
 	}
@@ -156,7 +156,7 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 	hooks := mgr.getEngineHooks()
 
 	settings := mgr.GetSettings()
-	outputPath := settings.General.DefaultDownloadDir
+	outputPath := settings.General.DefaultDownloadDir.AsString()
 	if outputPath == "" {
 		outputPath = "."
 	}

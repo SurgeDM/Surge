@@ -30,7 +30,7 @@ func (m RootModel) updateInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		originalPath := m.inputs[2].Value()
 		browseDir := strings.TrimSpace(originalPath)
 		if browseDir == "" {
-			browseDir = m.Settings.General.DefaultDownloadDir
+			browseDir = m.Settings.General.DefaultDownloadDir.AsString()
 		}
 		if browseDir == "" {
 			browseDir = m.PWD

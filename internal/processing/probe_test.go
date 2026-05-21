@@ -32,7 +32,7 @@ func TestProbeServer_UsesConfiguredProxy(t *testing.T) {
 	defer proxy.Close()
 
 	settings := config.DefaultSettings()
-	settings.Network.ProxyURL = proxy.URL
+	settings.Network.ProxyURL.Value = proxy.URL
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("SaveSettings() error = %v", err)
 	}
