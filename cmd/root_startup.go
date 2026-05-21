@@ -52,7 +52,7 @@ func initializeGlobalState() error {
 	utils.ConfigureDebug(logsDir)
 
 	// Clean up old logs (keeping retention-1 because a new log will be created immediately after)
-	retention := getSettings().General.LogRetentionCount.AsInt()
+	retention := config.Resolve[int](getSettings().General.LogRetentionCount)
 	if retention > 0 {
 		utils.CleanupLogs(retention - 1)
 	} else {
@@ -83,7 +83,7 @@ func resumePausedDownloads() {
 	for _, entry := range pausedEntries {
 		// If entry is explicitly queued, we should start it regardless of AutoResume setting
 		// If entry is paused, we only start it if AutoResume is enabled
-		if entry.Status == "paused" && !settings.General.AutoResume.AsBool() {
+		if entry.Status == "paused" && !config.Resolve[bool](settings.General.AutoResume) {
 			continue
 		}
 		if GlobalService == nil || entry.ID == "" {

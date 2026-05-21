@@ -18,82 +18,82 @@ func TestDefaultSettings(t *testing.T) {
 
 	// Verify General settings
 	t.Run("GeneralSettings", func(t *testing.T) {
-		if settings.General.DefaultDownloadDir.AsString() != "" {
-			if info, err := os.Stat(settings.General.DefaultDownloadDir.AsString()); err != nil || !info.IsDir() {
-				t.Errorf("DefaultDownloadDir set to invalid path: %s", settings.General.DefaultDownloadDir.AsString())
+		if Resolve[string](settings.General.DefaultDownloadDir) != "" {
+			if info, err := os.Stat(Resolve[string](settings.General.DefaultDownloadDir)); err != nil || !info.IsDir() {
+				t.Errorf("DefaultDownloadDir set to invalid path: %s", Resolve[string](settings.General.DefaultDownloadDir))
 			}
 		}
 
-		if !settings.General.WarnOnDuplicate.AsBool() {
+		if !Resolve[bool](settings.General.WarnOnDuplicate) {
 			t.Error("WarnOnDuplicate should be true by default")
 		}
-		if settings.General.AllowRemoteOpenActions.AsBool() {
+		if Resolve[bool](settings.General.AllowRemoteOpenActions) {
 			t.Error("AllowRemoteOpenActions should be false by default")
 		}
-		if settings.General.AutoResume.AsBool() {
+		if Resolve[bool](settings.General.AutoResume) {
 			t.Error("AutoResume should be false by default")
 		}
 	})
 
 	// Verify Connection settings
 	t.Run("NetworkSettings", func(t *testing.T) {
-		if settings.Network.MaxConnectionsPerDownload.AsInt() <= 0 {
-			t.Errorf("MaxConnectionsPerDownload should be positive, got: %d", settings.Network.MaxConnectionsPerDownload.AsInt())
+		if Resolve[int](settings.Network.MaxConnectionsPerDownload) <= 0 {
+			t.Errorf("MaxConnectionsPerDownload should be positive, got: %d", Resolve[int](settings.Network.MaxConnectionsPerDownload))
 		}
-		if settings.Network.MaxConnectionsPerDownload.AsInt() > 64 {
-			t.Errorf("MaxConnectionsPerDownload shouldn't exceed 64, got: %d", settings.Network.MaxConnectionsPerDownload.AsInt())
+		if Resolve[int](settings.Network.MaxConnectionsPerDownload) > 64 {
+			t.Errorf("MaxConnectionsPerDownload shouldn't exceed 64, got: %d", Resolve[int](settings.Network.MaxConnectionsPerDownload))
 		}
 
-		if settings.Network.SequentialDownload.AsBool() {
+		if Resolve[bool](settings.Network.SequentialDownload) {
 			t.Error("SequentialDownload should be false by default")
 		}
-		if settings.Network.DialHedgeCount.AsInt() != 4 {
-			t.Errorf("DialHedgeCount should be 4 by default, got: %d", settings.Network.DialHedgeCount.AsInt())
+		if Resolve[int](settings.Network.DialHedgeCount) != 4 {
+			t.Errorf("DialHedgeCount should be 4 by default, got: %d", Resolve[int](settings.Network.DialHedgeCount))
 		}
 	})
 
 	// Verify Chunk settings
 	t.Run("NetworkChunkSettings", func(t *testing.T) {
-		if settings.Network.MinChunkSize.AsInt64() <= 0 {
-			t.Errorf("MinChunkSize should be positive, got: %d", settings.Network.MinChunkSize.AsInt64())
+		if Resolve[int64](settings.Network.MinChunkSize) <= 0 {
+			t.Errorf("MinChunkSize should be positive, got: %d", Resolve[int64](settings.Network.MinChunkSize))
 		}
 
-		if settings.Network.WorkerBufferSize.AsInt() <= 0 {
-			t.Errorf("WorkerBufferSize should be positive, got: %d", settings.Network.WorkerBufferSize.AsInt())
+		if Resolve[int](settings.Network.WorkerBufferSize) <= 0 {
+			t.Errorf("WorkerBufferSize should be positive, got: %d", Resolve[int](settings.Network.WorkerBufferSize))
 		}
 	})
 
 	// Verify Performance settings
 	t.Run("PerformanceSettings", func(t *testing.T) {
-		if settings.Performance.MaxTaskRetries.AsInt() < 0 {
-			t.Errorf("MaxTaskRetries should be non-negative, got: %d", settings.Performance.MaxTaskRetries.AsInt())
+		if Resolve[int](settings.Performance.MaxTaskRetries) < 0 {
+			t.Errorf("MaxTaskRetries should be non-negative, got: %d", Resolve[int](settings.Performance.MaxTaskRetries))
 		}
-		if settings.Performance.SlowWorkerThreshold.AsFloat64() < 0 || settings.Performance.SlowWorkerThreshold.AsFloat64() > 1 {
-			t.Errorf("SlowWorkerThreshold should be between 0 and 1, got: %f", settings.Performance.SlowWorkerThreshold.AsFloat64())
+		if Resolve[float64](settings.Performance.SlowWorkerThreshold) < 0 || Resolve[float64](settings.Performance.SlowWorkerThreshold) > 1 {
+			t.Errorf("SlowWorkerThreshold should be between 0 and 1, got: %f", Resolve[float64](settings.Performance.SlowWorkerThreshold))
 		}
-		if settings.Performance.SlowWorkerGracePeriod.AsDuration() <= 0 {
-			t.Errorf("SlowWorkerGracePeriod should be positive, got: %v", settings.Performance.SlowWorkerGracePeriod.AsDuration())
+		if Resolve[time.Duration](settings.Performance.SlowWorkerGracePeriod) <= 0 {
+			t.Errorf("SlowWorkerGracePeriod should be positive, got: %v", Resolve[time.Duration](settings.Performance.SlowWorkerGracePeriod))
 		}
-		if settings.Performance.StallTimeout.AsDuration() <= 0 {
-			t.Errorf("StallTimeout should be positive, got: %v", settings.Performance.StallTimeout.AsDuration())
+		if Resolve[time.Duration](settings.Performance.StallTimeout) <= 0 {
+			t.Errorf("StallTimeout should be positive, got: %v", Resolve[time.Duration](settings.Performance.StallTimeout))
 		}
-		if settings.Performance.SpeedEmaAlpha.AsFloat64() < 0 || settings.Performance.SpeedEmaAlpha.AsFloat64() > 1 {
-			t.Errorf("SpeedEmaAlpha should be between 0 and 1, got: %f", settings.Performance.SpeedEmaAlpha.AsFloat64())
+		if Resolve[float64](settings.Performance.SpeedEmaAlpha) < 0 || Resolve[float64](settings.Performance.SpeedEmaAlpha) > 1 {
+			t.Errorf("SpeedEmaAlpha should be between 0 and 1, got: %f", Resolve[float64](settings.Performance.SpeedEmaAlpha))
 		}
 	})
 
 	// Verify Extension settings
 	t.Run("ExtensionSettings", func(t *testing.T) {
-		if !settings.Extension.ExtensionPrompt.AsBool() {
+		if !Resolve[bool](settings.Extension.ExtensionPrompt) {
 			t.Error("ExtensionPrompt should be true by default")
 		}
-		if settings.Extension.ChromeExtensionURL.AsString() == "" {
+		if Resolve[string](settings.Extension.ChromeExtensionURL) == "" {
 			t.Error("ChromeExtensionURL should not be empty")
 		}
-		if settings.Extension.FirefoxExtensionURL.AsString() == "" {
+		if Resolve[string](settings.Extension.FirefoxExtensionURL) == "" {
 			t.Error("FirefoxExtensionURL should not be empty")
 		}
-		if settings.Extension.InstructionsURL.AsString() == "" {
+		if Resolve[string](settings.Extension.InstructionsURL) == "" {
 			t.Error("InstructionsURL should not be empty")
 		}
 	})
@@ -107,7 +107,7 @@ func TestDefaultSettings_Consistency(t *testing.T) {
 		t.Error("DefaultSettings should return new instance each time")
 	}
 
-	if s1.Network.MaxConnectionsPerDownload.AsInt() != s2.Network.MaxConnectionsPerDownload.AsInt() {
+	if Resolve[int](s1.Network.MaxConnectionsPerDownload) != Resolve[int](s2.Network.MaxConnectionsPerDownload) {
 		t.Error("Default settings should be consistent")
 	}
 }
@@ -172,13 +172,13 @@ func TestSaveAndLoadSettings(t *testing.T) {
 		t.Fatalf("Failed to unmarshal settings: %v", err)
 	}
 
-	if loaded.General.DefaultDownloadDir.AsString() != original.General.DefaultDownloadDir.AsString() {
-		t.Errorf("DefaultDownloadDir mismatch: got %q, want %q", loaded.General.DefaultDownloadDir.AsString(), original.General.DefaultDownloadDir.AsString())
+	if Resolve[string](loaded.General.DefaultDownloadDir) != Resolve[string](original.General.DefaultDownloadDir) {
+		t.Errorf("DefaultDownloadDir mismatch: got %q, want %q", Resolve[string](loaded.General.DefaultDownloadDir), Resolve[string](original.General.DefaultDownloadDir))
 	}
-	if loaded.General.WarnOnDuplicate.AsBool() != original.General.WarnOnDuplicate.AsBool() {
+	if Resolve[bool](loaded.General.WarnOnDuplicate) != Resolve[bool](original.General.WarnOnDuplicate) {
 		t.Error("WarnOnDuplicate mismatch")
 	}
-	if loaded.Network.MaxConcurrentDownloads.AsInt() != original.Network.MaxConcurrentDownloads.AsInt() {
+	if Resolve[int](loaded.Network.MaxConcurrentDownloads) != Resolve[int](original.Network.MaxConcurrentDownloads) {
 		t.Error("MaxConcurrentDownloads mismatch")
 	}
 }
@@ -190,7 +190,7 @@ func TestLoadSettings_MissingFile(t *testing.T) {
 	}
 
 	if settings != nil {
-		if settings.Network.MaxConnectionsPerDownload.AsInt() <= 0 {
+		if Resolve[int](settings.Network.MaxConnectionsPerDownload) <= 0 {
 			t.Error("Should return default settings with valid values")
 		}
 	}
@@ -225,7 +225,7 @@ func TestToRuntimeConfig(t *testing.T) {
 		t.Fatal("ToRuntimeConfig returned nil")
 	}
 
-	if runtime.MaxConnectionsPerDownload != settings.Network.MaxConnectionsPerDownload.AsInt() {
+	if runtime.MaxConnectionsPerDownload != Resolve[int](settings.Network.MaxConnectionsPerDownload) {
 		t.Error("MaxConnectionsPerDownload not correctly mapped")
 	}
 }
@@ -267,7 +267,7 @@ func TestSettingsJSON_Serialization(t *testing.T) {
 		t.Fatalf("Failed to unmarshal: %v", err)
 	}
 
-	if loaded.Network.MaxConnectionsPerDownload.AsInt() != original.Network.MaxConnectionsPerDownload.AsInt() {
+	if Resolve[int](loaded.Network.MaxConnectionsPerDownload) != Resolve[int](original.Network.MaxConnectionsPerDownload) {
 		t.Error("Round-trip failed for MaxConnectionsPerDownload")
 	}
 }
@@ -288,10 +288,10 @@ func TestSaveSettings_RealFunction(t *testing.T) {
 		t.Fatalf("LoadSettings failed: %v", err)
 	}
 
-	if loaded.Network.MaxConnectionsPerDownload.AsInt() != 48 {
-		t.Errorf("MaxConnectionsPerDownload mismatch: got %d, want 48", loaded.Network.MaxConnectionsPerDownload.AsInt())
+	if Resolve[int](loaded.Network.MaxConnectionsPerDownload) != 48 {
+		t.Errorf("MaxConnectionsPerDownload mismatch: got %d, want 48", Resolve[int](loaded.Network.MaxConnectionsPerDownload))
 	}
-	if !loaded.General.AutoResume.AsBool() {
+	if !Resolve[bool](loaded.General.AutoResume) {
 		t.Error("AutoResume should be true")
 	}
 }
@@ -312,14 +312,14 @@ func TestSettings_Validate(t *testing.T) {
 				s.Performance.SlowWorkerThreshold.Value = 0.5
 			},
 			validate: func(t *testing.T, s *Settings) {
-				if s.Network.MaxConnectionsPerDownload.AsInt() != 48 {
-					t.Errorf("Expected 48, got %d", s.Network.MaxConnectionsPerDownload.AsInt())
+				if Resolve[int](s.Network.MaxConnectionsPerDownload) != 48 {
+					t.Errorf("Expected 48, got %d", Resolve[int](s.Network.MaxConnectionsPerDownload))
 				}
-				if s.General.LogRetentionCount.AsInt() != 10 {
-					t.Errorf("Expected 10, got %d", s.General.LogRetentionCount.AsInt())
+				if Resolve[int](s.General.LogRetentionCount) != 10 {
+					t.Errorf("Expected 10, got %d", Resolve[int](s.General.LogRetentionCount))
 				}
-				if s.Performance.SlowWorkerThreshold.AsFloat64() != 0.5 {
-					t.Errorf("Expected 0.5, got %f", s.Performance.SlowWorkerThreshold.AsFloat64())
+				if Resolve[float64](s.Performance.SlowWorkerThreshold) != 0.5 {
+					t.Errorf("Expected 0.5, got %f", Resolve[float64](s.Performance.SlowWorkerThreshold))
 				}
 			},
 		},
@@ -329,8 +329,8 @@ func TestSettings_Validate(t *testing.T) {
 				s.Network.MaxConnectionsPerDownload.Value = 999
 			},
 			validate: func(t *testing.T, s *Settings) {
-				if s.Network.MaxConnectionsPerDownload.AsInt() != defaults.Network.MaxConnectionsPerDownload.AsInt() {
-					t.Errorf("Expected default %d, got %d", defaults.Network.MaxConnectionsPerDownload.AsInt(), s.Network.MaxConnectionsPerDownload.AsInt())
+				if Resolve[int](s.Network.MaxConnectionsPerDownload) != Resolve[int](defaults.Network.MaxConnectionsPerDownload) {
+					t.Errorf("Expected default %d, got %d", Resolve[int](defaults.Network.MaxConnectionsPerDownload), Resolve[int](s.Network.MaxConnectionsPerDownload))
 				}
 			},
 		},
@@ -340,8 +340,8 @@ func TestSettings_Validate(t *testing.T) {
 				s.Network.MaxConnectionsPerDownload.Value = 0
 			},
 			validate: func(t *testing.T, s *Settings) {
-				if s.Network.MaxConnectionsPerDownload.AsInt() != defaults.Network.MaxConnectionsPerDownload.AsInt() {
-					t.Errorf("Expected default %d, got %d", defaults.Network.MaxConnectionsPerDownload.AsInt(), s.Network.MaxConnectionsPerDownload.AsInt())
+				if Resolve[int](s.Network.MaxConnectionsPerDownload) != Resolve[int](defaults.Network.MaxConnectionsPerDownload) {
+					t.Errorf("Expected default %d, got %d", Resolve[int](defaults.Network.MaxConnectionsPerDownload), Resolve[int](s.Network.MaxConnectionsPerDownload))
 				}
 			},
 		},
@@ -354,5 +354,33 @@ func TestSettings_Validate(t *testing.T) {
 			s.Validate()
 			tt.validate(t, s)
 		})
+	}
+}
+
+func TestResolveGeneric(t *testing.T) {
+	s := DefaultSettings()
+
+	// 1. Verify int
+	s.Network.MaxConcurrentDownloads.Value = float64(8)
+	if val := Resolve[int](s.Network.MaxConcurrentDownloads); val != 8 {
+		t.Errorf("Resolve[int] got %d, want 8", val)
+	}
+
+	// 2. Verify bool
+	s.General.WarnOnDuplicate.Value = float64(1)
+	if val := Resolve[bool](s.General.WarnOnDuplicate); !val {
+		t.Errorf("Resolve[bool] got false, want true")
+	}
+
+	// 3. Verify string
+	s.Network.UserAgent.Value = "Surge/1.0"
+	if val := Resolve[string](s.Network.UserAgent); val != "Surge/1.0" {
+		t.Errorf("Resolve[string] got %q, want \"Surge/1.0\"", val)
+	}
+
+	// 4. Verify duration
+	s.Performance.SlowWorkerGracePeriod.Value = "15s"
+	if val := Resolve[time.Duration](s.Performance.SlowWorkerGracePeriod); val != 15*time.Second {
+		t.Errorf("Resolve[time.Duration] got %v, want 15s", val)
 	}
 }

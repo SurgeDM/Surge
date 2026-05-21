@@ -666,13 +666,13 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 						}
 					}
 					setting.Value = theme
-					m.ApplyTheme(theme, m.Settings.General.ThemePath.AsString())
+					m.ApplyTheme(theme, config.Resolve[string](m.Settings.General.ThemePath))
 					return nil
 				}
 				if key == "theme_path" {
 					setting.Value = value
 					// Re-apply the current theme mode but with the brand new path
-					m.ApplyTheme(m.Settings.General.Theme.AsInt(), value)
+					m.ApplyTheme(config.Resolve[int](m.Settings.General.Theme), value)
 					return nil
 				}
 
@@ -685,14 +685,14 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 							if m.ToggleServiceFunc == nil {
 								return fmt.Errorf("service management is not available on this platform")
 							}
-							newVal := !setting.AsBool()
+							newVal := !config.Resolve[bool](setting)
 							if err := m.ToggleServiceFunc(newVal); err != nil {
 								return fmt.Errorf("failed to update service: %w", err)
 							}
 							setting.Value = newVal
 							return nil
 						}
-						setting.Value = !setting.AsBool()
+						setting.Value = !config.Resolve[bool](setting)
 					} else {
 						b, _ := strconv.ParseBool(value)
 						setting.Value = b
@@ -1052,8 +1052,8 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 // resetSettingToDefault resets a specific setting to its default value
 func (m *RootModel) resetSettingToDefault(category, key string, defaults *config.Settings) error {
 	if key == "auto_start" {
-		if m.ToggleServiceFunc != nil && m.Settings.General.AutoStart.AsBool() != defaults.General.AutoStart.AsBool() {
-			if err := m.ToggleServiceFunc(defaults.General.AutoStart.AsBool()); err != nil {
+		if m.ToggleServiceFunc != nil && config.Resolve[bool](m.Settings.General.AutoStart) != config.Resolve[bool](defaults.General.AutoStart) {
+			if err := m.ToggleServiceFunc(config.Resolve[bool](defaults.General.AutoStart)); err != nil {
 				return fmt.Errorf("failed to update service: %w", err)
 			}
 		}

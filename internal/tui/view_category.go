@@ -51,7 +51,7 @@ func (m RootModel) viewCategoryManager() string {
 	// === TOGGLE BAR ===
 	enabledStr := "OFF"
 	enabledColor := colors.Gray()
-	if m.Settings.Categories.CategoryEnabled.AsBool() {
+	if config.Resolve[bool](m.Settings.Categories.CategoryEnabled) {
 		enabledStr = "ON"
 		enabledColor = colors.StateDownloading()
 	}

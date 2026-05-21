@@ -80,7 +80,7 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 
 	if key.Matches(msg, m.keys.BatchConfirm.Confirm) {
 		// Add all URLs as downloads, skipping duplicates
-		path := m.Settings.General.DefaultDownloadDir.AsString()
+		path := config.Resolve[string](m.Settings.General.DefaultDownloadDir)
 		if path == "" {
 			path = "."
 		}

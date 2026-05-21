@@ -150,7 +150,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	// Even if logic checks for empty/dot, filepath.Dir of absolute path is absolute path.
 	if outputPath == "" || outputPath == "." {
 		// This should NOT happen for absolute paths
-		outputPath = settings.General.DefaultDownloadDir.AsString()
+		outputPath = config.Resolve[string](settings.General.DefaultDownloadDir)
 	}
 
 	// Ensure outputPath resolves to DirA

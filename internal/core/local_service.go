@@ -272,7 +272,7 @@ func (s *LocalDownloadService) getSpeedEmaAlpha() float64 {
 		return SpeedSmoothingAlpha
 	}
 
-	alpha := settings.Performance.SpeedEmaAlpha.AsFloat64()
+	alpha := config.Resolve[float64](settings.Performance.SpeedEmaAlpha)
 	if alpha <= 0 || alpha > 1 {
 		return SpeedSmoothingAlpha
 	}
@@ -476,8 +476,8 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 
 	outPath := path
 	if outPath == "" {
-		if settings.General.DefaultDownloadDir.AsString() != "" {
-			outPath = settings.General.DefaultDownloadDir.AsString()
+		if config.Resolve[string](settings.General.DefaultDownloadDir) != "" {
+			outPath = config.Resolve[string](settings.General.DefaultDownloadDir)
 		} else {
 			outPath = "."
 		}

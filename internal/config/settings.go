@@ -93,86 +93,130 @@ func (s *Setting) MarshalJSON() ([]byte, error) {
 	return json.Marshal(s.Value)
 }
 
-func (s *Setting) AsBool() bool {
+// Resolve retrieves the value of a setting converted to the expected generic type T.
+// This is a unified, caller-agnostic function that handles all dynamic type conversions safely.
+func Resolve[T any](s *Setting) T {
+	var zero T
 	if s == nil {
-		return false
+		return zero
 	}
-	if b, ok := s.Value.(bool); ok {
-		return b
-	}
-	return false
-}
 
-func (s *Setting) AsInt() int {
-	if s == nil {
-		return 0
-	}
-	switch v := s.Value.(type) {
-	case int:
-		return v
-	case float64:
-		return int(v)
-	}
-	return 0
-}
-
-func (s *Setting) AsInt64() int64 {
-	if s == nil {
-		return 0
-	}
-	switch v := s.Value.(type) {
-	case int64:
-		return v
-	case int:
-		return int64(v)
-	case float64:
-		return int64(v)
-	}
-	return 0
-}
-
-func (s *Setting) AsFloat64() float64 {
-	if s == nil {
-		return 0.0
-	}
-	switch v := s.Value.(type) {
-	case float64:
-		return v
-	case float32:
-		return float64(v)
-	case int:
-		return float64(v)
-	}
-	return 0.0
-}
-
-func (s *Setting) AsString() string {
-	if s == nil {
-		return ""
-	}
-	if str, ok := s.Value.(string); ok {
-		return str
-	}
-	return ""
-}
-
-func (s *Setting) AsDuration() time.Duration {
-	if s == nil {
-		return 0
-	}
-	switch v := s.Value.(type) {
-	case time.Duration:
-		return v
-	case string:
-		if d, err := time.ParseDuration(v); err == nil {
-			return d
+	var anyVal any = s.Value
+	if anyVal == nil {
+		anyVal = s.DefaultValue
+		if anyVal == nil {
+			return zero
 		}
-	case float64:
-		return time.Duration(v)
-	case int64:
-		return time.Duration(v)
 	}
-	return 0
+
+	// Try direct type assertion first
+	if val, ok := anyVal.(T); ok {
+		return val
+	}
+
+	// Dynamic conversions based on requested generic type T
+	switch any(zero).(type) {
+	case bool:
+		var b bool
+		switch v := anyVal.(type) {
+		case bool:
+			b = v
+		case int:
+			b = v != 0
+		case int64:
+			b = v != 0
+		case float64:
+			b = v != 0
+		}
+		return any(b).(T)
+
+	case int:
+		var i int
+		switch v := anyVal.(type) {
+		case int:
+			i = v
+		case int64:
+			i = int(v)
+		case float64:
+			i = int(v)
+		}
+		return any(i).(T)
+
+	case int64:
+		var i int64
+		switch v := anyVal.(type) {
+		case int64:
+			i = v
+		case int:
+			i = int64(v)
+		case float64:
+			i = int64(v)
+		}
+		return any(i).(T)
+
+	case float64:
+		var f float64
+		switch v := anyVal.(type) {
+		case float64:
+			f = v
+		case float32:
+			f = float64(v)
+		case int:
+			f = float64(v)
+		case int64:
+			f = float64(v)
+		}
+		return any(f).(T)
+
+	case string:
+		if str, ok := anyVal.(string); ok {
+			return any(str).(T)
+		}
+
+	case time.Duration:
+		var d time.Duration
+		switch v := anyVal.(type) {
+		case time.Duration:
+			d = v
+		case string:
+			if parsed, err := time.ParseDuration(v); err == nil {
+				d = parsed
+			}
+		case float64:
+			d = time.Duration(v)
+		case int64:
+			d = time.Duration(v)
+		case int:
+			d = time.Duration(v)
+		}
+		return any(d).(T)
+	}
+
+	return zero
+}
+
+// Resolve returns the setting's value dynamically converted to its schema-defined target type.
+// This ensures that unmarshaled types (like float64) are resolved back to their correct Go types (int, duration, etc.)
+// and can be accessed safely as any.
+func (s *Setting) Resolve() any {
+	if s == nil {
+		return nil
+	}
+	switch s.Type {
+	case "bool":
+		return Resolve[bool](s)
+	case "int":
+		return Resolve[int](s)
+	case "int64":
+		return Resolve[int64](s)
+	case "float64":
+		return Resolve[float64](s)
+	case "string", "auth_token", "link":
+		return Resolve[string](s)
+	case "duration":
+		return Resolve[time.Duration](s)
+	}
+	return s.Value
 }
 
 func (s *Settings) initializeCategoriesList() {
@@ -860,7 +904,7 @@ func (s *Settings) Validate() []string {
 			if catPath != "" {
 				if info, err := os.Stat(catPath); err != nil || !info.IsDir() {
 					// Fallback to default download dir
-					cat.Path = s.General.DefaultDownloadDir.AsString()
+					cat.Path = Resolve[string](s.General.DefaultDownloadDir)
 					s.StartupWarnings = append(s.StartupWarnings, fmt.Sprintf("Category %q path is broken; reset to default", cat.Name))
 				}
 			}
@@ -927,19 +971,19 @@ func SaveSettings(s *Settings) error {
 // ToRuntimeConfig creates the engine runtime config from validated settings.
 func (s *Settings) ToRuntimeConfig() *types.RuntimeConfig {
 	return &types.RuntimeConfig{
-		MaxConnectionsPerDownload: s.Network.MaxConnectionsPerDownload.AsInt(),
-		UserAgent:                 s.Network.UserAgent.AsString(),
-		ProxyURL:                  s.Network.ProxyURL.AsString(),
-		CustomDNS:                 s.Network.CustomDNS.AsString(),
-		SequentialDownload:        s.Network.SequentialDownload.AsBool(),
-		MinChunkSize:              s.Network.MinChunkSize.AsInt64(),
-		WorkerBufferSize:          s.Network.WorkerBufferSize.AsInt(),
-		DialHedgeCount:            s.Network.DialHedgeCount.AsInt(),
-		MaxTaskRetries:            s.Performance.MaxTaskRetries.AsInt(),
-		SlowWorkerThreshold:       s.Performance.SlowWorkerThreshold.AsFloat64(),
-		SlowWorkerGracePeriod:     s.Performance.SlowWorkerGracePeriod.AsDuration(),
-		StallTimeout:              s.Performance.StallTimeout.AsDuration(),
-		SpeedEmaAlpha:             s.Performance.SpeedEmaAlpha.AsFloat64(),
+		MaxConnectionsPerDownload: Resolve[int](s.Network.MaxConnectionsPerDownload),
+		UserAgent:                 Resolve[string](s.Network.UserAgent),
+		ProxyURL:                  Resolve[string](s.Network.ProxyURL),
+		CustomDNS:                 Resolve[string](s.Network.CustomDNS),
+		SequentialDownload:        Resolve[bool](s.Network.SequentialDownload),
+		MinChunkSize:              Resolve[int64](s.Network.MinChunkSize),
+		WorkerBufferSize:          Resolve[int](s.Network.WorkerBufferSize),
+		DialHedgeCount:            Resolve[int](s.Network.DialHedgeCount),
+		MaxTaskRetries:            Resolve[int](s.Performance.MaxTaskRetries),
+		SlowWorkerThreshold:       Resolve[float64](s.Performance.SlowWorkerThreshold),
+		SlowWorkerGracePeriod:     Resolve[time.Duration](s.Performance.SlowWorkerGracePeriod),
+		StallTimeout:              Resolve[time.Duration](s.Performance.StallTimeout),
+		SpeedEmaAlpha:             Resolve[float64](s.Performance.SpeedEmaAlpha),
 	}
 }
 

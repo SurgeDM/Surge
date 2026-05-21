@@ -7,6 +7,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
@@ -247,7 +248,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				if err != nil {
 					msg = err.Error()
 				}
-				if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification.AsBool() {
+				if settings := mgr.GetSettings(); settings != nil && config.Resolve[bool](settings.General.DownloadCompleteNotification) {
 					notify(fmt.Sprintf("Download failed: %s", filename), msg)
 				}
 				break
@@ -271,7 +272,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			if err := state.DeleteTasks(m.DownloadID); err != nil {
 				utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)
 			}
-			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification.AsBool() {
+			if settings := mgr.GetSettings(); settings != nil && config.Resolve[bool](settings.General.DownloadCompleteNotification) {
 
 				if filename == "" {
 					filename = m.Filename
@@ -306,7 +307,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 					utils.Debug("Lifecycle: Failed to remove incomplete file after error: %v", err)
 				}
 			}
-			if settings := mgr.GetSettings(); settings != nil && settings.General.DownloadCompleteNotification.AsBool() {
+			if settings := mgr.GetSettings(); settings != nil && config.Resolve[bool](settings.General.DownloadCompleteNotification) {
 
 				filename := m.Filename
 				if filename == "" && existing != nil {

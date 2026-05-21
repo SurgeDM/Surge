@@ -222,12 +222,12 @@ func TestLoadSettings_CorruptJSON_ReturnsDefaultValues(t *testing.T) {
 	if settings == nil {
 		t.Fatal("LoadSettings returned nil")
 	}
-	if settings.Network.MaxConnectionsPerDownload.AsInt() != defaults.Network.MaxConnectionsPerDownload.AsInt() {
+	if Resolve[int](settings.Network.MaxConnectionsPerDownload) != Resolve[int](defaults.Network.MaxConnectionsPerDownload) {
 		t.Errorf("MaxConnectionsPerDownload = %d, want default %d",
-			settings.Network.MaxConnectionsPerDownload.AsInt(), defaults.Network.MaxConnectionsPerDownload.AsInt())
+			Resolve[int](settings.Network.MaxConnectionsPerDownload), Resolve[int](defaults.Network.MaxConnectionsPerDownload))
 	}
-	if settings.Performance.MaxTaskRetries.AsInt() != defaults.Performance.MaxTaskRetries.AsInt() {
+	if Resolve[int](settings.Performance.MaxTaskRetries) != Resolve[int](defaults.Performance.MaxTaskRetries) {
 		t.Errorf("MaxTaskRetries = %d, want default %d",
-			settings.Performance.MaxTaskRetries.AsInt(), defaults.Performance.MaxTaskRetries.AsInt())
+			Resolve[int](settings.Performance.MaxTaskRetries), Resolve[int](defaults.Performance.MaxTaskRetries))
 	}
 }

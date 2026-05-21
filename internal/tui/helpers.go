@@ -75,7 +75,7 @@ func (m *RootModel) handleFilePickerSelection(path string) (tea.Model, tea.Cmd) 
 	switch m.filepickerOrigin {
 	case FilePickerOriginTheme:
 		m.Settings.General.ThemePath.Value = path
-		m.ApplyTheme(m.Settings.General.Theme.AsInt(), path)
+		m.ApplyTheme(config.Resolve[int](m.Settings.General.Theme), path)
 		m.filepickerOrigin = FilePickerOriginNone
 		m.state = SettingsState
 		m.resetFilepickerToDirMode()
@@ -114,7 +114,7 @@ func (m *RootModel) handleFilePickerGotoHome() tea.Cmd {
 	if m.filepickerOrigin == FilePickerOriginTheme {
 		targetDir = config.GetThemesDir()
 	} else {
-		targetDir = m.Settings.General.DefaultDownloadDir.AsString()
+		targetDir = config.Resolve[string](m.Settings.General.DefaultDownloadDir)
 		if targetDir == "" {
 			homeDir, _ := os.UserHomeDir()
 			targetDir = filepath.Join(homeDir, "Downloads")

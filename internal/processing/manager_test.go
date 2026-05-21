@@ -481,7 +481,7 @@ func TestLifecycleManager_GetSettings_RefreshesFromDiskAfterTTL(t *testing.T) {
 	settingsRefreshTTL = 0
 
 	settings := mgr.GetSettings()
-	if !settings.Categories.CategoryEnabled.AsBool() {
+	if !config.Resolve[bool](settings.Categories.CategoryEnabled) {
 		t.Fatal("expected GetSettings to pick up saved settings after TTL expiry")
 	}
 }
@@ -511,7 +511,7 @@ func TestLifecycleManager_GetSettings_KeepsCachedSnapshotWhenReloadFails(t *test
 	settingsRefreshTTL = 0
 
 	settings := mgr.GetSettings()
-	if settings.General.WarnOnDuplicate.AsBool() {
+	if config.Resolve[bool](settings.General.WarnOnDuplicate) {
 		t.Fatal("expected GetSettings to keep the cached snapshot when disk reload fails")
 	}
 }
