@@ -829,26 +829,80 @@ func (m RootModel) getSettingUnit() string {
 func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool) string {
 	switch key {
 	case "min_chunk_size":
-		if v, ok := value.(int64); ok {
-			mb := float64(v) / float64(config.MB)
+		var valInt64 int64
+		var ok bool
+		switch v := value.(type) {
+		case int64:
+			valInt64 = v
+			ok = true
+		case int:
+			valInt64 = int64(v)
+			ok = true
+		case float64:
+			valInt64 = int64(v)
+			ok = true
+		}
+		if ok {
+			mb := float64(valInt64) / float64(config.MB)
 			return fmt.Sprintf("%.1f", mb)
 		}
 	case "worker_buffer_size":
-		v := reflect.ValueOf(value)
-		if v.Kind() == reflect.Int {
-			kb := float64(v.Int()) / float64(config.KB)
+		var valInt int
+		var ok bool
+		switch v := value.(type) {
+		case int:
+			valInt = v
+			ok = true
+		case int64:
+			valInt = int(v)
+			ok = true
+		case float64:
+			valInt = int(v)
+			ok = true
+		}
+		if ok {
+			kb := float64(valInt) / float64(config.KB)
 			return fmt.Sprintf("%.0f", kb)
 		}
 	case "slow_worker_grace_period", "stall_timeout":
 		// Show duration as plain seconds number (e.g., "5" instead of "5s")
-		if d, ok := value.(time.Duration); ok {
+		var d time.Duration
+		var ok bool
+		switch v := value.(type) {
+		case time.Duration:
+			d = v
+			ok = true
+		case float64:
+			d = time.Duration(v)
+			ok = true
+		case int64:
+			d = time.Duration(v)
+			ok = true
+		case int:
+			d = time.Duration(v)
+			ok = true
+		}
+		if ok {
 			return fmt.Sprintf("%.0f", d.Seconds())
 		}
 	}
 
 	if key == "theme" {
-		if v, ok := value.(int); ok {
-			switch v {
+		var valInt int
+		var ok bool
+		switch v := value.(type) {
+		case int:
+			valInt = v
+			ok = true
+		case int64:
+			valInt = int(v)
+			ok = true
+		case float64:
+			valInt = int(v)
+			ok = true
+		}
+		if ok {
+			switch valInt {
 			case config.ThemeAdaptive:
 				return "< System >"
 			case config.ThemeLight:
@@ -871,28 +925,102 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 
 	switch typ {
 	case "bool":
-		if b, ok := value.(bool); ok {
+		var b bool
+		var ok bool
+		switch val := value.(type) {
+		case bool:
+			b = val
+			ok = true
+		case float64:
+			b = val != 0
+			ok = true
+		case int:
+			b = val != 0
+			ok = true
+		}
+		if ok {
 			if b {
 				return "True"
 			}
 			return "False"
 		}
 	case "duration":
-		if d, ok := value.(time.Duration); ok {
+		var d time.Duration
+		var ok bool
+		switch val := value.(type) {
+		case time.Duration:
+			d = val
+			ok = true
+		case float64:
+			d = time.Duration(val)
+			ok = true
+		case int64:
+			d = time.Duration(val)
+			ok = true
+		case int:
+			d = time.Duration(val)
+			ok = true
+		case string:
+			if parsed, err := time.ParseDuration(val); err == nil {
+				d = parsed
+				ok = true
+			}
+		}
+		if ok {
 			return d.String()
 		}
 	case "int64":
-		if v, ok := value.(int64); ok {
-			// Just display the raw number - units handled by getSettingUnit
+		var v int64
+		var ok bool
+		switch val := value.(type) {
+		case int64:
+			v = val
+			ok = true
+		case int:
+			v = int64(val)
+			ok = true
+		case float64:
+			v = int64(val)
+			ok = true
+		}
+		if ok {
 			return fmt.Sprintf("%d", v)
 		}
 	case "int":
-		v := reflect.ValueOf(value)
-		if v.Kind() == reflect.Int {
-			return fmt.Sprintf("%d", v.Int())
+		var v int
+		var ok bool
+		switch val := value.(type) {
+		case int:
+			v = val
+			ok = true
+		case int64:
+			v = int(val)
+			ok = true
+		case float64:
+			v = int(val)
+			ok = true
+		}
+		if ok {
+			return fmt.Sprintf("%d", v)
 		}
 	case "float64":
-		if v, ok := value.(float64); ok {
+		var v float64
+		var ok bool
+		switch val := value.(type) {
+		case float64:
+			v = val
+			ok = true
+		case float32:
+			v = float64(val)
+			ok = true
+		case int:
+			v = float64(val)
+			ok = true
+		case int64:
+			v = float64(val)
+			ok = true
+		}
+		if ok {
 			return fmt.Sprintf("%.2f", v)
 		}
 	case "string", "link":
