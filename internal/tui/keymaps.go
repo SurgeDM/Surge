@@ -445,7 +445,7 @@ func DefaultKeyMap() *KeyMap {
 				key.WithHelp("o", "open file"),
 			),
 			Quit: key.NewBinding(
-				key.WithKeys("ctrl+c", "ctrl+q"),
+				key.WithKeys("ctrl+q"),
 				key.WithHelp("ctrl+q", "quit"),
 			),
 			ForceQuit: key.NewBinding(

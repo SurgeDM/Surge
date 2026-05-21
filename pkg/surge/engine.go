@@ -78,10 +78,9 @@ func (e *LocalEngine) Shutdown() error {
 		return nil
 	}
 	var err error
-	if e.Service == nil {
-		return nil
+	if e.Service != nil {
+		err = e.Service.Shutdown()
 	}
-	err = e.Service.Shutdown()
 	if e.lifecycleDone != nil {
 		<-e.lifecycleDone
 		e.lifecycleDone = nil

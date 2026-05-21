@@ -18,6 +18,26 @@ func TestDefaultKeyMap(t *testing.T) {
 	}
 }
 
+func TestDashboardQuitAndForceQuitKeysDoNotOverlap(t *testing.T) {
+	km := DefaultKeyMap()
+	seen := make(map[string]string)
+
+	for _, entry := range []struct {
+		action string
+		keys   []string
+	}{
+		{action: "Quit", keys: km.Dashboard.Quit.Keys()},
+		{action: "ForceQuit", keys: km.Dashboard.ForceQuit.Keys()},
+	} {
+		for _, key := range entry.keys {
+			if previous, ok := seen[key]; ok {
+				t.Fatalf("dashboard key %q is assigned to both %s and %s", key, previous, entry.action)
+			}
+			seen[key] = entry.action
+		}
+	}
+}
+
 func TestKeyMapConversion(t *testing.T) {
 	km := DefaultKeyMap()
 	cfg := km.ToConfig()
