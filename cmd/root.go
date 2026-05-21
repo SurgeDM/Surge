@@ -87,10 +87,9 @@ var (
 	globalEnqueueMu         sync.Mutex
 )
 
-// buildActiveDownloadChecker constructs an IsNameActiveFunc callback used by the
-// lifecycle manager to detect file collisions with in-flight downloads. It queries
-// the provided getAll callback to check if any active download is writing to the
-// target directory and filename.
+// buildActiveDownloadChecker bridges the lifecycle manager and the worker pool.
+// LifecycleManager has no direct reference to the pool, so we inject this closure
+// at construction time to let it detect file-name collisions with in-flight downloads.
 func buildActiveDownloadChecker(getAll func() []types.DownloadConfig) processing.IsNameActiveFunc {
 	if getAll == nil {
 		return nil

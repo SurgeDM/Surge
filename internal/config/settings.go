@@ -994,9 +994,12 @@ func (s *Settings) Clone() *Settings {
 	}
 	data, err := json.Marshal(s)
 	if err != nil {
+		utils.Debug("Warning: failed to marshal settings for Clone: %v", err)
 		return nil
 	}
 	cloned := DefaultSettings()
-	_ = json.Unmarshal(data, cloned)
+	if err := json.Unmarshal(data, cloned); err != nil {
+		utils.Debug("Warning: failed to unmarshal settings for Clone: %v", err)
+	}
 	return cloned
 }
