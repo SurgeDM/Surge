@@ -597,7 +597,7 @@ func TestSingleDownloader_Download_ContentIntegrity(t *testing.T) {
 }
 
 // =============================================================================
-// PreallocateFailure — file handle release
+// PreallocateFailure - file handle release
 // =============================================================================
 
 func TestSingleDownloader_PreallocateFailure_ReleasesFileHandle(t *testing.T) {
@@ -641,13 +641,13 @@ func TestSingleDownloader_PreallocateFailure_ReleasesFileHandle(t *testing.T) {
 		t.Fatal("Expected error when preallocate fails on read-only file")
 	}
 	if !strings.Contains(err.Error(), "preallocate") && !strings.Contains(err.Error(), "permission") {
-		t.Logf("Got error: %v (acceptable — file handle should still be released)", err)
+		t.Logf("Got error: %v (acceptable - file handle should still be released)", err)
 	}
 
 	// Verificar que o file handle foi liberado: o arquivo pode ser removido
 	_ = os.Chmod(surgePath, 0o644)
 	if err := os.Remove(surgePath); err != nil {
-		t.Errorf("Failed to remove .surge file after preallocate failure — possible file handle leak: %v", err)
+		t.Errorf("Failed to remove .surge file after preallocate failure - possible file handle leak: %v", err)
 	}
 }
 

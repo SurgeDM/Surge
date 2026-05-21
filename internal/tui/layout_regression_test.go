@@ -327,7 +327,7 @@ func TestLayout_RenderBtopBoxWidthInvariant(t *testing.T) {
 				}
 				// RenderBtopBox always produces exactly h lines.
 				// A box has a minimum of 3 lines (top border, content rows, bottom border),
-				// so for h < 3 the output will be 3 lines — that is expected behaviour.
+				// so for h < 3 the output will be 3 lines - that is expected behaviour.
 				expectedLines := h
 				if expectedLines < 3 {
 					expectedLines = 3
@@ -480,7 +480,7 @@ func TestLayout_GetDynamicModalDimensions_BoundedByTerminal(t *testing.T) {
 // ─────────────────────────────────────────────────────────────
 
 // makeDownloadWithChunks creates a download model that has an active bitmap,
-// mirrors, an error, and verbose fields — everything that makes the detail
+// mirrors, an error, and verbose fields - everything that makes the detail
 // pane as tall as possible.
 func makeDownloadWithChunks(longURL bool) *DownloadModel {
 	url := "https://cdn.example.com/releases/v1.2.3/file.iso"
@@ -520,7 +520,7 @@ func makeDownloadWithChunks(longURL bool) *DownloadModel {
 }
 
 func TestLayout_RightColumnHeightNeverExceedsAvailable(t *testing.T) {
-	// Test across a wide range of heights — the invariant must hold for ALL of them.
+	// Test across a wide range of heights - the invariant must hold for ALL of them.
 	for termH := 18; termH <= 60; termH++ {
 		for _, termW := range []int{200, 160, 140} {
 			t.Run(fmt.Sprintf("%dx%d", termW, termH), func(t *testing.T) {
@@ -604,7 +604,7 @@ func TestLayout_ChunkMapSuppressedWhenDetailsTall(t *testing.T) {
 func TestLayout_DetailContentNotClippedByChunkMap(t *testing.T) {
 	// Render the dashboard at every height from 18..50 and verify that
 	// when the detail pane has enough room for the full content,
-	// all key sections are visible — none cut off by the chunk map.
+	// all key sections are visible - none cut off by the chunk map.
 	for termH := 18; termH <= 50; termH++ {
 		t.Run(fmt.Sprintf("h%d", termH), func(t *testing.T) {
 			m := InitialRootModel(1701, "test", nil, processing.NewLifecycleManager(nil, nil), false)
@@ -639,8 +639,8 @@ func TestLayout_DetailContentNotClippedByChunkMap(t *testing.T) {
 
 			if contentH > maxDetailInnerH {
 				// Even at full allocation (no chunk map), the content is
-				// taller than the detail pane. Clipping is expected — skip.
-				t.Skipf("content (%d lines) exceeds max detail inner height (%d) — terminal too short", contentH, maxDetailInnerH)
+				// taller than the detail pane. Clipping is expected - skip.
+				t.Skipf("content (%d lines) exceeds max detail inner height (%d) - terminal too short", contentH, maxDetailInnerH)
 			}
 
 			view := m.View()
@@ -658,7 +658,7 @@ func TestLayout_DetailContentNotClippedByChunkMap(t *testing.T) {
 			}
 			for _, label := range requiredLabels {
 				if !strings.Contains(rendered, label) {
-					t.Errorf("h=%d: label %q not found in rendered view — detail content was clipped (contentH=%d, maxInnerH=%d)",
+					t.Errorf("h=%d: label %q not found in rendered view - detail content was clipped (contentH=%d, maxInnerH=%d)",
 						termH, label, contentH, maxDetailInnerH)
 				}
 			}
@@ -673,7 +673,7 @@ func TestLayout_DetailContentNotClippedByChunkMap(t *testing.T) {
 func TestLayout_ChunkMapSpaceReclaimedForDetails(t *testing.T) {
 	// At every height where CalculateDashboardLayout says ShowChunkMap=true,
 	// verify that the final rendered right column still fits within
-	// AvailableHeight — proving that either the chunk map rendered within
+	// AvailableHeight - proving that either the chunk map rendered within
 	// budget or was suppressed and its space reclaimed.
 	for termH := 18; termH <= 60; termH++ {
 		t.Run(fmt.Sprintf("h%d", termH), func(t *testing.T) {

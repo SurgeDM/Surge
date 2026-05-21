@@ -49,7 +49,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	const minBorderDashes = 1
 	maxTitleSpace := innerWidth - minBorderDashes
 	if maxTitleSpace <= 0 {
-		// No room for any title at this width — suppress both
+		// No room for any title at this width - suppress both
 		leftTitle = ""
 		leftTitleWidth = 0
 		rightTitle = ""

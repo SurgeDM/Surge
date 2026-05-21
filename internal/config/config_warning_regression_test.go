@@ -34,7 +34,7 @@ func TestLoadSettings_CorruptJSON_PopulatesStartupWarning(t *testing.T) {
 
 	// THE REGRESSION: StartupWarnings must NOT be empty for a corrupt file.
 	if len(settings.StartupWarnings) == 0 {
-		t.Fatal("corrupt settings.json produced no StartupWarnings — config problems would be silently hidden")
+		t.Fatal("corrupt settings.json produced no StartupWarnings - config problems would be silently hidden")
 	}
 
 	// The warning should mention both the corruption and the reset action.
@@ -70,7 +70,7 @@ func TestLoadSettings_TruncatedJSON_PopulatesStartupWarning(t *testing.T) {
 		t.Fatal("LoadSettings returned nil for truncated JSON")
 	}
 	if len(settings.StartupWarnings) == 0 {
-		t.Fatal("truncated settings.json produced no StartupWarnings — config problems would be silently hidden")
+		t.Fatal("truncated settings.json produced no StartupWarnings - config problems would be silently hidden")
 	}
 }
 
@@ -96,10 +96,10 @@ func TestLoadSettings_ValidSettings_NoStartupWarnings(t *testing.T) {
 }
 
 // TestLoadSettings_MissingFile_NoStartupWarnings covers the first-run case where
-// no settings file exists — this is expected and must not produce warnings.
+// no settings file exists - this is expected and must not produce warnings.
 func TestLoadSettings_MissingFile_NoStartupWarnings(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	// No file created — GetSurgeDir() path doesn't exist, settings.json absent.
+	// No file created - GetSurgeDir() path doesn't exist, settings.json absent.
 
 	settings, err := LoadSettings()
 	if err != nil {
@@ -183,7 +183,7 @@ func TestValidate_MultipleInvalidFields_AllWarningsPresent(t *testing.T) {
 // on already-reset settings produces zero warnings rather than accumulating.
 func TestValidate_ClearsOldWarningsOnRevalidation(t *testing.T) {
 	s := DefaultSettings()
-	s.Network.MaxConnectionsPerDownload.Value = 999 // invalid — will be reset to default
+	s.Network.MaxConnectionsPerDownload.Value = 999 // invalid - will be reset to default
 	s.Validate()
 
 	firstCount := len(s.StartupWarnings)

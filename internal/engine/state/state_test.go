@@ -732,7 +732,7 @@ func TestValidateIntegrity_MissingFile(t *testing.T) {
 	defer CloseDB()
 
 	destPath := filepath.Join(tmpDir, "missing.zip")
-	// Insert a paused download — but DO NOT create the .surge file
+	// Insert a paused download - but DO NOT create the .surge file
 	entry := types.DownloadEntry{
 		ID:       "integrity-missing",
 		URL:      "https://example.com/missing.zip",
@@ -750,7 +750,7 @@ func TestValidateIntegrity_MissingFile(t *testing.T) {
 		t.Fatalf("Expected entry to exist before integrity check")
 	}
 
-	// Run integrity check — file is missing, entry should be removed
+	// Run integrity check - file is missing, entry should be removed
 	removed, err := ValidateIntegrity()
 	if err != nil {
 		t.Fatalf("ValidateIntegrity failed: %v", err)
@@ -816,7 +816,7 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 		t.Fatalf("Failed to set file_hash: %v", err)
 	}
 
-	// Run integrity check — file exists with matching hash, should keep it
+	// Run integrity check - file exists with matching hash, should keep it
 	removed, err := ValidateIntegrity()
 	if err != nil {
 		t.Fatalf("ValidateIntegrity failed: %v", err)
@@ -865,7 +865,7 @@ func TestValidateIntegrity_TamperedFile(t *testing.T) {
 	d := getDBHelper()
 	_, _ = d.Exec("UPDATE downloads SET file_hash = ? WHERE id = ?", "0000000000000000000000000000000000000000000000000000000000000000", "integrity-tampered")
 
-	// Run integrity check — hash mismatch, entry AND file should be removed
+	// Run integrity check - hash mismatch, entry AND file should be removed
 	removed, err := ValidateIntegrity()
 	if err != nil {
 		t.Fatalf("ValidateIntegrity failed: %v", err)
@@ -891,7 +891,7 @@ func TestValidateIntegrity_CompletedIgnored(t *testing.T) {
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 	defer CloseDB()
 
-	// Insert a completed download — should NOT be touched by integrity check
+	// Insert a completed download - should NOT be touched by integrity check
 	if err := AddToMasterList(types.DownloadEntry{
 		ID:          "integrity-completed",
 		URL:         "https://example.com/done.zip",

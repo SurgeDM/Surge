@@ -69,7 +69,7 @@ func (m RootModel) updateFilePicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// '.' to select current directory — only in directory-picking modes.
+	// '.' to select current directory - only in directory-picking modes.
 	// Skip for FilePickerOriginTheme which is file-only.
 	if m.filepickerOrigin != FilePickerOriginTheme && key.Matches(msg, m.keys.FilePicker.UseDir) {
 		return m.handleFilePickerSelection(m.filepicker.CurrentDirectory)

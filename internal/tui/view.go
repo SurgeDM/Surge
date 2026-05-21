@@ -358,7 +358,7 @@ func (m RootModel) View() tea.View {
 	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
 	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
 
-	// Hide help text at very narrow widths — version is more important
+	// Hide help text at very narrow widths - version is more important
 	var footerContent string
 	if layout.AvailableWidth < 60 {
 		footerContent = versionText
@@ -415,7 +415,7 @@ func (m RootModel) View() tea.View {
 
 		// Measure whether the detail content actually fits in the allocated
 		// DetailHeight. If it doesn't, the chunk map would cause details to
-		// be clipped — so give the chunk map's space back to details.
+		// be clipped - so give the chunk map's space back to details.
 		if showActualChunkMap {
 			detailInnerH := layout.DetailHeight - components.BorderFrameHeight
 			if detailInnerH < 1 {

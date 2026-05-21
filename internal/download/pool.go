@@ -166,7 +166,7 @@ func (p *WorkerPool) GetAll() []types.DownloadConfig {
 }
 
 // Pause pauses a specific download by ID. Returns true if found and pause initiated
-// (or already paused), false otherwise. Pure mechanical operation — no events emitted.
+// (or already paused), false otherwise. Pure mechanical operation - no events emitted.
 func (p *WorkerPool) Pause(downloadID string) bool {
 	p.mu.RLock()
 	ad, exists := p.downloads[downloadID]

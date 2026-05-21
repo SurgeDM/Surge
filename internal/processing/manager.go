@@ -246,7 +246,7 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 
 	settings := mgr.GetSettings()
 
-	// Throttle concurrent probes — acquire a semaphore slot before probing.
+	// Throttle concurrent probes - acquire a semaphore slot before probing.
 	// If the context is cancelled (e.g., shutdown) we abort immediately.
 	if mgr.probeSem != nil {
 		select {
@@ -275,7 +275,7 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 			return "", "", probeErr
 		}
 
-		utils.Debug("Lifecycle: Probe failed: %v — enqueueing with optimistic fallback metadata\n", probeErr)
+		utils.Debug("Lifecycle: Probe failed: %v - enqueueing with optimistic fallback metadata\n", probeErr)
 		// Probe failures are non-fatal for known server-side issues (403/405/500) or
 		// network timeouts: some servers reject or intermittently fail
 		// lightweight probe requests but still accept the actual download flow.

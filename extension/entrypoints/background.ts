@@ -451,7 +451,7 @@ function updateBadge(): void {
 }
 
 async function tryOpenPopup(): Promise<void> {
-  try { await browser.action.openPopup(); } catch { /* ignore — requires focused window */ }
+  try { await browser.action.openPopup(); } catch { /* ignore - requires focused window */ }
 }
 
 async function isDuplicateDownload(url: string): Promise<boolean> {
@@ -476,7 +476,7 @@ async function handleDownloadCreated(downloadItem: {
   try {
     await browser.downloads.cancel(downloadItem.id);
     await browser.downloads.erase({ id: downloadItem.id } as any);
-  } catch { /* already completed or removed — ignore */ }
+  } catch { /* already completed or removed - ignore */ }
 
   const { filename, directory } = extractPathInfo(downloadItem);
   const duplicateDisplayName = filename || downloadItem.url.split('/').pop()?.split('?')[0] || 'Unknown file';
@@ -549,7 +549,7 @@ async function startSSEStream(): Promise<void> {
       return;
     }
 
-    // Connected — reset retry backoff
+    // Connected - reset retry backoff
     sseRetryCount = 0;
 
     const reader = resp.body.getReader();
@@ -789,7 +789,7 @@ export default defineBackground(() => {
     }
   });
 
-  // Header capture — Firefox doesn't support the extraHeaders permission
+  // Header capture - Firefox doesn't support the extraHeaders permission
   const isFF = (browser.runtime.getURL as (path?: string) => string)('').startsWith('moz-extension:');
   const listenerOptions: Parameters<typeof browser.webRequest.onBeforeSendHeaders.addListener>[2] = ['requestHeaders'];
   if (!isFF) listenerOptions.push('extraHeaders');
@@ -802,7 +802,7 @@ export default defineBackground(() => {
     listenerOptions,
   );
 
-  // Message handler — Chrome MV3 requires sendResponse + return true for async responses.
+  // Message handler - Chrome MV3 requires sendResponse + return true for async responses.
   // Returning a Promise from onMessage does NOT work without webextension-polyfill.
   browser.runtime.onMessage.addListener(((
     message: Record<string, any>,
@@ -818,7 +818,7 @@ export default defineBackground(() => {
     return true;
   }) as Parameters<typeof browser.runtime.onMessage.addListener>[0]);
 
-  // Health check — start SSE stream when connection is established
+  // Health check - start SSE stream when connection is established
   setInterval(async () => {
     const wasConnected = isConnected;
     await checkHealthSilent();

@@ -1097,7 +1097,7 @@ func TestLifecycleManager_ProbeSemaphore_LimitsInflight(t *testing.T) {
 	wg.Wait()
 	close(stopPoller)
 
-	// addFunc is nil so every enqueue fails after probe — that's fine;
+	// addFunc is nil so every enqueue fails after probe - that's fine;
 	// we only care that the probe phase was throttled.
 	for _, err := range errs {
 		if err == nil {
@@ -1152,6 +1152,6 @@ func TestLifecycleManager_ProbeSemaphore_CancelledContextAbortsWait(t *testing.T
 	}
 	// Should abort almost instantly, not wait for the delayed slot return.
 	if elapsed > 200*time.Millisecond {
-		t.Errorf("Enqueue took %v to abort — semaphore cancellation may be broken", elapsed)
+		t.Errorf("Enqueue took %v to abort - semaphore cancellation may be broken", elapsed)
 	}
 }
