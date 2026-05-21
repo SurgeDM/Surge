@@ -101,7 +101,7 @@ func Resolve[T any](s *Setting) T {
 		return zero
 	}
 
-	var anyVal any = s.Value
+	var anyVal = s.Value
 	if anyVal == nil {
 		anyVal = s.DefaultValue
 		if anyVal == nil {
