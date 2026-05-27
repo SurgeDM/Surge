@@ -301,6 +301,11 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 		}
 
 		if readSoFar > 0 {
+			if d.Limiter != nil {
+				if err := d.Limiter.WaitN(ctx, int64(readSoFar)); err != nil {
+					return err
+				}
+			}
 
 			// check stopAt again before writing
 			// truncate readSoFar

@@ -22,6 +22,7 @@ type SingleDownloader struct {
 	ID           string               // Download ID
 	State        *types.ProgressState // Shared state for TUI polling
 	Runtime      *types.RuntimeConfig
+	Limiter      *engine.MultiLimiter
 	TotalSize    int64
 	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
 }
@@ -140,10 +141,15 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	buf := *bufPtr
 	defer bufPool.Put(bufPtr)
 
+	reader := io.Reader(resp.Body)
+	if d.Limiter != nil {
+		reader = &throttledReader{reader: resp.Body, limiter: d.Limiter, ctx: ctx}
+	}
+
 	if d.State == nil {
-		written, err = io.CopyBuffer(outFile, resp.Body, buf)
+		written, err = io.CopyBuffer(outFile, reader, buf)
 	} else {
-		progressReader := newProgressReader(resp.Body, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
+		progressReader := newProgressReader(reader, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
 		written, err = io.CopyBuffer(outFile, progressReader, buf)
 		progressReader.Flush()
 	}
@@ -181,6 +187,22 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	)
 
 	return nil
+}
+
+type throttledReader struct {
+	reader  io.Reader
+	limiter *engine.MultiLimiter
+	ctx     context.Context
+}
+
+func (t *throttledReader) Read(p []byte) (int, error) {
+	n, err := t.reader.Read(p)
+	if n > 0 && t.limiter != nil {
+		if waitErr := t.limiter.WaitN(t.ctx, int64(n)); waitErr != nil {
+			return n, waitErr
+		}
+	}
+	return n, err
 }
 
 type progressReader struct {
