@@ -22,7 +22,7 @@ type SingleDownloader struct {
 	ID           string               // Download ID
 	State        *types.ProgressState // Shared state for TUI polling
 	Runtime      *types.RuntimeConfig
-	Limiter      *engine.MultiLimiter
+	Limiter      types.ByteLimiter
 	TotalSize    int64
 	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
 }
@@ -191,7 +191,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 type throttledReader struct {
 	reader  io.Reader
-	limiter *engine.MultiLimiter
+	limiter types.ByteLimiter
 	ctx     context.Context
 }
 

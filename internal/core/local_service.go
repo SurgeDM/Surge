@@ -39,6 +39,11 @@ func (s *LocalDownloadService) ReloadSettings() error {
 	s.settingsMu.Lock()
 	s.settings = settings
 	s.settingsMu.Unlock()
+	if s.Pool != nil && settings != nil {
+		runtime := settings.ToRuntimeConfig()
+		s.Pool.SetGlobalRateLimit(runtime.GlobalRateLimitBps)
+		s.Pool.SetDefaultDownloadRateLimit(runtime.DefaultDownloadRateLimitBps)
+	}
 	return nil
 }
 
@@ -103,6 +108,11 @@ func NewLocalDownloadServiceWithInput(pool *download.WorkerPool, inputCh chan in
 	// Load initial settings
 	if s.settings, _ = config.LoadSettings(); s.settings == nil {
 		s.settings = config.DefaultSettings()
+	}
+	if pool != nil && s.settings != nil {
+		runtime := s.settings.ToRuntimeConfig()
+		pool.SetGlobalRateLimit(runtime.GlobalRateLimitBps)
+		pool.SetDefaultDownloadRateLimit(runtime.DefaultDownloadRateLimitBps)
 	}
 
 	// Lifecycle
@@ -500,6 +510,8 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 	state := types.NewProgressState(id, 0)
 	state.DestPath = filepath.Join(outPath, filename) // Best guess until download starts
 
+	runtime := settings.ToRuntimeConfig()
+
 	cfg := types.DownloadConfig{
 		URL:                url,
 		Mirrors:            mirrors,
@@ -508,11 +520,12 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 		Filename:           filename, // If empty, will be auto-detected
 		ProgressCh:         s.InputCh,
 		State:              state,
-		Runtime:            settings.ToRuntimeConfig(),
+		Runtime:            runtime,
 		Headers:            headers,
 		IsExplicitCategory: isExplicitCategory,
 		TotalSize:          totalSize,
 		SupportsRange:      supportsRange,
+		RateLimitBps:       runtime.DefaultDownloadRateLimitBps,
 	}
 
 	s.Pool.Add(cfg)

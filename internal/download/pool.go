@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/engine"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -28,6 +29,11 @@ type WorkerPool struct {
 	mu           sync.RWMutex
 	wg           sync.WaitGroup // We use this to wait for all active downloads to pause before exiting the program
 	maxDownloads int
+
+	limiterMu                   sync.Mutex
+	globalLimiter               *engine.RateLimiter
+	downloadLimiters            map[string]*engine.RateLimiter
+	defaultDownloadRateLimitBps int64
 }
 
 var (
@@ -50,12 +56,14 @@ func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
 		maxDownloads = 3 // Default to 3 if invalid
 	}
 	pool := &WorkerPool{
-		taskChan:     make(chan types.DownloadConfig, 100), // We make it buffered to avoid blocking add
-		progressCh:   progressCh,
-		progressDone: make(chan struct{}),
-		downloads:    make(map[string]*activeDownload),
-		queued:       make(map[string]types.DownloadConfig),
-		maxDownloads: maxDownloads,
+		taskChan:         make(chan types.DownloadConfig, 100), // We make it buffered to avoid blocking add
+		progressCh:       progressCh,
+		progressDone:     make(chan struct{}),
+		downloads:        make(map[string]*activeDownload),
+		queued:           make(map[string]types.DownloadConfig),
+		maxDownloads:     maxDownloads,
+		globalLimiter:    engine.NewRateLimiter(0, 0),
+		downloadLimiters: make(map[string]*engine.RateLimiter),
 	}
 	for i := 0; i < maxDownloads; i++ {
 		go pool.worker()
@@ -104,11 +112,53 @@ func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 	if cfg.ProgressCh == nil {
 		cfg.ProgressCh = p.progressCh
 	}
+	p.ensureLimiterForConfig(&cfg)
 	p.mu.Lock()
 	p.queued[cfg.ID] = cfg
 	p.mu.Unlock()
 
 	p.taskChan <- cfg
+}
+
+func (p *WorkerPool) ensureLimiterForConfig(cfg *types.DownloadConfig) {
+	if cfg == nil || cfg.ID == "" {
+		return
+	}
+
+	p.limiterMu.Lock()
+	defer p.limiterMu.Unlock()
+
+	if p.globalLimiter == nil {
+		p.globalLimiter = engine.NewRateLimiter(0, 0)
+	}
+	if p.downloadLimiters == nil {
+		p.downloadLimiters = make(map[string]*engine.RateLimiter)
+	}
+
+	rate := cfg.RateLimitBps
+	if rate <= 0 {
+		rate = p.defaultDownloadRateLimitBps
+		cfg.RateLimitBps = rate
+	}
+
+	limiter := p.downloadLimiters[cfg.ID]
+	if limiter == nil {
+		limiter = engine.NewRateLimiter(rate, rateLimiterBurst(rate))
+		p.downloadLimiters[cfg.ID] = limiter
+	} else {
+		limiter.SetRate(rate, rateLimiterBurst(rate))
+	}
+
+	if cfg.Limiter == nil {
+		cfg.Limiter = engine.NewMultiLimiter(p.globalLimiter, limiter)
+	}
+}
+
+func rateLimiterBurst(rate int64) int64 {
+	if rate <= 0 {
+		return 0
+	}
+	return rate
 }
 
 // HasDownload reports whether a download with the given URL is currently active or queued in the pool.
@@ -200,6 +250,53 @@ func (p *WorkerPool) Pause(downloadID string) bool {
 	// Send pause message is now exclusively handled by worker return paths
 	// to ensure fully synchronized byte counts.
 	return true
+}
+
+// SetGlobalRateLimit updates the global rate limiter (bytes/sec). Use 0 to disable.
+func (p *WorkerPool) SetGlobalRateLimit(rate int64) {
+	p.limiterMu.Lock()
+	if p.globalLimiter == nil {
+		p.globalLimiter = engine.NewRateLimiter(0, 0)
+	}
+	p.globalLimiter.SetRate(rate, rateLimiterBurst(rate))
+	p.limiterMu.Unlock()
+}
+
+// SetDefaultDownloadRateLimit updates the default per-download rate limit (bytes/sec).
+func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
+	p.limiterMu.Lock()
+	p.defaultDownloadRateLimitBps = rate
+	p.limiterMu.Unlock()
+}
+
+// SetDownloadRateLimit updates a specific download's rate limit (bytes/sec).
+func (p *WorkerPool) SetDownloadRateLimit(downloadID string, rate int64) {
+	if downloadID == "" {
+		return
+	}
+
+	p.limiterMu.Lock()
+	if p.downloadLimiters == nil {
+		p.downloadLimiters = make(map[string]*engine.RateLimiter)
+	}
+	limiter := p.downloadLimiters[downloadID]
+	if limiter == nil {
+		limiter = engine.NewRateLimiter(rate, rateLimiterBurst(rate))
+		p.downloadLimiters[downloadID] = limiter
+	} else {
+		limiter.SetRate(rate, rateLimiterBurst(rate))
+	}
+	p.limiterMu.Unlock()
+
+	p.mu.Lock()
+	if ad, ok := p.downloads[downloadID]; ok {
+		ad.config.RateLimitBps = rate
+	}
+	if cfg, ok := p.queued[downloadID]; ok {
+		cfg.RateLimitBps = rate
+		p.queued[downloadID] = cfg
+	}
+	p.mu.Unlock()
 }
 
 // PauseAll pauses all active downloads (for graceful shutdown)
@@ -336,6 +433,8 @@ func (p *WorkerPool) worker() {
 			// Canceled while waiting in queue.
 			continue
 		}
+
+		p.ensureLimiterForConfig(&cfg)
 
 		p.wg.Add(1)
 		// Create cancellable context

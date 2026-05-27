@@ -1,6 +1,9 @@
 package types
 
-import "time"
+import (
+	"context"
+	"time"
+)
 
 const (
 	KB = 1 << 10
@@ -59,10 +62,17 @@ type DownloadConfig struct {
 	Runtime    *RuntimeConfig
 	Mirrors    []string
 	Headers    map[string]string
+	Limiter    ByteLimiter
 
 	IsExplicitCategory bool
 	TotalSize          int64
 	SupportsRange      bool
+	RateLimitBps       int64
+}
+
+// ByteLimiter abstracts byte-based throttling for downloads.
+type ByteLimiter interface {
+	WaitN(ctx context.Context, n int64) error
 }
 
 // RuntimeConfig carries network and downloader tuning knobs.
@@ -71,12 +81,14 @@ type DownloadConfig struct {
 // connections, chunk size, buffer size, and retries; zero is preserved for
 // opt-out settings where disabling a behavior is meaningful.
 type RuntimeConfig struct {
-	MaxConnectionsPerDownload int
-	UserAgent                 string
-	ProxyURL                  string
-	CustomDNS                 string
-	SequentialDownload        bool
-	MinChunkSize              int64
+	MaxConnectionsPerDownload   int
+	UserAgent                   string
+	ProxyURL                    string
+	CustomDNS                   string
+	SequentialDownload          bool
+	MinChunkSize                int64
+	GlobalRateLimitBps          int64
+	DefaultDownloadRateLimitBps int64
 
 	WorkerBufferSize      int
 	MaxTaskRetries        int
@@ -163,18 +175,20 @@ func (r *RuntimeConfig) GetSpeedEmaAlpha() float64 {
 // that want engine defaults rather than relying on zero-value semantics.
 func DefaultRuntimeConfig() *RuntimeConfig {
 	return &RuntimeConfig{
-		MaxConnectionsPerDownload: PerDownloadMax,
-		UserAgent:                 DefaultUserAgent,
-		ProxyURL:                  "",
-		CustomDNS:                 "",
-		SequentialDownload:        false,
-		MinChunkSize:              MinChunk,
-		WorkerBufferSize:          WorkerBuffer,
-		MaxTaskRetries:            MaxTaskRetries,
-		DialHedgeCount:            DialHedgeCount,
-		SlowWorkerThreshold:       SlowWorkerThreshold,
-		SlowWorkerGracePeriod:     SlowWorkerGrace,
-		StallTimeout:              StallTimeout,
-		SpeedEmaAlpha:             SpeedEMAAlpha,
+		MaxConnectionsPerDownload:   PerDownloadMax,
+		UserAgent:                   DefaultUserAgent,
+		ProxyURL:                    "",
+		CustomDNS:                   "",
+		SequentialDownload:          false,
+		MinChunkSize:                MinChunk,
+		GlobalRateLimitBps:          0,
+		DefaultDownloadRateLimitBps: 0,
+		WorkerBufferSize:            WorkerBuffer,
+		MaxTaskRetries:              MaxTaskRetries,
+		DialHedgeCount:              DialHedgeCount,
+		SlowWorkerThreshold:         SlowWorkerThreshold,
+		SlowWorkerGracePeriod:       SlowWorkerGrace,
+		StallTimeout:                StallTimeout,
+		SpeedEmaAlpha:               SpeedEMAAlpha,
 	}
 }
