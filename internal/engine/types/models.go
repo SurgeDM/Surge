@@ -28,6 +28,7 @@ type DownloadState struct {
 	ActualChunkSize int64  `json:"actual_chunk_size,omitempty"`
 
 	FileHash string `json:"file_hash,omitempty"`
+	RateLimit int64 `json:"rate_limit,omitempty"`
 }
 
 // DownloadEntry is the durable record used for history and lifecycle recovery.
@@ -44,6 +45,7 @@ type DownloadEntry struct {
 	TimeTaken   int64    `json:"time_taken"`
 	AvgSpeed    float64  `json:"avg_speed"`
 	Mirrors     []string `json:"mirrors,omitempty"`
+	RateLimit   int64    `json:"rate_limit,omitempty"`
 }
 
 // MasterList holds all tracked downloads.
@@ -68,6 +70,7 @@ type DownloadStatus struct {
 	AddedAt     int64   `json:"added_at"`
 	TimeTaken   int64   `json:"time_taken"`
 	AvgSpeed    float64 `json:"avg_speed"`
+	RateLimit   int64   `json:"rate_limit,omitempty"`
 }
 
 // CancelResult carries enough metadata for callers to emit lifecycle events
