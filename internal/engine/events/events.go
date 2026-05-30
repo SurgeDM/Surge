@@ -29,6 +29,7 @@ type DownloadCompleteMsg struct {
 	Elapsed    time.Duration
 	Total      int64
 	AvgSpeed   float64 // Average download speed in bytes/sec
+	RateLimit  int64
 }
 
 // DownloadErrorMsg signals that an error occurred
@@ -104,6 +105,7 @@ type DownloadStartedMsg struct {
 	Total      int64
 	DestPath   string               // Full path to the destination file
 	State      *types.ProgressState `json:"-"`
+	RateLimit  int64
 }
 
 type DownloadPausedMsg struct {
@@ -111,6 +113,7 @@ type DownloadPausedMsg struct {
 	Filename   string
 	Downloaded int64
 	State      *types.DownloadState `json:"-"`
+	RateLimit  int64
 }
 
 type DownloadResumedMsg struct {
@@ -124,6 +127,7 @@ type DownloadQueuedMsg struct {
 	URL        string
 	DestPath   string
 	Mirrors    []string
+	RateLimit  int64
 }
 
 type DownloadRemovedMsg struct {

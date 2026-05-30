@@ -81,8 +81,8 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 		// 1. Upsert into downloads table
 		_, err := tx.Exec(`
 				INSERT INTO downloads (
-					id, url, dest_path, filename, status, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size, file_hash
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+					id, url, dest_path, filename, status, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size, file_hash, rate_limit
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				url=excluded.url,
 				dest_path=excluded.dest_path,
@@ -96,8 +96,9 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 				mirrors=excluded.mirrors,
 				chunk_bitmap=excluded.chunk_bitmap,
 				actual_chunk_size=excluded.actual_chunk_size,
-				file_hash=excluded.file_hash
-		`, state.ID, state.URL, state.DestPath, state.Filename, "paused", state.TotalSize, state.Downloaded, state.URLHash, state.CreatedAt, state.PausedAt, state.Elapsed/1e6, strings.Join(state.Mirrors, ","), state.ChunkBitmap, state.ActualChunkSize, state.FileHash)
+				file_hash=excluded.file_hash,
+				rate_limit=excluded.rate_limit
+		`, state.ID, state.URL, state.DestPath, state.Filename, "paused", state.TotalSize, state.Downloaded, state.URLHash, state.CreatedAt, state.PausedAt, state.Elapsed/1e6, strings.Join(state.Mirrors, ","), state.ChunkBitmap, state.ActualChunkSize, state.FileHash, state.RateLimit)
 		if err != nil {
 			return fmt.Errorf("failed to upsert download: %w", err)
 		}
@@ -253,12 +254,12 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 	}
 
 	var state types.DownloadState
-	var timeTaken, createdAt, pausedAt, actualChunkSize sql.NullInt64 // handle null
-	var mirrors, fileHash sql.NullString                              // handle null mirrors/hash
+	var timeTaken, createdAt, pausedAt, actualChunkSize, rateLimit sql.NullInt64 // handle null
+	var mirrors, fileHash sql.NullString                                           // handle null mirrors/hash
 	var chunkBitmap []byte
 
 	row := db.QueryRow(`
-		SELECT id, url, dest_path, filename, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size, file_hash
+		SELECT id, url, dest_path, filename, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size, file_hash, rate_limit
 		FROM downloads 
 		WHERE url = ? AND dest_path = ? AND status != 'completed'
 		ORDER BY paused_at DESC LIMIT 1
@@ -267,7 +268,7 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 	err := row.Scan(
 		&state.ID, &state.URL, &state.DestPath, &state.Filename,
 		&state.TotalSize, &state.Downloaded, &state.URLHash,
-		&createdAt, &pausedAt, &timeTaken, &mirrors, &chunkBitmap, &actualChunkSize, &fileHash,
+		&createdAt, &pausedAt, &timeTaken, &mirrors, &chunkBitmap, &actualChunkSize, &fileHash, &rateLimit,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -295,6 +296,9 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 	state.ChunkBitmap = chunkBitmap
 	if fileHash.Valid {
 		state.FileHash = fileHash.String
+	}
+	if rateLimit.Valid {
+		state.RateLimit = rateLimit.Int64
 	}
 
 	// Load tasks
@@ -367,7 +371,7 @@ func LoadMasterList() (*types.MasterList, error) {
 	}
 
 	rows, err := db.Query(`
-		SELECT id, url, dest_path, filename, status, total_size, downloaded, completed_at, time_taken, url_hash, mirrors, avg_speed 
+		SELECT id, url, dest_path, filename, status, total_size, downloaded, completed_at, time_taken, url_hash, mirrors, avg_speed, rate_limit 
 		FROM downloads
 	`)
 	if err != nil {
@@ -382,13 +386,13 @@ func LoadMasterList() (*types.MasterList, error) {
 	var list types.MasterList
 	for rows.Next() {
 		var e types.DownloadEntry
-		var completedAt, timeTaken sql.NullInt64      // handle nulls
-		var filename, urlHash, mirrors sql.NullString // handle nulls
-		var avgSpeed sql.NullFloat64                  // handle null avg_speed
+		var completedAt, timeTaken, rateLimit sql.NullInt64 // handle nulls
+		var filename, urlHash, mirrors sql.NullString       // handle nulls
+		var avgSpeed sql.NullFloat64                        // handle null avg_speed
 
 		if err := rows.Scan(
 			&e.ID, &e.URL, &e.DestPath, &filename, &e.Status, &e.TotalSize, &e.Downloaded,
-			&completedAt, &timeTaken, &urlHash, &mirrors, &avgSpeed,
+			&completedAt, &timeTaken, &urlHash, &mirrors, &avgSpeed, &rateLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -410,6 +414,9 @@ func LoadMasterList() (*types.MasterList, error) {
 		}
 		if avgSpeed.Valid {
 			e.AvgSpeed = avgSpeed.Float64
+		}
+		if rateLimit.Valid {
+			e.RateLimit = rateLimit.Int64
 		}
 
 		list.Downloads = append(list.Downloads, e)
@@ -433,8 +440,8 @@ func AddToMasterList(entry types.DownloadEntry) error {
 	return withTx(func(tx *sql.Tx) error {
 		_, err := tx.Exec(`
 			INSERT INTO downloads (
-				id, url, dest_path, filename, status, total_size, downloaded, completed_at, time_taken, url_hash, mirrors, avg_speed
-			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+				id, url, dest_path, filename, status, total_size, downloaded, completed_at, time_taken, url_hash, mirrors, avg_speed, rate_limit
+			) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 			ON CONFLICT(id) DO UPDATE SET
 				url=excluded.url,
 				dest_path=excluded.dest_path,
@@ -446,10 +453,11 @@ func AddToMasterList(entry types.DownloadEntry) error {
 				time_taken=excluded.time_taken,
 				url_hash=excluded.url_hash,
 				mirrors=excluded.mirrors,
-				avg_speed=excluded.avg_speed
+				avg_speed=excluded.avg_speed,
+				rate_limit=excluded.rate_limit
 		`,
 			entry.ID, entry.URL, entry.DestPath, entry.Filename, entry.Status, entry.TotalSize, entry.Downloaded,
-			entry.CompletedAt, entry.TimeTaken, entry.URLHash, strings.Join(entry.Mirrors, ","), entry.AvgSpeed)
+			entry.CompletedAt, entry.TimeTaken, entry.URLHash, strings.Join(entry.Mirrors, ","), entry.AvgSpeed, entry.RateLimit)
 
 		return err
 	})
@@ -478,15 +486,16 @@ func GetDownload(id string) (*types.DownloadEntry, error) {
 	var urlHash, filename, mirrors sql.NullString
 	var avgSpeed sql.NullFloat64
 
+	var rateLimit sql.NullInt64
 	row := db.QueryRow(`
-		SELECT id, url, dest_path, filename, status, total_size, downloaded, completed_at, time_taken, url_hash, mirrors, avg_speed 
+		SELECT id, url, dest_path, filename, status, total_size, downloaded, completed_at, time_taken, url_hash, mirrors, avg_speed, rate_limit 
 		FROM downloads
 		WHERE id = ?
 	`, id)
 
 	if err := row.Scan(
 		&e.ID, &e.URL, &e.DestPath, &filename, &e.Status, &e.TotalSize, &e.Downloaded,
-		&completedAt, &timeTaken, &urlHash, &mirrors, &avgSpeed,
+		&completedAt, &timeTaken, &urlHash, &mirrors, &avgSpeed, &rateLimit,
 	); err != nil {
 		if err == sql.ErrNoRows {
 			return nil, nil // Not found
@@ -511,6 +520,9 @@ func GetDownload(id string) (*types.DownloadEntry, error) {
 	}
 	if avgSpeed.Valid {
 		e.AvgSpeed = avgSpeed.Float64
+	}
+	if rateLimit.Valid {
+		e.RateLimit = rateLimit.Int64
 	}
 
 	return &e, nil
@@ -677,7 +689,7 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 
 	// 1. Load Downloads
 	query := fmt.Sprintf(`
-		SELECT id, url, dest_path, filename, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size
+		SELECT id, url, dest_path, filename, total_size, downloaded, url_hash, created_at, paused_at, time_taken, mirrors, chunk_bitmap, actual_chunk_size, rate_limit
 		FROM downloads
 		WHERE id IN (%s) AND status != 'completed'
 	`, inClause)
@@ -697,14 +709,14 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 
 	for rows.Next() {
 		var state types.DownloadState
-		var timeTaken, createdAt, pausedAt, actualChunkSize sql.NullInt64
+		var timeTaken, createdAt, pausedAt, actualChunkSize, rateLimit sql.NullInt64
 		var mirrors sql.NullString
 		var chunkBitmap []byte
 
 		if err := rows.Scan(
 			&state.ID, &state.URL, &state.DestPath, &state.Filename,
 			&state.TotalSize, &state.Downloaded, &state.URLHash,
-			&createdAt, &pausedAt, &timeTaken, &mirrors, &chunkBitmap, &actualChunkSize,
+			&createdAt, &pausedAt, &timeTaken, &mirrors, &chunkBitmap, &actualChunkSize, &rateLimit,
 		); err != nil {
 			return nil, err
 		}
@@ -725,6 +737,9 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 			state.ActualChunkSize = actualChunkSize.Int64
 		}
 		state.ChunkBitmap = chunkBitmap
+		if rateLimit.Valid {
+			state.RateLimit = rateLimit.Int64
+		}
 
 		states[state.ID] = &state
 	}
@@ -956,4 +971,24 @@ func ValidateIntegrity() (int, error) {
 	}
 
 	return removed, nil
+}
+
+// UpdateRateLimit updates the rate limit of a download in the database
+func UpdateRateLimit(id string, rate int64) error {
+	db := getDBHelper()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	result, err := db.Exec("UPDATE downloads SET rate_limit = ? WHERE id = ?", rate, id)
+	if err != nil {
+		return fmt.Errorf("failed to update rate limit: %w", err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("download not found: %s", id)
+	}
+
+	return nil
 }

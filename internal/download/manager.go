@@ -136,6 +136,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			Total:      cfg.TotalSize, // Relies on TotalSize from Config
 			DestPath:   finalDestPath,
 			State:      cfg.State,
+			RateLimit:  cfg.RateLimitBps,
 		})
 	}
 
@@ -188,6 +189,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		d := concurrent.NewConcurrentDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.Limiter = cfg.Limiter
+		d.RateLimitBps = cfg.RateLimitBps
 		utils.Debug("Calling Download with mirrors: %v", mirrors)
 		// Pass effectiveTotalSize to avoid unnecessary bootstrap if state already knows the size
 		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, effectiveTotalSize)
@@ -258,6 +260,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 				Elapsed:    elapsed,
 				Total:      effectiveTotalSize,
 				AvgSpeed:   avgSpeed,
+				RateLimit:  cfg.RateLimitBps,
 			})
 		}
 	} else if downloadErr != nil && !isPaused {

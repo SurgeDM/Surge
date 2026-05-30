@@ -130,6 +130,7 @@ func ensureDownloadsSchema() error {
 		{"actual_chunk_size", "INTEGER"},
 		{"avg_speed", "REAL"},
 		{"file_hash", "TEXT"},
+		{"rate_limit", "INTEGER"},
 	}
 
 	for _, col := range columnsToAdd {

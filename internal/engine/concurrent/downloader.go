@@ -32,6 +32,7 @@ type ConcurrentDownloader struct {
 	DestPath     string // For pause/resume
 	Runtime      *types.RuntimeConfig
 	Limiter      types.ByteLimiter
+	RateLimitBps int64
 	TotalSize    int64
 	bufPool      sync.Pool
 	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
@@ -567,6 +568,7 @@ func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queu
 		Mirrors:         candidateMirrors,
 		ChunkBitmap:     bitmap,
 		ActualChunkSize: chunkSize,
+		RateLimit:       d.RateLimitBps,
 	}
 	if d.ProgressChan != nil {
 		d.ProgressChan <- events.DownloadPausedMsg{
@@ -574,6 +576,7 @@ func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queu
 			Filename:   filepath.Base(destPath),
 			Downloaded: computedDownloaded,
 			State:      s,
+			RateLimit:  d.RateLimitBps,
 		}
 	}
 
