@@ -21,7 +21,7 @@ type activeDownload struct {
 }
 
 type WorkerPool struct {
-	taskChan     chan types.DownloadConfig
+	taskChan     chan string
 	progressCh   chan<- any
 	progressDone chan struct{}                   // closed when progressCh must no longer be sent to
 	downloads    map[string]*activeDownload      // Track active downloads for pause/resume
@@ -56,7 +56,7 @@ func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
 		maxDownloads = 3 // Default to 3 if invalid
 	}
 	pool := &WorkerPool{
-		taskChan:         make(chan types.DownloadConfig, 100), // We make it buffered to avoid blocking add
+		taskChan:         make(chan string, 100), // We make it buffered to avoid blocking add
 		progressCh:       progressCh,
 		progressDone:     make(chan struct{}),
 		downloads:        make(map[string]*activeDownload),
@@ -117,7 +117,7 @@ func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 	p.queued[cfg.ID] = cfg
 	p.mu.Unlock()
 
-	p.taskChan <- cfg
+	p.taskChan <- cfg.ID
 }
 
 func (p *WorkerPool) ensureLimiterForConfig(cfg *types.DownloadConfig) {
@@ -275,6 +275,16 @@ func (p *WorkerPool) SetDownloadRateLimit(downloadID string, rate int64) {
 		return
 	}
 
+	p.mu.Lock()
+	if ad, ok := p.downloads[downloadID]; ok {
+		ad.config.RateLimitBps = rate
+	}
+	if cfg, ok := p.queued[downloadID]; ok {
+		cfg.RateLimitBps = rate
+		p.queued[downloadID] = cfg
+	}
+	p.mu.Unlock()
+
 	p.limiterMu.Lock()
 	if p.downloadLimiters == nil {
 		p.downloadLimiters = make(map[string]*engine.RateLimiter)
@@ -287,16 +297,6 @@ func (p *WorkerPool) SetDownloadRateLimit(downloadID string, rate int64) {
 		limiter.SetRate(rate, rateLimiterBurst(rate))
 	}
 	p.limiterMu.Unlock()
-
-	p.mu.Lock()
-	if ad, ok := p.downloads[downloadID]; ok {
-		ad.config.RateLimitBps = rate
-	}
-	if cfg, ok := p.queued[downloadID]; ok {
-		cfg.RateLimitBps = rate
-		p.queued[downloadID] = cfg
-	}
-	p.mu.Unlock()
 }
 
 // PauseAll pauses all active downloads (for graceful shutdown)
@@ -425,22 +425,17 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 }
 
 func (p *WorkerPool) worker() {
-	for cfg := range p.taskChan {
-		p.mu.RLock()
-		_, stillQueued := p.queued[cfg.ID]
-		p.mu.RUnlock()
+	for id := range p.taskChan {
+		p.mu.Lock()
+		cfg, stillQueued := p.queued[id]
 		if !stillQueued {
 			// Canceled while waiting in queue.
+			p.mu.Unlock()
 			continue
 		}
 
 		p.ensureLimiterForConfig(&cfg)
-
-		p.wg.Add(1)
-		// Create cancellable context
 		ctx, cancel := context.WithCancel(context.Background())
-
-		// Register active download
 		ad := &activeDownload{
 			config: cfg,
 			cancel: cancel,
@@ -449,7 +444,7 @@ func (p *WorkerPool) worker() {
 			ad.config.State.SetCancelFunc(cancel)
 		}
 		ad.running.Store(true)
-		p.mu.Lock()
+		p.wg.Add(1)
 		delete(p.queued, cfg.ID)
 		p.downloads[cfg.ID] = ad
 		p.mu.Unlock()
@@ -518,6 +513,7 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 			Status:     "queued",
 			Downloaded: 0,
 			TotalSize:  0, // Metadata not yet fetched
+			RateLimit:  qCfg.RateLimitBps,
 		}
 	}
 
@@ -542,6 +538,7 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 		TotalSize:  totalSize,
 		Downloaded: downloaded,
 		Status:     "downloading",
+		RateLimit:  ad.config.RateLimitBps,
 	}
 	if dp := state.GetDestPath(); dp != "" {
 		status.DestPath = dp
