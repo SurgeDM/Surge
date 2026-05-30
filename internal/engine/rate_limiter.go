@@ -15,6 +15,7 @@ type RateLimiter struct {
 	bucketSize int64
 	lastRefill time.Time
 	mu         sync.Mutex
+	wakeCh     chan struct{}
 }
 
 func NewRateLimiter(rate int64, bucketSize int64) *RateLimiter {
@@ -26,6 +27,7 @@ func NewRateLimiter(rate int64, bucketSize int64) *RateLimiter {
 		bucketSize: bucketSize,
 		tokens:     bucketSize,
 		lastRefill: time.Now(),
+		wakeCh:     make(chan struct{}),
 	}
 }
 
@@ -84,6 +86,7 @@ func (r *RateLimiter) WaitN(ctx context.Context, n int64) error {
 		}
 
 		missing := n - r.tokens
+		wakeCh := r.wakeCh
 
 		hi, lo := bits.Mul64(uint64(missing), uint64(time.Second))
 		waitNs, rem := bits.Div64(hi, lo, uint64(r.rate))
@@ -104,9 +107,19 @@ func (r *RateLimiter) WaitN(ctx context.Context, n int64) error {
 		select {
 		case <-ctx.Done():
 			if !timer.Stop() {
-				<-timer.C
+				select {
+				case <-timer.C:
+				default:
+				}
 			}
 			return ctx.Err()
+		case <-wakeCh:
+			if !timer.Stop() {
+				select {
+				case <-timer.C:
+				default:
+				}
+			}
 		case <-timer.C:
 		}
 	}
@@ -145,4 +158,14 @@ func (r *RateLimiter) SetRate(rate int64, bucketSize int64) {
 		r.tokens = bucketSize
 	}
 	r.lastRefill = now
+	r.wakeWaitersLocked()
+}
+
+func (r *RateLimiter) wakeWaitersLocked() {
+	if r.wakeCh == nil {
+		r.wakeCh = make(chan struct{})
+		return
+	}
+	close(r.wakeCh)
+	r.wakeCh = make(chan struct{})
 }
