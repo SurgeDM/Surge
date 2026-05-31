@@ -54,10 +54,15 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 		statusLine = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true).Render(" Serving at " + serverAddr)
 	}
 
+	statusPrefix := greenDot
+	if m.ServerPort == 0 && !m.IsRemote {
+		statusPrefix = ""
+	}
+
 	serverPortContent := lipgloss.NewStyle().
 		Width(contentWidth).
 		Align(lipgloss.Center).
-		Render(greenDot + statusLine)
+		Render(statusPrefix + statusLine)
 
 	var innerContent string
 	// If the height is too short for both logo and server text, just return server text centered vertically
