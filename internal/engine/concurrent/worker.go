@@ -530,7 +530,7 @@ func (d *ConcurrentDownloader) HedgeWork(queue *TaskQueue) bool {
 	}
 
 	queue.Push(hedgedTask)
-	utils.Debug("Balancer: hedged %s (range: %d-%d) — idle worker will race on fresh connection",
+	utils.Debug("Balancer: hedged %s (range: %d-%d) - idle worker will race on fresh connection",
 		utils.ConvertBytesToHumanReadable(hedgedTask.Length), hedgedTask.Offset, hedgedTask.Offset+hedgedTask.Length)
 
 	return true

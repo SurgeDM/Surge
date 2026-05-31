@@ -36,7 +36,7 @@ func TestHandleDownload_HeadlessMode_AutoApprovesNonDuplicate(t *testing.T) {
 
 	// Enable ExtensionPrompt (default is true, but let's be explicit)
 	settings := config.DefaultSettings()
-	settings.Extension.ExtensionPrompt = true
+	settings.Extension.ExtensionPrompt.Value = true
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)
 	}
@@ -94,7 +94,7 @@ func TestHandleDownload_HeadlessMode_RejectsDuplicateWithWarn(t *testing.T) {
 
 	// Enable WarnOnDuplicate
 	settings := config.DefaultSettings()
-	settings.General.WarnOnDuplicate = true
+	settings.General.WarnOnDuplicate.Value = true
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)
 	}
@@ -145,8 +145,8 @@ func TestHandleDownload_HeadlessMode_RejectsExtensionPromptDuplicate(t *testing.
 	})
 
 	settings := config.DefaultSettings()
-	settings.Extension.ExtensionPrompt = true
-	settings.General.WarnOnDuplicate = false
+	settings.Extension.ExtensionPrompt.Value = true
+	settings.General.WarnOnDuplicate.Value = false
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)
 	}

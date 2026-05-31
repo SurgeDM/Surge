@@ -101,7 +101,7 @@ func TestGetCategoryPath(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	settings := config.DefaultSettings()
-	settings.Categories.CategoryEnabled = true
+	settings.Categories.CategoryEnabled.Value = true
 	settings.Categories.Categories = []config.Category{
 		{
 			Name:    "Images",
@@ -130,7 +130,7 @@ func TestGetCategoryPath(t *testing.T) {
 	}
 
 	// Disabled
-	settings.Categories.CategoryEnabled = false
+	settings.Categories.CategoryEnabled.Value = false
 	path, err = processing.GetCategoryPath("test.jpg", tmpDir, settings)
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
@@ -141,7 +141,7 @@ func TestGetCategoryPath(t *testing.T) {
 
 	// No side effects: routing should not create the directory before reservation.
 	missingDir := filepath.Join(tmpDir, "missing")
-	settings.Categories.CategoryEnabled = true
+	settings.Categories.CategoryEnabled.Value = true
 	settings.Categories.Categories = []config.Category{
 		{
 			Name:    "Programs",
@@ -163,7 +163,7 @@ func TestGetCategoryPath(t *testing.T) {
 
 func TestResolveDestination_Priority(t *testing.T) {
 	settings := config.DefaultSettings()
-	settings.Categories.CategoryEnabled = false
+	settings.Categories.CategoryEnabled.Value = false
 	defaultDir := "/downloads"
 
 	// 1. User defined beats all
@@ -213,7 +213,7 @@ func TestResolveDestination_Priority(t *testing.T) {
 
 func TestResolveDestination_ErrorsWhenUniqueNameExhausted(t *testing.T) {
 	settings := config.DefaultSettings()
-	settings.Categories.CategoryEnabled = false
+	settings.Categories.CategoryEnabled.Value = false
 
 	overflowActive := func(dir, name string) bool {
 		if name == "overflow.bin" {

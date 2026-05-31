@@ -381,8 +381,8 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 1. Test Extension Prompt Enabled
-	m.Settings.Extension.ExtensionPrompt = true
-	m.Settings.General.WarnOnDuplicate = true
+	m.Settings.Extension.ExtensionPrompt.Value = true
+	m.Settings.General.WarnOnDuplicate.Value = true
 
 	msg := events.DownloadRequestMsg{
 		URL:      "http://example.com/test.zip",
@@ -407,8 +407,8 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 2. Test Duplicate Warning (when prompt disabled but duplicate exists)
-	m.Settings.Extension.ExtensionPrompt = false
-	m.Settings.General.WarnOnDuplicate = true
+	m.Settings.Extension.ExtensionPrompt.Value = false
+	m.Settings.General.WarnOnDuplicate.Value = true
 
 	// Add existing download
 	m.downloads = append(m.downloads, &DownloadModel{
@@ -424,8 +424,8 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 3. Test No Prompt (Direct Download)
-	m.Settings.Extension.ExtensionPrompt = false
-	m.Settings.General.WarnOnDuplicate = true
+	m.Settings.Extension.ExtensionPrompt.Value = false
+	m.Settings.General.WarnOnDuplicate.Value = true
 	m.downloads = nil // Clear downloads
 
 	// Note: startDownload triggers a command (tea.Cmd), and might update state or lists.

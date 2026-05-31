@@ -110,7 +110,7 @@ func TestEnsureOpenActionRequestAllowed_RemoteToggle(t *testing.T) {
 	}
 
 	globalSettings = config.DefaultSettings()
-	globalSettings.General.AllowRemoteOpenActions = true
+	globalSettings.General.AllowRemoteOpenActions.Value = true
 	if err := ensureOpenActionRequestAllowed(request); err != nil {
 		t.Fatalf("expected remote open action to be allowed when enabled, got: %v", err)
 	}
@@ -380,7 +380,7 @@ func TestEnsureOpenActionRequestAllowed_ForwardedLoopbackDenied(t *testing.T) {
 	}
 
 	globalSettings = config.DefaultSettings()
-	globalSettings.General.AllowRemoteOpenActions = true
+	globalSettings.General.AllowRemoteOpenActions.Value = true
 	if err := ensureOpenActionRequestAllowed(request); err != nil {
 		t.Fatalf("expected forwarded loopback request to be allowed when enabled, got: %v", err)
 	}

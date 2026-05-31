@@ -584,7 +584,16 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 			if key == "" {
 				key = field.Name
 			}
-			values[key] = catVal.Field(i).Interface()
+			valInterface := catVal.Field(i).Interface()
+			if setting, ok := valInterface.(*config.Setting); ok {
+				if setting != nil {
+					values[key] = setting.Value
+				} else {
+					values[key] = nil
+				}
+			} else {
+				values[key] = valInterface
+			}
 		}
 	}
 
@@ -633,92 +642,97 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 				return nil
 			}
 
-			// Special logic for Theme to trigger app re-rendering internally
-			if key == "theme" {
-				var theme int
-				valLower := strings.ToLower(value)
-				switch valLower {
-				case "system", "adaptive", "0":
-					theme = config.ThemeAdaptive
-				case "light", "1":
-					theme = config.ThemeLight
-				case "dark", "2":
-					theme = config.ThemeDark
-				default:
-					if v, err := strconv.Atoi(value); err == nil && v >= 0 && v <= 2 {
-						theme = v
-					} else {
-						return nil // Invalid
-					}
+			if setting, ok := targetField.Interface().(*config.Setting); ok {
+				if setting == nil {
+					return nil
 				}
-				targetField.Set(reflect.ValueOf(theme))
-				m.ApplyTheme(theme, m.Settings.General.ThemePath)
-				return nil
-			}
-			if key == "theme_path" {
-				targetField.SetString(value)
-				// Re-apply the current theme mode but with the brand new path
-				m.ApplyTheme(m.Settings.General.Theme, value)
-				return nil
-			}
 
-			// Generic Parsing and Application
-			switch targetField.Kind() {
-			case reflect.Bool:
-				// Typically toggled unless explicitly typed out
-				if value == "" {
-					if key == "auto_start" {
-						if m.ToggleServiceFunc == nil {
-							return fmt.Errorf("service management is not available on this platform")
+				// Special logic for Theme to trigger app re-rendering internally
+				if key == "theme" {
+					var theme int
+					valLower := strings.ToLower(value)
+					switch valLower {
+					case "system", "adaptive", "0":
+						theme = config.ThemeAdaptive
+					case "light", "1":
+						theme = config.ThemeLight
+					case "dark", "2":
+						theme = config.ThemeDark
+					default:
+						if v, err := strconv.Atoi(value); err == nil && v >= 0 && v <= 2 {
+							theme = v
+						} else {
+							return nil // Invalid
 						}
-						newVal := !targetField.Bool()
-						if err := m.ToggleServiceFunc(newVal); err != nil {
-							return fmt.Errorf("failed to update service: %w", err)
+					}
+					setting.Value = theme
+					m.ApplyTheme(theme, config.Resolve[string](m.Settings.General.ThemePath))
+					return nil
+				}
+				if key == "theme_path" {
+					setting.Value = value
+					// Re-apply the current theme mode but with the brand new path
+					m.ApplyTheme(config.Resolve[int](m.Settings.General.Theme), value)
+					return nil
+				}
+
+				// Generic Parsing and Application
+				switch setting.Type {
+				case "bool":
+					// Typically toggled unless explicitly typed out
+					if value == "" {
+						if key == "auto_start" {
+							if m.ToggleServiceFunc == nil {
+								return fmt.Errorf("service management is not available on this platform")
+							}
+							newVal := !config.Resolve[bool](setting)
+							if err := m.ToggleServiceFunc(newVal); err != nil {
+								return fmt.Errorf("failed to update service: %w", err)
+							}
+							setting.Value = newVal
+							return nil
 						}
-						targetField.SetBool(newVal)
-						return nil
+						setting.Value = !config.Resolve[bool](setting)
+					} else {
+						b, _ := strconv.ParseBool(value)
+						setting.Value = b
 					}
-					targetField.SetBool(!targetField.Bool())
-				} else {
-					b, _ := strconv.ParseBool(value)
-					targetField.SetBool(b)
-				}
-			case reflect.String:
-				targetField.SetString(value)
-			case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
-				if key == "worker_buffer_size" {
-					if v, err := strconv.ParseFloat(value, 64); err == nil {
-						targetField.SetInt(int64(v * float64(config.KB)))
+				case "string", "auth_token", "link":
+					setting.Value = value
+				case "int":
+					if key == "worker_buffer_size" {
+						if v, err := strconv.ParseFloat(value, 64); err == nil {
+							setting.Value = int(v * float64(config.KB))
+						}
+					} else {
+						if v, err := strconv.Atoi(value); err == nil {
+							setting.Value = v
+						}
 					}
-				} else {
-					if v, err := strconv.Atoi(value); err == nil {
-						targetField.SetInt(int64(v))
+				case "int64":
+					// Handle KB/MB scaling gracefully if specified
+					if key == "min_chunk_size" {
+						if v, err := strconv.ParseFloat(value, 64); err == nil {
+							setting.Value = int64(v * float64(config.MB))
+						}
+					} else {
+						if v, err := strconv.ParseInt(value, 10, 64); err == nil {
+							setting.Value = v
+						}
 					}
-				}
-			case reflect.Int64:
-				if targetField.Type().String() == "time.Duration" {
+				case "duration":
 					if _, err := strconv.ParseFloat(value, 64); err == nil {
 						value += "s"
 					}
 					if v, err := time.ParseDuration(value); err == nil {
-						targetField.Set(reflect.ValueOf(v))
+						setting.Value = v
 					}
-				} else {
-					// Handle KB/MB scaling gracefully if specified
-					if key == "min_chunk_size" {
-						if v, err := strconv.ParseFloat(value, 64); err == nil {
-							targetField.SetInt(int64(v * float64(config.MB)))
-						}
-					} else {
-						if v, err := strconv.ParseInt(value, 10, 64); err == nil {
-							targetField.SetInt(v)
-						}
+				case "float64":
+					if v, err := strconv.ParseFloat(value, 64); err == nil {
+						setting.Value = v
 					}
 				}
-			case reflect.Float32, reflect.Float64:
-				if v, err := strconv.ParseFloat(value, 64); err == nil {
-					targetField.SetFloat(v)
-				}
+				return nil
 			}
 
 			return nil
@@ -815,26 +829,80 @@ func (m RootModel) getSettingUnit() string {
 func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool) string {
 	switch key {
 	case "min_chunk_size":
-		if v, ok := value.(int64); ok {
-			mb := float64(v) / float64(config.MB)
+		var valInt64 int64
+		var ok bool
+		switch v := value.(type) {
+		case int64:
+			valInt64 = v
+			ok = true
+		case int:
+			valInt64 = int64(v)
+			ok = true
+		case float64:
+			valInt64 = int64(v)
+			ok = true
+		}
+		if ok {
+			mb := float64(valInt64) / float64(config.MB)
 			return fmt.Sprintf("%.1f", mb)
 		}
 	case "worker_buffer_size":
-		v := reflect.ValueOf(value)
-		if v.Kind() == reflect.Int {
-			kb := float64(v.Int()) / float64(config.KB)
+		var valInt int
+		var ok bool
+		switch v := value.(type) {
+		case int:
+			valInt = v
+			ok = true
+		case int64:
+			valInt = int(v)
+			ok = true
+		case float64:
+			valInt = int(v)
+			ok = true
+		}
+		if ok {
+			kb := float64(valInt) / float64(config.KB)
 			return fmt.Sprintf("%.0f", kb)
 		}
 	case "slow_worker_grace_period", "stall_timeout":
 		// Show duration as plain seconds number (e.g., "5" instead of "5s")
-		if d, ok := value.(time.Duration); ok {
+		var d time.Duration
+		var ok bool
+		switch v := value.(type) {
+		case time.Duration:
+			d = v
+			ok = true
+		case float64:
+			d = time.Duration(v)
+			ok = true
+		case int64:
+			d = time.Duration(v)
+			ok = true
+		case int:
+			d = time.Duration(v)
+			ok = true
+		}
+		if ok {
 			return fmt.Sprintf("%.0f", d.Seconds())
 		}
 	}
 
 	if key == "theme" {
-		if v, ok := value.(int); ok {
-			switch v {
+		var valInt int
+		var ok bool
+		switch v := value.(type) {
+		case int:
+			valInt = v
+			ok = true
+		case int64:
+			valInt = int(v)
+			ok = true
+		case float64:
+			valInt = int(v)
+			ok = true
+		}
+		if ok {
+			switch valInt {
 			case config.ThemeAdaptive:
 				return "< System >"
 			case config.ThemeLight:
@@ -857,28 +925,102 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 
 	switch typ {
 	case "bool":
-		if b, ok := value.(bool); ok {
+		var b bool
+		var ok bool
+		switch val := value.(type) {
+		case bool:
+			b = val
+			ok = true
+		case float64:
+			b = val != 0
+			ok = true
+		case int:
+			b = val != 0
+			ok = true
+		}
+		if ok {
 			if b {
 				return "True"
 			}
 			return "False"
 		}
 	case "duration":
-		if d, ok := value.(time.Duration); ok {
+		var d time.Duration
+		var ok bool
+		switch val := value.(type) {
+		case time.Duration:
+			d = val
+			ok = true
+		case float64:
+			d = time.Duration(val)
+			ok = true
+		case int64:
+			d = time.Duration(val)
+			ok = true
+		case int:
+			d = time.Duration(val)
+			ok = true
+		case string:
+			if parsed, err := time.ParseDuration(val); err == nil {
+				d = parsed
+				ok = true
+			}
+		}
+		if ok {
 			return d.String()
 		}
 	case "int64":
-		if v, ok := value.(int64); ok {
-			// Just display the raw number - units handled by getSettingUnit
+		var v int64
+		var ok bool
+		switch val := value.(type) {
+		case int64:
+			v = val
+			ok = true
+		case int:
+			v = int64(val)
+			ok = true
+		case float64:
+			v = int64(val)
+			ok = true
+		}
+		if ok {
 			return fmt.Sprintf("%d", v)
 		}
 	case "int":
-		v := reflect.ValueOf(value)
-		if v.Kind() == reflect.Int {
-			return fmt.Sprintf("%d", v.Int())
+		var v int
+		var ok bool
+		switch val := value.(type) {
+		case int:
+			v = val
+			ok = true
+		case int64:
+			v = int(val)
+			ok = true
+		case float64:
+			v = int(val)
+			ok = true
+		}
+		if ok {
+			return fmt.Sprintf("%d", v)
 		}
 	case "float64":
-		if v, ok := value.(float64); ok {
+		var v float64
+		var ok bool
+		switch val := value.(type) {
+		case float64:
+			v = val
+			ok = true
+		case float32:
+			v = float64(val)
+			ok = true
+		case int:
+			v = float64(val)
+			ok = true
+		case int64:
+			v = float64(val)
+			ok = true
+		}
+		if ok {
 			return fmt.Sprintf("%.2f", v)
 		}
 	case "string", "link":
@@ -909,96 +1051,47 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 
 // resetSettingToDefault resets a specific setting to its default value
 func (m *RootModel) resetSettingToDefault(category, key string, defaults *config.Settings) error {
-	switch category {
-	case "General":
-		switch key {
-		case "default_download_dir":
-			m.Settings.General.DefaultDownloadDir = defaults.General.DefaultDownloadDir
-		case "warn_on_duplicate":
-			m.Settings.General.WarnOnDuplicate = defaults.General.WarnOnDuplicate
-		case "download_complete_notification":
-			m.Settings.General.DownloadCompleteNotification = defaults.General.DownloadCompleteNotification
-		case "auto_resume":
-			m.Settings.General.AutoResume = defaults.General.AutoResume
-		case "auto_start":
-			if m.ToggleServiceFunc != nil && m.Settings.General.AutoStart != defaults.General.AutoStart {
-				if err := m.ToggleServiceFunc(defaults.General.AutoStart); err != nil {
-					return fmt.Errorf("failed to update service: %w", err)
+	if key == "auto_start" {
+		if m.ToggleServiceFunc != nil && config.Resolve[bool](m.Settings.General.AutoStart) != config.Resolve[bool](defaults.General.AutoStart) {
+			if err := m.ToggleServiceFunc(config.Resolve[bool](defaults.General.AutoStart)); err != nil {
+				return fmt.Errorf("failed to update service: %w", err)
+			}
+		}
+	}
+
+	val1 := reflect.ValueOf(m.Settings).Elem()
+	val2 := reflect.ValueOf(defaults).Elem()
+	typ := val1.Type()
+
+	for i := 0; i < typ.NumField(); i++ {
+		field := typ.Field(i)
+		label := field.Tag.Get("ui_label")
+		if label == "" {
+			label = field.Name
+		}
+		if label == category {
+			catField1 := val1.Field(i)
+			catField2 := val2.Field(i)
+			if catField1.Kind() != reflect.Struct {
+				continue
+			}
+
+			catTyp := catField1.Type()
+			for j := 0; j < catTyp.NumField(); j++ {
+				f := catTyp.Field(j)
+				fieldKey := f.Tag.Get("json")
+				if fieldKey == "" {
+					fieldKey = f.Name
+				}
+				if fieldKey == key {
+					s1, ok1 := catField1.Field(j).Interface().(*config.Setting)
+					s2, ok2 := catField2.Field(j).Interface().(*config.Setting)
+					if ok1 && ok2 && s1 != nil && s2 != nil {
+						s1.Value = s2.Value
+						return nil
+					}
 				}
 			}
-			m.Settings.General.AutoStart = defaults.General.AutoStart
-		case "skip_update_check":
-			m.Settings.General.SkipUpdateCheck = defaults.General.SkipUpdateCheck
-
-		case "clipboard_monitor":
-			m.Settings.General.ClipboardMonitor = defaults.General.ClipboardMonitor
-		case "allow_remote_open_actions":
-			m.Settings.General.AllowRemoteOpenActions = defaults.General.AllowRemoteOpenActions
-		case "live_speed_graph":
-			m.Settings.General.LiveSpeedGraph = defaults.General.LiveSpeedGraph
-		case "theme":
-			m.Settings.General.Theme = defaults.General.Theme
-		case "theme_path":
-			m.Settings.General.ThemePath = defaults.General.ThemePath
-		case "log_retention_count":
-			m.Settings.General.LogRetentionCount = defaults.General.LogRetentionCount
-		}
-
-	case "Network":
-		// Handle Network-related keys
-		switch key {
-		case "max_connections_per_host":
-			m.Settings.Network.MaxConnectionsPerDownload = defaults.Network.MaxConnectionsPerDownload
-
-		case "max_concurrent_downloads":
-			m.Settings.Network.MaxConcurrentDownloads = defaults.Network.MaxConcurrentDownloads
-		case "max_concurrent_probes":
-			m.Settings.Network.MaxConcurrentProbes = defaults.Network.MaxConcurrentProbes
-		case "user_agent":
-			m.Settings.Network.UserAgent = defaults.Network.UserAgent
-		case "proxy_url":
-			m.Settings.Network.ProxyURL = defaults.Network.ProxyURL
-		case "custom_dns":
-			m.Settings.Network.CustomDNS = defaults.Network.CustomDNS
-		case "sequential_download":
-			m.Settings.Network.SequentialDownload = defaults.Network.SequentialDownload
-		case "min_chunk_size":
-			m.Settings.Network.MinChunkSize = defaults.Network.MinChunkSize
-		case "worker_buffer_size":
-			m.Settings.Network.WorkerBufferSize = defaults.Network.WorkerBufferSize
-		case "dial_hedge_count":
-			m.Settings.Network.DialHedgeCount = defaults.Network.DialHedgeCount
-		}
-	case "Performance":
-		switch key {
-		case "max_task_retries":
-			m.Settings.Performance.MaxTaskRetries = defaults.Performance.MaxTaskRetries
-		case "slow_worker_threshold":
-			m.Settings.Performance.SlowWorkerThreshold = defaults.Performance.SlowWorkerThreshold
-		case "slow_worker_grace_period":
-			m.Settings.Performance.SlowWorkerGracePeriod = defaults.Performance.SlowWorkerGracePeriod
-		case "stall_timeout":
-			m.Settings.Performance.StallTimeout = defaults.Performance.StallTimeout
-		case "speed_ema_alpha":
-			m.Settings.Performance.SpeedEmaAlpha = defaults.Performance.SpeedEmaAlpha
-		}
-	case "Categories":
-		switch key {
-		case "category_enabled":
-			m.Settings.Categories.CategoryEnabled = defaults.Categories.CategoryEnabled
-		}
-	case "Extension":
-		switch key {
-		case "extension_prompt":
-			m.Settings.Extension.ExtensionPrompt = defaults.Extension.ExtensionPrompt
-		case "chrome_extension_url":
-			m.Settings.Extension.ChromeExtensionURL = defaults.Extension.ChromeExtensionURL
-		case "firefox_extension_url":
-			m.Settings.Extension.FirefoxExtensionURL = defaults.Extension.FirefoxExtensionURL
-		case "instructions_url":
-			m.Settings.Extension.InstructionsURL = defaults.Extension.InstructionsURL
-		case "-":
-			m.Settings.Extension.AuthToken = defaults.Extension.AuthToken
 		}
 	}
 	return nil

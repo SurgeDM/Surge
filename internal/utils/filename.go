@@ -142,7 +142,7 @@ func TruncateFilename(name string) string {
 	maxBase := MaxFilenameLength - extBytes
 
 	if maxBase < 1 {
-		// Extension alone is too long — hard-truncate by rune so we don't split mid-char
+		// Extension alone is too long - hard-truncate by rune so we don't split mid-char
 		b := []byte(name)
 		for len(b) > MaxFilenameLength {
 			_, size := utf8.DecodeLastRune(b)

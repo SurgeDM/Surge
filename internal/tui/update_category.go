@@ -124,7 +124,7 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 				originalPath := m.catMgrInputs[3].Value()
 				browseDir := strings.TrimSpace(originalPath)
 				if browseDir == "" {
-					browseDir = m.Settings.General.DefaultDownloadDir
+					browseDir = config.Resolve[string](m.Settings.General.DefaultDownloadDir)
 				}
 				if browseDir == "" {
 					browseDir = m.PWD
@@ -238,7 +238,7 @@ func (m RootModel) updateCategoryManager(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 	}
 
 	if key.Matches(msg, m.keys.CategoryMgr.Toggle) {
-		m.Settings.Categories.CategoryEnabled = !m.Settings.Categories.CategoryEnabled
+		m.Settings.Categories.CategoryEnabled.Value = !config.Resolve[bool](m.Settings.Categories.CategoryEnabled)
 		return m, nil
 	}
 

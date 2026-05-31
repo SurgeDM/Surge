@@ -37,7 +37,7 @@ func newProbeTestServer(t *testing.T, size int64) *httptest.Server {
 
 func newLifecycleManagerForTest() *LifecycleManager {
 	settings := config.DefaultSettings()
-	settings.Categories.CategoryEnabled = false
+	settings.Categories.CategoryEnabled.Value = false
 	sem := make(chan struct{}, maxConcurrentProbes)
 	for i := 0; i < maxConcurrentProbes; i++ {
 		sem <- struct{}{}
@@ -461,7 +461,7 @@ func TestLifecycleManager_GetSettings_RefreshesFromDiskAfterTTL(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	initial := config.DefaultSettings()
-	initial.Categories.CategoryEnabled = false
+	initial.Categories.CategoryEnabled.Value = false
 	if err := config.SaveSettings(initial); err != nil {
 		t.Fatalf("SaveSettings(initial) failed: %v", err)
 	}
@@ -469,7 +469,7 @@ func TestLifecycleManager_GetSettings_RefreshesFromDiskAfterTTL(t *testing.T) {
 	mgr := NewLifecycleManager(nil, nil)
 
 	updated := config.DefaultSettings()
-	updated.Categories.CategoryEnabled = true
+	updated.Categories.CategoryEnabled.Value = true
 	if err := config.SaveSettings(updated); err != nil {
 		t.Fatalf("SaveSettings(updated) failed: %v", err)
 	}
@@ -481,7 +481,7 @@ func TestLifecycleManager_GetSettings_RefreshesFromDiskAfterTTL(t *testing.T) {
 	settingsRefreshTTL = 0
 
 	settings := mgr.GetSettings()
-	if !settings.Categories.CategoryEnabled {
+	if !config.Resolve[bool](settings.Categories.CategoryEnabled) {
 		t.Fatal("expected GetSettings to pick up saved settings after TTL expiry")
 	}
 }
@@ -491,7 +491,7 @@ func TestLifecycleManager_GetSettings_KeepsCachedSnapshotWhenReloadFails(t *test
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	initial := config.DefaultSettings()
-	initial.General.WarnOnDuplicate = false
+	initial.General.WarnOnDuplicate.Value = false
 	if err := config.SaveSettings(initial); err != nil {
 		t.Fatalf("SaveSettings(initial) failed: %v", err)
 	}
@@ -511,7 +511,7 @@ func TestLifecycleManager_GetSettings_KeepsCachedSnapshotWhenReloadFails(t *test
 	settingsRefreshTTL = 0
 
 	settings := mgr.GetSettings()
-	if settings.General.WarnOnDuplicate {
+	if config.Resolve[bool](settings.General.WarnOnDuplicate) {
 		t.Fatal("expected GetSettings to keep the cached snapshot when disk reload fails")
 	}
 }
@@ -1076,7 +1076,7 @@ func TestLifecycleManager_ProbeSemaphore_LimitsInflight(t *testing.T) {
 		return "", fmt.Errorf("dispatch intentionally rejected for test")
 	}
 	settings := config.DefaultSettings()
-	settings.Categories.CategoryEnabled = false
+	settings.Categories.CategoryEnabled.Value = false
 	mgr.ApplySettings(settings)
 
 	tempDir := t.TempDir()
@@ -1097,7 +1097,7 @@ func TestLifecycleManager_ProbeSemaphore_LimitsInflight(t *testing.T) {
 	wg.Wait()
 	close(stopPoller)
 
-	// addFunc is nil so every enqueue fails after probe — that's fine;
+	// addFunc is nil so every enqueue fails after probe - that's fine;
 	// we only care that the probe phase was throttled.
 	for _, err := range errs {
 		if err == nil {
@@ -1152,6 +1152,6 @@ func TestLifecycleManager_ProbeSemaphore_CancelledContextAbortsWait(t *testing.T
 	}
 	// Should abort almost instantly, not wait for the delayed slot return.
 	if elapsed > 200*time.Millisecond {
-		t.Errorf("Enqueue took %v to abort — semaphore cancellation may be broken", elapsed)
+		t.Errorf("Enqueue took %v to abort - semaphore cancellation may be broken", elapsed)
 	}
 }

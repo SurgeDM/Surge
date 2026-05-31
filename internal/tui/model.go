@@ -301,10 +301,10 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	// Override AutoResume if CLI flag provided
 	if noResume {
-		settings.General.AutoResume = false
+		settings.General.AutoResume.Value = false
 	}
 
-	applyColorModeForTheme(settings.General.Theme, settings.General.ThemePath, initialDarkBackground)
+	applyColorModeForTheme(config.Resolve[int](settings.General.Theme), config.Resolve[string](settings.General.ThemePath), initialDarkBackground)
 
 	// Load paused downloads from master list (now uses global config directory)
 	var downloads []*DownloadModel
@@ -338,7 +338,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 					dm.pausing = true
 					dm.started = true
 				case "paused":
-					if settings.General.AutoResume {
+					if config.Resolve[bool](settings.General.AutoResume) {
 						dm.resuming = true
 						dm.paused = true // Will update when resume event received
 					} else {
@@ -491,7 +491,7 @@ func (m RootModel) Init() tea.Cmd {
 	cmds = append(cmds, m.spinner.Tick)
 
 	// Trigger update check if not disabled in settings
-	if !m.Settings.General.SkipUpdateCheck {
+	if !config.Resolve[bool](m.Settings.General.SkipUpdateCheck) {
 		cmds = append(cmds, checkForUpdateCmd(m.CurrentVersion))
 	}
 
@@ -568,7 +568,7 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 		}
 
 		// Apply dashboard category filter.
-		if m.categoryFilter != "" && m.Settings != nil && m.Settings.Categories.CategoryEnabled {
+		if m.categoryFilter != "" && m.Settings != nil && config.Resolve[bool](m.Settings.Categories.CategoryEnabled) {
 			if !m.matchesCategoryFilter(d) {
 				continue
 			}

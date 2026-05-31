@@ -30,8 +30,8 @@ func TestAutoResume_Enabled(t *testing.T) {
 	// 2. Create settings file with AutoResume = true
 	settingsPath := filepath.Join(surgeDir, "settings.json")
 	settings := config.DefaultSettings()
-	settings.General.AutoResume = true
-	settings.General.DefaultDownloadDir = tmpDir
+	settings.General.AutoResume.Value = true
+	settings.General.DefaultDownloadDir.Value = tmpDir
 
 	data, _ := json.Marshal(settings)
 	if err := os.WriteFile(settingsPath, data, 0o644); err != nil {
@@ -103,7 +103,7 @@ func TestAutoResume_Disabled(t *testing.T) {
 	// 2. Settings with AutoResume = false
 	settingsPath := filepath.Join(surgeDir, "settings.json")
 	settings := config.DefaultSettings()
-	settings.General.AutoResume = false
+	settings.General.AutoResume.Value = false
 
 	data, _ := json.Marshal(settings)
 	if err := os.WriteFile(settingsPath, data, 0o644); err != nil {

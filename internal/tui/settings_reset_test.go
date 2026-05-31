@@ -43,24 +43,26 @@ func TestSettingsResetExhaustive(t *testing.T) {
 // setNonDefaultValue modifies a specific setting in the settings struct to a known "dirty" value.
 func setNonDefaultValue(t *testing.T, s *config.Settings, categoryLabel, jsonKey string) {
 	field := getFieldByJsonKey(t, s, categoryLabel, jsonKey)
+	setting, ok := field.Interface().(*config.Setting)
+	if !ok || setting == nil {
+		t.Fatalf("Setting field %s is not a *config.Setting", jsonKey)
+	}
 
-	switch field.Kind() {
-	case reflect.Bool:
-		field.SetBool(!field.Bool())
-	case reflect.String:
-		field.SetString("modified-value-" + jsonKey)
-	case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32:
-		field.SetInt(field.Int() + 10)
-	case reflect.Int64:
-		if field.Type().String() == "time.Duration" {
-			field.Set(reflect.ValueOf(field.Interface().(time.Duration) + time.Hour))
-		} else {
-			field.SetInt(field.Int() + 100)
-		}
-	case reflect.Float32, reflect.Float64:
-		field.SetFloat(field.Float() + 0.5)
+	switch val := setting.Value.(type) {
+	case bool:
+		setting.Value = !val
+	case string:
+		setting.Value = "modified-value-" + jsonKey
+	case int:
+		setting.Value = val + 10
+	case int64:
+		setting.Value = val + 100
+	case float64:
+		setting.Value = val + 0.5
+	case time.Duration:
+		setting.Value = val + time.Hour
 	default:
-		t.Errorf("Unsupported type for setting %s: %v", jsonKey, field.Kind())
+		t.Errorf("Unsupported type for setting %s: %T", jsonKey, setting.Value)
 	}
 }
 
@@ -69,9 +71,15 @@ func verifyIsDefault(t *testing.T, actual, expected *config.Settings, categoryLa
 	actualField := getFieldByJsonKey(t, actual, categoryLabel, jsonKey)
 	expectedField := getFieldByJsonKey(t, expected, categoryLabel, jsonKey)
 
-	if !reflect.DeepEqual(actualField.Interface(), expectedField.Interface()) {
+	actSetting, actOk := actualField.Interface().(*config.Setting)
+	expSetting, expOk := expectedField.Interface().(*config.Setting)
+	if !actOk || !expOk || actSetting == nil || expSetting == nil {
+		t.Fatalf("Fields are not *config.Setting")
+	}
+
+	if !reflect.DeepEqual(actSetting.Value, expSetting.Value) {
 		t.Errorf("Setting %q in category %q was not reset to default.\nGot: %v\nWant: %v",
-			jsonKey, categoryLabel, actualField.Interface(), expectedField.Interface())
+			jsonKey, categoryLabel, actSetting.Value, expSetting.Value)
 	}
 }
 

@@ -83,7 +83,7 @@ func hydrateConfigFromDisk(cfg *types.DownloadConfig) {
 
 // Resume resumes a paused download.
 //
-// Hot path: download is still in pool memory (same session) — extract config directly.
+// Hot path: download is still in pool memory (same session) - extract config directly.
 // Cold path: download was paused in a prior session, only stored in DB.
 func (mgr *LifecycleManager) Resume(id string) error {
 	hooks := mgr.getEngineHooks()
@@ -125,7 +125,7 @@ func (mgr *LifecycleManager) Resume(id string) error {
 
 	settings := mgr.GetSettings()
 
-	outputPath := settings.General.DefaultDownloadDir
+	outputPath := config.Resolve[string](settings.General.DefaultDownloadDir)
 	if outputPath == "" {
 		outputPath = "."
 	}
@@ -156,7 +156,7 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 	hooks := mgr.getEngineHooks()
 
 	settings := mgr.GetSettings()
-	outputPath := settings.General.DefaultDownloadDir
+	outputPath := config.Resolve[string](settings.General.DefaultDownloadDir)
 	if outputPath == "" {
 		outputPath = "."
 	}
@@ -276,7 +276,7 @@ func (mgr *LifecycleManager) Cancel(id string) error {
 		return nil
 	}
 
-	// Emit removal event — event worker handles DB deletion and file cleanup.
+	// Emit removal event - event worker handles DB deletion and file cleanup.
 	if hooks.PublishEvent != nil {
 		_ = hooks.PublishEvent(events.DownloadRemovedMsg{
 			DownloadID: id,
@@ -300,7 +300,7 @@ func (mgr *LifecycleManager) UpdateURL(id string, newURL string) error {
 		// Pool update succeeded; persist to DB.
 		return state.UpdateURL(id, newURL)
 	}
-	// No pool connected — DB-only update is correct (no in-memory state to sync).
+	// No pool connected - DB-only update is correct (no in-memory state to sync).
 	return state.UpdateURL(id, newURL)
 }
 

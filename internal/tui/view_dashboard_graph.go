@@ -117,7 +117,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 	var graphWithAxis string
 
 	if hideGraphStats {
-		// No stats box — graph gets almost full width
+		// No stats box - graph gets almost full width
 		graphAreaWidth, axisWidth := GetGraphAreaDimensions(width, true)
 		graphVisual := renderMultiLineGraph(graphData, graphAreaWidth, graphContentHeight, maxSpeed, nil)
 

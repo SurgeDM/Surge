@@ -201,7 +201,7 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 		return false
 	}
 
-	shouldPrompt := resolved.settings.Extension.ExtensionPrompt || (resolved.settings.General.WarnOnDuplicate && resolved.isDuplicate)
+	shouldPrompt := config.Resolve[bool](resolved.settings.Extension.ExtensionPrompt) || (config.Resolve[bool](resolved.settings.General.WarnOnDuplicate) && resolved.isDuplicate)
 	if !shouldPrompt {
 		return false
 	}
@@ -325,7 +325,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		outPath = utils.EnsureAbsPath(outPath)
 
 		// CLI explicit arg means we do not auto-route when user provided an explicit output path.
-		isExplicit := isExplicitOutputPath(outPath, settings.General.DefaultDownloadDir)
+		isExplicit := isExplicitOutputPath(outPath, config.Resolve[string](settings.General.DefaultDownloadDir))
 		if lifecycle == nil {
 			err := fmt.Errorf("lifecycle manager unavailable")
 			recordPreflightDownloadError(url, outPath, err)
@@ -358,7 +358,7 @@ func resolveOutputDir(reqPath string, relativeToDefaultDir bool, defaultOutputDi
 	}
 
 	if relativeToDefaultDir && reqPath != "" {
-		baseDir := settings.General.DefaultDownloadDir
+		baseDir := config.Resolve[string](settings.General.DefaultDownloadDir)
 		if baseDir == "" {
 			baseDir = defaultOutputDir
 		}
@@ -369,8 +369,8 @@ func resolveOutputDir(reqPath string, relativeToDefaultDir bool, defaultOutputDi
 	} else if outPath == "" {
 		if defaultOutputDir != "" {
 			outPath = defaultOutputDir
-		} else if settings.General.DefaultDownloadDir != "" {
-			outPath = settings.General.DefaultDownloadDir
+		} else if config.Resolve[string](settings.General.DefaultDownloadDir) != "" {
+			outPath = config.Resolve[string](settings.General.DefaultDownloadDir)
 		} else {
 			outPath = "."
 		}
@@ -387,16 +387,16 @@ func mapClientWindowsPath(reqPath string, relativeToDefaultDir bool, defaultOutp
 
 	baseDir := "."
 	if relativeToDefaultDir {
-		if settings != nil && strings.TrimSpace(settings.General.DefaultDownloadDir) != "" {
-			baseDir = settings.General.DefaultDownloadDir
+		if settings != nil && strings.TrimSpace(config.Resolve[string](settings.General.DefaultDownloadDir)) != "" {
+			baseDir = config.Resolve[string](settings.General.DefaultDownloadDir)
 		} else if strings.TrimSpace(defaultOutputDir) != "" {
 			baseDir = defaultOutputDir
 		}
 	} else {
 		if strings.TrimSpace(defaultOutputDir) != "" {
 			baseDir = defaultOutputDir
-		} else if settings != nil && strings.TrimSpace(settings.General.DefaultDownloadDir) != "" {
-			baseDir = settings.General.DefaultDownloadDir
+		} else if settings != nil && strings.TrimSpace(config.Resolve[string](settings.General.DefaultDownloadDir)) != "" {
+			baseDir = config.Resolve[string](settings.General.DefaultDownloadDir)
 		}
 	}
 

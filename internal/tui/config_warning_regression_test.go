@@ -31,28 +31,28 @@ func newModelWithWarnings(warnings []string) RootModel {
 // regression test: the TUI must show config warnings in the activity log.
 func TestConfigWarning_StartupConfigWarningMsg_AppearsInActivityLog(t *testing.T) {
 	m := newModelWithWarnings([]string{
-		"Config: settings file is corrupt (invalid character 'n') — all settings reset to defaults",
+		"Config: settings file is corrupt (invalid character 'n') - all settings reset to defaults",
 	})
 
-	// Dispatch the message directly — same code path as Init() → cmd() → Update()
+	// Dispatch the message directly - same code path as Init() → cmd() → Update()
 	updated, _ := m.Update(startupConfigWarningMsg(m.StartupConfigWarnings))
 	m2 := updated.(RootModel)
 
 	if len(m2.logEntries) == 0 {
-		t.Fatal("no log entries after startupConfigWarningMsg — config warning was silently dropped")
+		t.Fatal("no log entries after startupConfigWarningMsg - config warning was silently dropped")
 	}
 
 	entry := strings.Join(m2.logEntries, " ")
 	if !strings.Contains(entry, "⚠") {
 		t.Errorf("log entry should contain warning glyph ⚠, got: %q", entry)
 	}
-	// The corrupt-JSON warning text itself contains "Config:" — confirm it is present.
+	// The corrupt-JSON warning text itself contains "Config:" - confirm it is present.
 	if !strings.Contains(entry, "Config:") {
 		t.Errorf("log entry should contain 'Config:' from the warning text, got: %q", entry)
 	}
 	// Make sure the prefix is NOT doubled (handler must not add its own "Config:" prefix).
 	if strings.Contains(entry, "Config: Config:") {
-		t.Errorf("log entry has doubled 'Config:' prefix — handler is prepending it again: %q", entry)
+		t.Errorf("log entry has doubled 'Config:' prefix - handler is prepending it again: %q", entry)
 	}
 	if !strings.Contains(entry, "corrupt") {
 		t.Errorf("log entry should contain the original warning text, got: %q", entry)
@@ -60,7 +60,7 @@ func TestConfigWarning_StartupConfigWarningMsg_AppearsInActivityLog(t *testing.T
 }
 
 // TestConfigWarning_MultipleWarnings_AllAppearInLog ensures each warning gets
-// its own log entry — no truncation or merging.
+// its own log entry - no truncation or merging.
 func TestConfigWarning_MultipleWarnings_AllAppearInLog(t *testing.T) {
 	warnings := []string{
 		"Max connections/host reset to default (32)",
@@ -108,7 +108,7 @@ func TestConfigWarning_StartupConfigWarnings_CapturedFromSettings(t *testing.T) 
 	// produce for a corrupt or invalid config).
 	settings := config.DefaultSettings()
 	settings.StartupWarnings = []string{
-		"Config: settings file is corrupt — all settings reset to defaults",
+		"Config: settings file is corrupt - all settings reset to defaults",
 	}
 
 	// Build the model manually with these pre-warmed settings to simulate the
@@ -164,7 +164,7 @@ func TestConfigWarning_SystemLogMsg_UsesInfoStyle(t *testing.T) {
 	}
 
 	from := "github.com/SurgeDM/Surge/internal/engine/events"
-	_ = from // suppress unused import — events imported via update_events.go
+	_ = from // suppress unused import - events imported via update_events.go
 
 	// Use the events.SystemLogMsg path directly
 	m.addLogEntry(LogStyleStarted.Render("ℹ Startup integrity check: no issues found"))
@@ -193,7 +193,7 @@ func TestConfigWarning_WarningSurvivesLogTruncation(t *testing.T) {
 	}
 
 	// Now add a config warning as the 100th entry.
-	const configWarn = "⚠ Config: settings file is corrupt — all settings reset to defaults"
+	const configWarn = "⚠ Config: settings file is corrupt - all settings reset to defaults"
 	m.addLogEntry(LogStyleError.Render(configWarn))
 
 	if len(m.logEntries) != 100 {
@@ -204,13 +204,13 @@ func TestConfigWarning_WarningSurvivesLogTruncation(t *testing.T) {
 		t.Errorf("config warning should be the newest entry (last), got: %q", last)
 	}
 
-	// Add one more to trigger truncation — warning should be evicted (it's oldest now
+	// Add one more to trigger truncation - warning should be evicted (it's oldest now
 	// only if it was first, but here it's the newest so it should survive).
 	// Add 2 more to push over the cap: the warning is now entry 100 of 101, so truncation
-	// keeps entries [1..100] — warning survives.
+	// keeps entries [1..100] - warning survives.
 	m.addLogEntry("post-warning filler")
 	combined := strings.Join(m.logEntries, "\n")
 	if !strings.Contains(combined, "corrupt") {
-		t.Error("config warning was evicted from the log before older filler entries — ordering is wrong")
+		t.Error("config warning was evicted from the log before older filler entries - ordering is wrong")
 	}
 }

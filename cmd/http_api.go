@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -291,7 +292,7 @@ func ensureOpenActionRequestAllowed(r *http.Request) error {
 	}
 
 	settings := getSettings()
-	if settings != nil && settings.General.AllowRemoteOpenActions {
+	if settings != nil && config.Resolve[bool](settings.General.AllowRemoteOpenActions) {
 		return nil
 	}
 

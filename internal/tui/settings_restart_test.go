@@ -30,20 +30,20 @@ func TestRestartRequirementDetection(t *testing.T) {
 	}
 
 	// 4. Change non-restart setting (e.g. Theme)
-	originalTheme := m.Settings.General.Theme
-	m.Settings.General.Theme = (originalTheme + 1) % 3
+	originalTheme := config.Resolve[int](m.Settings.General.Theme)
+	m.Settings.General.Theme.Value = (originalTheme + 1) % 3
 	if m.checkRestartRequirement() {
 		t.Error("checkRestartRequirement() should be false when only non-restart settings changed")
 	}
 
 	// 5. Change restart-required setting (e.g. MaxConcurrentDownloads)
-	m.Settings.Network.MaxConcurrentDownloads += 1
+	m.Settings.Network.MaxConcurrentDownloads.Value = config.Resolve[int](m.Settings.Network.MaxConcurrentDownloads) + 1
 	if !m.checkRestartRequirement() {
 		t.Error("checkRestartRequirement() should be true when restart-required setting changed")
 	}
 
 	// 6. Reverting should make it false again
-	m.Settings.Network.MaxConcurrentDownloads -= 1
+	m.Settings.Network.MaxConcurrentDownloads.Value = config.Resolve[int](m.Settings.Network.MaxConcurrentDownloads) - 1
 	if m.checkRestartRequirement() {
 		t.Error("checkRestartRequirement() should be false when settings are reverted to baseline")
 	}

@@ -87,7 +87,10 @@ var (
 	globalEnqueueMu         sync.Mutex
 )
 
-func buildPoolIsNameActive(getAll func() []types.DownloadConfig) processing.IsNameActiveFunc {
+// buildActiveDownloadChecker bridges the lifecycle manager and the worker pool.
+// LifecycleManager has no direct reference to the pool, so we inject this closure
+// at construction time to let it detect file-name collisions with in-flight downloads.
+func buildActiveDownloadChecker(getAll func() []types.DownloadConfig) processing.IsNameActiveFunc {
 	if getAll == nil {
 		return nil
 	}
@@ -138,7 +141,7 @@ func newLocalLifecycleManager(service core.DownloadService, getAll func() []type
 		addWithIDFunc = service.AddWithID
 	}
 
-	return processing.NewLifecycleManager(addFunc, addWithIDFunc, buildPoolIsNameActive(getAll))
+	return processing.NewLifecycleManager(addFunc, addWithIDFunc, buildActiveDownloadChecker(getAll))
 }
 
 func startLifecycleEventWorker(service core.DownloadService, mgr *processing.LifecycleManager) (func(), error) {
@@ -318,10 +321,12 @@ func isExplicitOutputPath(outPath, defaultDir string) bool {
 
 type rootRunOptions struct {
 	portFlag     int
+	portSet      bool
 	batchFile    string
 	outputDir    string
 	noResume     bool
 	exitWhenDone bool
+	noServer     bool
 }
 
 func readRootRunOptions(cmd *cobra.Command) rootRunOptions {
@@ -330,13 +335,16 @@ func readRootRunOptions(cmd *cobra.Command) rootRunOptions {
 	outputDir, _ := cmd.Flags().GetString("output")
 	noResume, _ := cmd.Flags().GetBool("no-resume")
 	exitWhenDone, _ := cmd.Flags().GetBool("exit-when-done")
+	noServer, _ := cmd.Flags().GetBool("no-server")
 
 	return rootRunOptions{
 		portFlag:     portFlag,
+		portSet:      cmd.Flags().Changed("port"),
 		batchFile:    batchFile,
 		outputDir:    outputDir,
 		noResume:     noResume,
 		exitWhenDone: exitWhenDone,
+		noServer:     noServer,
 	}
 }
 
@@ -402,6 +410,16 @@ func startRootHTTPServer(opts rootRunOptions) (int, func(), error) {
 	}, nil
 }
 
+func maybeStartRootHTTPServer(opts rootRunOptions) (int, func(), error) {
+	if opts.noServer {
+		if opts.portSet {
+			return 0, nil, fmt.Errorf("--port cannot be used with --no-server")
+		}
+		return 0, func() {}, nil
+	}
+	return startRootHTTPServer(opts)
+}
+
 func queueInitialRootDownloads(args []string, opts rootRunOptions) {
 	atomic.AddInt32(&pendingEnqueue, 1)
 	go func() {
@@ -437,7 +455,7 @@ var rootCmd = &cobra.Command{
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		GlobalProgressCh = make(chan any, 100)
 		globalSettings = getSettings()
-		GlobalPool = download.NewWorkerPool(GlobalProgressCh, globalSettings.Network.MaxConcurrentDownloads)
+		GlobalPool = download.NewWorkerPool(GlobalProgressCh, config.Resolve[int](globalSettings.Network.MaxConcurrentDownloads))
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if ranRemote, err := maybeRunRemoteTUI(cmd, args); err != nil {
@@ -460,7 +478,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		opts := readRootRunOptions(cmd)
-		port, cleanup, err := startRootHTTPServer(opts)
+		port, cleanup, err := maybeStartRootHTTPServer(opts)
 		if err != nil {
 			return err
 		}
@@ -592,6 +610,7 @@ func init() {
 	rootCmd.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
 	rootCmd.Flags().Bool("no-resume", false, "Do not auto-resume paused downloads on startup")
 	rootCmd.Flags().Bool("exit-when-done", false, "Exit when all downloads complete")
+	rootCmd.Flags().Bool("no-server", false, "Do not start the HTTP API server (CLI subcommands will not work)")
 	rootCmd.SetVersionTemplate("Surge v{{.Version}}\n")
 	rootCmd.Version = Version
 }

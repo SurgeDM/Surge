@@ -80,7 +80,7 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 
 	if key.Matches(msg, m.keys.BatchConfirm.Confirm) {
 		// Add all URLs as downloads, skipping duplicates
-		path := m.Settings.General.DefaultDownloadDir
+		path := config.Resolve[string](m.Settings.General.DefaultDownloadDir)
 		if path == "" {
 			path = "."
 		}
@@ -170,7 +170,7 @@ func (m RootModel) updateUpdateAvailable(msg tea.KeyPressMsg) (tea.Model, tea.Cm
 	}
 	if key.Matches(msg, m.keys.Update.NeverRemind) {
 		// Persist the setting and dismiss
-		m.Settings.General.SkipUpdateCheck = true
+		m.Settings.General.SkipUpdateCheck.Value = true
 		_ = m.persistSettings()
 		m.state = DashboardState
 		m.UpdateInfo = nil
