@@ -1,6 +1,7 @@
 package download
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -126,7 +127,7 @@ func TestWorkerPool_RateLimit_DefaultChangeUpdatesInheritedActiveLimiter(t *test
 
 	done := make(chan error, 1)
 	go func() {
-		done <- limiter.WaitN(nil, 100)
+		done <- limiter.WaitN(context.Background(), 100)
 	}()
 
 	select {
@@ -195,7 +196,7 @@ func TestWorkerPool_RateLimit_DefaultChangeLeavesExplicitActiveLimiter(t *testin
 
 	done := make(chan error, 1)
 	go func() {
-		done <- limiter.WaitN(nil, 100)
+		done <- limiter.WaitN(context.Background(), 100)
 	}()
 
 	select {
@@ -270,7 +271,7 @@ func TestWorkerPool_RateLimit_SetGlobalHonorsWaiter(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- pool.globalLimiter.WaitN(nil, 100)
+		done <- pool.globalLimiter.WaitN(context.Background(), 100)
 	}()
 
 	select {

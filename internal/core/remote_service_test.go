@@ -135,8 +135,8 @@ type perDlRateCall struct {
 func newFakeRateLimitServer() *fakeRateLimitServer {
 	s := &fakeRateLimitServer{}
 	s.Server = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		switch {
-		case r.URL.Path == "/rate-limit":
+		switch r.URL.Path {
+		case "/rate-limit":
 			id := r.URL.Query().Get("id")
 			if r.URL.Query().Get("inherit") == "true" {
 				s.mu.Lock()
@@ -153,7 +153,7 @@ func newFakeRateLimitServer() *fakeRateLimitServer {
 			s.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"status":"rate_limited"}`))
-		case r.URL.Path == "/rate-limit/global":
+		case "/rate-limit/global":
 			rateStr := r.URL.Query().Get("rate")
 			rate, _ := strconv.ParseInt(rateStr, 10, 64)
 			s.mu.Lock()
@@ -161,7 +161,7 @@ func newFakeRateLimitServer() *fakeRateLimitServer {
 			s.mu.Unlock()
 			w.WriteHeader(http.StatusOK)
 			_, _ = w.Write([]byte(`{"status":"global_rate_limited"}`))
-		case r.URL.Path == "/rate-limit/default":
+		case "/rate-limit/default":
 			rateStr := r.URL.Query().Get("rate")
 			rate, _ := strconv.ParseInt(rateStr, 10, 64)
 			s.mu.Lock()
