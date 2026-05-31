@@ -41,10 +41,15 @@ func (m *RootModel) renderHeaderBox(width, height int) string {
 
 	var statusLine string
 	if contentWidth < 28 {
-		// Just show the address when narrow
-		statusLine = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true).Render(" " + serverAddr)
+		if m.ServerPort == 0 && !m.IsRemote {
+			statusLine = ""
+		} else {
+			statusLine = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true).Render(" " + serverAddr)
+		}
 	} else if m.IsRemote {
 		statusLine = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true).Render(" Connected to " + serverAddr)
+	} else if m.ServerPort == 0 {
+		statusLine = lipgloss.NewStyle().Foreground(colors.Gray()).Render(" Local mode")
 	} else {
 		statusLine = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true).Render(" Serving at " + serverAddr)
 	}
