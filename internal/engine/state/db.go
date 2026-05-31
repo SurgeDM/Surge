@@ -69,7 +69,8 @@ func initDBLocked() error {
 		chunk_bitmap BLOB,
 		actual_chunk_size INTEGER,
 		avg_speed REAL,
-		file_hash TEXT
+		file_hash TEXT,
+		rate_limit_set INTEGER
 	);
 
 	CREATE TABLE IF NOT EXISTS tasks (
@@ -131,6 +132,7 @@ func ensureDownloadsSchema() error {
 		{"avg_speed", "REAL"},
 		{"file_hash", "TEXT"},
 		{"rate_limit", "INTEGER"},
+		{"rate_limit_set", "INTEGER"},
 	}
 
 	for _, col := range columnsToAdd {

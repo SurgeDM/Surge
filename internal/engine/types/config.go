@@ -68,6 +68,7 @@ type DownloadConfig struct {
 	TotalSize          int64
 	SupportsRange      bool
 	RateLimitBps       int64
+	RateLimitSet       bool
 }
 
 // ByteLimiter abstracts byte-based throttling for downloads.

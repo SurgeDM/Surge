@@ -24,12 +24,13 @@ type ProgressMsg struct {
 
 // DownloadCompleteMsg signals that the download finished successfully
 type DownloadCompleteMsg struct {
-	DownloadID string
-	Filename   string
-	Elapsed    time.Duration
-	Total      int64
-	AvgSpeed   float64 // Average download speed in bytes/sec
-	RateLimit  int64
+	DownloadID   string
+	Filename     string
+	Elapsed      time.Duration
+	Total        int64
+	AvgSpeed     float64 // Average download speed in bytes/sec
+	RateLimit    int64
+	RateLimitSet bool
 }
 
 // DownloadErrorMsg signals that an error occurred
@@ -99,21 +100,23 @@ func (m *DownloadErrorMsg) UnmarshalJSON(data []byte) error {
 
 // DownloadStartedMsg is sent when a download actually starts (after metadata fetch)
 type DownloadStartedMsg struct {
-	DownloadID string
-	URL        string
-	Filename   string
-	Total      int64
-	DestPath   string               // Full path to the destination file
-	State      *types.ProgressState `json:"-"`
-	RateLimit  int64
+	DownloadID   string
+	URL          string
+	Filename     string
+	Total        int64
+	DestPath     string               // Full path to the destination file
+	State        *types.ProgressState `json:"-"`
+	RateLimit    int64
+	RateLimitSet bool
 }
 
 type DownloadPausedMsg struct {
-	DownloadID string
-	Filename   string
-	Downloaded int64
-	State      *types.DownloadState `json:"-"`
-	RateLimit  int64
+	DownloadID   string
+	Filename     string
+	Downloaded   int64
+	State        *types.DownloadState `json:"-"`
+	RateLimit    int64
+	RateLimitSet bool
 }
 
 type DownloadResumedMsg struct {
@@ -122,12 +125,13 @@ type DownloadResumedMsg struct {
 }
 
 type DownloadQueuedMsg struct {
-	DownloadID string
-	Filename   string
-	URL        string
-	DestPath   string
-	Mirrors    []string
-	RateLimit  int64
+	DownloadID   string
+	Filename     string
+	URL          string
+	DestPath     string
+	Mirrors      []string
+	RateLimit    int64
+	RateLimitSet bool
 }
 
 type DownloadRemovedMsg struct {
