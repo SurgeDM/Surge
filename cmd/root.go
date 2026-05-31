@@ -69,6 +69,7 @@ var pendingEnqueue int32
 var (
 	globalHost  string
 	globalToken string
+	noServer    bool
 )
 
 // Globals for Unified Backend
@@ -463,7 +464,17 @@ var rootCmd = &cobra.Command{
 		}
 
 		opts := readRootRunOptions(cmd)
-		port, cleanup, err := startRootHTTPServer(opts)
+		noServerFromFlag, _ := cmd.Flags().GetBool("no-server")
+		if noServerFromFlag {
+			noServer = true
+		}
+		var port int
+		var cleanup func()
+		if noServer {
+			port, cleanup, err = 0, func() {}, nil
+		} else {
+			port, cleanup, err = startRootHTTPServer(opts)
+		}
 		if err != nil {
 			return err
 		}
@@ -595,6 +606,7 @@ func init() {
 	rootCmd.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
 	rootCmd.Flags().Bool("no-resume", false, "Do not auto-resume paused downloads on startup")
 	rootCmd.Flags().Bool("exit-when-done", false, "Exit when all downloads complete")
+	rootCmd.Flags().Bool("no-server", false, "Do not start the HTTP API server (CLI subcommands will not work)")
 	rootCmd.SetVersionTemplate("Surge v{{.Version}}\n")
 	rootCmd.Version = Version
 }
