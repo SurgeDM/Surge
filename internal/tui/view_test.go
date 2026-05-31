@@ -45,6 +45,44 @@ func TestFormatDurationForUI(t *testing.T) {
 	}
 }
 
+func TestRenderHeaderBox_LocalModeHidesServerAddressAndStatusDot(t *testing.T) {
+	InitializeTUI()
+
+	m := RootModel{
+		ServerPort: 0,
+		ServerHost: "127.0.0.1",
+		IsRemote:   false,
+	}
+
+	plain := ansiEscapeRE.ReplaceAllString(m.renderHeaderBox(60, 8), "")
+	if !strings.Contains(plain, "Local mode") {
+		t.Fatalf("expected Local mode banner, got %q", plain)
+	}
+	if strings.Contains(plain, "127.0.0.1:0") {
+		t.Fatalf("unexpected server address in local no-server mode: %q", plain)
+	}
+	if strings.Contains(plain, "●") {
+		t.Fatalf("unexpected status dot in local no-server mode: %q", plain)
+	}
+}
+
+func TestRenderHeaderBox_CompactLocalModeStaysEmptyWhenServerDisabled(t *testing.T) {
+	InitializeTUI()
+
+	m := RootModel{
+		ServerPort: 0,
+		IsRemote:   false,
+	}
+
+	plain := ansiEscapeRE.ReplaceAllString(m.renderHeaderBox(24, 6), "")
+	if strings.Contains(plain, "127.0.0.1:0") {
+		t.Fatalf("unexpected compact server address in no-server mode: %q", plain)
+	}
+	if strings.Contains(plain, "●") {
+		t.Fatalf("unexpected compact status dot in no-server mode: %q", plain)
+	}
+}
+
 func TestGetDownloadStatus(t *testing.T) {
 	spinnerView := "⠋"
 

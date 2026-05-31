@@ -17,6 +17,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/spf13/cobra"
 )
 
 func init() {
@@ -668,6 +669,52 @@ func TestRootCmd_VersionMatchesPackageVar(t *testing.T) {
 func TestRootCmd_NoServerFlagRegistered(t *testing.T) {
 	if rootCmd.Flags().Lookup("no-server") == nil {
 		t.Fatal("expected --no-server flag on root command")
+	}
+}
+
+func TestReadRootRunOptions_ReadsNoServerFlag(t *testing.T) {
+	cmd := &cobra.Command{Use: "test"}
+	cmd.Flags().Int("port", 0, "")
+	cmd.Flags().String("batch", "", "")
+	cmd.Flags().String("output", "", "")
+	cmd.Flags().Bool("no-resume", false, "")
+	cmd.Flags().Bool("exit-when-done", false, "")
+	cmd.Flags().Bool("no-server", false, "")
+	if err := cmd.Flags().Set("no-server", "true"); err != nil {
+		t.Fatalf("failed to set no-server flag: %v", err)
+	}
+
+	opts := readRootRunOptions(cmd)
+	if !opts.noServer {
+		t.Fatal("expected readRootRunOptions to capture --no-server")
+	}
+}
+
+func TestMaybeStartRootHTTPServer_NoServerSkipsPortFile(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	if err := config.EnsureDirs(); err != nil {
+		t.Fatalf("failed to ensure dirs: %v", err)
+	}
+	removeActivePort()
+
+	port, cleanup, err := maybeStartRootHTTPServer(rootRunOptions{noServer: true})
+	if err != nil {
+		t.Fatalf("maybeStartRootHTTPServer returned error: %v", err)
+	}
+	if cleanup == nil {
+		t.Fatal("expected non-nil cleanup")
+	}
+	defer cleanup()
+
+	if port != 0 {
+		t.Fatalf("port = %d, want 0 when --no-server is enabled", port)
+	}
+
+	portFile := filepath.Join(config.GetRuntimeDir(), "port")
+	if _, err := os.Stat(portFile); !os.IsNotExist(err) {
+		t.Fatalf("expected no port file when server startup is skipped, stat err=%v", err)
 	}
 }
 
