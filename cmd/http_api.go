@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/config"
@@ -21,6 +22,11 @@ var (
 	ErrDownloadNotFound   = errors.New("download not found")
 	ErrNoDestinationPath  = errors.New("download has no destination path")
 )
+
+type rateLimitSettingsService interface {
+	SetGlobalRateLimit(rate int64) error
+	SetDefaultRateLimit(rate int64) error
+}
 
 func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service core.DownloadService) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
@@ -144,6 +150,76 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "updated", "id": id, "url": newURL})
 	})))
+
+	mux.HandleFunc("/rate-limit", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
+		id := r.URL.Query().Get("id")
+		if id == "" {
+			http.Error(w, "Missing id parameter", http.StatusBadRequest)
+			return
+		}
+		rate, rateStr, ok := parseRateLimitQuery(w, r)
+		if !ok {
+			return
+		}
+
+		if err := service.SetRateLimit(id, rate); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "rate_limited", "id": id, "rate": rateStr})
+	}))
+
+	mux.HandleFunc("/rate-limit/global", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
+		limiter, ok := service.(rateLimitSettingsService)
+		if !ok {
+			http.Error(w, "Service does not support global rate limits", http.StatusNotImplemented)
+			return
+		}
+		rate, rateStr, ok := parseRateLimitQuery(w, r)
+		if !ok {
+			return
+		}
+		if err := limiter.SetGlobalRateLimit(rate); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "global_rate_limited", "rate": rateStr})
+	}))
+
+	mux.HandleFunc("/rate-limit/default", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
+		limiter, ok := service.(rateLimitSettingsService)
+		if !ok {
+			http.Error(w, "Service does not support default rate limits", http.StatusNotImplemented)
+			return
+		}
+		rate, rateStr, ok := parseRateLimitQuery(w, r)
+		if !ok {
+			return
+		}
+		if err := limiter.SetDefaultRateLimit(rate); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "default_rate_limited", "rate": rateStr})
+	}))
+}
+
+func parseRateLimitQuery(w http.ResponseWriter, r *http.Request) (int64, string, bool) {
+	rateStr := r.URL.Query().Get("rate")
+	if rateStr == "" {
+		http.Error(w, "Missing rate parameter", http.StatusBadRequest)
+		return 0, "", false
+	}
+	rate, err := strconv.ParseInt(rateStr, 10, 64)
+	if err != nil {
+		http.Error(w, "Invalid rate parameter", http.StatusBadRequest)
+		return 0, "", false
+	}
+	if rate < 0 {
+		http.Error(w, "Rate parameter must be non-negative", http.StatusBadRequest)
+		return 0, "", false
+	}
+	return rate, rateStr, true
 }
 
 func eventsHandler(service core.DownloadService) http.HandlerFunc {
