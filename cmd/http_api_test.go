@@ -95,6 +95,10 @@ func (s *httpAPITestService) Shutdown() error {
 	return nil
 }
 
+func (s *httpAPITestService) SetRateLimit(id string, rate int64) error {
+	return nil
+}
+
 func TestEnsureOpenActionRequestAllowed_RemoteToggle(t *testing.T) {
 	original := globalSettings
 	t.Cleanup(func() {

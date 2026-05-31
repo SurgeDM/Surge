@@ -49,6 +49,7 @@ type DashboardKeyMap struct {
 	LogTop    key.Binding
 	LogBottom key.Binding
 	LogClose  key.Binding
+	SpeedLimits key.Binding
 }
 
 // InputKeyMap defines keybindings for the add download input
@@ -94,6 +95,7 @@ type SettingsKeyMap struct {
 	Tab3    key.Binding
 	Tab4    key.Binding
 	Tab5    key.Binding
+	Tab6    key.Binding
 	NextTab key.Binding
 	PrevTab key.Binding
 	Browse  key.Binding
@@ -204,8 +206,12 @@ var Keys = KeyMap{
 			key.WithHelp("s", "settings"),
 		),
 		Log: key.NewBinding(
+			key.WithKeys("L"),
+			key.WithHelp("L", "toggle log"),
+		),
+		SpeedLimits: key.NewBinding(
 			key.WithKeys("l"),
-			key.WithHelp("l", "toggle log"),
+			key.WithHelp("l", "speed limits"),
 		),
 		ToggleHelp: key.NewBinding(
 			key.WithKeys("h"),
@@ -373,6 +379,10 @@ var Keys = KeyMap{
 			key.WithKeys("5"),
 			key.WithHelp("5", "extension"),
 		),
+		Tab6: key.NewBinding(
+			key.WithKeys("6"),
+			key.WithHelp("6", "speed limits"),
+		),
 		NextTab: key.NewBinding(
 			key.WithKeys("right"),
 			key.WithHelp("\u2192", "next tab"),
@@ -497,7 +507,7 @@ func (k DashboardKeyMap) ShortHelp() []key.Binding {
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab, k.PrevTab},
-		{k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings, k.PinTab},
+		{k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings, k.SpeedLimits, k.PinTab},
 		{k.Log, k.OpenFile, k.ReportBug, k.Quit},
 	}
 }
@@ -540,7 +550,7 @@ func (k SettingsKeyMap) ShortHelp() []key.Binding {
 
 func (k SettingsKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.Tab1, k.Tab2, k.Tab3, k.Tab4, k.Tab5},
+		{k.Tab1, k.Tab2, k.Tab3, k.Tab4, k.Tab5, k.Tab6},
 		{k.PrevTab, k.NextTab, k.Up, k.Down, k.Edit, k.Reset, k.Browse, k.Close},
 	}
 }

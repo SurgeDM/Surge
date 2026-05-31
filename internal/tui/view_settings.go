@@ -51,7 +51,12 @@ func (m RootModel) viewSettings() string {
 	}
 
 	currentCategory := categories[activeTab]
-	settingsMeta := metadata[currentCategory]
+	var settingsMeta []config.SettingMeta
+	if currentCategory == "Speed Limits" {
+		settingsMeta = m.getSpeedLimitsMetadata()
+	} else {
+		settingsMeta = metadata[currentCategory]
+	}
 	if len(settingsMeta) == 0 {
 		content := lipgloss.NewStyle().
 			Padding(1, 2).
@@ -508,7 +513,12 @@ func (m *RootModel) normalizeSettingsSelection() {
 	}
 
 	settingsMap := config.GetSettingsMetadata()
-	settingsList := settingsMap[categories[m.SettingsActiveTab]]
+	var settingsList []config.SettingMeta
+	if categories[m.SettingsActiveTab] == "Speed Limits" {
+		settingsList = m.getSpeedLimitsMetadata()
+	} else {
+		settingsList = settingsMap[categories[m.SettingsActiveTab]]
+	}
 	if len(settingsList) == 0 {
 		m.SettingsSelectedRow = 0
 		if m.SettingsIsEditing {
@@ -548,6 +558,10 @@ func (m *RootModel) updateSettingsInputWidthForViewport() {
 
 // getSettingsValues returns a map of setting key -> value for a category
 func (m RootModel) getSettingsValues(category string) map[string]interface{} {
+	if category == "Speed Limits" {
+		return m.getSpeedLimitsValues()
+	}
+
 	values := make(map[string]interface{})
 
 	val := reflect.ValueOf(m.Settings).Elem()
@@ -602,6 +616,10 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 
 // setSettingValue sets a setting value from string input
 func (m *RootModel) setSettingValue(category, key, value string) error {
+	if category == "Speed Limits" {
+		return m.setSpeedLimitValue(key, value)
+	}
+
 	val := reflect.ValueOf(m.Settings).Elem()
 	typ := val.Type()
 
@@ -773,9 +791,18 @@ func (m RootModel) getCurrentSettingMeta() *config.SettingMeta {
 	}
 
 	activeCategory := categories[m.SettingsActiveTab]
-	settingsMap := config.GetSettingsMetadata()
-	settingsList, ok := settingsMap[activeCategory]
-	if !ok || m.SettingsSelectedRow < 0 || m.SettingsSelectedRow >= len(settingsList) {
+	var settingsList []config.SettingMeta
+	if activeCategory == "Speed Limits" {
+		settingsList = m.getSpeedLimitsMetadata()
+	} else {
+		settingsMap := config.GetSettingsMetadata()
+		var ok bool
+		settingsList, ok = settingsMap[activeCategory]
+		if !ok {
+			return nil
+		}
+	}
+	if m.SettingsSelectedRow < 0 || m.SettingsSelectedRow >= len(settingsList) {
 		return nil
 	}
 	return &settingsList[m.SettingsSelectedRow]
@@ -795,6 +822,9 @@ func (m RootModel) getSettingsCount() int {
 	categories := config.CategoryOrder()
 	if m.SettingsActiveTab >= 0 && m.SettingsActiveTab < len(categories) {
 		activeCategory := categories[m.SettingsActiveTab]
+		if activeCategory == "Speed Limits" {
+			return len(m.getSpeedLimitsMetadata())
+		}
 		settingsMap := config.GetSettingsMetadata()
 
 		if settingsList, ok := settingsMap[activeCategory]; ok {
@@ -1051,6 +1081,10 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 
 // resetSettingToDefault resets a specific setting to its default value
 func (m *RootModel) resetSettingToDefault(category, key string, defaults *config.Settings) error {
+	if category == "Speed Limits" {
+		return m.resetSpeedLimitToDefault(key, defaults)
+	}
+
 	if key == "auto_start" {
 		if m.ToggleServiceFunc != nil && config.Resolve[bool](m.Settings.General.AutoStart) != config.Resolve[bool](defaults.General.AutoStart) {
 			if err := m.ToggleServiceFunc(config.Resolve[bool](defaults.General.AutoStart)); err != nil {
@@ -1095,4 +1129,155 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 		}
 	}
 	return nil
+}
+
+func (m RootModel) getSpeedLimitsMetadata() []config.SettingMeta {
+	meta := []config.SettingMeta{
+		{
+			Key:         "global_rate_limit",
+			Label:       "Global Speed Limit",
+			Description: "Cap total download bandwidth (e.g. 10MB/s, 80Mbps, 500KB/s). Use 0 or \"unlimited\" to disable.",
+			Type:        "string",
+		},
+		{
+			Key:         "default_download_rate_limit",
+			Label:       "Default Download Limit",
+			Description: "Default speed limit for new/queued downloads (e.g. 2MB/s, 500KB/s). Use 0 or \"unlimited\" to disable.",
+			Type:        "string",
+		},
+	}
+
+	for _, d := range m.downloads {
+		if !d.done {
+			label := d.Filename
+			if label == "" {
+				label = d.ID
+			}
+			meta = append(meta, config.SettingMeta{
+				Key:         "dl:" + d.ID,
+				Label:       label,
+				Description: fmt.Sprintf("Speed limit for this specific download: %s. Use 0 or \"unlimited\" to disable.", label),
+				Type:        "string",
+			})
+		}
+	}
+	return meta
+}
+
+func (m RootModel) getSpeedLimitsValues() map[string]interface{} {
+	values := make(map[string]interface{})
+	values["global_rate_limit"] = m.Settings.Network.GlobalRateLimit.Value
+	values["default_download_rate_limit"] = m.Settings.Network.DefaultDownloadRateLimit.Value
+
+	for _, d := range m.downloads {
+		if !d.done {
+			values["dl:"+d.ID] = utils.FormatRateLimit(d.RateLimit)
+		}
+	}
+	return values
+}
+
+func (m *RootModel) setSpeedLimitValue(key, value string) error {
+	if key == "global_rate_limit" {
+		rate, err := utils.ParseRateLimit(value)
+		if err != nil {
+			return err
+		}
+		m.Settings.Network.GlobalRateLimit.Value = value
+		if err := m.persistSettings(); err != nil {
+			return err
+		}
+		return m.applyRemoteGlobalRateLimit(rate)
+	}
+
+	if key == "default_download_rate_limit" {
+		rate, err := utils.ParseRateLimit(value)
+		if err != nil {
+			return err
+		}
+		m.Settings.Network.DefaultDownloadRateLimit.Value = value
+		if err := m.persistSettings(); err != nil {
+			return err
+		}
+		return m.applyRemoteDefaultRateLimit(rate)
+	}
+
+	if strings.HasPrefix(key, "dl:") {
+		dlID := strings.TrimPrefix(key, "dl:")
+		rate, err := utils.ParseRateLimit(value)
+		if err != nil {
+			return err
+		}
+		if m.Service != nil {
+			if err := m.Service.SetRateLimit(dlID, rate); err != nil {
+				return err
+			}
+		}
+		if d := m.FindDownloadByID(dlID); d != nil {
+			d.RateLimit = rate
+		}
+		return nil
+	}
+
+	return fmt.Errorf("unknown speed limit key: %s", key)
+}
+
+func (m *RootModel) resetSpeedLimitToDefault(key string, defaults *config.Settings) error {
+	if key == "global_rate_limit" {
+		m.Settings.Network.GlobalRateLimit.Value = defaults.Network.GlobalRateLimit.Value
+		if err := m.persistSettings(); err != nil {
+			return err
+		}
+		rate, _ := utils.ParseRateLimitValue(defaults.Network.GlobalRateLimit.Value)
+		return m.applyRemoteGlobalRateLimit(rate)
+	}
+	if key == "default_download_rate_limit" {
+		m.Settings.Network.DefaultDownloadRateLimit.Value = defaults.Network.DefaultDownloadRateLimit.Value
+		if err := m.persistSettings(); err != nil {
+			return err
+		}
+		rate, _ := utils.ParseRateLimitValue(defaults.Network.DefaultDownloadRateLimit.Value)
+		return m.applyRemoteDefaultRateLimit(rate)
+	}
+	if strings.HasPrefix(key, "dl:") {
+		dlID := strings.TrimPrefix(key, "dl:")
+		if m.Service != nil {
+			if err := m.Service.SetRateLimit(dlID, 0); err != nil {
+				return err
+			}
+		}
+		if d := m.FindDownloadByID(dlID); d != nil {
+			d.RateLimit = 0
+		}
+		return nil
+	}
+	return nil
+}
+
+func (m *RootModel) applyRemoteGlobalRateLimit(rate int64) error {
+	if m.Service == nil {
+		return nil
+	}
+	if _, isLocal := m.Service.(interface{ ReloadSettings() error }); isLocal {
+		return nil
+	}
+	setter, ok := m.Service.(interface{ SetGlobalRateLimit(int64) error })
+	if !ok {
+		return nil
+	}
+	return setter.SetGlobalRateLimit(rate)
+}
+
+func (m *RootModel) applyRemoteDefaultRateLimit(rate int64) error {
+	if m.Service == nil {
+		return nil
+	}
+	if _, isLocal := m.Service.(interface{ ReloadSettings() error }); isLocal {
+		return nil
+	}
+	setter, ok := m.Service.(interface{ SetDefaultRateLimit(int64) error })
+	if !ok {
+		return nil
+	}
+	return setter.SetDefaultRateLimit(rate)
 }

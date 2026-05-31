@@ -244,6 +244,45 @@ func (s *RemoteDownloadService) Shutdown() error {
 	return nil
 }
 
+// SetRateLimit sets the speed limit for a specific download on the remote daemon
+func (s *RemoteDownloadService) SetRateLimit(id string, rate int64) error {
+	if rate < 0 {
+		return fmt.Errorf("rate limit must be non-negative")
+	}
+	resp, err := s.doRequest("POST", fmt.Sprintf("/rate-limit?id=%s&rate=%d", url.QueryEscape(id), rate), nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return nil
+}
+
+// SetGlobalRateLimit sets the remote daemon's global speed limit.
+func (s *RemoteDownloadService) SetGlobalRateLimit(rate int64) error {
+	if rate < 0 {
+		return fmt.Errorf("rate limit must be non-negative")
+	}
+	resp, err := s.doRequest("POST", fmt.Sprintf("/rate-limit/global?rate=%d", rate), nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return nil
+}
+
+// SetDefaultRateLimit sets the remote daemon's inherited per-download speed limit.
+func (s *RemoteDownloadService) SetDefaultRateLimit(rate int64) error {
+	if rate < 0 {
+		return fmt.Errorf("rate limit must be non-negative")
+	}
+	resp, err := s.doRequest("POST", fmt.Sprintf("/rate-limit/default?rate=%d", rate), nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return nil
+}
+
 // StreamEvents returns a channel that receives real-time download events via SSE.
 func (s *RemoteDownloadService) StreamEvents(ctx context.Context) (<-chan interface{}, func(), error) {
 	if ctx == nil {

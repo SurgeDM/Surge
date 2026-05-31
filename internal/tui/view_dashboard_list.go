@@ -1,10 +1,13 @@
 package tui
 
 import (
+	"fmt"
+
 	"charm.land/lipgloss/v2"
 
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // renderDownloadsBox generates the download list box with the top-left corner search bar string.
@@ -79,5 +82,13 @@ func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) strin
 		downloadsBorderColor = colors.Gray()
 	}
 
-	return renderBtopBox(leftTitle, PaneTitleStyle.Render(" Downloads "), innerContent, width, height, downloadsBorderColor)
+	limitStr := "Unlimited"
+	if m.Settings != nil && m.Settings.Network.GlobalRateLimit != nil {
+		if rate, err := utils.ParseRateLimitValue(m.Settings.Network.GlobalRateLimit.Value); err == nil && rate > 0 {
+			limitStr = utils.FormatRateLimit(rate)
+		}
+	}
+	rightTitle := PaneTitleStyle.Render(fmt.Sprintf(" Downloads [Limit: %s] ", limitStr))
+
+	return renderBtopBox(leftTitle, rightTitle, innerContent, width, height, downloadsBorderColor)
 }

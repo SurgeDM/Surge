@@ -331,12 +331,22 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 		// worker emits a started event.
 		hooks := mgr.getEngineHooks()
 		if hooks.PublishEvent != nil {
+			var rateLimit int64
+			var rateLimitSet bool
+			if hooks.GetStatus != nil {
+				if st := hooks.GetStatus(newID); st != nil {
+					rateLimit = st.RateLimit
+					rateLimitSet = st.RateLimitSet
+				}
+			}
 			_ = hooks.PublishEvent(events.DownloadQueuedMsg{
-				DownloadID: newID,
-				Filename:   finalFilename,
-				URL:        req.URL,
-				DestPath:   filepath.Join(finalPath, finalFilename),
-				Mirrors:    append([]string(nil), req.Mirrors...),
+				DownloadID:   newID,
+				Filename:     finalFilename,
+				URL:          req.URL,
+				DestPath:     filepath.Join(finalPath, finalFilename),
+				Mirrors:      append([]string(nil), req.Mirrors...),
+				RateLimit:    rateLimit,
+				RateLimitSet: rateLimitSet,
 			})
 		}
 

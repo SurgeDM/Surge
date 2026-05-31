@@ -262,6 +262,23 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if key.Matches(msg, m.keys.Dashboard.SpeedLimits) {
+		m.snapshotSettings()
+		m.state = SettingsState
+		categories := config.CategoryOrder()
+		tabIdx := 0
+		for i, cat := range categories {
+			if cat == "Speed Limits" {
+				tabIdx = i
+				break
+			}
+		}
+		m.SettingsActiveTab = tabIdx
+		m.SettingsSelectedRow = 0
+		m.SettingsIsEditing = false
+		return m, nil
+	}
+
 	if key.Matches(msg, m.keys.Dashboard.CategoryFilter) {
 		if !config.Resolve[bool](m.Settings.Categories.CategoryEnabled) || len(m.Settings.Categories.Categories) == 0 {
 			if m.categoryFilter != "" {

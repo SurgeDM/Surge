@@ -86,6 +86,7 @@ type DownloadModel struct {
 	Downloaded    int64
 	Speed         float64
 	Connections   int
+	RateLimit     int64 // Speed limit in bytes/sec
 
 	StartTime time.Time
 	Elapsed   time.Duration
@@ -365,6 +366,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 				if s.Status == "completed" && s.TimeTaken > 0 {
 					dm.Elapsed = time.Duration(s.TimeTaken) * time.Millisecond
 				}
+				dm.RateLimit = s.RateLimit
 
 				downloads = append(downloads, dm)
 			}

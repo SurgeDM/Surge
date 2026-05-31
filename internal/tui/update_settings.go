@@ -86,6 +86,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.keys.Settings.Tab3,
 		m.keys.Settings.Tab4,
 		m.keys.Settings.Tab5,
+		m.keys.Settings.Tab6,
 	}
 	for i, binding := range tabBindings {
 		if key.Matches(msg, binding) {
@@ -261,6 +262,9 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *RootModel) validateSetting(key, value string) error {
 	trimmed := strings.TrimSpace(value)
 	switch key {
+	case "global_rate_limit", "default_download_rate_limit":
+		_, err := utils.ParseRateLimit(trimmed)
+		return err
 	case "max_connections_per_host":
 		v, err := strconv.Atoi(trimmed)
 		if err != nil || v < 1 || v > 64 {
@@ -323,6 +327,11 @@ func (m *RootModel) validateSetting(key, value string) error {
 		}
 	case "custom_dns":
 		return config.ValidateDNSList(trimmed)
+	default:
+		if strings.HasPrefix(key, "dl:") {
+			_, err := utils.ParseRateLimit(trimmed)
+			return err
+		}
 	}
 	return nil
 }

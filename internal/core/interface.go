@@ -50,4 +50,8 @@ type DownloadService interface {
 
 	// Shutdown handles graceful shutdown of the service
 	Shutdown() error
+
+	// SetRateLimit sets the speed limit for a specific download
+	SetRateLimit(id string, rate int64) error
 }
+

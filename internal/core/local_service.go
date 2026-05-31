@@ -370,10 +370,12 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 		activeConfigs := s.Pool.GetAll()
 		for _, cfg := range activeConfigs {
 			status := types.DownloadStatus{
-				ID:       cfg.ID,
-				URL:      cfg.URL,
-				Filename: cfg.Filename,
-				Status:   "downloading",
+				ID:           cfg.ID,
+				URL:          cfg.URL,
+				Filename:     cfg.Filename,
+				Status:       "downloading",
+				RateLimit:    cfg.RateLimitBps,
+				RateLimitSet: cfg.RateLimitSet,
 			}
 
 			if cfg.State != nil {
@@ -445,18 +447,20 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 			}
 
 			statuses = append(statuses, types.DownloadStatus{
-				ID:          d.ID,
-				URL:         d.URL,
-				Filename:    d.Filename,
-				DestPath:    d.DestPath,
-				Status:      d.Status,
-				TotalSize:   d.TotalSize,
-				Downloaded:  d.Downloaded,
-				Progress:    progress,
-				Speed:       completedSpeedMBps(d),
-				Connections: 0,
-				TimeTaken:   d.TimeTaken,
-				AvgSpeed:    d.AvgSpeed,
+				ID:           d.ID,
+				URL:          d.URL,
+				Filename:     d.Filename,
+				DestPath:     d.DestPath,
+				Status:       d.Status,
+				TotalSize:    d.TotalSize,
+				Downloaded:   d.Downloaded,
+				Progress:     progress,
+				Speed:        completedSpeedMBps(d),
+				Connections:  0,
+				TimeTaken:    d.TimeTaken,
+				AvgSpeed:     d.AvgSpeed,
+				RateLimit:    d.RateLimit,
+				RateLimitSet: d.RateLimitSet,
 			})
 		}
 	}
@@ -627,16 +631,18 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 		}
 
 		status := types.DownloadStatus{
-			ID:         entry.ID,
-			URL:        entry.URL,
-			Filename:   entry.Filename,
-			TotalSize:  entry.TotalSize,
-			Downloaded: entry.Downloaded,
-			Progress:   progress,
-			Speed:      completedSpeedMBps(*entry),
-			Status:     entry.Status,
-			TimeTaken:  entry.TimeTaken,
-			AvgSpeed:   entry.AvgSpeed,
+			ID:           entry.ID,
+			URL:          entry.URL,
+			Filename:     entry.Filename,
+			TotalSize:    entry.TotalSize,
+			Downloaded:   entry.Downloaded,
+			Progress:     progress,
+			Speed:        completedSpeedMBps(*entry),
+			Status:       entry.Status,
+			TimeTaken:    entry.TimeTaken,
+			AvgSpeed:     entry.AvgSpeed,
+			RateLimit:    entry.RateLimit,
+			RateLimitSet: entry.RateLimitSet,
 		}
 		return &status, nil
 	}
@@ -648,4 +654,58 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 func (s *LocalDownloadService) History() ([]types.DownloadEntry, error) {
 	// For local service, we can directly access the state DB
 	return state.LoadCompletedDownloads()
+}
+
+// SetRateLimit sets the speed limit for a specific download
+func (s *LocalDownloadService) SetRateLimit(id string, rate int64) error {
+	if rate < 0 {
+		return fmt.Errorf("rate limit must be non-negative")
+	}
+	if s.Pool == nil {
+		return types.ErrPoolNotInit
+	}
+	s.Pool.SetDownloadRateLimit(id, rate)
+	if err := state.UpdateRateLimit(id, rate); err != nil {
+		utils.Debug("failed to persist rate limit for %s: %v", id, err)
+	}
+	return nil
+}
+
+// SetGlobalRateLimit sets the global speed limit for the local service.
+func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
+	if rate < 0 {
+		return fmt.Errorf("rate limit must be non-negative")
+	}
+	if s.Pool == nil {
+		return types.ErrPoolNotInit
+	}
+	s.Pool.SetGlobalRateLimit(rate)
+	return s.updateRateLimitSetting(func(settings *config.Settings) {
+		settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
+	})
+}
+
+// SetDefaultRateLimit sets the inherited default per-download speed limit.
+func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
+	if rate < 0 {
+		return fmt.Errorf("rate limit must be non-negative")
+	}
+	if s.Pool == nil {
+		return types.ErrPoolNotInit
+	}
+	s.Pool.SetDefaultDownloadRateLimit(rate)
+	return s.updateRateLimitSetting(func(settings *config.Settings) {
+		settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
+	})
+}
+
+func (s *LocalDownloadService) updateRateLimitSetting(update func(*config.Settings)) error {
+	s.settingsMu.Lock()
+	if s.settings == nil {
+		s.settings = config.DefaultSettings()
+	}
+	update(s.settings)
+	settings := s.settings
+	s.settingsMu.Unlock()
+	return config.SaveSettings(settings)
 }
