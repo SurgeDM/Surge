@@ -1156,7 +1156,7 @@ func (m RootModel) getSpeedLimitsMetadata() []config.SettingMeta {
 			meta = append(meta, config.SettingMeta{
 				Key:         "dl:" + d.ID,
 				Label:       label,
-				Description: fmt.Sprintf("Speed limit for this specific download: %s. Use 0 or \"unlimited\" to disable.", label),
+				Description: fmt.Sprintf("Speed limit for this specific download: %s. Use \"inherit\" for default, or 0/\"unlimited\" to disable.", label),
 				Type:        "string",
 			})
 		}
@@ -1171,7 +1171,7 @@ func (m RootModel) getSpeedLimitsValues() map[string]interface{} {
 
 	for _, d := range m.downloads {
 		if !d.done {
-			values["dl:"+d.ID] = utils.FormatRateLimit(d.RateLimit)
+			values["dl:"+d.ID] = m.formatDownloadRateLimitValue(d)
 		}
 	}
 	return values
@@ -1204,6 +1204,16 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 
 	if strings.HasPrefix(key, "dl:") {
 		dlID := strings.TrimPrefix(key, "dl:")
+		if isRateLimitInheritValue(value) {
+			if err := m.clearDownloadRateLimit(dlID); err != nil {
+				return err
+			}
+			if d := m.FindDownloadByID(dlID); d != nil {
+				d.RateLimit = 0
+				d.RateLimitSet = false
+			}
+			return nil
+		}
 		rate, err := utils.ParseRateLimit(value)
 		if err != nil {
 			return err
@@ -1215,6 +1225,7 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 		}
 		if d := m.FindDownloadByID(dlID); d != nil {
 			d.RateLimit = rate
+			d.RateLimitSet = true
 		}
 		return nil
 	}
@@ -1241,17 +1252,51 @@ func (m *RootModel) resetSpeedLimitToDefault(key string, defaults *config.Settin
 	}
 	if strings.HasPrefix(key, "dl:") {
 		dlID := strings.TrimPrefix(key, "dl:")
-		if m.Service != nil {
-			if err := m.Service.SetRateLimit(dlID, 0); err != nil {
-				return err
-			}
+		if err := m.clearDownloadRateLimit(dlID); err != nil {
+			return err
 		}
 		if d := m.FindDownloadByID(dlID); d != nil {
 			d.RateLimit = 0
+			d.RateLimitSet = false
 		}
 		return nil
 	}
 	return nil
+}
+
+func (m RootModel) formatDownloadRateLimitValue(d *DownloadModel) string {
+	if d == nil {
+		return "inherit"
+	}
+	if d.RateLimitSet {
+		if d.RateLimit <= 0 {
+			return "explicit unlimited"
+		}
+		return utils.FormatRateLimit(d.RateLimit)
+	}
+	defaultRate := int64(0)
+	if m.Settings != nil && m.Settings.Network.DefaultDownloadRateLimit != nil {
+		if rate, err := utils.ParseRateLimitValue(m.Settings.Network.DefaultDownloadRateLimit.Value); err == nil {
+			defaultRate = rate
+		}
+	}
+	return fmt.Sprintf("inherit (%s)", utils.FormatRateLimit(defaultRate))
+}
+
+func isRateLimitInheritValue(value string) bool {
+	normalized := strings.TrimSpace(strings.ToLower(value))
+	return normalized == "inherit" || normalized == "default"
+}
+
+func (m *RootModel) clearDownloadRateLimit(downloadID string) error {
+	if m.Service == nil {
+		return nil
+	}
+	clearer, ok := m.Service.(interface{ ClearRateLimit(string) error })
+	if !ok {
+		return fmt.Errorf("service does not support clearing download rate limits")
+	}
+	return clearer.ClearRateLimit(downloadID)
 }
 
 func (m *RootModel) applyRemoteGlobalRateLimit(rate int64) error {

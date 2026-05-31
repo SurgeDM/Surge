@@ -617,14 +617,18 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		etaStr = "..."
 	} else if d.paused || d.Speed == 0 {
 		speedStr = "Paused"
-		if d.RateLimit > 0 {
+		if d.RateLimitSet && d.RateLimit > 0 {
 			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
+		} else if d.RateLimitSet {
+			speedStr += " (Limit: unlimited)"
 		}
 		etaStr = "\u221e"
 	} else {
 		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/float64(config.MB))
-		if d.RateLimit > 0 {
+		if d.RateLimitSet && d.RateLimit > 0 {
 			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
+		} else if d.RateLimitSet {
+			speedStr += " (Limit: unlimited)"
 		}
 		if d.Total > 0 {
 			remaining := d.Total - d.Downloaded

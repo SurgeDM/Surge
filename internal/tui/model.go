@@ -87,6 +87,7 @@ type DownloadModel struct {
 	Speed         float64
 	Connections   int
 	RateLimit     int64 // Speed limit in bytes/sec
+	RateLimitSet  bool  // Whether RateLimit is an explicit per-download override
 
 	StartTime time.Time
 	Elapsed   time.Duration
@@ -367,6 +368,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 					dm.Elapsed = time.Duration(s.TimeTaken) * time.Millisecond
 				}
 				dm.RateLimit = s.RateLimit
+				dm.RateLimitSet = s.RateLimitSet
 
 				downloads = append(downloads, dm)
 			}
