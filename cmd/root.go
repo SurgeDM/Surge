@@ -69,7 +69,6 @@ var pendingEnqueue int32
 var (
 	globalHost  string
 	globalToken string
-	noServer    bool
 )
 
 // Globals for Unified Backend
@@ -326,6 +325,7 @@ type rootRunOptions struct {
 	outputDir    string
 	noResume     bool
 	exitWhenDone bool
+	noServer     bool
 }
 
 func readRootRunOptions(cmd *cobra.Command) rootRunOptions {
@@ -334,6 +334,7 @@ func readRootRunOptions(cmd *cobra.Command) rootRunOptions {
 	outputDir, _ := cmd.Flags().GetString("output")
 	noResume, _ := cmd.Flags().GetBool("no-resume")
 	exitWhenDone, _ := cmd.Flags().GetBool("exit-when-done")
+	noServer, _ := cmd.Flags().GetBool("no-server")
 
 	return rootRunOptions{
 		portFlag:     portFlag,
@@ -341,6 +342,7 @@ func readRootRunOptions(cmd *cobra.Command) rootRunOptions {
 		outputDir:    outputDir,
 		noResume:     noResume,
 		exitWhenDone: exitWhenDone,
+		noServer:     noServer,
 	}
 }
 
@@ -406,6 +408,13 @@ func startRootHTTPServer(opts rootRunOptions) (int, func(), error) {
 	}, nil
 }
 
+func maybeStartRootHTTPServer(opts rootRunOptions) (int, func(), error) {
+	if opts.noServer {
+		return 0, func() {}, nil
+	}
+	return startRootHTTPServer(opts)
+}
+
 func queueInitialRootDownloads(args []string, opts rootRunOptions) {
 	atomic.AddInt32(&pendingEnqueue, 1)
 	go func() {
@@ -464,17 +473,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		opts := readRootRunOptions(cmd)
-		noServerFromFlag, _ := cmd.Flags().GetBool("no-server")
-		if noServerFromFlag {
-			noServer = true
-		}
-		var port int
-		var cleanup func()
-		if noServer {
-			port, cleanup, err = 0, func() {}, nil
-		} else {
-			port, cleanup, err = startRootHTTPServer(opts)
-		}
+		port, cleanup, err := maybeStartRootHTTPServer(opts)
 		if err != nil {
 			return err
 		}
