@@ -494,6 +494,20 @@ func TestRateLimitPerDownloadEndpoint(t *testing.T) {
 			wantID:    "dl-3",
 			wantClear: true,
 		},
+		{
+			name:      "bare inherit flag clears explicit override",
+			path:      "/rate-limit?id=dl-4&inherit",
+			wantCode:  http.StatusOK,
+			wantID:    "dl-4",
+			wantClear: true,
+		},
+		{
+			name:      "rate inherit clears explicit override",
+			path:      "/rate-limit?id=dl-5&rate=inherit",
+			wantCode:  http.StatusOK,
+			wantID:    "dl-5",
+			wantClear: true,
+		},
 	} {
 		t.Run(tt.name, func(t *testing.T) {
 			svc := newRateLimitTestService()
@@ -629,6 +643,7 @@ func (r *rateLimitWrapper) GetStatus(id string) (*types.DownloadStatus, error) {
 }
 func (r *rateLimitWrapper) Shutdown() error                          { return nil }
 func (r *rateLimitWrapper) SetRateLimit(id string, rate int64) error { return nil }
+func (r *rateLimitWrapper) ClearRateLimit(id string) error           { return nil }
 
 // TestRateLimitDefaultEndpoint tests the /rate-limit/default endpoint.
 func TestRateLimitDefaultEndpoint(t *testing.T) {

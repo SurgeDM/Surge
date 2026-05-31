@@ -329,14 +329,39 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 	p.limiterMu.Unlock()
 
 	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	inheritedIDs := make([]string, 0)
 	for id, cfg := range p.queued {
 		if cfg.RateLimitSet {
 			continue
 		}
 		cfg.RateLimitBps = rate
 		p.queued[id] = cfg
+		inheritedIDs = append(inheritedIDs, id)
 	}
-	p.mu.Unlock()
+	for id, ad := range p.downloads {
+		if ad.config.RateLimitSet {
+			continue
+		}
+		ad.config.RateLimitBps = rate
+		inheritedIDs = append(inheritedIDs, id)
+	}
+
+	p.limiterMu.Lock()
+	defer p.limiterMu.Unlock()
+
+	if p.downloadLimiters == nil {
+		p.downloadLimiters = make(map[string]*engine.RateLimiter)
+	}
+	for _, id := range inheritedIDs {
+		limiter := p.downloadLimiters[id]
+		if limiter == nil {
+			p.downloadLimiters[id] = engine.NewRateLimiter(rate, rateLimiterBurst(rate))
+			continue
+		}
+		limiter.SetRate(rate, rateLimiterBurst(rate))
+	}
 }
 
 // SetDownloadRateLimit updates a specific download's rate limit (bytes/sec).

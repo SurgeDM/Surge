@@ -28,10 +28,6 @@ type rateLimitSettingsService interface {
 	SetDefaultRateLimit(rate int64) error
 }
 
-type rateLimitClearService interface {
-	ClearRateLimit(id string) error
-}
-
 func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service core.DownloadService) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
@@ -161,13 +157,8 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			http.Error(w, "Missing id parameter", http.StatusBadRequest)
 			return
 		}
-		if strings.EqualFold(r.URL.Query().Get("inherit"), "true") {
-			clearer, ok := service.(rateLimitClearService)
-			if !ok {
-				http.Error(w, "Service does not support clearing rate limits", http.StatusNotImplemented)
-				return
-			}
-			if err := clearer.ClearRateLimit(id); err != nil {
+		if isRateLimitInheritRequest(r) {
+			if err := service.ClearRateLimit(id); err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
 				return
 			}
@@ -219,6 +210,19 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		}
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "default_rate_limited", "rate": rateStr})
 	}))
+}
+
+func isRateLimitInheritRequest(r *http.Request) bool {
+	query := r.URL.Query()
+	for _, inherit := range query["inherit"] {
+		normalized := strings.ToLower(strings.TrimSpace(inherit))
+		if normalized == "" || normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "inherit" || normalized == "default" {
+			return true
+		}
+	}
+
+	normalizedRate := strings.ToLower(strings.TrimSpace(query.Get("rate")))
+	return normalizedRate == "inherit" || normalizedRate == "default"
 }
 
 func parseRateLimitQuery(w http.ResponseWriter, r *http.Request) (int64, string, bool) {

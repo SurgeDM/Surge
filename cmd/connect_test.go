@@ -66,6 +66,7 @@ func (f *fakeRemoteDownloadService) Shutdown() error { return nil }
 
 func (f *fakeRemoteDownloadService) SetRateLimit(id string, rate int64) error { return nil }
 
+func (f *fakeRemoteDownloadService) ClearRateLimit(id string) error { return nil }
 
 func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
 	m := newRemoteRootModel("https://example.com:1700", nil)

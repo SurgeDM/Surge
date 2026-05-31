@@ -38,6 +38,7 @@ func (m *mockService) UpdateURL(id string, newURL string) error           { retu
 func (m *mockService) GetStatus(id string) (*types.DownloadStatus, error) { return nil, nil }
 func (m *mockService) Shutdown() error                                    { return nil }
 func (m *mockService) SetRateLimit(id string, rate int64) error           { return nil }
+func (m *mockService) ClearRateLimit(id string) error                     { return nil }
 
 func TestUpdateDashboard_DeleteResilience(t *testing.T) {
 	// This test validates the TUI's defensive layer independently of the service

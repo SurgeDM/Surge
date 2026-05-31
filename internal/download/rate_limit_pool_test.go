@@ -17,10 +17,10 @@ func TestWorkerPool_RateLimit_QueuedUpdateHonored(t *testing.T) {
 
 	id := "queued-rate-test"
 	cfg := types.DownloadConfig{
-		ID:            id,
-		URL:           "http://example.com/file.bin",
-		RateLimitBps:  0,
-		RateLimitSet:  false,
+		ID:           id,
+		URL:          "http://example.com/file.bin",
+		RateLimitBps: 0,
+		RateLimitSet: false,
 	}
 
 	pool.SetDefaultDownloadRateLimit(1000)
@@ -54,10 +54,10 @@ func TestWorkerPool_RateLimit_ExplicitUnlimitedSurvivesDefaultChange(t *testing.
 
 	id := "explicit-unlimited"
 	cfg := types.DownloadConfig{
-		ID:            id,
-		URL:           "http://example.com/file.bin",
-		RateLimitBps:  0,
-		RateLimitSet:  true,
+		ID:           id,
+		URL:          "http://example.com/file.bin",
+		RateLimitBps: 0,
+		RateLimitSet: true,
 	}
 
 	pool.Add(cfg)
@@ -84,6 +84,138 @@ func TestWorkerPool_RateLimit_ExplicitUnlimitedSurvivesDefaultChange(t *testing.
 	pool.mu.Lock()
 	delete(pool.queued, id)
 	pool.mu.Unlock()
+}
+
+// TestWorkerPool_RateLimit_DefaultChangeUpdatesInheritedActiveLimiter verifies
+// that changing the default affects already-running downloads that inherit it.
+func TestWorkerPool_RateLimit_DefaultChangeUpdatesInheritedActiveLimiter(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 1)
+
+	id := "active-inherited"
+	oldRate := int64(1)
+	newRate := int64(10 * 1024 * 1024)
+	limiter := engine.NewRateLimiter(oldRate, rateLimiterBurst(oldRate))
+
+	pool.mu.Lock()
+	pool.downloads[id] = &activeDownload{
+		config: types.DownloadConfig{
+			ID:           id,
+			URL:          "http://example.com/file.bin",
+			RateLimitBps: oldRate,
+			RateLimitSet: false,
+		},
+	}
+	pool.mu.Unlock()
+
+	pool.limiterMu.Lock()
+	pool.downloadLimiters[id] = limiter
+	pool.limiterMu.Unlock()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- limiter.WaitN(nil, 100)
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("active inherited limiter waiter should be blocked")
+	case <-time.After(100 * time.Millisecond):
+		// expected
+	}
+
+	pool.SetDefaultDownloadRateLimit(newRate)
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("expected no error, got: %v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("active inherited limiter was not updated by default change")
+	}
+
+	pool.mu.RLock()
+	got := pool.downloads[id].config.RateLimitBps
+	gotSet := pool.downloads[id].config.RateLimitSet
+	pool.mu.RUnlock()
+
+	if got != newRate {
+		t.Fatalf("active inherited RateLimitBps = %d, want %d", got, newRate)
+	}
+	if gotSet {
+		t.Fatal("active inherited download should remain non-explicit")
+	}
+}
+
+// TestWorkerPool_RateLimit_DefaultChangeLeavesExplicitActiveLimiter verifies
+// that default changes do not alter active downloads with explicit overrides.
+func TestWorkerPool_RateLimit_DefaultChangeLeavesExplicitActiveLimiter(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 1)
+
+	id := "active-explicit"
+	explicitRate := int64(1)
+	newDefaultRate := int64(10 * 1024 * 1024)
+	limiter := engine.NewRateLimiter(explicitRate, rateLimiterBurst(explicitRate))
+
+	pool.mu.Lock()
+	pool.downloads[id] = &activeDownload{
+		config: types.DownloadConfig{
+			ID:           id,
+			URL:          "http://example.com/file.bin",
+			RateLimitBps: explicitRate,
+			RateLimitSet: true,
+		},
+	}
+	pool.mu.Unlock()
+
+	pool.limiterMu.Lock()
+	pool.downloadLimiters[id] = limiter
+	pool.limiterMu.Unlock()
+
+	done := make(chan error, 1)
+	go func() {
+		done <- limiter.WaitN(nil, 100)
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("active explicit limiter waiter should be blocked")
+	case <-time.After(100 * time.Millisecond):
+		// expected
+	}
+
+	pool.SetDefaultDownloadRateLimit(newDefaultRate)
+
+	select {
+	case <-done:
+		t.Fatal("active explicit limiter should not be updated by default change")
+	case <-time.After(100 * time.Millisecond):
+		// expected
+	}
+
+	pool.mu.RLock()
+	got := pool.downloads[id].config.RateLimitBps
+	gotSet := pool.downloads[id].config.RateLimitSet
+	pool.mu.RUnlock()
+
+	if got != explicitRate {
+		t.Fatalf("active explicit RateLimitBps = %d, want %d", got, explicitRate)
+	}
+	if !gotSet {
+		t.Fatal("active explicit download should remain explicit")
+	}
+
+	pool.SetDownloadRateLimit(id, newDefaultRate)
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("expected no error after explicit limiter update, got: %v", err)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("active explicit limiter waiter was not released during cleanup")
+	}
 }
 
 // TestWorkerPool_RateLimit_SetGlobalHonorsWaiter verifies that
@@ -128,10 +260,10 @@ func TestWorkerPool_RateLimit_SetDownloadHonorsWaiter(t *testing.T) {
 
 	id := "dl-waiter-test"
 	cfg := types.DownloadConfig{
-		ID:            id,
-		URL:           "http://example.com/file.bin",
-		RateLimitBps:  10000,
-		RateLimitSet:  true,
+		ID:           id,
+		URL:          "http://example.com/file.bin",
+		RateLimitBps: 10000,
+		RateLimitSet: true,
 	}
 	pool.Add(cfg)
 
