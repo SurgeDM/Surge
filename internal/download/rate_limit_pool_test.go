@@ -314,7 +314,7 @@ func TestWorkerPool_RateLimit_SetDownloadHonorsWaiter(t *testing.T) {
 
 	done := make(chan error, 1)
 	go func() {
-		done <- cfg.Limiter.WaitN(nil, 20000)
+		done <- cfg.Limiter.WaitN(context.Background(), 20000)
 	}()
 
 	select {
@@ -351,7 +351,7 @@ func TestWorkerPool_RateLimit_MultiLimiterComposition(t *testing.T) {
 	// Both limiters have 10000 tokens; requesting 20000 should block
 	done := make(chan error, 1)
 	go func() {
-		done <- ml.WaitN(nil, 20000)
+		done <- ml.WaitN(context.Background(), 20000)
 	}()
 
 	select {
