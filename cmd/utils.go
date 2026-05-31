@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -248,7 +249,11 @@ func ExecuteAPIAction(rawID, endpoint, method, successMsg string) error {
 		return fmt.Errorf("failed to resolve download ID: %w", err)
 	}
 
-	resp, err := doAPIRequest(method, baseURL, token, fmt.Sprintf("%s/%s", endpoint, id), nil)
+	// The HTTP API expects the download id as the "id" query parameter (see
+	// withRequiredID in cmd/http_api.go); a path segment (e.g. /pause/<id>)
+	// doesn't match the registered routes and 404s. Matches the extension and
+	// internal/core/remote_service.go, which already use ?id=.
+	resp, err := doAPIRequest(method, baseURL, token, fmt.Sprintf("%s?id=%s", endpoint, url.QueryEscape(id)), nil)
 	if err != nil {
 		return fmt.Errorf("failed to send request to server: %w", err)
 	}

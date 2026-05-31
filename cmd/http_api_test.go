@@ -385,3 +385,42 @@ func TestEnsureOpenActionRequestAllowed_ForwardedLoopbackDenied(t *testing.T) {
 		t.Fatalf("expected forwarded loopback request to be allowed when enabled, got: %v", err)
 	}
 }
+
+// recordingPauseService records the id passed to Pause so tests can assert how
+// the CLI delivered it to the HTTP API.
+type recordingPauseService struct {
+	*httpAPITestService
+	pausedID string
+}
+
+func (s *recordingPauseService) Pause(id string) error {
+	s.pausedID = id
+	return nil
+}
+
+// Regression for #456: ExecuteAPIAction sent the download id as a path segment
+// (POST /pause/<id>), but the HTTP API registers exact routes and reads the id
+// from the "id" query parameter (withRequiredID), so pause/resume/delete/open
+// 404'd against a remote daemon. The id must be sent as ?id=.
+func TestExecuteAPIAction_SendsIDAsQueryParam(t *testing.T) {
+	rec := &recordingPauseService{httpAPITestService: &httpAPITestService{}}
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", rec)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	prevHost, prevToken := globalHost, globalToken
+	globalHost, globalToken = "", ""
+	defer func() { globalHost, globalToken = prevHost, prevToken }()
+	t.Setenv("SURGE_HOST", server.URL)
+	t.Setenv("SURGE_TOKEN", "test-token")
+
+	// 32 chars so resolveDownloadID treats it as a full id (no server lookup).
+	const fullID = "abcdef0123456789abcdef0123456789"
+	if err := ExecuteAPIAction(fullID, "/pause", http.MethodPost, "Paused download"); err != nil {
+		t.Fatalf("ExecuteAPIAction returned error (id should reach /pause via ?id=): %v", err)
+	}
+	if rec.pausedID != fullID {
+		t.Fatalf("server received id %q via query param, want %q", rec.pausedID, fullID)
+	}
+}
