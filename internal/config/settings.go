@@ -251,6 +251,11 @@ func (s *Settings) initializeCategoriesList() {
 				s.Network.MinChunkSize,
 				s.Network.WorkerBufferSize,
 				s.Network.DialHedgeCount,
+			},
+		},
+		{
+			Name: "Speed Limits",
+			Settings: []*Setting{
 				s.Network.GlobalRateLimit,
 				s.Network.DefaultDownloadRateLimit,
 			},
@@ -348,7 +353,7 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 
 // CategoryOrder returns the order of categories for UI tabs.
 func CategoryOrder() []string {
-	return []string{"General", "Network", "Performance", "Categories", "Extension"}
+	return []string{"General", "Network", "Performance", "Categories", "Extension", "Speed Limits"}
 }
 
 const (
