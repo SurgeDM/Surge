@@ -386,24 +386,25 @@ func TestEnsureOpenActionRequestAllowed_ForwardedLoopbackDenied(t *testing.T) {
 	}
 }
 
-// recordingPauseService records the id passed to Pause so tests can assert how
-// the CLI delivered it to the HTTP API.
-type recordingPauseService struct {
+// recordingActionService records the id passed to each lifecycle action so
+// tests can assert how the CLI delivered it to the HTTP API.
+type recordingActionService struct {
 	*httpAPITestService
-	pausedID string
+	ids map[string]string // action -> received id
 }
 
-func (s *recordingPauseService) Pause(id string) error {
-	s.pausedID = id
-	return nil
-}
+func (s *recordingActionService) Pause(id string) error  { s.ids["pause"] = id; return nil }
+func (s *recordingActionService) Resume(id string) error { s.ids["resume"] = id; return nil }
+func (s *recordingActionService) Delete(id string) error { s.ids["delete"] = id; return nil }
 
 // Regression for #456: ExecuteAPIAction sent the download id as a path segment
-// (POST /pause/<id>), but the HTTP API registers exact routes and reads the id
-// from the "id" query parameter (withRequiredID), so pause/resume/delete/open
-// 404'd against a remote daemon. The id must be sent as ?id=.
+// (e.g. POST /pause/<id>), but the HTTP API registers exact routes and reads the
+// id from the "id" query parameter (withRequiredID), so pause/resume/delete/open
+// 404'd against a remote daemon. The id must be sent as ?id=. Exercise every
+// ExecuteAPIAction caller (pause/resume/delete), not just one, so a future
+// action-specific regression is caught.
 func TestExecuteAPIAction_SendsIDAsQueryParam(t *testing.T) {
-	rec := &recordingPauseService{httpAPITestService: &httpAPITestService{}}
+	rec := &recordingActionService{httpAPITestService: &httpAPITestService{}, ids: map[string]string{}}
 	mux := http.NewServeMux()
 	registerHTTPRoutes(mux, 0, "", rec)
 	server := httptest.NewServer(mux)
@@ -417,10 +418,16 @@ func TestExecuteAPIAction_SendsIDAsQueryParam(t *testing.T) {
 
 	// 32 chars so resolveDownloadID treats it as a full id (no server lookup).
 	const fullID = "abcdef0123456789abcdef0123456789"
-	if err := ExecuteAPIAction(fullID, "/pause", http.MethodPost, "Paused download"); err != nil {
-		t.Fatalf("ExecuteAPIAction returned error (id should reach /pause via ?id=): %v", err)
-	}
-	if rec.pausedID != fullID {
-		t.Fatalf("server received id %q via query param, want %q", rec.pausedID, fullID)
+	for _, action := range []struct{ name, endpoint string }{
+		{"pause", "/pause"},
+		{"resume", "/resume"},
+		{"delete", "/delete"},
+	} {
+		if err := ExecuteAPIAction(fullID, action.endpoint, http.MethodPost, action.name); err != nil {
+			t.Fatalf("ExecuteAPIAction(%s): id should reach %s via ?id=, got error: %v", action.name, action.endpoint, err)
+		}
+		if rec.ids[action.name] != fullID {
+			t.Fatalf("%s: server received id %q via query param, want %q", action.name, rec.ids[action.name], fullID)
+		}
 	}
 }
