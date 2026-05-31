@@ -154,6 +154,66 @@ func (p *WorkerPool) ensureLimiterForConfig(cfg *types.DownloadConfig) {
 	}
 }
 
+func (p *WorkerPool) ensureLimiterForDownload(downloadID string) {
+	if downloadID == "" {
+		return
+	}
+
+	for {
+		p.limiterMu.Lock()
+		defaultRate := p.defaultDownloadRateLimitBps
+		p.limiterMu.Unlock()
+
+		p.mu.Lock()
+		ad, ok := p.downloads[downloadID]
+		if !ok {
+			p.mu.Unlock()
+			return
+		}
+		rate := ad.config.RateLimitBps
+		rateSet := ad.config.RateLimitSet
+		if !rateSet {
+			rate = defaultRate
+			ad.config.RateLimitBps = rate
+		}
+		p.mu.Unlock()
+
+		p.limiterMu.Lock()
+		if p.globalLimiter == nil {
+			p.globalLimiter = engine.NewRateLimiter(0, 0)
+		}
+		if p.downloadLimiters == nil {
+			p.downloadLimiters = make(map[string]*engine.RateLimiter)
+		}
+		limiter := p.downloadLimiters[downloadID]
+		if limiter == nil {
+			limiter = engine.NewRateLimiter(rate, rateLimiterBurst(rate))
+			p.downloadLimiters[downloadID] = limiter
+		} else {
+			limiter.SetRate(rate, rateLimiterBurst(rate))
+		}
+		multiLimiter := engine.NewMultiLimiter(p.globalLimiter, limiter)
+		p.limiterMu.Unlock()
+
+		p.mu.Lock()
+		ad, ok = p.downloads[downloadID]
+		if !ok {
+			p.mu.Unlock()
+			return
+		}
+		if ad.config.Limiter == nil {
+			ad.config.Limiter = multiLimiter
+		}
+		currentRate := ad.config.RateLimitBps
+		currentRateSet := ad.config.RateLimitSet
+		p.mu.Unlock()
+
+		if currentRate == rate && currentRateSet == rateSet {
+			return
+		}
+	}
+}
+
 func rateLimiterBurst(rate int64) int64 {
 	if rate <= 0 {
 		return 0
@@ -481,7 +541,6 @@ func (p *WorkerPool) worker() {
 			continue
 		}
 
-		p.ensureLimiterForConfig(&cfg)
 		ctx, cancel := context.WithCancel(context.Background())
 		ad := &activeDownload{
 			config: cfg,
@@ -495,6 +554,8 @@ func (p *WorkerPool) worker() {
 		delete(p.queued, cfg.ID)
 		p.downloads[cfg.ID] = ad
 		p.mu.Unlock()
+
+		p.ensureLimiterForDownload(ad.config.ID)
 
 		err := TUIDownload(ctx, &ad.config)
 		ad.running.Store(false)

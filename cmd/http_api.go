@@ -28,6 +28,10 @@ type rateLimitSettingsService interface {
 	SetDefaultRateLimit(rate int64) error
 }
 
+type rateLimitClearService interface {
+	ClearRateLimit(id string) error
+}
+
 func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service core.DownloadService) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
@@ -155,6 +159,19 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		id := r.URL.Query().Get("id")
 		if id == "" {
 			http.Error(w, "Missing id parameter", http.StatusBadRequest)
+			return
+		}
+		if strings.EqualFold(r.URL.Query().Get("inherit"), "true") {
+			clearer, ok := service.(rateLimitClearService)
+			if !ok {
+				http.Error(w, "Service does not support clearing rate limits", http.StatusNotImplemented)
+				return
+			}
+			if err := clearer.ClearRateLimit(id); err != nil {
+				http.Error(w, err.Error(), http.StatusInternalServerError)
+				return
+			}
+			writeJSONResponse(w, http.StatusOK, map[string]string{"status": "rate_limit_inherited", "id": id})
 			return
 		}
 		rate, rateStr, ok := parseRateLimitQuery(w, r)
