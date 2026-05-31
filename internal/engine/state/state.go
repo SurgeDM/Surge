@@ -1006,3 +1006,23 @@ func UpdateRateLimit(id string, rate int64) error {
 
 	return nil
 }
+
+// ClearRateLimit removes a download-specific rate limit override.
+func ClearRateLimit(id string) error {
+	db := getDBHelper()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	result, err := db.Exec("UPDATE downloads SET rate_limit = 0, rate_limit_set = 0 WHERE id = ?", id)
+	if err != nil {
+		return fmt.Errorf("failed to clear rate limit: %w", err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("download not found: %s", id)
+	}
+
+	return nil
+}

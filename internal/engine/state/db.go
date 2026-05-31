@@ -70,6 +70,7 @@ func initDBLocked() error {
 		actual_chunk_size INTEGER,
 		avg_speed REAL,
 		file_hash TEXT,
+		rate_limit INTEGER,
 		rate_limit_set INTEGER
 	);
 
@@ -141,6 +142,12 @@ func ensureDownloadsSchema() error {
 			if _, err := db.Exec(alterQuery); err != nil {
 				log.Printf("Failed to add column %s: %v", col.name, err)
 			}
+		}
+	}
+
+	if !existingColumns["rate_limit_set"] && existingColumns["rate_limit"] {
+		if _, err := db.Exec("UPDATE downloads SET rate_limit_set = 1 WHERE rate_limit > 0"); err != nil {
+			log.Printf("Failed to backfill rate_limit_set: %v", err)
 		}
 	}
 

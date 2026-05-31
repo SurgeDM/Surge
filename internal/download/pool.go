@@ -311,6 +311,41 @@ func (p *WorkerPool) SetDownloadRateLimit(downloadID string, rate int64) {
 	p.limiterMu.Unlock()
 }
 
+// ClearDownloadRateLimit removes a specific download's override so it inherits the current default.
+func (p *WorkerPool) ClearDownloadRateLimit(downloadID string) {
+	if downloadID == "" {
+		return
+	}
+
+	p.limiterMu.Lock()
+	defaultRate := p.defaultDownloadRateLimitBps
+	p.limiterMu.Unlock()
+
+	p.mu.Lock()
+	if ad, ok := p.downloads[downloadID]; ok {
+		ad.config.RateLimitBps = defaultRate
+		ad.config.RateLimitSet = false
+	}
+	if cfg, ok := p.queued[downloadID]; ok {
+		cfg.RateLimitBps = defaultRate
+		cfg.RateLimitSet = false
+		p.queued[downloadID] = cfg
+	}
+	p.mu.Unlock()
+
+	p.limiterMu.Lock()
+	if p.downloadLimiters == nil {
+		p.downloadLimiters = make(map[string]*engine.RateLimiter)
+	}
+	limiter := p.downloadLimiters[downloadID]
+	if limiter == nil {
+		p.downloadLimiters[downloadID] = engine.NewRateLimiter(defaultRate, rateLimiterBurst(defaultRate))
+	} else {
+		limiter.SetRate(defaultRate, rateLimiterBurst(defaultRate))
+	}
+	p.limiterMu.Unlock()
+}
+
 // PauseAll pauses all active downloads (for graceful shutdown)
 func (p *WorkerPool) PauseAll() {
 	p.mu.RLock()

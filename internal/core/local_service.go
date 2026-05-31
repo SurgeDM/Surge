@@ -671,6 +671,18 @@ func (s *LocalDownloadService) SetRateLimit(id string, rate int64) error {
 	return nil
 }
 
+// ClearRateLimit clears a specific download's speed limit override.
+func (s *LocalDownloadService) ClearRateLimit(id string) error {
+	if s.Pool == nil {
+		return types.ErrPoolNotInit
+	}
+	s.Pool.ClearDownloadRateLimit(id)
+	if err := state.ClearRateLimit(id); err != nil {
+		utils.Debug("failed to clear rate limit for %s: %v", id, err)
+	}
+	return nil
+}
+
 // SetGlobalRateLimit sets the global speed limit for the local service.
 func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
 	if rate < 0 {

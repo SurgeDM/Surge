@@ -257,6 +257,16 @@ func (s *RemoteDownloadService) SetRateLimit(id string, rate int64) error {
 	return nil
 }
 
+// ClearRateLimit clears a specific download's speed limit override on the remote daemon.
+func (s *RemoteDownloadService) ClearRateLimit(id string) error {
+	resp, err := s.doRequest("POST", fmt.Sprintf("/rate-limit?id=%s&inherit=true", url.QueryEscape(id)), nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return nil
+}
+
 // SetGlobalRateLimit sets the remote daemon's global speed limit.
 func (s *RemoteDownloadService) SetGlobalRateLimit(rate int64) error {
 	if rate < 0 {
