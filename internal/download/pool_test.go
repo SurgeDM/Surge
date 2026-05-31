@@ -284,6 +284,9 @@ func TestWorkerPool_Cancel_RemovesFromMap(t *testing.T) {
 	ad.running.Store(true)
 	pool.downloads["test-id"] = ad
 	pool.mu.Unlock()
+	pool.limiterMu.Lock()
+	pool.downloadLimiters["test-id"] = pool.globalLimiter
+	pool.limiterMu.Unlock()
 
 	result := pool.Cancel("test-id")
 
@@ -305,6 +308,13 @@ func TestWorkerPool_Cancel_RemovesFromMap(t *testing.T) {
 
 	if exists {
 		t.Error("Expected download to be removed from map after cancel")
+	}
+
+	pool.limiterMu.Lock()
+	_, limiterExists := pool.downloadLimiters["test-id"]
+	pool.limiterMu.Unlock()
+	if limiterExists {
+		t.Error("Expected download limiter to be removed after cancel")
 	}
 }
 
@@ -749,6 +759,9 @@ func TestWorkerPool_ExtractPausedConfig_Success(t *testing.T) {
 		},
 	}
 	pool.mu.Unlock()
+	pool.limiterMu.Lock()
+	pool.downloadLimiters["test-id"] = pool.globalLimiter
+	pool.limiterMu.Unlock()
 
 	cfg := pool.ExtractPausedConfig("test-id")
 	if cfg == nil {
@@ -769,6 +782,13 @@ func TestWorkerPool_ExtractPausedConfig_Success(t *testing.T) {
 	pool.mu.RUnlock()
 	if exists {
 		t.Error("Expected download to be removed from pool after extract")
+	}
+
+	pool.limiterMu.Lock()
+	_, limiterExists := pool.downloadLimiters["test-id"]
+	pool.limiterMu.Unlock()
+	if limiterExists {
+		t.Error("Expected download limiter to be removed from pool after extract")
 	}
 
 	// Pause state should be cleared

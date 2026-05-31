@@ -502,6 +502,11 @@ func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
 		delete(p.queued, downloadID)
 	}
 	p.mu.Unlock()
+	if activeExists || queuedExists {
+		p.limiterMu.Lock()
+		delete(p.downloadLimiters, downloadID)
+		p.limiterMu.Unlock()
+	}
 
 	if !activeExists && !queuedExists {
 		return types.CancelResult{}
@@ -560,6 +565,9 @@ func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfi
 
 	cfg := ad.config
 	delete(p.downloads, downloadID)
+	p.limiterMu.Lock()
+	delete(p.downloadLimiters, downloadID)
+	p.limiterMu.Unlock()
 	if ad.config.State != nil {
 		ad.config.State.Resume()
 	}
@@ -648,6 +656,9 @@ func (p *WorkerPool) worker() {
 			p.mu.Lock()
 			delete(p.downloads, cfg.ID)
 			p.mu.Unlock()
+			p.limiterMu.Lock()
+			delete(p.downloadLimiters, cfg.ID)
+			p.limiterMu.Unlock()
 
 		} else {
 			// Only mark as done if not paused
@@ -660,6 +671,9 @@ func (p *WorkerPool) worker() {
 			p.mu.Lock()
 			delete(p.downloads, cfg.ID)
 			p.mu.Unlock()
+			p.limiterMu.Lock()
+			delete(p.downloadLimiters, cfg.ID)
+			p.limiterMu.Unlock()
 		}
 		// If paused, we keep it in downloads map for potential resume
 		p.wg.Done()
