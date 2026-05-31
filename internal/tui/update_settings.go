@@ -49,7 +49,11 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 
-			_ = m.setSettingValue(currentCategory, settingKey, val)
+			if err := m.setSettingValue(currentCategory, settingKey, val); err != nil {
+				m.settingsError = err.Error()
+				utils.Debug("Settings Update Error: %s = %s (%v)", settingKey, val, err)
+				return m, nil
+			}
 			m.SettingsIsEditing = false
 			m.settingsError = ""
 			m.SettingsInput.Blur()
