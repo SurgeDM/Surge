@@ -139,12 +139,6 @@ func resolveClientOutputPath(outputDir string) string {
 
 func resolveAPIConnection(requireServer bool) (string, string, error) {
 	target := resolveHostTarget()
-	if noServer && target == "" {
-		if !requireServer {
-			return "", "", nil
-		}
-		return "", "", errors.New("no local server running (start surge without --no-server, or connect to a remote with --host)")
-	}
 	if target == "" {
 		details, ok := getActiveConnectionDetails()
 		if ok {
