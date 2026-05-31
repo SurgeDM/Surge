@@ -16,15 +16,20 @@ func TestWorkerPool_RateLimit_QueuedUpdateHonored(t *testing.T) {
 	pool := NewWorkerPool(ch, 1)
 
 	id := "queued-rate-test"
+	state := types.NewProgressState(id, 0)
 	cfg := types.DownloadConfig{
 		ID:           id,
 		URL:          "http://example.com/file.bin",
+		State:        state,
 		RateLimitBps: 0,
 		RateLimitSet: false,
 	}
 
 	pool.SetDefaultDownloadRateLimit(1000)
-	pool.Add(cfg)
+	pool.ensureLimiterForConfig(&cfg)
+	pool.mu.Lock()
+	pool.queued[id] = cfg
+	pool.mu.Unlock()
 
 	pool.SetDownloadRateLimit(id, 5*1024*1024)
 
@@ -38,6 +43,10 @@ func TestWorkerPool_RateLimit_QueuedUpdateHonored(t *testing.T) {
 	}
 	if qCfg.RateLimitBps != 5*1024*1024 {
 		t.Fatalf("queued RateLimitBps = %d, want %d", qCfg.RateLimitBps, 5*1024*1024)
+	}
+	rate, rateSet := state.GetRateLimit()
+	if rate != 5*1024*1024 || !rateSet {
+		t.Fatalf("state rate limit = (%d, %v), want (%d, true)", rate, rateSet, 5*1024*1024)
 	}
 
 	pool.mu.Lock()
@@ -96,12 +105,15 @@ func TestWorkerPool_RateLimit_DefaultChangeUpdatesInheritedActiveLimiter(t *test
 	oldRate := int64(1)
 	newRate := int64(10 * 1024 * 1024)
 	limiter := engine.NewRateLimiter(oldRate, rateLimiterBurst(oldRate))
+	state := types.NewProgressState(id, 0)
+	state.SetRateLimit(oldRate, false)
 
 	pool.mu.Lock()
 	pool.downloads[id] = &activeDownload{
 		config: types.DownloadConfig{
 			ID:           id,
 			URL:          "http://example.com/file.bin",
+			State:        state,
 			RateLimitBps: oldRate,
 			RateLimitSet: false,
 		},
@@ -146,6 +158,10 @@ func TestWorkerPool_RateLimit_DefaultChangeUpdatesInheritedActiveLimiter(t *test
 	if gotSet {
 		t.Fatal("active inherited download should remain non-explicit")
 	}
+	stateRate, stateRateSet := state.GetRateLimit()
+	if stateRate != newRate || stateRateSet {
+		t.Fatalf("state rate limit = (%d, %v), want (%d, false)", stateRate, stateRateSet, newRate)
+	}
 }
 
 // TestWorkerPool_RateLimit_DefaultChangeLeavesExplicitActiveLimiter verifies
@@ -158,12 +174,15 @@ func TestWorkerPool_RateLimit_DefaultChangeLeavesExplicitActiveLimiter(t *testin
 	explicitRate := int64(1)
 	newDefaultRate := int64(10 * 1024 * 1024)
 	limiter := engine.NewRateLimiter(explicitRate, rateLimiterBurst(explicitRate))
+	state := types.NewProgressState(id, 0)
+	state.SetRateLimit(explicitRate, true)
 
 	pool.mu.Lock()
 	pool.downloads[id] = &activeDownload{
 		config: types.DownloadConfig{
 			ID:           id,
 			URL:          "http://example.com/file.bin",
+			State:        state,
 			RateLimitBps: explicitRate,
 			RateLimitSet: true,
 		},
@@ -206,6 +225,10 @@ func TestWorkerPool_RateLimit_DefaultChangeLeavesExplicitActiveLimiter(t *testin
 	if !gotSet {
 		t.Fatal("active explicit download should remain explicit")
 	}
+	stateRate, stateRateSet := state.GetRateLimit()
+	if stateRate != explicitRate || !stateRateSet {
+		t.Fatalf("state rate limit = (%d, %v), want (%d, true)", stateRate, stateRateSet, explicitRate)
+	}
 
 	pool.SetDownloadRateLimit(id, newDefaultRate)
 	select {
@@ -215,6 +238,24 @@ func TestWorkerPool_RateLimit_DefaultChangeLeavesExplicitActiveLimiter(t *testin
 		}
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("active explicit limiter waiter was not released during cleanup")
+	}
+}
+
+func TestWorkerPool_RateLimit_UnknownDownloadDoesNotCreateLimiter(t *testing.T) {
+	ch := make(chan any, 10)
+	pool := NewWorkerPool(ch, 1)
+
+	if ok := pool.SetDownloadRateLimit("missing", 1024); ok {
+		t.Fatal("expected SetDownloadRateLimit to report missing download")
+	}
+	if ok := pool.ClearDownloadRateLimit("missing"); ok {
+		t.Fatal("expected ClearDownloadRateLimit to report missing download")
+	}
+
+	pool.limiterMu.Lock()
+	defer pool.limiterMu.Unlock()
+	if _, ok := pool.downloadLimiters["missing"]; ok {
+		t.Fatal("missing download should not create a limiter")
 	}
 }
 
@@ -265,16 +306,14 @@ func TestWorkerPool_RateLimit_SetDownloadHonorsWaiter(t *testing.T) {
 		RateLimitBps: 10000,
 		RateLimitSet: true,
 	}
-	pool.Add(cfg)
-
-	pool.mu.RLock()
-	qCfg := pool.queued[id]
-	pool.mu.RUnlock()
-	pool.ensureLimiterForConfig(&qCfg)
+	pool.ensureLimiterForConfig(&cfg)
+	pool.mu.Lock()
+	pool.queued[id] = cfg
+	pool.mu.Unlock()
 
 	done := make(chan error, 1)
 	go func() {
-		done <- qCfg.Limiter.WaitN(nil, 20000)
+		done <- cfg.Limiter.WaitN(nil, 20000)
 	}()
 
 	select {

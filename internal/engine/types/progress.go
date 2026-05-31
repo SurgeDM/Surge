@@ -27,6 +27,8 @@ type ProgressState struct {
 	VerifiedProgress  atomic.Int64  // Verified bytes written to disk (for UI progress)
 	SessionStartBytes int64         // SessionStartBytes tracks how many bytes were already downloaded when the current session started
 	SavedElapsed      time.Duration // Time spent in previous sessions
+	RateLimitBps      int64         // Effective per-download rate limit in bytes/sec
+	RateLimitSet      bool          // Whether RateLimitBps is an explicit per-download override
 
 	Mirrors []MirrorStatus
 
@@ -78,6 +80,19 @@ func (ps *ProgressState) GetURL() string {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	return ps.URL
+}
+
+func (ps *ProgressState) SetRateLimit(rate int64, explicit bool) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	ps.RateLimitBps = rate
+	ps.RateLimitSet = explicit
+}
+
+func (ps *ProgressState) GetRateLimit() (int64, bool) {
+	ps.mu.Lock()
+	defer ps.mu.Unlock()
+	return ps.RateLimitBps, ps.RateLimitSet
 }
 
 func NewProgressState(id string, totalSize int64) *ProgressState {

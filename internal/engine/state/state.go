@@ -1001,7 +1001,7 @@ func UpdateRateLimit(id string, rate int64) error {
 
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return fmt.Errorf("download not found: %s", id)
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
 	}
 
 	return nil
@@ -1021,7 +1021,7 @@ func ClearRateLimit(id string) error {
 
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
-		return fmt.Errorf("download not found: %s", id)
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
 	}
 
 	return nil

@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -619,6 +620,45 @@ func TestLocalDownloadService_ClearRateLimit_UpdatesPool(t *testing.T) {
 	}
 	if cfgAfter.RateLimitSet {
 		t.Error("expected RateLimitSet to be false after clear")
+	}
+}
+
+func TestLocalDownloadService_SetRateLimit_UnknownIDReturnsNotFound(t *testing.T) {
+	tempDir := t.TempDir()
+	state.CloseDB()
+	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	defer state.CloseDB()
+
+	ch := make(chan interface{}, 10)
+	pool := download.NewWorkerPool(ch, 1)
+	svc := NewLocalDownloadServiceWithInput(pool, ch)
+	defer func() { _ = svc.Shutdown() }()
+
+	err := svc.SetRateLimit("missing-rate-id", 1024)
+	if !errors.Is(err, types.ErrNotFound) {
+		t.Fatalf("SetRateLimit error = %v, want ErrNotFound", err)
+	}
+
+	poolStatus := pool.GetStatus("missing-rate-id")
+	if poolStatus != nil {
+		t.Fatalf("missing download unexpectedly exists in pool: %#v", poolStatus)
+	}
+}
+
+func TestLocalDownloadService_ClearRateLimit_UnknownIDReturnsNotFound(t *testing.T) {
+	tempDir := t.TempDir()
+	state.CloseDB()
+	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	defer state.CloseDB()
+
+	ch := make(chan interface{}, 10)
+	pool := download.NewWorkerPool(ch, 1)
+	svc := NewLocalDownloadServiceWithInput(pool, ch)
+	defer func() { _ = svc.Shutdown() }()
+
+	err := svc.ClearRateLimit("missing-rate-id")
+	if !errors.Is(err, types.ErrNotFound) {
+		t.Fatalf("ClearRateLimit error = %v, want ErrNotFound", err)
 	}
 }
 

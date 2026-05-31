@@ -17,14 +17,16 @@ import (
 )
 
 type httpAPITestService struct {
-	history          []types.DownloadEntry
-	historyErr       error
-	statusByID       map[string]*types.DownloadStatus
-	getStatusErr     error
-	streamMsgs       []interface{}
-	rateLimitCalls   []string
-	rateLimitValues  map[string]int64
-	clearRateLimitID []string
+	history           []types.DownloadEntry
+	historyErr        error
+	statusByID        map[string]*types.DownloadStatus
+	getStatusErr      error
+	streamMsgs        []interface{}
+	rateLimitCalls    []string
+	rateLimitValues   map[string]int64
+	clearRateLimitID  []string
+	setRateLimitErr   error
+	clearRateLimitErr error
 }
 
 func newRateLimitTestService() *httpAPITestService {
@@ -106,6 +108,9 @@ func (s *httpAPITestService) Shutdown() error {
 }
 
 func (s *httpAPITestService) SetRateLimit(id string, rate int64) error {
+	if s.setRateLimitErr != nil {
+		return s.setRateLimitErr
+	}
 	if s.rateLimitCalls != nil {
 		s.rateLimitCalls = append(s.rateLimitCalls, "per-download:"+id)
 	}
@@ -116,6 +121,9 @@ func (s *httpAPITestService) SetRateLimit(id string, rate int64) error {
 }
 
 func (s *httpAPITestService) ClearRateLimit(id string) error {
+	if s.clearRateLimitErr != nil {
+		return s.clearRateLimitErr
+	}
 	s.clearRateLimitID = append(s.clearRateLimitID, id)
 	return nil
 }
@@ -533,6 +541,41 @@ func TestRateLimitPerDownloadEndpoint(t *testing.T) {
 				} else if got := svc.rateLimitValues[tt.wantID]; got != tt.wantRate {
 					t.Fatalf("rate for %s = %d, want %d", tt.wantID, got, tt.wantRate)
 				}
+			}
+		})
+	}
+}
+
+func TestRateLimitPerDownloadEndpoint_NotFoundReturns404(t *testing.T) {
+	tests := []struct {
+		name string
+		path string
+		svc  *httpAPITestService
+	}{
+		{
+			name: "set missing download",
+			path: "/rate-limit?id=missing&rate=1024",
+			svc:  &httpAPITestService{setRateLimitErr: types.ErrNotFound},
+		},
+		{
+			name: "clear missing download",
+			path: "/rate-limit?id=missing&inherit=true",
+			svc:  &httpAPITestService{clearRateLimitErr: types.ErrNotFound},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mux := http.NewServeMux()
+			registerHTTPRoutes(mux, 0, "", tt.svc)
+
+			req := httptest.NewRequest(http.MethodPost, tt.path, nil)
+			req.RemoteAddr = "127.0.0.1:12345"
+			rec := httptest.NewRecorder()
+			mux.ServeHTTP(rec, req)
+
+			if rec.Code != http.StatusNotFound {
+				t.Fatalf("expected status 404, got %d: %s", rec.Code, rec.Body.String())
 			}
 		})
 	}

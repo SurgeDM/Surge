@@ -27,6 +27,33 @@ func TestNewProgressState(t *testing.T) {
 	if ps.Paused.Load() {
 		t.Error("Paused should be false initially")
 	}
+	rate, rateSet := ps.GetRateLimit()
+	if rate != 0 || rateSet {
+		t.Errorf("rate limit = (%d, %v), want (0, false)", rate, rateSet)
+	}
+}
+
+func TestProgressState_RateLimitAccessors(t *testing.T) {
+	ps := NewProgressState("test-id", 1000)
+
+	ps.SetRateLimit(3*1024*1024, true)
+
+	rate, rateSet := ps.GetRateLimit()
+	if rate != 3*1024*1024 {
+		t.Fatalf("rate = %d, want %d", rate, 3*1024*1024)
+	}
+	if !rateSet {
+		t.Fatal("rateSet = false, want true")
+	}
+
+	ps.SetRateLimit(512*1024, false)
+	rate, rateSet = ps.GetRateLimit()
+	if rate != 512*1024 {
+		t.Fatalf("inherited rate = %d, want %d", rate, 512*1024)
+	}
+	if rateSet {
+		t.Fatal("rateSet = true, want false")
+	}
 }
 
 func TestProgressState_SetTotalSize(t *testing.T) {

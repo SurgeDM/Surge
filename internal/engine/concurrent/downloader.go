@@ -556,6 +556,11 @@ func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queu
 	// Get persisted bitmap data
 	bitmap, _, _, chunkSize, _ := d.State.GetBitmapSnapshot(false)
 
+	rateLimit, rateLimitSet := d.RateLimitBps, d.RateLimitSet
+	if d.State != nil {
+		rateLimit, rateLimitSet = d.State.GetRateLimit()
+	}
+
 	// Save state for resume (use computed value for consistency)
 	s := &types.DownloadState{
 		URL:             d.URL,
@@ -569,8 +574,8 @@ func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queu
 		Mirrors:         candidateMirrors,
 		ChunkBitmap:     bitmap,
 		ActualChunkSize: chunkSize,
-		RateLimit:       d.RateLimitBps,
-		RateLimitSet:    d.RateLimitSet,
+		RateLimit:       rateLimit,
+		RateLimitSet:    rateLimitSet,
 	}
 	if d.ProgressChan != nil {
 		d.ProgressChan <- events.DownloadPausedMsg{
@@ -578,8 +583,8 @@ func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queu
 			Filename:     filepath.Base(destPath),
 			Downloaded:   computedDownloaded,
 			State:        s,
-			RateLimit:    d.RateLimitBps,
-			RateLimitSet: d.RateLimitSet,
+			RateLimit:    rateLimit,
+			RateLimitSet: rateLimitSet,
 		}
 	}
 

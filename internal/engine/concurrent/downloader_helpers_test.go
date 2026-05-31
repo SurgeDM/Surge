@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 )
@@ -52,6 +53,47 @@ func TestHandlePause_Normal(t *testing.T) {
 	err := downloader.handlePause(destPath, fileSize, queue, nil)
 	if err != types.ErrPaused {
 		t.Fatalf("Expected ErrPaused, got %v", err)
+	}
+}
+
+func TestHandlePause_UsesLiveRateLimitFromState(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(1000)
+	destPath := filepath.Join(tmpDir, "test.bin")
+	state := types.NewProgressState("test-id", fileSize)
+	state.SetRateLimit(3*1024*1024, true)
+	progressCh := make(chan any, 1)
+	downloader := &ConcurrentDownloader{
+		ID:           "test-id",
+		URL:          "http://example.com/file.bin",
+		State:        state,
+		ProgressChan: progressCh,
+		RateLimitBps: 1,
+		RateLimitSet: false,
+	}
+
+	queue := NewTaskQueue()
+	queue.Push(types.Task{Offset: 500, Length: 500})
+
+	err := downloader.handlePause(destPath, fileSize, queue, nil)
+	if err != types.ErrPaused {
+		t.Fatalf("Expected ErrPaused, got %v", err)
+	}
+
+	msg, ok := (<-progressCh).(events.DownloadPausedMsg)
+	if !ok {
+		t.Fatalf("expected DownloadPausedMsg, got %T", msg)
+	}
+	if msg.RateLimit != 3*1024*1024 || !msg.RateLimitSet {
+		t.Fatalf("pause msg rate limit = (%d, %v), want (%d, true)", msg.RateLimit, msg.RateLimitSet, 3*1024*1024)
+	}
+	if msg.State == nil {
+		t.Fatal("expected pause state")
+	}
+	if msg.State.RateLimit != 3*1024*1024 || !msg.State.RateLimitSet {
+		t.Fatalf("pause state rate limit = (%d, %v), want (%d, true)", msg.State.RateLimit, msg.State.RateLimitSet, 3*1024*1024)
 	}
 }
 

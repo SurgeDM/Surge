@@ -125,10 +125,19 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	if cfg.State != nil {
 		cfg.State.SetFilename(finalFilename)
 		cfg.State.SetDestPath(finalDestPath)
+		cfg.State.SetRateLimit(cfg.RateLimitBps, cfg.RateLimitSet)
+	}
+
+	currentRateLimit := func() (int64, bool) {
+		if cfg.State != nil {
+			return cfg.State.GetRateLimit()
+		}
+		return cfg.RateLimitBps, cfg.RateLimitSet
 	}
 
 	// Send download started message
 	if cfg.ProgressCh != nil {
+		rateLimit, rateLimitSet := currentRateLimit()
 		safeSendProgress(cfg.ProgressCh, events.DownloadStartedMsg{
 			DownloadID:   cfg.ID,
 			URL:          cfg.URL,
@@ -136,8 +145,8 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			Total:        cfg.TotalSize, // Relies on TotalSize from Config
 			DestPath:     finalDestPath,
 			State:        cfg.State,
-			RateLimit:    cfg.RateLimitBps,
-			RateLimitSet: cfg.RateLimitSet,
+			RateLimit:    rateLimit,
+			RateLimitSet: rateLimitSet,
 		})
 	}
 
@@ -256,14 +265,15 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		}
 
 		if cfg.ProgressCh != nil {
+			rateLimit, rateLimitSet := currentRateLimit()
 			safeSendProgress(cfg.ProgressCh, events.DownloadCompleteMsg{
 				DownloadID:   cfg.ID,
 				Filename:     finalFilename,
 				Elapsed:      elapsed,
 				Total:        effectiveTotalSize,
 				AvgSpeed:     avgSpeed,
-				RateLimit:    cfg.RateLimitBps,
-				RateLimitSet: cfg.RateLimitSet,
+				RateLimit:    rateLimit,
+				RateLimitSet: rateLimitSet,
 			})
 		}
 	} else if downloadErr != nil && !isPaused {

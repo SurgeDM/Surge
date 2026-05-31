@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -515,6 +516,7 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 	state.DestPath = filepath.Join(outPath, filename) // Best guess until download starts
 
 	runtime := settings.ToRuntimeConfig()
+	state.SetRateLimit(runtime.DefaultDownloadRateLimitBps, false)
 
 	cfg := types.DownloadConfig{
 		URL:                url,
@@ -664,8 +666,14 @@ func (s *LocalDownloadService) SetRateLimit(id string, rate int64) error {
 	if s.Pool == nil {
 		return types.ErrPoolNotInit
 	}
-	s.Pool.SetDownloadRateLimit(id, rate)
+	foundInPool := s.Pool.SetDownloadRateLimit(id, rate)
 	if err := state.UpdateRateLimit(id, rate); err != nil {
+		if !foundInPool {
+			if errors.Is(err, types.ErrNotFound) {
+				return fmt.Errorf("%w: %s", types.ErrNotFound, id)
+			}
+			return err
+		}
 		utils.Debug("failed to persist rate limit for %s: %v", id, err)
 	}
 	return nil
@@ -676,8 +684,14 @@ func (s *LocalDownloadService) ClearRateLimit(id string) error {
 	if s.Pool == nil {
 		return types.ErrPoolNotInit
 	}
-	s.Pool.ClearDownloadRateLimit(id)
+	foundInPool := s.Pool.ClearDownloadRateLimit(id)
 	if err := state.ClearRateLimit(id); err != nil {
+		if !foundInPool {
+			if errors.Is(err, types.ErrNotFound) {
+				return fmt.Errorf("%w: %s", types.ErrNotFound, id)
+			}
+			return err
+		}
 		utils.Debug("failed to clear rate limit for %s: %v", id, err)
 	}
 	return nil

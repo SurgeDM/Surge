@@ -367,6 +367,7 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadEntry, savedS
 		dmState.SyncSessionStart()
 		mirrorURLs = []string{url}
 	}
+	dmState.SetRateLimit(rateLimit, rateLimitSet)
 
 	return types.DownloadConfig{
 		URL:           url,

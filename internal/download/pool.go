@@ -140,6 +140,9 @@ func (p *WorkerPool) ensureLimiterForConfig(cfg *types.DownloadConfig) {
 		rate = p.defaultDownloadRateLimitBps
 		cfg.RateLimitBps = rate
 	}
+	if cfg.State != nil {
+		cfg.State.SetRateLimit(rate, cfg.RateLimitSet)
+	}
 
 	limiter := p.downloadLimiters[cfg.ID]
 	if limiter == nil {
@@ -175,6 +178,9 @@ func (p *WorkerPool) ensureLimiterForDownload(downloadID string) {
 		if !rateSet {
 			rate = defaultRate
 			ad.config.RateLimitBps = rate
+		}
+		if ad.config.State != nil {
+			ad.config.State.SetRateLimit(rate, rateSet)
 		}
 		p.mu.Unlock()
 
@@ -338,6 +344,9 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 		}
 		cfg.RateLimitBps = rate
 		p.queued[id] = cfg
+		if cfg.State != nil {
+			cfg.State.SetRateLimit(rate, false)
+		}
 		inheritedIDs = append(inheritedIDs, id)
 	}
 	for id, ad := range p.downloads {
@@ -345,6 +354,9 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 			continue
 		}
 		ad.config.RateLimitBps = rate
+		if ad.config.State != nil {
+			ad.config.State.SetRateLimit(rate, false)
+		}
 		inheritedIDs = append(inheritedIDs, id)
 	}
 
@@ -365,22 +377,35 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 }
 
 // SetDownloadRateLimit updates a specific download's rate limit (bytes/sec).
-func (p *WorkerPool) SetDownloadRateLimit(downloadID string, rate int64) {
+func (p *WorkerPool) SetDownloadRateLimit(downloadID string, rate int64) bool {
 	if downloadID == "" {
-		return
+		return false
 	}
 
 	p.mu.Lock()
+	found := false
 	if ad, ok := p.downloads[downloadID]; ok {
 		ad.config.RateLimitBps = rate
 		ad.config.RateLimitSet = true
+		if ad.config.State != nil {
+			ad.config.State.SetRateLimit(rate, true)
+		}
+		found = true
 	}
 	if cfg, ok := p.queued[downloadID]; ok {
 		cfg.RateLimitBps = rate
 		cfg.RateLimitSet = true
+		if cfg.State != nil {
+			cfg.State.SetRateLimit(rate, true)
+		}
 		p.queued[downloadID] = cfg
+		found = true
 	}
 	p.mu.Unlock()
+
+	if !found {
+		return false
+	}
 
 	p.limiterMu.Lock()
 	if p.downloadLimiters == nil {
@@ -394,12 +419,13 @@ func (p *WorkerPool) SetDownloadRateLimit(downloadID string, rate int64) {
 		limiter.SetRate(rate, rateLimiterBurst(rate))
 	}
 	p.limiterMu.Unlock()
+	return true
 }
 
 // ClearDownloadRateLimit removes a specific download's override so it inherits the current default.
-func (p *WorkerPool) ClearDownloadRateLimit(downloadID string) {
+func (p *WorkerPool) ClearDownloadRateLimit(downloadID string) bool {
 	if downloadID == "" {
-		return
+		return false
 	}
 
 	p.limiterMu.Lock()
@@ -407,16 +433,29 @@ func (p *WorkerPool) ClearDownloadRateLimit(downloadID string) {
 	p.limiterMu.Unlock()
 
 	p.mu.Lock()
+	found := false
 	if ad, ok := p.downloads[downloadID]; ok {
 		ad.config.RateLimitBps = defaultRate
 		ad.config.RateLimitSet = false
+		if ad.config.State != nil {
+			ad.config.State.SetRateLimit(defaultRate, false)
+		}
+		found = true
 	}
 	if cfg, ok := p.queued[downloadID]; ok {
 		cfg.RateLimitBps = defaultRate
 		cfg.RateLimitSet = false
+		if cfg.State != nil {
+			cfg.State.SetRateLimit(defaultRate, false)
+		}
 		p.queued[downloadID] = cfg
+		found = true
 	}
 	p.mu.Unlock()
+
+	if !found {
+		return false
+	}
 
 	p.limiterMu.Lock()
 	if p.downloadLimiters == nil {
@@ -429,6 +468,7 @@ func (p *WorkerPool) ClearDownloadRateLimit(downloadID string) {
 		limiter.SetRate(defaultRate, rateLimiterBurst(defaultRate))
 	}
 	p.limiterMu.Unlock()
+	return true
 }
 
 // PauseAll pauses all active downloads (for graceful shutdown)

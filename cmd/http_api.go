@@ -14,6 +14,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -159,7 +160,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		}
 		if isRateLimitInheritRequest(r) {
 			if err := service.ClearRateLimit(id); err != nil {
-				http.Error(w, err.Error(), http.StatusInternalServerError)
+				http.Error(w, err.Error(), statusCodeForRateLimitError(err))
 				return
 			}
 			writeJSONResponse(w, http.StatusOK, map[string]string{"status": "rate_limit_inherited", "id": id})
@@ -171,7 +172,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		}
 
 		if err := service.SetRateLimit(id, rate); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), statusCodeForRateLimitError(err))
 			return
 		}
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "rate_limited", "id": id, "rate": rateStr})
@@ -210,6 +211,13 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		}
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "default_rate_limited", "rate": rateStr})
 	}))
+}
+
+func statusCodeForRateLimitError(err error) int {
+	if errors.Is(err, types.ErrNotFound) {
+		return http.StatusNotFound
+	}
+	return http.StatusInternalServerError
 }
 
 func isRateLimitInheritRequest(r *http.Request) bool {
