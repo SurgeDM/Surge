@@ -665,6 +665,12 @@ func TestRootCmd_VersionMatchesPackageVar(t *testing.T) {
 	}
 }
 
+func TestRootCmd_NoServerFlagRegistered(t *testing.T) {
+	if rootCmd.Flags().Lookup("no-server") == nil {
+		t.Fatal("expected --no-server flag on root command")
+	}
+}
+
 // =============================================================================
 // Health Check Endpoint Tests
 // =============================================================================
