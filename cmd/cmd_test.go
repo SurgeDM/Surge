@@ -10,6 +10,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -690,6 +691,27 @@ func TestReadRootRunOptions_ReadsNoServerFlag(t *testing.T) {
 	}
 }
 
+func TestReadRootRunOptions_TracksExplicitPort(t *testing.T) {
+	cmd := &cobra.Command{Use: "test"}
+	cmd.Flags().Int("port", 0, "")
+	cmd.Flags().String("batch", "", "")
+	cmd.Flags().String("output", "", "")
+	cmd.Flags().Bool("no-resume", false, "")
+	cmd.Flags().Bool("exit-when-done", false, "")
+	cmd.Flags().Bool("no-server", false, "")
+	if err := cmd.Flags().Set("port", "8080"); err != nil {
+		t.Fatalf("failed to set port flag: %v", err)
+	}
+
+	opts := readRootRunOptions(cmd)
+	if !opts.portSet {
+		t.Fatal("expected readRootRunOptions to track explicit --port")
+	}
+	if opts.portFlag != 8080 {
+		t.Fatalf("portFlag = %d, want 8080", opts.portFlag)
+	}
+}
+
 func TestMaybeStartRootHTTPServer_NoServerSkipsPortFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
@@ -715,6 +737,26 @@ func TestMaybeStartRootHTTPServer_NoServerSkipsPortFile(t *testing.T) {
 	portFile := filepath.Join(config.GetRuntimeDir(), "port")
 	if _, err := os.Stat(portFile); !os.IsNotExist(err) {
 		t.Fatalf("expected no port file when server startup is skipped, stat err=%v", err)
+	}
+}
+
+func TestMaybeStartRootHTTPServer_NoServerRejectsExplicitPort(t *testing.T) {
+	port, cleanup, err := maybeStartRootHTTPServer(rootRunOptions{
+		noServer: true,
+		portFlag: 8080,
+		portSet:  true,
+	})
+	if err == nil {
+		t.Fatal("expected error when --port is combined with --no-server")
+	}
+	if !strings.Contains(err.Error(), "--port cannot be used with --no-server") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if port != 0 {
+		t.Fatalf("port = %d, want 0 on validation error", port)
+	}
+	if cleanup != nil {
+		t.Fatal("expected nil cleanup on validation error")
 	}
 }
 

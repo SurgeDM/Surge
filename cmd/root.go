@@ -321,6 +321,7 @@ func isExplicitOutputPath(outPath, defaultDir string) bool {
 
 type rootRunOptions struct {
 	portFlag     int
+	portSet      bool
 	batchFile    string
 	outputDir    string
 	noResume     bool
@@ -338,6 +339,7 @@ func readRootRunOptions(cmd *cobra.Command) rootRunOptions {
 
 	return rootRunOptions{
 		portFlag:     portFlag,
+		portSet:      cmd.Flags().Changed("port"),
 		batchFile:    batchFile,
 		outputDir:    outputDir,
 		noResume:     noResume,
@@ -410,6 +412,9 @@ func startRootHTTPServer(opts rootRunOptions) (int, func(), error) {
 
 func maybeStartRootHTTPServer(opts rootRunOptions) (int, func(), error) {
 	if opts.noServer {
+		if opts.portSet {
+			return 0, nil, fmt.Errorf("--port cannot be used with --no-server")
+		}
 		return 0, func() {}, nil
 	}
 	return startRootHTTPServer(opts)
