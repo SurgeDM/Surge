@@ -102,7 +102,12 @@ func getFieldByJsonKey(t *testing.T, s *config.Settings, categoryLabel, jsonKey 
 	}
 
 	if !catField.IsValid() {
-		t.Fatalf("Could not find category: %s", categoryLabel)
+		if categoryLabel == "Speed Limits" {
+			catField = reflect.ValueOf(s).Elem().FieldByName("Network")
+		}
+		if !catField.IsValid() {
+			t.Fatalf("Could not find category: %s", categoryLabel)
+		}
 	}
 
 	// Find setting field within category
