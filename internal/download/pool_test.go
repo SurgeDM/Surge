@@ -922,7 +922,7 @@ func TestWorkerPool_GracefulShutdown_ClearsQueuedMap(t *testing.T) {
 	pool := &WorkerPool{
 		progressCh:   ch,
 		progressDone: make(chan struct{}),
-		taskChan:     make(chan types.DownloadConfig, 10),
+		taskChan:     make(chan string, 10),
 		downloads:    make(map[string]*activeDownload),
 		queued:       make(map[string]types.DownloadConfig),
 		maxDownloads: 0,
@@ -964,7 +964,7 @@ func TestWorkerPool_GracefulShutdown_DrainsTaskChan(t *testing.T) {
 	pool := &WorkerPool{
 		progressCh:   ch,
 		progressDone: make(chan struct{}),
-		taskChan:     make(chan types.DownloadConfig, 10),
+		taskChan:     make(chan string, 10),
 		downloads:    make(map[string]*activeDownload),
 		queued:       make(map[string]types.DownloadConfig),
 		maxDownloads: 0,
@@ -972,7 +972,7 @@ func TestWorkerPool_GracefulShutdown_DrainsTaskChan(t *testing.T) {
 
 	// Write items directly to taskChan (simulating Add() with no worker to consume).
 	for i := 0; i < 5; i++ {
-		pool.taskChan <- types.DownloadConfig{ID: fmt.Sprintf("buffered-%d", i)}
+		pool.taskChan <- fmt.Sprintf("buffered-%d", i)
 	}
 	if len(pool.taskChan) != 5 {
 		t.Fatalf("pre-condition: expected 5 items in taskChan, got %d", len(pool.taskChan))
@@ -1014,7 +1014,7 @@ func TestWorkerPool_GracefulShutdown_WorkerSkipsQueuedAfterShutdown(t *testing.T
 	pool.mu.Lock()
 	pool.queued[id] = types.DownloadConfig{ID: id}
 	pool.mu.Unlock()
-	pool.taskChan <- types.DownloadConfig{ID: id}
+	pool.taskChan <- id
 
 	// Shutdown should drain the queue and close taskChan.
 	done := make(chan struct{})

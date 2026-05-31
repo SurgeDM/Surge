@@ -136,7 +136,7 @@ func (p *WorkerPool) ensureLimiterForConfig(cfg *types.DownloadConfig) {
 	}
 
 	rate := cfg.RateLimitBps
-	if rate <= 0 {
+	if !cfg.RateLimitSet {
 		rate = p.defaultDownloadRateLimitBps
 		cfg.RateLimitBps = rate
 	}
@@ -267,6 +267,16 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 	p.limiterMu.Lock()
 	p.defaultDownloadRateLimitBps = rate
 	p.limiterMu.Unlock()
+
+	p.mu.Lock()
+	for id, cfg := range p.queued {
+		if cfg.RateLimitSet {
+			continue
+		}
+		cfg.RateLimitBps = rate
+		p.queued[id] = cfg
+	}
+	p.mu.Unlock()
 }
 
 // SetDownloadRateLimit updates a specific download's rate limit (bytes/sec).
@@ -278,9 +288,11 @@ func (p *WorkerPool) SetDownloadRateLimit(downloadID string, rate int64) {
 	p.mu.Lock()
 	if ad, ok := p.downloads[downloadID]; ok {
 		ad.config.RateLimitBps = rate
+		ad.config.RateLimitSet = true
 	}
 	if cfg, ok := p.queued[downloadID]; ok {
 		cfg.RateLimitBps = rate
+		cfg.RateLimitSet = true
 		p.queued[downloadID] = cfg
 	}
 	p.mu.Unlock()
@@ -506,14 +518,15 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 
 	if qExists {
 		return &types.DownloadStatus{
-			ID:         id,
-			URL:        qCfg.URL,
-			Filename:   qCfg.Filename,
-			DestPath:   resolveDestPath(&qCfg),
-			Status:     "queued",
-			Downloaded: 0,
-			TotalSize:  0, // Metadata not yet fetched
-			RateLimit:  qCfg.RateLimitBps,
+			ID:           id,
+			URL:          qCfg.URL,
+			Filename:     qCfg.Filename,
+			DestPath:     resolveDestPath(&qCfg),
+			Status:       "queued",
+			Downloaded:   0,
+			TotalSize:    0, // Metadata not yet fetched
+			RateLimit:    qCfg.RateLimitBps,
+			RateLimitSet: qCfg.RateLimitSet,
 		}
 	}
 
@@ -532,13 +545,14 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 	downloaded, totalSize, _, sessionElapsed, _, sessionStart := state.GetProgress()
 
 	status := &types.DownloadStatus{
-		ID:         id,
-		URL:        ad.config.URL,
-		Filename:   filename,
-		TotalSize:  totalSize,
-		Downloaded: downloaded,
-		Status:     "downloading",
-		RateLimit:  ad.config.RateLimitBps,
+		ID:           id,
+		URL:          ad.config.URL,
+		Filename:     filename,
+		TotalSize:    totalSize,
+		Downloaded:   downloaded,
+		Status:       "downloading",
+		RateLimit:    ad.config.RateLimitBps,
+		RateLimitSet: ad.config.RateLimitSet,
 	}
 	if dp := state.GetDestPath(); dp != "" {
 		status.DestPath = dp

@@ -130,13 +130,14 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	// Send download started message
 	if cfg.ProgressCh != nil {
 		safeSendProgress(cfg.ProgressCh, events.DownloadStartedMsg{
-			DownloadID: cfg.ID,
-			URL:        cfg.URL,
-			Filename:   finalFilename,
-			Total:      cfg.TotalSize, // Relies on TotalSize from Config
-			DestPath:   finalDestPath,
-			State:      cfg.State,
-			RateLimit:  cfg.RateLimitBps,
+			DownloadID:   cfg.ID,
+			URL:          cfg.URL,
+			Filename:     finalFilename,
+			Total:        cfg.TotalSize, // Relies on TotalSize from Config
+			DestPath:     finalDestPath,
+			State:        cfg.State,
+			RateLimit:    cfg.RateLimitBps,
+			RateLimitSet: cfg.RateLimitSet,
 		})
 	}
 
@@ -190,6 +191,7 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.Limiter = cfg.Limiter
 		d.RateLimitBps = cfg.RateLimitBps
+		d.RateLimitSet = cfg.RateLimitSet
 		utils.Debug("Calling Download with mirrors: %v", mirrors)
 		// Pass effectiveTotalSize to avoid unnecessary bootstrap if state already knows the size
 		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, effectiveTotalSize)
@@ -255,12 +257,13 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 
 		if cfg.ProgressCh != nil {
 			safeSendProgress(cfg.ProgressCh, events.DownloadCompleteMsg{
-				DownloadID: cfg.ID,
-				Filename:   finalFilename,
-				Elapsed:    elapsed,
-				Total:      effectiveTotalSize,
-				AvgSpeed:   avgSpeed,
-				RateLimit:  cfg.RateLimitBps,
+				DownloadID:   cfg.ID,
+				Filename:     finalFilename,
+				Elapsed:      elapsed,
+				Total:        effectiveTotalSize,
+				AvgSpeed:     avgSpeed,
+				RateLimit:    cfg.RateLimitBps,
+				RateLimitSet: cfg.RateLimitSet,
 			})
 		}
 	} else if downloadErr != nil && !isPaused {
