@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"path/filepath"
@@ -731,7 +732,17 @@ func (s *LocalDownloadService) updateRateLimitSetting(update func(*config.Settin
 		s.settings = config.DefaultSettings()
 	}
 	update(s.settings)
-	settings := s.settings
+	data, err := json.Marshal(s.settings)
+	if err != nil {
+		s.settingsMu.Unlock()
+		return err
+	}
+
+	var copy config.Settings
 	s.settingsMu.Unlock()
-	return config.SaveSettings(settings)
+
+	if err := json.Unmarshal(data, &copy); err != nil {
+		return err
+	}
+	return config.SaveSettings(&copy)
 }
