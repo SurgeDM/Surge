@@ -134,14 +134,15 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		m.pendingBatchRequests = nil
 		m.batchFilePath = ""
 		m.state = DashboardState
-		return m, tea.Batch(batchCmds...)
+		nextModel, nextCmd := m.showNextPendingRequest()
+		return nextModel, tea.Batch(append(batchCmds, nextCmd)...)
 	}
 	if key.Matches(msg, m.keys.BatchConfirm.Cancel) {
 		m.pendingBatchURLs = nil
 		m.pendingBatchRequests = nil
 		m.batchFilePath = ""
 		m.state = DashboardState
-		return m, nil
+		return m.showNextPendingRequest()
 	}
 	var cmd tea.Cmd
 	m.inputs[2], cmd = m.inputs[2].Update(msg)

@@ -172,10 +172,11 @@ type RootModel struct {
 	searchQuery  string          // Current search query
 
 	// Batch import
-	pendingBatchURLs     []string // URLs pending batch import
-	pendingBatchRequests []events.DownloadRequestMsg
-	pendingRequestQueue  []events.DownloadRequestMsg
-	batchFilePath        string // Path to the batch file
+	pendingBatchURLs         []string // URLs pending batch import
+	pendingBatchRequests     []events.DownloadRequestMsg
+	pendingRequestQueue      []events.DownloadRequestMsg
+	pendingBatchRequestQueue []events.BatchDownloadRequestMsg
+	batchFilePath            string // Path to the batch file
 
 	// URL Refresh
 	urlUpdateInput textinput.Model // Text input for updating URL

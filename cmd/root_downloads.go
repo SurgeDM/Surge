@@ -222,6 +222,7 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 	}
 
 	queued := 0
+	var failures []map[string]string
 	for _, item := range requests {
 		resolved := &resolvedDownloadRequest{
 			request: DownloadRequest{
@@ -240,11 +241,32 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 		if _, _, err := enqueueDownloadRequest(r, service, resolved); err != nil {
 			recordPreflightDownloadError(item.URL, item.Path, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", item.URL, err))
-			http.Error(w, err.Error(), http.StatusInternalServerError)
-			return
+			failures = append(failures, map[string]string{
+				"url":   item.URL,
+				"error": err.Error(),
+			})
+			continue
 		}
 		atomic.AddInt32(&activeDownloads, 1)
 		queued++
+	}
+
+	if len(failures) > 0 {
+		statusCode := http.StatusMultiStatus
+		status := "partial"
+		message := "Batch downloads partially queued"
+		if queued == 0 {
+			statusCode = http.StatusInternalServerError
+			status = "error"
+			message = "Batch downloads failed"
+		}
+		writeJSONResponse(w, statusCode, map[string]interface{}{
+			"status":   status,
+			"message":  message,
+			"count":    queued,
+			"failures": failures,
+		})
+		return
 	}
 
 	writeJSONResponse(w, http.StatusOK, map[string]interface{}{

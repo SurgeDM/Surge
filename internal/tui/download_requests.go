@@ -10,7 +10,7 @@ import (
 )
 
 func (m RootModel) handleDownloadRequestMsg(msg events.DownloadRequestMsg, queueIfBusy bool) (tea.Model, tea.Cmd) {
-	if queueIfBusy && (m.state == ExtensionConfirmationState || m.state == DuplicateWarningState) {
+	if queueIfBusy && (m.state == ExtensionConfirmationState || m.state == DuplicateWarningState || m.state == BatchConfirmState) {
 		m.pendingRequestQueue = append(m.pendingRequestQueue, msg)
 		return m, nil
 	}
@@ -58,9 +58,31 @@ func (m RootModel) handleDownloadRequestMsg(msg events.DownloadRequestMsg, queue
 	return m.startDownload(msg.URL, msg.Mirrors, msg.Headers, path, isDefaultPath, msg.Filename, msg.ID)
 }
 
+func (m RootModel) handleBatchDownloadRequestMsg(msg events.BatchDownloadRequestMsg, queueIfBusy bool) (tea.Model, tea.Cmd) {
+	if queueIfBusy && (m.state == ExtensionConfirmationState || m.state == DuplicateWarningState || m.state == BatchConfirmState) {
+		m.pendingBatchRequestQueue = append(m.pendingBatchRequestQueue, msg)
+		return m, nil
+	}
+
+	m.pendingBatchURLs = nil
+	m.pendingBatchRequests = append([]events.DownloadRequestMsg(nil), msg.Requests...)
+	m.batchFilePath = strings.TrimSpace(msg.Path)
+	if m.batchFilePath == "" {
+		m.batchFilePath = m.defaultDownloadPath()
+	}
+	m.inputs[2].SetValue(m.batchFilePath)
+	m.state = BatchConfirmState
+	return m, nil
+}
+
 func (m RootModel) showNextPendingRequest() (tea.Model, tea.Cmd) {
 	if len(m.pendingRequestQueue) == 0 {
-		return m, nil
+		if len(m.pendingBatchRequestQueue) == 0 {
+			return m, nil
+		}
+		next := m.pendingBatchRequestQueue[0]
+		m.pendingBatchRequestQueue = m.pendingBatchRequestQueue[1:]
+		return m.handleBatchDownloadRequestMsg(next, false)
 	}
 	next := m.pendingRequestQueue[0]
 	m.pendingRequestQueue = m.pendingRequestQueue[1:]

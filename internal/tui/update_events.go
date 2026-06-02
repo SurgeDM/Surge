@@ -106,15 +106,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleDownloadRequestMsg(msg, true)
 
 	case events.BatchDownloadRequestMsg:
-		m.pendingBatchURLs = nil
-		m.pendingBatchRequests = append([]events.DownloadRequestMsg(nil), msg.Requests...)
-		m.batchFilePath = strings.TrimSpace(msg.Path)
-		if m.batchFilePath == "" {
-			m.batchFilePath = m.defaultDownloadPath()
-		}
-		m.inputs[2].SetValue(m.batchFilePath)
-		m.state = BatchConfirmState
-		return m, nil
+		return m.handleBatchDownloadRequestMsg(msg, true)
 
 	case events.DownloadStartedMsg:
 

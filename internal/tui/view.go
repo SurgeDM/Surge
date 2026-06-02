@@ -217,10 +217,14 @@ func (m RootModel) View() tea.View {
 		if len(m.pendingBatchRequests) > 0 {
 			urlCount = len(m.pendingBatchRequests)
 		}
+		batchDetail := fmt.Sprintf("Path: %s", m.inputs[2].View())
+		if m.batchFilePath != "" && m.batchFilePath != strings.TrimSpace(m.inputs[2].Value()) {
+			batchDetail = fmt.Sprintf("Source: %s\nPath: %s", m.batchFilePath, m.inputs[2].View())
+		}
 		modal := components.ConfirmationModal{
 			Title:       "Batch Import",
 			Message:     fmt.Sprintf("Add %d downloads?", urlCount),
-			Detail:      fmt.Sprintf("%s\nPath: %s", m.batchFilePath, m.inputs[2].View()),
+			Detail:      batchDetail,
 			Keys:        m.keys.BatchConfirm,
 			Help:        m.help,
 			BorderColor: colors.Cyan(),
