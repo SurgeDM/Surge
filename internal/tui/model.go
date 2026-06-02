@@ -20,6 +20,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
@@ -171,8 +172,10 @@ type RootModel struct {
 	searchQuery  string          // Current search query
 
 	// Batch import
-	pendingBatchURLs []string // URLs pending batch import
-	batchFilePath    string   // Path to the batch file
+	pendingBatchURLs     []string // URLs pending batch import
+	pendingBatchRequests []events.DownloadRequestMsg
+	pendingRequestQueue  []events.DownloadRequestMsg
+	batchFilePath        string // Path to the batch file
 
 	// URL Refresh
 	urlUpdateInput textinput.Model // Text input for updating URL

@@ -441,6 +441,52 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 }
 
+func TestUpdate_DownloadRequestMsg_QueuesWhileConfirmationActive(t *testing.T) {
+	m := RootModel{
+		Settings:    config.DefaultSettings(),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
+		list:        NewDownloadList(40, 10),
+		inputs:      []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
+		keys:        Keys,
+	}
+	m.Settings.Extension.ExtensionPrompt.Value = true
+
+	first := events.DownloadRequestMsg{
+		URL:      "https://example.com/first.zip",
+		Filename: "first.zip",
+		Path:     "/tmp/downloads",
+	}
+	second := events.DownloadRequestMsg{
+		URL:      "https://example.com/second.zip",
+		Filename: "second.zip",
+		Path:     "/tmp/downloads",
+	}
+
+	updated, _ := m.Update(first)
+	root := updated.(RootModel)
+	updated, _ = root.Update(second)
+	root = updated.(RootModel)
+
+	if root.state != ExtensionConfirmationState {
+		t.Fatalf("expected ExtensionConfirmationState, got %v", root.state)
+	}
+	if root.pendingURL != first.URL {
+		t.Fatalf("pendingURL was overwritten: got %q, want %q", root.pendingURL, first.URL)
+	}
+	if len(root.pendingRequestQueue) != 1 || root.pendingRequestQueue[0].URL != second.URL {
+		t.Fatalf("expected second request queued, got %#v", root.pendingRequestQueue)
+	}
+
+	updated, _ = root.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	root = updated.(RootModel)
+	if root.state != ExtensionConfirmationState {
+		t.Fatalf("expected queued request to become active, got state %v", root.state)
+	}
+	if root.pendingURL != second.URL {
+		t.Fatalf("expected queued URL %q to become pending, got %q", second.URL, root.pendingURL)
+	}
+}
+
 func TestStartDownload_UsesProvidedIDWhenServiceSupportsIt(t *testing.T) {
 	ch := make(chan any, 16)
 	pool := download.NewWorkerPool(ch, 1)

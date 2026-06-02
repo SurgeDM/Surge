@@ -19,12 +19,14 @@ func (m RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.C
 	if key.Matches(msg, m.keys.Duplicate.Continue) {
 		// Continue anyway - startDownload handles unique filename generation
 		m.state = DashboardState
-		return m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
+		updated, cmd := m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
+		nextModel, nextCmd := updated.showNextPendingRequest()
+		return nextModel, tea.Batch(cmd, nextCmd)
 	}
 	if key.Matches(msg, m.keys.Duplicate.Cancel) {
 		// Cancel - don't add
 		m.state = DashboardState
-		return m, nil
+		return m.showNextPendingRequest()
 	}
 	if key.Matches(msg, m.keys.Duplicate.Focus) {
 		// Focus existing download - find it and select in list
@@ -35,7 +37,7 @@ func (m RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.C
 			}
 		}
 		m.state = DashboardState
-		return m, nil
+		return m.showNextPendingRequest()
 	}
 	return m, nil
 }
@@ -80,7 +82,10 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 
 	if key.Matches(msg, m.keys.BatchConfirm.Confirm) {
 		// Add all URLs as downloads, skipping duplicates
-		path := config.Resolve[string](m.Settings.General.DefaultDownloadDir)
+		path := strings.TrimSpace(m.inputs[2].Value())
+		if path == "" {
+			path = config.Resolve[string](m.Settings.General.DefaultDownloadDir)
+		}
 		if path == "" {
 			path = "."
 		}
@@ -88,6 +93,24 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		added := 0
 		skipped := 0
 		var batchCmds []tea.Cmd
+		for _, request := range m.pendingBatchRequests {
+			requestPath := path
+			isDefaultPath := m.isDefaultDownloadPath(requestPath)
+			if requestPath == "" {
+				isDefaultPath = true
+				requestPath = m.defaultDownloadPath()
+			}
+			if m.checkForDuplicate(request.URL) != nil {
+				skipped++
+				continue
+			}
+			var cmd tea.Cmd
+			m, cmd = m.startDownload(request.URL, request.Mirrors, request.Headers, requestPath, isDefaultPath, request.Filename, request.ID)
+			if cmd != nil {
+				batchCmds = append(batchCmds, cmd)
+			}
+			added++
+		}
 		for _, url := range m.pendingBatchURLs {
 			// Skip duplicate URLs
 			if m.checkForDuplicate(url) != nil {
@@ -108,17 +131,21 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			m.addLogEntry(LogStyleStarted.Render(fmt.Sprintf("\u2b07 Added %d downloads from batch", added)))
 		}
 		m.pendingBatchURLs = nil
+		m.pendingBatchRequests = nil
 		m.batchFilePath = ""
 		m.state = DashboardState
 		return m, tea.Batch(batchCmds...)
 	}
 	if key.Matches(msg, m.keys.BatchConfirm.Cancel) {
 		m.pendingBatchURLs = nil
+		m.pendingBatchRequests = nil
 		m.batchFilePath = ""
 		m.state = DashboardState
 		return m, nil
 	}
-	return m, nil
+	var cmd tea.Cmd
+	m.inputs[2], cmd = m.inputs[2].Update(msg)
+	return m, cmd
 }
 
 func (m RootModel) updateURLUpdate(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
