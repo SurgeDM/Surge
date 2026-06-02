@@ -321,10 +321,12 @@ func isExplicitOutputPath(outPath, defaultDir string) bool {
 
 type rootRunOptions struct {
 	portFlag     int
+	portSet      bool
 	batchFile    string
 	outputDir    string
 	noResume     bool
 	exitWhenDone bool
+	noServer     bool
 }
 
 func readRootRunOptions(cmd *cobra.Command) rootRunOptions {
@@ -333,13 +335,16 @@ func readRootRunOptions(cmd *cobra.Command) rootRunOptions {
 	outputDir, _ := cmd.Flags().GetString("output")
 	noResume, _ := cmd.Flags().GetBool("no-resume")
 	exitWhenDone, _ := cmd.Flags().GetBool("exit-when-done")
+	noServer, _ := cmd.Flags().GetBool("no-server")
 
 	return rootRunOptions{
 		portFlag:     portFlag,
+		portSet:      cmd.Flags().Changed("port"),
 		batchFile:    batchFile,
 		outputDir:    outputDir,
 		noResume:     noResume,
 		exitWhenDone: exitWhenDone,
+		noServer:     noServer,
 	}
 }
 
@@ -405,6 +410,16 @@ func startRootHTTPServer(opts rootRunOptions) (int, func(), error) {
 	}, nil
 }
 
+func maybeStartRootHTTPServer(opts rootRunOptions) (int, func(), error) {
+	if opts.noServer {
+		if opts.portSet {
+			return 0, nil, fmt.Errorf("--port cannot be used with --no-server")
+		}
+		return 0, func() {}, nil
+	}
+	return startRootHTTPServer(opts)
+}
+
 func queueInitialRootDownloads(args []string, opts rootRunOptions) {
 	atomic.AddInt32(&pendingEnqueue, 1)
 	go func() {
@@ -463,7 +478,7 @@ var rootCmd = &cobra.Command{
 		}
 
 		opts := readRootRunOptions(cmd)
-		port, cleanup, err := startRootHTTPServer(opts)
+		port, cleanup, err := maybeStartRootHTTPServer(opts)
 		if err != nil {
 			return err
 		}
@@ -595,6 +610,7 @@ func init() {
 	rootCmd.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
 	rootCmd.Flags().Bool("no-resume", false, "Do not auto-resume paused downloads on startup")
 	rootCmd.Flags().Bool("exit-when-done", false, "Exit when all downloads complete")
+	rootCmd.Flags().Bool("no-server", false, "Do not start the HTTP API server (CLI subcommands will not work)")
 	rootCmd.SetVersionTemplate("Surge v{{.Version}}\n")
 	rootCmd.Version = Version
 }

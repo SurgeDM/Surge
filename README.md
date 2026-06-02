@@ -85,12 +85,17 @@ Just run `surge` to enter the dashboard. This is where you can visualize progres
 # Start the TUI
 surge
 
+# Start the TUI without the local HTTP API server
+surge --no-server
+
 # Start TUI with downloads queued
 surge https://example.com/file1.zip https://example.com/file2.zip
 
 # Combine URLs and batch file
 surge https://example.com/file.zip --batch urls.txt
 ```
+
+`--no-server` keeps the TUI fully local and skips the embedded HTTP API. CLI control commands such as `surge add`, `surge pause`, and browser-extension requests will not be able to target that instance.
 
 ### 2. Server Mode (Headless)
 
