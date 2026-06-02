@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/events"
@@ -74,6 +75,16 @@ func (s *httpAPITestService) StreamEvents(context.Context) (<-chan interface{}, 
 }
 
 func (s *httpAPITestService) Publish(interface{}) error {
+	return nil
+}
+
+type publishRecordingHTTPService struct {
+	*httpAPITestService
+	published []interface{}
+}
+
+func (s *publishRecordingHTTPService) Publish(msg interface{}) error {
+	s.published = append(s.published, msg)
 	return nil
 }
 
@@ -206,6 +217,47 @@ func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 	}
 	if !strings.Contains(text, `"DownloadID":"queue-1"`) {
 		t.Fatalf("expected queued payload in SSE body, got %q", text)
+	}
+}
+
+func TestHandleBatchDownload_ConfirmPublishesSingleBatchRequest(t *testing.T) {
+	previousProgram := serverProgram
+	serverProgram = &tea.Program{}
+	t.Cleanup(func() {
+		serverProgram = previousProgram
+	})
+
+	service := &publishRecordingHTTPService{
+		httpAPITestService: &httpAPITestService{},
+	}
+	body := `{
+		"path": "/tmp/downloads",
+		"skip_approval": false,
+		"downloads": [
+			{"url": "https://example.com/one.zip"},
+			{"url": "https://example.com/two.zip"}
+		]
+	}`
+	request := httptest.NewRequest(http.MethodPost, "/download/batch", strings.NewReader(body))
+	recorder := httptest.NewRecorder()
+
+	handleBatchDownload(recorder, request, "", service)
+
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if len(service.published) != 1 {
+		t.Fatalf("expected 1 published message, got %d", len(service.published))
+	}
+	msg, ok := service.published[0].(events.BatchDownloadRequestMsg)
+	if !ok {
+		t.Fatalf("expected BatchDownloadRequestMsg, got %T", service.published[0])
+	}
+	if len(msg.Requests) != 2 {
+		t.Fatalf("expected 2 batch requests, got %d", len(msg.Requests))
+	}
+	if msg.Requests[0].URL != "https://example.com/one.zip" || msg.Requests[1].URL != "https://example.com/two.zip" {
+		t.Fatalf("unexpected batch URLs: %#v", msg.Requests)
 	}
 }
 
