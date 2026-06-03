@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/events"
@@ -87,6 +88,30 @@ func (s *httpAPITestService) StreamEvents(context.Context) (<-chan interface{}, 
 
 func (s *httpAPITestService) Publish(interface{}) error {
 	return nil
+}
+
+type publishRecordingHTTPService struct {
+	*httpAPITestService
+	published []interface{}
+}
+
+func (s *publishRecordingHTTPService) Publish(msg interface{}) error {
+	s.published = append(s.published, msg)
+	return nil
+}
+
+type batchAddRecordingService struct {
+	*httpAPITestService
+	added  []string
+	failOn string
+}
+
+func (s *batchAddRecordingService) Add(url string, _ string, _ string, _ []string, _ map[string]string, _ bool, _ int64, _ bool) (string, error) {
+	if url == s.failOn {
+		return "", errors.New("enqueue failed")
+	}
+	s.added = append(s.added, url)
+	return "id-" + url, nil
 }
 
 func (s *httpAPITestService) GetStatus(id string) (*types.DownloadStatus, error) {
@@ -251,6 +276,98 @@ func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 	}
 	if !strings.Contains(text, `"DownloadID":"queue-1"`) {
 		t.Fatalf("expected queued payload in SSE body, got %q", text)
+	}
+}
+
+func TestHandleBatchDownload_ConfirmPublishesSingleBatchRequest(t *testing.T) {
+	previousProgram := serverProgram
+	serverProgram = &tea.Program{}
+	t.Cleanup(func() {
+		serverProgram = previousProgram
+	})
+
+	service := &publishRecordingHTTPService{
+		httpAPITestService: &httpAPITestService{},
+	}
+	body := `{
+		"path": "/tmp/downloads",
+		"skip_approval": false,
+		"downloads": [
+			{"url": "https://example.com/one.zip"},
+			{"url": "https://example.com/two.zip"}
+		]
+	}`
+	request := httptest.NewRequest(http.MethodPost, "/download/batch", strings.NewReader(body))
+	recorder := httptest.NewRecorder()
+
+	handleBatchDownload(recorder, request, "", service)
+
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if len(service.published) != 1 {
+		t.Fatalf("expected 1 published message, got %d", len(service.published))
+	}
+	msg, ok := service.published[0].(events.BatchDownloadRequestMsg)
+	if !ok {
+		t.Fatalf("expected BatchDownloadRequestMsg, got %T", service.published[0])
+	}
+	if len(msg.Requests) != 2 {
+		t.Fatalf("expected 2 batch requests, got %d", len(msg.Requests))
+	}
+	if msg.Requests[0].URL != "https://example.com/one.zip" || msg.Requests[1].URL != "https://example.com/two.zip" {
+		t.Fatalf("unexpected batch URLs: %#v", msg.Requests)
+	}
+}
+
+func TestHandleBatchDownload_SkipApprovalReportsPartialFailure(t *testing.T) {
+	previousLifecycle := GlobalLifecycle
+	previousCleanup := GlobalLifecycleCleanup
+	t.Cleanup(func() {
+		GlobalLifecycle = previousLifecycle
+		GlobalLifecycleCleanup = previousCleanup
+	})
+	GlobalLifecycle = nil
+	GlobalLifecycleCleanup = nil
+
+	service := &batchAddRecordingService{
+		httpAPITestService: &httpAPITestService{},
+		failOn:             "https://example.com/two.zip",
+	}
+	body := `{
+		"path": "/tmp/downloads",
+		"skip_approval": true,
+		"downloads": [
+			{"url": "https://example.com/one.zip"},
+			{"url": "https://example.com/two.zip"},
+			{"url": "https://example.com/three.zip"}
+		]
+	}`
+	request := httptest.NewRequest(http.MethodPost, "/download/batch", strings.NewReader(body))
+	recorder := httptest.NewRecorder()
+
+	handleBatchDownload(recorder, request, "", service)
+
+	if recorder.Code != http.StatusMultiStatus {
+		t.Fatalf("expected status 207, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if len(service.added) != 2 {
+		t.Fatalf("expected 2 queued downloads, got %d: %#v", len(service.added), service.added)
+	}
+
+	var response struct {
+		Status   string              `json:"status"`
+		Count    int                 `json:"count"`
+		Failures []map[string]string `json:"failures"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if response.Status != "partial" || response.Count != 2 || len(response.Failures) != 1 {
+		t.Fatalf("unexpected partial response: %#v", response)
+	}
+	if response.Failures[0]["url"] != "https://example.com/two.zip" {
+		t.Fatalf("unexpected failed URL: %#v", response.Failures)
 	}
 }
 

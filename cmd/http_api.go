@@ -43,6 +43,10 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		handleDownload(w, r, defaultOutputDir, service)
 	})
 
+	mux.HandleFunc("/download/batch", func(w http.ResponseWriter, r *http.Request) {
+		handleBatchDownload(w, r, defaultOutputDir, service)
+	})
+
 	mux.HandleFunc("/pause", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
 		if err := service.Pause(id); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)

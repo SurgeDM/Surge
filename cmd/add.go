@@ -20,6 +20,7 @@ var addCmd = &cobra.Command{
 
 		batchFile, _ := cmd.Flags().GetString("batch")
 		output, _ := cmd.Flags().GetString("output")
+		confirm, _ := cmd.Flags().GetBool("confirm")
 
 		var urls []string
 		urls = append(urls, args...)
@@ -44,6 +45,14 @@ var addCmd = &cobra.Command{
 		}
 		resolvedOutput := resolveClientOutputPath(output)
 
+		if batchFile != "" && confirm {
+			if err := sendBatchToServer(urls, resolvedOutput, baseURL, token, false); err != nil {
+				return err
+			}
+			fmt.Printf("Batch confirmation requested for %d downloads.\n", len(urls))
+			return nil
+		}
+
 		// Send downloads to server
 		count := 0
 		attempted := 0
@@ -53,7 +62,7 @@ var addCmd = &cobra.Command{
 				continue
 			}
 			attempted++
-			if err := sendToServer(url, mirrors, resolvedOutput, baseURL, token); err != nil {
+			if err := sendToServerWithApproval(url, mirrors, resolvedOutput, baseURL, token, !confirm); err != nil {
 				fmt.Printf("Error adding %s: %v\n", url, err)
 				continue
 			}
@@ -77,4 +86,5 @@ func init() {
 	rootCmd.AddCommand(addCmd)
 	addCmd.Flags().StringP("batch", "b", "", "File containing URLs to download (one per line)")
 	addCmd.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
+	addCmd.Flags().Bool("confirm", false, "Show confirmation prompt before starting downloads")
 }

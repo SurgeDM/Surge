@@ -30,6 +30,12 @@ type DownloadRequest struct {
 	IsExplicitCategory   bool              `json:"is_explicit_category,omitempty"`
 }
 
+type BatchDownloadRequest struct {
+	Downloads    []DownloadRequest `json:"downloads"`
+	Path         string            `json:"path,omitempty"`
+	SkipApproval bool              `json:"skip_approval,omitempty"`
+}
+
 type resolvedDownloadRequest struct {
 	request       DownloadRequest
 	settings      *config.Settings
@@ -113,6 +119,10 @@ func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) 
 	if err := decodeJSONBody(r, &req); err != nil {
 		return req, fmt.Errorf("invalid json: %w", err)
 	}
+	return validateDownloadRequest(req)
+}
+
+func validateDownloadRequest(req DownloadRequest) (DownloadRequest, error) {
 	if req.URL == "" {
 		return req, fmt.Errorf("url is required")
 	}
@@ -138,6 +148,132 @@ func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) 
 		req.Path = cleanPath
 	}
 	return req, nil
+}
+
+func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir string, service core.DownloadService) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if service == nil {
+		http.Error(w, "Service unavailable", http.StatusInternalServerError)
+		return
+	}
+
+	var req BatchDownloadRequest
+	if err := decodeJSONBody(r, &req); err != nil {
+		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	if len(req.Downloads) == 0 {
+		http.Error(w, "downloads are required", http.StatusBadRequest)
+		return
+	}
+
+	settings := getSettings()
+	sharedPath := utils.EnsureAbsPath(resolveOutputDir(req.Path, false, defaultOutputDir, settings))
+	requests := make([]events.DownloadRequestMsg, 0, len(req.Downloads))
+
+	for _, item := range req.Downloads {
+		if item.Path == "" {
+			item.Path = sharedPath
+		}
+		item.SkipApproval = req.SkipApproval
+		validated, err := validateDownloadRequest(item)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		urlForAdd, mirrorsForAdd := normalizeDownloadTargets(validated.URL, validated.Mirrors)
+		itemPath := utils.EnsureAbsPath(resolveOutputDir(validated.Path, validated.RelativeToDefaultDir, defaultOutputDir, settings))
+		requests = append(requests, events.DownloadRequestMsg{
+			ID:       uuid.New().String(),
+			URL:      urlForAdd,
+			Filename: validated.Filename,
+			Path:     itemPath,
+			Mirrors:  mirrorsForAdd,
+			Headers:  validated.Headers,
+		})
+	}
+
+	if !req.SkipApproval {
+		if serverProgram == nil {
+			writeJSONResponse(w, http.StatusConflict, map[string]string{
+				"status":  "error",
+				"message": "Batch confirmation requires the TUI",
+			})
+			return
+		}
+		batchID := uuid.New().String()
+		if err := service.Publish(events.BatchDownloadRequestMsg{
+			ID:       batchID,
+			Path:     sharedPath,
+			Requests: requests,
+		}); err != nil {
+			http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusAccepted, map[string]string{
+			"status":  "pending_approval",
+			"message": "Batch download request sent to TUI for confirmation",
+			"id":      batchID,
+		})
+		return
+	}
+
+	queued := 0
+	var failures []map[string]string
+	for _, item := range requests {
+		resolved := &resolvedDownloadRequest{
+			request: DownloadRequest{
+				URL:          item.URL,
+				Filename:     item.Filename,
+				Path:         item.Path,
+				Mirrors:      item.Mirrors,
+				SkipApproval: true,
+				Headers:      item.Headers,
+			},
+			settings:      settings,
+			outPath:       item.Path,
+			urlForAdd:     item.URL,
+			mirrorsForAdd: item.Mirrors,
+		}
+		if _, _, err := enqueueDownloadRequest(r, service, resolved); err != nil {
+			recordPreflightDownloadError(item.URL, item.Path, err)
+			publishSystemLog(fmt.Sprintf("Error adding %s: %v", item.URL, err))
+			failures = append(failures, map[string]string{
+				"url":   item.URL,
+				"error": err.Error(),
+			})
+			continue
+		}
+		atomic.AddInt32(&activeDownloads, 1)
+		queued++
+	}
+
+	if len(failures) > 0 {
+		statusCode := http.StatusMultiStatus
+		status := "partial"
+		message := "Batch downloads partially queued"
+		if queued == 0 {
+			statusCode = http.StatusInternalServerError
+			status = "error"
+			message = "Batch downloads failed"
+		}
+		writeJSONResponse(w, statusCode, map[string]interface{}{
+			"status":   status,
+			"message":  message,
+			"count":    queued,
+			"failures": failures,
+		})
+		return
+	}
+
+	writeJSONResponse(w, http.StatusOK, map[string]interface{}{
+		"status":  "queued",
+		"message": "Batch downloads queued successfully",
+		"count":   queued,
+	})
 }
 
 func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolvedDownloadRequest, error) {
