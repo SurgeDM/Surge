@@ -15,6 +15,7 @@ func (m *RootModel) handleBatchFileSelection(path string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	m.pendingBatchURLs = urls
+	m.inputs[2].SetValue(m.defaultDownloadPath())
 	m.batchFilePath = path
 	m.resetFilepickerToDirMode()
 	m.state = BatchConfirmState

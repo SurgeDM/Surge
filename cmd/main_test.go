@@ -15,9 +15,11 @@ func resetSharedStateDB() error {
 	// Reset any pre-existing global DB state (e.g. left by an init or an
 	// isolated test cleanup) before pointing the package at the shared suite DB.
 	state.CloseDB()
-	err := config.EnsureDirs()
+	if err := config.EnsureDirs(); err != nil {
+		return err
+	}
 	state.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
-	return err
+	return nil
 }
 
 func TestMain(m *testing.M) {
@@ -35,6 +37,7 @@ func TestMain(m *testing.M) {
 
 		if ensureErr := resetSharedStateDB(); ensureErr != nil {
 			fmt.Fprintf(os.Stderr, "TestMain: failed to create isolated Surge test directories: %v\n", ensureErr)
+			_ = os.RemoveAll(tmpDir)
 			os.Exit(1)
 		}
 	}

@@ -160,17 +160,25 @@ type DownloadRequestMsg struct {
 	Headers  map[string]string
 }
 
+// BatchDownloadRequestMsg signals a batch request that should be confirmed once.
+type BatchDownloadRequestMsg struct {
+	ID       string
+	Path     string
+	Requests []DownloadRequestMsg
+}
+
 const (
-	EventTypeProgress = "progress"
-	EventTypeStarted  = "started"
-	EventTypeComplete = "complete"
-	EventTypeError    = "error"
-	EventTypePaused   = "paused"
-	EventTypeResumed  = "resumed"
-	EventTypeQueued   = "queued"
-	EventTypeRemoved  = "removed"
-	EventTypeRequest  = "request"
-	EventTypeSystem   = "system"
+	EventTypeProgress     = "progress"
+	EventTypeStarted      = "started"
+	EventTypeComplete     = "complete"
+	EventTypeError        = "error"
+	EventTypePaused       = "paused"
+	EventTypeResumed      = "resumed"
+	EventTypeQueued       = "queued"
+	EventTypeRemoved      = "removed"
+	EventTypeRequest      = "request"
+	EventTypeBatchRequest = "batch_request"
+	EventTypeSystem       = "system"
 )
 
 // SSEMessage represents one server-sent event frame.
@@ -233,6 +241,8 @@ func EventTypeForMessage(msg interface{}) (string, bool) {
 		return EventTypeRemoved, true
 	case DownloadRequestMsg:
 		return EventTypeRequest, true
+	case BatchDownloadRequestMsg:
+		return EventTypeBatchRequest, true
 	case SystemLogMsg:
 		return EventTypeSystem, true
 	default:
@@ -295,6 +305,12 @@ func DecodeSSEMessage(eventType string, data []byte) (interface{}, bool, error) 
 		msg = m
 	case EventTypeRequest:
 		var m DownloadRequestMsg
+		if err := json.Unmarshal(data, &m); err != nil {
+			return nil, true, err
+		}
+		msg = m
+	case EventTypeBatchRequest:
+		var m BatchDownloadRequestMsg
 		if err := json.Unmarshal(data, &m); err != nil {
 			return nil, true, err
 		}

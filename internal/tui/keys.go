@@ -428,12 +428,12 @@ var Keys = KeyMap{
 	},
 	BatchConfirm: BatchConfirmKeyMap{
 		Confirm: key.NewBinding(
-			key.WithKeys("y", "Y", "enter"),
-			key.WithHelp("y", "confirm"),
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "confirm"),
 		),
 		Cancel: key.NewBinding(
-			key.WithKeys("n", "N", "esc"),
-			key.WithHelp("n", "cancel"),
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "cancel"),
 		),
 	},
 	Update: UpdateKeyMap{

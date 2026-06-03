@@ -10,7 +10,6 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/tui/components"
-	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -104,47 +103,10 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case events.DownloadRequestMsg:
-		path := strings.TrimSpace(msg.Path)
-		isDefaultPath := m.isDefaultDownloadPath(path)
-		if path == "" {
-			isDefaultPath = true
-			path = m.defaultDownloadPath()
-		}
+		return m.handleDownloadRequestMsg(msg, true)
 
-		duplicate := m.checkForDuplicate(msg.URL)
-
-		if duplicate != nil && config.Resolve[bool](m.Settings.General.WarnOnDuplicate) {
-			utils.Debug("Duplicate download detected in TUI: %s", msg.URL)
-			m.pendingURL = msg.URL
-			m.pendingMirrors = msg.Mirrors
-			m.pendingHeaders = msg.Headers
-			m.pendingPath = path
-			m.pendingIsDefaultPath = isDefaultPath
-			m.pendingFilename = msg.Filename
-			m.duplicateInfo = duplicate.Filename
-			m.state = DuplicateWarningState
-			return m, nil
-		}
-
-		if m.Settings != nil && config.Resolve[bool](m.Settings.Extension.ExtensionPrompt) {
-			m.pendingURL = msg.URL
-			m.pendingMirrors = msg.Mirrors
-			m.pendingHeaders = msg.Headers
-			m.pendingPath = path
-			m.pendingIsDefaultPath = isDefaultPath
-			m.pendingFilename = msg.Filename
-			m.inputs[2].SetValue(path)
-			m.inputs[3].SetValue(msg.Filename)
-			m.focusedInput = 2
-			for i := range m.inputs {
-				m.inputs[i].Blur()
-			}
-			m.inputs[m.focusedInput].Focus()
-			m.state = ExtensionConfirmationState
-			return m, nil
-		}
-
-		return m.startDownload(msg.URL, msg.Mirrors, msg.Headers, path, isDefaultPath, msg.Filename, msg.ID)
+	case events.BatchDownloadRequestMsg:
+		return m.handleBatchDownloadRequestMsg(msg, true)
 
 	case events.DownloadStartedMsg:
 
