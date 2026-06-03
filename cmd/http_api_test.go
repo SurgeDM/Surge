@@ -385,3 +385,49 @@ func TestEnsureOpenActionRequestAllowed_ForwardedLoopbackDenied(t *testing.T) {
 		t.Fatalf("expected forwarded loopback request to be allowed when enabled, got: %v", err)
 	}
 }
+
+// recordingActionService records the id passed to each lifecycle action so
+// tests can assert how the CLI delivered it to the HTTP API.
+type recordingActionService struct {
+	*httpAPITestService
+	ids map[string]string // action -> received id
+}
+
+func (s *recordingActionService) Pause(id string) error  { s.ids["pause"] = id; return nil }
+func (s *recordingActionService) Resume(id string) error { s.ids["resume"] = id; return nil }
+func (s *recordingActionService) Delete(id string) error { s.ids["delete"] = id; return nil }
+
+// Regression for #456: ExecuteAPIAction sent the download id as a path segment
+// (e.g. POST /pause/<id>), but the HTTP API registers exact routes and reads the
+// id from the "id" query parameter (withRequiredID), so pause/resume/delete/open
+// 404'd against a remote daemon. The id must be sent as ?id=. Exercise every
+// ExecuteAPIAction caller (pause/resume/delete), not just one, so a future
+// action-specific regression is caught.
+func TestExecuteAPIAction_SendsIDAsQueryParam(t *testing.T) {
+	rec := &recordingActionService{httpAPITestService: &httpAPITestService{}, ids: map[string]string{}}
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", rec)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	prevHost, prevToken := globalHost, globalToken
+	globalHost, globalToken = "", ""
+	defer func() { globalHost, globalToken = prevHost, prevToken }()
+	t.Setenv("SURGE_HOST", server.URL)
+	t.Setenv("SURGE_TOKEN", "test-token")
+
+	// 32 chars so resolveDownloadID treats it as a full id (no server lookup).
+	const fullID = "abcdef0123456789abcdef0123456789"
+	for _, action := range []struct{ name, endpoint string }{
+		{"pause", "/pause"},
+		{"resume", "/resume"},
+		{"delete", "/delete"},
+	} {
+		if err := ExecuteAPIAction(fullID, action.endpoint, http.MethodPost, action.name); err != nil {
+			t.Fatalf("ExecuteAPIAction(%s): id should reach %s via ?id=, got error: %v", action.name, action.endpoint, err)
+		}
+		if rec.ids[action.name] != fullID {
+			t.Fatalf("%s: server received id %q via query param, want %q", action.name, rec.ids[action.name], fullID)
+		}
+	}
+}
