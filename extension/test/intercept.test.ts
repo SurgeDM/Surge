@@ -9,6 +9,7 @@ describe('download interception naming', () => {
   const mockFetch = vi.fn();
 
   beforeEach(() => {
+    mockFetch.mockReset();
     vi.stubGlobal('fetch', mockFetch);
     __test__.resetState();
 
