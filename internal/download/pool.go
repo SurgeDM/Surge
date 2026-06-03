@@ -568,6 +568,7 @@ func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfi
 	p.limiterMu.Lock()
 	delete(p.downloadLimiters, downloadID)
 	p.limiterMu.Unlock()
+	cfg.Limiter = nil
 	if ad.config.State != nil {
 		ad.config.State.Resume()
 	}

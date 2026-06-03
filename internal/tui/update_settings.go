@@ -333,6 +333,9 @@ func (m *RootModel) validateSetting(key, value string) error {
 		return config.ValidateDNSList(trimmed)
 	default:
 		if strings.HasPrefix(key, "dl:") {
+			if isRateLimitInheritValue(trimmed) {
+				return nil
+			}
 			_, err := utils.ParseRateLimit(trimmed)
 			return err
 		}

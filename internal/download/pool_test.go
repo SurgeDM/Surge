@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/engine"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
@@ -748,6 +749,7 @@ func TestWorkerPool_ExtractPausedConfig_Success(t *testing.T) {
 	state.Paused.Store(true)
 	state.SetDestPath("/tmp/final.bin")
 	state.SetFilename("final.bin")
+	staleLimiter := engine.NewMultiLimiter(pool.globalLimiter, engine.NewRateLimiter(1024, rateLimiterBurst(1024)))
 
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
@@ -756,6 +758,7 @@ func TestWorkerPool_ExtractPausedConfig_Success(t *testing.T) {
 			URL:      "http://example.com/file.zip",
 			Filename: "stale.bin",
 			State:    state,
+			Limiter:  staleLimiter,
 		},
 	}
 	pool.mu.Unlock()
@@ -774,6 +777,9 @@ func TestWorkerPool_ExtractPausedConfig_Success(t *testing.T) {
 	}
 	if cfg.DestPath != "/tmp/final.bin" {
 		t.Errorf("DestPath = %q, want /tmp/final.bin", cfg.DestPath)
+	}
+	if cfg.Limiter != nil {
+		t.Error("Expected limiter to be cleared so resume installs a fresh tracked limiter")
 	}
 
 	// Download must be removed from pool

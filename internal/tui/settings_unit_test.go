@@ -104,3 +104,13 @@ func TestSetSettingValueConversions(t *testing.T) {
 		t.Errorf("Expected slow_worker_grace_period to be %v, got %v", 45*time.Second, dur)
 	}
 }
+
+func TestValidateSetting_AllowsInheritedDownloadRateLimit(t *testing.T) {
+	m := &RootModel{}
+
+	for _, value := range []string{"inherit", "default"} {
+		if err := m.validateSetting("dl:test-id", value); err != nil {
+			t.Fatalf("validateSetting rejected %q for dl: key: %v", value, err)
+		}
+	}
+}
