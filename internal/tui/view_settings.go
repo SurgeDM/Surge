@@ -1292,11 +1292,7 @@ func (m *RootModel) clearDownloadRateLimit(downloadID string) error {
 	if m.Service == nil {
 		return nil
 	}
-	clearer, ok := m.Service.(interface{ ClearRateLimit(string) error })
-	if !ok {
-		return fmt.Errorf("service does not support clearing download rate limits")
-	}
-	return clearer.ClearRateLimit(downloadID)
+	return m.Service.ClearRateLimit(downloadID)
 }
 
 func (m *RootModel) applyRemoteGlobalRateLimit(rate int64) error {
