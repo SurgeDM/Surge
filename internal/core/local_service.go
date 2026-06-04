@@ -729,20 +729,21 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 func (s *LocalDownloadService) updateRateLimitSetting(update func(*config.Settings)) error {
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
+
 	if s.settings == nil {
 		s.settings = config.DefaultSettings()
 	}
 	update(s.settings)
+
 	data, err := json.Marshal(s.settings)
 	if err != nil {
-		s.settingsMu.Unlock()
 		return err
 	}
 
 	var copy config.Settings
-
 	if err := json.Unmarshal(data, &copy); err != nil {
 		return err
 	}
+
 	return config.SaveSettings(&copy)
 }
