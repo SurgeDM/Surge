@@ -728,6 +728,7 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 
 func (s *LocalDownloadService) updateRateLimitSetting(update func(*config.Settings)) error {
 	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
 	if s.settings == nil {
 		s.settings = config.DefaultSettings()
 	}
@@ -739,7 +740,6 @@ func (s *LocalDownloadService) updateRateLimitSetting(update func(*config.Settin
 	}
 
 	var copy config.Settings
-	s.settingsMu.Unlock()
 
 	if err := json.Unmarshal(data, &copy); err != nil {
 		return err
