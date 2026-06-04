@@ -163,10 +163,6 @@ func (p *WorkerPool) ensureLimiterForDownload(downloadID string) {
 	}
 
 	for {
-		p.limiterMu.Lock()
-		defaultRate := p.defaultDownloadRateLimitBps
-		p.limiterMu.Unlock()
-
 		p.mu.Lock()
 		ad, ok := p.downloads[downloadID]
 		if !ok {
@@ -175,10 +171,6 @@ func (p *WorkerPool) ensureLimiterForDownload(downloadID string) {
 		}
 		rate := ad.config.RateLimitBps
 		rateSet := ad.config.RateLimitSet
-		if !rateSet {
-			rate = defaultRate
-			ad.config.RateLimitBps = rate
-		}
 		if ad.config.State != nil {
 			ad.config.State.SetRateLimit(rate, rateSet)
 		}
