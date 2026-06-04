@@ -360,24 +360,66 @@ func (m RootModel) View() tea.View {
 	// === MAIN DASHBOARD LAYOUT ===
 	layout := CalculateDashboardLayout(m.width, m.height)
 
-	// Footer - keybindings on left, version on bottom-right
+	// Footer - keybindings on left, speed/limit/version on bottom-right
 	helpText := m.help.View(m.keys.Dashboard)
-	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
-	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
 
-	// Hide help text at very narrow widths - version is more important
-	var footerContent string
-	if layout.AvailableWidth < 60 {
-		footerContent = versionText
+	// --- Right-side footer: speed ｜ limit ｜ version ---
+	dimSep := lipgloss.NewStyle().Foreground(colors.Gray()).Render(" ｜ ")
+
+	// Global speed indicator
+	speedMBps := m.calcTotalSpeed()
+	speedGlyph := lipgloss.NewStyle().Foreground(colors.Cyan()).Render("\u2B07")
+	var speedVal string
+	if speedMBps < 0.01 {
+		speedVal = lipgloss.NewStyle().Foreground(colors.Gray()).Render("0 B/s")
+	} else if speedMBps < 1.0 {
+		speedVal = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(fmt.Sprintf("%.0f KB/s", speedMBps*1024))
 	} else {
-		leftFooterWidth := layout.AvailableWidth - lipgloss.Width(versionText)
+		speedVal = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(fmt.Sprintf("%.2f MB/s", speedMBps))
+	}
+	speedChunk := lipgloss.JoinHorizontal(lipgloss.Center, speedGlyph, " ", speedVal)
+
+	// Global rate limit indicator
+	limitGlyph := lipgloss.NewStyle().Foreground(colors.Pink()).Render("\u26A1")
+	var limitVal string
+	if m.Settings != nil && m.Settings.Network.GlobalRateLimit != nil {
+		if rate, err := utils.ParseRateLimitValue(m.Settings.Network.GlobalRateLimit.Value); err == nil && rate > 0 {
+			limitVal = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(utils.FormatRateLimit(rate))
+		}
+	}
+	var limitChunk string
+	if limitVal != "" {
+		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", limitVal)
+	} else {
+		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", lipgloss.NewStyle().Foreground(colors.Gray()).Render("\u221E"))
+	}
+
+	// Version indicator
+	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
+	versionChunk := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
+
+	rightFooter := lipgloss.JoinHorizontal(lipgloss.Center,
+		speedChunk,
+		dimSep,
+		limitChunk,
+		dimSep,
+		versionChunk,
+	)
+
+	// Hide help text at very narrow widths - right footer is more important
+	var footerContent string
+	rightFooterWidth := lipgloss.Width(rightFooter)
+	if layout.AvailableWidth < 60 {
+		footerContent = rightFooter
+	} else {
+		leftFooterWidth := layout.AvailableWidth - rightFooterWidth
 		if leftFooterWidth < 0 {
 			leftFooterWidth = 0
 		}
 		footerContent = lipgloss.JoinHorizontal(
 			lipgloss.Top,
 			lipgloss.NewStyle().Width(leftFooterWidth).Render(helpText),
-			versionText,
+			rightFooter,
 		)
 	}
 	footer := footerContent
