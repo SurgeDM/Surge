@@ -35,7 +35,7 @@ func testKeyMapInHelp(t *testing.T, name string, km helperKeyMap, ignored map[st
 		fieldName := typ.Field(i).Name
 		field := v.Field(i)
 
-		if field.Type() == reflect.TypeOf(key.Binding{}) {
+		if field.Type() == reflect.TypeFor[key.Binding]() {
 			binding := field.Interface().(key.Binding)
 
 			// Skip if explicitly ignored
@@ -130,11 +130,7 @@ func TestDynamicKeyMapReloading(t *testing.T) {
 	}()
 
 	// Override configuration directory
-	oldXDG := os.Getenv("XDG_CONFIG_HOME")
-	defer func() {
-		_ = os.Setenv("XDG_CONFIG_HOME", oldXDG)
-	}()
-	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	err = config.EnsureDirs()
 	if err != nil {

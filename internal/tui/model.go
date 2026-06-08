@@ -38,26 +38,26 @@ func InitializeTUI() {
 type UIState int // Defines UIState as int to be used in rootModel
 
 const (
-	DashboardState              UIState = iota // DashboardState is 0 increments after each line
-	InputState                                 // InputState is 1
-	DetailState                                // DetailState is 2
-	FilePickerState                            // FilePickerState is 3
-	DuplicateWarningState                      // DuplicateWarningState is 4
-	SearchState                                // SearchState is 6
-	SettingsState                              // SettingsState is 7
-	ExtensionConfirmationState                 // ExtensionConfirmationState is 8
-	BatchFilePickerState                       // BatchFilePickerState is 9
-	BatchConfirmState                          // BatchConfirmState is 10
-	UpdateAvailableState                       // UpdateAvailableState is 11
-	URLUpdateState                             // URLUpdateState is 12
-	CategoryManagerState                       // CategoryManagerState is 13
-	QuitConfirmState                           // QuitConfirmState is 14
-	RestartConfirmState                        // RestartConfirmState is 15
-	HelpModalState                             // HelpModalState is 16
-	BugReportTargetState                       // BugReportTargetState is 17
-	BugReportSystemDetailsState                // BugReportSystemDetailsState is 18
-	BugReportLogPathState                      // BugReportLogPathState is 19
-	CategoryResetConfirmState                  // CategoryResetConfirmState is 20
+	DashboardState UIState = iota
+	InputState
+	DetailState
+	FilePickerState
+	DuplicateWarningState
+	SearchState
+	SettingsState
+	ExtensionConfirmationState
+	BatchFilePickerState
+	BatchConfirmState
+	UpdateAvailableState
+	URLUpdateState
+	CategoryManagerState
+	QuitConfirmState
+	RestartConfirmState
+	HelpModalState
+	BugReportTargetState
+	BugReportSystemDetailsState
+	BugReportLogPathState
+	CategoryResetConfirmState
 )
 
 type FilePickerOrigin int

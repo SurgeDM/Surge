@@ -219,34 +219,18 @@ func LoadKeyMap() (*KeyMap, error) {
 
 	defaults.ApplyConfig(&cfg)
 	defaults.Validate()
-	// Self-healing: save the fully-merged and validated keymap back to disk
-	// so that any new defaults, keys, or sections are immediately preserved.
-	_ = SaveKeyMap(defaults)
+	// Self-healing: only write back if the merged config differs from what
+	// was on disk (e.g. new keys added, invalid bindings healed).
+	mergedCfg := defaults.ToConfig()
+	if !reflect.DeepEqual(&cfg, mergedCfg) {
+		_ = SaveKeyMap(defaults)
+	}
 	return defaults, nil
 }
 
 // SaveKeyMap saves the keymap configuration to file.
 func SaveKeyMap(k *KeyMap) error {
-	path := GetKeyMapConfigPath()
-
-	// Ensure directory exists
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-		return err
-	}
-
-	cfg := k.ToConfig()
-	data, err := json.MarshalIndent(cfg, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	// Atomic write: write to temp file, then rename
-	tempPath := path + ".tmp"
-	if err := os.WriteFile(tempPath, data, 0o644); err != nil {
-		return err
-	}
-
-	return os.Rename(tempPath, path)
+	return writeJSONAtomic(GetKeyMapConfigPath(), k.ToConfig())
 }
 
 // ApplyConfig applies configuration from KeyMapConfig to KeyMap.

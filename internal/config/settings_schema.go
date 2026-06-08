@@ -1,10 +1,9 @@
 package config
 
 // Setting represents a single application configuration option.
-// It encapsulates the live value, its default fallback, UI/CLI metadata,
-// reboot triggers, and localized validation logic into a unified, self-contained unit.
-// This architecture decouples setting definitions from static struct fields,
-// allowing dynamic schema resolution, introspection, and centralized validation.
+// Note: Custom MarshalJSON/UnmarshalJSON methods on *Setting (in settings.go)
+// serialize only the Value field. The json tags on other fields are not used
+// during normal serialization but document the intended schema.
 type Setting struct {
 	Key          string `json:"key"`
 	Label        string `json:"label"`

@@ -574,51 +574,16 @@ func (m *RootModel) updateSettingsInputWidthForViewport() {
 // getSettingsValues returns a map of setting key -> value for a category
 func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 	values := make(map[string]interface{})
-
-	val := reflect.ValueOf(m.Settings).Elem()
-	typ := val.Type()
-
-	var catVal reflect.Value
-	var found bool
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		label := field.Tag.Get("ui_label")
-		if label == "" {
-			label = field.Name
-		}
-		if label == category {
-			catVal = val.Field(i)
-			found = true
-			break
-		}
-	}
-
-	if !found {
+	if m.Settings == nil {
 		return values
 	}
 
-	if catVal.Kind() == reflect.Struct {
-		catTyp := catVal.Type()
-		for i := 0; i < catTyp.NumField(); i++ {
-			field := catTyp.Field(i)
-			if field.Tag.Get("ui_ignored") == "true" {
-				continue
+	for _, cat := range m.Settings.CategoriesList {
+		if cat.Name == category {
+			for _, set := range cat.Settings {
+				values[set.Key] = set.Value
 			}
-
-			key := field.Tag.Get("json")
-			if key == "" {
-				key = field.Name
-			}
-			valInterface := catVal.Field(i).Interface()
-			if setting, ok := valInterface.(*config.Setting); ok {
-				if setting != nil {
-					values[key] = setting.Value
-				} else {
-					values[key] = nil
-				}
-			} else {
-				values[key] = valInterface
-			}
+			return values
 		}
 	}
 
@@ -627,142 +592,120 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 
 // setSettingValue sets a setting value from string input
 func (m *RootModel) setSettingValue(category, key, value string) error {
-	val := reflect.ValueOf(m.Settings).Elem()
-	typ := val.Type()
-
-	var catVal reflect.Value
-	var foundCat bool
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		label := field.Tag.Get("ui_label")
-		if label == "" {
-			label = field.Name
-		}
-		if label == category {
-			catVal = val.Field(i)
-			foundCat = true
-			break
-		}
-	}
-
-	if !foundCat || catVal.Kind() != reflect.Struct {
+	setting := m.Settings.FindSetting(category, key)
+	if setting == nil {
 		return nil
 	}
 
-	catTyp := catVal.Type()
-	for i := 0; i < catTyp.NumField(); i++ {
-		field := catTyp.Field(i)
-		if field.Tag.Get("ui_ignored") == "true" {
-			continue
-		}
-
-		fieldKey := field.Tag.Get("json")
-		if fieldKey == "" {
-			fieldKey = field.Name
-		}
-
-		if fieldKey == key {
-			targetField := catVal.Field(i)
-			if !targetField.CanSet() {
-				return nil
+	// Special logic for Theme to trigger app re-rendering internally
+	if key == "theme" {
+		var theme int
+		valLower := strings.ToLower(value)
+		switch valLower {
+		case "system", "adaptive", "0":
+			theme = config.ThemeAdaptive
+		case "light", "1":
+			theme = config.ThemeLight
+		case "dark", "2":
+			theme = config.ThemeDark
+		default:
+			if v, err := strconv.Atoi(value); err == nil && v >= 0 && v <= 2 {
+				theme = v
+			} else {
+				return nil // Invalid
 			}
-
-			if setting, ok := targetField.Interface().(*config.Setting); ok {
-				if setting == nil {
-					return nil
-				}
-
-				// Special logic for Theme to trigger app re-rendering internally
-				if key == "theme" {
-					var theme int
-					valLower := strings.ToLower(value)
-					switch valLower {
-					case "system", "adaptive", "0":
-						theme = config.ThemeAdaptive
-					case "light", "1":
-						theme = config.ThemeLight
-					case "dark", "2":
-						theme = config.ThemeDark
-					default:
-						if v, err := strconv.Atoi(value); err == nil && v >= 0 && v <= 2 {
-							theme = v
-						} else {
-							return nil // Invalid
-						}
-					}
-					setting.Value = theme
-					m.ApplyTheme(theme, config.Resolve[string](m.Settings.General.ThemePath))
-					return nil
-				}
-				if key == "theme_path" {
-					setting.Value = value
-					// Re-apply the current theme mode but with the brand new path
-					m.ApplyTheme(config.Resolve[int](m.Settings.General.Theme), value)
-					return nil
-				}
-
-				// Generic Parsing and Application
-				switch setting.Type {
-				case "bool":
-					// Typically toggled unless explicitly typed out
-					if value == "" {
-						if key == "auto_start" {
-							if m.ToggleServiceFunc == nil {
-								return fmt.Errorf("service management is not available on this platform")
-							}
-							newVal := !config.Resolve[bool](setting)
-							if err := m.ToggleServiceFunc(newVal); err != nil {
-								return fmt.Errorf("failed to update service: %w", err)
-							}
-							setting.Value = newVal
-							return nil
-						}
-						setting.Value = !config.Resolve[bool](setting)
-					} else {
-						b, _ := strconv.ParseBool(value)
-						setting.Value = b
-					}
-				case "string", "auth_token", "link":
-					setting.Value = value
-				case "int":
-					if key == "worker_buffer_size" {
-						if v, err := strconv.ParseFloat(value, 64); err == nil {
-							setting.Value = int(v * float64(config.KB))
-						}
-					} else {
-						if v, err := strconv.Atoi(value); err == nil {
-							setting.Value = v
-						}
-					}
-				case "int64":
-					// Handle KB/MB scaling gracefully if specified
-					if key == "min_chunk_size" {
-						if v, err := strconv.ParseFloat(value, 64); err == nil {
-							setting.Value = int64(v * float64(config.MB))
-						}
-					} else {
-						if v, err := strconv.ParseInt(value, 10, 64); err == nil {
-							setting.Value = v
-						}
-					}
-				case "duration":
-					if _, err := strconv.ParseFloat(value, 64); err == nil {
-						value += "s"
-					}
-					if v, err := time.ParseDuration(value); err == nil {
-						setting.Value = v
-					}
-				case "float64":
-					if v, err := strconv.ParseFloat(value, 64); err == nil {
-						setting.Value = v
-					}
-				}
-				return nil
-			}
-
-			return nil
 		}
+		setting.Value = theme
+		m.ApplyTheme(theme, config.Resolve[string](m.Settings.General.ThemePath))
+		return nil
 	}
+	if key == "theme_path" {
+		setting.Value = value
+		// Re-apply the current theme mode but with the brand new path
+		m.ApplyTheme(config.Resolve[int](m.Settings.General.Theme), value)
+		return nil
+	}
+
+	// Generic Parsing and Application
+	var parsedVal any
+
+	switch setting.Type {
+	case "bool":
+		// Typically toggled unless explicitly typed out
+		if value == "" {
+			if key == "auto_start" {
+				if m.ToggleServiceFunc == nil {
+					return fmt.Errorf("service management is not available on this platform")
+				}
+				newVal := !config.Resolve[bool](setting)
+				if err := m.ToggleServiceFunc(newVal); err != nil {
+					return fmt.Errorf("failed to update service: %w", err)
+				}
+				parsedVal = newVal
+			} else {
+				parsedVal = !config.Resolve[bool](setting)
+			}
+		} else {
+			b, err := strconv.ParseBool(value)
+			if err != nil {
+				return fmt.Errorf("invalid boolean")
+			}
+			parsedVal = b
+		}
+	case "string", "auth_token", "link":
+		parsedVal = value
+	case "int":
+		if key == "worker_buffer_size" {
+			v, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return fmt.Errorf("invalid number")
+			}
+			parsedVal = int(v * float64(config.KB))
+		} else {
+			v, err := strconv.Atoi(value)
+			if err != nil {
+				return fmt.Errorf("invalid number")
+			}
+			parsedVal = v
+		}
+	case "int64":
+		// Handle KB/MB scaling gracefully if specified
+		if key == "min_chunk_size" {
+			v, err := strconv.ParseFloat(value, 64)
+			if err != nil {
+				return fmt.Errorf("invalid number")
+			}
+			parsedVal = int64(v * float64(config.MB))
+		} else {
+			v, err := strconv.ParseInt(value, 10, 64)
+			if err != nil {
+				return fmt.Errorf("invalid number")
+			}
+			parsedVal = v
+		}
+	case "duration":
+		if _, err := strconv.ParseFloat(value, 64); err == nil {
+			value += "s"
+		}
+		v, err := time.ParseDuration(value)
+		if err != nil {
+			return fmt.Errorf("invalid duration")
+		}
+		parsedVal = v
+	case "float64":
+		v, err := strconv.ParseFloat(value, 64)
+		if err != nil {
+			return fmt.Errorf("invalid number")
+		}
+		parsedVal = v
+	default:
+		parsedVal = value
+	}
+
+	if err := setting.Validate(parsedVal); err != nil {
+		return err
+	}
+	setting.Value = parsedVal
 	return nil
 }
 
@@ -854,80 +797,32 @@ func (m RootModel) getSettingUnit() string {
 func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool) string {
 	switch key {
 	case "min_chunk_size":
-		var valInt64 int64
-		var ok bool
-		switch v := value.(type) {
-		case int64:
-			valInt64 = v
-			ok = true
-		case int:
-			valInt64 = int64(v)
-			ok = true
-		case float64:
-			valInt64 = int64(v)
-			ok = true
-		}
-		if ok {
-			mb := float64(valInt64) / float64(config.MB)
+		if v, ok := asFloat64(value); ok {
+			mb := v / float64(config.MB)
 			return fmt.Sprintf("%.1f", mb)
 		}
 	case "worker_buffer_size":
-		var valInt int
-		var ok bool
-		switch v := value.(type) {
-		case int:
-			valInt = v
-			ok = true
-		case int64:
-			valInt = int(v)
-			ok = true
-		case float64:
-			valInt = int(v)
-			ok = true
-		}
-		if ok {
-			kb := float64(valInt) / float64(config.KB)
+		if v, ok := asFloat64(value); ok {
+			kb := v / float64(config.KB)
 			return fmt.Sprintf("%.0f", kb)
 		}
 	case "slow_worker_grace_period", "stall_timeout":
-		// Show duration as plain seconds number (e.g., "5" instead of "5s")
-		var d time.Duration
-		var ok bool
-		switch v := value.(type) {
-		case time.Duration:
-			d = v
-			ok = true
-		case float64:
-			d = time.Duration(v)
-			ok = true
-		case int64:
-			d = time.Duration(v)
-			ok = true
-		case int:
-			d = time.Duration(v)
-			ok = true
-		}
-		if ok {
-			return fmt.Sprintf("%.0f", d.Seconds())
+		if v, ok := asFloat64(value); ok {
+			// Values might be duration or pure float64 depending on decode/init paths.
+			// The settings parse logic handles both, but for UI string we want raw seconds.
+			var secs float64
+			if _, isDuration := value.(time.Duration); isDuration {
+				secs = time.Duration(v).Seconds()
+			} else {
+				secs = v
+			}
+			return fmt.Sprintf("%.0f", secs)
 		}
 	}
 
 	if key == "theme" {
-		var valInt int
-		var ok bool
-		switch v := value.(type) {
-		case int:
-			valInt = v
-			ok = true
-		case int64:
-			valInt = int(v)
-			ok = true
-		case float64:
-			valInt = int(v)
-			ok = true
-		}
-		if ok {
-			switch valInt {
+		if v, ok := asFloat64(value); ok {
+			switch int(v) {
 			case config.ThemeAdaptive:
 				return "< System >"
 			case config.ThemeLight:
@@ -950,102 +845,40 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 
 	switch typ {
 	case "bool":
-		var b bool
-		var ok bool
-		switch val := value.(type) {
-		case bool:
-			b = val
-			ok = true
-		case float64:
-			b = val != 0
-			ok = true
-		case int:
-			b = val != 0
-			ok = true
-		}
-		if ok {
+		if b, ok := value.(bool); ok {
 			if b {
 				return "True"
 			}
 			return "False"
 		}
-	case "duration":
-		var d time.Duration
-		var ok bool
-		switch val := value.(type) {
-		case time.Duration:
-			d = val
-			ok = true
-		case float64:
-			d = time.Duration(val)
-			ok = true
-		case int64:
-			d = time.Duration(val)
-			ok = true
-		case int:
-			d = time.Duration(val)
-			ok = true
-		case string:
-			if parsed, err := time.ParseDuration(val); err == nil {
-				d = parsed
-				ok = true
+		if v, ok := asFloat64(value); ok {
+			if v != 0 {
+				return "True"
 			}
+			return "False"
 		}
-		if ok {
+	case "duration":
+		if d, ok := value.(time.Duration); ok {
 			return d.String()
 		}
-	case "int64":
-		var v int64
-		var ok bool
-		switch val := value.(type) {
-		case int64:
-			v = val
-			ok = true
-		case int:
-			v = int64(val)
-			ok = true
-		case float64:
-			v = int64(val)
-			ok = true
+		if s, ok := value.(string); ok {
+			if parsed, err := time.ParseDuration(s); err == nil {
+				return parsed.String()
+			}
 		}
-		if ok {
-			return fmt.Sprintf("%d", v)
+		if v, ok := asFloat64(value); ok {
+			return time.Duration(v).String()
+		}
+	case "int64":
+		if v, ok := asFloat64(value); ok {
+			return fmt.Sprintf("%d", int64(v))
 		}
 	case "int":
-		var v int
-		var ok bool
-		switch val := value.(type) {
-		case int:
-			v = val
-			ok = true
-		case int64:
-			v = int(val)
-			ok = true
-		case float64:
-			v = int(val)
-			ok = true
-		}
-		if ok {
-			return fmt.Sprintf("%d", v)
+		if v, ok := asFloat64(value); ok {
+			return fmt.Sprintf("%d", int(v))
 		}
 	case "float64":
-		var v float64
-		var ok bool
-		switch val := value.(type) {
-		case float64:
-			v = val
-			ok = true
-		case float32:
-			v = float64(val)
-			ok = true
-		case int:
-			v = float64(val)
-			ok = true
-		case int64:
-			v = float64(val)
-			ok = true
-		}
-		if ok {
+		if v, ok := asFloat64(value); ok {
 			return fmt.Sprintf("%.2f", v)
 		}
 	case "string", "link":
@@ -1084,40 +917,10 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 		}
 	}
 
-	val1 := reflect.ValueOf(m.Settings).Elem()
-	val2 := reflect.ValueOf(defaults).Elem()
-	typ := val1.Type()
-
-	for i := 0; i < typ.NumField(); i++ {
-		field := typ.Field(i)
-		label := field.Tag.Get("ui_label")
-		if label == "" {
-			label = field.Name
-		}
-		if label == category {
-			catField1 := val1.Field(i)
-			catField2 := val2.Field(i)
-			if catField1.Kind() != reflect.Struct {
-				continue
-			}
-
-			catTyp := catField1.Type()
-			for j := 0; j < catTyp.NumField(); j++ {
-				f := catTyp.Field(j)
-				fieldKey := f.Tag.Get("json")
-				if fieldKey == "" {
-					fieldKey = f.Name
-				}
-				if fieldKey == key {
-					s1, ok1 := catField1.Field(j).Interface().(*config.Setting)
-					s2, ok2 := catField2.Field(j).Interface().(*config.Setting)
-					if ok1 && ok2 && s1 != nil && s2 != nil {
-						s1.Value = s2.Value
-						return nil
-					}
-				}
-			}
-		}
+	setting := m.Settings.FindSetting(category, key)
+	defaultSetting := defaults.FindSetting(category, key)
+	if setting != nil && defaultSetting != nil {
+		setting.Value = defaultSetting.Value
 	}
 	return nil
 }
