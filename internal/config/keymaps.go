@@ -219,12 +219,14 @@ func LoadKeyMap() (*KeyMap, error) {
 
 	defaults.ApplyConfig(&cfg)
 	defaults.Validate()
-	// Self-healing: only write back if the merged config differs from what
-	// was on disk (e.g. new keys added, invalid bindings healed).
-	mergedCfg := defaults.ToConfig()
-	if !reflect.DeepEqual(&cfg, mergedCfg) {
+
+	// Self-healing: save the fully-merged and validated keymap back to disk
+	// ONLY if it differs from what was on disk to avoid constant disk thrashing.
+	mergedData, _ := json.MarshalIndent(defaults.ToConfig(), "", "  ")
+	if string(data) != string(mergedData) {
 		_ = SaveKeyMap(defaults)
 	}
+
 	return defaults, nil
 }
 

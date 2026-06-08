@@ -28,13 +28,12 @@ func (m HelpModal) RenderWithBtopBox(
 	innerWidth := m.Width - boxFrameX - paddingX
 
 	// Render the full help view from the keybindings
-	helpText := m.Help.FullHelpView(m.HelpKeys.FullHelp())
+	h := m.Help
+	h.SetWidth(innerWidth)
+	helpText := h.FullHelpView(m.HelpKeys.FullHelp())
 
-	// Wrap to box width and center
-	helpContent := lipgloss.NewStyle().
-		Width(innerWidth).
-		Align(lipgloss.Center).
-		Render(helpText)
+	// Wrap to box width and center as a block, preserving column alignment
+	helpContent := lipgloss.PlaceHorizontal(innerWidth, lipgloss.Center, helpText)
 
 	boxFrameY := lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).GetVerticalFrameSize()
 	innerHeight := m.Height - boxFrameY
