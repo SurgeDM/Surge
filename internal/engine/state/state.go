@@ -895,7 +895,7 @@ func ValidateIntegrity() (int, error) {
 		// Check if .surge file exists
 		_, statErr := os.Stat(surgePath)
 		if os.IsNotExist(statErr) {
-			// File missing — remove orphaned DB entry
+			// File missing - remove orphaned DB entry
 			utils.Debug("Integrity: .surge file missing for %s, removing entry %s", e.destPath, e.id)
 			if err := removeDownloadAndTasks(e.id); err != nil {
 				return removed, fmt.Errorf("failed to remove orphaned entry %s: %w", e.id, err)
@@ -914,7 +914,7 @@ func ValidateIntegrity() (int, error) {
 				return removed, fmt.Errorf("failed to verify hash for %s: %w", surgePath, err)
 			}
 			if !matches {
-				// File has been tampered with — remove entry and corrupted file
+				// File has been tampered with - remove entry and corrupted file
 				utils.Debug("Integrity: hash mismatch for %s (expected %s), removing", surgePath, e.fileHash)
 				if err := retryRemove(surgePath); err != nil && !os.IsNotExist(err) {
 					return removed, fmt.Errorf("failed to remove tampered file %s: %w", surgePath, err)

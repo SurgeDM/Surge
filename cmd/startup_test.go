@@ -128,7 +128,7 @@ func setupTestEnv(t *testing.T, tmpDir string) {
 
 	// Setup Settings (AutoResume=false default)
 	settings := config.DefaultSettings()
-	settings.General.AutoResume = false // Ensure we test that "queued" overrides this
+	settings.General.AutoResume.Value = false // Ensure we test that "queued" overrides this
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatal(err)
 	}

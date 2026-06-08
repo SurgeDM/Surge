@@ -105,7 +105,7 @@ func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing
 	settingsDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", settingsDir)
 	settings := config.DefaultSettings()
-	settings.General.DownloadCompleteNotification = true
+	settings.General.DownloadCompleteNotification.Value = true
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("failed to save settings: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestStartEventWorker_SuppressesNotificationWhenSettingDisabled(t *testing.T
 	settingsDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", settingsDir)
 	settings := config.DefaultSettings()
-	settings.General.DownloadCompleteNotification = false
+	settings.General.DownloadCompleteNotification.Value = false
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("failed to save settings: %v", err)
 	}
@@ -248,7 +248,7 @@ func TestStartEventWorker_CompletionNotificationUsesGenericMessageWhenElapsedZer
 	settingsDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", settingsDir)
 	settings := config.DefaultSettings()
-	settings.General.DownloadCompleteNotification = true
+	settings.General.DownloadCompleteNotification.Value = true
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("failed to save settings: %v", err)
 	}
@@ -293,7 +293,7 @@ func TestStartEventWorker_ErrorNotificationFallsBackToDownloadID(t *testing.T) {
 	settingsDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", settingsDir)
 	settings := config.DefaultSettings()
-	settings.General.DownloadCompleteNotification = true
+	settings.General.DownloadCompleteNotification.Value = true
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("failed to save settings: %v", err)
 	}

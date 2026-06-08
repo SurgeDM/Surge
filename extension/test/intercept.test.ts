@@ -9,6 +9,7 @@ describe('download interception naming', () => {
   const mockFetch = vi.fn();
 
   beforeEach(() => {
+    mockFetch.mockReset();
     vi.stubGlobal('fetch', mockFetch);
     __test__.resetState();
 
@@ -85,7 +86,7 @@ describe('download interception naming', () => {
     }));
   });
 
-  it('preserves the filename if the browser actually provides one', async () => {
+  it('always sends an empty filename even when the browser provides one, deferring to the backend prober', async () => {
     mockFetch.mockImplementation(async (url: string) => {
       if (url.includes('/health')) return { ok: true };
       if (url.includes('/list')) return { ok: true, json: async () => [] };

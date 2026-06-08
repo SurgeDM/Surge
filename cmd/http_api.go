@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -33,6 +34,10 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
 		handleDownload(w, r, defaultOutputDir, service)
+	})
+
+	mux.HandleFunc("/download/batch", func(w http.ResponseWriter, r *http.Request) {
+		handleBatchDownload(w, r, defaultOutputDir, service)
 	})
 
 	mux.HandleFunc("/pause", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
@@ -291,7 +296,7 @@ func ensureOpenActionRequestAllowed(r *http.Request) error {
 	}
 
 	settings := getSettings()
-	if settings != nil && settings.General.AllowRemoteOpenActions {
+	if settings != nil && config.Resolve[bool](settings.General.AllowRemoteOpenActions) {
 		return nil
 	}
 

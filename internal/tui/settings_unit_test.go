@@ -1,115 +1,106 @@
 package tui
 
 import (
-	"reflect"
 	"testing"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 )
 
-func TestSettingsUnitConversion(t *testing.T) {
-	m := RootModel{
+func TestSettingsMetadataValidation(t *testing.T) {
+	metadata := config.GetSettingsMetadata()
+	categories := config.CategoryOrder()
+
+	if len(metadata) == 0 {
+		t.Fatal("Expected non-empty settings metadata")
+	}
+
+	for _, category := range categories {
+		settings, ok := metadata[category]
+		if !ok {
+			t.Errorf("Category %s missing from metadata", category)
+			continue
+		}
+
+		if len(settings) == 0 {
+			t.Errorf("Category %s has no settings", category)
+		}
+
+		for _, s := range settings {
+			if s.Key == "" {
+				t.Errorf("Setting in category %s has empty Key", category)
+			}
+			if s.Label == "" {
+				t.Errorf("Setting %q in category %s has empty Label", s.Key, category)
+			}
+			if s.Description == "" {
+				t.Errorf("Setting %q in category %s has empty Description", s.Key, category)
+			}
+			if s.Type == "" {
+				t.Errorf("Setting %q in category %s has empty Type", s.Key, category)
+			}
+		}
+	}
+}
+
+func TestSettingsFloatResilience(t *testing.T) {
+	// Verify that float64 values (e.g. from JSON deserialization) format cleanly
+	valInt := formatSettingValue(float64(5), "int", false)
+	if valInt != "5" {
+		t.Errorf("Expected float64(5) as int to format as \"5\", got %q", valInt)
+	}
+
+	valDuration := formatSettingValue(float64(5*time.Second), "duration", false)
+	if valDuration != "5s" {
+		t.Errorf("Expected float64(5s) as duration to format as \"5s\", got %q", valDuration)
+	}
+}
+
+func TestSetSettingValueConversions(t *testing.T) {
+	m := &RootModel{
 		Settings: config.DefaultSettings(),
 	}
 
-	tests := []struct {
-		name          string
-		category      string
-		key           string
-		typ           string
-		internalValue interface{}
-		uiInput       string
-		expectedValue interface{}
-	}{
-		{
-			name:          "MinChunkSize MB Conversion",
-			category:      "Network",
-			key:           "min_chunk_size",
-			typ:           "int64",
-			internalValue: int64(4 * config.MB),
-			uiInput:       "4.0",
-			expectedValue: int64(4 * config.MB),
-		},
-		{
-			name:          "WorkerBufferSize KB Conversion",
-			category:      "Network",
-			key:           "worker_buffer_size",
-			typ:           "int",
-			internalValue: 1024 * config.KB,
-			uiInput:       "1024",
-			expectedValue: 1024 * config.KB,
-		},
-		{
-			name:          "SlowWorkerGracePeriod seconds Conversion",
-			category:      "Performance",
-			key:           "slow_worker_grace_period",
-			typ:           "duration",
-			internalValue: 10 * time.Second,
-			uiInput:       "10",
-			expectedValue: 10 * time.Second,
-		},
-		{
-			name:          "StallTimeout seconds Conversion",
-			category:      "Performance",
-			key:           "stall_timeout",
-			typ:           "duration",
-			internalValue: 5 * time.Second,
-			uiInput:       "5",
-			expectedValue: 5 * time.Second,
-		},
-		{
-			name:          "SlowWorkerThreshold float Comparison",
-			category:      "Performance",
-			key:           "slow_worker_threshold",
-			typ:           "float64",
-			internalValue: 0.35,
-			uiInput:       "0.35",
-			expectedValue: 0.35,
-		},
-		{
-			name:          "SpeedEmaAlpha float Comparison",
-			category:      "Performance",
-			key:           "speed_ema_alpha",
-			typ:           "float64",
-			internalValue: 0.5,
-			uiInput:       "0.50",
-			expectedValue: 0.5,
-		},
-		{
-			name:          "MaxTaskRetries int Comparison",
-			category:      "Performance",
-			key:           "max_task_retries",
-			typ:           "int",
-			internalValue: 5,
-			uiInput:       "5",
-			expectedValue: 5,
-		},
+	// 1. Test worker_buffer_size (float -> KB-scaled int)
+	// Default is 32KB. Let's set it to 64 (representing 64KB, which should become 64 * 1024 = 65536)
+	err := m.setSettingValue("Network", "worker_buffer_size", "64")
+	if err != nil {
+		t.Fatalf("setSettingValue failed: %v", err)
+	}
+	val := config.Resolve[int](m.Settings.Network.WorkerBufferSize)
+	if val != 64*1024 {
+		t.Errorf("Expected worker_buffer_size to be %d, got %d", 64*1024, val)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// 1. Test Internal -> UI String (formatSettingValueForEdit)
-			gotUI := formatSettingValueForEdit(tt.internalValue, tt.typ, tt.key, false)
-			// For floats like 4.0 vs 4, we normalize by parsing back
-			if gotUI != tt.uiInput {
-				t.Errorf("%s: formatSettingValueForEdit() = %q, want %q", tt.name, gotUI, tt.uiInput)
-			}
+	// 2. Test min_chunk_size (float -> MB-scaled int64)
+	// Default is 4MB. Let's set it to 8 (representing 8MB, which should become 8 * 1024 * 1024 = 8388608)
+	err = m.setSettingValue("Network", "min_chunk_size", "8")
+	if err != nil {
+		t.Fatalf("setSettingValue failed: %v", err)
+	}
+	val64 := config.Resolve[int64](m.Settings.Network.MinChunkSize)
+	if val64 != 8*1024*1024 {
+		t.Errorf("Expected min_chunk_size to be %d, got %d", 8*1024*1024, val64)
+	}
 
-			// 2. Test UI String -> Internal (setSettingValue)
-			err := m.setSettingValue(tt.category, tt.key, tt.uiInput)
-			if err != nil {
-				t.Fatalf("%s: setSettingValue() returned error: %v", tt.name, err)
-			}
+	// 3. Test slow_worker_grace_period / stall_timeout (number string -> time.Duration via "s" suffix injection)
+	// Let's set stall_timeout to "15" (which should parse as 15s)
+	err = m.setSettingValue("Performance", "stall_timeout", "15")
+	if err != nil {
+		t.Fatalf("setSettingValue failed: %v", err)
+	}
+	dur := config.Resolve[time.Duration](m.Settings.Performance.StallTimeout)
+	if dur != 15*time.Second {
+		t.Errorf("Expected stall_timeout to be %v, got %v", 15*time.Second, dur)
+	}
 
-			// Read back the value using reflection similar to how the app does
-			values := m.getSettingsValues(tt.category)
-			gotInternal := values[tt.key]
-
-			if !reflect.DeepEqual(gotInternal, tt.expectedValue) {
-				t.Errorf("%s: Value after setSettingValue() = %v (%T), want %v (%T)",
-					tt.name, gotInternal, gotInternal, tt.expectedValue, tt.expectedValue)
-			}
-		})
+	// Let's set slow_worker_grace_period to "45s" (already has "s" suffix)
+	err = m.setSettingValue("Performance", "slow_worker_grace_period", "45s")
+	if err != nil {
+		t.Fatalf("setSettingValue failed: %v", err)
+	}
+	dur = config.Resolve[time.Duration](m.Settings.Performance.SlowWorkerGracePeriod)
+	if dur != 45*time.Second {
+		t.Errorf("Expected slow_worker_grace_period to be %v, got %v", 45*time.Second, dur)
 	}
 }

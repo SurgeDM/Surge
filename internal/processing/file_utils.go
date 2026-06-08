@@ -138,7 +138,7 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string, string) b
 // GetCategoryPath applies category routing only while the caller is still using
 // the default destination, so explicit user paths are left untouched.
 func GetCategoryPath(filename, defaultDir string, settings *config.Settings) (string, error) {
-	if settings == nil || !settings.Categories.CategoryEnabled || filename == "" {
+	if settings == nil || !config.Resolve[bool](settings.Categories.CategoryEnabled) || filename == "" {
 		return defaultDir, nil
 	}
 
@@ -176,7 +176,7 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 	filename := getBaseFilename(url, candidateFilename, probe)
 
 	destPath := defaultDir
-	if routeToCategory && settings != nil && settings.Categories.CategoryEnabled && filename != "" {
+	if routeToCategory && settings != nil && config.Resolve[bool](settings.Categories.CategoryEnabled) && filename != "" {
 		var err error
 		destPath, err = GetCategoryPath(filename, defaultDir, settings)
 		if err != nil {

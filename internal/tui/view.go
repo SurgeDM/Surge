@@ -214,10 +214,17 @@ func (m RootModel) View() tea.View {
 
 	if m.state == BatchConfirmState {
 		urlCount := len(m.pendingBatchURLs)
+		if len(m.pendingBatchRequests) > 0 {
+			urlCount = len(m.pendingBatchRequests)
+		}
+		batchDetail := fmt.Sprintf("Path: %s", m.inputs[2].View())
+		if m.batchFilePath != "" && m.batchFilePath != strings.TrimSpace(m.inputs[2].Value()) {
+			batchDetail = fmt.Sprintf("Source: %s\nPath: %s", m.batchFilePath, m.inputs[2].View())
+		}
 		modal := components.ConfirmationModal{
 			Title:       "Batch Import",
 			Message:     fmt.Sprintf("Add %d downloads?", urlCount),
-			Detail:      m.batchFilePath,
+			Detail:      batchDetail,
 			Keys:        m.keys.BatchConfirm,
 			Help:        m.help,
 			BorderColor: colors.Cyan(),
@@ -362,7 +369,7 @@ func (m RootModel) View() tea.View {
 	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
 	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
 
-	// Hide help text at very narrow widths — version is more important
+	// Hide help text at very narrow widths - version is more important
 	var footerContent string
 	if layout.AvailableWidth < 60 {
 		footerContent = versionText
@@ -419,7 +426,7 @@ func (m RootModel) View() tea.View {
 
 		// Measure whether the detail content actually fits in the allocated
 		// DetailHeight. If it doesn't, the chunk map would cause details to
-		// be clipped — so give the chunk map's space back to details.
+		// be clipped - so give the chunk map's space back to details.
 		if showActualChunkMap {
 			detailInnerH := layout.DetailHeight - components.BorderFrameHeight
 			if detailInnerH < 1 {

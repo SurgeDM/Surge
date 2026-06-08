@@ -31,8 +31,8 @@ func TestStartDownload_RoutesDefaultPathWithURLDerivedFilename(t *testing.T) {
 	imageDir := filepath.Join(rootDir, "images")
 
 	settings := config.DefaultSettings()
-	settings.Categories.CategoryEnabled = true
-	settings.General.DefaultDownloadDir = rootDir
+	settings.Categories.CategoryEnabled.Value = true
+	settings.General.DefaultDownloadDir.Value = rootDir
 	settings.Categories.Categories = []config.Category{
 		{Name: "Images", Pattern: `(?i)\.(jpg|jpeg|png)$`, Path: imageDir},
 	}
@@ -53,9 +53,9 @@ func TestUpdate_InputSubmit_BlankPathUsesDefaultPathRouting(t *testing.T) {
 	musicDir := filepath.Join(rootDir, "music")
 
 	settings := config.DefaultSettings()
-	settings.Categories.CategoryEnabled = true
-	settings.General.WarnOnDuplicate = false
-	settings.General.DefaultDownloadDir = rootDir
+	settings.Categories.CategoryEnabled.Value = true
+	settings.General.WarnOnDuplicate.Value = false
+	settings.General.DefaultDownloadDir.Value = rootDir
 	settings.Categories.Categories = []config.Category{
 		{Name: "Music", Pattern: `(?i)\.(mp3|flac)$`, Path: musicDir},
 	}
@@ -83,8 +83,8 @@ func TestUpdate_DuplicateContinuePreservesDefaultPathRouting(t *testing.T) {
 	videoDir := filepath.Join(rootDir, "videos")
 
 	settings := config.DefaultSettings()
-	settings.Categories.CategoryEnabled = true
-	settings.General.DefaultDownloadDir = rootDir
+	settings.Categories.CategoryEnabled.Value = true
+	settings.General.DefaultDownloadDir.Value = rootDir
 	settings.Categories.Categories = []config.Category{
 		{Name: "Videos", Pattern: `(?i)\.mp4$`, Path: videoDir},
 	}
@@ -112,9 +112,9 @@ func TestUpdate_ExtensionConfirmBlankPathUsesDefaultPathRouting(t *testing.T) {
 	docDir := filepath.Join(rootDir, "docs")
 
 	settings := config.DefaultSettings()
-	settings.Categories.CategoryEnabled = true
-	settings.General.WarnOnDuplicate = false
-	settings.General.DefaultDownloadDir = rootDir
+	settings.Categories.CategoryEnabled.Value = true
+	settings.General.WarnOnDuplicate.Value = false
+	settings.General.DefaultDownloadDir.Value = rootDir
 	settings.Categories.Categories = []config.Category{
 		{Name: "Documents", Pattern: `(?i)\.pdf$`, Path: docDir},
 	}
@@ -171,7 +171,7 @@ func TestUpdate_CategoryManagerEscRemovesNewPlaceholder(t *testing.T) {
 
 func TestGetFilteredDownloads_AppliesCategoryFilter(t *testing.T) {
 	settings := config.DefaultSettings()
-	settings.Categories.CategoryEnabled = true
+	settings.Categories.CategoryEnabled.Value = true
 	settings.Categories.Categories = []config.Category{
 		{Name: "Videos", Pattern: `(?i)\.mp4$`},
 		{Name: "Documents", Pattern: `(?i)\.pdf$`},

@@ -72,7 +72,7 @@ func (s *countingLifecycleService) StreamEvents(context.Context) (<-chan interfa
 	return ch, cleanup, nil
 }
 
-func TestBuildPoolIsNameActive(t *testing.T) {
+func TestBuildActiveDownloadChecker(t *testing.T) {
 	getAll := func() []types.DownloadConfig {
 		state := types.NewProgressState("dl-2", 0)
 		state.SetFilename("from-state.iso")
@@ -85,7 +85,7 @@ func TestBuildPoolIsNameActive(t *testing.T) {
 		}
 	}
 
-	isNameActive := buildPoolIsNameActive(getAll)
+	isNameActive := buildActiveDownloadChecker(getAll)
 	if isNameActive == nil {
 		t.Fatal("expected name activity callback")
 	}
@@ -239,8 +239,8 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 		t.Fatalf("MkdirAll failed: %v", err)
 	}
 	settings := config.DefaultSettings()
-	settings.General.DefaultDownloadDir = defaultDir
-	settings.Categories.CategoryEnabled = true
+	settings.General.DefaultDownloadDir.Value = defaultDir
+	settings.Categories.CategoryEnabled.Value = true
 	settings.Categories.Categories = append(settings.Categories.Categories, config.Category{
 		Name:    "Binary",
 		Pattern: `(?i)\.bin$`,
@@ -325,8 +325,8 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 
 	defaultDir := t.TempDir()
 	initial := config.DefaultSettings()
-	initial.General.DefaultDownloadDir = defaultDir
-	initial.Categories.CategoryEnabled = false
+	initial.General.DefaultDownloadDir.Value = defaultDir
+	initial.Categories.CategoryEnabled.Value = false
 	if err := config.SaveSettings(initial); err != nil {
 		t.Fatalf("SaveSettings(initial) failed: %v", err)
 	}
@@ -343,8 +343,8 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 		t.Fatalf("MkdirAll failed: %v", err)
 	}
 	updated := config.DefaultSettings()
-	updated.General.DefaultDownloadDir = defaultDir
-	updated.Categories.CategoryEnabled = true
+	updated.General.DefaultDownloadDir.Value = defaultDir
+	updated.Categories.CategoryEnabled.Value = true
 	updated.Categories.Categories = []config.Category{
 		{
 			Name:    "Binary",

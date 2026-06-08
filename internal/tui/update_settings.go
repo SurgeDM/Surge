@@ -161,14 +161,14 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		settingKey := m.getCurrentSettingKey()
 		switch settingKey {
 		case "default_download_dir":
-			originalPath := m.Settings.General.DefaultDownloadDir
+			originalPath := config.Resolve[string](m.Settings.General.DefaultDownloadDir)
 			browseDir := originalPath
 			if browseDir == "" {
 				browseDir = m.PWD
 			}
 			return m, m.openDirectoryPicker(FilePickerOriginSettings, originalPath, browseDir, false, true)
 		case "theme_path":
-			originalPath := m.Settings.General.ThemePath
+			originalPath := config.Resolve[string](m.Settings.General.ThemePath)
 			browseDir := originalPath
 			if browseDir != "" {
 				if info, err := os.Stat(browseDir); err == nil && !info.IsDir() {
@@ -212,9 +212,9 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 		// Special handling for Theme cycling
 		if settingKey == "theme" {
-			newTheme := (m.Settings.General.Theme + 1) % 3
-			m.Settings.General.Theme = newTheme
-			m.ApplyTheme(newTheme, m.Settings.General.ThemePath)
+			newTheme := (config.Resolve[int](m.Settings.General.Theme) + 1) % 3
+			m.Settings.General.Theme.Value = newTheme
+			m.ApplyTheme(newTheme, config.Resolve[string](m.Settings.General.ThemePath))
 			return m, nil
 		}
 
@@ -284,7 +284,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if settingKey == "theme" || settingKey == "theme_path" {
-			m.ApplyTheme(m.Settings.General.Theme, m.Settings.General.ThemePath)
+			m.ApplyTheme(config.Resolve[int](m.Settings.General.Theme), config.Resolve[string](m.Settings.General.ThemePath))
 		}
 		return m, nil
 	}

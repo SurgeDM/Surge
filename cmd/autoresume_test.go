@@ -41,8 +41,8 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 	// 2. Settings with AutoResume = true
 	settingsPath := filepath.Join(surgeDir, "settings.json")
 	settings := config.DefaultSettings()
-	settings.General.AutoResume = true
-	settings.General.DefaultDownloadDir = tmpDir
+	settings.General.AutoResume.Value = true
+	settings.General.DefaultDownloadDir.Value = tmpDir
 
 	data, _ := json.Marshal(settings)
 	if err := os.WriteFile(settingsPath, data, 0o644); err != nil {

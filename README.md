@@ -51,7 +51,7 @@ If Surge saves you time, consider supporting the development! Donations go direc
 
 [**☕ Buy us a coffee**](https://www.buymeacoffee.com/surge.downloader)
 
-_Totally optional—your stars, issues, and contributions already mean the world to us! :)_
+_Totally optional-your stars, issues, and contributions already mean the world to us! :)_
 
 ---
 
@@ -85,12 +85,17 @@ Just run `surge` to enter the dashboard. This is where you can visualize progres
 # Start the TUI
 surge
 
+# Start the TUI without the local HTTP API server
+surge --no-server
+
 # Start TUI with downloads queued
 surge https://example.com/file1.zip https://example.com/file2.zip
 
 # Combine URLs and batch file
 surge https://example.com/file.zip --batch urls.txt
 ```
+
+`--no-server` keeps the TUI fully local and skips the embedded HTTP API. CLI control commands such as `surge add`, `surge pause`, and browser-extension requests will not be able to target that instance.
 
 ### 2. Server Mode (Headless)
 
@@ -217,7 +222,7 @@ We tested Surge against standard tools. Because of our connection optimization l
 
 | Tool            | Time             | Speed                | Comparison    |
 | --------------- | ---------------- | -------------------- | ------------- |
-| **Surge** | **28.93s** | **35.40 MB/s** | **—**  |
+| **Surge** | **28.93s** | **35.40 MB/s** | **-**  |
 | aria2c          | 40.04s           | 25.57 MB/s           | 1.38× slower |
 | curl            | 57.57s           | 17.79 MB/s           | 1.99× slower |
 | wget            | 61.81s           | 16.57 MB/s           | 2.14× slower |

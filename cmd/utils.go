@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -184,10 +185,15 @@ func doAPIRequest(method string, baseURL string, token string, path string, body
 }
 
 func sendToServer(url string, mirrors []string, outPath string, baseURL string, token string) error {
+	return sendToServerWithApproval(url, mirrors, outPath, baseURL, token, true)
+}
+
+func sendToServerWithApproval(url string, mirrors []string, outPath string, baseURL string, token string, skipApproval bool) error {
 	reqBody := DownloadRequest{
-		URL:     url,
-		Mirrors: mirrors,
-		Path:    outPath,
+		URL:          url,
+		Mirrors:      mirrors,
+		Path:         outPath,
+		SkipApproval: skipApproval,
 	}
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
@@ -195,6 +201,49 @@ func sendToServer(url string, mirrors []string, outPath string, baseURL string, 
 	}
 
 	resp, err := doAPIRequest(http.MethodPost, baseURL, token, "/download", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to connect to server: %w", err)
+	}
+	defer func() {
+		if err := resp.Body.Close(); err != nil {
+			utils.Debug("Error closing response body: %v", err)
+		}
+	}()
+
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("server error: %s - %s", resp.Status, string(body))
+	}
+
+	return nil
+}
+
+func sendBatchToServer(urls []string, outPath string, baseURL string, token string, skipApproval bool) error {
+	reqBody := BatchDownloadRequest{
+		Path:         outPath,
+		SkipApproval: skipApproval,
+	}
+	for _, arg := range urls {
+		url, mirrors := ParseURLArg(arg)
+		if url == "" {
+			continue
+		}
+		reqBody.Downloads = append(reqBody.Downloads, DownloadRequest{
+			URL:     url,
+			Mirrors: mirrors,
+			Path:    outPath,
+		})
+	}
+	if len(reqBody.Downloads) == 0 {
+		return fmt.Errorf("no valid URLs to add")
+	}
+
+	jsonData, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("failed to marshal request: %w", err)
+	}
+
+	resp, err := doAPIRequest(http.MethodPost, baseURL, token, "/download/batch", bytes.NewBuffer(jsonData))
 	if err != nil {
 		return fmt.Errorf("failed to connect to server: %w", err)
 	}
@@ -248,7 +297,11 @@ func ExecuteAPIAction(rawID, endpoint, method, successMsg string) error {
 		return fmt.Errorf("failed to resolve download ID: %w", err)
 	}
 
-	resp, err := doAPIRequest(method, baseURL, token, fmt.Sprintf("%s/%s", endpoint, id), nil)
+	// The HTTP API expects the download id as the "id" query parameter (see
+	// withRequiredID in cmd/http_api.go); a path segment (e.g. /pause/<id>)
+	// doesn't match the registered routes and 404s. Matches the extension and
+	// internal/core/remote_service.go, which already use ?id=.
+	resp, err := doAPIRequest(method, baseURL, token, fmt.Sprintf("%s?id=%s", endpoint, url.QueryEscape(id)), nil)
 	if err != nil {
 		return fmt.Errorf("failed to send request to server: %w", err)
 	}

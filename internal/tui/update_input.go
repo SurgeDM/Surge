@@ -5,6 +5,7 @@ import (
 
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -30,7 +31,7 @@ func (m RootModel) updateInput(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		originalPath := m.inputs[2].Value()
 		browseDir := strings.TrimSpace(originalPath)
 		if browseDir == "" {
-			browseDir = m.Settings.General.DefaultDownloadDir
+			browseDir = config.Resolve[string](m.Settings.General.DefaultDownloadDir)
 		}
 		if browseDir == "" {
 			browseDir = m.PWD
@@ -171,14 +172,16 @@ func (m RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, 
 		}
 
 		m.state = DashboardState
-		return m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
+		updated, cmd := m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
+		nextModel, nextCmd := updated.showNextPendingRequest()
+		return nextModel, tea.Batch(cmd, nextCmd)
 	}
 
 	if key.Matches(msg, m.keys.Extension.Cancel) {
 		m.filepickerOrigin = FilePickerOriginNone
 		m.blurAllInputs()
 		m.state = DashboardState
-		return m, nil
+		return m.showNextPendingRequest()
 	}
 
 	var cmd tea.Cmd

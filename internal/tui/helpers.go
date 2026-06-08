@@ -74,14 +74,14 @@ func (m *RootModel) removeDownloadByID(id string) bool {
 func (m *RootModel) handleFilePickerSelection(path string) (tea.Model, tea.Cmd) {
 	switch m.filepickerOrigin {
 	case FilePickerOriginTheme:
-		m.Settings.General.ThemePath = path
-		m.ApplyTheme(m.Settings.General.Theme, path)
+		m.Settings.General.ThemePath.Value = path
+		m.ApplyTheme(config.Resolve[int](m.Settings.General.Theme), path)
 		m.filepickerOrigin = FilePickerOriginNone
 		m.state = SettingsState
 		m.resetFilepickerToDirMode()
 		return m, nil
 	case FilePickerOriginSettings:
-		m.Settings.General.DefaultDownloadDir = path
+		m.Settings.General.DefaultDownloadDir.Value = path
 		m.filepickerOrigin = FilePickerOriginNone
 		m.state = SettingsState
 		m.resetFilepickerToDirMode()
@@ -114,7 +114,7 @@ func (m *RootModel) handleFilePickerGotoHome() tea.Cmd {
 	if m.filepickerOrigin == FilePickerOriginTheme {
 		targetDir = config.GetThemesDir()
 	} else {
-		targetDir = m.Settings.General.DefaultDownloadDir
+		targetDir = config.Resolve[string](m.Settings.General.DefaultDownloadDir)
 		if targetDir == "" {
 			homeDir, _ := os.UserHomeDir()
 			targetDir = filepath.Join(homeDir, "Downloads")
@@ -185,10 +185,42 @@ func (m *RootModel) snapshotSettings() {
 	if m.Settings == nil {
 		return
 	}
-	// Shallow copy settings to compare restart-required fields later.
-	// Since Settings is a pointer, we clone the underlying struct.
-	baseline := *m.Settings
-	m.SettingsBaseline = &baseline
+	// Deep clone settings to compare restart-required fields later.
+	m.SettingsBaseline = m.Settings.Clone()
+}
+
+func settingsEqual(s1, s2 *config.Setting) bool {
+	if s1 == nil || s2 == nil {
+		return s1 == s2
+	}
+	// If both are numbers, compare their float64 representations to handle JSON deserialization type differences (int vs float64)
+	switch s1.Type {
+	case "int", "int64", "float64", "duration":
+		var v1, v2 float64
+		switch val := s1.Value.(type) {
+		case int:
+			v1 = float64(val)
+		case int64:
+			v1 = float64(val)
+		case float64:
+			v1 = val
+		case time.Duration:
+			v1 = float64(val)
+		}
+		switch val := s2.Value.(type) {
+		case int:
+			v2 = float64(val)
+		case int64:
+			v2 = float64(val)
+		case float64:
+			v2 = val
+		case time.Duration:
+			v2 = float64(val)
+		}
+		return v1 == v2
+	default:
+		return reflect.DeepEqual(s1.Value, s2.Value)
+	}
 }
 
 func (m *RootModel) checkRestartRequirement() bool {
@@ -209,12 +241,15 @@ func (m *RootModel) checkRestartRequirement() bool {
 
 		catTyp := catField1.Type()
 		for j := 0; j < catTyp.NumField(); j++ {
-			field := catTyp.Field(j)
-			if field.Tag.Get("ui_restart") == "true" {
-				f1 := catField1.Field(j)
-				f2 := catField2.Field(j)
-				if !reflect.DeepEqual(f1.Interface(), f2.Interface()) {
-					return true
+			f1 := catField1.Field(j)
+			f2 := catField2.Field(j)
+			s1, ok1 := f1.Interface().(*config.Setting)
+			s2, ok2 := f2.Interface().(*config.Setting)
+			if ok1 && ok2 && s1 != nil && s2 != nil {
+				if s1.NeedsRestart {
+					if !settingsEqual(s1, s2) {
+						return true
+					}
 				}
 			}
 		}

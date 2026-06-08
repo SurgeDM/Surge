@@ -382,8 +382,8 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 1. Test Extension Prompt Enabled
-	m.Settings.Extension.ExtensionPrompt = true
-	m.Settings.General.WarnOnDuplicate = true
+	m.Settings.Extension.ExtensionPrompt.Value = true
+	m.Settings.General.WarnOnDuplicate.Value = true
 
 	msg := events.DownloadRequestMsg{
 		URL:      "http://example.com/test.zip",
@@ -408,8 +408,8 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 2. Test Duplicate Warning (when prompt disabled but duplicate exists)
-	m.Settings.Extension.ExtensionPrompt = false
-	m.Settings.General.WarnOnDuplicate = true
+	m.Settings.Extension.ExtensionPrompt.Value = false
+	m.Settings.General.WarnOnDuplicate.Value = true
 
 	// Add existing download
 	m.downloads = append(m.downloads, &DownloadModel{
@@ -425,8 +425,8 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	}
 
 	// 3. Test No Prompt (Direct Download)
-	m.Settings.Extension.ExtensionPrompt = false
-	m.Settings.General.WarnOnDuplicate = true
+	m.Settings.Extension.ExtensionPrompt.Value = false
+	m.Settings.General.WarnOnDuplicate.Value = true
 	m.downloads = nil // Clear downloads
 
 	// Note: startDownload triggers a command (tea.Cmd), and might update state or lists.
@@ -439,6 +439,103 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	// Should remain in DashboardState (default) or whatever it was
 	if newRoot.state == ExtensionConfirmationState || newRoot.state == DuplicateWarningState {
 		t.Errorf("Expected no prompt state, got %v", newRoot.state)
+	}
+}
+
+func TestUpdate_DownloadRequestMsg_QueuesWhileConfirmationActive(t *testing.T) {
+	m := RootModel{
+		Settings:    config.DefaultSettings(),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
+		list:        NewDownloadList(40, 10),
+		inputs:      []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
+		keys:        Keys,
+	}
+	m.Settings.Extension.ExtensionPrompt.Value = true
+
+	first := events.DownloadRequestMsg{
+		URL:      "https://example.com/first.zip",
+		Filename: "first.zip",
+		Path:     "/tmp/downloads",
+	}
+	second := events.DownloadRequestMsg{
+		URL:      "https://example.com/second.zip",
+		Filename: "second.zip",
+		Path:     "/tmp/downloads",
+	}
+
+	updated, _ := m.Update(first)
+	root := updated.(RootModel)
+	updated, _ = root.Update(second)
+	root = updated.(RootModel)
+
+	if root.state != ExtensionConfirmationState {
+		t.Fatalf("expected ExtensionConfirmationState, got %v", root.state)
+	}
+	if root.pendingURL != first.URL {
+		t.Fatalf("pendingURL was overwritten: got %q, want %q", root.pendingURL, first.URL)
+	}
+	if len(root.pendingRequestQueue) != 1 || root.pendingRequestQueue[0].URL != second.URL {
+		t.Fatalf("expected second request queued, got %#v", root.pendingRequestQueue)
+	}
+
+	updated, _ = root.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	root = updated.(RootModel)
+	if root.state != ExtensionConfirmationState {
+		t.Fatalf("expected queued request to become active, got state %v", root.state)
+	}
+	if root.pendingURL != second.URL {
+		t.Fatalf("expected queued URL %q to become pending, got %q", second.URL, root.pendingURL)
+	}
+}
+
+func TestUpdate_BatchDownloadRequestMsg_QueuesWhileConfirmationActive(t *testing.T) {
+	m := RootModel{
+		Settings:    config.DefaultSettings(),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
+		list:        NewDownloadList(40, 10),
+		inputs:      []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
+		keys:        Keys,
+	}
+	m.Settings.Extension.ExtensionPrompt.Value = true
+
+	first := events.DownloadRequestMsg{
+		URL:      "https://example.com/first.zip",
+		Filename: "first.zip",
+		Path:     "/tmp/downloads",
+	}
+	batch := events.BatchDownloadRequestMsg{
+		Path: "/tmp/batch",
+		Requests: []events.DownloadRequestMsg{
+			{URL: "https://example.com/one.zip", Path: "/tmp/batch"},
+			{URL: "https://example.com/two.zip", Path: "/tmp/batch"},
+		},
+	}
+
+	updated, _ := m.Update(first)
+	root := updated.(RootModel)
+	updated, _ = root.Update(batch)
+	root = updated.(RootModel)
+
+	if root.state != ExtensionConfirmationState {
+		t.Fatalf("expected active single confirmation to remain, got %v", root.state)
+	}
+	if root.pendingURL != first.URL {
+		t.Fatalf("pendingURL was overwritten: got %q, want %q", root.pendingURL, first.URL)
+	}
+	if len(root.pendingBatchRequestQueue) != 1 {
+		t.Fatalf("expected batch request queued, got %d", len(root.pendingBatchRequestQueue))
+	}
+
+	updated, _ = root.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	root = updated.(RootModel)
+	if root.state != BatchConfirmState {
+		t.Fatalf("expected queued batch to become active, got state %v", root.state)
+	}
+	if len(root.pendingBatchRequests) != 2 {
+		t.Fatalf("expected 2 pending batch requests, got %d", len(root.pendingBatchRequests))
+	}
+	if root.pendingURL != first.URL {
+		t.Fatalf("queued batch should not mutate abandoned single fields, got pendingURL %q", root.pendingURL)
 	}
 }
 

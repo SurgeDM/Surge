@@ -10,6 +10,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/events"
@@ -77,6 +78,30 @@ func (s *httpAPITestService) Publish(interface{}) error {
 	return nil
 }
 
+type publishRecordingHTTPService struct {
+	*httpAPITestService
+	published []interface{}
+}
+
+func (s *publishRecordingHTTPService) Publish(msg interface{}) error {
+	s.published = append(s.published, msg)
+	return nil
+}
+
+type batchAddRecordingService struct {
+	*httpAPITestService
+	added  []string
+	failOn string
+}
+
+func (s *batchAddRecordingService) Add(url string, _ string, _ string, _ []string, _ map[string]string, _ bool, _ int64, _ bool) (string, error) {
+	if url == s.failOn {
+		return "", errors.New("enqueue failed")
+	}
+	s.added = append(s.added, url)
+	return "id-" + url, nil
+}
+
 func (s *httpAPITestService) GetStatus(id string) (*types.DownloadStatus, error) {
 	if s.getStatusErr != nil {
 		return nil, s.getStatusErr
@@ -110,7 +135,7 @@ func TestEnsureOpenActionRequestAllowed_RemoteToggle(t *testing.T) {
 	}
 
 	globalSettings = config.DefaultSettings()
-	globalSettings.General.AllowRemoteOpenActions = true
+	globalSettings.General.AllowRemoteOpenActions.Value = true
 	if err := ensureOpenActionRequestAllowed(request); err != nil {
 		t.Fatalf("expected remote open action to be allowed when enabled, got: %v", err)
 	}
@@ -206,6 +231,98 @@ func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 	}
 	if !strings.Contains(text, `"DownloadID":"queue-1"`) {
 		t.Fatalf("expected queued payload in SSE body, got %q", text)
+	}
+}
+
+func TestHandleBatchDownload_ConfirmPublishesSingleBatchRequest(t *testing.T) {
+	previousProgram := serverProgram
+	serverProgram = &tea.Program{}
+	t.Cleanup(func() {
+		serverProgram = previousProgram
+	})
+
+	service := &publishRecordingHTTPService{
+		httpAPITestService: &httpAPITestService{},
+	}
+	body := `{
+		"path": "/tmp/downloads",
+		"skip_approval": false,
+		"downloads": [
+			{"url": "https://example.com/one.zip"},
+			{"url": "https://example.com/two.zip"}
+		]
+	}`
+	request := httptest.NewRequest(http.MethodPost, "/download/batch", strings.NewReader(body))
+	recorder := httptest.NewRecorder()
+
+	handleBatchDownload(recorder, request, "", service)
+
+	if recorder.Code != http.StatusAccepted {
+		t.Fatalf("expected status 202, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if len(service.published) != 1 {
+		t.Fatalf("expected 1 published message, got %d", len(service.published))
+	}
+	msg, ok := service.published[0].(events.BatchDownloadRequestMsg)
+	if !ok {
+		t.Fatalf("expected BatchDownloadRequestMsg, got %T", service.published[0])
+	}
+	if len(msg.Requests) != 2 {
+		t.Fatalf("expected 2 batch requests, got %d", len(msg.Requests))
+	}
+	if msg.Requests[0].URL != "https://example.com/one.zip" || msg.Requests[1].URL != "https://example.com/two.zip" {
+		t.Fatalf("unexpected batch URLs: %#v", msg.Requests)
+	}
+}
+
+func TestHandleBatchDownload_SkipApprovalReportsPartialFailure(t *testing.T) {
+	previousLifecycle := GlobalLifecycle
+	previousCleanup := GlobalLifecycleCleanup
+	t.Cleanup(func() {
+		GlobalLifecycle = previousLifecycle
+		GlobalLifecycleCleanup = previousCleanup
+	})
+	GlobalLifecycle = nil
+	GlobalLifecycleCleanup = nil
+
+	service := &batchAddRecordingService{
+		httpAPITestService: &httpAPITestService{},
+		failOn:             "https://example.com/two.zip",
+	}
+	body := `{
+		"path": "/tmp/downloads",
+		"skip_approval": true,
+		"downloads": [
+			{"url": "https://example.com/one.zip"},
+			{"url": "https://example.com/two.zip"},
+			{"url": "https://example.com/three.zip"}
+		]
+	}`
+	request := httptest.NewRequest(http.MethodPost, "/download/batch", strings.NewReader(body))
+	recorder := httptest.NewRecorder()
+
+	handleBatchDownload(recorder, request, "", service)
+
+	if recorder.Code != http.StatusMultiStatus {
+		t.Fatalf("expected status 207, got %d: %s", recorder.Code, recorder.Body.String())
+	}
+	if len(service.added) != 2 {
+		t.Fatalf("expected 2 queued downloads, got %d: %#v", len(service.added), service.added)
+	}
+
+	var response struct {
+		Status   string              `json:"status"`
+		Count    int                 `json:"count"`
+		Failures []map[string]string `json:"failures"`
+	}
+	if err := json.Unmarshal(recorder.Body.Bytes(), &response); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if response.Status != "partial" || response.Count != 2 || len(response.Failures) != 1 {
+		t.Fatalf("unexpected partial response: %#v", response)
+	}
+	if response.Failures[0]["url"] != "https://example.com/two.zip" {
+		t.Fatalf("unexpected failed URL: %#v", response.Failures)
 	}
 }
 
@@ -380,8 +497,54 @@ func TestEnsureOpenActionRequestAllowed_ForwardedLoopbackDenied(t *testing.T) {
 	}
 
 	globalSettings = config.DefaultSettings()
-	globalSettings.General.AllowRemoteOpenActions = true
+	globalSettings.General.AllowRemoteOpenActions.Value = true
 	if err := ensureOpenActionRequestAllowed(request); err != nil {
 		t.Fatalf("expected forwarded loopback request to be allowed when enabled, got: %v", err)
+	}
+}
+
+// recordingActionService records the id passed to each lifecycle action so
+// tests can assert how the CLI delivered it to the HTTP API.
+type recordingActionService struct {
+	*httpAPITestService
+	ids map[string]string // action -> received id
+}
+
+func (s *recordingActionService) Pause(id string) error  { s.ids["pause"] = id; return nil }
+func (s *recordingActionService) Resume(id string) error { s.ids["resume"] = id; return nil }
+func (s *recordingActionService) Delete(id string) error { s.ids["delete"] = id; return nil }
+
+// Regression for #456: ExecuteAPIAction sent the download id as a path segment
+// (e.g. POST /pause/<id>), but the HTTP API registers exact routes and reads the
+// id from the "id" query parameter (withRequiredID), so pause/resume/delete/open
+// 404'd against a remote daemon. The id must be sent as ?id=. Exercise every
+// ExecuteAPIAction caller (pause/resume/delete), not just one, so a future
+// action-specific regression is caught.
+func TestExecuteAPIAction_SendsIDAsQueryParam(t *testing.T) {
+	rec := &recordingActionService{httpAPITestService: &httpAPITestService{}, ids: map[string]string{}}
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", rec)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	prevHost, prevToken := globalHost, globalToken
+	globalHost, globalToken = "", ""
+	defer func() { globalHost, globalToken = prevHost, prevToken }()
+	t.Setenv("SURGE_HOST", server.URL)
+	t.Setenv("SURGE_TOKEN", "test-token")
+
+	// 32 chars so resolveDownloadID treats it as a full id (no server lookup).
+	const fullID = "abcdef0123456789abcdef0123456789"
+	for _, action := range []struct{ name, endpoint string }{
+		{"pause", "/pause"},
+		{"resume", "/resume"},
+		{"delete", "/delete"},
+	} {
+		if err := ExecuteAPIAction(fullID, action.endpoint, http.MethodPost, action.name); err != nil {
+			t.Fatalf("ExecuteAPIAction(%s): id should reach %s via ?id=, got error: %v", action.name, action.endpoint, err)
+		}
+		if rec.ids[action.name] != fullID {
+			t.Fatalf("%s: server received id %q via query param, want %q", action.name, rec.ids[action.name], fullID)
+		}
 	}
 }

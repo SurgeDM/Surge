@@ -20,6 +20,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/core"
+	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
@@ -172,8 +173,11 @@ type RootModel struct {
 	searchQuery  string          // Current search query
 
 	// Batch import
-	pendingBatchURLs []string // URLs pending batch import
-	batchFilePath    string   // Path to the batch file
+	pendingBatchURLs         []string // URLs pending batch import
+	pendingBatchRequests     []events.DownloadRequestMsg
+	pendingRequestQueue      []events.DownloadRequestMsg
+	pendingBatchRequestQueue []events.BatchDownloadRequestMsg
+	batchFilePath            string // Path to the batch file
 
 	// URL Refresh
 	urlUpdateInput textinput.Model // Text input for updating URL
@@ -316,10 +320,10 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 
 	// Override AutoResume if CLI flag provided
 	if noResume {
-		settings.General.AutoResume = false
+		settings.General.AutoResume.Value = false
 	}
 
-	applyColorModeForTheme(settings.General.Theme, settings.General.ThemePath, initialDarkBackground)
+	applyColorModeForTheme(config.Resolve[int](settings.General.Theme), config.Resolve[string](settings.General.ThemePath), initialDarkBackground)
 
 	// Load paused downloads from master list (now uses global config directory)
 	var downloads []*DownloadModel
@@ -353,7 +357,7 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 					dm.pausing = true
 					dm.started = true
 				case "paused":
-					if settings.General.AutoResume {
+					if config.Resolve[bool](settings.General.AutoResume) {
 						dm.resuming = true
 						dm.paused = true // Will update when resume event received
 					} else {
@@ -511,7 +515,7 @@ func (m RootModel) Init() tea.Cmd {
 	cmds = append(cmds, m.spinner.Tick)
 
 	// Trigger update check if not disabled in settings
-	if !m.Settings.General.SkipUpdateCheck {
+	if !config.Resolve[bool](m.Settings.General.SkipUpdateCheck) {
 		cmds = append(cmds, checkForUpdateCmd(m.CurrentVersion))
 	}
 
@@ -588,7 +592,7 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 		}
 
 		// Apply dashboard category filter.
-		if m.categoryFilter != "" && m.Settings != nil && m.Settings.Categories.CategoryEnabled {
+		if m.categoryFilter != "" && m.Settings != nil && config.Resolve[bool](m.Settings.Categories.CategoryEnabled) {
 			if !m.matchesCategoryFilter(d) {
 				continue
 			}
