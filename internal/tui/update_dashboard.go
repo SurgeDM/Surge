@@ -259,6 +259,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.SettingsActiveTab = 0
 		m.SettingsSelectedRow = 0
 		m.SettingsIsEditing = false
+		m.SettingsFocusedPane = 1
 		return m, nil
 	}
 
