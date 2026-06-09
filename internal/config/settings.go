@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"time"
@@ -313,6 +314,16 @@ func GetSettingsPath() string {
 // LoadSettings loads settings from disk. Returns defaults if file doesn't exist
 // or if the JSON is corrupt, so the application can always start.
 func LoadSettings() (*Settings, error) {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.modified" && setting.Value == "true" {
+				// Delete settings.json if git is dirty in build
+				_ = os.Remove(GetSettingsPath())
+				break
+			}
+		}
+	}
+
 	path := GetSettingsPath()
 
 	data, err := os.ReadFile(path)
