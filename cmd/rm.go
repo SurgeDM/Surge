@@ -42,4 +42,5 @@ var rmCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(rmCmd)
 	rmCmd.Flags().Bool("clean", false, "Remove all completed downloads")
+	rmCmd.Flags().Bool("clean-failed", false, "Remove all failed downloads")
 }
