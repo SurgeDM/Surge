@@ -15,6 +15,96 @@ import (
 var openBugReportBrowser = utils.OpenBrowser
 var writeBugReportClipboard = clipboard.Write
 
+func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.speedLimitsIsEditing {
+		if key.Matches(msg, m.keys.Input.Enter) {
+			// Save
+			value := m.SettingsInput.Value()
+			metaList := m.getSpeedLimitsMetadata()
+			if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
+				meta := metaList[m.speedLimitsCursor]
+				if err := m.setSpeedLimitValue(meta.Key, value); err != nil {
+					m.addLogEntry(LogStyleError.Render("✖ Invalid rate limit: " + err.Error()))
+				} else {
+					m.addLogEntry(LogStyleComplete.Render("✔ Speed limit updated: " + meta.Label))
+				}
+			}
+			m.speedLimitsIsEditing = false
+			m.SettingsInput.Blur()
+			return m, nil
+		}
+		if key.Matches(msg, m.keys.Input.Esc) {
+			m.speedLimitsIsEditing = false
+			m.SettingsInput.Blur()
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.SettingsInput, cmd = m.SettingsInput.Update(msg)
+		return m, cmd
+	}
+
+	if key.Matches(msg, m.keys.SpeedLimits.Close) {
+		m.state = DashboardState
+		return m, nil
+	}
+	
+	metaList := m.getSpeedLimitsMetadata()
+	
+	if key.Matches(msg, m.keys.SpeedLimits.Up) {
+		m.speedLimitsCursor--
+		if m.speedLimitsCursor < 0 {
+			m.speedLimitsCursor = 0
+		}
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.SpeedLimits.Down) {
+		m.speedLimitsCursor++
+		if m.speedLimitsCursor >= len(metaList) {
+			m.speedLimitsCursor = len(metaList) - 1
+		}
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.SpeedLimits.Edit) {
+		if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
+			meta := metaList[m.speedLimitsCursor]
+			values := m.getSpeedLimitsValues()
+			val := values[meta.Key]
+			
+			var valStr string
+			if vStr, ok := val.(string); ok {
+				valStr = vStr
+			} else {
+				valStr = fmt.Sprintf("%v", val)
+			}
+			// Don't prefix with "inherit" or "≈" in the edit input
+			if strings.HasPrefix(valStr, "inherit") {
+				valStr = "inherit"
+			} else if strings.HasPrefix(valStr, "explicit 0") {
+				valStr = "0"
+			}
+			
+			m.speedLimitsIsEditing = true
+			m.SettingsInput.SetValue(valStr)
+			m.SettingsInput.Focus()
+			m.SettingsInput.CursorEnd()
+		}
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.SpeedLimits.Reset) {
+		if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
+			meta := metaList[m.speedLimitsCursor]
+			if err := m.resetSpeedLimitToDefault(meta.Key, config.DefaultSettings()); err != nil {
+				m.addLogEntry(LogStyleError.Render("✖ Reset failed: " + err.Error()))
+			} else {
+				m.addLogEntry(LogStyleComplete.Render("✔ Reset to default: " + meta.Label))
+			}
+		}
+		return m, nil
+	}
+
+	return m, nil
+}
+
 func (m RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Duplicate.Continue) {
 		// Continue anyway - startDownload handles unique filename generation

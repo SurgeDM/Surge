@@ -1,8 +1,12 @@
 package tui
 
 import (
+	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -92,7 +96,6 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.keys.Settings.Tab3,
 		m.keys.Settings.Tab4,
 		m.keys.Settings.Tab5,
-		m.keys.Settings.Tab6,
 	}
 	for i, binding := range tabBindings {
 		if key.Matches(msg, binding) {

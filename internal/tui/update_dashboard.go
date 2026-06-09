@@ -265,18 +265,10 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg, m.keys.Dashboard.SpeedLimits) {
 		m.snapshotSettings()
-		m.state = SettingsState
-		categories := config.CategoryOrder()
-		tabIdx := 0
-		for i, cat := range categories {
-			if cat == "Speed Limits" {
-				tabIdx = i
-				break
-			}
-		}
-		m.SettingsActiveTab = tabIdx
-		m.SettingsSelectedRow = 0
-		m.SettingsIsEditing = false
+		m.state = SpeedLimitsState
+		m.speedLimitsCursor = 0
+		m.speedLimitsIsEditing = false
+		m.SettingsInput.SetValue("")
 		return m, nil
 	}
 

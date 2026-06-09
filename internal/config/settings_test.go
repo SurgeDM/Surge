@@ -112,6 +112,22 @@ func TestDefaultSettings_Consistency(t *testing.T) {
 	}
 }
 
+func TestDefaultSettings_Validation(t *testing.T) {
+	settings := DefaultSettings()
+	for _, cat := range settings.CategoriesList {
+		for _, s := range cat.Settings {
+			if s.ValidateFunc != nil {
+				if err := s.ValidateFunc(s.DefaultValue); err != nil {
+					t.Errorf("Validation failed for default value of %s: %v", s.Key, err)
+				}
+				if err := s.ValidateFunc(s.Value); err != nil {
+					t.Errorf("Validation failed for current value of %s: %v", s.Key, err)
+				}
+			}
+		}
+	}
+}
+
 func TestGetSettingsPath(t *testing.T) {
 	path := GetSettingsPath()
 

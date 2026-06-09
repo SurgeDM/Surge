@@ -13,8 +13,8 @@ import (
 
 // GraphStats contains the statistics to overlay on the graph
 type GraphStats struct {
-	DownloadSpeed float64 // Current download speed in MB/s
-	DownloadTop   float64 // Top download speed in MB/s
+	DownloadSpeed int64 // Current download speed in B/s
+	DownloadTop   int64 // Top download speed in B/s
 	DownloadTotal int64   // Total downloaded bytes
 }
 
@@ -157,21 +157,30 @@ func overlayStatsBox(graph string, stats *GraphStats, width, height int) string 
 	headerStyle := lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true)
 	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray())
 
-	speedMbps := stats.DownloadSpeed * 8
-	topMbps := stats.DownloadTop * 8
+	speedMbps := float64(stats.DownloadSpeed) * 8 / 1000000.0
+	topMbps := float64(stats.DownloadTop) * 8 / 1000000.0
+
+	speedStr := "0 MB/s"
+	if stats.DownloadSpeed > 0 {
+		speedStr = utils.FormatRateLimit(stats.DownloadSpeed)
+	}
+	topStr := "0 MB/s"
+	if stats.DownloadTop > 0 {
+		topStr = utils.FormatRateLimit(stats.DownloadTop)
+	}
 
 	// Compact stats box like btop
 	statsLines := []string{
 		headerStyle.Render("download"),
 		fmt.Sprintf("%s %s  %s",
 			valueStyle.Render("\u25bc"),
-			valueStyle.Render(fmt.Sprintf("%.2f MB/s", stats.DownloadSpeed)),
+			valueStyle.Render(speedStr),
 			dimStyle.Render(fmt.Sprintf("(%.0f Mbps)", speedMbps)),
 		),
 		fmt.Sprintf("%s %s %s  %s",
 			labelStyle.Render("\u25bc"),
 			labelStyle.Render("Top:"),
-			valueStyle.Render(fmt.Sprintf("%.2f MB/s", stats.DownloadTop)),
+			valueStyle.Render(topStr),
 			dimStyle.Render(fmt.Sprintf("(%.0f Mbps)", topMbps)),
 		),
 		fmt.Sprintf("%s %s %s",

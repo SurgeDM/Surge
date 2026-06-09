@@ -31,6 +31,13 @@ func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.urlUpdateInput, cmd = m.urlUpdateInput.Update(msg)
 		return m, cmd
+	case SpeedLimitsState:
+		if m.speedLimitsIsEditing {
+			var cmd tea.Cmd
+			m.SettingsInput, cmd = m.SettingsInput.Update(msg)
+			return m, cmd
+		}
+		return m, nil
 	case SettingsState:
 		if m.SettingsIsEditing {
 			var cmd tea.Cmd
@@ -238,6 +245,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case BatchConfirmState:
 			return m.updateBatchConfirm(msg)
+
+		case SpeedLimitsState:
+			return m.updateSpeedLimits(msg)
 
 		case SettingsState:
 			return m.updateSettings(msg)

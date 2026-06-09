@@ -16,6 +16,7 @@ type KeyMap struct {
 	BugReport      BugReportKeyMap
 	CategoryMgr    CategoryManagerKeyMap
 	QuitConfirm    QuitConfirmKeyMap
+	SpeedLimits    SpeedLimitsKeyMap
 }
 
 // DashboardKeyMap defines keybindings for the main dashboard
@@ -152,6 +153,15 @@ type CategoryManagerKeyMap struct {
 	Toggle key.Binding // toggle enable/disable
 	Tab    key.Binding
 	Close  key.Binding
+}
+
+// SpeedLimitsKeyMap defines keybindings for speed limits
+type SpeedLimitsKeyMap struct {
+	Up    key.Binding
+	Down  key.Binding
+	Edit  key.Binding
+	Reset key.Binding
+	Close key.Binding
 }
 
 // Keys contains all the keybindings for the application
@@ -496,6 +506,40 @@ var Keys = KeyMap{
 			key.WithHelp("n/esc", "cancel"),
 		),
 	},
+	SpeedLimits: SpeedLimitsKeyMap{
+		Up: key.NewBinding(
+			key.WithKeys("up"),
+			key.WithHelp("↑", "up"),
+		),
+		Down: key.NewBinding(
+			key.WithKeys("down"),
+			key.WithHelp("↓", "down"),
+		),
+		Edit: key.NewBinding(
+			key.WithKeys("enter"),
+			key.WithHelp("enter", "edit"),
+		),
+		Reset: key.NewBinding(
+			key.WithKeys("r"),
+			key.WithHelp("r", "reset"),
+		),
+		Close: key.NewBinding(
+			key.WithKeys("esc"),
+			key.WithHelp("esc", "cancel/close"),
+		),
+	},
+}
+
+// ShortHelp returns keybindings to be shown in the mini help view.
+func (k SpeedLimitsKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Up, k.Down, k.Edit, k.Reset, k.Close}
+}
+
+// FullHelp returns keybindings for the expanded help view.
+func (k SpeedLimitsKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down, k.Edit, k.Reset, k.Close},
+	}
 }
 
 // ShortHelp returns keybindings to show in the mini help view

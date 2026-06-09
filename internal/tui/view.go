@@ -136,6 +136,10 @@ func (m RootModel) View() tea.View {
 		return m.wrapView(m.viewSettings())
 	}
 
+	if m.state == SpeedLimitsState {
+		return m.wrapView(m.renderModalWithOverlay(m.viewSpeedLimits()))
+	}
+
 	if m.state == CategoryManagerState {
 		return m.wrapView(m.viewCategoryManager())
 	}
@@ -371,15 +375,13 @@ func (m RootModel) View() tea.View {
 	dimSep := lipgloss.NewStyle().Foreground(colors.Gray()).Render(" ｜ ")
 
 	// Global speed indicator
-	speedMBps := m.calcTotalSpeed()
+	speedBps := m.calcTotalSpeedBps()
 	speedGlyph := lipgloss.NewStyle().Foreground(colors.Cyan()).Render("\u2B07")
 	var speedVal string
-	if speedMBps < 0.01 {
-		speedVal = lipgloss.NewStyle().Foreground(colors.Gray()).Render("0 B/s")
-	} else if speedMBps < 1.0 {
-		speedVal = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(fmt.Sprintf("%.0f KB/s", speedMBps*1024))
+	if speedBps <= 0 {
+		speedVal = lipgloss.NewStyle().Foreground(colors.Gray()).Render("0 MB/s")
 	} else {
-		speedVal = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(fmt.Sprintf("%.2f MB/s", speedMBps))
+		speedVal = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(utils.FormatRateLimit(speedBps))
 	}
 	speedChunk := lipgloss.JoinHorizontal(lipgloss.Center, speedGlyph, " ", speedVal)
 
@@ -395,7 +397,7 @@ func (m RootModel) View() tea.View {
 	if limitVal != "" {
 		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", limitVal)
 	} else {
-		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", lipgloss.NewStyle().Foreground(colors.Gray()).Render("\u221E"))
+		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", lipgloss.NewStyle().Foreground(colors.Gray()).Render("0"))
 	}
 
 	// Version indicator
@@ -801,16 +803,17 @@ func getDownloadStatus(d *DownloadModel, spinnerView string) string {
 	return status.RenderWithSpinner(spinnerView)
 }
 
-func (m RootModel) calcTotalSpeed() float64 {
-	total := 0.0
+// calcTotalSpeedBps calculates the sum of all active downloads' speed in bytes per second.
+func (m RootModel) calcTotalSpeedBps() int64 {
+	total := int64(0)
 	for _, d := range m.downloads {
 		// Skip completed downloads
 		if d.done {
 			continue
 		}
-		total += d.Speed
+		total += int64(d.Speed)
 	}
-	return total / float64(config.MB)
+	return total
 }
 
 func (m RootModel) ComputeViewStats() ViewStats {

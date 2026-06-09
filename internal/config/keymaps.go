@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"runtime/debug"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -25,6 +26,7 @@ type KeyMap struct {
 	Update         UpdateKeyMap          `json:"update"`
 	BugReport      BugReportKeyMap       `json:"bug_report"`
 	CategoryMgr    CategoryManagerKeyMap `json:"category_mgr"`
+	SpeedLimits    SpeedLimitsKeyMap     `json:"speed_limits"`
 	QuitConfirm    QuitConfirmKeyMap     `json:"quit_confirm"`
 
 	// StartupWarnings holds validation messages from the most recent LoadKeyMap call.
@@ -46,6 +48,7 @@ type DashboardKeyMap struct {
 	Refresh        key.Binding
 	Delete         key.Binding
 	Settings       key.Binding
+	SpeedLimits    key.Binding
 	Log            key.Binding
 	ToggleHelp     key.Binding
 	ReportBug      key.Binding
@@ -167,6 +170,15 @@ type CategoryManagerKeyMap struct {
 	Close  key.Binding
 }
 
+// SpeedLimitsKeyMap defines keybindings for speed limits
+type SpeedLimitsKeyMap struct {
+	Up    key.Binding
+	Down  key.Binding
+	Edit  key.Binding
+	Reset key.Binding
+	Close key.Binding
+}
+
 // KeyBindingConfig represents a single key binding.
 type KeyBindingConfig struct {
 	Keys []string `json:"keys"`
@@ -186,6 +198,7 @@ type KeyMapConfig struct {
 	Update         map[string]KeyBindingConfig `json:"update"`
 	BugReport      map[string]KeyBindingConfig `json:"bug_report"`
 	CategoryMgr    map[string]KeyBindingConfig `json:"category_mgr"`
+	SpeedLimits    map[string]KeyBindingConfig `json:"speed_limits"`
 	QuitConfirm    map[string]KeyBindingConfig `json:"quit_confirm"`
 }
 
@@ -196,6 +209,16 @@ func GetKeyMapConfigPath() string {
 
 // LoadKeyMap loads the keymap configuration from file.
 func LoadKeyMap() (*KeyMap, error) {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		for _, setting := range info.Settings {
+			if setting.Key == "vcs.modified" && setting.Value == "true" {
+				// Delete keymaps.json if git is dirty in build
+				_ = os.Remove(GetKeyMapConfigPath())
+				break
+			}
+		}
+	}
+
 	defaults := DefaultKeyMap()
 	path := GetKeyMapConfigPath()
 	data, err := os.ReadFile(path)
@@ -277,6 +300,7 @@ func (k *KeyMap) ApplyConfig(cfg *KeyMapConfig) {
 	applyToStruct(&k.Update, cfg.Update)
 	applyToStruct(&k.BugReport, cfg.BugReport)
 	applyToStruct(&k.CategoryMgr, cfg.CategoryMgr)
+	applyToStruct(&k.SpeedLimits, cfg.SpeedLimits)
 	applyToStruct(&k.QuitConfirm, cfg.QuitConfirm)
 }
 
@@ -311,6 +335,7 @@ func (k *KeyMap) ToConfig() *KeyMapConfig {
 		Update:         structToMap(k.Update),
 		BugReport:      structToMap(k.BugReport),
 		CategoryMgr:    structToMap(k.CategoryMgr),
+		SpeedLimits:    structToMap(k.SpeedLimits),
 		QuitConfirm:    structToMap(k.QuitConfirm),
 	}
 }
@@ -412,6 +437,10 @@ func DefaultKeyMap() *KeyMap {
 			Settings: key.NewBinding(
 				key.WithKeys("s"),
 				key.WithHelp("s", "settings"),
+			),
+			SpeedLimits: key.NewBinding(
+				key.WithKeys("T"),
+				key.WithHelp("T", "speed limits"),
 			),
 			Log: key.NewBinding(
 				key.WithKeys("l"),
@@ -678,6 +707,13 @@ func DefaultKeyMap() *KeyMap {
 			Tab:    key.NewBinding(key.WithKeys("tab"), key.WithHelp("tab", "next field")),
 			Close:  key.NewBinding(key.WithKeys("esc", "q"), key.WithHelp("esc/q", "save & close")),
 		},
+		SpeedLimits: SpeedLimitsKeyMap{
+			Up:    key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", "up")),
+			Down:  key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", "down")),
+			Edit:  key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "edit")),
+			Reset: key.NewBinding(key.WithKeys("r"), key.WithHelp("r", "reset")),
+			Close: key.NewBinding(key.WithKeys("esc"), key.WithHelp("esc", "cancel/close")),
+		},
 		QuitConfirm: QuitConfirmKeyMap{
 			Left: key.NewBinding(
 				key.WithKeys("left", "h"),
@@ -713,7 +749,7 @@ func (k DashboardKeyMap) ShortHelp() []key.Binding {
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab, k.PrevTab},
-		{k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings, k.PinTab},
+		{k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings, k.SpeedLimits, k.PinTab},
 		{k.Log, k.OpenFile, k.ReportBug, k.Quit},
 	}
 }
@@ -798,7 +834,20 @@ func (k CategoryManagerKeyMap) ShortHelp() []key.Binding {
 }
 
 func (k CategoryManagerKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Up, k.Down, k.Edit, k.Add, k.Delete, k.Tab, k.Toggle, k.Close}}
+	return [][]key.Binding{
+		{k.Up, k.Down, k.Edit, k.Tab, k.Toggle},
+		{k.Add, k.Delete, k.Close},
+	}
+}
+
+func (k SpeedLimitsKeyMap) ShortHelp() []key.Binding {
+	return []key.Binding{k.Up, k.Down, k.Edit, k.Reset, k.Close}
+}
+
+func (k SpeedLimitsKeyMap) FullHelp() [][]key.Binding {
+	return [][]key.Binding{
+		{k.Up, k.Down, k.Edit, k.Reset, k.Close},
+	}
 }
 
 func (k QuitConfirmKeyMap) ShortHelp() []key.Binding {

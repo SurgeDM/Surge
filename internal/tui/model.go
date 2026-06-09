@@ -58,6 +58,7 @@ const (
 	BugReportSystemDetailsState
 	BugReportLogPathState
 	CategoryResetConfirmState
+	SpeedLimitsState
 )
 
 type FilePickerOrigin int
@@ -164,6 +165,10 @@ type RootModel struct {
 	SettingsInput         textinput.Model  // Input for editing string/int values
 	settingsError         string           // Current validation error in settings
 	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
+
+	// Speed Limits Modal
+	speedLimitsCursor     int
+	speedLimitsIsEditing  bool
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download

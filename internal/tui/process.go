@@ -55,7 +55,7 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 
 	// Update speed graph history with EMA smoothing for smooth transitions
 	if time.Since(m.lastSpeedHistoryUpdate) >= GraphUpdateInterval {
-		totalSpeed := m.calcTotalSpeed()
+		totalSpeed := float64(m.calcTotalSpeedBps())
 		// EMA smooth against previous graph point for visual continuity
 		var smoothed float64
 		if m.Settings != nil && config.Resolve[bool](m.Settings.General.LiveSpeedGraph) {

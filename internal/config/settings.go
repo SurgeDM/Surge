@@ -379,7 +379,13 @@ var categoryOrder = []string{"General", "Network", "Performance", "Categories", 
 
 // CategoryOrder returns the display order of settings categories.
 func CategoryOrder() []string {
-	return []string{"General", "Network", "Speed Limits", "Performance", "Categories", "Extension"}
+	return []string{
+		"General",
+		"Network",
+		"Performance",
+		"Categories",
+		"Extension",
+	}
 }
 
 const (
@@ -737,10 +743,10 @@ func DefaultSettings() *Settings {
 			GlobalRateLimit: &Setting{
 				Key:          "global_rate_limit",
 				Label:        "Global Rate Limit",
-				Description:  "Cap total download bandwidth (e.g., 10MB/s, 80Mbps). Use 0 or \"unlimited\" to disable.",
+				Description:  "Cap total download bandwidth (e.g., 10MB/s, 80Mbps). Use 0 to disable.",
 				Type:         "string",
-				DefaultValue: "unlimited",
-				Value:        "unlimited",
+				DefaultValue: "0",
+				Value:        "0",
 				ValidateFunc: func(val any) error {
 					_, err := utils.ParseRateLimitValue(val)
 					return err
@@ -749,10 +755,10 @@ func DefaultSettings() *Settings {
 			DefaultDownloadRateLimit: &Setting{
 				Key:          "default_download_rate_limit",
 				Label:        "Default Download Rate Limit",
-				Description:  "Default cap per download (e.g., 2MB/s). Use 0 or \"unlimited\" to disable.",
+				Description:  "Default cap per download (e.g., 2MB/s). Use 0 to disable.",
 				Type:         "string",
-				DefaultValue: "unlimited",
-				Value:        "unlimited",
+				DefaultValue: "0",
+				Value:        "0",
 				ValidateFunc: func(val any) error {
 					_, err := utils.ParseRateLimitValue(val)
 					return err
