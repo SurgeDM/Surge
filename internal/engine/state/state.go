@@ -655,6 +655,21 @@ func RemoveCompletedDownloads() (int64, error) {
 	return count, nil
 }
 
+func RemoveFailedDownloads() (int64, error) {
+	db := getDBHelper()
+	if db == nil {
+		return 0, fmt.Errorf("database not initialised")
+	}
+
+	result, err := db.Exec("DELETE FROM downloads WHERE status = 'failed'")
+	if err != nil {
+		return 0, fmt.Errorf("failed to remove failed downloads")
+	}
+
+	count, _ := result.RowsAffected()
+	return count, nil
+}
+
 // LoadStates loads multiple download states from SQLite in batch
 func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 	if len(ids) == 0 {
