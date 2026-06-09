@@ -120,6 +120,14 @@ func (s *httpAPITestService) Shutdown() error {
 	return nil
 }
 
+func (s *httpAPITestService) ClearCompleted() (int64, error) {
+	return 0, nil
+}
+
+func (s *httpAPITestService) ClearFailed() (int64, error) {
+	return 0, nil
+}
+
 func TestEnsureOpenActionRequestAllowed_RemoteToggle(t *testing.T) {
 	original := globalSettings
 	t.Cleanup(func() {

@@ -72,6 +72,14 @@ func (s *countingLifecycleService) StreamEvents(context.Context) (<-chan interfa
 	return ch, cleanup, nil
 }
 
+func (s *countingLifecycleService) ClearCompleted() (int64, error) {
+	return 0, nil
+}
+
+func (s *countingLifecycleService) ClearFailed() (int64, error) {
+	return 0, nil
+}
+
 func TestBuildActiveDownloadChecker(t *testing.T) {
 	getAll := func() []types.DownloadConfig {
 		state := types.NewProgressState("dl-2", 0)

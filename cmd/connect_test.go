@@ -64,6 +64,10 @@ func (f *fakeRemoteDownloadService) GetStatus(id string) (*types.DownloadStatus,
 
 func (f *fakeRemoteDownloadService) Shutdown() error { return nil }
 
+func (f *fakeRemoteDownloadService) ClearCompleted() (int64, error) { return 0, nil }
+
+func (f *fakeRemoteDownloadService) ClearFailed() (int64, error) { return 0, nil }
+
 func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
 	m := newRemoteRootModel("https://example.com:1700", nil)
 
