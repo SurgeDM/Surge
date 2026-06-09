@@ -928,5 +928,3 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 	}
 	return nil
 }
-
-

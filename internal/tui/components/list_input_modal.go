@@ -87,7 +87,7 @@ func (m ListInputModal) RenderWithBtopBox(
 	helpStyle := lipgloss.NewStyle().
 		Foreground(colors.Gray()).
 		Width(innerWidth) // Left aligned by default, which fits the design better
-	
+
 	var helpText string
 	if m.HelpKeys != nil {
 		helpText = helpStyle.Render(m.Help.View(m.HelpKeys))

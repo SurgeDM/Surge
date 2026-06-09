@@ -24,10 +24,10 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
 				meta := metaList[m.speedLimitsCursor]
 				if err := m.setSpeedLimitValue(meta.Key, value); err != nil {
-					m.addLogEntry(LogStyleError.Render("✖ Invalid rate limit: " + err.Error()))
-				} else {
-					m.addLogEntry(LogStyleComplete.Render("✔ Speed limit updated: " + meta.Label))
+					m.addLogEntry(LogStyleError.Render("\u2716 Invalid rate limit: " + err.Error()))
+					return m, nil
 				}
+				m.addLogEntry(LogStyleComplete.Render("\u2714 Speed limit updated: " + meta.Label))
 			}
 			m.speedLimitsIsEditing = false
 			m.SettingsInput.Blur()
@@ -47,9 +47,9 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.state = DashboardState
 		return m, nil
 	}
-	
+
 	metaList := m.getSpeedLimitsMetadata()
-	
+
 	if key.Matches(msg, m.keys.SpeedLimits.Up) {
 		m.speedLimitsCursor--
 		if m.speedLimitsCursor < 0 {
@@ -69,7 +69,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			meta := metaList[m.speedLimitsCursor]
 			values := m.getSpeedLimitsValues()
 			val := values[meta.Key]
-			
+
 			var valStr string
 			if vStr, ok := val.(string); ok {
 				valStr = vStr
@@ -82,7 +82,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			} else if strings.HasPrefix(valStr, "explicit 0") {
 				valStr = "0"
 			}
-			
+
 			m.speedLimitsIsEditing = true
 			m.SettingsInput.SetValue(valStr)
 			m.SettingsInput.Focus()

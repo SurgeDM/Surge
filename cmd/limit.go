@@ -71,19 +71,29 @@ func runLimitCommand(cmd *cobra.Command, args []string) error {
 	rate := int64(0)
 	switch {
 	case globalLimit:
-		rate, err = utils.ParseRateLimit(speedArg)
-		if err != nil {
-			return err
+		if strings.EqualFold(strings.TrimSpace(speedArg), "unlimited") {
+			rate = 0
+			success = "Set global speed limit to unlimited"
+		} else {
+			rate, err = utils.ParseRateLimit(speedArg)
+			if err != nil {
+				return err
+			}
+			success = fmt.Sprintf("Set global speed limit to %s", utils.FormatRateLimit(rate))
 		}
 		path = fmt.Sprintf("/rate-limit/global?rate=%d", rate)
-		success = fmt.Sprintf("Set global speed limit to %s", utils.FormatRateLimit(rate))
 	case defaultLimit:
-		rate, err = utils.ParseRateLimit(speedArg)
-		if err != nil {
-			return err
+		if strings.EqualFold(strings.TrimSpace(speedArg), "unlimited") {
+			rate = 0
+			success = "Set default download speed limit to unlimited"
+		} else {
+			rate, err = utils.ParseRateLimit(speedArg)
+			if err != nil {
+				return err
+			}
+			success = fmt.Sprintf("Set default download speed limit to %s", utils.FormatRateLimit(rate))
 		}
 		path = fmt.Sprintf("/rate-limit/default?rate=%d", rate)
-		success = fmt.Sprintf("Set default download speed limit to %s", utils.FormatRateLimit(rate))
 	default:
 		id, err := resolveDownloadID(args[0])
 		if err != nil {
@@ -92,6 +102,9 @@ func runLimitCommand(cmd *cobra.Command, args []string) error {
 		if strings.EqualFold(strings.TrimSpace(speedArg), "inherit") || strings.EqualFold(strings.TrimSpace(speedArg), "default") {
 			path = fmt.Sprintf("/rate-limit?id=%s&inherit=true", url.QueryEscape(id))
 			success = fmt.Sprintf("Set speed limit for %s to inherit the default", id)
+		} else if strings.EqualFold(strings.TrimSpace(speedArg), "unlimited") {
+			path = fmt.Sprintf("/rate-limit?id=%s&rate=0", url.QueryEscape(id))
+			success = fmt.Sprintf("Set speed limit for %s to unlimited", id)
 		} else {
 			rate, err = utils.ParseRateLimit(speedArg)
 			if err != nil {

@@ -448,7 +448,7 @@ func TestUpdate_DownloadRequestMsg_QueuesWhileConfirmationActive(t *testing.T) {
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 		list:        NewDownloadList(40, 10),
 		inputs:      []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
-		keys:        Keys,
+		keys:        config.DefaultKeyMap(),
 	}
 	m.Settings.Extension.ExtensionPrompt.Value = true
 
@@ -494,7 +494,7 @@ func TestUpdate_BatchDownloadRequestMsg_QueuesWhileConfirmationActive(t *testing
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 		list:        NewDownloadList(40, 10),
 		inputs:      []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
-		keys:        Keys,
+		keys:        config.DefaultKeyMap(),
 	}
 	m.Settings.Extension.ExtensionPrompt.Value = true
 
@@ -551,7 +551,7 @@ func TestStartDownload_UsesProvidedIDWhenServiceSupportsIt(t *testing.T) {
 		Settings: config.DefaultSettings(),
 		Service:  svc,
 		list:     NewDownloadList(80, 20),
-		keys:     Keys,
+		keys:     config.DefaultKeyMap(),
 		inputs:   []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
 	}
 
@@ -723,7 +723,7 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 
 	m := RootModel{
 		state:         DashboardState,
-		keys:          Keys,
+		keys:          config.DefaultKeyMap(),
 		enqueueCtx:    ctx,
 		cancelEnqueue: cancel,
 	}
@@ -756,7 +756,7 @@ func TestUpdate_QuitCancelsEnqueueContext(t *testing.T) {
 func newQuitConfirmModel() RootModel {
 	return RootModel{
 		state: QuitConfirmState,
-		keys:  Keys,
+		keys:  config.DefaultKeyMap(),
 	}
 }
 
@@ -969,7 +969,7 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 		downloads:      []*DownloadModel{dm},
 		list:           NewDownloadList(40, 10),
 		state:          DashboardState,
-		keys:           Keys,
+		keys:           config.DefaultKeyMap(),
 		urlUpdateInput: textinput.New(),
 		Service:        core.NewLocalDownloadServiceWithInput(nil, nil),
 	}
@@ -1033,7 +1033,7 @@ func TestUpdate_AddPathBrowseUsesCurrentPathAndEscReturnsToInput(t *testing.T) {
 		state:        InputState,
 		focusedInput: 2,
 		inputs:       newInputModels(),
-		keys:         Keys,
+		keys:         config.DefaultKeyMap(),
 		PWD:          filepath.Dir(browseDir),
 		Settings:     config.DefaultSettings(),
 	}
@@ -1077,7 +1077,7 @@ func TestUpdate_FilePickerUseDirReturnsToAddInput(t *testing.T) {
 		state:            FilePickerState,
 		focusedInput:     2,
 		inputs:           newInputModels(),
-		keys:             Keys,
+		keys:             config.DefaultKeyMap(),
 		Settings:         config.DefaultSettings(),
 		filepicker:       newFilepicker(browseDir),
 		filepickerOrigin: FilePickerOriginAdd,
@@ -1116,7 +1116,7 @@ func TestUpdate_FilePickerLeftAtRootStaysOpen(t *testing.T) {
 	m := RootModel{
 		state:            FilePickerState,
 		inputs:           newInputModels(),
-		keys:             Keys,
+		keys:             config.DefaultKeyMap(),
 		Settings:         config.DefaultSettings(),
 		filepicker:       newFilepicker(rootDir),
 		filepickerOrigin: FilePickerOriginAdd,

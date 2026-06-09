@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
@@ -51,7 +52,7 @@ func TestUpdateDashboard_DeleteResilience(t *testing.T) {
 		state:     DashboardState,
 		downloads: []*DownloadModel{dm},
 		Service:   svc,
-		keys:      Keys,
+		keys:      config.DefaultKeyMap(),
 		list:      NewDownloadList(80, 20),
 	}
 	m.UpdateListItems()
@@ -78,7 +79,7 @@ func TestUpdateDashboard_DeleteSuccess(t *testing.T) {
 		state:     DashboardState,
 		downloads: []*DownloadModel{dm},
 		Service:   svc,
-		keys:      Keys,
+		keys:      config.DefaultKeyMap(),
 		list:      NewDownloadList(80, 20),
 	}
 	m.UpdateListItems()
@@ -101,7 +102,7 @@ func TestUpdateDashboard_DeleteOtherError(t *testing.T) {
 		state:     DashboardState,
 		downloads: []*DownloadModel{dm},
 		Service:   svc,
-		keys:      Keys,
+		keys:      config.DefaultKeyMap(),
 		list:      NewDownloadList(80, 20),
 	}
 	m.UpdateListItems()

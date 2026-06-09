@@ -167,8 +167,8 @@ type RootModel struct {
 	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
 
 	// Speed Limits Modal
-	speedLimitsCursor     int
-	speedLimitsIsEditing  bool
+	speedLimitsCursor    int
+	speedLimitsIsEditing bool
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download

@@ -67,18 +67,20 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 	}
 
 	if maxSpeed == 0 {
-		maxSpeed = 1.0 // Default scale for empty graph
+		maxSpeed = 1000000.0 // Default scale for empty graph
 	} else {
 		// Add headroom
 		maxSpeed = maxSpeed * GraphHeadroom
-		if maxSpeed < 1.0 {
-			maxSpeed = 1.0
+		if maxSpeed < 1000000.0 {
+			maxSpeed = 1000000.0
 		}
-		if maxSpeed >= 5 {
-			maxSpeed = float64(int((maxSpeed+4.99)/5) * 5)
+		mb := maxSpeed / 1000000.0
+		if mb >= 5 {
+			mb = float64(int((mb+4.99)/5) * 5)
 		} else {
-			maxSpeed = float64(int(maxSpeed + 0.99))
+			mb = float64(int(mb + 0.99))
 		}
+		maxSpeed = mb * 1000000.0
 	}
 
 	buildAxisLines := func(h int, axisStyle lipgloss.Style) []string {

@@ -45,11 +45,11 @@ type DashboardKeyMap struct {
 	Up   key.Binding
 	Down key.Binding
 	// Log Navigation
-	LogUp     key.Binding
-	LogDown   key.Binding
-	LogTop    key.Binding
-	LogBottom key.Binding
-	LogClose  key.Binding
+	LogUp       key.Binding
+	LogDown     key.Binding
+	LogTop      key.Binding
+	LogBottom   key.Binding
+	LogClose    key.Binding
 	SpeedLimits key.Binding
 }
 

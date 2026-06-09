@@ -21,7 +21,7 @@ func newCategoryTestModel(t *testing.T, settings *config.Settings) RootModel {
 		Settings: settings,
 		Service:  svc,
 		list:     NewDownloadList(80, 20),
-		keys:     Keys,
+		keys:     config.DefaultKeyMap(),
 		inputs:   []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
 	}
 }
@@ -146,7 +146,7 @@ func TestUpdate_CategoryManagerEscRemovesNewPlaceholder(t *testing.T) {
 	m := RootModel{
 		state:         CategoryManagerState,
 		Settings:      settings,
-		keys:          Keys,
+		keys:          config.DefaultKeyMap(),
 		catMgrCursor:  1,
 		catMgrEditing: true,
 		catMgrIsNew:   true,

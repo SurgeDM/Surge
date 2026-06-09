@@ -15,7 +15,7 @@ import (
 type GraphStats struct {
 	DownloadSpeed int64 // Current download speed in B/s
 	DownloadTop   int64 // Top download speed in B/s
-	DownloadTotal int64   // Total downloaded bytes
+	DownloadTotal int64 // Total downloaded bytes
 }
 
 // graphColors returns the gradient slice for the graph from the current palette.
