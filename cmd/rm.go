@@ -20,6 +20,7 @@ var rmCmd = &cobra.Command{
 		}
 
 		clean, _ := cmd.Flags().GetBool("clean")
+		clean_failed, _ := cmd.Flags().GetBool("clean-failed")
 
 		if !clean && len(args) == 0 {
 			return fmt.Errorf("provide a download ID or use --clean")
@@ -32,6 +33,13 @@ var rmCmd = &cobra.Command{
 				return fmt.Errorf("error cleaning downloads: %w", err)
 			}
 			fmt.Printf("Removed %d completed downloads.\n", count)
+			return nil
+		} else if clean_failed {
+			count, err := state.RemoveFailedDownloads()
+			if err != nil {
+				return fmt.Errorf("error cleaning failed downloads: %w", err)
+			}
+			fmt.Printf("Removed %d failed downloads.\n", count)
 			return nil
 		}
 
