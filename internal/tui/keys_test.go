@@ -149,8 +149,8 @@ func TestDynamicKeyMapReloading(t *testing.T) {
 		lastConfigCheckTime: time.Now().Add(-2 * time.Second),  // Ensure check triggers
 	}
 
-	if len(m.keys.Dashboard.ToggleHelp.Keys()) != 1 || m.keys.Dashboard.ToggleHelp.Keys()[0] != "/" {
-		t.Errorf("Expected default ToggleHelp key '/', got %v", m.keys.Dashboard.ToggleHelp.Keys())
+	if len(m.keys.Dashboard.ToggleHelp.Keys()) != 1 || m.keys.Dashboard.ToggleHelp.Keys()[0] != "h" {
+		t.Errorf("Expected default ToggleHelp key 'h', got %v", m.keys.Dashboard.ToggleHelp.Keys())
 	}
 
 	// 2. Simulate user editing keymap.json on disk

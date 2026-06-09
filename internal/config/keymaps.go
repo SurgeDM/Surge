@@ -378,16 +378,16 @@ func DefaultKeyMap() *KeyMap {
 				key.WithHelp("e", "done tab"),
 			),
 			NextTab: key.NewBinding(
-				key.WithKeys("tab", "right", "l"),
-				key.WithHelp("tab/→/l", "next tab"),
+				key.WithKeys("tab", "right"),
+				key.WithHelp("tab/→", "next tab"),
 			),
 			PrevTab: key.NewBinding(
-				key.WithKeys("shift+tab", "left", "h"),
-				key.WithHelp("shift+tab/←/h", "prev tab"),
+				key.WithKeys("shift+tab", "left"),
+				key.WithHelp("shift+tab/←", "prev tab"),
 			),
 			Add: key.NewBinding(
-				key.WithKeys("n"),
-				key.WithHelp("n", "add download"),
+				key.WithKeys("a"),
+				key.WithHelp("a", "add download"),
 			),
 			BatchImport: key.NewBinding(
 				key.WithKeys("b", "B"),
@@ -414,12 +414,12 @@ func DefaultKeyMap() *KeyMap {
 				key.WithHelp("s", "settings"),
 			),
 			Log: key.NewBinding(
-				key.WithKeys("a"),
-				key.WithHelp("a", "toggle log"),
+				key.WithKeys("l"),
+				key.WithHelp("l", "toggle log"),
 			),
 			ToggleHelp: key.NewBinding(
-				key.WithKeys("/"),
-				key.WithHelp("/", "keybindings"),
+				key.WithKeys("h"),
+				key.WithHelp("h", "keybindings"),
 			),
 			ReportBug: key.NewBinding(
 				key.WithKeys("?"),
