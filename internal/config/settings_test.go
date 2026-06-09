@@ -128,6 +128,33 @@ func TestDefaultSettings_Validation(t *testing.T) {
 	}
 }
 
+func TestCategoriesListMatchesCategoryOrder(t *testing.T) {
+	settings := DefaultSettings()
+	order := CategoryOrder()
+
+	// 1. Verify every category in CategoriesList is present in CategoryOrder
+	orderMap := make(map[string]bool)
+	for _, name := range order {
+		orderMap[name] = true
+	}
+	for _, cat := range settings.CategoriesList {
+		if !orderMap[cat.Name] {
+			t.Errorf("Category %q is in CategoriesList but missing from CategoryOrder()", cat.Name)
+		}
+	}
+
+	// 2. Verify every category in CategoryOrder is present in CategoriesList
+	listMap := make(map[string]bool)
+	for _, cat := range settings.CategoriesList {
+		listMap[cat.Name] = true
+	}
+	for _, name := range order {
+		if !listMap[name] {
+			t.Errorf("Category %q is in CategoryOrder() but missing from CategoriesList", name)
+		}
+	}
+}
+
 func TestGetSettingsPath(t *testing.T) {
 	path := GetSettingsPath()
 

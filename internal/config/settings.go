@@ -255,13 +255,7 @@ func (s *Settings) initializeCategoriesList() {
 				s.Network.DialHedgeCount,
 			},
 		},
-		{
-			Name: "Speed Limits",
-			Settings: []*Setting{
-				s.Network.GlobalRateLimit,
-				s.Network.DefaultDownloadRateLimit,
-			},
-		},
+
 		{
 			Name: "Performance",
 			Settings: []*Setting{
