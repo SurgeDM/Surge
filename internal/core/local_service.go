@@ -636,3 +636,11 @@ func (s *LocalDownloadService) History() ([]types.DownloadEntry, error) {
 	// For local service, we can directly access the state DB
 	return state.LoadCompletedDownloads()
 }
+
+func (s *LocalDownloadService) ClearCompleted() (int64, error) {
+	return state.RemoveCompletedDownloads()
+}
+
+func (s *LocalDownloadService) ClearFailed() (int64, error) {
+	return state.RemoveFailedDownloads()
+}
