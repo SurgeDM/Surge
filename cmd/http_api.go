@@ -148,6 +148,24 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "updated", "id": id, "url": newURL})
 	})))
+
+	mux.HandleFunc("/clear-completed", requireMethod(http.MethodPost, func(w http.ResponseWriter, _ *http.Request) {
+		count, err := service.ClearCompleted()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]int64{"deleted": count})
+	}))
+
+	mux.HandleFunc("/clear-failed", requireMethod(http.MethodPost, func(w http.ResponseWriter, _ *http.Request) {
+		count, err := service.ClearFailed()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]int64{"deleted": count})
+	}))
 }
 
 func eventsHandler(service core.DownloadService) http.HandlerFunc {
