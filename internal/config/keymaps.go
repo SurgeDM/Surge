@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
-	"runtime/debug"
+
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -209,15 +209,7 @@ func GetKeyMapConfigPath() string {
 
 // LoadKeyMap loads the keymap configuration from file.
 func LoadKeyMap() (*KeyMap, error) {
-	if info, ok := debug.ReadBuildInfo(); ok {
-		for _, setting := range info.Settings {
-			if setting.Key == "vcs.modified" && setting.Value == "true" {
-				// Delete keymaps.json if git is dirty in build
-				_ = os.Remove(GetKeyMapConfigPath())
-				break
-			}
-		}
-	}
+
 
 	defaults := DefaultKeyMap()
 	path := GetKeyMapConfigPath()

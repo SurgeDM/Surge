@@ -726,10 +726,7 @@ func TestFooter_GlobalRateLimitShown(t *testing.T) {
 	if !strings.Contains(last, "/s") {
 		t.Errorf("footer should show rate limit with /s unit, got: %q", last)
 	}
-	// Rate limit is shown formatted
-	if strings.Contains(last, "0") && len(last) < 20 { // Dummy check
-		// Not 0 when active limit is set
-	}
+	// Not 0 when active limit is set
 }
 
 func TestFooter_HidesHelpAtNarrowWidth(t *testing.T) {

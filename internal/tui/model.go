@@ -254,7 +254,10 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 }
 
 func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, orchestrator *processing.LifecycleManager, noResume bool, currentCommit ...string) RootModel {
-	initialDarkBackground := lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	initialDarkBackground := true
+	if len(os.Args) > 0 && !strings.HasSuffix(os.Args[0], ".test") && !strings.HasSuffix(os.Args[0], ".test.exe") {
+		initialDarkBackground = lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
+	}
 	commitValue := "unknown"
 	if len(currentCommit) > 0 {
 		if trimmed := strings.TrimSpace(currentCommit[0]); trimmed != "" {

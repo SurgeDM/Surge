@@ -453,6 +453,11 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true, //errors are printed in main.go this prevents double printing
 	SilenceUsage:  true, // prevent usage text from being printed on every error
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if reset, _ := cmd.Flags().GetBool("reset-settings"); reset {
+			_ = os.Remove(config.GetSettingsPath())
+			_ = os.Remove(config.GetKeyMapConfigPath())
+			fmt.Println("Settings and keybindings have been reset to defaults.")
+		}
 		GlobalProgressCh = make(chan any, 100)
 		globalSettings = getSettings()
 		GlobalPool = download.NewWorkerPool(GlobalProgressCh, config.Resolve[int](globalSettings.Network.MaxConcurrentDownloads))
@@ -611,6 +616,7 @@ func init() {
 	rootCmd.Flags().Bool("no-resume", false, "Do not auto-resume paused downloads on startup")
 	rootCmd.Flags().Bool("exit-when-done", false, "Exit when all downloads complete")
 	rootCmd.Flags().Bool("no-server", false, "Do not start the HTTP API server (CLI subcommands will not work)")
+	rootCmd.Flags().Bool("reset-settings", false, "Reset settings and keybindings to defaults on startup")
 	rootCmd.SetVersionTemplate("Surge v{{.Version}}\n")
 	rootCmd.Version = Version
 }
