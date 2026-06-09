@@ -189,6 +189,21 @@ func (m *RootModel) snapshotSettings() {
 	m.SettingsBaseline = m.Settings.Clone()
 }
 
+func asFloat64(value any) (float64, bool) {
+	switch v := value.(type) {
+	case float64:
+		return v, true
+	case int:
+		return float64(v), true
+	case int64:
+		return float64(v), true
+	case time.Duration:
+		return float64(v), true
+	default:
+		return 0, false
+	}
+}
+
 func settingsEqual(s1, s2 *config.Setting) bool {
 	if s1 == nil || s2 == nil {
 		return s1 == s2
@@ -196,28 +211,12 @@ func settingsEqual(s1, s2 *config.Setting) bool {
 	// If both are numbers, compare their float64 representations to handle JSON deserialization type differences (int vs float64)
 	switch s1.Type {
 	case "int", "int64", "float64", "duration":
-		var v1, v2 float64
-		switch val := s1.Value.(type) {
-		case int:
-			v1 = float64(val)
-		case int64:
-			v1 = float64(val)
-		case float64:
-			v1 = val
-		case time.Duration:
-			v1 = float64(val)
+		v1, ok1 := asFloat64(s1.Value)
+		v2, ok2 := asFloat64(s2.Value)
+		if ok1 && ok2 {
+			return v1 == v2
 		}
-		switch val := s2.Value.(type) {
-		case int:
-			v2 = float64(val)
-		case int64:
-			v2 = float64(val)
-		case float64:
-			v2 = val
-		case time.Duration:
-			v2 = float64(val)
-		}
-		return v1 == v2
+		return reflect.DeepEqual(s1.Value, s2.Value)
 	default:
 		return reflect.DeepEqual(s1.Value, s2.Value)
 	}
@@ -228,28 +227,19 @@ func (m *RootModel) checkRestartRequirement() bool {
 		return false
 	}
 
-	val1 := reflect.ValueOf(m.Settings).Elem()
-	val2 := reflect.ValueOf(m.SettingsBaseline).Elem()
-	typ := val1.Type()
-
-	for i := 0; i < typ.NumField(); i++ {
-		catField1 := val1.Field(i)
-		catField2 := val2.Field(i)
-		if catField1.Kind() != reflect.Struct {
+	for i, cat := range m.Settings.CategoriesList {
+		if i >= len(m.SettingsBaseline.CategoriesList) {
 			continue
 		}
-
-		catTyp := catField1.Type()
-		for j := 0; j < catTyp.NumField(); j++ {
-			f1 := catField1.Field(j)
-			f2 := catField2.Field(j)
-			s1, ok1 := f1.Interface().(*config.Setting)
-			s2, ok2 := f2.Interface().(*config.Setting)
-			if ok1 && ok2 && s1 != nil && s2 != nil {
-				if s1.NeedsRestart {
-					if !settingsEqual(s1, s2) {
-						return true
-					}
+		baselineCat := m.SettingsBaseline.CategoriesList[i]
+		for j, set := range cat.Settings {
+			if set.NeedsRestart {
+				if j >= len(baselineCat.Settings) {
+					continue
+				}
+				baseline := baselineCat.Settings[j]
+				if !settingsEqual(set, baseline) {
+					return true
 				}
 			}
 		}

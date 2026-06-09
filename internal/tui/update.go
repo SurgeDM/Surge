@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"os"
+	"time"
+
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/utils"
 
@@ -49,9 +52,31 @@ func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 
 // Update handles messages and updates the model
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Dynamically reload keymap.json on the fly if it is updated on disk
+	if time.Since(m.lastConfigCheckTime) > 1*time.Second {
+		m.lastConfigCheckTime = time.Now()
+		if info, err := os.Stat(config.GetKeyMapConfigPath()); err == nil {
+			if info.ModTime().After(m.lastKeyMapModTime) {
+				preLoadModTime := info.ModTime()
+				if newKeys, err := config.LoadKeyMap(); err == nil && newKeys != nil {
+					m.keys = newKeys
+					if postInfo, postErr := os.Stat(config.GetKeyMapConfigPath()); postErr == nil {
+						m.lastKeyMapModTime = postInfo.ModTime()
+					} else {
+						m.lastKeyMapModTime = preLoadModTime
+					}
+					utils.Debug("TUI: dynamically reloaded keymap.json from disk")
+				}
+			}
+		}
+	}
 
 	if m.Settings == nil {
 		m.Settings = config.DefaultSettings()
+	}
+
+	if m.keys == nil {
+		m.keys = config.DefaultKeyMap()
 	}
 
 	if m.shuttingDown {

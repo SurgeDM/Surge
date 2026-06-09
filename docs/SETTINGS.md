@@ -42,6 +42,50 @@ Surge implements a self-healing configuration system to ensure the application r
 - **Syntactic Validation**: Proxy URLs and DNS server lists are validated for correct syntax.
 - **Category Integrity**: If a custom category has an invalid regular expression pattern, it is automatically pruned from the active list to prevent engine crashes.
 - **Corrupt JSON Fallback**: If the `settings.json` file is completely unparseable (e.g., missing brackets or commas), Surge will log a warning and start with all factory default settings for that session.
+## Keymap Configuration
+
+Surge allows you to customize your keyboard shortcuts by editing the `keymap.json` file located in the application config directory:
+
+- **Windows:** `%APPDATA%\surge\keymap.json`
+- **macOS:** `~/Library/Application Support/surge/keymap.json`
+- **Linux:** `~/.config/surge/keymap.json`
+
+Surge will automatically generate this file with all default keybindings (including Vim-style keys) on the first startup.
+
+### Structure
+
+The `keymap.json` file is structured into nested sections matching each TUI state (e.g., `dashboard`, `settings`, `file_picker`, etc.). Each binding consists of an array of key strings and a help description. For example:
+
+```json
+{
+  "dashboard": {
+    "Quit": {
+      "keys": [
+        "ctrl+c",
+        "ctrl+q"
+      ],
+      "help": "quit"
+    },
+    "Up": {
+      "keys": [
+        "up",
+        "k"
+      ],
+      "help": "up"
+    }
+  }
+}
+```
+
+*Note: You do not need to specify all keys. Surge will automatically validate and fall back to internal defaults for any missing or invalid keybindings on startup.*
+
+### Ambiguous Bindings & ForceQuit
+
+By default, both `Quit` and `ForceQuit` in the dashboard bind `ctrl+c`. 
+- **Quit** (`ctrl+c` or `ctrl+q`) initiates a graceful shutdown of all active download tasks, ensuring that progress and state are fully persisted before exiting the application.
+- **ForceQuit** (`ctrl+c`) performs an immediate exit of the application without waiting for the graceful shutdown of the background download engine.
+
+If you choose to customize these bindings, you can separate them (e.g. binding `Quit` exclusively to `ctrl+q` and `ForceQuit` exclusively to `ctrl+c`) to avoid any ambiguity during normal exit.
 
 ## Directory Structure
 
@@ -49,7 +93,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 
 | Directory   | Purpose                           | Linux                        | macOS                                       | Windows                 |
 | :---------- | :-------------------------------- | :--------------------------- | :------------------------------------------ | :---------------------- |
-| **Config**  | `settings.json`                   | `~/.config/surge/`           | `~/Library/Application Support/surge/`      | `%APPDATA%\surge\`      |
+| **Config**  | `settings.json`, `keymap.json`    | `~/.config/surge/`           | `~/Library/Application Support/surge/`      | `%APPDATA%\surge\`      |
 | **State**   | Database (`surge.db`), auth token | `~/.local/state/surge/`      | `~/Library/Application Support/surge/`      | `%APPDATA%\surge\`      |
 | **Logs**    | Timestamped `.log` files          | `~/.local/state/surge/logs/` | `~/Library/Application Support/surge/logs/` | `%APPDATA%\surge\logs\` |
 | **Themes**  | Custom `.toml` theme files        | `~/.config/surge/themes/`    | `~/Library/Application Support/surge/themes/` | `%APPDATA%\surge\themes\` |

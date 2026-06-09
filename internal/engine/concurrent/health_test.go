@@ -184,9 +184,9 @@ func TestHealth_StallDetection(t *testing.T) {
 
 func TestHealth_ZeroStallTimeoutDisablesStallDetection(t *testing.T) {
 	runtime := &types.RuntimeConfig{
-		SlowWorkerThreshold:   0,
+		SlowWorkerThreshold:   0.5,
 		SlowWorkerGracePeriod: 0,
-		StallTimeout:          0,
+		StallTimeout:          0, // Disabled
 	}
 	state := types.NewProgressState("test", 1000)
 	d := NewConcurrentDownloader("test", nil, state, runtime)
@@ -195,19 +195,53 @@ func TestHealth_ZeroStallTimeoutDisablesStallDetection(t *testing.T) {
 	defer cancel()
 
 	now := time.Now()
+
+	stalledCtx, stalledCancel := context.WithCancel(ctx)
 	active := &ActiveTask{
 		StartTime: now.Add(-10 * time.Second),
-		Cancel:    cancel,
+		Cancel:    stalledCancel,
 	}
-	active.LastActivity.Store(now.Add(-2 * time.Second).UnixNano())
+	active.LastActivity.Store(now.Add(-2 * time.Second).UnixNano()) // Stalled for 2s
 	active.Speed = 5 * 1024 * 1024
 	d.activeTasks[0] = active
 
 	d.checkWorkerHealth()
 
+	// Verify stalled worker was NOT cancelled
 	select {
-	case <-ctx.Done():
-		t.Error("worker should not have been cancelled when stall timeout is disabled")
+	case <-stalledCtx.Done():
+		t.Error("Stalled worker should NOT have been cancelled since stall detection is disabled")
 	default:
+		// Success
+	}
+}
+
+func TestHealth_ZeroSlowWorkerThresholdDisablesSlowCheck(t *testing.T) {
+	runtime := &types.RuntimeConfig{
+		SlowWorkerThreshold:   0, // Disabled
+		SlowWorkerGracePeriod: 0,
+	}
+	state := types.NewProgressState("test", 1000)
+	d := NewConcurrentDownloader("test", nil, state, runtime)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	now := time.Now()
+
+	_, w0Cancel := context.WithCancel(ctx)
+	w1Ctx, w1Cancel := context.WithCancel(ctx)
+
+	d.activeTasks[0] = &ActiveTask{StartTime: now.Add(-10 * time.Second), Speed: 10 * 1024 * 1024, Cancel: w0Cancel}
+	d.activeTasks[1] = &ActiveTask{StartTime: now.Add(-10 * time.Second), Speed: 1 * 1024 * 1024, Cancel: w1Cancel}
+
+	d.checkWorkerHealth()
+
+	// Verify slow worker (Worker 1) was NOT cancelled
+	select {
+	case <-w1Ctx.Done():
+		t.Error("Worker 1 should NOT have been cancelled since slow worker checks are disabled")
+	default:
+		// Success
 	}
 }

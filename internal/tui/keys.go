@@ -206,12 +206,12 @@ var Keys = KeyMap{
 			key.WithHelp("s", "settings"),
 		),
 		Log: key.NewBinding(
-			key.WithKeys("L"),
-			key.WithHelp("L", "toggle log"),
+			key.WithKeys("l"),
+			key.WithHelp("l", "toggle log"),
 		),
 		SpeedLimits: key.NewBinding(
-			key.WithKeys("l"),
-			key.WithHelp("l", "speed limits"),
+			key.WithKeys("r"),
+			key.WithHelp("r", "speed limits"),
 		),
 		ToggleHelp: key.NewBinding(
 			key.WithKeys("h"),

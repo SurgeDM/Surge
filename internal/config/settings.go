@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine/types"
@@ -289,6 +290,21 @@ func (s *Settings) initializeCategoriesList() {
 	}
 }
 
+// FindSetting returns a setting by its category and JSON key without using reflection.
+func (s *Settings) FindSetting(categoryName, key string) *Setting {
+	for _, cat := range s.CategoriesList {
+		if cat.Name == categoryName {
+			for _, set := range cat.Settings {
+				if set.Key == key {
+					return set
+				}
+			}
+			return nil
+		}
+	}
+	return nil
+}
+
 // GetSettingsPath returns the path to the settings JSON file.
 func GetSettingsPath() string {
 	return filepath.Join(GetSurgeDir(), "settings.json")
@@ -331,29 +347,39 @@ type SettingMeta struct {
 	RequiresRestart bool   // Whether changing this setting requires an application restart
 }
 
+var (
+	cachedSettingsMetadata map[string][]SettingMeta
+	settingsMetadataOnce   sync.Once
+)
+
 // GetSettingsMetadata returns metadata for all settings organized by category.
+// The result is computed once and cached since metadata is static.
 func GetSettingsMetadata() map[string][]SettingMeta {
-	s := DefaultSettings()
-	meta := make(map[string][]SettingMeta)
-	for _, cat := range s.CategoriesList {
-		var list []SettingMeta
-		for _, set := range cat.Settings {
-			list = append(list, SettingMeta{
-				Key:             set.Key,
-				Label:           set.Label,
-				Description:     set.Description,
-				Type:            set.Type,
-				RequiresRestart: set.NeedsRestart,
-			})
+	settingsMetadataOnce.Do(func() {
+		s := DefaultSettings()
+		cachedSettingsMetadata = make(map[string][]SettingMeta)
+		for _, cat := range s.CategoriesList {
+			list := make([]SettingMeta, 0, len(cat.Settings))
+			for _, set := range cat.Settings {
+				list = append(list, SettingMeta{
+					Key:             set.Key,
+					Label:           set.Label,
+					Description:     set.Description,
+					Type:            set.Type,
+					RequiresRestart: set.NeedsRestart,
+				})
+			}
+			cachedSettingsMetadata[cat.Name] = list
 		}
-		meta[cat.Name] = list
-	}
-	return meta
+	})
+	return cachedSettingsMetadata
 }
 
-// CategoryOrder returns the order of categories for UI tabs.
+var categoryOrder = []string{"General", "Network", "Performance", "Categories", "Extension"}
+
+// CategoryOrder returns the display order of settings categories.
 func CategoryOrder() []string {
-	return []string{"General", "Network", "Performance", "Categories", "Extension", "Speed Limits"}
+	return []string{"General", "Network", "Speed Limits", "Performance", "Categories", "Extension"}
 }
 
 const (
@@ -976,27 +1002,26 @@ func ValidateDNSList(s string) error {
 	return nil
 }
 
-// SaveSettings saves settings to disk atomically.
-func SaveSettings(s *Settings) error {
-	path := GetSettingsPath()
-
-	// Ensure directory exists
+// writeJSONAtomic marshals v as indented JSON and writes it to path atomically
+// using a temp-file-then-rename strategy.
+func writeJSONAtomic(path string, v any) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-
-	data, err := json.MarshalIndent(s, "", "  ")
+	data, err := json.MarshalIndent(v, "", "  ")
 	if err != nil {
 		return err
 	}
-
-	// Atomic write: write to temp file, then rename
 	tempPath := path + ".tmp"
 	if err := os.WriteFile(tempPath, data, 0o644); err != nil {
 		return err
 	}
-
 	return os.Rename(tempPath, path)
+}
+
+// SaveSettings saves settings to disk atomically.
+func SaveSettings(s *Settings) error {
+	return writeJSONAtomic(GetSettingsPath(), s)
 }
 
 // ToRuntimeConfig creates the engine runtime config from validated settings.

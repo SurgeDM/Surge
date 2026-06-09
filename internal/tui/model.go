@@ -38,26 +38,26 @@ func InitializeTUI() {
 type UIState int // Defines UIState as int to be used in rootModel
 
 const (
-	DashboardState              UIState = iota // DashboardState is 0 increments after each line
-	InputState                                 // InputState is 1
-	DetailState                                // DetailState is 2
-	FilePickerState                            // FilePickerState is 3
-	DuplicateWarningState                      // DuplicateWarningState is 4
-	SearchState                                // SearchState is 6
-	SettingsState                              // SettingsState is 7
-	ExtensionConfirmationState                 // ExtensionConfirmationState is 8
-	BatchFilePickerState                       // BatchFilePickerState is 9
-	BatchConfirmState                          // BatchConfirmState is 10
-	UpdateAvailableState                       // UpdateAvailableState is 11
-	URLUpdateState                             // URLUpdateState is 12
-	CategoryManagerState                       // CategoryManagerState is 13
-	QuitConfirmState                           // QuitConfirmState is 14
-	RestartConfirmState                        // RestartConfirmState is 15
-	HelpModalState                             // HelpModalState is 16
-	BugReportTargetState                       // BugReportTargetState is 17
-	BugReportSystemDetailsState                // BugReportSystemDetailsState is 18
-	BugReportLogPathState                      // BugReportLogPathState is 19
-	CategoryResetConfirmState                  // CategoryResetConfirmState is 20
+	DashboardState UIState = iota
+	InputState
+	DetailState
+	FilePickerState
+	DuplicateWarningState
+	SearchState
+	SettingsState
+	ExtensionConfirmationState
+	BatchFilePickerState
+	BatchConfirmState
+	UpdateAvailableState
+	URLUpdateState
+	CategoryManagerState
+	QuitConfirmState
+	RestartConfirmState
+	HelpModalState
+	BugReportTargetState
+	BugReportSystemDetailsState
+	BugReportLogPathState
+	CategoryResetConfirmState
 )
 
 type FilePickerOrigin int
@@ -159,6 +159,7 @@ type RootModel struct {
 	StartupConfigWarnings []string         // Config validation warnings to emit on first render
 	SettingsActiveTab     int              // Active category tab (0-3)
 	SettingsSelectedRow   int              // Selected setting within current tab
+	SettingsFocusedPane   int              // Focused settings pane (0 = Tabs, 1 = List)
 	SettingsIsEditing     bool             // Whether currently editing a value
 	SettingsInput         textinput.Model  // Input for editing string/int values
 	settingsError         string           // Current validation error in settings
@@ -199,7 +200,9 @@ type RootModel struct {
 	bugReportIncludeLatestLog  bool
 
 	// Keybindings
-	keys KeyMap
+	keys                *config.KeyMap
+	lastKeyMapModTime   time.Time
+	lastConfigCheckTime time.Time
 
 	// Server port for display
 	ServerPort int
@@ -298,11 +301,23 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		settings = config.DefaultSettings()
 	}
 
+	keys, _ := config.LoadKeyMap()
+	if keys == nil {
+		keys = config.DefaultKeyMap()
+	}
+	var keyMapModTime time.Time
+	if info, err := os.Stat(config.GetKeyMapConfigPath()); err == nil {
+		keyMapModTime = info.ModTime()
+	}
+
 	// Capture any config warnings produced during load so Init() can surface
 	// them in the activity log once the viewport is ready.
 	var startupConfigWarnings []string
 	if len(settings.StartupWarnings) > 0 {
-		startupConfigWarnings = append([]string(nil), settings.StartupWarnings...)
+		startupConfigWarnings = append(startupConfigWarnings, settings.StartupWarnings...)
+	}
+	if len(keys.StartupWarnings) > 0 {
+		startupConfigWarnings = append(startupConfigWarnings, keys.StartupWarnings...)
 	}
 
 	// Override AutoResume if CLI flag provided
@@ -448,6 +463,9 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		PWD:                   pwd,
 		Settings:              settings,
 		StartupConfigWarnings: startupConfigWarnings,
+		SettingsActiveTab:     0,
+		SettingsSelectedRow:   0,
+		SettingsFocusedPane:   1,
 		SpeedHistory:          make([]float64, GraphHistoryPoints),                          // 60 points of history (30s at 0.5s interval)
 		logViewport:           viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)), // Default size, will be resized
 		logEntries:            make([]string, 0),
@@ -455,7 +473,9 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 		searchInput:           searchInput,
 		urlUpdateInput:        urlUpdateInput,
 		catMgrInputs:          [4]textinput.Model{catNameInput, catDescInput, catPatternInput, catPathInput},
-		keys:                  Keys,
+		keys:                  keys,
+		lastKeyMapModTime:     keyMapModTime,
+		lastConfigCheckTime:   time.Now(),
 		ServerPort:            serverPort,
 		CurrentVersion:        currentVersion,
 		CurrentCommit:         commitValue,

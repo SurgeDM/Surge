@@ -1,10 +1,14 @@
 package tui
 
 import (
+	"os"
 	"reflect"
+	"runtime"
 	"testing"
+	"time"
 
 	"charm.land/bubbles/v2/key"
+	"github.com/SurgeDM/Surge/internal/config"
 )
 
 type helperKeyMap interface {
@@ -31,7 +35,7 @@ func testKeyMapInHelp(t *testing.T, name string, km helperKeyMap, ignored map[st
 		fieldName := typ.Field(i).Name
 		field := v.Field(i)
 
-		if field.Type() == reflect.TypeOf(key.Binding{}) {
+		if field.Type() == reflect.TypeFor[key.Binding]() {
 			binding := field.Interface().(key.Binding)
 
 			// Skip if explicitly ignored
@@ -86,4 +90,97 @@ func TestCategoryManagerKeyMap_AllKeysInHelp(t *testing.T) {
 
 func TestQuitConfirmKeyMap_AllKeysInHelp(t *testing.T) {
 	testKeyMapInHelp(t, "QuitConfirm", Keys.QuitConfirm, nil)
+}
+
+func TestDuplicateKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "Duplicate", Keys.Duplicate, nil)
+}
+
+func TestExtensionKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "Extension", Keys.Extension, nil)
+}
+
+func TestSettingsEditorKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "SettingsEditor", Keys.SettingsEditor, nil)
+}
+
+func TestBatchConfirmKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "BatchConfirm", Keys.BatchConfirm, nil)
+}
+
+func TestUpdateKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "Update", Keys.Update, nil)
+}
+
+func TestBugReportKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "BugReport", Keys.BugReport, nil)
+}
+
+func TestDynamicKeyMapReloading(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Skipping on Windows: GetSurgeDir uses %APPDATA% and does not honor XDG_CONFIG_HOME")
+	}
+
+	tmpDir, err := os.MkdirTemp("", "surge-tui-keymap-test")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+	defer func() {
+		_ = os.RemoveAll(tmpDir)
+	}()
+
+	// Override configuration directory
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+
+	err = config.EnsureDirs()
+	if err != nil {
+		t.Fatalf("Failed to ensure directories: %v", err)
+	}
+
+	// 1. Initialize keymap and verify default state
+	km, err := config.LoadKeyMap()
+	if err != nil {
+		t.Fatalf("Failed to load keymap: %v", err)
+	}
+
+	m := RootModel{
+		keys:                km,
+		lastKeyMapModTime:   time.Now().Add(-10 * time.Second), // Ensure modTime is older
+		lastConfigCheckTime: time.Now().Add(-2 * time.Second),  // Ensure check triggers
+	}
+
+	if len(m.keys.Dashboard.ToggleHelp.Keys()) != 1 || m.keys.Dashboard.ToggleHelp.Keys()[0] != "h" {
+		t.Errorf("Expected default ToggleHelp key 'h', got %v", m.keys.Dashboard.ToggleHelp.Keys())
+	}
+
+	// 2. Simulate user editing keymap.json on disk
+	customKeyMap := config.DefaultKeyMap()
+	customKeyMap.Dashboard.ToggleHelp = key.NewBinding(
+		key.WithKeys("ctrl+x"),
+		key.WithHelp("ctrl+x", "keybindings"),
+	)
+
+	// Save custom keymap to temp directory
+	err = config.SaveKeyMap(customKeyMap)
+	if err != nil {
+		t.Fatalf("Failed to save custom keymap: %v", err)
+	}
+
+	// Update modTime on disk to simulate fresh write in the past
+	keymapPath := config.GetKeyMapConfigPath()
+	now := time.Now()
+	err = os.Chtimes(keymapPath, now, now)
+	if err != nil {
+		t.Fatalf("Failed to set file times: %v", err)
+	}
+
+	// 3. Trigger TUI update loop and assert dynamic reload
+	res, _ := m.Update(struct{}{})
+	updatedModel := res.(RootModel)
+
+	// Ensure the new custom keybinding was hot-reloaded dynamically
+	toggleHelpKeys := updatedModel.keys.Dashboard.ToggleHelp.Keys()
+	if len(toggleHelpKeys) != 1 || toggleHelpKeys[0] != "ctrl+x" {
+		t.Errorf("Expected dynamic reload to update ToggleHelp key to 'ctrl+x', got %v", toggleHelpKeys)
+	}
 }
