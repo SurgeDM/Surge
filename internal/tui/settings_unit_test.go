@@ -105,12 +105,17 @@ func TestSetSettingValueConversions(t *testing.T) {
 	}
 }
 
-func TestValidateSetting_AllowsInheritedDownloadRateLimit(t *testing.T) {
-	m := &RootModel{}
+func TestSetSpeedLimitValue_AllowsInheritedDownloadRateLimit(t *testing.T) {
+	// Initialize a RootModel with non-nil maps and a dummy Service to avoid panics
+	m := &RootModel{
+		Settings:  config.DefaultSettings(),
+		downloads: []*DownloadModel{{ID: "test-id"}},
+	}
 
 	for _, value := range []string{"inherit", "default"} {
-		if err := m.validateSetting("dl:test-id", value); err != nil {
-			t.Fatalf("validateSetting rejected %q for dl: key: %v", value, err)
+		// Expect nil error because "inherit" or "default" is a valid rate limit for a specific download
+		if err := m.setSpeedLimitValue("dl:test-id", value); err != nil {
+			t.Fatalf("setSpeedLimitValue rejected %q for dl: key: %v", value, err)
 		}
 	}
 }
