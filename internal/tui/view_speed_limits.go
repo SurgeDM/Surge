@@ -112,9 +112,6 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 			return err
 		}
 		m.Settings.Network.GlobalRateLimit.Value = value
-		if err := m.persistSettings(); err != nil {
-			return err
-		}
 		return m.applyRemoteGlobalRateLimit(rate)
 	}
 
@@ -124,9 +121,6 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 			return err
 		}
 		m.Settings.Network.DefaultDownloadRateLimit.Value = value
-		if err := m.persistSettings(); err != nil {
-			return err
-		}
 		return m.applyRemoteDefaultRateLimit(rate)
 	}
 
@@ -164,17 +158,11 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 func (m *RootModel) resetSpeedLimitToDefault(key string, defaults *config.Settings) error {
 	if key == "global_rate_limit" {
 		m.Settings.Network.GlobalRateLimit.Value = defaults.Network.GlobalRateLimit.Value
-		if err := m.persistSettings(); err != nil {
-			return err
-		}
 		rate, _ := utils.ParseRateLimitValue(defaults.Network.GlobalRateLimit.Value)
 		return m.applyRemoteGlobalRateLimit(rate)
 	}
 	if key == "default_download_rate_limit" {
 		m.Settings.Network.DefaultDownloadRateLimit.Value = defaults.Network.DefaultDownloadRateLimit.Value
-		if err := m.persistSettings(); err != nil {
-			return err
-		}
 		rate, _ := utils.ParseRateLimitValue(defaults.Network.DefaultDownloadRateLimit.Value)
 		return m.applyRemoteDefaultRateLimit(rate)
 	}
@@ -227,9 +215,6 @@ func (m *RootModel) applyRemoteGlobalRateLimit(rate int64) error {
 	if m.Service == nil {
 		return nil
 	}
-	if _, isLocal := m.Service.(interface{ ReloadSettings() error }); isLocal {
-		return nil
-	}
 	setter, ok := m.Service.(interface{ SetGlobalRateLimit(int64) error })
 	if !ok {
 		return nil
@@ -239,9 +224,6 @@ func (m *RootModel) applyRemoteGlobalRateLimit(rate int64) error {
 
 func (m *RootModel) applyRemoteDefaultRateLimit(rate int64) error {
 	if m.Service == nil {
-		return nil
-	}
-	if _, isLocal := m.Service.(interface{ ReloadSettings() error }); isLocal {
 		return nil
 	}
 	setter, ok := m.Service.(interface{ SetDefaultRateLimit(int64) error })
