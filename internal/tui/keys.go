@@ -527,21 +527,11 @@ var Keys = KeyMap{
 }
 
 // ShortHelp returns keybindings to be shown in the mini help view.
-func (k SpeedLimitsKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Edit, k.Reset, k.Close}
-}
-
-// FullHelp returns keybindings for the expanded help view.
-func (k SpeedLimitsKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{
-		{k.Up, k.Down, k.Edit, k.Reset, k.Close},
-	}
-}
+func (k SpeedLimitsKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.Up, k.Down, k.Edit, k.Reset, k.Close} }
+func (k SpeedLimitsKeyMap) FullHelp() [][]key.Binding  { return [][]key.Binding{k.ShortHelp()} }
 
 // ShortHelp returns keybindings to show in the mini help view
-func (k DashboardKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.ToggleHelp, k.ReportBug}
-}
+func (k DashboardKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.ToggleHelp, k.ReportBug} }
 
 // FullHelp returns keybindings for the expanded help view
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
@@ -552,42 +542,19 @@ func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	}
 }
 
-func (k InputKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Tab, k.Enter, k.Esc}
-}
+func (k InputKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.Tab, k.Enter, k.Esc} }
+func (k InputKeyMap) FullHelp() [][]key.Binding  { return [][]key.Binding{k.ShortHelp()} }
 
-func (k InputKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Tab, k.Enter, k.Esc}}
-}
+func (k FilePickerKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.Back, k.Forward, k.UseDir, k.GotoHome, k.Open, k.Cancel} }
+func (k FilePickerKeyMap) FullHelp() [][]key.Binding  { return [][]key.Binding{k.ShortHelp()} }
 
-func (k FilePickerKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Back, k.Forward, k.UseDir, k.GotoHome, k.Open, k.Cancel}
-}
+func (k DuplicateKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.Continue, k.Focus, k.Cancel} }
+func (k DuplicateKeyMap) FullHelp() [][]key.Binding  { return [][]key.Binding{k.ShortHelp()} }
 
-func (k FilePickerKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Back, k.Forward, k.UseDir, k.GotoHome, k.Open, k.Cancel}}
-}
+func (k ExtensionKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.Browse, k.Prev, k.Next, k.Confirm, k.Cancel} }
+func (k ExtensionKeyMap) FullHelp() [][]key.Binding  { return [][]key.Binding{k.ShortHelp()} }
 
-func (k DuplicateKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Continue, k.Focus, k.Cancel}
-}
-
-func (k DuplicateKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Continue, k.Focus, k.Cancel}}
-}
-
-func (k ExtensionKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Browse, k.Prev, k.Next, k.Confirm, k.Cancel}
-}
-
-func (k ExtensionKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Browse, k.Prev, k.Next, k.Confirm, k.Cancel}}
-}
-
-func (k SettingsKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.PrevTab, k.NextTab, k.Edit, k.Reset, k.Close}
-}
-
+func (k SettingsKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.PrevTab, k.NextTab, k.Edit, k.Reset, k.Close} }
 func (k SettingsKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Tab1, k.Tab2, k.Tab3, k.Tab4, k.Tab5},
@@ -595,50 +562,20 @@ func (k SettingsKeyMap) FullHelp() [][]key.Binding {
 	}
 }
 
-func (k SettingsEditorKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Confirm, k.Cancel}
-}
+func (k SettingsEditorKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.Confirm, k.Cancel} }
+func (k SettingsEditorKeyMap) FullHelp() [][]key.Binding  { return [][]key.Binding{k.ShortHelp()} }
 
-func (k SettingsEditorKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Confirm, k.Cancel}}
-}
+func (k BatchConfirmKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.Confirm, k.Cancel} }
+func (k BatchConfirmKeyMap) FullHelp() [][]key.Binding  { return [][]key.Binding{k.ShortHelp()} }
 
-func (k BatchConfirmKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Confirm, k.Cancel}
-}
+func (k UpdateKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.OpenGitHub, k.IgnoreNow, k.NeverRemind} }
+func (k UpdateKeyMap) FullHelp() [][]key.Binding  { return [][]key.Binding{k.ShortHelp()} }
 
-func (k BatchConfirmKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Confirm, k.Cancel}}
-}
+func (k BugReportKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.Core, k.Extension, k.Cancel} }
+func (k BugReportKeyMap) FullHelp() [][]key.Binding  { return [][]key.Binding{k.ShortHelp()} }
 
-func (k UpdateKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.OpenGitHub, k.IgnoreNow, k.NeverRemind}
-}
+func (k CategoryManagerKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.Up, k.Down, k.Edit, k.Add, k.Delete, k.Tab, k.Toggle, k.Close} }
+func (k CategoryManagerKeyMap) FullHelp() [][]key.Binding  { return [][]key.Binding{k.ShortHelp()} }
 
-func (k UpdateKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.OpenGitHub, k.IgnoreNow, k.NeverRemind}}
-}
-
-func (k BugReportKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Core, k.Extension, k.Cancel}
-}
-
-func (k BugReportKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Core, k.Extension, k.Cancel}}
-}
-
-func (k CategoryManagerKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Up, k.Down, k.Edit, k.Add, k.Delete, k.Tab, k.Toggle, k.Close}
-}
-
-func (k CategoryManagerKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Up, k.Down, k.Edit, k.Add, k.Delete, k.Tab, k.Toggle, k.Close}}
-}
-
-func (k QuitConfirmKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.Select, k.Cancel}
-}
-
-func (k QuitConfirmKeyMap) FullHelp() [][]key.Binding {
-	return [][]key.Binding{{k.Select, k.Cancel}}
-}
+func (k QuitConfirmKeyMap) ShortHelp() []key.Binding { return []key.Binding{k.Select, k.Cancel} }
+func (k QuitConfirmKeyMap) FullHelp() [][]key.Binding  { return [][]key.Binding{k.ShortHelp()} }
