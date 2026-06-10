@@ -66,17 +66,22 @@ func (r *RateLimiter) WaitN(ctx context.Context, n int64) error {
 			elapsed := now.Sub(r.lastRefill)
 			if elapsed > 0 {
 				hi, lo := bits.Mul64(uint64(elapsed.Nanoseconds()), uint64(r.rate))
-				add, _ := bits.Div64(hi, lo, uint64(time.Second))
-				if add > 0 {
-					if add > uint64(maxInt64) {
-						r.tokens = maxInt64
-					} else {
-						r.tokens += int64(add)
-					}
-					if r.tokens > bucketCap {
-						r.tokens = bucketCap
-					}
+				if hi >= uint64(time.Second) {
+					r.tokens = bucketCap
 					r.lastRefill = now
+				} else {
+					add, _ := bits.Div64(hi, lo, uint64(time.Second))
+					if add > 0 {
+						if add > uint64(maxInt64) {
+							r.tokens = maxInt64
+						} else {
+							r.tokens += int64(add)
+						}
+						if r.tokens > bucketCap {
+							r.tokens = bucketCap
+						}
+						r.lastRefill = now
+					}
 				}
 			}
 		}
@@ -146,12 +151,16 @@ func (r *RateLimiter) SetRate(rate int64, bucketSize int64) {
 		elapsed := now.Sub(r.lastRefill)
 		if elapsed > 0 {
 			hi, lo := bits.Mul64(uint64(elapsed.Nanoseconds()), uint64(r.rate))
-			add, _ := bits.Div64(hi, lo, uint64(time.Second))
-			if add > 0 {
-				if add > uint64(maxInt64) {
-					r.tokens = maxInt64
-				} else {
-					r.tokens += int64(add)
+			if hi >= uint64(time.Second) {
+				r.tokens = bucketSize
+			} else {
+				add, _ := bits.Div64(hi, lo, uint64(time.Second))
+				if add > 0 {
+					if add > uint64(maxInt64) {
+						r.tokens = maxInt64
+					} else {
+						r.tokens += int64(add)
+					}
 				}
 			}
 		}

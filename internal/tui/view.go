@@ -397,7 +397,7 @@ func (m RootModel) View() tea.View {
 	if limitVal != "" {
 		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", limitVal)
 	} else {
-		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", lipgloss.NewStyle().Foreground(colors.Gray()).Render("0"))
+		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", lipgloss.NewStyle().Foreground(colors.Gray()).Render("∞"))
 	}
 
 	// Version indicator
@@ -675,7 +675,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		if d.RateLimitSet && d.RateLimit > 0 {
 			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
 		} else if d.RateLimitSet {
-			speedStr += " (Limit: unlimited)"
+			speedStr += " (Limit: ∞)"
 		}
 		etaStr = "\u221e"
 	} else {
@@ -683,7 +683,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		if d.RateLimitSet && d.RateLimit > 0 {
 			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
 		} else if d.RateLimitSet {
-			speedStr += " (Limit: unlimited)"
+			speedStr += " (Limit: ∞)"
 		}
 		if d.Total > 0 {
 			remaining := d.Total - d.Downloaded

@@ -697,7 +697,7 @@ func TestFooter_ActiveSpeedShowsKBps(t *testing.T) {
 	}
 }
 
-func TestFooter_UnlimitedRateLimitShowsInfinity(t *testing.T) {
+func TestFooter_ZeroRateLimitShowsInfinity(t *testing.T) {
 	InitializeTUI()
 	m := InitialRootModel(1701, "1.0.0", nil, processing.NewLifecycleManager(nil, nil), false)
 	m.width = 120
@@ -706,8 +706,8 @@ func TestFooter_UnlimitedRateLimitShowsInfinity(t *testing.T) {
 	m.Settings = config.DefaultSettings()
 
 	last := footerLine(m)
-	if !strings.Contains(last, "0") {
-		t.Errorf("footer should show 0 when rate limit is unlimited, got: %q", last)
+	if !strings.Contains(last, "∞") {
+		t.Errorf("footer should show ∞ when rate limit is 0, got: %q", last)
 	}
 }
 
