@@ -110,6 +110,18 @@ func TestParseURLArg_Unit(t *testing.T) {
 			expectedMirrors: []string{"http://a.com", "http://b.com"},
 		},
 		{
+			name:            "Single URL with commas in query string (archive.org formats)",
+			input:           "https://archive.org/compress/item/formats=PNG,ITEM TILE,LOG,ISO IMAGE",
+			expectedURL:     "https://archive.org/compress/item/formats=PNG,ITEM TILE,LOG,ISO IMAGE",
+			expectedMirrors: []string{"https://archive.org/compress/item/formats=PNG,ITEM TILE,LOG,ISO IMAGE"},
+		},
+		{
+			name:            "Query-comma URL followed by a real mirror",
+			input:           "https://archive.org/compress/item/formats=PNG,LOG,http://mirror.example.com/item.zip",
+			expectedURL:     "https://archive.org/compress/item/formats=PNG,LOG",
+			expectedMirrors: []string{"https://archive.org/compress/item/formats=PNG,LOG", "http://mirror.example.com/item.zip"},
+		},
+		{
 			name:            "Empty URL",
 			input:           "",
 			expectedURL:     "",
