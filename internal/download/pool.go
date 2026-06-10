@@ -327,7 +327,6 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 	p.limiterMu.Unlock()
 
 	p.mu.Lock()
-	defer p.mu.Unlock()
 
 	inheritedIDs := make([]string, 0)
 	for id, cfg := range p.queued {
@@ -351,10 +350,9 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 		}
 		inheritedIDs = append(inheritedIDs, id)
 	}
+	p.mu.Unlock()
 
 	p.limiterMu.Lock()
-	defer p.limiterMu.Unlock()
-
 	if p.downloadLimiters == nil {
 		p.downloadLimiters = make(map[string]*engine.RateLimiter)
 	}
@@ -366,6 +364,7 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 		}
 		limiter.SetRate(rate, rateLimiterBurst(rate))
 	}
+	p.limiterMu.Unlock()
 }
 
 // SetDownloadRateLimit updates a specific download's rate limit (bytes/sec).

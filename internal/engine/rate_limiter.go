@@ -9,6 +9,12 @@ import (
 
 const maxInt64 = int64(^uint64(0) >> 1)
 
+// RateLimiter is a custom token-bucket rate limiter.
+// We use a custom implementation instead of golang.org/x/time/rate because
+// x/time/rate's SetLimit does not wake up already-blocked WaitN calls. For a
+// download manager with interactive UX, we need WaitN to instantly react to
+// a rate increase (via wakeCh) so the user doesn't experience "stuck"
+// downloads after lifting a heavy throttle.
 type RateLimiter struct {
 	rate       int64
 	tokens     int64
