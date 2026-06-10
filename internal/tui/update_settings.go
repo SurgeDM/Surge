@@ -286,4 +286,3 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	return m, nil
 }
-

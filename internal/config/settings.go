@@ -308,8 +308,6 @@ func GetSettingsPath() string {
 // LoadSettings loads settings from disk. Returns defaults if file doesn't exist
 // or if the JSON is corrupt, so the application can always start.
 func LoadSettings() (*Settings, error) {
-
-
 	path := GetSettingsPath()
 
 	data, err := os.ReadFile(path)
@@ -371,8 +369,6 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 	})
 	return cachedSettingsMetadata
 }
-
-
 
 // CategoryOrder returns the display order of settings categories.
 func CategoryOrder() []string {
