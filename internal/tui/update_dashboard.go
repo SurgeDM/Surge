@@ -173,8 +173,8 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.list.FilterState() == list.Filtering {
 			// Fall through
 		} else if d := m.GetSelectedDownload(); d != nil {
-			if !d.done {
-				m.addLogEntry(LogStyleError.Render("\u2716 Purge is only for completed downloads (use 'x' to cancel)"))
+			if !d.done || d.err != nil {
+				m.addLogEntry(LogStyleError.Render("\u2716 Purge is only for successfully completed downloads"))
 				return m, nil
 			}
 			if m.Service == nil {

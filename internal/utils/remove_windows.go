@@ -20,14 +20,18 @@ const (
 // file so that Windows users do not see spurious "access denied" errors.
 func RemoveFile(path string) error {
 	wait := removeRetryBaseInterval
-	for i := 0; i < removeRetryAttempts; i++ {
+	for i := 0; i <= removeRetryAttempts; i++ {
 		err := os.Remove(path)
 		if err == nil || os.IsNotExist(err) {
 			return nil
+		}
+		if i == removeRetryAttempts {
+			Debug("RemoveFile(%s): final attempt %d failed: %v", path, i+1, err)
+			return err
 		}
 		Debug("RemoveFile(%s): attempt %d failed: %v", path, i+1, err)
 		time.Sleep(wait)
 		wait *= 2
 	}
-	return os.Remove(path)
+	return nil
 }

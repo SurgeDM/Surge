@@ -10,7 +10,6 @@ import (
 	"github.com/SurgeDM/Surge/internal/bugreport"
 	"github.com/SurgeDM/Surge/internal/clipboard"
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -458,25 +457,37 @@ func (m RootModel) updatePurgeConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			filename = d.Filename
 		}
 		if filename == "" {
-			if entry, err := state.GetDownload(targetID); err == nil && entry != nil {
-				filename = entry.Filename
+			if status, err := m.Service.GetStatus(targetID); err == nil && status != nil {
+				filename = status.Filename
+			}
+			if filename == "" {
+				if history, err := m.Service.History(); err == nil {
+					for _, entry := range history {
+						if entry.ID == targetID {
+							filename = entry.Filename
+							break
+						}
+					}
+				}
 			}
 		}
 
-		if err := m.Service.Purge(targetID); err != nil {
+		err := m.Service.Purge(targetID)
+
+		m.removeDownloadByID(targetID)
+		m.UpdateListItems()
+
+		if err != nil {
 			if !errors.Is(err, types.ErrNotFound) {
 				m.addLogEntry(LogStyleError.Render("\u2716 Purge failed: " + err.Error()))
 				return m, nil
 			}
 		}
 
-		m.removeDownloadByID(targetID)
-		m.UpdateListItems()
-
 		if filename != "" {
-			m.addLogEntry(LogStyleError.Render("\u2716 Purged: " + filename))
+			m.addLogEntry(LogStyleStarted.Render("\u2714 Purged: " + filename))
 		} else {
-			m.addLogEntry(LogStyleError.Render("\u2716 Purged download"))
+			m.addLogEntry(LogStyleStarted.Render("\u2714 Purged download"))
 		}
 
 		return m, nil
