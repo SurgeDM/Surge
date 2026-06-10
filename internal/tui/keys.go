@@ -180,11 +180,11 @@ var Keys = KeyMap{
 		),
 		NextTab: key.NewBinding(
 			key.WithKeys("tab", "right"),
-			key.WithHelp("tab/→", "next tab"),
+			key.WithHelp("tab/\u2192", "next tab"),
 		),
 		PrevTab: key.NewBinding(
 			key.WithKeys("left"),
-			key.WithHelp("←", "prev tab"),
+			key.WithHelp("\u2190", "prev tab"),
 		),
 		Add: key.NewBinding(
 			key.WithKeys("a"),
@@ -260,11 +260,11 @@ var Keys = KeyMap{
 		),
 		LogUp: key.NewBinding(
 			key.WithKeys("up"),
-			key.WithHelp("↑", "scroll up"),
+			key.WithHelp("\u2191", "scroll up"),
 		),
 		LogDown: key.NewBinding(
 			key.WithKeys("down"),
-			key.WithHelp("↓", "scroll down"),
+			key.WithHelp("\u2193", "scroll down"),
 		),
 		LogTop: key.NewBinding(
 			key.WithKeys("g"),
@@ -471,8 +471,8 @@ var Keys = KeyMap{
 		),
 	},
 	CategoryMgr: CategoryManagerKeyMap{
-		Up:     key.NewBinding(key.WithKeys("up"), key.WithHelp("↑", "up")),
-		Down:   key.NewBinding(key.WithKeys("down"), key.WithHelp("↓", "down")),
+		Up:     key.NewBinding(key.WithKeys("up"), key.WithHelp("\u2191", "up")),
+		Down:   key.NewBinding(key.WithKeys("down"), key.WithHelp("\u2193", "down")),
 		Edit:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "edit")),
 		Add:    key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add")),
 		Delete: key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),
@@ -505,11 +505,11 @@ var Keys = KeyMap{
 	SpeedLimits: SpeedLimitsKeyMap{
 		Up: key.NewBinding(
 			key.WithKeys("up"),
-			key.WithHelp("↑", "up"),
+			key.WithHelp("\u2191", "up"),
 		),
 		Down: key.NewBinding(
 			key.WithKeys("down"),
-			key.WithHelp("↓", "down"),
+			key.WithHelp("\u2193", "down"),
 		),
 		Edit: key.NewBinding(
 			key.WithKeys("enter"),

@@ -75,6 +75,9 @@ func (s *httpAPITestService) UpdateURL(string, string) error {
 func (s *httpAPITestService) Delete(string) error {
 	return nil
 }
+func (s *httpAPITestService) Purge(string) error {
+	return nil
+}
 
 func (s *httpAPITestService) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
 	channel := make(chan interface{}, len(s.streamMsgs))
@@ -578,6 +581,52 @@ func TestRateLimitEndpoint_NegativeRateReturns400(t *testing.T) {
 	}
 }
 
+// recordingActionService records the id passed to each lifecycle action so
+// tests can assert how the CLI delivered it to the HTTP API.
+type recordingActionService struct {
+	*httpAPITestService
+	ids map[string]string // action -> received id
+}
+
+func (s *recordingActionService) Pause(id string) error  { s.ids["pause"] = id; return nil }
+func (s *recordingActionService) Resume(id string) error { s.ids["resume"] = id; return nil }
+func (s *recordingActionService) Delete(id string) error { s.ids["delete"] = id; return nil }
+func (s *recordingActionService) Purge(id string) error  { s.ids["purge"] = id; return nil }
+
+// Regression for #456: ExecuteAPIAction sent the download id as a path segment
+// (e.g. POST /pause/<id>), but the HTTP API registers exact routes and reads the
+// ExecuteAPIAction caller (pause/resume/delete), not just one, so a future
+// action-specific regression is caught.
+func TestExecuteAPIAction_SendsIDAsQueryParam(t *testing.T) {
+	rec := &recordingActionService{httpAPITestService: &httpAPITestService{}, ids: map[string]string{}}
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", rec)
+	server := httptest.NewServer(mux)
+	defer server.Close()
+
+	prevHost, prevToken := globalHost, globalToken
+	globalHost, globalToken = "", ""
+	defer func() { globalHost, globalToken = prevHost, prevToken }()
+	t.Setenv("SURGE_HOST", server.URL)
+	t.Setenv("SURGE_TOKEN", "test-token")
+
+	// 32 chars so resolveDownloadID treats it as a full id (no server lookup).
+	const fullID = "abcdef0123456789abcdef0123456789"
+	for _, action := range []struct{ name, endpoint string }{
+		{"pause", "/pause"},
+		{"resume", "/resume"},
+		{"delete", "/delete"},
+		{"purge", "/purge"},
+	} {
+		if err := ExecuteAPIAction(fullID, action.endpoint, http.MethodPost, action.name); err != nil {
+			t.Fatalf("ExecuteAPIAction(%s): id should reach %s via ?id=, got error: %v", action.name, action.endpoint, err)
+		}
+		if rec.ids[action.name] != fullID {
+			t.Fatalf("%s: server received id %q via query param, want %q", action.name, rec.ids[action.name], fullID)
+		}
+	}
+}
+
 // TestRateLimitPerDownloadEndpoint tests the /rate-limit?id=...&rate=... endpoint.
 func TestRateLimitPerDownloadEndpoint(t *testing.T) {
 	for _, tt := range []struct {
@@ -798,53 +847,10 @@ func (r *rateLimitWrapper) StreamEvents(context.Context) (<-chan interface{}, fu
 	return make(chan interface{}), func() {}, nil
 }
 func (r *rateLimitWrapper) Publish(interface{}) error { return nil }
-
-type recordingActionService struct {
-	*httpAPITestService
-	actionCalledWithID string
-}
-
-func (s *recordingActionService) Pause(id string) error {
-	s.actionCalledWithID = id
-	return nil
-}
-
-// TestExecuteAPIAction_SendsIDAsQueryParam is a regression guard for #456.
-// It verifies that ExecuteAPIAction sends the download ID as a query parameter (?id=<id>)
-// rather than as a path segment (e.g. /pause/<id>).
-func TestExecuteAPIAction_SendsIDAsQueryParam(t *testing.T) {
-	svc := &recordingActionService{
-		httpAPITestService: newRateLimitTestService(),
-	}
-	mux := http.NewServeMux()
-	registerHTTPRoutes(mux, 0, "", svc)
-	server := httptest.NewServer(mux)
-	defer server.Close()
-
-	originalHost := globalHost
-	originalToken := globalToken
-	t.Cleanup(func() {
-		globalHost = originalHost
-		globalToken = originalToken
-	})
-	globalHost = server.URL
-	globalToken = "test-token"
-
-	// Use a 32-character ID so resolveDownloadID doesn't attempt to connect or hit DB
-	testID := "0123456789abcdef0123456789abcdef"
-
-	err := ExecuteAPIAction(testID, "/pause", http.MethodPost, "Success")
-	if err != nil {
-		t.Fatalf("ExecuteAPIAction failed: %v", err)
-	}
-
-	if svc.actionCalledWithID != testID {
-		t.Errorf("Expected action to be called with ID %q, got %q", testID, svc.actionCalledWithID)
-	}
-}
 func (r *rateLimitWrapper) GetStatus(id string) (*types.DownloadStatus, error) {
 	return nil, errors.New("not found")
 }
+func (r *rateLimitWrapper) Purge(id string) error { return nil }
 func (r *rateLimitWrapper) Shutdown() error                          { return nil }
 func (r *rateLimitWrapper) SetRateLimit(id string, rate int64) error { return nil }
 func (r *rateLimitWrapper) ClearRateLimit(id string) error           { return nil }

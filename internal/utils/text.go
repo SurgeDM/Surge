@@ -164,11 +164,11 @@ func Truncate(s string, limit int) string {
 		return s
 	}
 	if limit <= 1 {
-		return "…"
+		return "\u2026"
 	}
 
 	sub := truncateToWidth(s, limit-1)
-	return sub + "…"
+	return sub + "\u2026"
 }
 
 // TruncateMiddle truncates a string in the middle to a maximum visual width.
@@ -225,10 +225,10 @@ func TruncateMiddle(s string, limit int) string {
 		if !strings.HasSuffix(lStr, "\x1b[0m") {
 			lStr += "\x1b[0m"
 		}
-		return lStr + "…" + state + right.String()
+		return lStr + "\u2026" + state + right.String()
 	}
 
-	return lStr + "…" + right.String()
+	return lStr + "\u2026" + right.String()
 }
 
 // TruncateTwoLines middle-truncates a string to fit in at most 2 lines of a given width.

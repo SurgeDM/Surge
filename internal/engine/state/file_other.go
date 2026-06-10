@@ -2,9 +2,10 @@
 
 package state
 
-import "os"
+import "github.com/SurgeDM/Surge/internal/utils"
 
-// retryRemove is a no-op wrapper on non-Windows platforms.
+// retryRemove delegates to utils.RemoveFile. On non-Windows platforms this is
+// a direct os.Remove call; the wrapper exists only for API consistency.
 func retryRemove(path string) error {
-	return os.Remove(path)
+	return utils.RemoveFile(path)
 }

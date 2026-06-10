@@ -32,7 +32,7 @@ func (m RootModel) viewSpeedLimits() string {
 		} else if strings.HasPrefix(valStr, "inherit") {
 			// keep it as is
 		} else if !strings.HasPrefix(meta.Key, "dl:") {
-			valStr = "≈ " + valStr
+			valStr = "\u2248 " + valStr
 		}
 
 		items = append(items, components.ListInputItem{

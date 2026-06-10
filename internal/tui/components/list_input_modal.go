@@ -41,7 +41,7 @@ func (m ListInputModal) viewContent() string {
 		var valueStyle lipgloss.Style
 
 		if i == m.Cursor {
-			prefix = lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true).Render("▸ ")
+			prefix = lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true).Render("\u25B8 ")
 			labelStyle = lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true)
 			valueStyle = lipgloss.NewStyle().Foreground(colors.LightGray())
 		} else {

@@ -59,6 +59,7 @@ const (
 	BugReportLogPathState
 	CategoryResetConfirmState
 	SpeedLimitsState
+	PurgeConfirmState
 )
 
 type FilePickerOrigin int
@@ -118,6 +119,7 @@ type RootModel struct {
 	pinnedTab    int // -1=None, 0=Queued, 1=Active, 2=Done
 	inputs       []textinput.Model
 	focusedInput int
+	purgeTargetID string
 	// Service Interface
 	// Core
 	Service      core.DownloadService

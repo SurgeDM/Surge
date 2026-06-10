@@ -71,7 +71,7 @@ func (m RootModel) View() tea.View {
 
 	// Terminal too small to render any meaningful layout
 	if m.width < MinTermWidth || m.height < MinTermHeight {
-		msg := lipgloss.NewStyle().Foreground(colors.Cyan()).Render(fmt.Sprintf("Terminal too small (min: %d×%d)", MinTermWidth, MinTermHeight))
+		msg := lipgloss.NewStyle().Foreground(colors.Cyan()).Render(fmt.Sprintf("Terminal too small (min: %d\u00D7%d)", MinTermWidth, MinTermHeight))
 		return m.wrapView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, msg))
 	}
 
@@ -311,6 +311,10 @@ func (m RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(m.viewCategoryResetConfirm()))
 	}
 
+	if m.state == PurgeConfirmState {
+		return m.wrapView(m.renderModalWithOverlay(m.viewPurgeConfirm()))
+	}
+
 	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
 		modal := components.ConfirmationModal{
 			Title:       "\u2b06 Update Available",
@@ -397,7 +401,7 @@ func (m RootModel) View() tea.View {
 	if limitVal != "" {
 		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", limitVal)
 	} else {
-		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", lipgloss.NewStyle().Foreground(colors.Gray()).Render("∞"))
+		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", lipgloss.NewStyle().Foreground(colors.Gray()).Render("\u221E"))
 	}
 
 	// Version indicator
@@ -675,7 +679,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		if d.RateLimitSet && d.RateLimit > 0 {
 			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
 		} else if d.RateLimitSet {
-			speedStr += " (Limit: ∞)"
+			speedStr += " (Limit: \u221E)"
 		}
 		etaStr = "\u221e"
 	} else {
@@ -683,7 +687,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		if d.RateLimitSet && d.RateLimit > 0 {
 			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
 		} else if d.RateLimitSet {
-			speedStr += " (Limit: ∞)"
+			speedStr += " (Limit: \u221E)"
 		}
 		if d.Total > 0 {
 			remaining := d.Total - d.Downloaded
@@ -991,6 +995,38 @@ func (m RootModel) viewRestartConfirm() string {
 
 	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
 	return renderBtopBox(PaneTitleStyle.Render(" Restart Required "), "", content, w, h, colors.Orange())
+}
+
+func (m RootModel) viewPurgeConfirm() string {
+	filename := ""
+	if d := m.FindDownloadByID(m.purgeTargetID); d != nil {
+		filename = d.Filename
+	}
+
+	if filename == "" {
+		filename = "this download"
+	} else if len(filename) > 30 {
+		filename = filename[:27] + "..."
+	}
+
+	modal := components.ConfirmationModal{
+		Title:            "Purge Download",
+		Message:          "Permanently delete this download?",
+		Detail:           fmt.Sprintf("File: %s\nThis will also remove the downloaded file(s) from disk.", filename),
+		Keys:             m.keys.QuitConfirm, // QuitConfirm works as a general yes/no
+		Help:             m.help,
+		BorderColor:      colors.Red(),
+		ShowYesNoButtons: true,
+		YesNoFocused:     m.quitConfirmFocused,
+		YesLabel:         "Yes",
+		NoLabel:          "No",
+	}
+
+	w, h := GetDynamicModalDimensions(m.width, m.height, 46, 8, 60, 12)
+	modal.Width = w
+	modal.Height = h
+
+	return modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 }
 
 func (m RootModel) viewCategoryResetConfirm() string {
