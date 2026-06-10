@@ -791,6 +791,8 @@ func (m RootModel) getSettingUnit() string {
 		return " seconds"
 	case "slow_worker_threshold", "speed_ema_alpha":
 		return " (0.0-1.0)"
+	case "global_rate_limit", "default_download_rate_limit":
+		return " MB/s"
 	default:
 		return ""
 	}
@@ -820,6 +822,19 @@ func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool
 				secs = v
 			}
 			return fmt.Sprintf("%.0f", secs)
+		}
+	case "global_rate_limit", "default_download_rate_limit":
+		if vStr, ok := value.(string); ok && vStr != "" {
+			if parsed, err := utils.ParseRateLimitValue(vStr); err == nil {
+				if parsed == 0 {
+					return "0"
+				}
+				mb := float64(parsed) / 1000000.0
+				if mb == float64(int64(mb)) {
+					return fmt.Sprintf("%.0f", mb)
+				}
+				return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", mb), "0"), ".")
+			}
 		}
 	}
 
