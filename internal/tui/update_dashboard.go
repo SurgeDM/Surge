@@ -146,7 +146,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			// Fall through
 		} else if d := m.GetSelectedDownload(); d != nil {
 			if m.Service == nil {
-				m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
+				m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
 				return m, nil
 			}
 			targetID := d.ID
@@ -158,7 +158,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				if errors.Is(err, types.ErrNotFound) {
 					m.removeDownloadByID(targetID)
 				} else {
-					m.addLogEntry(LogStyleError.Render("✖ Delete failed: " + err.Error()))
+					m.addLogEntry(LogStyleError.Render("\u2716 Delete failed: " + err.Error()))
 				}
 			} else {
 				m.removeDownloadByID(targetID)
@@ -168,11 +168,31 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	// Delete download + file from disk (purge)
+	if key.Matches(msg, m.keys.Dashboard.PurgeFile) {
+		if m.list.FilterState() == list.Filtering {
+			// Fall through
+		} else if d := m.GetSelectedDownload(); d != nil {
+			if !d.done || d.err != nil {
+				m.addLogEntry(LogStyleError.Render("\u2716 Purge is only for successfully completed downloads"))
+				return m, nil
+			}
+			if m.Service == nil {
+				m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
+				return m, nil
+			}
+			m.purgeTargetID = d.ID
+			m.quitConfirmFocused = 1 // default focus on "Cancel"
+			m.state = PurgeConfirmState
+			return m, nil
+		}
+	}
+
 	// Pause/Resume toggle
 	if key.Matches(msg, m.keys.Dashboard.Pause) {
 		if d := m.GetSelectedDownload(); d != nil {
 			if m.Service == nil {
-				m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
+				m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
 				return m, nil
 			}
 			if !d.done {
@@ -181,14 +201,14 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					d.paused = false
 					d.resuming = true
 					if err := m.Service.Resume(d.ID); err != nil {
-						m.addLogEntry(LogStyleError.Render("✖ Resume failed: " + err.Error()))
+						m.addLogEntry(LogStyleError.Render("\u2716 Resume failed: " + err.Error()))
 						d.paused = true // Revert
 						d.resuming = false
 					}
 				} else {
 					// Pause
 					if err := m.Service.Pause(d.ID); err != nil {
-						m.addLogEntry(LogStyleError.Render("✖ Pause failed: " + err.Error()))
+						m.addLogEntry(LogStyleError.Render("\u2716 Pause failed: " + err.Error()))
 					} else {
 						d.resuming = false
 						d.pausing = true
@@ -219,7 +239,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Dashboard.Refresh) {
 		if d := m.GetSelectedDownload(); d != nil {
 			if m.Service == nil {
-				m.addLogEntry(LogStyleError.Render("✖ Service unavailable"))
+				m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
 				return m, nil
 			}
 			// Only allow refresh if download is paused or errored
@@ -228,7 +248,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.urlUpdateInput.SetValue(d.URL)
 				m.urlUpdateInput.Focus()
 			} else {
-				m.addLogEntry(LogStyleError.Render("✖ Pause download before refreshing URL"))
+				m.addLogEntry(LogStyleError.Render("\u2716 Pause download before refreshing URL"))
 			}
 		}
 		return m, nil
@@ -267,11 +287,11 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if !config.Resolve[bool](m.Settings.Categories.CategoryEnabled) || len(m.Settings.Categories.Categories) == 0 {
 			if m.categoryFilter != "" {
 				m.categoryFilter = ""
-				m.addLogEntry(LogStyleStarted.Render("📂 Filter: All"))
+				m.addLogEntry(LogStyleStarted.Render("\U0001F4C2 Filter: All"))
 				m.UpdateListItems()
 				return m, nil
 			}
-			m.addLogEntry(LogStyleError.Render("✖ Enable categories in Settings first"))
+			m.addLogEntry(LogStyleError.Render("\u2716 Enable categories in Settings first"))
 			return m, nil
 		}
 		names := config.CategoryNames(m.Settings.Categories.Categories)
@@ -289,7 +309,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if label == "" {
 			label = "All"
 		}
-		m.addLogEntry(LogStyleStarted.Render("📂 Filter: " + label))
+		m.addLogEntry(LogStyleStarted.Render("\U0001F4C2 Filter: " + label))
 		m.UpdateListItems()
 		return m, nil
 	}

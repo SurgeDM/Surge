@@ -58,6 +58,7 @@ const (
 	BugReportSystemDetailsState
 	BugReportLogPathState
 	CategoryResetConfirmState
+	PurgeConfirmState
 )
 
 type FilePickerOrigin int
@@ -192,6 +193,9 @@ type RootModel struct {
 	catMgrError     string             // Error message for display in category manager
 	// Quit confirm button focus (0 = Yep!, 1 = Nope)
 	quitConfirmFocused int
+
+	// Purge confirm: ID of download pending file deletion
+	purgeTargetID string
 
 	// Bug report flow context
 	bugReportIncludeSystemInfo bool

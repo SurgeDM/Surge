@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/bugreport"
 	"github.com/SurgeDM/Surge/internal/clipboard"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -350,21 +352,21 @@ func (m RootModel) buildCoreBugReportURL() string {
 
 func (m RootModel) tryOpenBugReportURL(reportURL string) RootModel {
 	if reportURL == "" {
-		m.addLogEntry(LogStyleError.Render("✖ Could not open browser. Try running surge bug-report from your terminal instead."))
+		m.addLogEntry(LogStyleError.Render("\u2716 Could not open browser. Try running surge bug-report from your terminal instead."))
 		return m
 	}
 
 	if err := openBugReportBrowser(reportURL); err != nil {
 		if err := writeBugReportClipboard(reportURL); err == nil {
-			m.addLogEntry(LogStyleError.Render("✖ Could not open browser. URL copied to clipboard."))
+			m.addLogEntry(LogStyleError.Render("\u2716 Could not open browser. URL copied to clipboard."))
 			return m
 		}
 
-		m.addLogEntry(LogStyleError.Render("✖ Could not open browser. Try running surge bug-report from your terminal instead."))
+		m.addLogEntry(LogStyleError.Render("\u2716 Could not open browser. Try running surge bug-report from your terminal instead."))
 		return m
 	}
 
-	m.addLogEntry(LogStyleStarted.Render("🐞 Opening browser to file bug report..."))
+	m.addLogEntry(LogStyleStarted.Render("\U0001F41E Opening browser to file bug report..."))
 	return m
 }
 
@@ -433,6 +435,81 @@ func (m RootModel) updateCategoryResetConfirm(msg tea.KeyPressMsg) (tea.Model, t
 		return confirmReset()
 	case yesNoNo, yesNoCancel:
 		return cancelReset()
+	}
+
+	return m, nil
+}
+
+func (m RootModel) updatePurgeConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	confirmPurge := func() (tea.Model, tea.Cmd) {
+		targetID := m.purgeTargetID
+		m.purgeTargetID = ""
+		m.quitConfirmFocused = 0
+		m.state = DashboardState
+
+		if m.Service == nil {
+			m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
+			return m, nil
+		}
+
+		filename := ""
+		if d := m.FindDownloadByID(targetID); d != nil {
+			filename = d.Filename
+		}
+		if filename == "" {
+			if status, err := m.Service.GetStatus(targetID); err == nil && status != nil {
+				filename = status.Filename
+			}
+			if filename == "" {
+				if history, err := m.Service.History(); err == nil {
+					for _, entry := range history {
+						if entry.ID == targetID {
+							filename = entry.Filename
+							break
+						}
+					}
+				}
+			}
+		}
+
+		err := m.Service.Purge(targetID)
+
+		m.removeDownloadByID(targetID)
+		m.UpdateListItems()
+
+		if err != nil {
+			if !errors.Is(err, types.ErrNotFound) {
+				m.addLogEntry(LogStyleError.Render("\u2716 Purge failed: " + err.Error()))
+				return m, nil
+			}
+		}
+
+		if filename != "" {
+			m.addLogEntry(LogStyleStarted.Render("\u2714 Purged: " + filename))
+		} else {
+			m.addLogEntry(LogStyleStarted.Render("\u2714 Purged download"))
+		}
+
+		return m, nil
+	}
+
+	cancelPurge := func() (tea.Model, tea.Cmd) {
+		m.purgeTargetID = ""
+		m.quitConfirmFocused = 0
+		m.state = DashboardState
+		return m, nil
+	}
+
+	m, decision, handled := m.handleYesNoSelection(msg)
+	if !handled {
+		return m, nil
+	}
+
+	switch decision {
+	case yesNoYes:
+		return confirmPurge()
+	case yesNoNo, yesNoCancel:
+		return cancelPurge()
 	}
 
 	return m, nil

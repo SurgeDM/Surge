@@ -51,6 +51,8 @@ func (f *fakeRemoteDownloadService) UpdateURL(id string, newURL string) error { 
 
 func (f *fakeRemoteDownloadService) Delete(id string) error { return nil }
 
+func (f *fakeRemoteDownloadService) Purge(id string) error { return nil }
+
 func (f *fakeRemoteDownloadService) StreamEvents(ctx context.Context) (<-chan interface{}, func(), error) {
 	ch := make(chan interface{})
 	return ch, func() { close(ch) }, nil

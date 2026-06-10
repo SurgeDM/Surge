@@ -37,6 +37,9 @@ type DownloadService interface {
 	// Delete cancels and removes a download.
 	Delete(id string) error
 
+	// Purge cancels and removes a download, and deletes its files from disk.
+	Purge(id string) error
+
 	// StreamEvents returns a channel that receives real-time download events.
 	// For local mode, this is a direct channel.
 	// For remote mode, this is sourced from SSE.

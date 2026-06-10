@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -589,6 +590,48 @@ func (s *LocalDownloadService) Delete(id string) error {
 	return nil
 }
 
+// Purge cancels and removes a download, and deletes its files from disk.
+func (s *LocalDownloadService) Purge(id string) error {
+	destPath := ""
+
+	// Get status before deleting so we know where the file is
+	status, err := s.GetStatus(id)
+	if err == nil && status != nil {
+		destPath = filepath.Clean(status.DestPath)
+	} else {
+		// Fallback to history
+		history, err := s.History()
+		if err == nil {
+			for _, entry := range history {
+				if entry.ID == id {
+					destPath = filepath.Clean(entry.DestPath)
+					break
+				}
+			}
+		}
+	}
+
+	// Delete from engine/db
+	if err := s.Delete(id); err != nil {
+		return err
+	}
+
+	// Delete files if we found a path
+	if destPath != "" && destPath != "." {
+		var errs []string
+		if err := utils.RemoveFile(destPath); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, err.Error())
+		}
+		if err := utils.RemoveFile(destPath + types.IncompleteSuffix); err != nil && !os.IsNotExist(err) {
+			errs = append(errs, err.Error())
+		}
+		if len(errs) > 0 {
+			return fmt.Errorf("failed to delete files: %s", strings.Join(errs, ", "))
+		}
+	}
+	return nil
+}
+
 // GetStatus returns a status for a single download by id.
 func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, error) {
 	if id == "" {
@@ -617,6 +660,7 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 			ID:         entry.ID,
 			URL:        entry.URL,
 			Filename:   entry.Filename,
+			DestPath:   entry.DestPath,
 			TotalSize:  entry.TotalSize,
 			Downloaded: entry.Downloaded,
 			Progress:   progress,

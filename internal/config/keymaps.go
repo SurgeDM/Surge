@@ -45,6 +45,7 @@ type DashboardKeyMap struct {
 	Pause          key.Binding
 	Refresh        key.Binding
 	Delete         key.Binding
+	PurgeFile      key.Binding
 	Settings       key.Binding
 	Log            key.Binding
 	ToggleHelp     key.Binding
@@ -212,7 +213,7 @@ func LoadKeyMap() (*KeyMap, error) {
 	if err := json.Unmarshal(data, &cfg); err != nil {
 		utils.Debug("Warning: corrupt keymap file %s: %v \u2014 using defaults", path, err)
 		defaults.StartupWarnings = append(defaults.StartupWarnings,
-			fmt.Sprintf("Config: keymap file is corrupt (%v) — all keybindings reset to defaults & rewrite the file", err))
+			fmt.Sprintf("Config: keymap file is corrupt (%v) \u2014 all keybindings reset to defaults & rewrite the file", err))
 		err = SaveKeyMap(defaults)
 		return defaults, err
 	}
@@ -379,11 +380,11 @@ func DefaultKeyMap() *KeyMap {
 			),
 			NextTab: key.NewBinding(
 				key.WithKeys("tab", "right"),
-				key.WithHelp("tab/→", "next tab"),
+				key.WithHelp("tab/\u2192", "next tab"),
 			),
 			PrevTab: key.NewBinding(
 				key.WithKeys("shift+tab", "left"),
-				key.WithHelp("shift+tab/←", "prev tab"),
+				key.WithHelp("shift+tab/\u2190", "prev tab"),
 			),
 			Add: key.NewBinding(
 				key.WithKeys("a"),
@@ -408,6 +409,10 @@ func DefaultKeyMap() *KeyMap {
 			Delete: key.NewBinding(
 				key.WithKeys("x"),
 				key.WithHelp("x", "delete"),
+			),
+			PurgeFile: key.NewBinding(
+				key.WithKeys("X"),
+				key.WithHelp("X", "delete+file"),
 			),
 			Settings: key.NewBinding(
 				key.WithKeys("s"),
@@ -455,11 +460,11 @@ func DefaultKeyMap() *KeyMap {
 			),
 			LogUp: key.NewBinding(
 				key.WithKeys("up"),
-				key.WithHelp("↑", "scroll up"),
+				key.WithHelp("\u2191", "scroll up"),
 			),
 			LogDown: key.NewBinding(
 				key.WithKeys("down"),
-				key.WithHelp("↓", "scroll down"),
+				key.WithHelp("\u2193", "scroll down"),
 			),
 			LogTop: key.NewBinding(
 				key.WithKeys("g"),
@@ -669,8 +674,8 @@ func DefaultKeyMap() *KeyMap {
 			),
 		},
 		CategoryMgr: CategoryManagerKeyMap{
-			Up:     key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("↑/k", "up")),
-			Down:   key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("↓/j", "down")),
+			Up:     key.NewBinding(key.WithKeys("up", "k"), key.WithHelp("\u2191/k", "up")),
+			Down:   key.NewBinding(key.WithKeys("down", "j"), key.WithHelp("\u2193/j", "down")),
 			Edit:   key.NewBinding(key.WithKeys("enter"), key.WithHelp("enter", "edit")),
 			Add:    key.NewBinding(key.WithKeys("a"), key.WithHelp("a", "add")),
 			Delete: key.NewBinding(key.WithKeys("x"), key.WithHelp("x", "delete")),
@@ -713,7 +718,7 @@ func (k DashboardKeyMap) ShortHelp() []key.Binding {
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab, k.PrevTab},
-		{k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.Settings, k.PinTab},
+		{k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.PurgeFile, k.Settings, k.PinTab},
 		{k.Log, k.OpenFile, k.ReportBug, k.Quit},
 	}
 }

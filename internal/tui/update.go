@@ -270,6 +270,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case CategoryResetConfirmState:
 			return m.updateCategoryResetConfirm(msg)
 
+		case PurgeConfirmState:
+			return m.updatePurgeConfirm(msg)
+
 		default:
 			return m, nil
 		}
