@@ -122,6 +122,12 @@ func TestParseURLArg_Unit(t *testing.T) {
 			expectedMirrors: []string{"https://archive.org/compress/item/formats=PNG,LOG", "http://mirror.example.com/item.zip"},
 		},
 		{
+			name:            "Bare scheme in query is not a mirror boundary",
+			input:           "https://primary.com/file?a=1,http:,http://mirror.example.com/file",
+			expectedURL:     "https://primary.com/file?a=1,http:",
+			expectedMirrors: []string{"https://primary.com/file?a=1,http:", "http://mirror.example.com/file"},
+		},
+		{
 			name:            "Empty URL",
 			input:           "",
 			expectedURL:     "",

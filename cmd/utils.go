@@ -108,11 +108,13 @@ func ParseURLArg(arg string) (string, []string) {
 
 // startsNewMirror reports whether a comma-separated segment begins a new
 // mirror rather than continuing the previous URL. Only http(s) URLs are
-// downloadable, so a segment is a mirror boundary only when it parses as an
-// absolute http or https URL.
+// downloadable, so a segment is a mirror boundary only when it starts with the
+// http:// or https:// prefix. Matching the literal prefix (rather than a
+// non-empty url.Parse scheme) keeps bare-scheme query values like "http:" glued
+// to the previous URL, and matches how the rest of the CLI recognizes URLs
+// (internal/clipboard/validator.go).
 func startsNewMirror(segment string) bool {
-	u, err := url.Parse(segment)
-	return err == nil && (u.Scheme == "http" || u.Scheme == "https")
+	return strings.HasPrefix(segment, "http://") || strings.HasPrefix(segment, "https://")
 }
 
 func resolveLocalToken() string {
