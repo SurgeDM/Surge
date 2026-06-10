@@ -115,6 +115,57 @@ func TestUpdate_DownloadStartedKeepsResuming(t *testing.T) {
 	}
 }
 
+func TestUpdate_DownloadStartedPropagatesRateLimit(t *testing.T) {
+	dm := NewDownloadModel("id-1", "http://example.com/file", "file", 0)
+	m := RootModel{
+		downloads:   []*DownloadModel{dm},
+		list:        NewDownloadList(80, 20),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
+	}
+
+	updated, _ := m.Update(events.DownloadStartedMsg{
+		DownloadID:   "id-1",
+		URL:          "http://example.com/file",
+		Filename:     "file",
+		Total:        100,
+		DestPath:     "/tmp/file",
+		State:        types.NewProgressState("id-1", 100),
+		RateLimit:    2 * 1024 * 1024,
+		RateLimitSet: true,
+	})
+	m2 := updated.(RootModel)
+	d := m2.downloads[0]
+	if d.RateLimit != 2*1024*1024 || !d.RateLimitSet {
+		t.Fatalf("rate limit = (%d, %v), want (%d, true)", d.RateLimit, d.RateLimitSet, 2*1024*1024)
+	}
+}
+
+func TestUpdate_DownloadStartedNewDownloadPropagatesRateLimit(t *testing.T) {
+	m := RootModel{
+		list:        NewDownloadList(80, 20),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
+	}
+
+	updated, _ := m.Update(events.DownloadStartedMsg{
+		DownloadID:   "id-1",
+		URL:          "http://example.com/file",
+		Filename:     "file",
+		Total:        100,
+		DestPath:     "/tmp/file",
+		State:        types.NewProgressState("id-1", 100),
+		RateLimit:    3 * 1024 * 1024,
+		RateLimitSet: true,
+	})
+	m2 := updated.(RootModel)
+	if len(m2.downloads) != 1 {
+		t.Fatalf("expected 1 download, got %d", len(m2.downloads))
+	}
+	d := m2.downloads[0]
+	if d.RateLimit != 3*1024*1024 || !d.RateLimitSet {
+		t.Fatalf("rate limit = (%d, %v), want (%d, true)", d.RateLimit, d.RateLimitSet, 3*1024*1024)
+	}
+}
+
 func TestUpdate_EnqueueSuccessMergesOptimisticEntryAfterStart(t *testing.T) {
 	optimistic := NewDownloadModel("pending-1", "http://example.com/file", "file.bin", 0)
 	optimistic.Destination = "/tmp/file.bin"
@@ -189,6 +240,76 @@ func TestUpdate_PauseResumeEventsNormalizeFlags(t *testing.T) {
 	d = m3.downloads[0]
 	if d.paused || d.pausing || !d.resuming {
 		t.Fatalf("Expected paused/pausing cleared and resuming=true after DownloadResumedMsg, got paused=%v pausing=%v resuming=%v", d.paused, d.pausing, d.resuming)
+	}
+}
+
+func TestUpdate_DownloadPausedPropagatesRateLimit(t *testing.T) {
+	m := RootModel{
+		downloads: []*DownloadModel{
+			{ID: "id-1"},
+		},
+		list:        NewDownloadList(80, 20),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
+	}
+
+	updated, _ := m.Update(events.DownloadPausedMsg{
+		DownloadID:   "id-1",
+		Filename:     "file",
+		Downloaded:   50,
+		RateLimit:    4 * 1024 * 1024,
+		RateLimitSet: true,
+	})
+	m2 := updated.(RootModel)
+	d := m2.downloads[0]
+	if d.RateLimit != 4*1024*1024 || !d.RateLimitSet {
+		t.Fatalf("rate limit = (%d, %v), want (%d, true)", d.RateLimit, d.RateLimitSet, 4*1024*1024)
+	}
+}
+
+func TestUpdate_DownloadQueuedPropagatesRateLimit(t *testing.T) {
+	m := RootModel{
+		list:        NewDownloadList(80, 20),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
+	}
+
+	updated, _ := m.Update(events.DownloadQueuedMsg{
+		DownloadID:   "id-1",
+		Filename:     "file",
+		URL:          "http://example.com/file",
+		DestPath:     "/tmp/file",
+		RateLimit:    5 * 1024 * 1024,
+		RateLimitSet: true,
+	})
+	m2 := updated.(RootModel)
+	if len(m2.downloads) != 1 {
+		t.Fatalf("expected 1 download, got %d", len(m2.downloads))
+	}
+	d := m2.downloads[0]
+	if d.RateLimit != 5*1024*1024 || !d.RateLimitSet {
+		t.Fatalf("rate limit = (%d, %v), want (%d, true)", d.RateLimit, d.RateLimitSet, 5*1024*1024)
+	}
+}
+
+func TestUpdate_DownloadQueuedExistingDownloadPropagatesRateLimit(t *testing.T) {
+	dm := NewDownloadModel("id-1", "http://example.com/file", "file", 0)
+	m := RootModel{
+		downloads:   []*DownloadModel{dm},
+		list:        NewDownloadList(80, 20),
+		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
+	}
+
+	updated, _ := m.Update(events.DownloadQueuedMsg{
+		DownloadID:   "id-1",
+		Filename:     "file",
+		URL:          "http://example.com/file",
+		DestPath:     "/tmp/file",
+		RateLimit:    6 * 1024 * 1024,
+		RateLimitSet: true,
+	})
+	m2 := updated.(RootModel)
+	d := m2.downloads[0]
+	if d.RateLimit != 6*1024*1024 || !d.RateLimitSet {
+		t.Fatalf("rate limit = (%d, %v), want (%d, true)", d.RateLimit, d.RateLimitSet, 6*1024*1024)
 	}
 }
 
