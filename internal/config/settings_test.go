@@ -139,7 +139,7 @@ func TestEveryValidatorIsInCategoriesList(t *testing.T) {
 	var collect func(v reflect.Value)
 	collect = func(v reflect.Value) {
 		switch v.Kind() {
-		case reflect.Ptr:
+		case reflect.Pointer:
 			if v.IsNil() {
 				return
 			}
