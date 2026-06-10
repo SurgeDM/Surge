@@ -20,7 +20,7 @@ const (
 // file so that Windows users do not see spurious "access denied" errors.
 func RemoveFile(path string) error {
 	wait := removeRetryBaseInterval
-	for i := 0; i <= removeRetryAttempts; i++ {
+	for i := 0; ; i++ {
 		err := os.Remove(path)
 		if err == nil || os.IsNotExist(err) {
 			return nil
@@ -33,5 +33,4 @@ func RemoveFile(path string) error {
 		time.Sleep(wait)
 		wait *= 2
 	}
-	return nil
 }
