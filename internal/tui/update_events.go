@@ -116,6 +116,8 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.FilenameLower = strings.ToLower(msg.Filename)
 			d.Total = msg.Total
 			d.Destination = msg.DestPath
+			d.RateLimit = msg.RateLimit
+			d.RateLimitSet = msg.RateLimitSet
 			d.StartTime = time.Now()
 			d.paused = false
 			d.pausing = false
@@ -141,6 +143,8 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if !found {
 			newDownload := NewDownloadModel(msg.DownloadID, msg.URL, msg.Filename, msg.Total)
 			newDownload.Destination = msg.DestPath
+			newDownload.RateLimit = msg.RateLimit
+			newDownload.RateLimitSet = msg.RateLimitSet
 			if msg.State != nil {
 				newDownload.state = msg.State
 			}
@@ -212,6 +216,8 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			d.pausing = false
 			d.resuming = false
 			d.Downloaded = msg.Downloaded
+			d.RateLimit = msg.RateLimit
+			d.RateLimitSet = msg.RateLimitSet
 			d.Speed = 0
 			m.addLogEntry(LogStylePaused.Render("\u23f8 Paused: " + d.Filename))
 		}
@@ -232,12 +238,16 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// We optimistically added it, but if it came from elsewhere, handle it
 		found := false
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.RateLimit = msg.RateLimit
+			d.RateLimitSet = msg.RateLimitSet
 			found = true
 		}
 		if !found {
 			// Add placeholder
 			newDownload := NewDownloadModel(msg.DownloadID, msg.URL, msg.Filename, 0)
 			newDownload.Destination = msg.DestPath
+			newDownload.RateLimit = msg.RateLimit
+			newDownload.RateLimitSet = msg.RateLimitSet
 			m.downloads = append(m.downloads, newDownload)
 			m.SelectedDownloadID = msg.DownloadID
 			m.UpdateListItems()
