@@ -190,7 +190,6 @@ func (p *WorkerPool) ensureLimiterForDownload(downloadID string) {
 		} else {
 			limiter.SetRate(rate, rateLimiterBurst(rate))
 		}
-		multiLimiter := engine.NewMultiLimiter(p.globalLimiter, limiter)
 		p.limiterMu.Unlock()
 
 		p.mu.Lock()
@@ -198,9 +197,6 @@ func (p *WorkerPool) ensureLimiterForDownload(downloadID string) {
 		if !ok {
 			p.mu.Unlock()
 			return
-		}
-		if ad.config.Limiter == nil {
-			ad.config.Limiter = multiLimiter
 		}
 		currentRate := ad.config.RateLimitBps
 		currentRateSet := ad.config.RateLimitSet

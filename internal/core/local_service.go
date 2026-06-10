@@ -708,7 +708,7 @@ func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
 	}
 	s.Pool.SetGlobalRateLimit(rate)
 	return s.updateRateLimitSetting(func(settings *config.Settings) {
-		settings.Network.GlobalRateLimit.Value = fmt.Sprintf("%d b/s", rate)
+		settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
 	})
 }
 
@@ -722,7 +722,7 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 	}
 	s.Pool.SetDefaultDownloadRateLimit(rate)
 	return s.updateRateLimitSetting(func(settings *config.Settings) {
-		settings.Network.DefaultDownloadRateLimit.Value = fmt.Sprintf("%d b/s", rate)
+		settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
 	})
 }
 

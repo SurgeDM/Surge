@@ -53,8 +53,6 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 		topSpeedBps = currentSpeedBps
 	}
 
-
-
 	maxSpeed := 0.0
 	for _, v := range graphData {
 		if v > maxSpeed {
