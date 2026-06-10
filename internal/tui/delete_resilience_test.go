@@ -19,6 +19,10 @@ func (m *mockService) Delete(id string) error {
 	return m.deleteErr
 }
 
+func (m *mockService) Purge(id string) error {
+	return m.Delete(id)
+}
+
 func (m *mockService) List() ([]types.DownloadStatus, error)   { return nil, nil }
 func (m *mockService) History() ([]types.DownloadEntry, error) { return nil, nil }
 func (m *mockService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {

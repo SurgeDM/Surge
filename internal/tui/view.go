@@ -71,7 +71,7 @@ func (m RootModel) View() tea.View {
 
 	// Terminal too small to render any meaningful layout
 	if m.width < MinTermWidth || m.height < MinTermHeight {
-		msg := lipgloss.NewStyle().Foreground(colors.Cyan()).Render(fmt.Sprintf("Terminal too small (min: %d×%d)", MinTermWidth, MinTermHeight))
+		msg := lipgloss.NewStyle().Foreground(colors.Cyan()).Render(fmt.Sprintf("Terminal too small (min: %d\u00D7%d)", MinTermWidth, MinTermHeight))
 		return m.wrapView(lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, msg))
 	}
 
@@ -305,6 +305,10 @@ func (m RootModel) View() tea.View {
 
 	if m.state == CategoryResetConfirmState {
 		return m.wrapView(m.renderModalWithOverlay(m.viewCategoryResetConfirm()))
+	}
+
+	if m.state == PurgeConfirmState {
+		return m.wrapView(m.renderModalWithOverlay(m.viewPurgeConfirm()))
 	}
 
 	if m.state == UpdateAvailableState && m.UpdateInfo != nil {
@@ -936,6 +940,61 @@ func (m RootModel) viewRestartConfirm() string {
 
 	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
 	return renderBtopBox(PaneTitleStyle.Render(" Restart Required "), "", content, w, h, colors.Orange())
+}
+
+func (m RootModel) viewPurgeConfirm() string {
+	w, h := GetDynamicModalDimensions(m.width, m.height, 46, 8, 60, 10)
+	innerWidth := w - (components.BorderFrameWidth * 2)
+
+	messageStyle := lipgloss.NewStyle().
+		Foreground(colors.White()).
+		Width(innerWidth).
+		Align(lipgloss.Center)
+
+	detailStyle := lipgloss.NewStyle().
+		Foreground(colors.Red()).
+		Bold(true).
+		Width(innerWidth).
+		Align(lipgloss.Center)
+
+	pad := "   "
+
+	activeFirst := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Red()).Bold(true).Underline(true)
+	activeRest := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Red()).Bold(true)
+	activePad := lipgloss.NewStyle().Background(colors.Red())
+
+	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236")).Underline(true)
+	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236"))
+	inactivePad := lipgloss.NewStyle().Background(lipgloss.Color("236"))
+
+	renderBtn := func(padStyle, firstStyle, restStyle lipgloss.Style, first, rest string) string {
+		return padStyle.Render(pad) + firstStyle.Render(first) + restStyle.Render(rest) + padStyle.Render(pad)
+	}
+
+	yesBtn := renderBtn(inactivePad, inactiveFirst, inactiveRest, "y", "es")
+	noBtn := renderBtn(activePad, activeFirst, activeRest, "N", "o")
+
+	buttons := lipgloss.JoinHorizontal(lipgloss.Top, yesBtn, "  ", noBtn)
+
+	filename := ""
+	if d := m.FindDownloadByID(m.purgeTargetID); d != nil {
+		filename = d.Filename
+	}
+
+	if filename == "" {
+		filename = "this download"
+	} else if len(filename) > 30 {
+		filename = filename[:27] + "..."
+	}
+
+	content := lipgloss.JoinVertical(lipgloss.Center,
+		messageStyle.Render(fmt.Sprintf("Permanently delete \n%s?", filename)),
+		detailStyle.Render("This will also remove the downloaded file(s) from disk."),
+		"",
+		buttons,
+	)
+
+	return renderBtopBox(PaneTitleStyle.Render(" Purge Download "), "", content, w, h, colors.Red())
 }
 
 func (m RootModel) viewCategoryResetConfirm() string {

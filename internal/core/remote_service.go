@@ -238,6 +238,16 @@ func (s *RemoteDownloadService) Delete(id string) error {
 	return nil
 }
 
+// Purge cancels and removes a download, and deletes its files from disk.
+func (s *RemoteDownloadService) Purge(id string) error {
+	resp, err := s.doRequest("POST", "/purge?id="+url.QueryEscape(id), nil)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	return nil
+}
+
 // Shutdown stops the service.
 func (s *RemoteDownloadService) Shutdown() error {
 	s.cancel()

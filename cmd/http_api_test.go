@@ -64,6 +64,10 @@ func (s *httpAPITestService) Delete(string) error {
 	return nil
 }
 
+func (s *httpAPITestService) Purge(string) error {
+	return nil
+}
+
 func (s *httpAPITestService) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
 	channel := make(chan interface{}, len(s.streamMsgs))
 	for _, msg := range s.streamMsgs {
@@ -513,6 +517,7 @@ type recordingActionService struct {
 func (s *recordingActionService) Pause(id string) error  { s.ids["pause"] = id; return nil }
 func (s *recordingActionService) Resume(id string) error { s.ids["resume"] = id; return nil }
 func (s *recordingActionService) Delete(id string) error { s.ids["delete"] = id; return nil }
+func (s *recordingActionService) Purge(id string) error  { s.ids["purge"] = id; return nil }
 
 // Regression for #456: ExecuteAPIAction sent the download id as a path segment
 // (e.g. POST /pause/<id>), but the HTTP API registers exact routes and reads the
@@ -539,6 +544,7 @@ func TestExecuteAPIAction_SendsIDAsQueryParam(t *testing.T) {
 		{"pause", "/pause"},
 		{"resume", "/resume"},
 		{"delete", "/delete"},
+		{"purge", "/purge"},
 	} {
 		if err := ExecuteAPIAction(fullID, action.endpoint, http.MethodPost, action.name); err != nil {
 			t.Fatalf("ExecuteAPIAction(%s): id should reach %s via ?id=, got error: %v", action.name, action.endpoint, err)

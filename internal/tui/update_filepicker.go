@@ -9,7 +9,7 @@ import (
 func (m *RootModel) handleBatchFileSelection(path string) (tea.Model, tea.Cmd) {
 	urls, err := utils.ReadURLsFromFile(path)
 	if err != nil {
-		m.addLogEntry(LogStyleError.Render("✖ Failed to read batch file: " + err.Error()))
+		m.addLogEntry(LogStyleError.Render("\u2716 Failed to read batch file: " + err.Error()))
 		m.resetFilepickerToDirMode()
 		m.state = DashboardState
 		return m, nil

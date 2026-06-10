@@ -64,6 +64,14 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "deleted", "id": id})
 	}), http.MethodDelete, http.MethodPost))
 
+	mux.HandleFunc("/purge", requireMethods(withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
+		if err := service.Purge(id); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "purged", "id": id})
+	}), http.MethodDelete, http.MethodPost))
+
 	mux.HandleFunc("/list", requireMethod(http.MethodGet, func(w http.ResponseWriter, _ *http.Request) {
 		statuses, err := service.List()
 		if err != nil {
