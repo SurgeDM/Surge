@@ -660,6 +660,7 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 			ID:         entry.ID,
 			URL:        entry.URL,
 			Filename:   entry.Filename,
+			DestPath:   entry.DestPath,
 			TotalSize:  entry.TotalSize,
 			Downloaded: entry.Downloaded,
 			Progress:   progress,
