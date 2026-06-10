@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -124,6 +125,60 @@ func TestDefaultSettings_Validation(t *testing.T) {
 					t.Errorf("Validation failed for current value of %s: %v", s.Key, err)
 				}
 			}
+		}
+	}
+}
+
+// TestEveryValidatorIsInCategoriesList prevents a setting from being defined with a
+// ValidateFunc but accidentally omitted from initializeCategoriesList, which would
+// silently skip validation on startup.
+func TestEveryValidatorIsInCategoriesList(t *testing.T) {
+	settings := DefaultSettings()
+
+	var allSettings []*Setting
+	var collect func(v reflect.Value)
+	collect = func(v reflect.Value) {
+		switch v.Kind() {
+		case reflect.Ptr:
+			if v.IsNil() {
+				return
+			}
+			if v.Type() == reflect.TypeOf((*Setting)(nil)) {
+				allSettings = append(allSettings, v.Interface().(*Setting))
+				return
+			}
+			collect(v.Elem())
+		case reflect.Struct:
+			for i := range v.NumField() {
+				collect(v.Field(i))
+			}
+		case reflect.Slice:
+			for i := range v.Len() {
+				collect(v.Index(i))
+			}
+		}
+	}
+	collect(reflect.ValueOf(settings))
+
+	validated := make(map[*Setting]struct{})
+	for _, s := range allSettings {
+		if s != nil && s.ValidateFunc != nil {
+			validated[s] = struct{}{}
+		}
+	}
+
+	inCategories := make(map[*Setting]struct{})
+	for _, cat := range settings.CategoriesList {
+		for _, s := range cat.Settings {
+			if s != nil {
+				inCategories[s] = struct{}{}
+			}
+		}
+	}
+
+	for s := range validated {
+		if _, ok := inCategories[s]; !ok {
+			t.Errorf("Setting %q has a ValidateFunc but is missing from CategoriesList", s.Key)
 		}
 	}
 }

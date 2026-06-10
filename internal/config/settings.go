@@ -253,6 +253,8 @@ func (s *Settings) initializeCategoriesList() {
 				s.Network.MinChunkSize,
 				s.Network.WorkerBufferSize,
 				s.Network.DialHedgeCount,
+				s.Network.GlobalRateLimit,
+				s.Network.DefaultDownloadRateLimit,
 			},
 		},
 
