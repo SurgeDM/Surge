@@ -82,7 +82,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if strings.HasPrefix(valStr, "inherit") {
 				valStr = "inherit"
 			}
-			if valStr == "0" {
+			if bps, err := utils.ParseRateLimitValue(valStr); err == nil && bps == 0 {
 				valStr = "\u221E"
 			}
 

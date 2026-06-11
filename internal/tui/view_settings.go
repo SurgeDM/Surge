@@ -657,6 +657,9 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			if _, err := strconv.ParseFloat(value, 64); err == nil {
 				value += " MB/s"
 			}
+			if bps, err := utils.ParseRateLimitValue(value); err == nil {
+				value = utils.FormatRateLimit(bps)
+			}
 		}
 		parsedVal = value
 	case "int":
@@ -832,7 +835,7 @@ func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool
 		if vStr, ok := value.(string); ok && vStr != "" {
 			if parsed, err := utils.ParseRateLimitValue(vStr); err == nil {
 				if parsed == 0 {
-					return "0"
+					return "\u221E"
 				}
 				mb := float64(parsed) / 1000000.0
 				if mb == float64(int64(mb)) {

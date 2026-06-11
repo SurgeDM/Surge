@@ -27,7 +27,7 @@ func (m RootModel) viewSpeedLimits() string {
 			valStr = fmt.Sprintf("%v", val)
 		}
 
-		if valStr == "0" || valStr == "" || valStr == "\u221E" {
+		if bps, err := utils.ParseRateLimitValue(valStr); err == nil && bps == 0 {
 			valStr = "\u221E"
 		}
 
