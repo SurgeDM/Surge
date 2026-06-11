@@ -20,6 +20,13 @@ type activeDownload struct {
 	running atomic.Bool
 }
 
+// WorkerPool manages the download workers and tasks.
+//
+// Lock Ordering:
+// If a code path must acquire both the pool's main mutex (p.mu) and a limiter's internal
+// mutex (limiter.mu, via limiter.SetRate() or limiter.WaitN()), it MUST acquire p.mu first.
+// Examples: Add, SetDownloadRateLimit, SetDefaultDownloadRateLimit.
+// Never acquire p.mu while holding a limiter's internal mutex to prevent deadlocks.
 type WorkerPool struct {
 	taskChan     chan string
 	progressCh   chan<- any

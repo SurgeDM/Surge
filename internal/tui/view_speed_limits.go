@@ -29,8 +29,6 @@ func (m RootModel) viewSpeedLimits() string {
 
 		if valStr == "0" || valStr == "" || valStr == "\u221E" {
 			valStr = "\u221E"
-		} else if strings.HasPrefix(valStr, "inherit") {
-			// keep it as is
 		}
 
 		suffix := "e.g. \"10 MB/s\""
@@ -182,25 +180,39 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 
 func (m *RootModel) resetSpeedLimitToDefault(key string, defaults *config.Settings) error {
 	if key == "global_rate_limit" {
-		rate, _ := utils.ParseRateLimitValue(defaults.Network.GlobalRateLimit.Value)
+		var rate int64
+		if defaults.Network.GlobalRateLimit != nil {
+			rate, _ = utils.ParseRateLimitValue(defaults.Network.GlobalRateLimit.Value)
+		}
 		if err := m.applyRemoteGlobalRateLimit(rate); err != nil {
 			return err
 		}
-		if m.Settings.Network.GlobalRateLimit == nil {
-			m.Settings.Network.GlobalRateLimit = config.DefaultSettings().Network.GlobalRateLimit
+		if m.Settings != nil {
+			if m.Settings.Network.GlobalRateLimit == nil {
+				m.Settings.Network.GlobalRateLimit = config.DefaultSettings().Network.GlobalRateLimit
+			}
+			if defaults.Network.GlobalRateLimit != nil {
+				m.Settings.Network.GlobalRateLimit.Value = defaults.Network.GlobalRateLimit.Value
+			}
 		}
-		m.Settings.Network.GlobalRateLimit.Value = defaults.Network.GlobalRateLimit.Value
 		return nil
 	}
 	if key == "default_download_rate_limit" {
-		rate, _ := utils.ParseRateLimitValue(defaults.Network.DefaultDownloadRateLimit.Value)
+		var rate int64
+		if defaults.Network.DefaultDownloadRateLimit != nil {
+			rate, _ = utils.ParseRateLimitValue(defaults.Network.DefaultDownloadRateLimit.Value)
+		}
 		if err := m.applyRemoteDefaultRateLimit(rate); err != nil {
 			return err
 		}
-		if m.Settings.Network.DefaultDownloadRateLimit == nil {
-			m.Settings.Network.DefaultDownloadRateLimit = config.DefaultSettings().Network.DefaultDownloadRateLimit
+		if m.Settings != nil {
+			if m.Settings.Network.DefaultDownloadRateLimit == nil {
+				m.Settings.Network.DefaultDownloadRateLimit = config.DefaultSettings().Network.DefaultDownloadRateLimit
+			}
+			if defaults.Network.DefaultDownloadRateLimit != nil {
+				m.Settings.Network.DefaultDownloadRateLimit.Value = defaults.Network.DefaultDownloadRateLimit.Value
+			}
 		}
-		m.Settings.Network.DefaultDownloadRateLimit.Value = defaults.Network.DefaultDownloadRateLimit.Value
 		return nil
 	}
 	if strings.HasPrefix(key, "dl:") {

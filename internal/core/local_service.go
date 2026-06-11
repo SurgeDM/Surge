@@ -719,6 +719,8 @@ func (s *LocalDownloadService) SetRateLimit(id string, rate int64) error {
 	foundInPool := s.Pool.SetDownloadRateLimit(id, rate)
 	if err != nil && !foundInPool {
 		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
+	} else if err != nil && foundInPool {
+		utils.Debug("SetRateLimit: download %s not found in DB (unpaused) but active in pool; state will persist on pause", id)
 	}
 	return nil
 }
@@ -737,6 +739,8 @@ func (s *LocalDownloadService) ClearRateLimit(id string) error {
 	foundInPool := s.Pool.ClearDownloadRateLimit(id)
 	if err != nil && !foundInPool {
 		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
+	} else if err != nil && foundInPool {
+		utils.Debug("ClearRateLimit: download %s not found in DB (unpaused) but active in pool; state will persist on pause", id)
 	}
 	return nil
 }
