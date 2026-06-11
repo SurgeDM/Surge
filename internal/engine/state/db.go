@@ -145,12 +145,6 @@ func ensureDownloadsSchema() error {
 		}
 	}
 
-	if !existingColumns["rate_limit_set"] && existingColumns["rate_limit"] {
-		if _, err := db.Exec("UPDATE downloads SET rate_limit_set = 1 WHERE rate_limit > 0"); err != nil {
-			log.Printf("Failed to backfill rate_limit_set: %v", err)
-		}
-	}
-
 	return nil
 }
 

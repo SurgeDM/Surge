@@ -226,15 +226,20 @@ func (m *RootModel) resetSpeedLimitToDefault(key string, defaults *config.Settin
 }
 
 // formatDownloadRateLimitValue returns the string representation of the download's rate limit.
-// We use "-1" as a numeric alias for inheriting the default rate so users don't have to type "inherit".
 func (m RootModel) formatDownloadRateLimitValue(d *DownloadModel) string {
 	if d == nil {
-		return "-1"
+		return "inherit"
 	}
 	if d.RateLimitSet {
 		return utils.FormatRateLimit(d.RateLimit)
 	}
-	return "-1"
+	defaultRate := int64(0)
+	if m.Settings != nil && m.Settings.Network.DefaultDownloadRateLimit != nil {
+		if rate, err := utils.ParseRateLimitValue(m.Settings.Network.DefaultDownloadRateLimit.Value); err == nil {
+			defaultRate = rate
+		}
+	}
+	return fmt.Sprintf("inherit (%s)", utils.FormatRateLimit(defaultRate))
 }
 
 func isRateLimitInheritValue(value string) bool {
