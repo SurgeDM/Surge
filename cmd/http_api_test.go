@@ -850,7 +850,7 @@ func (r *rateLimitWrapper) Publish(interface{}) error { return nil }
 func (r *rateLimitWrapper) GetStatus(id string) (*types.DownloadStatus, error) {
 	return nil, errors.New("not found")
 }
-func (r *rateLimitWrapper) Purge(id string) error { return nil }
+func (r *rateLimitWrapper) Purge(id string) error                    { return nil }
 func (r *rateLimitWrapper) Shutdown() error                          { return nil }
 func (r *rateLimitWrapper) SetRateLimit(id string, rate int64) error { return nil }
 func (r *rateLimitWrapper) ClearRateLimit(id string) error           { return nil }

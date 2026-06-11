@@ -2,7 +2,6 @@ package core
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -751,9 +750,14 @@ func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
 		return types.ErrPoolNotInit
 	}
 	s.Pool.SetGlobalRateLimit(rate)
-	return s.updateRateLimitSetting(func(settings *config.Settings) {
-		settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
-	})
+
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	if s.settings == nil {
+		s.settings = config.DefaultSettings()
+	}
+	s.settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
+	return config.SaveSettings(s.settings)
 }
 
 // SetDefaultRateLimit sets the inherited default per-download speed limit.
@@ -765,29 +769,12 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 		return types.ErrPoolNotInit
 	}
 	s.Pool.SetDefaultDownloadRateLimit(rate)
-	return s.updateRateLimitSetting(func(settings *config.Settings) {
-		settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
-	})
-}
 
-func (s *LocalDownloadService) updateRateLimitSetting(update func(*config.Settings)) error {
 	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
 	if s.settings == nil {
 		s.settings = config.DefaultSettings()
 	}
-	update(s.settings)
-
-	data, err := json.Marshal(s.settings)
-	s.settingsMu.Unlock() // Release lock before I/O and unmarshaling
-
-	if err != nil {
-		return err
-	}
-
-	var copy config.Settings
-	if err := json.Unmarshal(data, &copy); err != nil {
-		return err
-	}
-
-	return config.SaveSettings(&copy)
+	s.settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
+	return config.SaveSettings(s.settings)
 }
