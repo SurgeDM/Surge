@@ -73,9 +73,6 @@ func ParseRateLimit(input string) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("invalid rate limit value")
 	}
-	if value < 0 {
-		return 0, fmt.Errorf("rate limit must be non-negative")
-	}
 
 	unit, ok := rateUnits[unitStr]
 	if !ok {

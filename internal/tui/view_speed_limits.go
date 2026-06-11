@@ -130,11 +130,7 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 		if m.Settings.Network.GlobalRateLimit == nil {
 			m.Settings.Network.GlobalRateLimit = config.DefaultSettings().Network.GlobalRateLimit
 		}
-		if rate > 0 {
-			m.Settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
-		} else {
-			m.Settings.Network.GlobalRateLimit.Value = "0"
-		}
+		m.Settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
 		return nil
 	}
 
@@ -149,11 +145,7 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 		if m.Settings.Network.DefaultDownloadRateLimit == nil {
 			m.Settings.Network.DefaultDownloadRateLimit = config.DefaultSettings().Network.DefaultDownloadRateLimit
 		}
-		if rate > 0 {
-			m.Settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
-		} else {
-			m.Settings.Network.DefaultDownloadRateLimit.Value = "0"
-		}
+		m.Settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
 		return nil
 	}
 

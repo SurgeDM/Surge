@@ -27,7 +27,7 @@ func TestWorkerPool_RateLimit_QueuedUpdateHonored(t *testing.T) {
 	}
 
 	pool.SetDefaultDownloadRateLimit(1000)
-	pool.ensureLimiterForConfig(&cfg)
+	pool.ensureLimiterForConfigLocked(&cfg)
 	pool.mu.Lock()
 	pool.queued[id] = cfg
 	pool.mu.Unlock()
@@ -72,9 +72,9 @@ func TestWorkerPool_RateLimit_ExplicitUnlimitedSurvivesDefaultChange(t *testing.
 
 	pool.Add(cfg)
 
-	// Verify ensureLimiterForConfig respects explicit unlimited
+	// Verify ensureLimiterForConfigLocked respects explicit unlimited
 	testCfg := cfg
-	pool.ensureLimiterForConfig(&testCfg)
+	pool.ensureLimiterForConfigLocked(&testCfg)
 
 	if testCfg.RateLimitBps != 0 {
 		t.Fatalf("Explicit unlimited should stay at 0, got %d", testCfg.RateLimitBps)
@@ -121,9 +121,9 @@ func TestWorkerPool_RateLimit_DefaultChangeUpdatesInheritedActiveLimiter(t *test
 	}
 	pool.mu.Unlock()
 
-	pool.limiterMu.Lock()
+	pool.mu.Lock()
 	pool.downloadLimiters[id] = limiter
-	pool.limiterMu.Unlock()
+	pool.mu.Unlock()
 
 	done := make(chan error, 1)
 	go func() {
@@ -190,9 +190,9 @@ func TestWorkerPool_RateLimit_DefaultChangeLeavesExplicitActiveLimiter(t *testin
 	}
 	pool.mu.Unlock()
 
-	pool.limiterMu.Lock()
+	pool.mu.Lock()
 	pool.downloadLimiters[id] = limiter
-	pool.limiterMu.Unlock()
+	pool.mu.Unlock()
 
 	done := make(chan error, 1)
 	go func() {
@@ -253,8 +253,8 @@ func TestWorkerPool_RateLimit_UnknownDownloadDoesNotCreateLimiter(t *testing.T) 
 		t.Fatal("expected ClearDownloadRateLimit to report missing download")
 	}
 
-	pool.limiterMu.Lock()
-	defer pool.limiterMu.Unlock()
+	pool.mu.Lock()
+	defer pool.mu.Unlock()
 	if _, ok := pool.downloadLimiters["missing"]; ok {
 		t.Fatal("missing download should not create a limiter")
 	}
@@ -307,7 +307,7 @@ func TestWorkerPool_RateLimit_SetDownloadHonorsWaiter(t *testing.T) {
 		RateLimitBps: 10000,
 		RateLimitSet: true,
 	}
-	pool.ensureLimiterForConfig(&cfg)
+	pool.ensureLimiterForConfigLocked(&cfg)
 	pool.mu.Lock()
 	pool.queued[id] = cfg
 	pool.mu.Unlock()
