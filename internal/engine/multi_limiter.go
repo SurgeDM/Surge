@@ -20,8 +20,11 @@ func (m *MultiLimiter) WaitN(ctx context.Context, n int64) error {
 	if m == nil {
 		return nil
 	}
-	for _, l := range m.limiters {
+	for i, l := range m.limiters {
 		if err := l.WaitN(ctx, n); err != nil {
+			for j := 0; j < i; j++ {
+				m.limiters[j].Refund(n)
+			}
 			return err
 		}
 	}

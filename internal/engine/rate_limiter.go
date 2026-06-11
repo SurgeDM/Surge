@@ -184,3 +184,16 @@ func (r *RateLimiter) wakeWaitersLocked() {
 	close(r.wakeCh)
 	r.wakeCh = make(chan struct{})
 }
+
+func (r *RateLimiter) Refund(n int64) {
+	if n <= 0 {
+		return
+	}
+	r.mu.Lock()
+	r.tokens += n
+	if r.tokens > r.bucketSize {
+		r.tokens = r.bucketSize
+	}
+	r.wakeWaitersLocked()
+	r.mu.Unlock()
+}

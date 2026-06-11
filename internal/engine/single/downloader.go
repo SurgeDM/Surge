@@ -199,6 +199,9 @@ func (t *throttledReader) Read(p []byte) (int, error) {
 	n, err := t.reader.Read(p)
 	if n > 0 && t.limiter != nil {
 		if waitErr := t.limiter.WaitN(t.ctx, int64(n)); waitErr != nil {
+			if err != nil {
+				return n, err
+			}
 			return n, waitErr
 		}
 	}

@@ -112,8 +112,8 @@ func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 	if cfg.ProgressCh == nil {
 		cfg.ProgressCh = p.progressCh
 	}
-	p.ensureLimiterForConfig(&cfg)
 	p.mu.Lock()
+	p.ensureLimiterForConfig(&cfg)
 	p.queued[cfg.ID] = cfg
 	p.mu.Unlock()
 

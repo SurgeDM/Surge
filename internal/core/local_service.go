@@ -749,18 +749,25 @@ func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
 	if s.Pool == nil {
 		return types.ErrPoolNotInit
 	}
-	s.Pool.SetGlobalRateLimit(rate)
 
 	s.settingsMu.Lock()
-	defer s.settingsMu.Unlock()
 	if s.settings == nil {
 		s.settings = config.DefaultSettings()
 	}
 	if s.settings.Network.GlobalRateLimit == nil {
 		s.settings.Network.GlobalRateLimit = config.DefaultSettings().Network.GlobalRateLimit
 	}
+	oldValue := s.settings.Network.GlobalRateLimit.Value
 	s.settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
-	return config.SaveSettings(s.settings)
+	if err := config.SaveSettings(s.settings); err != nil {
+		s.settings.Network.GlobalRateLimit.Value = oldValue
+		s.settingsMu.Unlock()
+		return err
+	}
+	s.settingsMu.Unlock()
+
+	s.Pool.SetGlobalRateLimit(rate)
+	return nil
 }
 
 // SetDefaultRateLimit sets the inherited default per-download speed limit.
@@ -771,16 +778,23 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 	if s.Pool == nil {
 		return types.ErrPoolNotInit
 	}
-	s.Pool.SetDefaultDownloadRateLimit(rate)
 
 	s.settingsMu.Lock()
-	defer s.settingsMu.Unlock()
 	if s.settings == nil {
 		s.settings = config.DefaultSettings()
 	}
 	if s.settings.Network.DefaultDownloadRateLimit == nil {
 		s.settings.Network.DefaultDownloadRateLimit = config.DefaultSettings().Network.DefaultDownloadRateLimit
 	}
+	oldValue := s.settings.Network.DefaultDownloadRateLimit.Value
 	s.settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
-	return config.SaveSettings(s.settings)
+	if err := config.SaveSettings(s.settings); err != nil {
+		s.settings.Network.DefaultDownloadRateLimit.Value = oldValue
+		s.settingsMu.Unlock()
+		return err
+	}
+	s.settingsMu.Unlock()
+
+	s.Pool.SetDefaultDownloadRateLimit(rate)
+	return nil
 }

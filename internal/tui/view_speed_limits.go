@@ -31,8 +31,6 @@ func (m RootModel) viewSpeedLimits() string {
 			valStr = "0"
 		} else if strings.HasPrefix(valStr, "inherit") {
 			// keep it as is
-		} else if !strings.HasPrefix(meta.Key, "dl:") {
-			valStr = "\u2248 " + valStr
 		}
 
 		suffix := "MB/s by default"
@@ -186,20 +184,26 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 
 func (m *RootModel) resetSpeedLimitToDefault(key string, defaults *config.Settings) error {
 	if key == "global_rate_limit" {
+		rate, _ := utils.ParseRateLimitValue(defaults.Network.GlobalRateLimit.Value)
+		if err := m.applyRemoteGlobalRateLimit(rate); err != nil {
+			return err
+		}
 		if m.Settings.Network.GlobalRateLimit == nil {
 			m.Settings.Network.GlobalRateLimit = config.DefaultSettings().Network.GlobalRateLimit
 		}
 		m.Settings.Network.GlobalRateLimit.Value = defaults.Network.GlobalRateLimit.Value
-		rate, _ := utils.ParseRateLimitValue(defaults.Network.GlobalRateLimit.Value)
-		return m.applyRemoteGlobalRateLimit(rate)
+		return nil
 	}
 	if key == "default_download_rate_limit" {
+		rate, _ := utils.ParseRateLimitValue(defaults.Network.DefaultDownloadRateLimit.Value)
+		if err := m.applyRemoteDefaultRateLimit(rate); err != nil {
+			return err
+		}
 		if m.Settings.Network.DefaultDownloadRateLimit == nil {
 			m.Settings.Network.DefaultDownloadRateLimit = config.DefaultSettings().Network.DefaultDownloadRateLimit
 		}
 		m.Settings.Network.DefaultDownloadRateLimit.Value = defaults.Network.DefaultDownloadRateLimit.Value
-		rate, _ := utils.ParseRateLimitValue(defaults.Network.DefaultDownloadRateLimit.Value)
-		return m.applyRemoteDefaultRateLimit(rate)
+		return nil
 	}
 	if strings.HasPrefix(key, "dl:") {
 		dlID := strings.TrimPrefix(key, "dl:")
