@@ -2,7 +2,9 @@ package single
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -726,5 +728,65 @@ func TestSingleDownloader_Download_BootstrapSize(t *testing.T) {
 	}
 	if state.TotalSize != expectedSize {
 		t.Errorf("Expected state.TotalSize %d, got %d", expectedSize, state.TotalSize)
+	}
+}
+
+type stubLimiter struct {
+	err error
+}
+
+func (s stubLimiter) WaitN(context.Context, int64) error {
+	return s.err
+}
+
+type partialErrorReader struct {
+	n   int
+	err error
+}
+
+func (r partialErrorReader) Read(p []byte) (int, error) {
+	if r.n > len(p) {
+		r.n = len(p)
+	}
+	for i := 0; i < r.n; i++ {
+		p[i] = byte(i)
+	}
+	return r.n, r.err
+}
+
+func TestThrottledReader_PreservesUnderlyingReadError(t *testing.T) {
+	readErr := io.ErrUnexpectedEOF
+	waitErr := errors.New("limiter wait failed")
+	reader := &throttledReader{
+		reader:  partialErrorReader{n: 7, err: readErr},
+		limiter: stubLimiter{err: waitErr},
+		ctx:     context.Background(),
+	}
+
+	buf := make([]byte, 16)
+	n, err := reader.Read(buf)
+	if n != 7 {
+		t.Fatalf("Read bytes = %d, want 7", n)
+	}
+	if !errors.Is(err, readErr) {
+		t.Fatalf("Read error = %v, want %v", err, readErr)
+	}
+}
+
+func TestThrottledReader_UsesLimiterErrorForCleanRead(t *testing.T) {
+	waitErr := errors.New("limiter wait failed")
+	reader := &throttledReader{
+		reader:  partialErrorReader{n: 7, err: nil},
+		limiter: stubLimiter{err: waitErr},
+		ctx:     context.Background(),
+	}
+
+	buf := make([]byte, 16)
+	n, err := reader.Read(buf)
+	if n != 7 {
+		t.Fatalf("Read bytes = %d, want 7", n)
+	}
+	if !errors.Is(err, waitErr) {
+		t.Fatalf("Read error = %v, want %v", err, waitErr)
 	}
 }
