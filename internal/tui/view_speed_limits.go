@@ -35,11 +35,15 @@ func (m RootModel) viewSpeedLimits() string {
 			valStr = "\u2248 " + valStr
 		}
 
+		suffix := "MB/s by default"
+		if strings.HasPrefix(meta.Key, "dl:") {
+			suffix = "MB/s or \"inherit\""
+		}
 		items = append(items, components.ListInputItem{
 			Label:       meta.Label,
 			Value:       valStr,
 			IsEditing:   m.speedLimitsIsEditing && m.speedLimitsCursor == i,
-			InputSuffix: "MB/s by default",
+			InputSuffix: suffix,
 		})
 	}
 

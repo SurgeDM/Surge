@@ -353,6 +353,19 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 		p.downloadLimiters = make(map[string]*engine.RateLimiter)
 	}
 	for _, id := range inheritedIDs {
+		p.mu.RLock()
+		rateLimitSet := false
+		if ad, ok := p.downloads[id]; ok {
+			rateLimitSet = ad.config.RateLimitSet
+		} else if cfg, ok := p.queued[id]; ok {
+			rateLimitSet = cfg.RateLimitSet
+		}
+		p.mu.RUnlock()
+
+		if rateLimitSet {
+			continue
+		}
+
 		limiter := p.downloadLimiters[id]
 		if limiter == nil {
 			p.downloadLimiters[id] = engine.NewRateLimiter(rate, rateLimiterBurst(rate))

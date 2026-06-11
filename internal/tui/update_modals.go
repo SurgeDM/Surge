@@ -81,7 +81,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			// Don't prefix with "inherit" or "\u2248" in the edit input
 			if strings.HasPrefix(valStr, "inherit") {
 				valStr = "inherit"
-			} else if strings.HasPrefix(valStr, "explicit 0") {
+			} else if strings.HasPrefix(valStr, "0 (") {
 				valStr = "0"
 			}
 
