@@ -160,8 +160,6 @@ func (p *WorkerPool) ensureLimiterForConfigLocked(cfg *types.DownloadConfig) {
 	}
 }
 
-
-
 func rateLimiterBurst(rate int64) int64 {
 	if rate <= 0 {
 		return 0
@@ -214,22 +212,24 @@ func (p *WorkerPool) GetAll() []types.DownloadConfig {
 	var configs []types.DownloadConfig
 	for _, ad := range p.downloads {
 		cfg := types.DownloadConfig{
-			ID:            ad.config.ID,
-			URL:           ad.config.URL,
-			OutputPath:    ad.config.OutputPath,
-			Filename:      ad.config.Filename,
-			DestPath:      ad.config.DestPath,
-			Mirrors:       ad.config.Mirrors,
-			SupportsRange: ad.config.SupportsRange,
-			ProgressCh:    ad.config.ProgressCh,
-			RateLimitBps:  ad.config.RateLimitBps,
-			RateLimitSet:  ad.config.RateLimitSet,
-			IsResume:      ad.config.IsResume,
-			SavedState:    ad.config.SavedState,
-			Limiter:       ad.config.Limiter,
-			State:         ad.config.State,
-			Headers:       ad.config.Headers,
+			ID:                 ad.config.ID,
+			URL:                ad.config.URL,
+			OutputPath:         ad.config.OutputPath,
+			Filename:           ad.config.Filename,
+			DestPath:           ad.config.DestPath,
+			Mirrors:            ad.config.Mirrors,
+			SupportsRange:      ad.config.SupportsRange,
+			ProgressCh:         ad.config.ProgressCh,
+			RateLimitBps:       ad.config.RateLimitBps,
+			RateLimitSet:       ad.config.RateLimitSet,
+			IsResume:           ad.config.IsResume,
+			SavedState:         ad.config.SavedState,
+			Limiter:            ad.config.Limiter,
+			State:              ad.config.State,
+			Headers:            ad.config.Headers,
 			IsExplicitCategory: ad.config.IsExplicitCategory,
+			Runtime:            ad.config.Runtime,
+			TotalSize:          ad.config.TotalSize,
 		}
 		syncConfigFromState(&cfg)
 		configs = append(configs, cfg)

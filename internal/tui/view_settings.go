@@ -653,6 +653,11 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			parsedVal = b
 		}
 	case "string", "auth_token", "link":
+		if key == "global_rate_limit" || key == "default_download_rate_limit" {
+			if _, err := strconv.ParseFloat(value, 64); err == nil {
+				value += " MB/s"
+			}
+		}
 		parsedVal = value
 	case "int":
 		if key == "worker_buffer_size" {
