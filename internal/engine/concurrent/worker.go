@@ -301,15 +301,6 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 		}
 
 		if readSoFar > 0 {
-			if d.Limiter != nil {
-				if err := d.Limiter.WaitN(ctx, int64(readSoFar)); err != nil {
-					return err
-				}
-				// Refresh activity after the rate-limiter wait so the health monitor
-				// does not treat intentional throttle pauses as network stalls.
-				activeTask.LastActivity.Store(time.Now().UnixNano())
-			}
-
 			// check stopAt again before writing
 			// truncate readSoFar
 			currentStopAt := activeTask.StopAt.Load()
@@ -318,6 +309,15 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 				if readSoFar <= 0 {
 					return nil // stolen completely
 				}
+			}
+
+			if d.Limiter != nil {
+				if err := d.Limiter.WaitN(ctx, int64(readSoFar)); err != nil {
+					return err
+				}
+				// Refresh activity after the rate-limiter wait so the health monitor
+				// does not treat intentional throttle pauses as network stalls.
+				activeTask.LastActivity.Store(time.Now().UnixNano())
 			}
 
 			_, writeErr := file.WriteAt(buf[:readSoFar], offset)

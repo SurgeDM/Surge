@@ -284,6 +284,8 @@ func (p *WorkerPool) SetGlobalRateLimit(rate int64) {
 	if p.globalLimiter == nil {
 		p.globalLimiter = engine.NewRateLimiter(0, 0)
 	}
+	// All per-download MultiLimiters hold a pointer to this globalLimiter,
+	// so updating the rate here propagates to all active downloads instantly.
 	p.globalLimiter.SetRate(rate, rateLimiterBurst(rate))
 }
 

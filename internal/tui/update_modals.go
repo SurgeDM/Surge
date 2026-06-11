@@ -82,6 +82,9 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if strings.HasPrefix(valStr, "inherit") {
 				valStr = "inherit"
 			}
+			if valStr == "0" {
+				valStr = "∞"
+			}
 
 			m.speedLimitsIsEditing = true
 			m.SettingsInput.SetValue(valStr)
