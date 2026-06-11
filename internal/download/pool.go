@@ -576,7 +576,7 @@ func (p *WorkerPool) worker() {
 		p.wg.Add(1)
 		delete(p.queued, cfg.ID)
 		p.downloads[cfg.ID] = ad
-		
+
 		// Make a local copy for TUIDownload to mutate safely
 		localCfg := ad.config
 		p.mu.Unlock()
