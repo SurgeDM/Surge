@@ -576,13 +576,24 @@ func TestLocalDownloadService_SetRateLimit_UpdatesPool(t *testing.T) {
 	svc := NewLocalDownloadServiceWithInput(pool, ch)
 	defer func() { _ = svc.Shutdown() }()
 
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(10 * time.Second):
+		case <-r.Context().Done():
+		}
+	}))
+	defer ts.Close()
+
 	cfg := types.DownloadConfig{
 		ID:           "pool-rate-test",
-		URL:          "http://example.com/file.bin",
+		URL:          ts.URL,
 		RateLimitBps: 0,
 		RateLimitSet: false,
 	}
 	pool.Add(cfg)
+
+	// Yield briefly to let worker pick it up
+	time.Sleep(50 * time.Millisecond)
 
 	if err := svc.SetRateLimit("pool-rate-test", 3*1024*1024); err != nil {
 		t.Fatalf("SetRateLimit: %v", err)
@@ -598,6 +609,9 @@ func TestLocalDownloadService_SetRateLimit_UpdatesPool(t *testing.T) {
 	if cfgAfter.RateLimitBps != 3*1024*1024 {
 		t.Errorf("RateLimitBps = %d, want %d", cfgAfter.RateLimitBps, 3*1024*1024)
 	}
+
+	// Cancel the download to unblock the hanging httptest.NewServer
+	_ = svc.Delete("pool-rate-test")
 }
 
 func TestLocalDownloadService_ClearRateLimit_UpdatesPool(t *testing.T) {
@@ -612,13 +626,24 @@ func TestLocalDownloadService_ClearRateLimit_UpdatesPool(t *testing.T) {
 	svc := NewLocalDownloadServiceWithInput(pool, ch)
 	defer func() { _ = svc.Shutdown() }()
 
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(10 * time.Second):
+		case <-r.Context().Done():
+		}
+	}))
+	defer ts.Close()
+
 	cfg := types.DownloadConfig{
 		ID:           "pool-clear-rate-test",
-		URL:          "http://example.com/file.bin",
+		URL:          ts.URL,
 		RateLimitBps: 3 * 1024 * 1024,
 		RateLimitSet: true,
 	}
 	pool.Add(cfg)
+
+	// Yield briefly to let worker pick it up
+	time.Sleep(50 * time.Millisecond)
 
 	if err := svc.ClearRateLimit("pool-clear-rate-test"); err != nil {
 		t.Fatalf("ClearRateLimit: %v", err)
@@ -631,6 +656,9 @@ func TestLocalDownloadService_ClearRateLimit_UpdatesPool(t *testing.T) {
 	if cfgAfter.RateLimitSet {
 		t.Error("expected RateLimitSet to be false after clear")
 	}
+
+	// Cancel the download to unblock the hanging httptest.NewServer
+	_ = svc.Delete("pool-clear-rate-test")
 }
 
 func TestLocalDownloadService_SetRateLimit_UnknownIDReturnsNotFound(t *testing.T) {
