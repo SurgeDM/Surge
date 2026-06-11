@@ -353,19 +353,6 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 		p.downloadLimiters = make(map[string]*engine.RateLimiter)
 	}
 	for _, id := range inheritedIDs {
-		p.mu.RLock()
-		rateLimitSet := false
-		if ad, ok := p.downloads[id]; ok {
-			rateLimitSet = ad.config.RateLimitSet
-		} else if cfg, ok := p.queued[id]; ok {
-			rateLimitSet = cfg.RateLimitSet
-		}
-		p.mu.RUnlock()
-
-		if rateLimitSet {
-			continue
-		}
-
 		limiter := p.downloadLimiters[id]
 		if limiter == nil {
 			p.downloadLimiters[id] = engine.NewRateLimiter(rate, rateLimiterBurst(rate))
@@ -548,15 +535,15 @@ func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
 // Returns nil if the download is not found, not paused, or still transitioning (pausing).
 func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfig {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	ad, exists := p.downloads[downloadID]
 	if !exists || ad == nil {
+		p.mu.Unlock()
 		return nil
 	}
 
 	// Cannot extract if still pausing or not actually paused
 	if ad.config.State == nil || !ad.config.State.IsPaused() || ad.config.State.IsPausing() {
+		p.mu.Unlock()
 		return nil
 	}
 
@@ -565,12 +552,15 @@ func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfi
 
 	cfg := ad.config
 	delete(p.downloads, downloadID)
+	p.mu.Unlock()
+
 	p.limiterMu.Lock()
 	delete(p.downloadLimiters, downloadID)
 	p.limiterMu.Unlock()
+
 	cfg.Limiter = nil
-	if ad.config.State != nil {
-		ad.config.State.Resume()
+	if cfg.State != nil {
+		cfg.State.Resume()
 	}
 	return &cfg
 }

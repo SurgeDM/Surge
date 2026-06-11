@@ -710,15 +710,15 @@ func (s *LocalDownloadService) SetRateLimit(id string, rate int64) error {
 	if s.Pool == nil {
 		return types.ErrPoolNotInit
 	}
+
+	err := state.UpdateRateLimit(id, rate)
+	if err != nil && !errors.Is(err, types.ErrNotFound) {
+		return err
+	}
+
 	foundInPool := s.Pool.SetDownloadRateLimit(id, rate)
-	if err := state.UpdateRateLimit(id, rate); err != nil {
-		if !foundInPool {
-			if errors.Is(err, types.ErrNotFound) {
-				return fmt.Errorf("%w: %s", types.ErrNotFound, id)
-			}
-			return err
-		}
-		utils.Debug("failed to persist rate limit for %s: %v", id, err)
+	if err != nil && !foundInPool {
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
 	}
 	return nil
 }
@@ -728,15 +728,15 @@ func (s *LocalDownloadService) ClearRateLimit(id string) error {
 	if s.Pool == nil {
 		return types.ErrPoolNotInit
 	}
+	
+	err := state.ClearRateLimit(id)
+	if err != nil && !errors.Is(err, types.ErrNotFound) {
+		return err
+	}
+
 	foundInPool := s.Pool.ClearDownloadRateLimit(id)
-	if err := state.ClearRateLimit(id); err != nil {
-		if !foundInPool {
-			if errors.Is(err, types.ErrNotFound) {
-				return fmt.Errorf("%w: %s", types.ErrNotFound, id)
-			}
-			return err
-		}
-		utils.Debug("failed to clear rate limit for %s: %v", id, err)
+	if err != nil && !foundInPool {
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
 	}
 	return nil
 }
