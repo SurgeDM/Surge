@@ -576,47 +576,58 @@ func (p *WorkerPool) worker() {
 		p.wg.Add(1)
 		delete(p.queued, cfg.ID)
 		p.downloads[cfg.ID] = ad
+		
+		// Make a local copy for TUIDownload to mutate safely
+		localCfg := ad.config
 		p.mu.Unlock()
 
-		err := TUIDownload(ctx, &ad.config)
+		err := TUIDownload(ctx, &localCfg)
 		ad.running.Store(false)
+
+		// Sync back mutated fields cleanly under lock
+		p.mu.Lock()
+		if _, exists := p.downloads[localCfg.ID]; exists {
+			ad.config.TotalSize = localCfg.TotalSize
+			ad.config.Runtime = localCfg.Runtime
+		}
+		p.mu.Unlock()
 
 		// Logic:
 		// 1. If Pause() was called: State.IsPaused() is true. We keep the task in p.downloads (so it can be resumed).
 		// 2. If finished/error: We remove from p.downloads.
 
-		isPaused := ad.config.State != nil && ad.config.State.IsPaused()
+		isPaused := localCfg.State != nil && localCfg.State.IsPaused()
 
 		// Clear "Pausing" transition state now that worker has exited
-		if ad.config.State != nil {
-			ad.config.State.SetPausing(false)
+		if localCfg.State != nil {
+			localCfg.State.SetPausing(false)
 		}
 
 		if isPaused {
-			utils.Debug("WorkerPool: Download %s paused cleanly", cfg.ID)
+			utils.Debug("WorkerPool: Download %s paused cleanly", localCfg.ID)
 			// If paused, we keep it in downloads map for potential resume via ExtractPausedConfig
 		} else if err != nil {
-			if cfg.State != nil {
-				cfg.State.SetError(err)
+			if localCfg.State != nil {
+				localCfg.State.SetError(err)
 			}
 			// Note: DownloadErrorMsg is already emitted by TUIDownload on the same progressCh.
 			// Clean up errored download from tracking (don't save to .surge)
 			p.mu.Lock()
-			delete(p.downloads, cfg.ID)
-			delete(p.downloadLimiters, cfg.ID)
+			delete(p.downloads, localCfg.ID)
+			delete(p.downloadLimiters, localCfg.ID)
 			p.mu.Unlock()
 
 		} else {
 			// Only mark as done if not paused
-			if cfg.State != nil {
-				cfg.State.Done.Store(true)
+			if localCfg.State != nil {
+				localCfg.State.Done.Store(true)
 			}
 			// Note: DownloadCompleteMsg is sent by the progress reporter when it detects Done=true
 
 			// Clean up from tracking
 			p.mu.Lock()
-			delete(p.downloads, cfg.ID)
-			delete(p.downloadLimiters, cfg.ID)
+			delete(p.downloads, localCfg.ID)
+			delete(p.downloadLimiters, localCfg.ID)
 			p.mu.Unlock()
 		}
 		// If paused, we keep it in downloads map for potential resume
