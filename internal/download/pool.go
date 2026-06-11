@@ -213,7 +213,24 @@ func (p *WorkerPool) GetAll() []types.DownloadConfig {
 
 	var configs []types.DownloadConfig
 	for _, ad := range p.downloads {
-		cfg := ad.config
+		cfg := types.DownloadConfig{
+			ID:            ad.config.ID,
+			URL:           ad.config.URL,
+			OutputPath:    ad.config.OutputPath,
+			Filename:      ad.config.Filename,
+			DestPath:      ad.config.DestPath,
+			Mirrors:       ad.config.Mirrors,
+			SupportsRange: ad.config.SupportsRange,
+			ProgressCh:    ad.config.ProgressCh,
+			RateLimitBps:  ad.config.RateLimitBps,
+			RateLimitSet:  ad.config.RateLimitSet,
+			IsResume:      ad.config.IsResume,
+			SavedState:    ad.config.SavedState,
+			Limiter:       ad.config.Limiter,
+			State:         ad.config.State,
+			Headers:       ad.config.Headers,
+			IsExplicitCategory: ad.config.IsExplicitCategory,
+		}
 		syncConfigFromState(&cfg)
 		configs = append(configs, cfg)
 	}
@@ -607,9 +624,22 @@ func (p *WorkerPool) worker() {
 
 // GetStatus returns the status of an active download
 func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
+	var adURL, adFilename, adDestPath string
+	var adRateLimitBps int64
+	var adRateLimitSet bool
+	var adState *types.ProgressState
+
 	p.mu.RLock()
 	ad, exists := p.downloads[id]
 	qCfg, qExists := p.queued[id]
+	if exists {
+		adURL = ad.config.URL
+		adFilename = ad.config.Filename
+		adDestPath = ad.config.DestPath
+		adRateLimitBps = ad.config.RateLimitBps
+		adRateLimitSet = ad.config.RateLimitSet
+		adState = ad.config.State
+	}
 	p.mu.RUnlock()
 
 	if !exists && !qExists {
@@ -630,13 +660,13 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 		}
 	}
 
-	state := ad.config.State
+	state := adState
 	if state == nil {
 		return nil
 	}
 
 	// Use state filename/destpath if available (thread-safe)
-	filename := ad.config.Filename
+	filename := adFilename
 	if str := state.GetFilename(); str != "" {
 		filename = str
 	}
@@ -646,18 +676,18 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 
 	status := &types.DownloadStatus{
 		ID:           id,
-		URL:          ad.config.URL,
+		URL:          adURL,
 		Filename:     filename,
 		TotalSize:    totalSize,
 		Downloaded:   downloaded,
 		Status:       "downloading",
-		RateLimit:    ad.config.RateLimitBps,
-		RateLimitSet: ad.config.RateLimitSet,
+		RateLimit:    adRateLimitBps,
+		RateLimitSet: adRateLimitSet,
 	}
 	if dp := state.GetDestPath(); dp != "" {
 		status.DestPath = dp
 	} else {
-		status.DestPath = ad.config.DestPath
+		status.DestPath = adDestPath
 	}
 
 	if ad.config.State.IsPausing() {
