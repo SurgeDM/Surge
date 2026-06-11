@@ -27,15 +27,21 @@ func (m RootModel) viewSpeedLimits() string {
 			valStr = fmt.Sprintf("%v", val)
 		}
 
-		if valStr == "0" || valStr == "" {
-			valStr = "0"
+		if valStr == "0" || valStr == "" || valStr == "\u221E" {
+			valStr = "\u221E"
 		} else if strings.HasPrefix(valStr, "inherit") {
 			// keep it as is
 		}
 
 		suffix := "MB/s by default"
 		if strings.HasPrefix(meta.Key, "dl:") {
-			suffix = "MB/s or \"inherit\""
+			defaultRate := int64(0)
+			if m.Settings != nil && m.Settings.Network.DefaultDownloadRateLimit != nil {
+				if rate, err := utils.ParseRateLimitValue(m.Settings.Network.DefaultDownloadRateLimit.Value); err == nil {
+					defaultRate = rate
+				}
+			}
+			suffix = fmt.Sprintf("MB/s (-1 for default: %s)", utils.FormatRateLimit(defaultRate))
 		}
 		items = append(items, components.ListInputItem{
 			Label:       meta.Label,
@@ -91,13 +97,13 @@ func (m RootModel) getSpeedLimitsMetadata() []config.SettingMeta {
 
 func (m RootModel) getSpeedLimitsValues() map[string]interface{} {
 	values := make(map[string]interface{})
-	
+
 	if m.Settings != nil && m.Settings.Network.GlobalRateLimit != nil {
 		values["global_rate_limit"] = m.Settings.Network.GlobalRateLimit.Value
 	} else {
 		values["global_rate_limit"] = "0"
 	}
-	
+
 	if m.Settings != nil && m.Settings.Network.DefaultDownloadRateLimit != nil {
 		values["default_download_rate_limit"] = m.Settings.Network.DefaultDownloadRateLimit.Value
 	} else {
@@ -219,28 +225,22 @@ func (m *RootModel) resetSpeedLimitToDefault(key string, defaults *config.Settin
 	return nil
 }
 
+// formatDownloadRateLimitValue returns the string representation of the download's rate limit.
+// We use "-1" as a numeric alias for inheriting the default rate so users don't have to type "inherit".
 func (m RootModel) formatDownloadRateLimitValue(d *DownloadModel) string {
 	if d == nil {
-		return "inherit"
+		return "-1"
 	}
 	if d.RateLimitSet {
-		if d.RateLimit <= 0 {
-			return "0 (unlimited)"
-		}
 		return utils.FormatRateLimit(d.RateLimit)
 	}
-	defaultRate := int64(0)
-	if m.Settings != nil && m.Settings.Network.DefaultDownloadRateLimit != nil {
-		if rate, err := utils.ParseRateLimitValue(m.Settings.Network.DefaultDownloadRateLimit.Value); err == nil {
-			defaultRate = rate
-		}
-	}
-	return fmt.Sprintf("inherit (%s)", utils.FormatRateLimit(defaultRate))
+	return "-1"
 }
 
 func isRateLimitInheritValue(value string) bool {
 	normalized := strings.TrimSpace(strings.ToLower(value))
-	return normalized == "inherit" || normalized == "default"
+	// -1 is the numeric alias for inheriting the default rate
+	return normalized == "inherit" || normalized == "default" || normalized == "-1"
 }
 
 func (m *RootModel) clearDownloadRateLimit(downloadID string) error {

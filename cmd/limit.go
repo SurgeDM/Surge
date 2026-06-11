@@ -19,7 +19,7 @@ var limitCmd = &cobra.Command{
 Examples:
   surge limit <id> 2MB/s
   surge limit <id> 0
-  surge limit <id> inherit
+  surge limit <id> -1
   surge limit --global 10MB/s
   surge limit --default 2MB/s`,
 	Args: validateLimitArgs,
@@ -76,7 +76,7 @@ func runLimitCommand(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if rate == 0 {
-			success = "Set global speed limit to 0 (unlimited)"
+			success = "Set global speed limit to \u221E"
 		} else {
 			success = fmt.Sprintf("Set global speed limit to %s", utils.FormatRateLimit(rate))
 		}
@@ -87,7 +87,7 @@ func runLimitCommand(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		if rate == 0 {
-			success = "Set default download speed limit to 0 (unlimited)"
+			success = "Set default download speed limit to \u221E"
 		} else {
 			success = fmt.Sprintf("Set default download speed limit to %s", utils.FormatRateLimit(rate))
 		}
@@ -97,7 +97,9 @@ func runLimitCommand(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return fmt.Errorf("failed to resolve download ID: %w", err)
 		}
-		if strings.EqualFold(strings.TrimSpace(speedArg), "inherit") || strings.EqualFold(strings.TrimSpace(speedArg), "default") {
+		speedStr := strings.TrimSpace(speedArg)
+		// -1 is used as a numeric alias for "inherit" so users don't have to type a string
+		if strings.EqualFold(speedStr, "inherit") || strings.EqualFold(speedStr, "default") || speedStr == "-1" {
 			path = fmt.Sprintf("/rate-limit?id=%s&inherit=true", url.QueryEscape(id))
 			success = fmt.Sprintf("Set speed limit for %s to inherit the default", id)
 		} else {
@@ -107,7 +109,7 @@ func runLimitCommand(cmd *cobra.Command, args []string) error {
 			}
 			path = fmt.Sprintf("/rate-limit?id=%s&rate=%d", url.QueryEscape(id), rate)
 			if rate == 0 {
-				success = fmt.Sprintf("Set speed limit for %s to 0 (unlimited)", id)
+				success = fmt.Sprintf("Set speed limit for %s to \u221E", id)
 			} else {
 				success = fmt.Sprintf("Set speed limit for %s to %s", id, utils.FormatRateLimit(rate))
 			}

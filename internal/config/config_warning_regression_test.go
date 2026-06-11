@@ -14,6 +14,7 @@ import (
 // test for bug 2: corrupt settings must set StartupWarnings, not return silent defaults.
 func TestLoadSettings_CorruptJSON_PopulatesStartupWarning(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("AppData", t.TempDir())
 
 	surgeDir := GetSurgeDir()
 	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
@@ -51,6 +52,7 @@ func TestLoadSettings_CorruptJSON_PopulatesStartupWarning(t *testing.T) {
 // scenario (atomically incomplete file).
 func TestLoadSettings_TruncatedJSON_PopulatesStartupWarning(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("AppData", t.TempDir())
 
 	surgeDir := GetSurgeDir()
 	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
@@ -77,6 +79,7 @@ func TestLoadSettings_TruncatedJSON_PopulatesStartupWarning(t *testing.T) {
 // TestLoadSettings_ValidSettings_NoStartupWarnings ensures clean configs stay quiet.
 func TestLoadSettings_ValidSettings_NoStartupWarnings(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("AppData", t.TempDir())
 
 	defaults := DefaultSettings()
 	if err := SaveSettings(defaults); err != nil {
@@ -99,6 +102,7 @@ func TestLoadSettings_ValidSettings_NoStartupWarnings(t *testing.T) {
 // no settings file exists - this is expected and must not produce warnings.
 func TestLoadSettings_MissingFile_NoStartupWarnings(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("AppData", t.TempDir())
 	// No file created - GetSurgeDir() path doesn't exist, settings.json absent.
 
 	settings, err := LoadSettings()
@@ -207,6 +211,7 @@ func TestValidate_ClearsOldWarningsOnRevalidation(t *testing.T) {
 // settings are actually defaults, not a partially-parsed struct.
 func TestLoadSettings_CorruptJSON_ReturnsDefaultValues(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("AppData", t.TempDir())
 
 	surgeDir := GetSurgeDir()
 	if err := os.MkdirAll(surgeDir, 0o755); err != nil {

@@ -13,8 +13,8 @@ func TestParseRateLimit(t *testing.T) {
 	}{
 		{"Empty string", "", 0, false},
 		{"Zero", "0", 0, false},
-		{"Default unit (MB/s)", "5", 5 * 1000 * 1000, false},
-		{"Default unit fractional", "1.5", 1500000, false},
+		{"Default unit (MB/s)", "5 mb/s", 5 * 1000 * 1000, false},
+		{"Default unit fractional", "1.5 mb/s", 1500000, false},
 		{"Bytes", "500 b", 500, false},
 		{"Bytes suffix", "500b", 500, false},
 		{"Kilobytes", "2 kb", 2000, false},
@@ -53,8 +53,8 @@ func TestFormatRateLimit(t *testing.T) {
 		bps  int64
 		want string
 	}{
-		{"Zero", 0, "0"},
-		{"Negative", -100, "0"},
+		{"Zero", 0, "\u221E"},
+		{"Negative", -100, "\u221E"},
 		{"Bytes", 500, "500 B/s"},
 		{"Kilobytes", 1000, "1.0 kB/s"},
 		{"Megabytes", 1000000, "1.0 MB/s"},

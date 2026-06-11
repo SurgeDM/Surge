@@ -566,6 +566,11 @@ func TestLocalDownloadService_SetDefaultRateLimit_NegativeRate(t *testing.T) {
 }
 
 func TestLocalDownloadService_SetRateLimit_UpdatesPool(t *testing.T) {
+	tempDir := t.TempDir()
+	state.CloseDB()
+	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	defer state.CloseDB()
+
 	ch := make(chan interface{}, 10)
 	pool := download.NewWorkerPool(ch, 1)
 	svc := NewLocalDownloadServiceWithInput(pool, ch)
@@ -596,6 +601,11 @@ func TestLocalDownloadService_SetRateLimit_UpdatesPool(t *testing.T) {
 }
 
 func TestLocalDownloadService_ClearRateLimit_UpdatesPool(t *testing.T) {
+	tempDir := t.TempDir()
+	state.CloseDB()
+	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	defer state.CloseDB()
+
 	ch := make(chan interface{}, 10)
 	pool := download.NewWorkerPool(ch, 1)
 	pool.SetDefaultDownloadRateLimit(512 * 1024)

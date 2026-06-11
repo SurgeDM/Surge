@@ -728,7 +728,7 @@ func (s *LocalDownloadService) ClearRateLimit(id string) error {
 	if s.Pool == nil {
 		return types.ErrPoolNotInit
 	}
-	
+
 	err := state.ClearRateLimit(id)
 	if err != nil && !errors.Is(err, types.ErrNotFound) {
 		return err
