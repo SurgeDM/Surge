@@ -558,9 +558,9 @@ func TestRateLimitEndpoint_NegativeRateReturns400(t *testing.T) {
 		name string
 		path string
 	}{
-		{name: "per-download", path: "/rate-limit?id=dl-id&rate=-1"},
-		{name: "global", path: "/rate-limit/global?rate=-1"},
-		{name: "default", path: "/rate-limit/default?rate=-1"},
+		{name: "per-download", path: "/rate-limit?id=dl-id&rate=-2"},
+		{name: "global", path: "/rate-limit/global?rate=-2"},
+		{name: "default", path: "/rate-limit/default?rate=-2"},
 	}
 
 	for _, tt := range tests {

@@ -242,7 +242,7 @@ func isRateLimitInheritRequest(r *http.Request) bool {
 	}
 
 	normalizedRate := strings.ToLower(strings.TrimSpace(query.Get("rate")))
-	return normalizedRate == "inherit" || normalizedRate == "default"
+	return normalizedRate == "inherit" || normalizedRate == "default" || normalizedRate == "-1"
 }
 
 func parseRateLimitQuery(w http.ResponseWriter, r *http.Request) (int64, string, bool) {

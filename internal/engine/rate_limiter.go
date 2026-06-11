@@ -190,6 +190,12 @@ func (r *RateLimiter) Refund(n int64) {
 		return
 	}
 	r.mu.Lock()
+	// If the limiter is unlimited (rate == 0), WaitN never deducted tokens,
+	// so there is nothing to refund and no waiters to wake.
+	if r.rate <= 0 {
+		r.mu.Unlock()
+		return
+	}
 	r.tokens += n
 	if r.tokens > r.bucketSize {
 		r.tokens = r.bucketSize
