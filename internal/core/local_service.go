@@ -756,6 +756,9 @@ func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
 	if s.settings == nil {
 		s.settings = config.DefaultSettings()
 	}
+	if s.settings.Network.GlobalRateLimit == nil {
+		s.settings.Network.GlobalRateLimit = config.DefaultSettings().Network.GlobalRateLimit
+	}
 	s.settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
 	return config.SaveSettings(s.settings)
 }
@@ -774,6 +777,9 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 	defer s.settingsMu.Unlock()
 	if s.settings == nil {
 		s.settings = config.DefaultSettings()
+	}
+	if s.settings.Network.DefaultDownloadRateLimit == nil {
+		s.settings.Network.DefaultDownloadRateLimit = config.DefaultSettings().Network.DefaultDownloadRateLimit
 	}
 	s.settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
 	return config.SaveSettings(s.settings)

@@ -93,8 +93,18 @@ func (m RootModel) getSpeedLimitsMetadata() []config.SettingMeta {
 
 func (m RootModel) getSpeedLimitsValues() map[string]interface{} {
 	values := make(map[string]interface{})
-	values["global_rate_limit"] = m.Settings.Network.GlobalRateLimit.Value
-	values["default_download_rate_limit"] = m.Settings.Network.DefaultDownloadRateLimit.Value
+	
+	if m.Settings != nil && m.Settings.Network.GlobalRateLimit != nil {
+		values["global_rate_limit"] = m.Settings.Network.GlobalRateLimit.Value
+	} else {
+		values["global_rate_limit"] = "0"
+	}
+	
+	if m.Settings != nil && m.Settings.Network.DefaultDownloadRateLimit != nil {
+		values["default_download_rate_limit"] = m.Settings.Network.DefaultDownloadRateLimit.Value
+	} else {
+		values["default_download_rate_limit"] = "0"
+	}
 
 	for _, d := range m.downloads {
 		if !d.done {
@@ -113,6 +123,9 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 		if err := m.applyRemoteGlobalRateLimit(rate); err != nil {
 			return err
 		}
+		if m.Settings.Network.GlobalRateLimit == nil {
+			m.Settings.Network.GlobalRateLimit = config.DefaultSettings().Network.GlobalRateLimit
+		}
 		if rate > 0 {
 			m.Settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
 		} else {
@@ -128,6 +141,9 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 		}
 		if err := m.applyRemoteDefaultRateLimit(rate); err != nil {
 			return err
+		}
+		if m.Settings.Network.DefaultDownloadRateLimit == nil {
+			m.Settings.Network.DefaultDownloadRateLimit = config.DefaultSettings().Network.DefaultDownloadRateLimit
 		}
 		if rate > 0 {
 			m.Settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
@@ -170,11 +186,17 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 
 func (m *RootModel) resetSpeedLimitToDefault(key string, defaults *config.Settings) error {
 	if key == "global_rate_limit" {
+		if m.Settings.Network.GlobalRateLimit == nil {
+			m.Settings.Network.GlobalRateLimit = config.DefaultSettings().Network.GlobalRateLimit
+		}
 		m.Settings.Network.GlobalRateLimit.Value = defaults.Network.GlobalRateLimit.Value
 		rate, _ := utils.ParseRateLimitValue(defaults.Network.GlobalRateLimit.Value)
 		return m.applyRemoteGlobalRateLimit(rate)
 	}
 	if key == "default_download_rate_limit" {
+		if m.Settings.Network.DefaultDownloadRateLimit == nil {
+			m.Settings.Network.DefaultDownloadRateLimit = config.DefaultSettings().Network.DefaultDownloadRateLimit
+		}
 		m.Settings.Network.DefaultDownloadRateLimit.Value = defaults.Network.DefaultDownloadRateLimit.Value
 		rate, _ := utils.ParseRateLimitValue(defaults.Network.DefaultDownloadRateLimit.Value)
 		return m.applyRemoteDefaultRateLimit(rate)
