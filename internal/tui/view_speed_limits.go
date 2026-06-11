@@ -60,19 +60,14 @@ func (m RootModel) viewSpeedLimits() string {
 }
 
 func (m RootModel) getSpeedLimitsMetadata() []config.SettingMeta {
+	networkMeta := config.GetSettingsMetadata()["Network"]
+	keyToMeta := make(map[string]config.SettingMeta, len(networkMeta))
+	for _, m := range networkMeta {
+		keyToMeta[m.Key] = m
+	}
 	meta := []config.SettingMeta{
-		{
-			Key:         "global_rate_limit",
-			Label:       "Global Speed Limit",
-			Description: "Cap total download bandwidth (e.g. 10MB/s, 80Mbps, 500KB/s). Use 0 to disable.",
-			Type:        "string",
-		},
-		{
-			Key:         "default_download_rate_limit",
-			Label:       "Default Download Limit",
-			Description: "Default speed limit for new/queued downloads (e.g. 2MB/s, 500KB/s). Use 0 to disable.",
-			Type:        "string",
-		},
+		keyToMeta["global_rate_limit"],
+		keyToMeta["default_download_rate_limit"],
 	}
 
 	for _, d := range m.downloads {
@@ -200,7 +195,7 @@ func (m RootModel) formatDownloadRateLimitValue(d *DownloadModel) string {
 	}
 	if d.RateLimitSet {
 		if d.RateLimit <= 0 {
-			return "explicit 0"
+			return "0 (unlimited)"
 		}
 		return utils.FormatRateLimit(d.RateLimit)
 	}

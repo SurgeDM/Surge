@@ -1027,8 +1027,13 @@ func SaveSettings(s *Settings) error {
 
 // ToRuntimeConfig creates the engine runtime config from validated settings.
 func (s *Settings) ToRuntimeConfig() *types.RuntimeConfig {
-	globalRate, _ := utils.ParseRateLimitValue(s.Network.GlobalRateLimit.Value)
-	defaultRate, _ := utils.ParseRateLimitValue(s.Network.DefaultDownloadRateLimit.Value)
+	var globalRate, defaultRate int64
+	if s.Network.GlobalRateLimit != nil {
+		globalRate, _ = utils.ParseRateLimitValue(s.Network.GlobalRateLimit.Value)
+	}
+	if s.Network.DefaultDownloadRateLimit != nil {
+		defaultRate, _ = utils.ParseRateLimitValue(s.Network.DefaultDownloadRateLimit.Value)
+	}
 	return &types.RuntimeConfig{
 		MaxConnectionsPerDownload:   Resolve[int](s.Network.MaxConnectionsPerDownload),
 		UserAgent:                   Resolve[string](s.Network.UserAgent),
