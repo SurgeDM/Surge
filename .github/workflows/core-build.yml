@@ -41,16 +41,13 @@ jobs:
       - name: Build
         shell: bash
         run: go build -v ./...
-      - name: Test with Race Detector
-        if: matrix.os == 'ubuntu-latest'
-        shell: bash
-        run: go test -race -v ./...
+
       - name: Test
         shell: bash
         run: |
           cover_arg=""
           if [ "$RUNNER_OS" = "Linux" ]; then
-            cover_arg="-- -coverprofile=coverage.out"
+            cover_arg="-- -coverprofile=coverage.out -race"
           fi
           gotestsum --junitfile test-results.xml --format testdox $cover_arg ./...
       - name: Comment Test Failures
