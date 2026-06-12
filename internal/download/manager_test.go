@@ -235,11 +235,9 @@ func TestTUIDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
 	if err := TUIDownload(context.Background(), &cfg); err != nil {
 		t.Fatalf("TUIDownload failed: %v", err)
 	}
-	if cfg.TotalSize != fileSize {
-		t.Fatalf("cfg.TotalSize = %d, want %d", cfg.TotalSize, fileSize)
-	}
-	if got := cfg.State.TotalSize; got != fileSize {
-		t.Fatalf("state total size = %d, want %d", got, fileSize)
+	_, stateTotal, _, _, _, _ := cfg.State.GetProgress()
+	if stateTotal != fileSize {
+		t.Fatalf("state total size = %d, want %d", stateTotal, fileSize)
 	}
 
 	foundComplete := false
@@ -305,8 +303,9 @@ func TestTUIDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
 	if string(got) != string(content) {
 		t.Fatalf("downloaded content = %q, want %q", string(got), string(content))
 	}
-	if cfg.TotalSize != int64(len(content)) {
-		t.Fatalf("cfg.TotalSize = %d, want %d", cfg.TotalSize, len(content))
+	_, stateTotal, _, _, _, _ := cfg.State.GetProgress()
+	if stateTotal != int64(len(content)) {
+		t.Fatalf("state total size = %d, want %d", stateTotal, len(content))
 	}
 
 	foundComplete := false
