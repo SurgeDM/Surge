@@ -15,6 +15,7 @@ on:
 
 permissions:
   contents: write
+  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -40,21 +41,43 @@ jobs:
       - name: Build
         shell: bash
         run: go build -v ./...
+
       - name: Test
         shell: bash
         run: |
           cover_arg=""
           if [ "$RUNNER_OS" = "Linux" ]; then
-            cover_arg="-- -coverprofile=coverage.out"
+            cover_arg="-coverprofile=coverage.out"
           fi
-          gotestsum --junitfile test-results.xml --format testdox $cover_arg ./...
-      - name: Upload Test Results
-        uses: actions/upload-artifact@v4
-        if: always()
+          gotestsum --junitfile test-results.xml --format testdox -- -race $cover_arg ./...
+      - name: Comment Test Failures
+        if: failure() && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
         with:
-          name: test-results-${{ matrix.os }}
-          path: test-results.xml
-          retention-days: 7
+          script: |
+            const fs = require('fs');
+            if (!fs.existsSync('test-results.xml')) return;
+            const content = fs.readFileSync('test-results.xml', 'utf8');
+            const regex = /<testcase classname="([^"]+)" name="([^"]+)"[^>]*>\s*<(?:failure|error)/g;
+            let match;
+            const failures = [];
+            while ((match = regex.exec(content)) !== null) {
+              failures.push(`- **${match[1]}**: \`${match[2]}\``);
+            }
+            if (failures.length > 0) {
+              const body = `### ❌ Test Failures on \`${{ matrix.os }}\`\n` + failures.join('\n');
+              try {
+                await github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: body
+                });
+              } catch (err) {
+                // Fork PRs have a read-only token; log but don't fail the step.
+                core.warning(`Could not post comment (fork PR?): ${err.message}`);
+              }
+            }
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
         if: matrix.os == 'ubuntu-latest' && success() && hashFiles('coverage.out') != ''

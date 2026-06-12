@@ -102,6 +102,8 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 	}
 	defer func() {
 		_ = GlobalService.Shutdown()
+		GlobalService = nil
+		GlobalPool = nil
 		GlobalLifecycle = nil
 	}()
 
