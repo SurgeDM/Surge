@@ -586,7 +586,6 @@ func (p *WorkerPool) worker() {
 			ad.config.State.SetCancelFunc(cancel)
 		}
 		ad.running.Store(true)
-		p.wg.Add(1)
 		delete(p.queued, cfg.ID)
 		p.downloads[cfg.ID] = ad
 
