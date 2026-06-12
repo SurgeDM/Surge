@@ -66,12 +66,17 @@ jobs:
             }
             if (failures.length > 0) {
               const body = `### ❌ Test Failures on \`${{ matrix.os }}\`\n` + failures.join('\n');
-              await github.rest.issues.createComment({
-                issue_number: context.issue.number,
-                owner: context.repo.owner,
-                repo: context.repo.repo,
-                body: body
-              });
+              try {
+                await github.rest.issues.createComment({
+                  issue_number: context.issue.number,
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  body: body
+                });
+              } catch (err) {
+                // Fork PRs have a read-only token; log but don't fail the step.
+                core.warning(`Could not post comment (fork PR?): ${err.message}`);
+              }
             }
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v5
