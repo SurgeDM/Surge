@@ -81,6 +81,9 @@ func syncConfigFromState(cfg *types.DownloadConfig) {
 		}
 		cfg.Mirrors = urls
 	}
+	if _, totalSize, _, _, _, _ := cfg.State.GetProgress(); totalSize > 0 {
+		cfg.TotalSize = totalSize
+	}
 }
 
 // resolveDestPath resolves the destination path consistently from config, state, and output bounds.
@@ -106,6 +109,7 @@ func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 	}
 	p.mu.Lock()
 	p.queued[cfg.ID] = cfg
+	p.wg.Add(1)
 	p.mu.Unlock()
 
 	p.taskChan <- cfg
@@ -334,10 +338,10 @@ func (p *WorkerPool) worker() {
 		p.mu.RUnlock()
 		if !stillQueued {
 			// Canceled while waiting in queue.
+			p.wg.Done()
 			continue
 		}
 
-		p.wg.Add(1)
 		// Create cancellable context
 		ctx, cancel := context.WithCancel(context.Background())
 
@@ -500,6 +504,7 @@ drainLoop:
 	for {
 		select {
 		case <-p.taskChan:
+			p.wg.Done()
 		default:
 			break drainLoop
 		}
