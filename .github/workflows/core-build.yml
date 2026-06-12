@@ -47,9 +47,9 @@ jobs:
         run: |
           cover_arg=""
           if [ "$RUNNER_OS" = "Linux" ]; then
-            cover_arg="-- -coverprofile=coverage.out -race"
+            cover_arg="-coverprofile=coverage.out"
           fi
-          gotestsum --junitfile test-results.xml --format testdox $cover_arg ./...
+          gotestsum --junitfile test-results.xml --format testdox -- -race $cover_arg ./...
       - name: Comment Test Failures
         if: failure() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
