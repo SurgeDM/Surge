@@ -67,7 +67,8 @@ type LocalDownloadService struct {
 	settings   *config.Settings
 	settingsMu sync.RWMutex
 
-	lifecycleHooks LifecycleHooks
+	lifecycleHooks   LifecycleHooks
+	lifecycleHooksMu sync.RWMutex
 }
 
 // LifecycleHooks routes service-level management calls through the LifecycleManager.
@@ -523,24 +524,33 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 
 // Pause pauses an active download.
 func (s *LocalDownloadService) Pause(id string) error {
-	if s.lifecycleHooks.Pause != nil {
-		return s.lifecycleHooks.Pause(id)
+	s.lifecycleHooksMu.RLock()
+	fn := s.lifecycleHooks.Pause
+	s.lifecycleHooksMu.RUnlock()
+	if fn != nil {
+		return fn(id)
 	}
 	return fmt.Errorf("PauseFunc not initialized")
 }
 
 // Resume resumes a paused download.
 func (s *LocalDownloadService) Resume(id string) error {
-	if s.lifecycleHooks.Resume != nil {
-		return s.lifecycleHooks.Resume(id)
+	s.lifecycleHooksMu.RLock()
+	fn := s.lifecycleHooks.Resume
+	s.lifecycleHooksMu.RUnlock()
+	if fn != nil {
+		return fn(id)
 	}
 	return fmt.Errorf("ResumeFunc not initialized")
 }
 
 // ResumeBatch resumes multiple paused downloads efficiently.
 func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
-	if s.lifecycleHooks.ResumeBatch != nil {
-		return s.lifecycleHooks.ResumeBatch(ids)
+	s.lifecycleHooksMu.RLock()
+	fn := s.lifecycleHooks.ResumeBatch
+	s.lifecycleHooksMu.RUnlock()
+	if fn != nil {
+		return fn(ids)
 	}
 	errs := make([]error, len(ids))
 	for i := range errs {
@@ -552,13 +562,18 @@ func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
 // SetLifecycleHooks wires the processing layer into the service so
 // pause/resume/cancel/updateURL calls are routed through the lifecycle manager.
 func (s *LocalDownloadService) SetLifecycleHooks(hooks LifecycleHooks) {
+	s.lifecycleHooksMu.Lock()
 	s.lifecycleHooks = hooks
+	s.lifecycleHooksMu.Unlock()
 }
 
 // UpdateURL updates the URL of a paused or errored download
 func (s *LocalDownloadService) UpdateURL(id string, newURL string) error {
-	if s.lifecycleHooks.UpdateURL != nil {
-		return s.lifecycleHooks.UpdateURL(id, newURL)
+	s.lifecycleHooksMu.RLock()
+	fn := s.lifecycleHooks.UpdateURL
+	s.lifecycleHooksMu.RUnlock()
+	if fn != nil {
+		return fn(id, newURL)
 	}
 	// Fallback: update pool in-memory only (no DB persistence)
 	if s.Pool == nil {
@@ -569,8 +584,11 @@ func (s *LocalDownloadService) UpdateURL(id string, newURL string) error {
 
 // Delete cancels and removes a download.
 func (s *LocalDownloadService) Delete(id string) error {
-	if s.lifecycleHooks.Cancel != nil {
-		return s.lifecycleHooks.Cancel(id)
+	s.lifecycleHooksMu.RLock()
+	fn := s.lifecycleHooks.Cancel
+	s.lifecycleHooksMu.RUnlock()
+	if fn != nil {
+		return fn(id)
 	}
 	// Fallback when lifecycle hooks not wired (e.g. tests)
 	if s.Pool == nil {

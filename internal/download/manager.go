@@ -191,7 +191,6 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		// Pass effectiveTotalSize to avoid unnecessary bootstrap if state already knows the size
 		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, effectiveTotalSize)
 		if d.TotalSize > 0 {
-			cfg.TotalSize = d.TotalSize
 			effectiveTotalSize = d.TotalSize
 		}
 
@@ -221,7 +220,6 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		// Pass effectiveTotalSize here as well
 		downloadErr = d.Download(ctx, cfg.URL, finalDestPath, effectiveTotalSize, finalFilename)
 		if d.TotalSize > 0 {
-			cfg.TotalSize = d.TotalSize
 			effectiveTotalSize = d.TotalSize
 		}
 	}

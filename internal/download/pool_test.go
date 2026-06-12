@@ -970,9 +970,9 @@ func TestWorkerPool_GracefulShutdown_DrainsTaskChan(t *testing.T) {
 		maxDownloads: 0,
 	}
 
-	// Write items directly to taskChan (simulating Add() with no worker to consume).
+	// Use Add() to ensure WaitGroup accounting is correct.
 	for i := 0; i < 5; i++ {
-		pool.taskChan <- types.DownloadConfig{ID: fmt.Sprintf("buffered-%d", i)}
+		pool.Add(types.DownloadConfig{ID: fmt.Sprintf("buffered-%d", i)})
 	}
 	if len(pool.taskChan) != 5 {
 		t.Fatalf("pre-condition: expected 5 items in taskChan, got %d", len(pool.taskChan))
@@ -1008,13 +1008,9 @@ func TestWorkerPool_GracefulShutdown_WorkerSkipsQueuedAfterShutdown(t *testing.T
 	// Single worker, small taskChan.
 	pool := NewWorkerPool(ch, 1)
 
-	// Manually insert into queued + taskChan without a real probe/download,
-	// then immediately shut down before the worker gets to process it.
+	// Add via public API to ensure correct internal state (WaitGroup, queued map).
 	id := "skip-me"
-	pool.mu.Lock()
-	pool.queued[id] = types.DownloadConfig{ID: id}
-	pool.mu.Unlock()
-	pool.taskChan <- types.DownloadConfig{ID: id}
+	pool.Add(types.DownloadConfig{ID: id})
 
 	// Shutdown should drain the queue and close taskChan.
 	done := make(chan struct{})

@@ -86,14 +86,35 @@ func ParseURLArg(arg string) (string, []string) {
 	parts := strings.Split(arg, ",")
 	var urls []string
 	for _, p := range parts {
-		if trimmed := strings.TrimSpace(p); trimmed != "" {
-			urls = append(urls, trimmed)
+		trimmed := strings.TrimSpace(p)
+		if trimmed == "" {
+			continue
 		}
+		// Only an http(s) URL starts a new mirror. A segment without a
+		// scheme means the comma lived inside the previous URL (e.g. the
+		// "formats=PNG,ITEM TILE,LOG" query in an archive.org compress link),
+		// so glue it back instead of treating it as a separate mirror.
+		if len(urls) > 0 && !startsNewMirror(trimmed) {
+			urls[len(urls)-1] += "," + trimmed
+			continue
+		}
+		urls = append(urls, trimmed)
 	}
 	if len(urls) == 0 {
 		return "", nil
 	}
 	return urls[0], urls
+}
+
+// startsNewMirror reports whether a comma-separated segment begins a new
+// mirror rather than continuing the previous URL. Only http(s) URLs are
+// downloadable, so a segment is a mirror boundary only when it starts with the
+// http:// or https:// prefix. Matching the literal prefix (rather than a
+// non-empty url.Parse scheme) keeps bare-scheme query values like "http:" glued
+// to the previous URL, and matches how the rest of the CLI recognizes URLs
+// (internal/clipboard/validator.go).
+func startsNewMirror(segment string) bool {
+	return strings.HasPrefix(segment, "http://") || strings.HasPrefix(segment, "https://")
 }
 
 func resolveLocalToken() string {

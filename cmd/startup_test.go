@@ -57,6 +57,11 @@ func TestServer_Startup_HandlesResume(t *testing.T) {
 		})
 	}
 	defer func() {
+		if GlobalService != nil {
+			_ = GlobalService.Shutdown()
+		}
+		GlobalService = nil
+		GlobalPool = nil
 		GlobalLifecycle = nil
 	}()
 

@@ -5,17 +5,18 @@ import (
 	"fmt"
 	"sync/atomic"
 
+	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // StartHeadlessConsumer starts a goroutine to consume progress messages and log to stdout
-func StartHeadlessConsumer() {
+func StartHeadlessConsumer(service core.DownloadService) {
 	go func() {
-		if GlobalService == nil {
+		if service == nil {
 			return
 		}
-		stream, cleanup, err := GlobalService.StreamEvents(context.Background())
+		stream, cleanup, err := service.StreamEvents(context.Background())
 		if err != nil {
 			utils.Debug("Failed to start event stream: %v", err)
 			return

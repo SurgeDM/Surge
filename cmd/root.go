@@ -209,6 +209,12 @@ func takeLifecycleCleanup() func() {
 	return cleanup
 }
 
+func setLifecycleCleanupForTest(fn func()) {
+	globalLifecycleMu.Lock()
+	GlobalLifecycleCleanup = fn
+	globalLifecycleMu.Unlock()
+}
+
 func currentPoolConfigs() []types.DownloadConfig {
 	if GlobalPool == nil {
 		return nil
