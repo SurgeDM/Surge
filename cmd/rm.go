@@ -27,8 +27,8 @@ var rmCmd = &cobra.Command{
 			return fmt.Errorf("--clean and --purge are mutually exclusive; use --purge with an ID to also delete that download's files")
 		}
 
-		if !clean && len(args) == 0 {
-			return fmt.Errorf("provide a download ID or use --clean")
+		if !clean && !clean_failed && len(args) == 0 {
+			return fmt.Errorf("provide a download ID, or use --clean or --clean-failed")
 		}
 
 		if clean {
