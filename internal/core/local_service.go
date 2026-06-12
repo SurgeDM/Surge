@@ -733,7 +733,9 @@ func (s *LocalDownloadService) SetRateLimit(id string, rate int64) error {
 	if err != nil && !errors.Is(err, types.ErrNotFound) {
 		return err
 	}
-	if entry == nil || entry.Status == "completed" {
+	
+	poolStatus := s.Pool.GetStatus(id)
+	if poolStatus == nil && (entry == nil || entry.Status == "completed") {
 		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
 	}
 
@@ -757,7 +759,17 @@ func (s *LocalDownloadService) ClearRateLimit(id string) error {
 		return types.ErrPoolNotInit
 	}
 
-	err := state.ClearRateLimit(id)
+	entry, err := state.GetDownload(id)
+	if err != nil && !errors.Is(err, types.ErrNotFound) {
+		return err
+	}
+	
+	poolStatus := s.Pool.GetStatus(id)
+	if poolStatus == nil && (entry == nil || entry.Status == "completed") {
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
+	}
+
+	err = state.ClearRateLimit(id)
 	if err != nil && !errors.Is(err, types.ErrNotFound) {
 		return err
 	}

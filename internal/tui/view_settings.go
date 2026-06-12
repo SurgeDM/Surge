@@ -375,7 +375,10 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		case "link":
 			valueStr = lipgloss.NewStyle().Foreground(colors.Cyan()).Render("Open [Enter]")
 		default:
-			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key, true) + unitStyle.Render(unit)
+			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key, true)
+			if valueStr != "\u221E" {
+				valueStr += unitStyle.Render(unit)
+			}
 			if meta.Key == "max_global_connections" {
 				valueStr += " (Ignored)"
 			}

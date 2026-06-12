@@ -117,6 +117,12 @@ func (m RootModel) getSpeedLimitsValues() map[string]interface{} {
 }
 
 func (m *RootModel) setSpeedLimitValue(key, value string) error {
+	if value != "" && value != "0" && !isRateLimitInheritValue(value) {
+		if _, err := strconv.ParseFloat(value, 64); err == nil {
+			value += " MB/s"
+		}
+	}
+
 	if key == "global_rate_limit" {
 		rate, err := utils.ParseRateLimit(value)
 		if err != nil {
