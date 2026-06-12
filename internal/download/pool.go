@@ -703,9 +703,9 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 		status.DestPath = adDestPath
 	}
 
-	if ad.config.State.IsPausing() {
+	if state.IsPausing() {
 		status.Status = "pausing"
-	} else if ad.config.State.IsPaused() {
+	} else if state.IsPaused() {
 		status.Status = "paused"
 	} else if state.Done.Load() {
 		status.Status = "completed"
