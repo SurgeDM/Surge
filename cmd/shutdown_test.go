@@ -62,9 +62,9 @@ func TestDefaultGlobalShutdown_ShutdownBeforeCleanup(t *testing.T) {
 			order = append(order, "shutdown")
 		},
 	}
-	GlobalLifecycleCleanup = func() {
+	setLifecycleCleanupForTest(func() {
 		order = append(order, "cleanup")
-	}
+	})
 	t.Cleanup(func() {
 		GlobalService = nil
 		GlobalLifecycle = nil
