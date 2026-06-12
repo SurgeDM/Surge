@@ -55,7 +55,7 @@ func (i DownloadItem) Description() string {
 
 	speedInfo := ""
 	if d.Speed > 0 {
-		speedInfo = fmt.Sprintf(" \u2022 %.2f MB/s", d.Speed/float64(MB))
+		speedInfo = fmt.Sprintf(" \u2022 %s", utils.FormatSpeed(d.Speed))
 		if d.RateLimitSet && d.RateLimit > 0 {
 			speedInfo += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
 		} else if d.RateLimitSet {

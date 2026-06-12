@@ -204,6 +204,12 @@ func (t *throttledReader) Read(p []byte) (int, error) {
 			if err != nil && err != io.EOF {
 				return n, err
 			}
+			// If the underlying read signalled EOF (last bytes of the file), preserve
+			// it so the caller sees a completed download rather than a cancelled one.
+			// Rate enforcement is moot once the transfer is done.
+			if err == io.EOF {
+				return n, io.EOF
+			}
 			return n, waitErr
 		}
 	}

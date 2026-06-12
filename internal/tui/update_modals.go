@@ -51,6 +51,12 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	metaList := m.getSpeedLimitsMetadata()
+	if m.speedLimitsCursor >= len(metaList) {
+		m.speedLimitsCursor = len(metaList) - 1
+	}
+	if m.speedLimitsCursor < 0 {
+		m.speedLimitsCursor = 0
+	}
 
 	if key.Matches(msg, m.keys.SpeedLimits.Up) {
 		m.speedLimitsCursor--

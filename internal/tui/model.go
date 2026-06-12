@@ -35,6 +35,9 @@ func InitializeTUI() {
 	components.InitializeStatusCache()
 }
 
+// IsTestMode is set by tests to avoid blocking calls to terminal interrogation
+var IsTestMode bool
+
 type UIState int // Defines UIState as int to be used in rootModel
 
 const (
@@ -257,7 +260,7 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 
 func InitialRootModel(serverPort int, currentVersion string, service core.DownloadService, orchestrator *processing.LifecycleManager, noResume bool, currentCommit ...string) RootModel {
 	initialDarkBackground := true
-	if len(os.Args) > 0 && !strings.HasSuffix(os.Args[0], ".test") && !strings.HasSuffix(os.Args[0], ".test.exe") {
+	if !IsTestMode {
 		initialDarkBackground = lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
 	}
 	commitValue := "unknown"

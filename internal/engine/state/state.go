@@ -1007,6 +1007,21 @@ func UpdateRateLimit(id string, rate int64) error {
 	return nil
 }
 
+// UpdateDefaultRateLimit updates the inherited rate limit of a download in the database
+func UpdateDefaultRateLimit(id string, rate int64) error {
+	db := getDBHelper()
+	if db == nil {
+		return fmt.Errorf("database not initialized")
+	}
+
+	_, err := db.Exec("UPDATE downloads SET rate_limit = ? WHERE id = ? AND (rate_limit_set = 0 OR rate_limit_set IS NULL)", rate, id)
+	if err != nil {
+		return fmt.Errorf("failed to update default rate limit: %w", err)
+	}
+
+	return nil
+}
+
 // ClearRateLimit removes a download-specific rate limit override.
 func ClearRateLimit(id string) error {
 	db := getDBHelper()

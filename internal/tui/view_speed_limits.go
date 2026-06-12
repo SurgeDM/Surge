@@ -117,13 +117,14 @@ func (m RootModel) getSpeedLimitsValues() map[string]interface{} {
 }
 
 func (m *RootModel) setSpeedLimitValue(key, value string) error {
-	if value != "" && value != "0" && !isRateLimitInheritValue(value) {
-		if _, err := strconv.ParseFloat(value, 64); err == nil {
-			value += " MB/s"
-		}
+	if m.Settings == nil {
+		return fmt.Errorf("settings not loaded")
 	}
 
 	if key == "global_rate_limit" {
+		if utils.IsRateLimitInherit(value) {
+			return fmt.Errorf("global rate limit cannot be inherited")
+		}
 		rate, err := utils.ParseRateLimit(value)
 		if err != nil {
 			return err
@@ -139,6 +140,9 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 	}
 
 	if key == "default_download_rate_limit" {
+		if utils.IsRateLimitInherit(value) {
+			return fmt.Errorf("default rate limit cannot be inherited")
+		}
 		rate, err := utils.ParseRateLimit(value)
 		if err != nil {
 			return err
@@ -253,9 +257,7 @@ func (m RootModel) formatDownloadRateLimitValue(d *DownloadModel) string {
 }
 
 func isRateLimitInheritValue(value string) bool {
-	normalized := strings.TrimSpace(strings.ToLower(value))
-	// -1 is the numeric alias for inheriting the default rate
-	return normalized == "inherit" || normalized == "default" || normalized == "-1"
+	return utils.IsRateLimitInherit(value)
 }
 
 func (m *RootModel) clearDownloadRateLimit(downloadID string) error {

@@ -426,6 +426,10 @@ func DefaultKeyMap() *KeyMap {
 				key.WithKeys("x"),
 				key.WithHelp("x", "delete"),
 			),
+			PurgeFile: key.NewBinding(
+				key.WithKeys("X", "shift+x"),
+				key.WithHelp("X", "delete+purge"),
+			),
 			Settings: key.NewBinding(
 				key.WithKeys("s"),
 				key.WithHelp("s", "settings"),

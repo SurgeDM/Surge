@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -383,9 +382,9 @@ func (m RootModel) View() tea.View {
 	speedGlyph := lipgloss.NewStyle().Foreground(colors.Cyan()).Render("\u2B07")
 	var speedVal string
 	if speedBps <= 0 {
-		speedVal = lipgloss.NewStyle().Foreground(colors.Gray()).Render("0 MB/s")
+		speedVal = lipgloss.NewStyle().Foreground(colors.Gray()).Render("0 B/s")
 	} else {
-		speedVal = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(utils.FormatRateLimit(speedBps))
+		speedVal = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(utils.FormatSpeed(float64(speedBps)))
 	}
 	speedChunk := lipgloss.JoinHorizontal(lipgloss.Center, speedGlyph, " ", speedVal)
 
@@ -661,12 +660,12 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	if d.done {
 		if elapsed.Seconds() >= 1 {
 			avgSpeed := float64(d.Total) / float64(int(elapsed.Seconds()))
-			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(config.MB))
+			speedStr = fmt.Sprintf("%s (Avg)", utils.FormatSpeed(avgSpeed))
 		} else if d.Speed > 0 {
-			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", d.Speed/float64(config.MB))
+			speedStr = fmt.Sprintf("%s (Avg)", utils.FormatSpeed(d.Speed))
 		} else if elapsed.Seconds() > 0 {
 			avgSpeed := float64(d.Total) / elapsed.Seconds()
-			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(config.MB))
+			speedStr = fmt.Sprintf("%s (Avg)", utils.FormatSpeed(avgSpeed))
 		} else {
 			speedStr = "N/A"
 		}
@@ -683,7 +682,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		}
 		etaStr = "\u221e"
 	} else {
-		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/float64(config.MB))
+		speedStr = utils.FormatSpeed(d.Speed)
 		if d.RateLimitSet && d.RateLimit > 0 {
 			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
 		} else if d.RateLimitSet {

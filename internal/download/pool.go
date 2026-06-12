@@ -215,30 +215,13 @@ func (p *WorkerPool) GetAll() []types.DownloadConfig {
 
 	var configs []types.DownloadConfig
 	for _, ad := range p.downloads {
-		cfg := types.DownloadConfig{
-			ID:                 ad.config.ID,
-			URL:                ad.config.URL,
-			OutputPath:         ad.config.OutputPath,
-			Filename:           ad.config.Filename,
-			DestPath:           ad.config.DestPath,
-			Mirrors:            ad.config.Mirrors,
-			SupportsRange:      ad.config.SupportsRange,
-			ProgressCh:         ad.config.ProgressCh,
-			RateLimitBps:       ad.config.RateLimitBps,
-			RateLimitSet:       ad.config.RateLimitSet,
-			IsResume:           ad.config.IsResume,
-			SavedState:         ad.config.SavedState,
-			Limiter:            ad.config.Limiter,
-			State:              ad.config.State,
-			Headers:            ad.config.Headers,
-			IsExplicitCategory: ad.config.IsExplicitCategory,
-			Runtime:            ad.config.Runtime,
-			TotalSize:          ad.config.TotalSize,
-		}
+		cfg := ad.config
+		cfg.Limiter = nil
 		syncConfigFromState(&cfg)
 		configs = append(configs, cfg)
 	}
 	for _, cfg := range p.queued {
+		cfg.Limiter = nil
 		configs = append(configs, cfg)
 	}
 	return configs
@@ -314,6 +297,8 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 		}
 		limiter := p.downloadLimiters[id]
 		if limiter == nil {
+			// Note: ensureLimiterForConfigLocked guarantees all active/queued downloads have a limiter.
+			// This nil branch is defensive and should be unreachable in practice.
 			p.downloadLimiters[id] = engine.NewRateLimiter(rate, rateLimiterBurst(rate))
 		} else {
 			limiter.SetRate(rate, rateLimiterBurst(rate))
@@ -329,6 +314,8 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 		}
 		limiter := p.downloadLimiters[id]
 		if limiter == nil {
+			// Note: ensureLimiterForConfigLocked guarantees all active/queued downloads have a limiter.
+			// This nil branch is defensive and should be unreachable in practice.
 			p.downloadLimiters[id] = engine.NewRateLimiter(rate, rateLimiterBurst(rate))
 		} else {
 			limiter.SetRate(rate, rateLimiterBurst(rate))
@@ -560,11 +547,11 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 
 func (p *WorkerPool) worker() {
 	for id := range p.taskChan {
-		p.mu.Lock()
+		p.mu.RLock()
 		cfg, stillQueued := p.queued[id]
+		p.mu.RUnlock()
 		if !stillQueued {
 			// Canceled while waiting in queue.
-			p.mu.Unlock()
 			p.wg.Done()
 			continue
 		}
@@ -586,6 +573,16 @@ func (p *WorkerPool) worker() {
 			ad.config.State.SetCancelFunc(cancel)
 		}
 		ad.running.Store(true)
+
+		p.mu.Lock()
+		cfg, stillQueued = p.queued[id]
+		if !stillQueued {
+			p.mu.Unlock()
+			cancel()
+			p.wg.Done()
+			continue
+		}
+		ad.config = cfg // Ensure ad.config has the latest state from queue
 		delete(p.queued, cfg.ID)
 		p.downloads[cfg.ID] = ad
 
@@ -757,6 +754,7 @@ func (p *WorkerPool) GracefulShutdown() {
 	for id := range p.queued {
 		delete(p.queued, id)
 	}
+	clear(p.downloadLimiters)
 	p.mu.Unlock()
 
 	// Drain taskChan to discard any configs that were already written into the

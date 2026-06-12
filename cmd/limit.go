@@ -99,7 +99,7 @@ func runLimitCommand(cmd *cobra.Command, args []string) error {
 		}
 		speedStr := strings.TrimSpace(speedArg)
 		// -1 is used as a numeric alias for "inherit" so users don't have to type a string
-		if strings.EqualFold(speedStr, "inherit") || strings.EqualFold(speedStr, "default") || speedStr == "-1" {
+		if utils.IsRateLimitInherit(speedStr) {
 			path = fmt.Sprintf("/rate-limit?id=%s&inherit=true", url.QueryEscape(id))
 			success = fmt.Sprintf("Set speed limit for %s to inherit the default", id)
 		} else {

@@ -657,8 +657,8 @@ func TestFooter_IdleSpeedShowsZero(t *testing.T) {
 	m.height = 35
 
 	last := footerLine(m)
-	if !strings.Contains(last, "0 MB/s") {
-		t.Errorf("footer should show '0 MB/s' when idle, got: %q", last)
+	if !strings.Contains(last, "0 B/s") {
+		t.Errorf("footer should show '0 B/s' when idle, got: %q", last)
 	}
 }
 

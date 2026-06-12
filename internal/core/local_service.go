@@ -372,11 +372,15 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 	if s.Pool != nil {
 		activeConfigs := s.Pool.GetAll()
 		for _, cfg := range activeConfigs {
+			statusStr := "downloading"
+			if st := s.Pool.GetStatus(cfg.ID); st != nil {
+				statusStr = st.Status
+			}
 			status := types.DownloadStatus{
 				ID:           cfg.ID,
 				URL:          cfg.URL,
 				Filename:     cfg.Filename,
-				Status:       "downloading",
+				Status:       statusStr,
 				RateLimit:    cfg.RateLimitBps,
 				RateLimitSet: cfg.RateLimitSet,
 			}
@@ -518,7 +522,6 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 	state.DestPath = filepath.Join(outPath, filename) // Best guess until download starts
 
 	runtime := settings.ToRuntimeConfig()
-	state.SetRateLimit(runtime.DefaultDownloadRateLimitBps, false)
 
 	cfg := types.DownloadConfig{
 		URL:                url,
@@ -806,9 +809,9 @@ func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
 		s.settingsMu.Unlock()
 		return err
 	}
+	s.Pool.SetGlobalRateLimit(rate)
 	s.settingsMu.Unlock()
 
-	s.Pool.SetGlobalRateLimit(rate)
 	return nil
 }
 
@@ -835,8 +838,18 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 		s.settingsMu.Unlock()
 		return err
 	}
+	s.Pool.SetDefaultDownloadRateLimit(rate)
+
+	// Sync the new default rate to the DB for all downloads that inherit it.
+	if configs := s.Pool.GetAll(); configs != nil {
+		for _, cfg := range configs {
+			if !cfg.RateLimitSet {
+				state.UpdateDefaultRateLimit(cfg.ID, rate)
+			}
+		}
+	}
+
 	s.settingsMu.Unlock()
 
-	s.Pool.SetDefaultDownloadRateLimit(rate)
 	return nil
 }

@@ -589,6 +589,7 @@ func TestLocalDownloadService_SetRateLimit_UpdatesPool(t *testing.T) {
 		URL:          ts.URL,
 		RateLimitBps: 0,
 		RateLimitSet: false,
+		State:        &types.ProgressState{},
 	}
 	pool.Add(cfg)
 
@@ -639,6 +640,7 @@ func TestLocalDownloadService_ClearRateLimit_UpdatesPool(t *testing.T) {
 		URL:          ts.URL,
 		RateLimitBps: 3 * 1024 * 1024,
 		RateLimitSet: true,
+		State:        &types.ProgressState{},
 	}
 	pool.Add(cfg)
 

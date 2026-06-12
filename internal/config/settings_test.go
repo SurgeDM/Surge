@@ -371,7 +371,9 @@ func TestSettingsJSON_Serialization(t *testing.T) {
 }
 
 func TestSaveSettings_RealFunction(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 	original := DefaultSettings()
 	original.Network.MaxConnectionsPerDownload.Value = 48
 	original.General.AutoResume.Value = true

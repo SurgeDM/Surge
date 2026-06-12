@@ -82,7 +82,14 @@ func ParseRateLimit(input string) (int64, error) {
 		return 0, fmt.Errorf("unknown rate limit unit %q (accepted: B, KB, MB, GB, etc.)", unitStr)
 	}
 
-	if strings.HasSuffix(unitStr, "b/s") {
+	// Check original unitStr for 'b' vs 'B' to distinguish bits from bytes
+	if strings.HasSuffix(unitStr, "bit/s") || strings.HasSuffix(unitStr, "bits/s") {
+		unit.isBits = true
+	} else if strings.HasSuffix(unitStr, "b/s") && !strings.HasSuffix(unitStr, "B/s") {
+		// e.g. "Mb/s" vs "MB/s", but "B/s" is bytes
+		unit.isBits = true
+	} else if unitStrLower == "b/s" && !strings.HasPrefix(unitStr, "B") {
+		// lowercase 'b' (e.g. "b/s", "b/S") means bits; uppercase 'B' means bytes
 		unit.isBits = true
 	}
 
@@ -135,4 +142,18 @@ func FormatRateLimit(bps int64) string {
 		return "\u221E"
 	}
 	return ConvertBytesToHumanReadable(bps) + "/s"
+}
+
+// FormatSpeed formats a live speed value (unlike FormatRateLimit, 0 means "0 B/s", not "infinity")
+func FormatSpeed(speedBps float64) string {
+	if speedBps <= 0 {
+		return "0 B/s"
+	}
+	return ConvertBytesToHumanReadable(int64(math.Round(speedBps))) + "/s"
+}
+
+// IsRateLimitInherit checks if the string is one of the recognized aliases for inheriting the default limit.
+func IsRateLimitInherit(s string) bool {
+	normalized := strings.ToLower(strings.TrimSpace(s))
+	return normalized == "inherit" || normalized == "default" || normalized == "-1"
 }

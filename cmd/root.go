@@ -460,9 +460,13 @@ var rootCmd = &cobra.Command{
 	SilenceUsage:  true, // prevent usage text from being printed on every error
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if reset, _ := cmd.Flags().GetBool("reset-settings"); reset {
-			_ = os.Remove(config.GetSettingsPath())
-			_ = os.Remove(config.GetKeyMapConfigPath())
-			fmt.Println("Settings and keybindings have been reset to defaults.")
+			err1 := utils.RemoveFile(config.GetSettingsPath())
+			err2 := utils.RemoveFile(config.GetKeyMapConfigPath())
+			if err1 != nil || err2 != nil {
+				fmt.Printf("Error resetting settings: %v, %v\n", err1, err2)
+			} else {
+				fmt.Println("Settings and keybindings have been reset to defaults.")
+			}
 		}
 		GlobalProgressCh = make(chan any, 100)
 		globalSettings = getSettings()

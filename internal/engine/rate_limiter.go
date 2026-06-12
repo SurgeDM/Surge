@@ -55,6 +55,12 @@ func (r *RateLimiter) WaitN(ctx context.Context, n int64) error {
 		}
 
 		bucketCap := r.bucketSize
+		// Note: Expanding the bucketCap to 'n' on subsequent iterations couples
+		// the effective burst size to the caller's read buffer. For a single-file
+		// downloader reading 32 KB at a time with a 10 KB/s limit, tokens can build
+		// up to 32 KB during a slow disk write, producing a 3.2x instantaneous burst
+		// on the next loop. This burst-then-pause pattern is an accepted design
+		// trade-off to avoid penalising bursty readers while bounding average throughput.
 		if !firstLoop && bucketCap < n {
 			bucketCap = n
 		}
@@ -154,7 +160,7 @@ func (r *RateLimiter) SetRate(rate int64, bucketSize int64) {
 		if elapsed > 0 {
 			hi, lo := bits.Mul64(uint64(elapsed.Nanoseconds()), uint64(r.rate))
 			if hi >= uint64(time.Second) {
-				r.tokens = bucketSize
+				r.tokens = r.bucketSize
 			} else {
 				add, _ := bits.Div64(hi, lo, uint64(time.Second))
 				if add > 0 {
@@ -171,7 +177,9 @@ func (r *RateLimiter) SetRate(rate int64, bucketSize int64) {
 	r.rate = rate
 	r.bucketSize = bucketSize
 
-	if r.tokens > bucketSize {
+	if rate == 0 {
+		r.tokens = 0
+	} else if r.tokens > bucketSize {
 		r.tokens = bucketSize
 	}
 	r.lastRefill = now

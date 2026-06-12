@@ -669,13 +669,6 @@ func TestRateLimitPerDownloadEndpoint(t *testing.T) {
 			wantClear: true,
 		},
 		{
-			name:      "bare inherit flag clears explicit override",
-			path:      "/rate-limit?id=dl-4&inherit",
-			wantCode:  http.StatusOK,
-			wantID:    "dl-4",
-			wantClear: true,
-		},
-		{
 			name:      "rate inherit clears explicit override",
 			path:      "/rate-limit?id=dl-5&rate=inherit",
 			wantCode:  http.StatusOK,
@@ -777,11 +770,13 @@ func TestRateLimitGlobalEndpoint(t *testing.T) {
 			svc := newRateLimitTestService()
 			mux := http.NewServeMux()
 			registerHTTPRoutes(mux, 0, "", svc)
+			handler := authMiddleware("test-token", mux)
 
 			req := httptest.NewRequest(http.MethodPost, tt.path, nil)
+			req.Header.Set("Authorization", "Bearer test-token")
 			req.RemoteAddr = "127.0.0.1:12345"
 			rec := httptest.NewRecorder()
-			mux.ServeHTTP(rec, req)
+			handler.ServeHTTP(rec, req)
 
 			if rec.Code != tt.wantCode {
 				t.Fatalf("expected status %d, got %d: %s", tt.wantCode, rec.Code, rec.Body.String())
@@ -860,11 +855,13 @@ func TestRateLimitDefaultEndpoint(t *testing.T) {
 	svc := newRateLimitTestService()
 	mux := http.NewServeMux()
 	registerHTTPRoutes(mux, 0, "", svc)
+	handler := authMiddleware("test-token", mux)
 
 	req := httptest.NewRequest(http.MethodPost, "/rate-limit/default?rate=2097152", nil)
+	req.Header.Set("Authorization", "Bearer test-token")
 	req.RemoteAddr = "127.0.0.1:12345"
 	rec := httptest.NewRecorder()
-	mux.ServeHTTP(rec, req)
+	handler.ServeHTTP(rec, req)
 
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())

@@ -76,7 +76,7 @@ func (s *RemoteDownloadService) doRequest(method, path string, body interface{})
 	}
 
 	if resp.StatusCode >= 400 {
-		defer func() { _ = resp.Body.Close() }()
+		defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 		// Limit error body read to 1KB to prevent DoS
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, types.KB))
 		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(bodyBytes))
@@ -91,7 +91,7 @@ func (s *RemoteDownloadService) List() ([]types.DownloadStatus, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
 	var statuses []types.DownloadStatus
 	if err := json.NewDecoder(resp.Body).Decode(&statuses); err != nil {
@@ -106,7 +106,7 @@ func (s *RemoteDownloadService) History() ([]types.DownloadEntry, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
 	var history []types.DownloadEntry
 	if err := json.NewDecoder(resp.Body).Decode(&history); err != nil {
@@ -121,7 +121,7 @@ func (s *RemoteDownloadService) GetStatus(id string) (*types.DownloadStatus, err
 	if err != nil {
 		return nil, err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
 	var status types.DownloadStatus
 	if err := json.NewDecoder(resp.Body).Decode(&status); err != nil {
@@ -148,7 +148,7 @@ func (s *RemoteDownloadService) Add(url string, path string, filename string, mi
 	if err != nil {
 		return "", err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
 	var result map[string]string
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -175,7 +175,7 @@ func (s *RemoteDownloadService) AddWithID(url string, path string, filename stri
 	if err != nil {
 		return "", err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
 	var result map[string]string
 	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
@@ -190,7 +190,7 @@ func (s *RemoteDownloadService) Pause(id string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 	return nil
 }
 
@@ -200,7 +200,7 @@ func (s *RemoteDownloadService) Resume(id string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 	return nil
 }
 
@@ -222,7 +222,7 @@ func (s *RemoteDownloadService) UpdateURL(id string, newURL string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 	return nil
 }
 
@@ -234,7 +234,7 @@ func (s *RemoteDownloadService) Delete(id string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 	return nil
 }
 
@@ -244,7 +244,7 @@ func (s *RemoteDownloadService) Purge(id string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 	return nil
 }
 
@@ -263,7 +263,7 @@ func (s *RemoteDownloadService) SetRateLimit(id string, rate int64) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 	return nil
 }
 
@@ -273,7 +273,7 @@ func (s *RemoteDownloadService) ClearRateLimit(id string) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 	return nil
 }
 
@@ -286,7 +286,7 @@ func (s *RemoteDownloadService) SetGlobalRateLimit(rate int64) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 	return nil
 }
 
@@ -299,7 +299,7 @@ func (s *RemoteDownloadService) SetDefaultRateLimit(rate int64) error {
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 	return nil
 }
 
@@ -383,7 +383,7 @@ func (s *RemoteDownloadService) connectSSE(ctx context.Context, ch chan interfac
 	if err != nil {
 		return err
 	}
-	defer func() { _ = resp.Body.Close() }()
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
 	if resp.StatusCode != 200 {
 		return fmt.Errorf("failed to connect to event stream: %s", resp.Status)

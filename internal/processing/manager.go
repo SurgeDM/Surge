@@ -338,6 +338,10 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 					rateLimit = st.RateLimit
 					rateLimitSet = st.RateLimitSet
 				}
+			} else if settings != nil && settings.Network.DefaultDownloadRateLimit != nil {
+				if parsed, err := utils.ParseRateLimitValue(settings.Network.DefaultDownloadRateLimit.Value); err == nil {
+					rateLimit = parsed
+				}
 			}
 			_ = hooks.PublishEvent(events.DownloadQueuedMsg{
 				DownloadID:   newID,

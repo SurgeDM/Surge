@@ -187,7 +187,11 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			http.Error(w, err.Error(), statusCodeForRateLimitError(err))
 			return
 		}
-		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "rate_limited", "id": id, "rate": rateStr})
+		status := "rate_limited"
+		if rate == 0 {
+			status = "rate_unlimited"
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": status, "id": id, "rate": rateStr})
 	}))
 
 	mux.HandleFunc("/rate-limit/global", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
@@ -204,7 +208,11 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "global_rate_limited", "rate": rateStr})
+		status := "global_rate_limited"
+		if rate == 0 {
+			status = "global_rate_unlimited"
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": status, "rate": rateStr})
 	}))
 
 	mux.HandleFunc("/rate-limit/default", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
@@ -221,7 +229,11 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "default_rate_limited", "rate": rateStr})
+		status := "default_rate_limited"
+		if rate == 0 {
+			status = "default_rate_unlimited"
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": status, "rate": rateStr})
 	}))
 }
 
@@ -236,13 +248,12 @@ func isRateLimitInheritRequest(r *http.Request) bool {
 	query := r.URL.Query()
 	for _, inherit := range query["inherit"] {
 		normalized := strings.ToLower(strings.TrimSpace(inherit))
-		if normalized == "" || normalized == "true" || normalized == "1" || normalized == "yes" || normalized == "inherit" || normalized == "default" {
+		if normalized == "true" || normalized == "1" || normalized == "yes" || utils.IsRateLimitInherit(inherit) {
 			return true
 		}
 	}
 
-	normalizedRate := strings.ToLower(strings.TrimSpace(query.Get("rate")))
-	return normalizedRate == "inherit" || normalizedRate == "default" || normalizedRate == "-1"
+	return utils.IsRateLimitInherit(query.Get("rate"))
 }
 
 func parseRateLimitQuery(w http.ResponseWriter, r *http.Request) (int64, string, bool) {
