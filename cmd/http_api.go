@@ -253,7 +253,7 @@ func parseRateLimitQuery(w http.ResponseWriter, r *http.Request) (int64, string,
 	}
 	rate, err := strconv.ParseInt(rateStr, 10, 64)
 	if err != nil {
-		http.Error(w, "Invalid rate parameter", http.StatusBadRequest)
+		http.Error(w, "Invalid rate parameter (expected: integer bytes/sec, e.g. 10485760 for 10 MB/s)", http.StatusBadRequest)
 		return 0, "", false
 	}
 	if rate < 0 {

@@ -125,7 +125,6 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	if cfg.State != nil {
 		cfg.State.SetFilename(finalFilename)
 		cfg.State.SetDestPath(finalDestPath)
-		cfg.State.SetRateLimit(cfg.RateLimitBps, cfg.RateLimitSet)
 	}
 
 	currentRateLimit := func() (int64, bool) {
