@@ -729,7 +729,15 @@ func (s *LocalDownloadService) SetRateLimit(id string, rate int64) error {
 		return types.ErrPoolNotInit
 	}
 
-	err := state.UpdateRateLimit(id, rate)
+	entry, err := state.GetDownload(id)
+	if err != nil && !errors.Is(err, types.ErrNotFound) {
+		return err
+	}
+	if entry == nil || entry.Status == "completed" {
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
+	}
+
+	err = state.UpdateRateLimit(id, rate)
 	if err != nil && !errors.Is(err, types.ErrNotFound) {
 		return err
 	}

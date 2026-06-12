@@ -41,13 +41,13 @@ var rateUnits = map[string]rateUnit{
 
 // ParseRateLimit parses a human-friendly rate limit string into bytes per second.
 func ParseRateLimit(input string) (int64, error) {
-	trimmed := strings.TrimSpace(strings.ToLower(input))
-	if trimmed == "" || trimmed == "0" || trimmed == "\u221e" || trimmed == "unlimited" {
+	trimmed := strings.TrimSpace(input)
+	lower := strings.ToLower(trimmed)
+	if lower == "" || lower == "0" || lower == "\u221e" || lower == "unlimited" {
 		return 0, nil
 	}
 
 	trimmed = strings.ReplaceAll(trimmed, " ", "")
-	trimmed = strings.TrimSuffix(trimmed, "/s")
 
 	numEnd := 0
 	for numEnd < len(trimmed) {
@@ -74,9 +74,16 @@ func ParseRateLimit(input string) (int64, error) {
 		return 0, fmt.Errorf("invalid rate limit value")
 	}
 
-	unit, ok := rateUnits[unitStr]
+	unitStrLower := strings.ToLower(unitStr)
+	lookupKey := strings.TrimSuffix(unitStrLower, "/s")
+
+	unit, ok := rateUnits[lookupKey]
 	if !ok {
 		return 0, fmt.Errorf("unknown rate limit unit %q (accepted: B, KB, MB, GB, etc.)", unitStr)
+	}
+
+	if strings.HasSuffix(unitStr, "b/s") {
+		unit.isBits = true
 	}
 
 	bytes := value * unit.multiplier

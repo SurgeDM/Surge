@@ -45,6 +45,7 @@ func (r *RateLimiter) WaitN(ctx context.Context, n int64) error {
 		ctx = context.Background()
 	}
 
+	firstLoop := true
 	for {
 		r.mu.Lock()
 
@@ -54,7 +55,7 @@ func (r *RateLimiter) WaitN(ctx context.Context, n int64) error {
 		}
 
 		bucketCap := r.bucketSize
-		if bucketCap < n {
+		if !firstLoop && bucketCap < n {
 			bucketCap = n
 		}
 
@@ -96,6 +97,7 @@ func (r *RateLimiter) WaitN(ctx context.Context, n int64) error {
 			return nil
 		}
 
+		firstLoop = false
 		missing := n - r.tokens
 		wakeCh := r.wakeCh
 
