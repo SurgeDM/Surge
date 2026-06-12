@@ -40,6 +40,10 @@ jobs:
       - name: Build
         shell: bash
         run: go build -v ./...
+      - name: Test with Race Detector
+        if: matrix.os == 'ubuntu-latest'
+        shell: bash
+        run: go test -race -v ./...
       - name: Test
         shell: bash
         run: |
