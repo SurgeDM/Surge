@@ -345,6 +345,11 @@ func (p *WorkerPool) worker() {
 		// Create cancellable context
 		ctx, cancel := context.WithCancel(context.Background())
 
+		// Ensure Runtime is initialized before exposing to GetAll
+		if cfg.Runtime == nil {
+			cfg.Runtime = types.DefaultRuntimeConfig()
+		}
+
 		// Register active download
 		ad := &activeDownload{
 			config: cfg,
