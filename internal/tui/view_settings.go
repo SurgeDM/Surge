@@ -841,7 +841,7 @@ func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool
 				if mb == float64(int64(mb)) {
 					return fmt.Sprintf("%.0f", mb)
 				}
-				return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.2f", mb), "0"), ".")
+				return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.3f", mb), "0"), ".")
 			}
 		}
 	}
@@ -935,7 +935,6 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 
 // resetSettingToDefault resets a specific setting to its default value
 func (m *RootModel) resetSettingToDefault(category, key string, defaults *config.Settings) error {
-
 	if key == "auto_start" {
 		if m.ToggleServiceFunc != nil && config.Resolve[bool](m.Settings.General.AutoStart) != config.Resolve[bool](defaults.General.AutoStart) {
 			if err := m.ToggleServiceFunc(config.Resolve[bool](defaults.General.AutoStart)); err != nil {
