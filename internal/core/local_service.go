@@ -736,7 +736,7 @@ func (s *LocalDownloadService) SetRateLimit(id string, rate int64) error {
 	if err != nil && !errors.Is(err, types.ErrNotFound) {
 		return err
 	}
-	
+
 	poolStatus := s.Pool.GetStatus(id)
 	if poolStatus == nil && (entry == nil || entry.Status == "completed") {
 		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
@@ -766,7 +766,7 @@ func (s *LocalDownloadService) ClearRateLimit(id string) error {
 	if err != nil && !errors.Is(err, types.ErrNotFound) {
 		return err
 	}
-	
+
 	poolStatus := s.Pool.GetStatus(id)
 	if poolStatus == nil && (entry == nil || entry.Status == "completed") {
 		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
@@ -842,10 +842,17 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 
 	// Sync the new default rate to the DB for all downloads that inherit it.
 	if configs := s.Pool.GetAll(); configs != nil {
+		var dbErrs []string
 		for _, cfg := range configs {
 			if !cfg.RateLimitSet {
-				state.UpdateDefaultRateLimit(cfg.ID, rate)
+				if err := state.UpdateDefaultRateLimit(cfg.ID, rate); err != nil {
+					dbErrs = append(dbErrs, fmt.Sprintf("%s: %v", cfg.ID, err))
+				}
 			}
+		}
+		if len(dbErrs) > 0 {
+			s.settingsMu.Unlock()
+			return fmt.Errorf("failed to update default rate limit in DB for some downloads: %s", strings.Join(dbErrs, "; "))
 		}
 	}
 

@@ -315,7 +315,10 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 				// Reset stall clock before the wait so the health monitor measures
 				// time from when throttling begins, not from the last network read.
 				activeTask.LastActivity.Store(time.Now().UnixNano())
-				if err := d.Limiter.WaitN(ctx, int64(readSoFar)); err != nil {
+				activeTask.WaitingOnLimiter.Store(true)
+				err := d.Limiter.WaitN(ctx, int64(readSoFar))
+				activeTask.WaitingOnLimiter.Store(false)
+				if err != nil {
 					return err
 				}
 
