@@ -838,6 +838,8 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 		s.settingsMu.Unlock()
 		return err
 	}
+	s.settingsMu.Unlock()
+
 	s.Pool.SetDefaultDownloadRateLimit(rate)
 
 	// Sync the new default rate to the DB for all downloads that inherit it.
@@ -851,12 +853,9 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 			}
 		}
 		if len(dbErrs) > 0 {
-			s.settingsMu.Unlock()
 			return fmt.Errorf("failed to update default rate limit in DB for some downloads: %s", strings.Join(dbErrs, "; "))
 		}
 	}
-
-	s.settingsMu.Unlock()
 
 	return nil
 }

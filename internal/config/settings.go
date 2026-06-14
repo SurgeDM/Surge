@@ -1029,10 +1029,18 @@ func SaveSettings(s *Settings) error {
 func (s *Settings) ToRuntimeConfig() *types.RuntimeConfig {
 	var globalRate, defaultRate int64
 	if s.Network.GlobalRateLimit != nil {
-		globalRate, _ = utils.ParseRateLimitValue(s.Network.GlobalRateLimit.Value)
+		var err error
+		globalRate, err = utils.ParseRateLimitValue(s.Network.GlobalRateLimit.Value)
+		if err != nil {
+			globalRate, _ = utils.ParseRateLimitValue(s.Network.GlobalRateLimit.DefaultValue)
+		}
 	}
 	if s.Network.DefaultDownloadRateLimit != nil {
-		defaultRate, _ = utils.ParseRateLimitValue(s.Network.DefaultDownloadRateLimit.Value)
+		var err error
+		defaultRate, err = utils.ParseRateLimitValue(s.Network.DefaultDownloadRateLimit.Value)
+		if err != nil {
+			defaultRate, _ = utils.ParseRateLimitValue(s.Network.DefaultDownloadRateLimit.DefaultValue)
+		}
 	}
 	return &types.RuntimeConfig{
 		MaxConnectionsPerDownload:   Resolve[int](s.Network.MaxConnectionsPerDownload),

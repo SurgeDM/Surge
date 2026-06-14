@@ -142,6 +142,14 @@ func (p *WorkerPool) ensureLimiterForConfigLocked(cfg *types.DownloadConfig) {
 		p.downloadLimiters = make(map[string]*engine.RateLimiter)
 	}
 
+	// If state already carries an explicit rate, prefer it over cfg default.
+	if cfg.State != nil {
+		if stateRate, stateSet := cfg.State.GetRateLimit(); stateSet {
+			cfg.RateLimitBps = stateRate
+			cfg.RateLimitSet = true
+		}
+	}
+
 	rate := cfg.RateLimitBps
 	if !cfg.RateLimitSet {
 		rate = p.defaultDownloadRateLimitBps
