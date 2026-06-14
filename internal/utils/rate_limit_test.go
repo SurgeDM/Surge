@@ -1,6 +1,7 @@
 package utils
 
 import (
+	"math"
 	"testing"
 )
 
@@ -28,6 +29,11 @@ func TestParseRateLimit(t *testing.T) {
 		{"Megabits (mbps)", "8 mbps", 1000 * 1000, false},
 		{"With /s suffix", "10 MB/s", 10 * 1000 * 1000, false},
 		{"Spaces", "  10  mb  ", 10 * 1000 * 1000, false},
+		{"Bytes (Bps)", "10 Bps", 10, false},
+		{"Kilobytes (KBps)", "10 KBps", 10 * 1000, false},
+		{"Megabytes (MBps)", "10 MBps", 10 * 1000 * 1000, false},
+		{"Gigabytes (GBps)", "10 GBps", 10 * 1000 * 1000 * 1000, false},
+		{"Bits (bps lowercase)", "10 bps", int64(math.Round(10.0 / 8)), false},
 		{"Invalid value", "abc mb", 0, true},
 		{"Invalid unit", "10 xyz", 0, true},
 		{"Negative value", "-10 mb", 0, true},

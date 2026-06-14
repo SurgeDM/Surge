@@ -82,6 +82,12 @@ func ParseRateLimit(input string) (int64, error) {
 		return 0, fmt.Errorf("unknown rate limit unit %q (accepted: B, KB, MB, GB, etc.)", unitStr)
 	}
 
+	// Capital-B *ps suffixes (GBps, MBps, KBps, Bps) are bytes per second,
+	// not bits. This must be checked before the /s-suffix heuristics below.
+	if strings.HasSuffix(unitStr, "Bps") && !strings.Contains(unitStr, "/") {
+		unit.isBits = false
+	}
+
 	// Check original unitStr for 'b' vs 'B' to distinguish bits from bytes
 	if strings.HasSuffix(unitStr, "bit/s") || strings.HasSuffix(unitStr, "bits/s") {
 		unit.isBits = true
