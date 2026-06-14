@@ -838,9 +838,8 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 		s.settingsMu.Unlock()
 		return err
 	}
-	s.settingsMu.Unlock()
-
 	s.Pool.SetDefaultDownloadRateLimit(rate)
+	s.settingsMu.Unlock()
 
 	// Sync the new default rate to the DB for all downloads that inherit it.
 	if configs := s.Pool.GetAll(); configs != nil {
