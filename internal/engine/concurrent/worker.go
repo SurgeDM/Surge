@@ -181,32 +181,6 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 // downloadTask downloads a single byte range and writes to file at offset
 func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, file *os.File, activeTask *ActiveTask, buf []byte, client *http.Client, totalSize int64) error {
-	var waitStart, waitEnd chan struct{}
-	if d.Limiter != nil {
-		waitStart = make(chan struct{})
-		waitEnd = make(chan struct{})
-		heartbeatDone := make(chan struct{})
-		go func() {
-			ticker := time.NewTicker(d.Runtime.GetStallTimeout() / 2)
-			defer ticker.Stop()
-			isWaiting := false
-			for {
-				select {
-				case <-waitStart:
-					isWaiting = true
-				case <-waitEnd:
-					isWaiting = false
-				case <-ticker.C:
-					if isWaiting {
-						activeTask.LastActivity.Store(time.Now().UnixNano())
-					}
-				case <-heartbeatDone:
-					return
-				}
-			}
-		}()
-		defer close(heartbeatDone)
-	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
 	if err != nil {
 		return err
@@ -341,16 +315,10 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 				// Reset stall clock before the wait so the health monitor measures
 				// time from when throttling begins, not from the last network read.
 				activeTask.LastActivity.Store(time.Now().UnixNano())
-
-				// Signal heartbeat goroutine that we are waiting
-				waitStart <- struct{}{}
-				waitErr := d.Limiter.WaitN(ctx, int64(readSoFar))
-				waitEnd <- struct{}{}
-				
-				if waitErr != nil {
-					return waitErr
+				if err := d.Limiter.WaitN(ctx, int64(readSoFar)); err != nil {
+					return err
 				}
-				
+
 				// Refresh again after the wait to keep the stall clock current.
 				activeTask.LastActivity.Store(time.Now().UnixNano())
 			}

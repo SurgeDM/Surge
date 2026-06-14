@@ -754,7 +754,6 @@ func (p *WorkerPool) GracefulShutdown() {
 	for id := range p.queued {
 		delete(p.queued, id)
 	}
-	clear(p.downloadLimiters)
 	p.mu.Unlock()
 
 	// Drain taskChan to discard any configs that were already written into the
