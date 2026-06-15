@@ -160,22 +160,25 @@ func (s *LocalDownloadService) broadcastLoop() {
 				isProgress = true
 			}
 
-			if isProgress {
-				// Non-blocking send for progress updates
-				select {
-				case ch <- msg:
-				default:
-					// Drop progress message if channel is full
+			func() {
+				defer func() { recover() }()
+				if isProgress {
+					// Non-blocking send for progress updates
+					select {
+					case ch <- msg:
+					default:
+						// Drop progress message if channel is full
+					}
+				} else {
+					// Blocking send with timeout for critical state changes
+					// We don't want to drop these, but we also don't want to block forever if a client is dead
+					select {
+					case ch <- msg:
+					case <-time.After(1 * time.Second):
+						utils.Debug("Dropped critical event due to slow client")
+					}
 				}
-			} else {
-				// Blocking send with timeout for critical state changes
-				// We don't want to drop these, but we also don't want to block forever if a client is dead
-				select {
-				case ch <- msg:
-				case <-time.After(1 * time.Second):
-					utils.Debug("Dropped critical event due to slow client")
-				}
-			}
+			}()
 		}
 	}
 	// Close all listeners when input closes
