@@ -55,6 +55,7 @@ func (m RootModel) viewSpeedLimits() string {
 
 	modal := components.ListInputModal{
 		Title:       "Speed Limits",
+		Subtitle:    "Note: Enter 0 for infinity/unlimited.",
 		Items:       items,
 		Cursor:      m.speedLimitsCursor,
 		Input:       m.SettingsInput,

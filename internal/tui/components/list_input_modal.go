@@ -21,6 +21,7 @@ type ListInputItem struct {
 // ListInputModal renders a list of items where the active item can be edited inline.
 type ListInputModal struct {
 	Title       string
+	Subtitle    string
 	Items       []ListInputItem
 	Cursor      int
 	Input       textinput.Model
@@ -114,8 +115,18 @@ func (m ListInputModal) RenderWithBtopBox(
 	var lines []string
 	lines = append(lines, mainContent)
 
+	var subtitleLine string
+	var subtitleHeight int
+	if m.Subtitle != "" {
+		subtitleLine = lipgloss.NewStyle().
+			Foreground(colors.Gray()).
+			PaddingLeft(2).
+			Render(m.Subtitle)
+		subtitleHeight = lipgloss.Height(subtitleLine)
+	}
+
 	// Add padding to push help to bottom
-	spacingNeeded := innerHeight - mainContentHeight - errorHeight - helpHeight
+	spacingNeeded := innerHeight - mainContentHeight - errorHeight - subtitleHeight - helpHeight
 	if spacingNeeded < 0 {
 		spacingNeeded = 0
 	}
@@ -125,6 +136,9 @@ func (m ListInputModal) RenderWithBtopBox(
 	}
 	if errorLine != "" {
 		lines = append(lines, errorLine)
+	}
+	if subtitleLine != "" {
+		lines = append(lines, subtitleLine)
 	}
 	if helpText != "" {
 		lines = append(lines, helpText)

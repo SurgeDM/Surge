@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -25,12 +26,34 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			metaList := m.getSpeedLimitsMetadata()
 			if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
 				meta := metaList[m.speedLimitsCursor]
-				if err := m.setSpeedLimitValue(meta.Key, value); err != nil {
+				
+				valueStr := strings.TrimSpace(value)
+				if !utils.IsRateLimitInherit(valueStr) {
+					if _, err := strconv.ParseFloat(valueStr, 64); err != nil {
+						m.speedLimitsError = "Please enter a number (in MB/s)"
+						if strings.HasPrefix(meta.Key, "dl:") {
+							m.speedLimitsError = "Please enter a number (in MB/s) or -1"
+						}
+						return m, nil
+					}
+				}
+
+				oldValues := m.getSpeedLimitsValues()
+				oldVal := oldValues[meta.Key]
+				
+				if err := m.setSpeedLimitValue(meta.Key, valueStr); err != nil {
 					m.speedLimitsError = err.Error()
 					return m, nil
 				}
 				m.speedLimitsError = ""
-				m.addLogEntry(LogStyleComplete.Render("\u2714 Speed limit updated: " + meta.Label))
+				
+				newValues := m.getSpeedLimitsValues()
+				newVal := newValues[meta.Key]
+				
+				oldStr := strings.ReplaceAll(fmt.Sprintf("%v", oldVal), "\u221E", "0 MB/s")
+				newStr := strings.ReplaceAll(fmt.Sprintf("%v", newVal), "\u221E", "0 MB/s")
+				
+				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 %s updated: %s \u2192 %s", meta.Label, oldStr, newStr)))
 			}
 			m.speedLimitsIsEditing = false
 			m.SettingsInput.Blur()
@@ -92,10 +115,17 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			}
 			// Strip display-only prefixes before pre-filling the edit input
 			if strings.HasPrefix(valStr, "inherit") {
-				valStr = "inherit"
-			}
-			if bps, err := utils.ParseRateLimitValue(valStr); err == nil && bps == 0 {
-				valStr = "0"
+				valStr = "-1"
+			} else if bps, err := utils.ParseRateLimitValue(valStr); err == nil {
+				if bps == 0 {
+					valStr = "0"
+				} else {
+					valStr = fmt.Sprintf("%v", float64(bps)/1000000.0)
+					valStr = strings.TrimRight(strings.TrimRight(valStr, "0"), ".")
+					if valStr == "" {
+						valStr = "0"
+					}
+				}
 			}
 
 			m.speedLimitsIsEditing = true
@@ -109,10 +139,20 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.speedLimitsError = ""
 		if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
 			meta := metaList[m.speedLimitsCursor]
+			
+			oldValues := m.getSpeedLimitsValues()
+			oldVal := oldValues[meta.Key]
+			
 			if err := m.resetSpeedLimitToDefault(meta.Key, config.DefaultSettings()); err != nil {
 				m.addLogEntry(LogStyleError.Render("\u2716 Reset failed: " + err.Error()))
 			} else {
-				m.addLogEntry(LogStyleComplete.Render("\u2714 Reset to default: " + meta.Label))
+				newValues := m.getSpeedLimitsValues()
+				newVal := newValues[meta.Key]
+				
+				oldStr := strings.ReplaceAll(fmt.Sprintf("%v", oldVal), "\u221E", "0 MB/s")
+				newStr := strings.ReplaceAll(fmt.Sprintf("%v", newVal), "\u221E", "0 MB/s")
+				
+				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 %s reset: %s \u2192 %s", meta.Label, oldStr, newStr)))
 			}
 		}
 		return m, nil
