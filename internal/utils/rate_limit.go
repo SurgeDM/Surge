@@ -66,7 +66,7 @@ func ParseRateLimit(input string) (int64, error) {
 	numStr := trimmed[:numEnd]
 	unitStr := trimmed[numEnd:]
 	if unitStr == "" {
-		return 0, fmt.Errorf("missing rate limit unit (e.g. KB/s, MB/s, B/s)")
+		unitStr = "MB"
 	}
 
 	value, err := strconv.ParseFloat(numStr, 64)

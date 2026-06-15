@@ -37,6 +37,7 @@ func TestParseRateLimit(t *testing.T) {
 		{"Invalid value", "abc mb", 0, true},
 		{"Invalid unit", "10 xyz", 0, true},
 		{"Negative value", "-10 mb", 0, true},
+		{"No unit defaults to MB", "10", 10 * 1000 * 1000, false},
 	}
 
 	for _, tt := range tests {
