@@ -146,7 +146,11 @@ func NewLocalDownloadServiceWithInput(pool *download.WorkerPool, inputCh chan in
 func (s *LocalDownloadService) broadcastLoop() {
 	for msg := range s.InputCh {
 		s.listenerMu.Lock()
-		for _, ch := range s.listeners {
+		listenersCopy := make([]chan any, len(s.listeners))
+		copy(listenersCopy, s.listeners)
+		s.listenerMu.Unlock()
+
+		for _, ch := range listenersCopy {
 			// Check message type
 			isProgress := false
 			switch msg.(type) {
@@ -173,7 +177,6 @@ func (s *LocalDownloadService) broadcastLoop() {
 				}
 			}
 		}
-		s.listenerMu.Unlock()
 	}
 	// Close all listeners when input closes
 	s.listenerMu.Lock()
@@ -809,8 +812,9 @@ func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
 		s.settingsMu.Unlock()
 		return err
 	}
-	s.Pool.SetGlobalRateLimit(rate)
 	s.settingsMu.Unlock()
+
+	s.Pool.SetGlobalRateLimit(rate)
 
 	return nil
 }
@@ -838,8 +842,9 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 		s.settingsMu.Unlock()
 		return err
 	}
-	s.Pool.SetDefaultDownloadRateLimit(rate)
 	s.settingsMu.Unlock()
+
+	s.Pool.SetDefaultDownloadRateLimit(rate)
 
 	// Sync the new default rate to the DB for all downloads that inherit it.
 	if configs := s.Pool.GetAll(); configs != nil {

@@ -784,7 +784,7 @@ drainLoop:
 	warned := false
 
 	for {
-		p.mu.RLock()
+		p.mu.Lock()
 		stillPausing := false
 		for _, ad := range p.downloads {
 			if ad.config.State != nil && ad.config.State.IsPausing() {
@@ -798,7 +798,7 @@ drainLoop:
 				break
 			}
 		}
-		p.mu.RUnlock()
+		p.mu.Unlock()
 
 		if !stillPausing {
 			break

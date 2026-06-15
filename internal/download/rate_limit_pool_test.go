@@ -27,8 +27,8 @@ func TestWorkerPool_RateLimit_QueuedUpdateHonored(t *testing.T) {
 	}
 
 	pool.SetDefaultDownloadRateLimit(1000)
-	pool.ensureLimiterForConfigLocked(&cfg)
 	pool.mu.Lock()
+	pool.ensureLimiterForConfigLocked(&cfg)
 	pool.queued[id] = cfg
 	pool.mu.Unlock()
 
@@ -74,7 +74,9 @@ func TestWorkerPool_RateLimit_ExplicitUnlimitedSurvivesDefaultChange(t *testing.
 
 	// Verify ensureLimiterForConfigLocked respects explicit unlimited
 	testCfg := cfg
+	pool.mu.Lock()
 	pool.ensureLimiterForConfigLocked(&testCfg)
+	pool.mu.Unlock()
 
 	if testCfg.RateLimitBps != 0 {
 		t.Fatalf("Explicit unlimited should stay at 0, got %d", testCfg.RateLimitBps)
