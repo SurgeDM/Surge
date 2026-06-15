@@ -67,7 +67,7 @@ jobs:
               });
               
               for (const comment of comments) {
-                if (comment.user.type === 'Bot' && comment.body.includes(signature)) {
+                if (comment.user?.type === 'Bot' && comment.body.includes(signature)) {
                   await github.rest.issues.deleteComment({
                     comment_id: comment.id,
                     owner: context.repo.owner,
