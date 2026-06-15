@@ -51,11 +51,35 @@ jobs:
           fi
           gotestsum --junitfile test-results.xml --format testdox -- -race $cover_arg ./...
       - name: Comment Test Failures
-        if: failure() && github.event_name == 'pull_request'
+        if: always() && github.event_name == 'pull_request'
         uses: actions/github-script@v7
         with:
           script: |
             const fs = require('fs');
+            const signature = '<!-- core-build-test-failures-${{ matrix.os }} -->';
+            
+            // 1. Delete previous comments
+            try {
+              const comments = await github.rest.issues.listComments({
+                issue_number: context.issue.number,
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+              });
+              
+              for (const comment of comments.data) {
+                if (comment.user.type === 'Bot' && comment.body.includes(signature)) {
+                  await github.rest.issues.deleteComment({
+                    comment_id: comment.id,
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                  });
+                }
+              }
+            } catch (err) {
+              core.warning(`Could not delete old comments: ${err.message}`);
+            }
+
+            // 2. Post new comment if there are failures
             if (!fs.existsSync('test-results.xml')) return;
             const content = fs.readFileSync('test-results.xml', 'utf8');
             const regex = /<testcase classname="([^"]+)" name="([^"]+)"[^>]*>\s*<(?:failure|error)/g;
@@ -65,7 +89,7 @@ jobs:
               failures.push(`- **${match[1]}**: \`${match[2]}\``);
             }
             if (failures.length > 0) {
-              const body = `### ❌ Test Failures on \`${{ matrix.os }}\`\n` + failures.join('\n');
+              const body = `${signature}\n### ❌ Test Failures on \`${{ matrix.os }}\`\n` + failures.join('\n');
               try {
                 await github.rest.issues.createComment({
                   issue_number: context.issue.number,
