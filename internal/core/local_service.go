@@ -161,7 +161,7 @@ func (s *LocalDownloadService) broadcastLoop() {
 			}
 
 			func() {
-				defer func() { recover() }()
+				defer func() { _ = recover() }()
 				if isProgress {
 					// Non-blocking send for progress updates
 					select {
@@ -304,19 +304,45 @@ func (s *LocalDownloadService) StreamEvents(ctx context.Context) (<-chan interfa
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ch := make(chan interface{}, 100)
+	outCh := make(chan interface{}, 99)
+	inCh := make(chan interface{})
+	stopCh := make(chan struct{})
+
+	go func() {
+		defer close(outCh)
+		for {
+			select {
+			case <-stopCh:
+				return
+			case <-ctx.Done():
+				return
+			case msg, ok := <-inCh:
+				if !ok {
+					return
+				}
+				select {
+				case outCh <- msg:
+				case <-stopCh:
+					return
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+
 	s.listenerMu.Lock()
-	s.listeners = append(s.listeners, ch)
+	s.listeners = append(s.listeners, inCh)
 	s.listenerMu.Unlock()
 
 	var once sync.Once
 	cleanup := func() {
 		once.Do(func() {
+			close(stopCh)
 			s.listenerMu.Lock()
 			for i, listener := range s.listeners {
-				if listener == ch {
+				if listener == inCh {
 					s.listeners = append(s.listeners[:i], s.listeners[i+1:]...)
-					close(ch)
 					break
 				}
 			}
@@ -327,11 +353,14 @@ func (s *LocalDownloadService) StreamEvents(ctx context.Context) (<-chan interfa
 	// Callers own listener lifetime; service shutdown closes listeners after the
 	// broadcaster drains InputCh so lifecycle persistence can observe final events.
 	go func() {
-		<-ctx.Done()
-		cleanup()
+		select {
+		case <-ctx.Done():
+			cleanup()
+		case <-stopCh:
+		}
 	}()
 
-	return ch, cleanup, nil
+	return outCh, cleanup, nil
 }
 
 // Publish emits an event into the service's event stream.
