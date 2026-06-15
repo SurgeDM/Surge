@@ -22,7 +22,7 @@ func TestRemoveFile_WindowsRetry_Success(t *testing.T) {
 	// but an attempt after 200ms should succeed.
 	go func() {
 		time.Sleep(200 * time.Millisecond)
-		f.Close()
+		_ = f.Close()
 	}()
 
 	// Remove it (should block, retry, and eventually succeed)
@@ -46,7 +46,7 @@ func TestRemoveFile_WindowsRetry_Exhausted(t *testing.T) {
 		t.Fatalf("Failed to create test file: %v", err)
 	}
 	// Make sure we close it at the very end so we don't leak handles
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	// Remove it (should exhaust retries and fail)
 	err = RemoveFile(file)

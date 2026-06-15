@@ -9,6 +9,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/clipboard"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -230,6 +231,20 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					filePath = d.Destination + types.IncompleteSuffix
 				}
 				_ = openWithSystem(filePath)
+			}
+		}
+		return m, nil
+	}
+
+	// Open folder
+	if key.Matches(msg, m.keys.Dashboard.OpenFolder) {
+		if d := m.GetSelectedDownload(); d != nil {
+			if d.Destination != "" {
+				filePath := d.Destination
+				if !d.done {
+					filePath = d.Destination + types.IncompleteSuffix
+				}
+				_ = utils.OpenContainingFolder(filePath)
 			}
 		}
 		return m, nil

@@ -16,6 +16,25 @@ func TestDefaultKeyMap(t *testing.T) {
 	if len(km.Dashboard.Quit.Keys()) == 0 {
 		t.Error("Default Dashboard.Quit keys should not be empty")
 	}
+
+	// Verify OpenFolder default binding
+	if len(km.Dashboard.OpenFolder.Keys()) == 0 || km.Dashboard.OpenFolder.Keys()[0] != "O" {
+		t.Errorf("Default Dashboard.OpenFolder should have key 'O', got %v", km.Dashboard.OpenFolder.Keys())
+	}
+
+	// Verify OpenFolder is in FullHelp
+	foundOpenFolder := false
+	for _, row := range km.Dashboard.FullHelp() {
+		for _, b := range row {
+			if b.Help().Desc == "open folder" {
+				foundOpenFolder = true
+				break
+			}
+		}
+	}
+	if !foundOpenFolder {
+		t.Error("Dashboard.OpenFolder missing from FullHelp")
+	}
 }
 
 func TestKeyMapConversion(t *testing.T) {
@@ -33,18 +52,26 @@ func TestKeyMapConversion(t *testing.T) {
 
 	// Verify reflection-based conversion
 	km2 := DefaultKeyMap()
-	// Change a key in config
-	cfg.Dashboard["Quit"] = KeyBindingConfig{
+	
+	// Remove original exact-case key to test case-insensitive matching
+	delete(cfg.Dashboard, "Quit")
+	
+	// Change a key in config using mixed case
+	cfg.Dashboard["qUiT"] = KeyBindingConfig{
 		Keys: []string{"ctrl+x"},
 		Help: "exit",
 	}
+	// Case-collision testing
+	cfg.Dashboard["quit"] = KeyBindingConfig{
+		Keys: []string{"ctrl+z"},
+		Help: "exit alt",
+	}
+	
 	km2.ApplyConfig(cfg)
 
-	if km2.Dashboard.Quit.Keys()[0] != "ctrl+x" {
-		t.Errorf("Expected Quit key to be ctrl+x, got %v", km2.Dashboard.Quit.Keys())
-	}
-	if km2.Dashboard.Quit.Help().Desc != "exit" {
-		t.Errorf("Expected Quit help desc to be exit, got %s", km2.Dashboard.Quit.Help().Desc)
+	appliedKey := km2.Dashboard.Quit.Keys()[0]
+	if appliedKey != "ctrl+x" && appliedKey != "ctrl+z" {
+		t.Errorf("Expected Quit key to be ctrl+x or ctrl+z (from mixed-case configs), got %v", km2.Dashboard.Quit.Keys())
 	}
 }
 

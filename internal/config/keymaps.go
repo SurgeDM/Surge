@@ -54,6 +54,7 @@ type DashboardKeyMap struct {
 	ToggleHelp     key.Binding
 	ReportBug      key.Binding
 	OpenFile       key.Binding
+	OpenFolder     key.Binding
 	Quit           key.Binding
 	ForceQuit      key.Binding
 	CategoryFilter key.Binding
@@ -213,10 +214,13 @@ func LoadKeyMap() (*KeyMap, error) {
 
 	defaults := DefaultKeyMap()
 	path := GetKeyMapConfigPath()
+	utils.Debug("Loading keymap from %s", path)
 	data, err := os.ReadFile(path)
 	if err != nil {
+		utils.Debug("Failed to read keymap file: %v", err)
 		if os.IsNotExist(err) {
 			utils.Debug("Warning: Created New %s file \u2014 using defaults", path)
+			defaults.StartupWarnings = append(defaults.StartupWarnings, "Config: created new keymap file "+path)
 			_ = SaveKeyMap(defaults)
 			return defaults, nil
 		}
@@ -239,6 +243,7 @@ func LoadKeyMap() (*KeyMap, error) {
 	// ONLY if it differs from what was on disk to avoid constant disk thrashing.
 	mergedData, _ := json.MarshalIndent(defaults.ToConfig(), "", "  ")
 	if string(data) != string(mergedData) {
+		defaults.StartupWarnings = append(defaults.StartupWarnings, "Config: keymap file was updated to include missing keys or fix formatting")
 		_ = SaveKeyMap(defaults)
 	}
 
@@ -257,13 +262,19 @@ func (k *KeyMap) ApplyConfig(cfg *KeyMapConfig) {
 	}
 
 	applyToStruct := func(s any, m map[string]KeyBindingConfig) {
+		ciMap := make(map[string]KeyBindingConfig)
+		for k, vCfg := range m {
+			ciMap[strings.ToLower(k)] = vCfg
+		}
+
 		v := reflect.ValueOf(s).Elem()
 		t := v.Type()
 		for i := 0; i < v.NumField(); i++ {
 			field := v.Field(i)
 			if field.Type() == reflect.TypeFor[key.Binding]() {
-				fieldName := t.Field(i).Name
-				if bCfg, ok := m[fieldName]; ok {
+				fieldName := strings.ToLower(t.Field(i).Name)
+				if bCfg, ok := ciMap[fieldName]; ok {
+					utils.Debug("Applying custom keybinding for %s.%s", t.Name(), t.Field(i).Name)
 					if len(bCfg.Keys) > 0 {
 						helpDesc := bCfg.Help
 						if helpDesc == "" {
@@ -453,6 +464,10 @@ func DefaultKeyMap() *KeyMap {
 			OpenFile: key.NewBinding(
 				key.WithKeys("o"),
 				key.WithHelp("o", "open file"),
+			),
+			OpenFolder: key.NewBinding(
+				key.WithKeys("O"),
+				key.WithHelp("O", "open folder"),
 			),
 			Quit: key.NewBinding(
 				key.WithKeys("ctrl+c", "ctrl+q"),
@@ -746,7 +761,7 @@ func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab, k.PrevTab},
 		{k.Add, k.BatchImport, k.Search, k.CategoryFilter, k.Pause, k.Refresh, k.Delete, k.PurgeFile, k.Settings, k.SpeedLimits, k.PinTab},
-		{k.Log, k.OpenFile, k.ReportBug, k.Quit},
+		{k.Log, k.OpenFile, k.OpenFolder, k.ReportBug, k.Quit},
 	}
 }
 
