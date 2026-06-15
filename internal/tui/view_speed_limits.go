@@ -28,10 +28,10 @@ func (m RootModel) viewSpeedLimits() string {
 		}
 
 		if bps, err := utils.ParseRateLimitValue(valStr); err == nil && bps == 0 {
-			valStr = "\u221E"
+			valStr = "0"
 		}
 
-		suffix := "e.g. \"10 MB/s\""
+		suffix := "MB/s"
 		if strings.HasPrefix(meta.Key, "dl:") {
 			defaultRate := int64(0)
 			if m.Settings != nil && m.Settings.Network.DefaultDownloadRateLimit != nil {
@@ -39,7 +39,11 @@ func (m RootModel) viewSpeedLimits() string {
 					defaultRate = rate
 				}
 			}
-			suffix = fmt.Sprintf("e.g. \"10 MB/s\" (-1 to inherit %s)", utils.FormatRateLimit(defaultRate))
+			displayRate := utils.FormatRateLimit(defaultRate)
+			if defaultRate <= 0 {
+				displayRate = "0 MB/s"
+			}
+			suffix = fmt.Sprintf("MB/s (-1 to inherit %s)", displayRate)
 		}
 		items = append(items, components.ListInputItem{
 			Label:       meta.Label,
@@ -59,6 +63,7 @@ func (m RootModel) viewSpeedLimits() string {
 		BorderColor: colors.Magenta(),
 		Width:       w,
 		Height:      h,
+		Error:       m.speedLimitsError,
 	}
 
 	box := modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
