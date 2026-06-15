@@ -60,13 +60,13 @@ jobs:
             
             // 1. Delete previous comments
             try {
-              const comments = await github.rest.issues.listComments({
+              const comments = await github.paginate(github.rest.issues.listComments, {
                 issue_number: context.issue.number,
                 owner: context.repo.owner,
                 repo: context.repo.repo,
               });
               
-              for (const comment of comments.data) {
+              for (const comment of comments) {
                 if (comment.user.type === 'Bot' && comment.body.includes(signature)) {
                   await github.rest.issues.deleteComment({
                     comment_id: comment.id,
