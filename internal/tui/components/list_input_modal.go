@@ -29,6 +29,7 @@ type ListInputModal struct {
 	BorderColor color.Color
 	Width       int
 	Height      int
+	Error       string
 }
 
 // viewContent renders the list items (without box wrapper or help text).
@@ -99,18 +100,31 @@ func (m ListInputModal) RenderWithBtopBox(
 	mainContentHeight := lipgloss.Height(mainContent)
 	helpHeight := lipgloss.Height(helpText)
 
+	var errorLine string
+	var errorHeight int
+	if m.Error != "" {
+		errorLine = lipgloss.NewStyle().
+			Foreground(colors.StateError()).
+			Bold(true).
+			Render("  \u2716 " + m.Error)
+		errorHeight = lipgloss.Height(errorLine)
+	}
+
 	// Ensure we don't overflow unexpectedly, though we assume the caller provided enough height
 	var lines []string
 	lines = append(lines, mainContent)
 
 	// Add padding to push help to bottom
-	spacingNeeded := innerHeight - mainContentHeight - helpHeight
+	spacingNeeded := innerHeight - mainContentHeight - errorHeight - helpHeight
 	if spacingNeeded < 0 {
 		spacingNeeded = 0
 	}
 
 	for i := 0; i < spacingNeeded; i++ {
 		lines = append(lines, "")
+	}
+	if errorLine != "" {
+		lines = append(lines, errorLine)
 	}
 	if helpText != "" {
 		lines = append(lines, helpText)
