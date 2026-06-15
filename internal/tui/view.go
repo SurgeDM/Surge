@@ -372,7 +372,7 @@ func (m RootModel) View() tea.View {
 	layout := CalculateDashboardLayout(m.width, m.height)
 
 	// Footer - keybindings on left, speed/limit/version on bottom-right
-	helpText := m.help.View(m.keys.Dashboard)
+	helpText := lipgloss.NewStyle().PaddingLeft(2).Render(m.help.View(m.keys.Dashboard))
 
 	// --- Right-side footer: speed ｜ limit ｜ version ---
 	dimSep := lipgloss.NewStyle().Foreground(colors.Gray()).Render(" \uff5c ")
@@ -407,13 +407,13 @@ func (m RootModel) View() tea.View {
 	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
 	versionChunk := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
 
-	rightFooter := lipgloss.JoinHorizontal(lipgloss.Center,
+	rightFooter := lipgloss.NewStyle().PaddingRight(2).Render(lipgloss.JoinHorizontal(lipgloss.Center,
 		speedChunk,
 		dimSep,
 		limitChunk,
 		dimSep,
 		versionChunk,
-	)
+	))
 
 	// Hide help text at very narrow widths - right footer is more important
 	var footerContent string

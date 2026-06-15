@@ -112,15 +112,16 @@ func (m ListInputModal) RenderWithBtopBox(
 	}
 
 	// Ensure we don't overflow unexpectedly, though we assume the caller provided enough height
-	var lines []string
-	lines = append(lines, mainContent)
-
 	var subtitleLine string
 	var subtitleHeight int
 	if m.Subtitle != "" {
 		subtitleLine = lipgloss.NewStyle().
-			Foreground(colors.Gray()).
-			PaddingLeft(2).
+			Foreground(colors.LightGray()).
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(colors.Magenta()).
+			Padding(0, 1).
+			MarginLeft(2).
+			MarginBottom(1).
 			Render(m.Subtitle)
 		subtitleHeight = lipgloss.Height(subtitleLine)
 	}
@@ -131,14 +132,17 @@ func (m ListInputModal) RenderWithBtopBox(
 		spacingNeeded = 0
 	}
 
+	var lines []string
+	if subtitleLine != "" {
+		lines = append(lines, subtitleLine)
+	}
+	lines = append(lines, mainContent)
+
 	for i := 0; i < spacingNeeded; i++ {
 		lines = append(lines, "")
 	}
 	if errorLine != "" {
 		lines = append(lines, errorLine)
-	}
-	if subtitleLine != "" {
-		lines = append(lines, subtitleLine)
 	}
 	if helpText != "" {
 		lines = append(lines, helpText)
