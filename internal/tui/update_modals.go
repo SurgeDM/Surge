@@ -26,9 +26,10 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
 				meta := metaList[m.speedLimitsCursor]
 				if err := m.setSpeedLimitValue(meta.Key, value); err != nil {
-					m.addLogEntry(LogStyleError.Render("\u2716 Invalid rate limit: " + err.Error()))
+					m.speedLimitsError = err.Error()
 					return m, nil
 				}
+				m.speedLimitsError = ""
 				m.addLogEntry(LogStyleComplete.Render("\u2714 Speed limit updated: " + meta.Label))
 			}
 			m.speedLimitsIsEditing = false
@@ -37,6 +38,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 		if key.Matches(msg, m.keys.Input.Esc) {
 			m.speedLimitsIsEditing = false
+			m.speedLimitsError = ""
 			m.SettingsInput.Blur()
 			return m, nil
 		}
@@ -47,6 +49,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if key.Matches(msg, m.keys.SpeedLimits.Close) {
 		m.state = DashboardState
+		m.speedLimitsError = ""
 		return m, nil
 	}
 
@@ -59,6 +62,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.SpeedLimits.Up) {
+		m.speedLimitsError = ""
 		m.speedLimitsCursor--
 		if m.speedLimitsCursor < 0 {
 			m.speedLimitsCursor = 0
@@ -66,6 +70,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.SpeedLimits.Down) {
+		m.speedLimitsError = ""
 		m.speedLimitsCursor++
 		if m.speedLimitsCursor >= len(metaList) {
 			m.speedLimitsCursor = len(metaList) - 1
@@ -73,6 +78,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.SpeedLimits.Edit) {
+		m.speedLimitsError = ""
 		if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
 			meta := metaList[m.speedLimitsCursor]
 			values := m.getSpeedLimitsValues()
@@ -89,7 +95,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				valStr = "inherit"
 			}
 			if bps, err := utils.ParseRateLimitValue(valStr); err == nil && bps == 0 {
-				valStr = "\u221E"
+				valStr = "0"
 			}
 
 			m.speedLimitsIsEditing = true
@@ -100,6 +106,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.SpeedLimits.Reset) {
+		m.speedLimitsError = ""
 		if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
 			meta := metaList[m.speedLimitsCursor]
 			if err := m.resetSpeedLimitToDefault(meta.Key, config.DefaultSettings()); err != nil {

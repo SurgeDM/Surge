@@ -174,6 +174,7 @@ type RootModel struct {
 	// Speed Limits Modal
 	speedLimitsCursor    int
 	speedLimitsIsEditing bool
+	speedLimitsError     string
 
 	// Selection persistence
 	SelectedDownloadID string // ID of the currently selected download
