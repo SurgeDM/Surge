@@ -51,6 +51,12 @@ func TestSanitizeFilename(t *testing.T) {
 		{"mid-length unicode filename", strings.Repeat("中", 100) + ".zip", strings.Repeat("中", 78) + ".zip"},
 		{"unicode filename over limit", strings.Repeat("中", 250) + ".zip", strings.Repeat("中", 78) + ".zip"},
 		{"unicode filename with long extension", strings.Repeat("中", 10) + "." + strings.Repeat("a", 250), strings.Repeat("中", 10) + "." + strings.Repeat("a", 209)},
+		{"trailing period shielded by control char", "file.pdf.\x01", "file.pdf"},
+		{"multiple trailing periods shielded by control char", "report..\x02", "report"},
+		{"trailing space after period", "file . ", "file"},
+		{"trailing period after space", "doc .", "doc"},
+		{"interleaved trailing periods and spaces", "file. .", "file"},
+		{"space-shielded period with control char", "file.txt .\x01", "file.txt"},
 	}
 
 	for _, tt := range tests {
