@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -58,9 +59,10 @@ func (d *SingleDownloader) applyClientSettings(client *http.Client) {
 		}
 		if d.Headers != nil {
 			for key, val := range d.Headers {
-				if key != "Range" {
-					req.Header.Set(key, val)
+				if strings.EqualFold(key, "Range") {
+					continue
 				}
+				req.Header.Set(key, val)
 			}
 		}
 		return nil
@@ -88,6 +90,13 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	}
 
 	for key, val := range d.Headers {
+		// Never forward a caller-supplied Range header. This downloader fetches
+		// the whole file in one connection, so a range-capable server would
+		// reply 206 and the strict 200 check below would abort a valid download.
+		// The worker, probe and redirect paths strip Range for the same reason.
+		if strings.EqualFold(key, "Range") {
+			continue
+		}
 		req.Header.Set(key, val)
 	}
 	req.Header.Set("User-Agent", d.Runtime.GetUserAgent())
