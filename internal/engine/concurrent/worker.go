@@ -70,9 +70,9 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			}
 			// If the incoming Task carried a shared pointer, copy it into the active task
 			if task.SharedMaxOffset != nil {
-				activeTask.SharedMaxOffsetMu.Lock()
+				// activeTask is newly allocated and not yet visible to other goroutines,
+				// so this assignment does not need mutex protection.
 				activeTask.SharedMaxOffset = task.SharedMaxOffset
-				activeTask.SharedMaxOffsetMu.Unlock()
 				// Prevent infinite hedging of hedged tasks.
 				activeTask.Hedged.Store(1)
 			}
