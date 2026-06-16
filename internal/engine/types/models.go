@@ -4,9 +4,9 @@ import "sync/atomic"
 
 // Task represents a byte range to download.
 type Task struct {
-	Offset          int64         `json:"offset"`
-	Length          int64         `json:"length"`
-	SharedMaxOffset *atomic.Int64 `json:"-"`
+    Offset          int64                           `json:"offset"`
+    Length          int64                           `json:"length"`
+    SharedMaxOffset atomic.Pointer[atomic.Int64]    `json:"-"`
 }
 
 // DownloadState is the persisted snapshot used to resume a download.
