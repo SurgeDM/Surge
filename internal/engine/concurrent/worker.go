@@ -62,18 +62,18 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			// Register active task with per-task cancellable context
 			taskCtx, taskCancel := context.WithCancel(ctx)
 			now := time.Now()
-            activeTask := &ActiveTask{
-                Task:        task,
-                StartTime:   now,
-                Cancel:      taskCancel,
-                WindowStart: now, // Initialize sliding window
-            }
-            // If the incoming Task carried a shared pointer, copy it into the active task atomically
-            if ptr := task.SharedMaxOffset.Load(); ptr != nil {
-                activeTask.SharedMaxOffset.Store(ptr)
-                // Prevent infinite hedging of hedged tasks.
-                activeTask.Hedged.Store(1)
-            }
+			activeTask := &ActiveTask{
+				Task:        task,
+				StartTime:   now,
+				Cancel:      taskCancel,
+				WindowStart: now, // Initialize sliding window
+			}
+			// If the incoming Task carried a shared pointer, copy it into the active task atomically
+			if ptr := task.SharedMaxOffset.Load(); ptr != nil {
+				activeTask.SharedMaxOffset.Store(ptr)
+				// Prevent infinite hedging of hedged tasks.
+				activeTask.Hedged.Store(1)
+			}
 			activeTask.CurrentOffset.Store(task.Offset)
 			activeTask.StopAt.Store(task.Offset + task.Length)
 			activeTask.LastActivity.Store(now.UnixNano())
@@ -338,32 +338,32 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 
 			// Compute newly written bytes deduplicated across racing workers
 			var newlyWritten int64
-            // Dereference the shared pointer atomically for race-free access
-            if ptr := activeTask.SharedMaxOffset.Load(); ptr != nil {
-                for {
-                    maxOff := ptr.Load()
-                    if offset <= maxOff {
-                        // This exact byte range was already reported by the racing worker!
-                        newlyWritten = 0
-                        break
-                    }
-                    if rangeStart >= maxOff {
-                        // Entirely new progress
-                        if ptr.CompareAndSwap(maxOff, offset) {
-                            newlyWritten = int64(readSoFar)
-                            break
-                        }
-                    } else {
-                        // Partially new progress
-                        if ptr.CompareAndSwap(maxOff, offset) {
-                            newlyWritten = offset - maxOff
-                            break
-                        }
-                    }
-                }
-            } else {
-                newlyWritten = int64(readSoFar)
-            }
+			// Dereference the shared pointer atomically for race-free access
+			if ptr := activeTask.SharedMaxOffset.Load(); ptr != nil {
+				for {
+					maxOff := ptr.Load()
+					if offset <= maxOff {
+						// This exact byte range was already reported by the racing worker!
+						newlyWritten = 0
+						break
+					}
+					if rangeStart >= maxOff {
+						// Entirely new progress
+						if ptr.CompareAndSwap(maxOff, offset) {
+							newlyWritten = int64(readSoFar)
+							break
+						}
+					} else {
+						// Partially new progress
+						if ptr.CompareAndSwap(maxOff, offset) {
+							newlyWritten = offset - maxOff
+							break
+						}
+					}
+				}
+			} else {
+				newlyWritten = int64(readSoFar)
+			}
 
 			activeTask.CurrentOffset.Store(offset)
 			activeTask.WindowBytes.Add(newlyWritten)
@@ -531,22 +531,22 @@ func (d *ConcurrentDownloader) HedgeWork(queue *TaskQueue) bool {
 		return false
 	}
 
-    // Initialize the shared deduplication state for both tasks
-    if bestActive.SharedMaxOffset.Load() == nil {
-        maxOff := &atomic.Int64{}
-        maxOff.Store(current)
-        bestActive.SharedMaxOffset.Store(maxOff)
-    }
+	// Initialize the shared deduplication state for both tasks
+	if bestActive.SharedMaxOffset.Load() == nil {
+		maxOff := &atomic.Int64{}
+		maxOff.Store(current)
+		bestActive.SharedMaxOffset.Store(maxOff)
+	}
 
-    // Create a duplicate task for the remaining byte range
-    hedgedTask := types.Task{
-        Offset: current,
-        Length: stopAt - current,
-    }
-    // Point the hedged task at the same shared pointer
-    if ptr := bestActive.SharedMaxOffset.Load(); ptr != nil {
-        hedgedTask.SharedMaxOffset.Store(ptr)
-    }
+	// Create a duplicate task for the remaining byte range
+	hedgedTask := types.Task{
+		Offset: current,
+		Length: stopAt - current,
+	}
+	// Point the hedged task at the same shared pointer
+	if ptr := bestActive.SharedMaxOffset.Load(); ptr != nil {
+		hedgedTask.SharedMaxOffset.Store(ptr)
+	}
 
 	queue.Push(hedgedTask)
 	utils.Debug("Balancer: hedged %s (range: %d-%d) - idle worker will race on fresh connection",

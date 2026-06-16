@@ -27,10 +27,10 @@ type ActiveTask struct {
 	WindowBytes atomic.Int64 // Bytes downloaded in current window
 
 	// Hedged request tracking
-	Hedged           atomic.Int32  // 1 if an idle worker is already racing this task
-    // SharedMaxOffset points to the highest offset reached by any racing worker.
-    // Use atomic.Pointer to allow safe concurrent initialization and reads.
-    SharedMaxOffset  atomic.Pointer[atomic.Int64]
+	Hedged atomic.Int32 // 1 if an idle worker is already racing this task
+	// SharedMaxOffset points to the highest offset reached by any racing worker.
+	// Use atomic.Pointer to allow safe concurrent initialization and reads.
+	SharedMaxOffset atomic.Pointer[atomic.Int64]
 	// Set while blocked on rate limiter so health monitor doesn't treat it as stalled
 	WaitingOnLimiter atomic.Bool
 }
