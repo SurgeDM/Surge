@@ -26,7 +26,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			metaList := m.getSpeedLimitsMetadata()
 			if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
 				meta := metaList[m.speedLimitsCursor]
-				
+
 				valueStr := strings.TrimSpace(value)
 				if !utils.IsRateLimitInherit(valueStr) {
 					if _, err := strconv.ParseFloat(valueStr, 64); err != nil {
@@ -40,19 +40,19 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 				oldValues := m.getSpeedLimitsValues()
 				oldVal := oldValues[meta.Key]
-				
+
 				if err := m.setSpeedLimitValue(meta.Key, valueStr); err != nil {
 					m.speedLimitsError = err.Error()
 					return m, nil
 				}
 				m.speedLimitsError = ""
-				
+
 				newValues := m.getSpeedLimitsValues()
 				newVal := newValues[meta.Key]
-				
+
 				oldStr := strings.ReplaceAll(fmt.Sprintf("%v", oldVal), "\u221E", "0 MB/s")
 				newStr := strings.ReplaceAll(fmt.Sprintf("%v", newVal), "\u221E", "0 MB/s")
-				
+
 				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 %s updated: %s \u2192 %s", meta.Label, oldStr, newStr)))
 			}
 			m.speedLimitsIsEditing = false
@@ -139,19 +139,19 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.speedLimitsError = ""
 		if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
 			meta := metaList[m.speedLimitsCursor]
-			
+
 			oldValues := m.getSpeedLimitsValues()
 			oldVal := oldValues[meta.Key]
-			
+
 			if err := m.resetSpeedLimitToDefault(meta.Key, config.DefaultSettings()); err != nil {
 				m.addLogEntry(LogStyleError.Render("\u2716 Reset failed: " + err.Error()))
 			} else {
 				newValues := m.getSpeedLimitsValues()
 				newVal := newValues[meta.Key]
-				
+
 				oldStr := strings.ReplaceAll(fmt.Sprintf("%v", oldVal), "\u221E", "0 MB/s")
 				newStr := strings.ReplaceAll(fmt.Sprintf("%v", newVal), "\u221E", "0 MB/s")
-				
+
 				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 %s reset: %s \u2192 %s", meta.Label, oldStr, newStr)))
 			}
 		}

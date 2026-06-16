@@ -55,7 +55,7 @@ func TestUpdateSpeedLimits_EscClearsError(t *testing.T) {
 func TestUpdateSpeedLimits_ArrowNavClearsError(t *testing.T) {
 	m := newSpeedLimitsTestModel(t)
 	m.speedLimitsError = "some error"
-	
+
 	// Test Up arrow
 	updatedUp, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyUp})
 	mUp := updatedUp.(RootModel)
