@@ -3,7 +3,6 @@ package concurrent
 import (
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 )
