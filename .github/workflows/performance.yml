@@ -29,15 +29,15 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+       - name: Cache Go modules
+         uses: actions/cache@v4
+         with:
+           path: ~/go/pkg/mod
+           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+           restore-keys: |
+             ${{ runner.os }}-go-
 
-      - name: Task Creation Overhead
+       - name: Task Creation Overhead
         run: |
           go test -bench=Benchmark_TaskCreation \
                   -benchtime=5s -benchmem -run=^$ \
@@ -61,17 +61,17 @@ jobs:
                   -benchtime=5s -benchmem -run=^$ \
                   ./internal/engine/concurrent | tee lock-contention.txt
 
-      - name: Upload Benchmark Results
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: benchmark-results
-          path: |
-            task-creation.txt
-            cas-contention.txt
-            file-sync.txt
-            lock-contention.txt
-          retention-days: 30
+       - name: Upload Benchmark Results
+         if: always()
+         uses: actions/upload-artifact@v4
+         with:
+           name: benchmark-results
+           path: |
+             task-creation.txt
+             cas-contention.txt
+             file-sync.txt
+             lock-contention.txt
+           retention-days: 30
 
   integration-tests:
     name: Integration Tests
@@ -86,26 +86,26 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+       - name: Cache Go modules
+         uses: actions/cache@v4
+         with:
+           path: ~/go/pkg/mod
+           key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+           restore-keys: |
+             ${{ runner.os }}-go-
 
-      - name: Lock Contention Analysis
+       - name: Lock Contention Analysis
         run: |
           go test -run=TestLockContention_ProgressUpdates -v \
                   ./internal/engine/concurrent | tee contention-analysis.txt
 
-      - name: Upload Test Results
-        if: always()
-        uses: actions/upload-artifact@v3
-        with:
-          name: integration-results
-          path: contention-analysis.txt
-          retention-days: 30
+       - name: Upload Test Results
+         if: always()
+         uses: actions/upload-artifact@v4
+         with:
+           name: integration-results
+           path: contention-analysis.txt
+           retention-days: 30
 
   performance-summary:
     name: Performance Summary
@@ -116,10 +116,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
-        uses: actions/download-artifact@v3
-        with:
-          path: results
+       - name: Download all artifacts
+         uses: actions/download-artifact@v4
+         with:
+           path: results
 
       - name: Install benchstat
         run: |
