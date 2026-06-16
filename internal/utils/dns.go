@@ -11,19 +11,27 @@ import (
 // and the in-app help text), so only the first server is used here; a missing
 // port defaults to 53.
 func normalizeDNSAddr(customAddr string) string {
-	// Use the first server of a possibly comma-separated list. Without this the
-	// whole list would be treated as one host:port and net.SplitHostPort would
-	// fail, producing an invalid dial target like "[1.1.1.1:53, 8.8.8.8:53]:53"
-	// that breaks every DNS lookup.
-	if i := strings.IndexByte(customAddr, ','); i >= 0 {
-		customAddr = customAddr[:i]
+	// Use the first non-empty server of a possibly comma-separated list. Without
+	// this the whole list would be treated as one host:port and net.SplitHostPort
+	// would fail, producing an invalid dial target like "[1.1.1.1:53, 8.8.8.8:53]:53"
+	// that breaks every DNS lookup. Skipping empty entries also handles stray
+	// commas/whitespace (e.g. ", 8.8.8.8:53") gracefully; an empty result means
+	// no usable server was provided.
+	first := ""
+	for _, part := range strings.Split(customAddr, ",") {
+		if p := strings.TrimSpace(part); p != "" {
+			first = p
+			break
+		}
 	}
-	customAddr = strings.TrimSpace(customAddr)
+	if first == "" {
+		return ""
+	}
 
 	// Ensure there is a port in the address. If not, default to 53.
-	host, port, err := net.SplitHostPort(customAddr)
+	host, port, err := net.SplitHostPort(first)
 	if err != nil {
-		host = customAddr
+		host = first
 		port = "53"
 	}
 	return net.JoinHostPort(host, port)
@@ -38,6 +46,11 @@ func ConfigureDialer(dialer *net.Dialer, customAddr string) {
 	}
 
 	target := normalizeDNSAddr(customAddr)
+	if target == "" {
+		// The value was only separators/whitespace: no usable server, so leave
+		// the dialer's default resolver in place rather than installing a broken one.
+		return
+	}
 
 	dialer.Resolver = &net.Resolver{
 		PreferGo: true,
