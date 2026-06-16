@@ -53,7 +53,8 @@ func TestHedgeSharedMaxOffsetRace(t *testing.T) {
 
 	wg.Wait()
 
-	// Consume any hedged tasks to avoid leaking goroutines
+	// Close the queue and drain remaining tasks without blocking.
+	queue.Close()
 	for {
 		tsk, ok := queue.Pop()
 		if !ok {
