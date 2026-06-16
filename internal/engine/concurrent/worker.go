@@ -537,7 +537,6 @@ func (d *ConcurrentDownloader) HedgeWork(queue *TaskQueue) bool {
 	}
 
 	// Initialize the shared deduplication state for both tasks
-	// Initialize the shared deduplication state for both tasks.
 	bestActive.SharedMaxOffsetMu.Lock()
 	if bestActive.SharedMaxOffset == nil {
 		maxOff := &atomic.Int64{}
