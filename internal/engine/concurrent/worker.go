@@ -68,9 +68,11 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				Cancel:      taskCancel,
 				WindowStart: now, // Initialize sliding window
 			}
-			// If the incoming Task carried a shared pointer, copy it into the active task atomically
-			if ptr := task.SharedMaxOffset.Load(); ptr != nil {
-				activeTask.SharedMaxOffset.Store(ptr)
+			// If the incoming Task carried a shared pointer, copy it into the active task
+			if task.SharedMaxOffset != nil {
+				activeTask.SharedMaxOffsetMu.Lock()
+				activeTask.SharedMaxOffset = task.SharedMaxOffset
+				activeTask.SharedMaxOffsetMu.Unlock()
 				// Prevent infinite hedging of hedged tasks.
 				activeTask.Hedged.Store(1)
 			}
@@ -338,8 +340,11 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 
 			// Compute newly written bytes deduplicated across racing workers
 			var newlyWritten int64
-			// Dereference the shared pointer atomically for race-free access
-			if ptr := activeTask.SharedMaxOffset.Load(); ptr != nil {
+			// Read pointer under RLock to avoid racing with hedger initialization
+			activeTask.SharedMaxOffsetMu.RLock()
+			ptr := activeTask.SharedMaxOffset
+			activeTask.SharedMaxOffsetMu.RUnlock()
+			if ptr != nil {
 				for {
 					maxOff := ptr.Load()
 					if offset <= maxOff {
@@ -532,21 +537,20 @@ func (d *ConcurrentDownloader) HedgeWork(queue *TaskQueue) bool {
 	}
 
 	// Initialize the shared deduplication state for both tasks
-	if bestActive.SharedMaxOffset.Load() == nil {
+	// Initialize the shared deduplication state for both tasks.
+	bestActive.SharedMaxOffsetMu.Lock()
+	if bestActive.SharedMaxOffset == nil {
 		maxOff := &atomic.Int64{}
 		maxOff.Store(current)
-		bestActive.SharedMaxOffset.Store(maxOff)
+		bestActive.SharedMaxOffset = maxOff
 	}
-
 	// Create a duplicate task for the remaining byte range
 	hedgedTask := types.Task{
-		Offset: current,
-		Length: stopAt - current,
+		Offset:          current,
+		Length:          stopAt - current,
+		SharedMaxOffset: bestActive.SharedMaxOffset,
 	}
-	// Point the hedged task at the same shared pointer
-	if ptr := bestActive.SharedMaxOffset.Load(); ptr != nil {
-		hedgedTask.SharedMaxOffset.Store(ptr)
-	}
+	bestActive.SharedMaxOffsetMu.Unlock()
 
 	queue.Push(hedgedTask)
 	utils.Debug("Balancer: hedged %s (range: %d-%d) - idle worker will race on fresh connection",
