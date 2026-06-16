@@ -168,6 +168,54 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 	}
 }
 
+func TestDetermineFilename_ContentDispositionExtraParams(t *testing.T) {
+	// Regression: the server-supplied Content-Disposition filename must win even
+	// when the header carries extra RFC 6266 parameters (creation-date, size, ...).
+	pdfContent := []byte("%PDF-1.4\n")
+
+	tests := []struct {
+		name     string
+		url      string
+		headers  http.Header
+		expected string
+	}{
+		{
+			name: "filename kept with creation-date param",
+			url:  "https://example.com/download?filename=wrong.txt",
+			headers: http.Header{
+				"Content-Disposition": []string{`attachment; filename="report.pdf"; creation-date="Wed, 12 Feb 1997 16:29:51 -0500"`},
+			},
+			expected: "report.pdf",
+		},
+		{
+			name: "filename kept with size param",
+			url:  "https://example.com/download?filename=wrong.txt",
+			headers: http.Header{
+				"Content-Disposition": []string{`attachment; filename="archive.zip"; size=12345`},
+			},
+			expected: "archive.zip",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &http.Response{
+				Header: tt.headers,
+				Body:   io.NopCloser(bytes.NewReader(pdfContent)),
+			}
+
+			filename, _, err := DetermineFilename(tt.url, resp)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if filename != tt.expected {
+				t.Errorf("got %q, want %q", filename, tt.expected)
+			}
+		})
+	}
+}
+
 func TestDetermineFilename_LoggingIntegration(t *testing.T) {
 	// Setup temp dir for logs
 	tempDir, err := os.MkdirTemp("", "surge-debug-integration")
