@@ -38,8 +38,10 @@ func TestHedgeSharedMaxOffsetRace(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 500; i++ {
-			// Read without taking the init mutex to emulate pre-fix reader behavior.
+			// Read under the task's RLock, matching production downloadTask behaviour.
+			active.SharedMaxOffsetMu.RLock()
 			ptr := active.SharedMaxOffset
+			active.SharedMaxOffsetMu.RUnlock()
 			if ptr != nil {
 				_ = ptr.Load()
 				// harmless CAS attempt
