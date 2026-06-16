@@ -31,7 +31,11 @@ func DetermineFilename(rawurl string, resp *http.Response) (string, io.Reader, e
 	var candidate string
 
 	// 1. Content-Disposition
-	if _, name, err := httpheader.ContentDisposition(resp.Header); err == nil && name != "" {
+	// httpheader.ContentDisposition returns (dtype, filename, params); the third
+	// value is the parameter map, not an error. Guarding on it being nil would
+	// drop the filename whenever the header carries any extra RFC 6266 parameter
+	// (creation-date, size, ...), so only the filename string is checked here.
+	if _, name, _ := httpheader.ContentDisposition(resp.Header); name != "" {
 		candidate = name
 		Debug("Filename from Content-Disposition: %s", candidate)
 	}
