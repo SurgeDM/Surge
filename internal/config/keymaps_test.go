@@ -52,10 +52,10 @@ func TestKeyMapConversion(t *testing.T) {
 
 	// Verify reflection-based conversion
 	km2 := DefaultKeyMap()
-
+	
 	// Remove original exact-case key to test case-insensitive matching
 	delete(cfg.Dashboard, "Quit")
-
+	
 	// Change a key in config using mixed case
 	cfg.Dashboard["qUiT"] = KeyBindingConfig{
 		Keys: []string{"ctrl+x"},
@@ -66,7 +66,7 @@ func TestKeyMapConversion(t *testing.T) {
 		Keys: []string{"ctrl+z"},
 		Help: "exit alt",
 	}
-
+	
 	km2.ApplyConfig(cfg)
 
 	appliedKey := km2.Dashboard.Quit.Keys()[0]
