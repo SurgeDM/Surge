@@ -195,6 +195,14 @@ func TestDetermineFilename_ContentDispositionExtraParams(t *testing.T) {
 			},
 			expected: "archive.zip",
 		},
+		{
+			name: "filename* with RFC 5987 encoding is decoded and prioritized",
+			url:  "https://example.com/download",
+			headers: http.Header{
+				"Content-Disposition": []string{`attachment; filename="fallback.pdf"; filename*=UTF-8''report%20Q1.pdf`},
+			},
+			expected: "report Q1.pdf",
+		},
 	}
 
 	for _, tt := range tests {
