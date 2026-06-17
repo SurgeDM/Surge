@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/h2non/filetype"
-	"github.com/vfaronov/httpheader"
 )
 
 const MaxFilenameLength = 240
@@ -31,13 +31,13 @@ func DetermineFilename(rawurl string, resp *http.Response) (string, io.Reader, e
 	var candidate string
 
 	// 1. Content-Disposition
-	// httpheader.ContentDisposition returns (dtype, filename, params); the third
-	// value is the parameter map, not an error. Guarding on it being nil would
-	// drop the filename whenever the header carries any extra RFC 6266 parameter
-	// (creation-date, size, ...), so only the filename string is checked here.
-	if _, name, _ := httpheader.ContentDisposition(resp.Header); name != "" {
-		candidate = name
-		Debug("Filename from Content-Disposition: %s", candidate)
+	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+		if _, params, err := mime.ParseMediaType(cd); err == nil {
+			if name := params["filename"]; name != "" {
+				candidate = name
+				Debug("Filename from Content-Disposition: %s", candidate)
+			}
+		}
 	}
 
 	// 2. Query Parameters (if no Content-Disposition)
