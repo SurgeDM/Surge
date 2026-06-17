@@ -484,3 +484,74 @@ func TestResolveGeneric(t *testing.T) {
 		t.Errorf("Resolve[time.Duration] got %v, want 15s", val)
 	}
 }
+
+func TestCategorySettings_UnmarshalJSON_BackwardCompatibility(t *testing.T) {
+	// Test the old array format
+	oldJSON := []byte(`[
+		{"name": "Videos", "pattern": ".*\\.mp4"},
+		{"name": "Music", "pattern": ".*\\.mp3"}
+	]`)
+
+	var cs CategorySettings
+	err := json.Unmarshal(oldJSON, &cs)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal old array format: %v", err)
+	}
+
+	if len(cs.Categories) != 2 {
+		t.Fatalf("Expected 2 categories, got %d", len(cs.Categories))
+	}
+	if cs.Categories[0].Name != "Videos" {
+		t.Errorf("Expected first category to be 'Videos', got '%s'", cs.Categories[0].Name)
+	}
+
+	// Test the new struct format
+	newJSON := []byte(`{
+		"category_enabled": true,
+		"categories": [
+			{"name": "Documents", "pattern": ".*\\.pdf"}
+		]
+	}`)
+
+	fullJSON := []byte(`{
+		"categories": ` + string(newJSON) + `
+	}`)
+
+	s := DefaultSettings()
+	err = json.Unmarshal(fullJSON, s)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal new struct format: %v", err)
+	}
+
+	if len(s.Categories.Categories) != 1 {
+		t.Fatalf("Expected 1 category, got %d", len(s.Categories.Categories))
+	}
+	if s.Categories.Categories[0].Name != "Documents" {
+		t.Errorf("Expected 'Documents', got '%s'", s.Categories.Categories[0].Name)
+	}
+	if !Resolve[bool](s.Categories.CategoryEnabled) {
+		t.Errorf("Expected category_enabled to be true")
+	}
+
+	// Test full settings with old format
+	fullOldJSON := []byte(`{
+		"categories": ` + string(oldJSON) + `
+	}`)
+
+	s2 := DefaultSettings()
+	err = json.Unmarshal(fullOldJSON, s2)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal full old format: %v", err)
+	}
+
+	if len(s2.Categories.Categories) != 2 {
+		t.Fatalf("Expected 2 categories, got %d", len(s2.Categories.Categories))
+	}
+	if s2.Categories.Categories[0].Name != "Videos" {
+		t.Errorf("Expected 'Videos', got '%s'", s2.Categories.Categories[0].Name)
+	}
+	// CategoryEnabled should remain default (false)
+	if Resolve[bool](s2.Categories.CategoryEnabled) {
+		t.Errorf("Expected category_enabled to remain false")
+	}
+}
