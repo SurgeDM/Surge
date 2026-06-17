@@ -555,3 +555,126 @@ func ClearRateLimit(id string) error {
 	}
 	return saveMasterListLocked(list)
 }
+
+// NormalizeStaleDownloads resets downloads that were interrupted (e.g., app crash)
+// and appear as dead/frozen items in the TUI.
+func NormalizeStaleDownloads() (int, error) {
+	masterMu.Lock()
+	defer masterMu.Unlock()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return 0, err
+	}
+	count := 0
+	for i, e := range list.Downloads {
+		if e.Status == "downloading" {
+			list.Downloads[i].Status = "paused"
+			count++
+		}
+	}
+	if count > 0 {
+		err = saveMasterListLocked(list)
+	}
+	return count, err
+}
+
+// ValidateIntegrity checks that paused .surge files still exist and haven't been tampered with.
+// Removes orphaned or corrupted entries from the database.
+// Returns the number of entries removed.
+func ValidateIntegrity() (int, error) {
+	masterMu.Lock()
+	defer masterMu.Unlock()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return 0, err
+	}
+
+	removed := 0
+	expectedSurgePaths := make(map[string]struct{})
+	candidateDirs := make(map[string]struct{})
+
+	var out []types.DownloadEntry
+
+	for _, e := range list.Downloads {
+		if e.DestPath == "" {
+			out = append(out, e)
+			continue
+		}
+
+		candidateDirs[filepath.Dir(e.DestPath)] = struct{}{}
+		if e.Status != "completed" {
+			expectedSurgePaths[e.DestPath+types.IncompleteSuffix] = struct{}{}
+		}
+
+		if e.Status == "paused" || e.Status == "queued" {
+			surgePath := e.DestPath + types.IncompleteSuffix
+
+			// Check if .surge file exists
+			_, statErr := os.Stat(surgePath)
+			if os.IsNotExist(statErr) {
+				// File missing - remove orphaned DB entry
+				utils.Debug("Integrity: .surge file missing for %s, removing entry %s", e.DestPath, e.ID)
+				_ = os.Remove(getDetailPath(e.ID))
+				removed++
+				continue
+			}
+			if statErr != nil {
+				return removed, fmt.Errorf("failed to stat %s: %w", surgePath, statErr)
+			}
+
+			// If we have a stored hash, verify it
+			var ds DetailState
+			if err := loadGob(getDetailPath(e.ID), &ds); err == nil && ds.State != nil && ds.State.FileHash != "" {
+				matches, err := compareAgainstStoredFileHash(surgePath, ds.State.FileHash)
+				if err != nil {
+					return removed, fmt.Errorf("failed to verify hash for %s: %w", surgePath, err)
+				}
+				if !matches {
+					// File has been tampered with - remove entry and corrupted file
+					utils.Debug("Integrity: hash mismatch for %s (expected %s), removing", surgePath, ds.State.FileHash)
+					_ = os.Remove(surgePath)
+					_ = os.Remove(getDetailPath(e.ID))
+					removed++
+					continue
+				}
+			}
+		}
+
+		out = append(out, e)
+	}
+
+	list.Downloads = out
+	if removed > 0 {
+		if err := saveMasterListLocked(list); err != nil {
+			return removed, err
+		}
+	}
+
+	// Remove orphan .surge files that no longer have matching entries.
+	for dir := range candidateDirs {
+		files, err := os.ReadDir(dir)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue
+			}
+			return removed, fmt.Errorf("failed to read directory %s: %w", dir, err)
+		}
+		for _, f := range files {
+			if f.IsDir() {
+				continue
+			}
+			name := f.Name()
+			if !strings.HasSuffix(name, types.IncompleteSuffix) {
+				continue
+			}
+			surgePath := filepath.Join(dir, name)
+			if _, ok := expectedSurgePaths[surgePath]; ok {
+				continue
+			}
+			_ = os.Remove(surgePath)
+			utils.Debug("Integrity: removed orphan .surge file %s", surgePath)
+		}
+	}
+
+	return removed, nil
+}
