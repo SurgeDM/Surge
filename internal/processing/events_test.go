@@ -102,7 +102,7 @@ func TestStartEventWorker_PersistsQueuedMirrorsForResume(t *testing.T) {
 
 	mgr.StartEventWorker(ch)
 
-	queuedState, err := state.LoadState("https://example.com/video.mp4", finalPath)
+	queuedState, err := state.GetDownload("download-queued")
 	if err != nil {
 		t.Fatalf("failed to reload queued state: %v", err)
 	}

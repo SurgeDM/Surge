@@ -202,10 +202,18 @@ func seedDownload(t *testing.T, id, url, dest, status string) {
 		PausedAt:   0,
 		CreatedAt:  time.Now().Unix(),
 	}
-	if err := state.SaveState(url, dest, manualState); err != nil {
+	if err := state.AddToMasterList(types.DownloadEntry{
+		ID:         id,
+		URL:        url,
+		DestPath:   dest,
+		Filename:   filepath.Base(dest),
+		Status:     status,
+		TotalSize:  1000,
+		Downloaded: 0,
+	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.UpdateStatus(id, status); err != nil {
+	if err := state.SaveState(url, dest, manualState); err != nil {
 		t.Fatal(err)
 	}
 }
