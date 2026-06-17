@@ -7,7 +7,7 @@ func ConvertBytesToHumanReadable(bytes int64) string {
 	if bytes <= 0 {
 		return "0 B"
 	}
-	
+
 	const unit = 1000
 	if bytes < unit {
 		return fmt.Sprintf("%d B", bytes)

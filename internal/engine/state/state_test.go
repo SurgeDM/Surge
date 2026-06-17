@@ -440,11 +440,11 @@ func TestUpdateStatus(t *testing.T) {
 	}
 	// Mock task data using SaveState
 	state := &types.DownloadState{
-		ID:         id,
-		URL:        "https://example.com/status-test.zip",
-		DestPath:   filepath.Join(tmpDir, "status-test.zip"),
-		Filename:   "status-test.zip",
-		Tasks:      []types.Task{{Offset: 0, Length: 100}},
+		ID:       id,
+		URL:      "https://example.com/status-test.zip",
+		DestPath: filepath.Join(tmpDir, "status-test.zip"),
+		Filename: "status-test.zip",
+		Tasks:    []types.Task{{Offset: 0, Length: 100}},
 	}
 	if err := SaveState("https://example.com/status-test.zip", filepath.Join(tmpDir, "status-test.zip"), state); err != nil {
 		t.Fatalf("SaveState failed: %v", err)

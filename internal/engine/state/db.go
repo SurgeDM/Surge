@@ -75,14 +75,14 @@ func atomicWrite(targetPath string, data interface{}) error {
 		return err
 	}
 	tmpName := f.Name()
-	defer os.Remove(tmpName) // cleans up if we fail before rename
+	defer func() { _ = os.Remove(tmpName) }() // cleans up if we fail before rename
 
 	if err := gob.NewEncoder(f).Encode(data); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	if err := f.Sync(); err != nil {
-		f.Close()
+		_ = f.Close()
 		return err
 	}
 	if err := f.Close(); err != nil {
@@ -96,6 +96,6 @@ func loadGob(path string, v interface{}) error {
 	if err != nil {
 		return err
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 	return gob.NewDecoder(f).Decode(v)
 }

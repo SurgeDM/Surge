@@ -370,7 +370,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 
 		case events.BatchProgressMsg, events.ProgressMsg:
 			// Progress ticks are intentionally transient; persisting them would add
-			// SQLite churn without improving resume or history recovery.
+			// file I/O churn without improving resume or history recovery.
 		}
 	}
 }

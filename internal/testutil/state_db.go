@@ -19,7 +19,7 @@ func init() {
 	SuppressNotificationsInTests()
 }
 
-// SetupStateDB configures a fresh temp SQLite DB for tests that exercise state persistence.
+// SetupStateDB configures a fresh temp backend for tests that exercise state persistence.
 func SetupStateDB(t *testing.T) string {
 	t.Helper()
 
