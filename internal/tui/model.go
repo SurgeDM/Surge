@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -310,15 +311,22 @@ func InitialRootModel(serverPort int, currentVersion string, service core.Downlo
 	applyFilepickerTheme(&fp)
 
 	// Load settings for auto resume
-	settings, _ := config.LoadSettings()
+	settings, errSettings := config.LoadSettings()
 	if settings == nil {
 		settings = config.DefaultSettings()
 	}
+	if errSettings != nil {
+		settings.StartupWarnings = append(settings.StartupWarnings, fmt.Sprintf("Failed to load settings: %v", errSettings))
+	}
 
-	keys, _ := config.LoadKeyMap()
+	keys, errKeys := config.LoadKeyMap()
 	if keys == nil {
 		keys = config.DefaultKeyMap()
 	}
+	if errKeys != nil {
+		keys.StartupWarnings = append(keys.StartupWarnings, fmt.Sprintf("Failed to load keymap: %v", errKeys))
+	}
+
 	var keyMapModTime time.Time
 	if info, err := os.Stat(config.GetKeyMapConfigPath()); err == nil {
 		keyMapModTime = info.ModTime()

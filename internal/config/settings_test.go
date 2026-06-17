@@ -485,6 +485,95 @@ func TestResolveGeneric(t *testing.T) {
 	}
 }
 
+func TestCategorySettings_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name        string
+		json        string
+		wantErr     bool
+		assertState func(t *testing.T, cs *CategorySettings)
+	}{
+		{
+			name:    "Old array format",
+			json:    `[{"name": "Videos", "pattern": ".*\\.mp4"}]`,
+			wantErr: false,
+			assertState: func(t *testing.T, cs *CategorySettings) {
+				if len(cs.Categories) != 1 {
+					t.Fatalf("Expected 1 category, got %d", len(cs.Categories))
+				}
+				if cs.Categories[0].Name != "Videos" {
+					t.Errorf("Expected 'Videos', got '%s'", cs.Categories[0].Name)
+				}
+			},
+		},
+		{
+			name:    "New struct format",
+			json:    `{"category_enabled": true, "categories": [{"name": "Documents", "pattern": ".*\\.pdf"}]}`,
+			wantErr: false,
+			assertState: func(t *testing.T, cs *CategorySettings) {
+				if len(cs.Categories) != 1 {
+					t.Fatalf("Expected 1 category, got %d", len(cs.Categories))
+				}
+				if cs.Categories[0].Name != "Documents" {
+					t.Errorf("Expected 'Documents', got '%s'", cs.Categories[0].Name)
+				}
+				if cs.CategoryEnabled == nil {
+					t.Fatalf("Expected CategoryEnabled to be non-nil")
+				}
+				if Resolve[bool](cs.CategoryEnabled) != true {
+					t.Errorf("Expected CategoryEnabled to be true")
+				}
+			},
+		},
+		{
+			name:    "Null value",
+			json:    `null`,
+			wantErr: false,
+			assertState: func(t *testing.T, cs *CategorySettings) {
+				if len(cs.Categories) != 0 {
+					t.Errorf("Expected 0 categories, got %d", len(cs.Categories))
+				}
+			},
+		},
+		{
+			name:    "Empty array",
+			json:    `[]`,
+			wantErr: false,
+			assertState: func(t *testing.T, cs *CategorySettings) {
+				if len(cs.Categories) != 0 {
+					t.Errorf("Expected 0 categories, got %d", len(cs.Categories))
+				}
+			},
+		},
+		{
+			name:        "Invalid JSON array",
+			json:        `[{"name": "Videos"`,
+			wantErr:     true,
+			assertState: nil,
+		},
+		{
+			name:        "Invalid JSON object",
+			json:        `{"categories": [{"name": "Videos"}`,
+			wantErr:     true,
+			assertState: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cs CategorySettings
+			err := json.Unmarshal([]byte(tt.json), &cs)
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Unmarshal() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if !tt.wantErr && tt.assertState != nil {
+				tt.assertState(t, &cs)
+			}
+		})
+	}
+}
+
 func TestCategorySettings_UnmarshalJSON_BackwardCompatibility(t *testing.T) {
 	// Test the old array format
 	oldJSON := []byte(`[
