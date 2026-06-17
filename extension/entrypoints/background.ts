@@ -472,15 +472,15 @@ async function handleDownloadCreated(downloadItem: {
   if (shouldSkipUrl(downloadItem.url)) return;
   if (!isFreshDownload(downloadItem)) return;
 
-  // Only intercept when Surge is actually reachable. If the daemon is offline,
-  // leave the browser download alone so normal downloads keep working.
-  if (!await checkHealthSilent()) return;
-
   const minFileSizeMB = await getMinFileSizeMB();
   const minSizeInBytes = minFileSizeMB * 1024 * 1024;
   if (minSizeInBytes > 0 && downloadItem.totalBytes !== undefined && downloadItem.totalBytes > 0 && downloadItem.totalBytes < minSizeInBytes) {
     return; // File is smaller than minimum size threshold; let browser handle it.
   }
+
+  // Only intercept when Surge is actually reachable. If the daemon is offline,
+  // leave the browser download alone so normal downloads keep working.
+  if (!await checkHealthSilent()) return;
 
   // Once health has passed, cancel the browser download immediately before any
   // additional async work so the browser does not race ahead of the handoff.

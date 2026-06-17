@@ -205,6 +205,36 @@ describe('download interception naming', () => {
       expect(downloadCall).toBeDefined();
     });
 
+    it('intercepts when totalBytes is 0 (zero byte file)', async () => {
+      const downloadItem = {
+        id: 1006,
+        url: 'https://example.com/empty.txt',
+        startTime: new Date().toISOString(),
+        totalBytes: 0,
+      };
+
+      await __test__.handleDownloadCreated(downloadItem);
+
+      expect(browser.downloads.cancel).toHaveBeenCalledWith(1006);
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      expect(downloadCall).toBeDefined();
+    });
+
+    it('intercepts when totalBytes is exactly at the minFileSize threshold', async () => {
+      const downloadItem = {
+        id: 1007,
+        url: 'https://example.com/exact.bin',
+        startTime: new Date().toISOString(),
+        totalBytes: 10 * 1024 * 1024, // Exactly 10MB default threshold
+      };
+
+      await __test__.handleDownloadCreated(downloadItem);
+
+      expect(browser.downloads.cancel).toHaveBeenCalledWith(1007);
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      expect(downloadCall).toBeDefined();
+    });
+
     it('intercepts everything when minFileSize is 0', async () => {
       (browser.storage.local.get as any).mockImplementation((key: string) => {
         if (key === 'intercept') return Promise.resolve({ intercept: true });
