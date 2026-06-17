@@ -13,7 +13,7 @@ This is intentionally short. If you see something that can be better, open a PR.
 - `internal/engine/probe.go`: probe logic (range support, metadata, mirror probing).
 - `internal/engine/concurrent/`: concurrent HTTP downloader and worker/retry/failover logic.
 - `internal/engine/single/`: single-connection HTTP downloader fallback.
-- `internal/engine/state/`: SQLite-backed persistence for paused/history downloads.
+- `internal/engine/state/`: Gob-backed file persistence for paused/history downloads.
 - `internal/tui/`: terminal UI models, update loop, views.
 - `internal/testutil/`: mock HTTP servers and test helpers.
 
