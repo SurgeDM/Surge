@@ -1,7 +1,7 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { normalizeToken, normalizeServerUrl } from './popup/lib/utils';
 import { DownloadStatus, HistoryEntry } from './popup/store/types';
-import { STORAGE_KEYS } from '../lib/storage';
+import { STORAGE_KEYS, readStoredNumber } from '../lib/storage';
 import {
   buildDownloadRequestBody,
   buildEventStreamHeaders,
@@ -431,6 +431,11 @@ async function isNotificationsEnabled(): Promise<boolean> {
   return enabled !== false; // Default to true if undefined
 }
 
+async function getMinFileSizeMB(): Promise<number> {
+  const result = await browser.storage.local.get(STORAGE_KEYS.MIN_FILE_SIZE);
+  return readStoredNumber(result, STORAGE_KEYS.MIN_FILE_SIZE, 10);
+}
+
 function shouldSkipUrl(url: string): boolean {
   return url.startsWith('blob:')
     || url.startsWith('data:')
@@ -461,7 +466,7 @@ async function isDuplicateDownload(url: string): Promise<boolean> {
 }
 
 async function handleDownloadCreated(downloadItem: {
-  id: number; url: string; filename?: string; state?: string; startTime?: string;
+  id: number; url: string; filename?: string; state?: string; startTime?: string; totalBytes?: number;
 }): Promise<void> {
   if (!await isInterceptEnabled()) return;
   if (shouldSkipUrl(downloadItem.url)) return;
@@ -470,6 +475,12 @@ async function handleDownloadCreated(downloadItem: {
   // Only intercept when Surge is actually reachable. If the daemon is offline,
   // leave the browser download alone so normal downloads keep working.
   if (!await checkHealthSilent()) return;
+
+  const minFileSizeMB = await getMinFileSizeMB();
+  const minSizeInBytes = minFileSizeMB * 1024 * 1024;
+  if (minSizeInBytes > 0 && downloadItem.totalBytes !== undefined && downloadItem.totalBytes > 0 && downloadItem.totalBytes < minSizeInBytes) {
+    return; // File is smaller than minimum size threshold; let browser handle it.
+  }
 
   // Once health has passed, cancel the browser download immediately before any
   // additional async work so the browser does not race ahead of the handoff.
@@ -763,7 +774,7 @@ async function handleSkipDuplicate(id: string): Promise<{ success: boolean }> {
 export default defineBackground(() => {
   // Download interception
   browser.downloads.onCreated.addListener((downloadItem: {
-    id: number; url: string; filename?: string; state?: string; startTime?: string;
+    id: number; url: string; filename?: string; state?: string; startTime?: string; totalBytes?: number;
   }) => {
     if (processedIds.has(downloadItem.id)) return;
     processedIds.add(downloadItem.id);

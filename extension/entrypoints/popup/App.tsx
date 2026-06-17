@@ -1,5 +1,5 @@
 import { createSignal, onMount, onCleanup } from 'solid-js';
-import { readStoredBoolean, readStoredString, STORAGE_KEYS } from '../../lib/storage';
+import { readStoredBoolean, readStoredString, readStoredNumber, STORAGE_KEYS } from '../../lib/storage';
 import {
   serverConnected,
   setServerConnected,
@@ -10,6 +10,7 @@ import {
   setCurrentView,
   setInterceptEnabled,
   setNotificationsEnabled,
+  setMinFileSize,
   handleSseEvent,
   setServerUrl,
   setServerUrlLocked,
@@ -62,6 +63,7 @@ export default function App() {
         STORAGE_KEYS.VERIFIED,
         STORAGE_KEYS.INTERCEPT,
         STORAGE_KEYS.NOTIFICATIONS,
+        STORAGE_KEYS.MIN_FILE_SIZE,
       ]);
 
       const storedServerUrl = readStoredString(storedValues, STORAGE_KEYS.SERVER_URL);
@@ -76,6 +78,7 @@ export default function App() {
 
       setInterceptEnabled(readStoredBoolean(storedValues, STORAGE_KEYS.INTERCEPT, true));
       setNotificationsEnabled(readStoredBoolean(storedValues, STORAGE_KEYS.NOTIFICATIONS, true));
+      setMinFileSize(readStoredNumber(storedValues, STORAGE_KEYS.MIN_FILE_SIZE, 10));
     } catch { /* ignore */ }
   }
 
