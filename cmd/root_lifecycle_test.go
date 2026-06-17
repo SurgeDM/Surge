@@ -56,6 +56,8 @@ func (s *countingLifecycleService) Publish(msg interface{}) error {
 }
 func (s *countingLifecycleService) GetStatus(string) (*types.DownloadStatus, error) { return nil, nil }
 func (s *countingLifecycleService) Shutdown() error                                 { return nil }
+func (s *countingLifecycleService) SetRateLimit(string, int64) error                { return nil }
+func (s *countingLifecycleService) ClearRateLimit(string) error                     { return nil }
 
 func (s *countingLifecycleService) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
 	s.streamCalls.Add(1)

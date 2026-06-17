@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -109,6 +110,103 @@ func TestDefaultSettings_Consistency(t *testing.T) {
 
 	if Resolve[int](s1.Network.MaxConnectionsPerDownload) != Resolve[int](s2.Network.MaxConnectionsPerDownload) {
 		t.Error("Default settings should be consistent")
+	}
+}
+
+func TestDefaultSettings_Validation(t *testing.T) {
+	settings := DefaultSettings()
+	for _, cat := range settings.CategoriesList {
+		for _, s := range cat.Settings {
+			if s.ValidateFunc != nil {
+				if err := s.ValidateFunc(s.DefaultValue); err != nil {
+					t.Errorf("Validation failed for default value of %s: %v", s.Key, err)
+				}
+				if err := s.ValidateFunc(s.Value); err != nil {
+					t.Errorf("Validation failed for current value of %s: %v", s.Key, err)
+				}
+			}
+		}
+	}
+}
+
+// TestEveryValidatorIsInCategoriesList prevents a setting from being defined with a
+// ValidateFunc but accidentally omitted from initializeCategoriesList, which would
+// silently skip validation on startup.
+func TestEveryValidatorIsInCategoriesList(t *testing.T) {
+	settings := DefaultSettings()
+
+	var allSettings []*Setting
+	var collect func(v reflect.Value)
+	collect = func(v reflect.Value) {
+		switch v.Kind() {
+		case reflect.Pointer:
+			if v.IsNil() {
+				return
+			}
+			if v.Type() == reflect.TypeOf((*Setting)(nil)) {
+				allSettings = append(allSettings, v.Interface().(*Setting))
+				return
+			}
+			collect(v.Elem())
+		case reflect.Struct:
+			for i := range v.NumField() {
+				collect(v.Field(i))
+			}
+		case reflect.Slice:
+			for i := range v.Len() {
+				collect(v.Index(i))
+			}
+		}
+	}
+	collect(reflect.ValueOf(settings))
+
+	validated := make(map[*Setting]struct{})
+	for _, s := range allSettings {
+		if s != nil && s.ValidateFunc != nil {
+			validated[s] = struct{}{}
+		}
+	}
+
+	inCategories := make(map[*Setting]struct{})
+	for _, cat := range settings.CategoriesList {
+		for _, s := range cat.Settings {
+			if s != nil {
+				inCategories[s] = struct{}{}
+			}
+		}
+	}
+
+	for s := range validated {
+		if _, ok := inCategories[s]; !ok {
+			t.Errorf("Setting %q has a ValidateFunc but is missing from CategoriesList", s.Key)
+		}
+	}
+}
+
+func TestCategoriesListMatchesCategoryOrder(t *testing.T) {
+	settings := DefaultSettings()
+	order := CategoryOrder()
+
+	// 1. Verify every category in CategoriesList is present in CategoryOrder
+	orderMap := make(map[string]bool)
+	for _, name := range order {
+		orderMap[name] = true
+	}
+	for _, cat := range settings.CategoriesList {
+		if !orderMap[cat.Name] {
+			t.Errorf("Category %q is in CategoriesList but missing from CategoryOrder()", cat.Name)
+		}
+	}
+
+	// 2. Verify every category in CategoryOrder is present in CategoriesList
+	listMap := make(map[string]bool)
+	for _, cat := range settings.CategoriesList {
+		listMap[cat.Name] = true
+	}
+	for _, name := range order {
+		if !listMap[name] {
+			t.Errorf("Category %q is in CategoryOrder() but missing from CategoriesList", name)
+		}
 	}
 }
 
@@ -273,7 +371,9 @@ func TestSettingsJSON_Serialization(t *testing.T) {
 }
 
 func TestSaveSettings_RealFunction(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 	original := DefaultSettings()
 	original.Network.MaxConnectionsPerDownload.Value = 48
 	original.General.AutoResume.Value = true
@@ -382,5 +482,165 @@ func TestResolveGeneric(t *testing.T) {
 	s.Performance.SlowWorkerGracePeriod.Value = "15s"
 	if val := Resolve[time.Duration](s.Performance.SlowWorkerGracePeriod); val != 15*time.Second {
 		t.Errorf("Resolve[time.Duration] got %v, want 15s", val)
+	}
+}
+
+func TestCategorySettings_UnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		name        string
+		json        string
+		wantErr     bool
+		assertState func(t *testing.T, cs *CategorySettings)
+	}{
+		{
+			name:    "Old array format",
+			json:    `[{"name": "Videos", "pattern": ".*\\.mp4"}]`,
+			wantErr: false,
+			assertState: func(t *testing.T, cs *CategorySettings) {
+				if len(cs.Categories) != 1 {
+					t.Fatalf("Expected 1 category, got %d", len(cs.Categories))
+				}
+				if cs.Categories[0].Name != "Videos" {
+					t.Errorf("Expected 'Videos', got '%s'", cs.Categories[0].Name)
+				}
+			},
+		},
+		{
+			name:    "New struct format",
+			json:    `{"category_enabled": true, "categories": [{"name": "Documents", "pattern": ".*\\.pdf"}]}`,
+			wantErr: false,
+			assertState: func(t *testing.T, cs *CategorySettings) {
+				if len(cs.Categories) != 1 {
+					t.Fatalf("Expected 1 category, got %d", len(cs.Categories))
+				}
+				if cs.Categories[0].Name != "Documents" {
+					t.Errorf("Expected 'Documents', got '%s'", cs.Categories[0].Name)
+				}
+				if cs.CategoryEnabled == nil {
+					t.Fatalf("Expected CategoryEnabled to be non-nil")
+				}
+				if Resolve[bool](cs.CategoryEnabled) != true {
+					t.Errorf("Expected CategoryEnabled to be true")
+				}
+			},
+		},
+		{
+			name:    "Null value",
+			json:    `null`,
+			wantErr: false,
+			assertState: func(t *testing.T, cs *CategorySettings) {
+				if len(cs.Categories) != 0 {
+					t.Errorf("Expected 0 categories, got %d", len(cs.Categories))
+				}
+			},
+		},
+		{
+			name:    "Empty array",
+			json:    `[]`,
+			wantErr: false,
+			assertState: func(t *testing.T, cs *CategorySettings) {
+				if len(cs.Categories) != 0 {
+					t.Errorf("Expected 0 categories, got %d", len(cs.Categories))
+				}
+			},
+		},
+		{
+			name:        "Invalid JSON array",
+			json:        `[{"name": "Videos"`,
+			wantErr:     true,
+			assertState: nil,
+		},
+		{
+			name:        "Invalid JSON object",
+			json:        `{"categories": [{"name": "Videos"}`,
+			wantErr:     true,
+			assertState: nil,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cs CategorySettings
+			err := json.Unmarshal([]byte(tt.json), &cs)
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("Unmarshal() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			if !tt.wantErr && tt.assertState != nil {
+				tt.assertState(t, &cs)
+			}
+		})
+	}
+}
+
+func TestCategorySettings_UnmarshalJSON_BackwardCompatibility(t *testing.T) {
+	// Test the old array format
+	oldJSON := []byte(`[
+		{"name": "Videos", "pattern": ".*\\.mp4"},
+		{"name": "Music", "pattern": ".*\\.mp3"}
+	]`)
+
+	var cs CategorySettings
+	err := json.Unmarshal(oldJSON, &cs)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal old array format: %v", err)
+	}
+
+	if len(cs.Categories) != 2 {
+		t.Fatalf("Expected 2 categories, got %d", len(cs.Categories))
+	}
+	if cs.Categories[0].Name != "Videos" {
+		t.Errorf("Expected first category to be 'Videos', got '%s'", cs.Categories[0].Name)
+	}
+
+	// Test the new struct format
+	newJSON := []byte(`{
+		"category_enabled": true,
+		"categories": [
+			{"name": "Documents", "pattern": ".*\\.pdf"}
+		]
+	}`)
+
+	fullJSON := []byte(`{
+		"categories": ` + string(newJSON) + `
+	}`)
+
+	s := DefaultSettings()
+	err = json.Unmarshal(fullJSON, s)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal new struct format: %v", err)
+	}
+
+	if len(s.Categories.Categories) != 1 {
+		t.Fatalf("Expected 1 category, got %d", len(s.Categories.Categories))
+	}
+	if s.Categories.Categories[0].Name != "Documents" {
+		t.Errorf("Expected 'Documents', got '%s'", s.Categories.Categories[0].Name)
+	}
+	if !Resolve[bool](s.Categories.CategoryEnabled) {
+		t.Errorf("Expected category_enabled to be true")
+	}
+
+	// Test full settings with old format
+	fullOldJSON := []byte(`{
+		"categories": ` + string(oldJSON) + `
+	}`)
+
+	s2 := DefaultSettings()
+	err = json.Unmarshal(fullOldJSON, s2)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal full old format: %v", err)
+	}
+
+	if len(s2.Categories.Categories) != 2 {
+		t.Fatalf("Expected 2 categories, got %d", len(s2.Categories.Categories))
+	}
+	if s2.Categories.Categories[0].Name != "Videos" {
+		t.Errorf("Expected 'Videos', got '%s'", s2.Categories.Categories[0].Name)
+	}
+	// CategoryEnabled should remain default (false)
+	if Resolve[bool](s2.Categories.CategoryEnabled) {
+		t.Errorf("Expected category_enabled to remain false")
 	}
 }

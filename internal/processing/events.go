@@ -81,14 +81,16 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			// Persist the started record immediately so crash recovery and later lifecycle
 			// events have a stable destination record even before the first pause snapshot.
 			entry := types.DownloadEntry{
-				ID:         m.DownloadID,
-				URL:        m.URL,
-				URLHash:    state.URLHash(m.URL),
-				DestPath:   m.DestPath,
-				Filename:   m.Filename,
-				Status:     "downloading",
-				TotalSize:  m.Total,
-				Downloaded: 0,
+				ID:           m.DownloadID,
+				URL:          m.URL,
+				URLHash:      state.URLHash(m.URL),
+				DestPath:     m.DestPath,
+				Filename:     m.Filename,
+				Status:       "downloading",
+				TotalSize:    m.Total,
+				Downloaded:   0,
+				RateLimit:    m.RateLimit,
+				RateLimitSet: m.RateLimitSet,
 			}
 			if existing, _ := state.GetDownload(m.DownloadID); existing != nil {
 				entry.Mirrors = append([]string(nil), existing.Mirrors...)
@@ -173,13 +175,15 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 
 			entry := types.DownloadEntry{
-				ID:         m.DownloadID,
-				Status:     "paused",
-				Downloaded: snapshot.Downloaded,
-				DestPath:   destPath,
-				Filename:   m.Filename,
-				TotalSize:  snapshot.TotalSize,
-				TimeTaken:  snapshot.Elapsed / int64(time.Millisecond),
+				ID:           m.DownloadID,
+				Status:       "paused",
+				Downloaded:   snapshot.Downloaded,
+				DestPath:     destPath,
+				Filename:     m.Filename,
+				TotalSize:    snapshot.TotalSize,
+				TimeTaken:    snapshot.Elapsed / int64(time.Millisecond),
+				RateLimit:    m.RateLimit,
+				RateLimitSet: m.RateLimitSet,
 			}
 			if existing != nil {
 				entry.URL = existing.URL
@@ -228,16 +232,18 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			if err := finalizeCompletedFile(destPath); err != nil {
 				utils.Debug("Lifecycle: Failed to finalize completed file at %s: %v", destPath, err)
 				if err := state.AddToMasterList(types.DownloadEntry{
-					ID:         m.DownloadID,
-					URL:        url,
-					URLHash:    urlHash,
-					DestPath:   destPath,
-					Filename:   filename,
-					Status:     "error",
-					TotalSize:  m.Total,
-					Downloaded: m.Total,
-					TimeTaken:  m.Elapsed.Milliseconds(),
-					AvgSpeed:   avgSpeed,
+					ID:           m.DownloadID,
+					URL:          url,
+					URLHash:      urlHash,
+					DestPath:     destPath,
+					Filename:     filename,
+					Status:       "error",
+					TotalSize:    m.Total,
+					Downloaded:   m.Total,
+					TimeTaken:    m.Elapsed.Milliseconds(),
+					AvgSpeed:     avgSpeed,
+					RateLimit:    m.RateLimit,
+					RateLimitSet: m.RateLimitSet,
 				}); err != nil {
 					utils.Debug("Lifecycle: Failed to persist finalization error state: %v", err)
 				}
@@ -255,17 +261,19 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			}
 
 			if err := state.AddToMasterList(types.DownloadEntry{
-				ID:          m.DownloadID,
-				URL:         url,
-				URLHash:     urlHash,
-				DestPath:    destPath,
-				Filename:    filename,
-				Status:      "completed",
-				TotalSize:   m.Total,
-				Downloaded:  m.Total,
-				CompletedAt: time.Now().Unix(),
-				TimeTaken:   m.Elapsed.Milliseconds(),
-				AvgSpeed:    avgSpeed,
+				ID:           m.DownloadID,
+				URL:          url,
+				URLHash:      urlHash,
+				DestPath:     destPath,
+				Filename:     filename,
+				Status:       "completed",
+				TotalSize:    m.Total,
+				Downloaded:   m.Total,
+				CompletedAt:  time.Now().Unix(),
+				TimeTaken:    m.Elapsed.Milliseconds(),
+				AvgSpeed:     avgSpeed,
+				RateLimit:    m.RateLimit,
+				RateLimitSet: m.RateLimitSet,
 			}); err != nil {
 				utils.Debug("Lifecycle: Failed to persist completed download: %v", err)
 			}
@@ -347,13 +355,15 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			// Queue persistence is what lets downloads survive shutdown before any worker
 			// has emitted a started event.
 			if err := state.AddToMasterList(types.DownloadEntry{
-				ID:       m.DownloadID,
-				URL:      m.URL,
-				URLHash:  state.URLHash(m.URL),
-				DestPath: m.DestPath,
-				Filename: m.Filename,
-				Mirrors:  append([]string(nil), m.Mirrors...),
-				Status:   "queued",
+				ID:           m.DownloadID,
+				URL:          m.URL,
+				URLHash:      state.URLHash(m.URL),
+				DestPath:     m.DestPath,
+				Filename:     m.Filename,
+				Mirrors:      append([]string(nil), m.Mirrors...),
+				Status:       "queued",
+				RateLimit:    m.RateLimit,
+				RateLimitSet: m.RateLimitSet,
 			}); err != nil {
 				utils.Debug("Lifecycle: Failed to persist queued download: %v", err)
 			}

@@ -185,7 +185,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// Edit / Toggle
 	if key.Matches(msg, m.keys.Settings.Edit) {
-		// Categories tab → open Category Manager
+		// Categories tab \u2192 open Category Manager
 		if m.SettingsActiveTab < len(categories) && categories[m.SettingsActiveTab] == "Categories" {
 			m.catMgrCursor = 0
 			m.state = CategoryManagerState
@@ -265,7 +265,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		// Categories tab → 'Manage Categories' selected → confirm full reset
+		// Categories tab \u2192 'Manage Categories' selected \u2192 confirm full reset
 		if m.SettingsActiveTab < len(categories) && categories[m.SettingsActiveTab] == "Categories" && settingKey == "category_enabled" {
 			m.state = CategoryResetConfirmState
 			m.quitConfirmFocused = 0

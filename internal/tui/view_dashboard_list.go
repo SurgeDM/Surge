@@ -79,5 +79,7 @@ func (m *RootModel) renderDownloadsBox(width, height int, stats ViewStats) strin
 		downloadsBorderColor = colors.Gray()
 	}
 
-	return renderBtopBox(leftTitle, PaneTitleStyle.Render(" Downloads "), innerContent, width, height, downloadsBorderColor)
+	rightTitle := PaneTitleStyle.Render(" Downloads ")
+
+	return renderBtopBox(leftTitle, rightTitle, innerContent, width, height, downloadsBorderColor)
 }

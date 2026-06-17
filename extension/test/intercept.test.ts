@@ -20,6 +20,7 @@ describe('download interception naming', () => {
           get: vi.fn().mockImplementation((key: string) => {
             if (key === 'intercept') return Promise.resolve({ intercept: true });
             if (key === 'serverUrl') return Promise.resolve({ serverUrl: 'http://127.0.0.1:1700' });
+            if (key === 'minFileSize') return Promise.resolve({ minFileSize: 10 });
             return Promise.resolve({});
           }),
           set: vi.fn(),
@@ -130,5 +131,130 @@ describe('download interception naming', () => {
 
     const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
     expect(downloadCall).toBeUndefined();
+  });
+
+  describe('minimum file size guard', () => {
+    beforeEach(() => {
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes('/health')) return { ok: true };
+        if (url.includes('/list')) return { ok: true, json: async () => [] };
+        if (url.includes('/download')) return {
+          ok: true,
+          json: async () => ({ status: 'queued', id: '101', filename: 'test.zip' })
+        };
+        return { ok: false };
+      });
+    });
+
+    it('does not intercept when totalBytes is smaller than minFileSize threshold', async () => {
+      const downloadItem = {
+        id: 1001,
+        url: 'https://example.com/small.txt',
+        startTime: new Date().toISOString(),
+        totalBytes: 5 * 1024 * 1024, // 5MB (smaller than default 10MB)
+      };
+
+      await __test__.handleDownloadCreated(downloadItem);
+
+      expect(browser.downloads.cancel).not.toHaveBeenCalled();
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      expect(downloadCall).toBeUndefined();
+    });
+
+    it('intercepts when totalBytes is larger than minFileSize threshold', async () => {
+      const downloadItem = {
+        id: 1002,
+        url: 'https://example.com/large.iso',
+        startTime: new Date().toISOString(),
+        totalBytes: 15 * 1024 * 1024, // 15MB (larger than default 10MB)
+      };
+
+      await __test__.handleDownloadCreated(downloadItem);
+
+      expect(browser.downloads.cancel).toHaveBeenCalledWith(1002);
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      expect(downloadCall).toBeDefined();
+    });
+
+    it('intercepts when totalBytes is unknown', async () => {
+      const downloadItem = {
+        id: 1003,
+        url: 'https://example.com/stream.bin',
+        startTime: new Date().toISOString(),
+        totalBytes: -1, // Unknown size
+      };
+
+      await __test__.handleDownloadCreated(downloadItem);
+
+      expect(browser.downloads.cancel).toHaveBeenCalledWith(1003);
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      expect(downloadCall).toBeDefined();
+    });
+
+    it('intercepts when totalBytes is undefined', async () => {
+      const downloadItem = {
+        id: 1005,
+        url: 'https://example.com/stream2.bin',
+        startTime: new Date().toISOString(),
+      };
+
+      await __test__.handleDownloadCreated(downloadItem);
+
+      expect(browser.downloads.cancel).toHaveBeenCalledWith(1005);
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      expect(downloadCall).toBeDefined();
+    });
+
+    it('intercepts when totalBytes is 0 (zero byte file)', async () => {
+      const downloadItem = {
+        id: 1006,
+        url: 'https://example.com/empty.txt',
+        startTime: new Date().toISOString(),
+        totalBytes: 0,
+      };
+
+      await __test__.handleDownloadCreated(downloadItem);
+
+      expect(browser.downloads.cancel).toHaveBeenCalledWith(1006);
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      expect(downloadCall).toBeDefined();
+    });
+
+    it('intercepts when totalBytes is exactly at the minFileSize threshold', async () => {
+      const downloadItem = {
+        id: 1007,
+        url: 'https://example.com/exact.bin',
+        startTime: new Date().toISOString(),
+        totalBytes: 10 * 1024 * 1024, // Exactly 10MB default threshold
+      };
+
+      await __test__.handleDownloadCreated(downloadItem);
+
+      expect(browser.downloads.cancel).toHaveBeenCalledWith(1007);
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      expect(downloadCall).toBeDefined();
+    });
+
+    it('intercepts everything when minFileSize is 0', async () => {
+      (browser.storage.local.get as any).mockImplementation((key: string) => {
+        if (key === 'intercept') return Promise.resolve({ intercept: true });
+        if (key === 'serverUrl') return Promise.resolve({ serverUrl: 'http://127.0.0.1:1700' });
+        if (key === 'minFileSize') return Promise.resolve({ minFileSize: 0 });
+        return Promise.resolve({});
+      });
+
+      const downloadItem = {
+        id: 1004,
+        url: 'https://example.com/tiny.txt',
+        startTime: new Date().toISOString(),
+        totalBytes: 1024, // 1KB
+      };
+
+      await __test__.handleDownloadCreated(downloadItem);
+
+      expect(browser.downloads.cancel).toHaveBeenCalledWith(1004);
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      expect(downloadCall).toBeDefined();
+    });
   });
 });

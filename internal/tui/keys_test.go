@@ -116,6 +116,10 @@ func TestBugReportKeyMap_AllKeysInHelp(t *testing.T) {
 	testKeyMapInHelp(t, "BugReport", Keys.BugReport, nil)
 }
 
+func TestSpeedLimitsKeyMap_AllKeysInHelp(t *testing.T) {
+	testKeyMapInHelp(t, "SpeedLimits", Keys.SpeedLimits, nil)
+}
+
 func TestDynamicKeyMapReloading(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("Skipping on Windows: GetSurgeDir uses %APPDATA% and does not honor XDG_CONFIG_HOME")

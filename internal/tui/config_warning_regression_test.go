@@ -3,7 +3,7 @@ package tui
 // Regression tests for: config warnings must appear in the TUI activity log.
 //
 // Root causes fixed (branch fix-config-fails):
-//  1. publishStartupWarnings() fired before the TUI event stream connected → silently dropped.
+//  1. publishStartupWarnings() fired before the TUI event stream connected \u2192 silently dropped.
 //  2. Corrupt settings.json produced no StartupWarnings at all.
 //
 // These tests cover the TUI side: startupConfigWarningMsg dispatch and rendering.
@@ -17,7 +17,7 @@ import (
 )
 
 // newModelWithWarnings builds a minimal RootModel with pre-populated
-// StartupConfigWarnings to exercise the Init() → startupConfigWarningMsg path.
+// StartupConfigWarnings to exercise the Init() \u2192 startupConfigWarningMsg path.
 func newModelWithWarnings(warnings []string) RootModel {
 	return RootModel{
 		StartupConfigWarnings: warnings,
@@ -34,7 +34,7 @@ func TestConfigWarning_StartupConfigWarningMsg_AppearsInActivityLog(t *testing.T
 		"Config: settings file is corrupt (invalid character 'n') - all settings reset to defaults",
 	})
 
-	// Dispatch the message directly - same code path as Init() → cmd() → Update()
+	// Dispatch the message directly - same code path as Init() \u2192 cmd() \u2192 Update()
 	updated, _ := m.Update(startupConfigWarningMsg(m.StartupConfigWarnings))
 	m2 := updated.(RootModel)
 

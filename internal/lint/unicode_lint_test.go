@@ -17,7 +17,7 @@ import (
 
 // TestNoRawUnicodeInStringLiterals walks every .go file in the repository and
 // fails if any string literal contains a raw non-ASCII character (e.g. '\u2716'
-// written literally as "✖") instead of a \uXXXX escape sequence.
+// written literally as "\u2716") instead of a \uXXXX escape sequence.
 //
 // Why: raw glyphs are invisible in diffs, harder to grep, and can silently
 // break on terminals that do not support the relevant Unicode block.  The
@@ -88,7 +88,7 @@ func TestNoRawUnicodeInStringLiterals(t *testing.T) {
 			}
 
 			// lit is the *raw source text* of the token, including surrounding
-			// quotes or back-ticks.  If the programmer wrote "✖" in source, lit
+			// quotes or back-ticks.  If the programmer wrote "\u2716" in source, lit
 			// will contain the actual UTF-8 bytes of that glyph.  If they wrote
 			// "\u2716" in source, lit only contains ASCII bytes.
 			for _, r := range lit {
@@ -116,7 +116,7 @@ func TestNoRawUnicodeInStringLiterals(t *testing.T) {
 
 	for _, v := range violations {
 		t.Errorf(
-			"%s:%d:%d: raw Unicode glyph %q (\\u%04X) in string literal — use \\u%04X escape instead",
+			"%s:%d:%d: raw Unicode glyph %q (\\u%04X) in string literal \u2014 use \\u%04X escape instead",
 			v.file, v.line, v.col, string(v.raw), v.raw, v.raw,
 		)
 	}

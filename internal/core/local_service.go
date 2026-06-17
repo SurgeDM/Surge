@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -40,6 +41,11 @@ func (s *LocalDownloadService) ReloadSettings() error {
 	s.settingsMu.Lock()
 	s.settings = settings
 	s.settingsMu.Unlock()
+	if s.Pool != nil && settings != nil {
+		runtime := settings.ToRuntimeConfig()
+		s.Pool.SetGlobalRateLimit(runtime.GlobalRateLimitBps)
+		s.Pool.SetDefaultDownloadRateLimit(runtime.DefaultDownloadRateLimitBps)
+	}
 	return nil
 }
 
@@ -106,6 +112,11 @@ func NewLocalDownloadServiceWithInput(pool *download.WorkerPool, inputCh chan in
 	if s.settings, _ = config.LoadSettings(); s.settings == nil {
 		s.settings = config.DefaultSettings()
 	}
+	if pool != nil && s.settings != nil {
+		runtime := s.settings.ToRuntimeConfig()
+		pool.SetGlobalRateLimit(runtime.GlobalRateLimitBps)
+		pool.SetDefaultDownloadRateLimit(runtime.DefaultDownloadRateLimitBps)
+	}
 
 	// Lifecycle
 	ctx, cancel := context.WithCancel(context.Background())
@@ -135,7 +146,11 @@ func NewLocalDownloadServiceWithInput(pool *download.WorkerPool, inputCh chan in
 func (s *LocalDownloadService) broadcastLoop() {
 	for msg := range s.InputCh {
 		s.listenerMu.Lock()
-		for _, ch := range s.listeners {
+		listenersCopy := make([]chan any, len(s.listeners))
+		copy(listenersCopy, s.listeners)
+		s.listenerMu.Unlock()
+
+		for _, ch := range listenersCopy {
 			// Check message type
 			isProgress := false
 			switch msg.(type) {
@@ -145,24 +160,26 @@ func (s *LocalDownloadService) broadcastLoop() {
 				isProgress = true
 			}
 
-			if isProgress {
-				// Non-blocking send for progress updates
-				select {
-				case ch <- msg:
-				default:
-					// Drop progress message if channel is full
+			func() {
+				defer func() { _ = recover() }()
+				if isProgress {
+					// Non-blocking send for progress updates
+					select {
+					case ch <- msg:
+					default:
+						// Drop progress message if channel is full
+					}
+				} else {
+					// Blocking send with timeout for critical state changes
+					// We don't want to drop these, but we also don't want to block forever if a client is dead
+					select {
+					case ch <- msg:
+					case <-time.After(1 * time.Second):
+						utils.Debug("Dropped critical event due to slow client")
+					}
 				}
-			} else {
-				// Blocking send with timeout for critical state changes
-				// We don't want to drop these, but we also don't want to block forever if a client is dead
-				select {
-				case ch <- msg:
-				case <-time.After(1 * time.Second):
-					utils.Debug("Dropped critical event due to slow client")
-				}
-			}
+			}()
 		}
-		s.listenerMu.Unlock()
 	}
 	// Close all listeners when input closes
 	s.listenerMu.Lock()
@@ -287,19 +304,45 @@ func (s *LocalDownloadService) StreamEvents(ctx context.Context) (<-chan interfa
 	if ctx == nil {
 		ctx = context.Background()
 	}
-	ch := make(chan interface{}, 100)
+	outCh := make(chan interface{}, 99)
+	inCh := make(chan interface{})
+	stopCh := make(chan struct{})
+
+	go func() {
+		defer close(outCh)
+		for {
+			select {
+			case <-stopCh:
+				return
+			case <-ctx.Done():
+				return
+			case msg, ok := <-inCh:
+				if !ok {
+					return
+				}
+				select {
+				case outCh <- msg:
+				case <-stopCh:
+					return
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+
 	s.listenerMu.Lock()
-	s.listeners = append(s.listeners, ch)
+	s.listeners = append(s.listeners, inCh)
 	s.listenerMu.Unlock()
 
 	var once sync.Once
 	cleanup := func() {
 		once.Do(func() {
+			close(stopCh)
 			s.listenerMu.Lock()
 			for i, listener := range s.listeners {
-				if listener == ch {
+				if listener == inCh {
 					s.listeners = append(s.listeners[:i], s.listeners[i+1:]...)
-					close(ch)
 					break
 				}
 			}
@@ -310,11 +353,14 @@ func (s *LocalDownloadService) StreamEvents(ctx context.Context) (<-chan interfa
 	// Callers own listener lifetime; service shutdown closes listeners after the
 	// broadcaster drains InputCh so lifecycle persistence can observe final events.
 	go func() {
-		<-ctx.Done()
-		cleanup()
+		select {
+		case <-ctx.Done():
+			cleanup()
+		case <-stopCh:
+		}
 	}()
 
-	return ch, cleanup, nil
+	return outCh, cleanup, nil
 }
 
 // Publish emits an event into the service's event stream.
@@ -361,11 +407,17 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 	if s.Pool != nil {
 		activeConfigs := s.Pool.GetAll()
 		for _, cfg := range activeConfigs {
+			statusStr := "downloading"
+			if st := s.Pool.GetStatus(cfg.ID); st != nil {
+				statusStr = st.Status
+			}
 			status := types.DownloadStatus{
-				ID:       cfg.ID,
-				URL:      cfg.URL,
-				Filename: cfg.Filename,
-				Status:   "downloading",
+				ID:           cfg.ID,
+				URL:          cfg.URL,
+				Filename:     cfg.Filename,
+				Status:       statusStr,
+				RateLimit:    cfg.RateLimitBps,
+				RateLimitSet: cfg.RateLimitSet,
 			}
 
 			if cfg.State != nil {
@@ -437,18 +489,20 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 			}
 
 			statuses = append(statuses, types.DownloadStatus{
-				ID:          d.ID,
-				URL:         d.URL,
-				Filename:    d.Filename,
-				DestPath:    d.DestPath,
-				Status:      d.Status,
-				TotalSize:   d.TotalSize,
-				Downloaded:  d.Downloaded,
-				Progress:    progress,
-				Speed:       completedSpeedMBps(d),
-				Connections: 0,
-				TimeTaken:   d.TimeTaken,
-				AvgSpeed:    d.AvgSpeed,
+				ID:           d.ID,
+				URL:          d.URL,
+				Filename:     d.Filename,
+				DestPath:     d.DestPath,
+				Status:       d.Status,
+				TotalSize:    d.TotalSize,
+				Downloaded:   d.Downloaded,
+				Progress:     progress,
+				Speed:        completedSpeedMBps(d),
+				Connections:  0,
+				TimeTaken:    d.TimeTaken,
+				AvgSpeed:     d.AvgSpeed,
+				RateLimit:    d.RateLimit,
+				RateLimitSet: d.RateLimitSet,
 			})
 		}
 	}
@@ -502,6 +556,8 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 	state := types.NewProgressState(id, 0)
 	state.DestPath = filepath.Join(outPath, filename) // Best guess until download starts
 
+	runtime := settings.ToRuntimeConfig()
+
 	cfg := types.DownloadConfig{
 		URL:                url,
 		Mirrors:            mirrors,
@@ -510,11 +566,12 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 		Filename:           filename, // If empty, will be auto-detected
 		ProgressCh:         s.InputCh,
 		State:              state,
-		Runtime:            settings.ToRuntimeConfig(),
+		Runtime:            runtime,
 		Headers:            headers,
 		IsExplicitCategory: isExplicitCategory,
 		TotalSize:          totalSize,
 		SupportsRange:      supportsRange,
+		RateLimitBps:       runtime.DefaultDownloadRateLimitBps,
 	}
 
 	s.Pool.Add(cfg)
@@ -675,17 +732,19 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 		}
 
 		status := types.DownloadStatus{
-			ID:         entry.ID,
-			URL:        entry.URL,
-			Filename:   entry.Filename,
-			DestPath:   entry.DestPath,
-			TotalSize:  entry.TotalSize,
-			Downloaded: entry.Downloaded,
-			Progress:   progress,
-			Speed:      completedSpeedMBps(*entry),
-			Status:     entry.Status,
-			TimeTaken:  entry.TimeTaken,
-			AvgSpeed:   entry.AvgSpeed,
+			ID:           entry.ID,
+			URL:          entry.URL,
+			Filename:     entry.Filename,
+			DestPath:     entry.DestPath,
+			TotalSize:    entry.TotalSize,
+			Downloaded:   entry.Downloaded,
+			Progress:     progress,
+			Speed:        completedSpeedMBps(*entry),
+			Status:       entry.Status,
+			TimeTaken:    entry.TimeTaken,
+			AvgSpeed:     entry.AvgSpeed,
+			RateLimit:    entry.RateLimit,
+			RateLimitSet: entry.RateLimitSet,
 		}
 		return &status, nil
 	}
@@ -705,4 +764,140 @@ func (s *LocalDownloadService) ClearCompleted() (int64, error) {
 
 func (s *LocalDownloadService) ClearFailed() (int64, error) {
 	return state.RemoveFailedDownloads()
+// SetRateLimit sets the speed limit for a specific download
+func (s *LocalDownloadService) SetRateLimit(id string, rate int64) error {
+	if rate < 0 {
+		return fmt.Errorf("rate limit must be non-negative")
+	}
+	if s.Pool == nil {
+		return types.ErrPoolNotInit
+	}
+
+	entry, err := state.GetDownload(id)
+	if err != nil && !errors.Is(err, types.ErrNotFound) {
+		return err
+	}
+
+	poolStatus := s.Pool.GetStatus(id)
+	if poolStatus == nil && (entry == nil || entry.Status == "completed") {
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
+	}
+
+	err = state.UpdateRateLimit(id, rate)
+	if err != nil && !errors.Is(err, types.ErrNotFound) {
+		return err
+	}
+
+	foundInPool := s.Pool.SetDownloadRateLimit(id, rate)
+	if err != nil && !foundInPool {
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
+	} else if err != nil && foundInPool {
+		utils.Debug("SetRateLimit: download %s not found in DB (unpaused) but active in pool; state will persist on pause", id)
+	}
+	return nil
+}
+
+// ClearRateLimit clears a specific download's speed limit override.
+func (s *LocalDownloadService) ClearRateLimit(id string) error {
+	if s.Pool == nil {
+		return types.ErrPoolNotInit
+	}
+
+	entry, err := state.GetDownload(id)
+	if err != nil && !errors.Is(err, types.ErrNotFound) {
+		return err
+	}
+
+	poolStatus := s.Pool.GetStatus(id)
+	if poolStatus == nil && (entry == nil || entry.Status == "completed") {
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
+	}
+
+	err = state.ClearRateLimit(id)
+	if err != nil && !errors.Is(err, types.ErrNotFound) {
+		return err
+	}
+
+	foundInPool := s.Pool.ClearDownloadRateLimit(id)
+	if err != nil && !foundInPool {
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
+	} else if err != nil && foundInPool {
+		utils.Debug("ClearRateLimit: download %s not found in DB (unpaused) but active in pool; state will persist on pause", id)
+	}
+	return nil
+}
+
+// SetGlobalRateLimit sets the global speed limit for the local service.
+func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
+	if rate < 0 {
+		return fmt.Errorf("rate limit must be non-negative")
+	}
+	if s.Pool == nil {
+		return types.ErrPoolNotInit
+	}
+
+	s.settingsMu.Lock()
+	if s.settings == nil {
+		s.settings = config.DefaultSettings()
+	}
+	if s.settings.Network.GlobalRateLimit == nil {
+		s.settings.Network.GlobalRateLimit = config.DefaultSettings().Network.GlobalRateLimit
+	}
+	oldValue := s.settings.Network.GlobalRateLimit.Value
+	s.settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
+	if err := config.SaveSettings(s.settings); err != nil {
+		s.settings.Network.GlobalRateLimit.Value = oldValue
+		s.settingsMu.Unlock()
+		return err
+	}
+	s.settingsMu.Unlock()
+
+	s.Pool.SetGlobalRateLimit(rate)
+
+	return nil
+}
+
+// SetDefaultRateLimit sets the inherited default per-download speed limit.
+func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
+	if rate < 0 {
+		return fmt.Errorf("rate limit must be non-negative")
+	}
+	if s.Pool == nil {
+		return types.ErrPoolNotInit
+	}
+
+	s.settingsMu.Lock()
+	if s.settings == nil {
+		s.settings = config.DefaultSettings()
+	}
+	if s.settings.Network.DefaultDownloadRateLimit == nil {
+		s.settings.Network.DefaultDownloadRateLimit = config.DefaultSettings().Network.DefaultDownloadRateLimit
+	}
+	oldValue := s.settings.Network.DefaultDownloadRateLimit.Value
+	s.settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
+	if err := config.SaveSettings(s.settings); err != nil {
+		s.settings.Network.DefaultDownloadRateLimit.Value = oldValue
+		s.settingsMu.Unlock()
+		return err
+	}
+	s.settingsMu.Unlock()
+
+	s.Pool.SetDefaultDownloadRateLimit(rate)
+
+	// Sync the new default rate to the DB for all downloads that inherit it.
+	if configs := s.Pool.GetAll(); configs != nil {
+		var dbErrs []string
+		for _, cfg := range configs {
+			if !cfg.RateLimitSet {
+				if err := state.UpdateDefaultRateLimit(cfg.ID, rate); err != nil {
+					dbErrs = append(dbErrs, fmt.Sprintf("%s: %v", cfg.ID, err))
+				}
+			}
+		}
+		if len(dbErrs) > 0 {
+			return fmt.Errorf("failed to update default rate limit in DB for some downloads: %s", strings.Join(dbErrs, "; "))
+		}
+	}
+
+	return nil
 }

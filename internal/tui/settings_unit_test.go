@@ -104,3 +104,18 @@ func TestSetSettingValueConversions(t *testing.T) {
 		t.Errorf("Expected slow_worker_grace_period to be %v, got %v", 45*time.Second, dur)
 	}
 }
+
+func TestSetSpeedLimitValue_AllowsInheritedDownloadRateLimit(t *testing.T) {
+	// Initialize a RootModel with non-nil maps and a dummy Service to avoid panics
+	m := &RootModel{
+		Settings:  config.DefaultSettings(),
+		downloads: []*DownloadModel{{ID: "test-id"}},
+	}
+
+	for _, value := range []string{"inherit", "default"} {
+		// Expect nil error because "inherit" or "default" is a valid rate limit for a specific download
+		if err := m.setSpeedLimitValue("dl:test-id", value); err != nil {
+			t.Fatalf("setSpeedLimitValue rejected %q for dl: key: %v", value, err)
+		}
+	}
+}

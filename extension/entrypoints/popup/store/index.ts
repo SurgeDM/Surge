@@ -86,6 +86,8 @@ const [interceptEnabled, setInterceptEnabled] = createSignal(true);
 export { interceptEnabled, setInterceptEnabled };
 const [notificationsEnabled, setNotificationsEnabled] = createSignal(true);
 export { notificationsEnabled, setNotificationsEnabled };
+const [minFileSize, setMinFileSize] = createSignal(10);
+export { minFileSize, setMinFileSize };
 
 // Surge server URL for API requests
 const [serverUrl, setServerUrl] = createSignal('');

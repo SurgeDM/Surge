@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"path/filepath"
@@ -12,7 +13,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/h2non/filetype"
-	"github.com/vfaronov/httpheader"
 )
 
 const MaxFilenameLength = 240
@@ -31,9 +31,13 @@ func DetermineFilename(rawurl string, resp *http.Response) (string, io.Reader, e
 	var candidate string
 
 	// 1. Content-Disposition
-	if _, name, err := httpheader.ContentDisposition(resp.Header); err == nil && name != "" {
-		candidate = name
-		Debug("Filename from Content-Disposition: %s", candidate)
+	if cd := resp.Header.Get("Content-Disposition"); cd != "" {
+		if _, params, err := mime.ParseMediaType(cd); err == nil {
+			if name := params["filename"]; name != "" {
+				candidate = name
+				Debug("Filename from Content-Disposition: %s", candidate)
+			}
+		}
 	}
 
 	// 2. Query Parameters (if no Content-Disposition)
@@ -173,10 +177,6 @@ func sanitizeFilename(name string) string {
 		name = strings.ReplaceAll(name, ch, "_")
 	}
 
-	// Trim leading/trailing spaces and trailing periods (problematic on Windows)
-	name = strings.TrimSpace(name)
-	name = strings.TrimRight(name, ".")
-
 	// Remove unprintable control characters
 	var b strings.Builder
 	for _, c := range name {
@@ -185,7 +185,15 @@ func sanitizeFilename(name string) string {
 		}
 	}
 	name = b.String()
+
+	// Trim trailing spaces and periods (both invalid on Windows), after
+	// stripping control characters so a control char trailing the periods
+	// (e.g. "file.pdf.\x01") doesn't shield them. The TrimRight cutset clears
+	// interleaved trailing dots and spaces in one pass (e.g. "file. ." and the
+	// space re-exposed by removing a trailing period); TrimSpace also clears
+	// any leading whitespace.
 	name = strings.TrimSpace(name)
+	name = strings.TrimRight(name, ". ")
 
 	if name == "" {
 		return "_"

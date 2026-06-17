@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -519,4 +520,193 @@ func TestLocalDownloadService_ResumeRejectedWhilePausing(t *testing.T) {
 	if err := svc.Resume(id); err == nil {
 		t.Fatal("expected resume to fail while download is still pausing")
 	}
+}
+
+// --- Rate limit validation tests ---
+
+func TestLocalDownloadService_SetRateLimit_NegativeRate(t *testing.T) {
+	svc := NewLocalDownloadService(nil)
+	err := svc.SetRateLimit("dl-1", -1)
+	if err == nil {
+		t.Fatal("expected error for negative rate")
+	}
+	if !strings.Contains(err.Error(), "non-negative") {
+		t.Fatalf("expected 'non-negative' error, got: %v", err)
+	}
+}
+
+func TestLocalDownloadService_SetRateLimit_ZeroPoolReturnsError(t *testing.T) {
+	svc := NewLocalDownloadService(nil)
+	err := svc.SetRateLimit("dl-1", 0)
+	if err == nil {
+		t.Fatal("expected error when pool is nil")
+	}
+}
+
+func TestLocalDownloadService_SetGlobalRateLimit_NegativeRate(t *testing.T) {
+	svc := NewLocalDownloadService(nil)
+	err := svc.SetGlobalRateLimit(-1)
+	if err == nil {
+		t.Fatal("expected error for negative rate")
+	}
+	if !strings.Contains(err.Error(), "non-negative") {
+		t.Fatalf("expected 'non-negative' error, got: %v", err)
+	}
+}
+
+func TestLocalDownloadService_SetDefaultRateLimit_NegativeRate(t *testing.T) {
+	svc := NewLocalDownloadService(nil)
+	err := svc.SetDefaultRateLimit(-1)
+	if err == nil {
+		t.Fatal("expected error for negative rate")
+	}
+	if !strings.Contains(err.Error(), "non-negative") {
+		t.Fatalf("expected 'non-negative' error, got: %v", err)
+	}
+}
+
+func TestLocalDownloadService_SetRateLimit_UpdatesPool(t *testing.T) {
+	tempDir := t.TempDir()
+	state.CloseDB()
+	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	defer state.CloseDB()
+
+	ch := make(chan interface{}, 10)
+	pool := download.NewWorkerPool(ch, 1)
+	svc := NewLocalDownloadServiceWithInput(pool, ch)
+	defer func() { _ = svc.Shutdown() }()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(10 * time.Second):
+		case <-r.Context().Done():
+		}
+	}))
+	defer ts.Close()
+
+	cfg := types.DownloadConfig{
+		ID:           "pool-rate-test",
+		URL:          ts.URL,
+		RateLimitBps: 0,
+		RateLimitSet: false,
+		State:        &types.ProgressState{},
+	}
+	pool.Add(cfg)
+
+	// Yield briefly to let worker pick it up
+	time.Sleep(50 * time.Millisecond)
+
+	if err := svc.SetRateLimit("pool-rate-test", 3*1024*1024); err != nil {
+		t.Fatalf("SetRateLimit: %v", err)
+	}
+
+	cfgAfter, exists := findPoolConfig(pool, "pool-rate-test")
+	if !exists {
+		t.Fatal("expected queued download to still exist")
+	}
+	if !cfgAfter.RateLimitSet {
+		t.Error("expected RateLimitSet to be true")
+	}
+	if cfgAfter.RateLimitBps != 3*1024*1024 {
+		t.Errorf("RateLimitBps = %d, want %d", cfgAfter.RateLimitBps, 3*1024*1024)
+	}
+
+	// Cancel the download to unblock the hanging httptest.NewServer
+	_ = svc.Delete("pool-rate-test")
+}
+
+func TestLocalDownloadService_ClearRateLimit_UpdatesPool(t *testing.T) {
+	tempDir := t.TempDir()
+	state.CloseDB()
+	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	defer state.CloseDB()
+
+	ch := make(chan interface{}, 10)
+	pool := download.NewWorkerPool(ch, 1)
+	pool.SetDefaultDownloadRateLimit(512 * 1024)
+	svc := NewLocalDownloadServiceWithInput(pool, ch)
+	defer func() { _ = svc.Shutdown() }()
+
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(10 * time.Second):
+		case <-r.Context().Done():
+		}
+	}))
+	defer ts.Close()
+
+	cfg := types.DownloadConfig{
+		ID:           "pool-clear-rate-test",
+		URL:          ts.URL,
+		RateLimitBps: 3 * 1024 * 1024,
+		RateLimitSet: true,
+		State:        &types.ProgressState{},
+	}
+	pool.Add(cfg)
+
+	// Yield briefly to let worker pick it up
+	time.Sleep(50 * time.Millisecond)
+
+	if err := svc.ClearRateLimit("pool-clear-rate-test"); err != nil {
+		t.Fatalf("ClearRateLimit: %v", err)
+	}
+
+	cfgAfter, exists := findPoolConfig(pool, "pool-clear-rate-test")
+	if !exists {
+		t.Fatal("expected queued download to still exist")
+	}
+	if cfgAfter.RateLimitSet {
+		t.Error("expected RateLimitSet to be false after clear")
+	}
+
+	// Cancel the download to unblock the hanging httptest.NewServer
+	_ = svc.Delete("pool-clear-rate-test")
+}
+
+func TestLocalDownloadService_SetRateLimit_UnknownIDReturnsNotFound(t *testing.T) {
+	tempDir := t.TempDir()
+	state.CloseDB()
+	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	defer state.CloseDB()
+
+	ch := make(chan interface{}, 10)
+	pool := download.NewWorkerPool(ch, 1)
+	svc := NewLocalDownloadServiceWithInput(pool, ch)
+	defer func() { _ = svc.Shutdown() }()
+
+	err := svc.SetRateLimit("missing-rate-id", 1024)
+	if !errors.Is(err, types.ErrNotFound) {
+		t.Fatalf("SetRateLimit error = %v, want ErrNotFound", err)
+	}
+
+	poolStatus := pool.GetStatus("missing-rate-id")
+	if poolStatus != nil {
+		t.Fatalf("missing download unexpectedly exists in pool: %#v", poolStatus)
+	}
+}
+
+func TestLocalDownloadService_ClearRateLimit_UnknownIDReturnsNotFound(t *testing.T) {
+	tempDir := t.TempDir()
+	state.CloseDB()
+	state.Configure(filepath.Join(tempDir, fmt.Sprintf("%s-surge.db", t.Name())))
+	defer state.CloseDB()
+
+	ch := make(chan interface{}, 10)
+	pool := download.NewWorkerPool(ch, 1)
+	svc := NewLocalDownloadServiceWithInput(pool, ch)
+	defer func() { _ = svc.Shutdown() }()
+
+	err := svc.ClearRateLimit("missing-rate-id")
+	if !errors.Is(err, types.ErrNotFound) {
+		t.Fatalf("ClearRateLimit error = %v, want ErrNotFound", err)
+	}
+}
+
+func findPoolConfig(pool *download.WorkerPool, id string) (types.DownloadConfig, bool) {
+	for _, cfg := range pool.GetAll() {
+		if cfg.ID == id {
+			return cfg, true
+		}
+	}
+	return types.DownloadConfig{}, false
 }

@@ -32,11 +32,11 @@ type Palette struct {
 	} `toml:"normal"`
 	Bright struct {
 		Black   string `toml:"black"`   // unused by accessors (reserved for future use)
-		Red     string `toml:"red"`     // → Pink(), ProgressStart()
+		Red     string `toml:"red"`     // \u2192 Pink(), ProgressStart()
 		Green   string `toml:"green"`   // unused by accessors (reserved for future use)
 		Yellow  string `toml:"yellow"`  // unused by accessors (reserved for future use)
 		Blue    string `toml:"blue"`    // unused by accessors (reserved for future use)
-		Magenta string `toml:"magenta"` // → ProgressEnd()
+		Magenta string `toml:"magenta"` // \u2192 ProgressEnd()
 		Cyan    string `toml:"cyan"`    // unused by accessors (reserved for future use)
 		White   string `toml:"white"`   // unused by accessors (reserved for future use)
 	} `toml:"bright"`
@@ -345,7 +345,7 @@ func SetDarkMode(isDark bool) {
 		return
 	}
 
-	// Re-load the active theme (custom or empty → built-in default) with the new mode.
+	// Re-load the active theme (custom or empty \u2192 built-in default) with the new mode.
 	LoadTheme(path, isDark)
 }
 

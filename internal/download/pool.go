@@ -7,6 +7,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/engine"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -19,8 +20,15 @@ type activeDownload struct {
 	running atomic.Bool
 }
 
+// WorkerPool manages the download workers and tasks.
+//
+// Lock Ordering:
+// If a code path must acquire both the pool's main mutex (p.mu) and a limiter's internal
+// mutex (limiter.mu, via limiter.SetRate() or limiter.WaitN()), it MUST acquire p.mu first.
+// Examples: Add, SetDownloadRateLimit, SetDefaultDownloadRateLimit.
+// Never acquire p.mu while holding a limiter's internal mutex to prevent deadlocks.
 type WorkerPool struct {
-	taskChan     chan types.DownloadConfig
+	taskChan     chan string
 	progressCh   chan<- any
 	progressDone chan struct{}                   // closed when progressCh must no longer be sent to
 	downloads    map[string]*activeDownload      // Track active downloads for pause/resume
@@ -28,6 +36,10 @@ type WorkerPool struct {
 	mu           sync.RWMutex
 	wg           sync.WaitGroup // We use this to wait for all active downloads to pause before exiting the program
 	maxDownloads int
+
+	globalLimiter               *engine.RateLimiter
+	downloadLimiters            map[string]*engine.RateLimiter
+	defaultDownloadRateLimitBps int64
 }
 
 var (
@@ -50,12 +62,14 @@ func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
 		maxDownloads = 3 // Default to 3 if invalid
 	}
 	pool := &WorkerPool{
-		taskChan:     make(chan types.DownloadConfig, 100), // We make it buffered to avoid blocking add
-		progressCh:   progressCh,
-		progressDone: make(chan struct{}),
-		downloads:    make(map[string]*activeDownload),
-		queued:       make(map[string]types.DownloadConfig),
-		maxDownloads: maxDownloads,
+		taskChan:         make(chan string, 100), // We make it buffered to avoid blocking add
+		progressCh:       progressCh,
+		progressDone:     make(chan struct{}),
+		downloads:        make(map[string]*activeDownload),
+		queued:           make(map[string]types.DownloadConfig),
+		maxDownloads:     maxDownloads,
+		globalLimiter:    engine.NewRateLimiter(0, 0),
+		downloadLimiters: make(map[string]*engine.RateLimiter),
 	}
 	for i := 0; i < maxDownloads; i++ {
 		go pool.worker()
@@ -108,11 +122,61 @@ func (p *WorkerPool) Add(cfg types.DownloadConfig) {
 		cfg.ProgressCh = p.progressCh
 	}
 	p.mu.Lock()
+	p.ensureLimiterForConfigLocked(&cfg)
 	p.queued[cfg.ID] = cfg
 	p.wg.Add(1)
 	p.mu.Unlock()
 
-	p.taskChan <- cfg
+	p.taskChan <- cfg.ID
+}
+
+func (p *WorkerPool) ensureLimiterForConfigLocked(cfg *types.DownloadConfig) {
+	if cfg == nil || cfg.ID == "" {
+		return
+	}
+
+	if p.globalLimiter == nil {
+		p.globalLimiter = engine.NewRateLimiter(0, 0)
+	}
+	if p.downloadLimiters == nil {
+		p.downloadLimiters = make(map[string]*engine.RateLimiter)
+	}
+
+	// If state already carries an explicit rate, prefer it over cfg default.
+	if cfg.State != nil {
+		if stateRate, stateSet := cfg.State.GetRateLimit(); stateSet {
+			cfg.RateLimitBps = stateRate
+			cfg.RateLimitSet = true
+		}
+	}
+
+	rate := cfg.RateLimitBps
+	if !cfg.RateLimitSet {
+		rate = p.defaultDownloadRateLimitBps
+		cfg.RateLimitBps = rate
+	}
+	if cfg.State != nil {
+		cfg.State.SetRateLimit(rate, cfg.RateLimitSet)
+	}
+
+	limiter := p.downloadLimiters[cfg.ID]
+	if limiter == nil {
+		limiter = engine.NewRateLimiter(rate, rateLimiterBurst(rate))
+		p.downloadLimiters[cfg.ID] = limiter
+	} else {
+		limiter.SetRate(rate, rateLimiterBurst(rate))
+	}
+
+	if cfg.Limiter == nil {
+		cfg.Limiter = engine.NewMultiLimiter(p.globalLimiter, limiter)
+	}
+}
+
+func rateLimiterBurst(rate int64) int64 {
+	if rate <= 0 {
+		return 0
+	}
+	return rate
 }
 
 // HasDownload reports whether a download with the given URL is currently active or queued in the pool.
@@ -160,10 +224,12 @@ func (p *WorkerPool) GetAll() []types.DownloadConfig {
 	var configs []types.DownloadConfig
 	for _, ad := range p.downloads {
 		cfg := ad.config
+		cfg.Limiter = nil
 		syncConfigFromState(&cfg)
 		configs = append(configs, cfg)
 	}
 	for _, cfg := range p.queued {
+		cfg.Limiter = nil
 		configs = append(configs, cfg)
 	}
 	return configs
@@ -206,6 +272,155 @@ func (p *WorkerPool) Pause(downloadID string) bool {
 	return true
 }
 
+// SetGlobalRateLimit updates the global rate limiter (bytes/sec). Use 0 to disable.
+func (p *WorkerPool) SetGlobalRateLimit(rate int64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.globalLimiter == nil {
+		p.globalLimiter = engine.NewRateLimiter(0, 0)
+	}
+	// All per-download MultiLimiters hold a pointer to this globalLimiter,
+	// so updating the rate here propagates to all active downloads instantly.
+	p.globalLimiter.SetRate(rate, rateLimiterBurst(rate))
+}
+
+// SetDefaultDownloadRateLimit updates the default per-download rate limit (bytes/sec).
+func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	p.defaultDownloadRateLimitBps = rate
+	if p.downloadLimiters == nil {
+		p.downloadLimiters = make(map[string]*engine.RateLimiter)
+	}
+
+	for id, cfg := range p.queued {
+		if cfg.RateLimitSet {
+			continue
+		}
+		cfg.RateLimitBps = rate
+		p.queued[id] = cfg
+		if cfg.State != nil {
+			cfg.State.SetRateLimit(rate, false)
+		}
+		limiter := p.downloadLimiters[id]
+		if limiter == nil {
+			// Note: ensureLimiterForConfigLocked guarantees all active/queued downloads have a limiter.
+			// This nil branch is defensive and should be unreachable in practice.
+			p.downloadLimiters[id] = engine.NewRateLimiter(rate, rateLimiterBurst(rate))
+		} else {
+			limiter.SetRate(rate, rateLimiterBurst(rate))
+		}
+	}
+	for id, ad := range p.downloads {
+		if ad.config.RateLimitSet {
+			continue
+		}
+		ad.config.RateLimitBps = rate
+		if ad.config.State != nil {
+			ad.config.State.SetRateLimit(rate, false)
+		}
+		limiter := p.downloadLimiters[id]
+		if limiter == nil {
+			// Note: ensureLimiterForConfigLocked guarantees all active/queued downloads have a limiter.
+			// This nil branch is defensive and should be unreachable in practice.
+			p.downloadLimiters[id] = engine.NewRateLimiter(rate, rateLimiterBurst(rate))
+		} else {
+			limiter.SetRate(rate, rateLimiterBurst(rate))
+		}
+	}
+}
+
+// SetDownloadRateLimit updates a specific download's rate limit (bytes/sec).
+func (p *WorkerPool) SetDownloadRateLimit(downloadID string, rate int64) bool {
+	if downloadID == "" {
+		return false
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	found := false
+	if ad, ok := p.downloads[downloadID]; ok {
+		ad.config.RateLimitBps = rate
+		ad.config.RateLimitSet = true
+		if ad.config.State != nil {
+			ad.config.State.SetRateLimit(rate, true)
+		}
+		found = true
+	}
+	if cfg, ok := p.queued[downloadID]; ok {
+		cfg.RateLimitBps = rate
+		cfg.RateLimitSet = true
+		if cfg.State != nil {
+			cfg.State.SetRateLimit(rate, true)
+		}
+		p.queued[downloadID] = cfg
+		found = true
+	}
+
+	if !found {
+		return false
+	}
+
+	if p.downloadLimiters == nil {
+		p.downloadLimiters = make(map[string]*engine.RateLimiter)
+	}
+	limiter := p.downloadLimiters[downloadID]
+	if limiter == nil {
+		p.downloadLimiters[downloadID] = engine.NewRateLimiter(rate, rateLimiterBurst(rate))
+	} else {
+		limiter.SetRate(rate, rateLimiterBurst(rate))
+	}
+	return true
+}
+
+// ClearDownloadRateLimit removes a specific download's override so it inherits the current default.
+func (p *WorkerPool) ClearDownloadRateLimit(downloadID string) bool {
+	if downloadID == "" {
+		return false
+	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	defaultRate := p.defaultDownloadRateLimitBps
+
+	found := false
+	if ad, ok := p.downloads[downloadID]; ok {
+		ad.config.RateLimitBps = defaultRate
+		ad.config.RateLimitSet = false
+		if ad.config.State != nil {
+			ad.config.State.SetRateLimit(defaultRate, false)
+		}
+		found = true
+	}
+	if cfg, ok := p.queued[downloadID]; ok {
+		cfg.RateLimitBps = defaultRate
+		cfg.RateLimitSet = false
+		if cfg.State != nil {
+			cfg.State.SetRateLimit(defaultRate, false)
+		}
+		p.queued[downloadID] = cfg
+		found = true
+	}
+
+	if !found {
+		return false
+	}
+
+	if p.downloadLimiters == nil {
+		p.downloadLimiters = make(map[string]*engine.RateLimiter)
+	}
+	limiter := p.downloadLimiters[downloadID]
+	if limiter == nil {
+		p.downloadLimiters[downloadID] = engine.NewRateLimiter(defaultRate, rateLimiterBurst(defaultRate))
+	} else {
+		limiter.SetRate(defaultRate, rateLimiterBurst(defaultRate))
+	}
+	return true
+}
+
 // PauseAll pauses all active downloads (for graceful shutdown)
 func (p *WorkerPool) PauseAll() {
 	p.mu.RLock()
@@ -235,6 +450,9 @@ func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
 	}
 	if queuedExists {
 		delete(p.queued, downloadID)
+	}
+	if activeExists || queuedExists {
+		delete(p.downloadLimiters, downloadID)
 	}
 	p.mu.Unlock()
 
@@ -278,15 +496,15 @@ func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
 // Returns nil if the download is not found, not paused, or still transitioning (pausing).
 func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfig {
 	p.mu.Lock()
-	defer p.mu.Unlock()
-
 	ad, exists := p.downloads[downloadID]
 	if !exists || ad == nil {
+		p.mu.Unlock()
 		return nil
 	}
 
 	// Cannot extract if still pausing or not actually paused
 	if ad.config.State == nil || !ad.config.State.IsPaused() || ad.config.State.IsPausing() {
+		p.mu.Unlock()
 		return nil
 	}
 
@@ -295,8 +513,12 @@ func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfi
 
 	cfg := ad.config
 	delete(p.downloads, downloadID)
-	if ad.config.State != nil {
-		ad.config.State.Resume()
+	delete(p.downloadLimiters, downloadID)
+	p.mu.Unlock()
+
+	cfg.Limiter = nil
+	if cfg.State != nil {
+		cfg.State.Resume()
 	}
 	return &cfg
 }
@@ -332,9 +554,9 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 }
 
 func (p *WorkerPool) worker() {
-	for cfg := range p.taskChan {
+	for id := range p.taskChan {
 		p.mu.RLock()
-		_, stillQueued := p.queued[cfg.ID]
+		cfg, stillQueued := p.queued[id]
 		p.mu.RUnlock()
 		if !stillQueued {
 			// Canceled while waiting in queue.
@@ -359,48 +581,70 @@ func (p *WorkerPool) worker() {
 			ad.config.State.SetCancelFunc(cancel)
 		}
 		ad.running.Store(true)
+
 		p.mu.Lock()
+		cfg, stillQueued = p.queued[id]
+		if !stillQueued {
+			p.mu.Unlock()
+			cancel()
+			p.wg.Done()
+			continue
+		}
+		ad.config = cfg // Ensure ad.config has the latest state from queue
 		delete(p.queued, cfg.ID)
 		p.downloads[cfg.ID] = ad
+
+		// Make a local copy for TUIDownload to mutate safely
+		localCfg := ad.config
 		p.mu.Unlock()
 
-		err := TUIDownload(ctx, &ad.config)
+		err := TUIDownload(ctx, &localCfg)
 		ad.running.Store(false)
+
+		// Sync back mutated fields cleanly under lock
+		p.mu.Lock()
+		if _, exists := p.downloads[localCfg.ID]; exists {
+			ad.config.TotalSize = localCfg.TotalSize
+			ad.config.Runtime = localCfg.Runtime
+		}
+		p.mu.Unlock()
 
 		// Logic:
 		// 1. If Pause() was called: State.IsPaused() is true. We keep the task in p.downloads (so it can be resumed).
 		// 2. If finished/error: We remove from p.downloads.
 
-		isPaused := ad.config.State != nil && ad.config.State.IsPaused()
+		isPaused := localCfg.State != nil && localCfg.State.IsPaused()
 
 		// Clear "Pausing" transition state now that worker has exited
-		if ad.config.State != nil {
-			ad.config.State.SetPausing(false)
+		if localCfg.State != nil {
+			localCfg.State.SetPausing(false)
 		}
 
 		if isPaused {
-			utils.Debug("WorkerPool: Download %s paused cleanly", cfg.ID)
+			utils.Debug("WorkerPool: Download %s paused cleanly", localCfg.ID)
 			// If paused, we keep it in downloads map for potential resume via ExtractPausedConfig
 		} else if err != nil {
-			if cfg.State != nil {
-				cfg.State.SetError(err)
+			if localCfg.State != nil {
+				localCfg.State.SetError(err)
 			}
 			// Note: DownloadErrorMsg is already emitted by TUIDownload on the same progressCh.
 			// Clean up errored download from tracking (don't save to .surge)
 			p.mu.Lock()
-			delete(p.downloads, cfg.ID)
+			delete(p.downloads, localCfg.ID)
+			delete(p.downloadLimiters, localCfg.ID)
 			p.mu.Unlock()
 
 		} else {
 			// Only mark as done if not paused
-			if cfg.State != nil {
-				cfg.State.Done.Store(true)
+			if localCfg.State != nil {
+				localCfg.State.Done.Store(true)
 			}
 			// Note: DownloadCompleteMsg is sent by the progress reporter when it detects Done=true
 
 			// Clean up from tracking
 			p.mu.Lock()
-			delete(p.downloads, cfg.ID)
+			delete(p.downloads, localCfg.ID)
+			delete(p.downloadLimiters, localCfg.ID)
 			p.mu.Unlock()
 		}
 		// If paused, we keep it in downloads map for potential resume
@@ -410,9 +654,22 @@ func (p *WorkerPool) worker() {
 
 // GetStatus returns the status of an active download
 func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
+	var adURL, adFilename, adDestPath string
+	var adRateLimitBps int64
+	var adRateLimitSet bool
+	var adState *types.ProgressState
+
 	p.mu.RLock()
 	ad, exists := p.downloads[id]
 	qCfg, qExists := p.queued[id]
+	if exists {
+		adURL = ad.config.URL
+		adFilename = ad.config.Filename
+		adDestPath = ad.config.DestPath
+		adRateLimitBps = ad.config.RateLimitBps
+		adRateLimitSet = ad.config.RateLimitSet
+		adState = ad.config.State
+	}
 	p.mu.RUnlock()
 
 	if !exists && !qExists {
@@ -421,23 +678,25 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 
 	if qExists {
 		return &types.DownloadStatus{
-			ID:         id,
-			URL:        qCfg.URL,
-			Filename:   qCfg.Filename,
-			DestPath:   resolveDestPath(&qCfg),
-			Status:     "queued",
-			Downloaded: 0,
-			TotalSize:  0, // Metadata not yet fetched
+			ID:           id,
+			URL:          qCfg.URL,
+			Filename:     qCfg.Filename,
+			DestPath:     resolveDestPath(&qCfg),
+			Status:       "queued",
+			Downloaded:   0,
+			TotalSize:    0, // Metadata not yet fetched
+			RateLimit:    qCfg.RateLimitBps,
+			RateLimitSet: qCfg.RateLimitSet,
 		}
 	}
 
-	state := ad.config.State
+	state := adState
 	if state == nil {
 		return nil
 	}
 
 	// Use state filename/destpath if available (thread-safe)
-	filename := ad.config.Filename
+	filename := adFilename
 	if str := state.GetFilename(); str != "" {
 		filename = str
 	}
@@ -446,22 +705,24 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 	downloaded, totalSize, _, sessionElapsed, _, sessionStart := state.GetProgress()
 
 	status := &types.DownloadStatus{
-		ID:         id,
-		URL:        ad.config.URL,
-		Filename:   filename,
-		TotalSize:  totalSize,
-		Downloaded: downloaded,
-		Status:     "downloading",
+		ID:           id,
+		URL:          adURL,
+		Filename:     filename,
+		TotalSize:    totalSize,
+		Downloaded:   downloaded,
+		Status:       "downloading",
+		RateLimit:    adRateLimitBps,
+		RateLimitSet: adRateLimitSet,
 	}
 	if dp := state.GetDestPath(); dp != "" {
 		status.DestPath = dp
 	} else {
-		status.DestPath = ad.config.DestPath
+		status.DestPath = adDestPath
 	}
 
-	if ad.config.State.IsPausing() {
+	if state.IsPausing() {
 		status.Status = "pausing"
-	} else if ad.config.State.IsPaused() {
+	} else if state.IsPaused() {
 		status.Status = "paused"
 	} else if state.Done.Load() {
 		status.Status = "completed"
@@ -523,7 +784,7 @@ drainLoop:
 	warned := false
 
 	for {
-		p.mu.RLock()
+		p.mu.Lock()
 		stillPausing := false
 		for _, ad := range p.downloads {
 			if ad.config.State != nil && ad.config.State.IsPausing() {
@@ -537,7 +798,7 @@ drainLoop:
 				break
 			}
 		}
-		p.mu.RUnlock()
+		p.mu.Unlock()
 
 		if !stillPausing {
 			break

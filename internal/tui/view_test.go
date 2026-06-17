@@ -33,7 +33,7 @@ func TestFormatDurationForUI(t *testing.T) {
 		{"23h59m59s", 23*time.Hour + 59*time.Minute + 59*time.Second, "23:59:59"},
 		{"1 day", 24 * time.Hour, "1d"},
 		{"1d 5h", 29 * time.Hour, "1d 5h"},
-		{"30+ days", 31 * 24 * time.Hour, "∞"},
+		{"30+ days", 31 * 24 * time.Hour, "\u221E"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -400,8 +400,8 @@ func TestView_NetworkActivityShowsFiveAxisLabelsWhenTall(t *testing.T) {
 	view := m.View()
 	plain := ansiEscapeRE.ReplaceAllString(view.Content, "")
 
-	if !strings.Contains(plain, "0.8 MB/s") || !strings.Contains(plain, "0.2 MB/s") {
-		t.Fatalf("expected 5-axis labels (including 0.8 and 0.2 MB/s), got:\n%s", plain)
+	if !strings.Contains(plain, "800 kB/s") || !strings.Contains(plain, "200 kB/s") {
+		t.Fatalf("expected 5-axis labels (including 800 kB/s and 200 kB/s), got:\n%s", plain)
 	}
 }
 
@@ -607,5 +607,166 @@ func TestView_DoesNotPanicAtExtremeSizes(t *testing.T) {
 		m.height = tc.height
 		// Should not panic
 		_ = m.View()
+	}
+}
+
+// --- Footer status bar tests ---
+
+// footerLine extracts the plain-text last line of the dashboard view.
+func footerLine(m RootModel) string {
+	plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
+	trimmed := strings.TrimRight(plain, "\n")
+	lines := strings.Split(trimmed, "\n")
+	if len(lines) == 0 {
+		return ""
+	}
+	return lines[len(lines)-1]
+}
+
+func TestFooter_GlyphsAlwaysPresent(t *testing.T) {
+	InitializeTUI()
+	m := InitialRootModel(1701, "1.2.3", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.width = 120
+	m.height = 35
+
+	last := footerLine(m)
+	for _, glyph := range []string{"\u2B07", "\u26A1"} {
+		if !strings.Contains(last, glyph) {
+			t.Errorf("footer missing glyph %q, got: %q", glyph, last)
+		}
+	}
+}
+
+func TestFooter_VersionShown(t *testing.T) {
+	InitializeTUI()
+	m := InitialRootModel(1701, "9.8.7", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.width = 120
+	m.height = 35
+
+	last := footerLine(m)
+	if !strings.Contains(last, "v9.8.7") {
+		t.Errorf("footer should contain version string v9.8.7, got: %q", last)
+	}
+}
+
+func TestFooter_IdleSpeedShowsZero(t *testing.T) {
+	InitializeTUI()
+	// No active downloads \u2192 speed should render as "0 B/s"
+	m := InitialRootModel(1701, "1.0.0", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.width = 120
+	m.height = 35
+
+	last := footerLine(m)
+	if !strings.Contains(last, "0 B/s") {
+		t.Errorf("footer should show '0 B/s' when idle, got: %q", last)
+	}
+}
+
+func TestFooter_ActiveSpeedShowsMBps(t *testing.T) {
+	InitializeTUI()
+	m := InitialRootModel(1701, "1.0.0", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.width = 120
+	m.height = 35
+	// Inject an active download at 2.5 MB/s (in bytes/s)
+	m.downloads = []*DownloadModel{
+		{Speed: 2.5 * 1024 * 1024},
+	}
+
+	last := footerLine(m)
+	if !strings.Contains(last, "MB/s") {
+		t.Errorf("footer should show MB/s for active download, got: %q", last)
+	}
+	if !strings.Contains(last, "2.6") {
+		t.Errorf("footer should show 2.6 MB/s, got: %q", last)
+	}
+}
+
+func TestFooter_ActiveSpeedShowsKBps(t *testing.T) {
+	InitializeTUI()
+	m := InitialRootModel(1701, "1.0.0", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.width = 120
+	m.height = 35
+	// 512 KB/s = 0.5 MB/s \u2192 should render as KB/s
+	m.downloads = []*DownloadModel{
+		{Speed: 512 * 1024},
+	}
+
+	last := footerLine(m)
+	if !strings.Contains(last, "kB/s") {
+		t.Errorf("footer should show kB/s for sub-MB/s speed, got: %q", last)
+	}
+}
+
+func TestFooter_ZeroRateLimitShowsInfinity(t *testing.T) {
+	InitializeTUI()
+	m := InitialRootModel(1701, "1.0.0", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.width = 120
+	m.height = 35
+	// Default settings have no global rate limit \u2192 \u221E
+	m.Settings = config.DefaultSettings()
+
+	last := footerLine(m)
+	if !strings.Contains(last, "\u221E") {
+		t.Errorf("footer should show \u221E when rate limit is 0, got: %q", last)
+	}
+}
+
+func TestFooter_GlobalRateLimitShown(t *testing.T) {
+	InitializeTUI()
+	m := InitialRootModel(1701, "1.0.0", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.width = 120
+	m.height = 35
+
+	settings := config.DefaultSettings()
+	settings.Network.GlobalRateLimit.Value = "2mb" // 2 MB/s limit
+	m.Settings = settings
+
+	last := footerLine(m)
+	// FormatRateLimit(2_000_000) \u2192 "2.0 MB/s" or similar; just check the unit appears
+	if !strings.Contains(last, "/s") {
+		t.Errorf("footer should show rate limit with /s unit, got: %q", last)
+	}
+	// Not 0 when active limit is set
+}
+
+func TestFooter_HidesHelpAtNarrowWidth(t *testing.T) {
+	InitializeTUI()
+	// width=55: above MinTermWidth(45) so the real dashboard renders, but below
+	// the 60-char threshold where we drop help text from the footer.
+	m := InitialRootModel(1701, "1.0.0", nil, processing.NewLifecycleManager(nil, nil), false)
+	m.width = 55
+	m.height = 24
+
+	last := footerLine(m)
+	// Speed/limit/version glyphs must still appear
+	for _, glyph := range []string{"\u2B07", "\u26A1"} {
+		if !strings.Contains(last, glyph) {
+			t.Errorf("narrow footer missing glyph %q, got: %q", glyph, last)
+		}
+	}
+	// Help key text must be absent at this width
+	if strings.Contains(last, "enter") || strings.Contains(last, "tab") || strings.Contains(last, "del") {
+		t.Errorf("footer should hide help text at narrow width, got: %q", last)
+	}
+}
+
+func TestFooter_NoLineOverflowAtVariousSizes(t *testing.T) {
+	InitializeTUI()
+	sizes := []struct{ width, height int }{
+		{160, 40},
+		{120, 35},
+		{100, 24},
+		{80, 24},
+		{60, 20},
+	}
+	for _, tc := range sizes {
+		m := InitialRootModel(1701, "1.0.0", nil, processing.NewLifecycleManager(nil, nil), false)
+		m.width = tc.width
+		m.height = tc.height
+		for i, line := range strings.Split(m.View().Content, "\n") {
+			if w := lipgloss.Width(line); w > tc.width {
+				t.Errorf("line %d overflows at %dx%d: width=%d", i, tc.width, tc.height, w)
+			}
+		}
 	}
 }

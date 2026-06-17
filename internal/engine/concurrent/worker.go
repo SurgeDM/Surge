@@ -63,13 +63,16 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			taskCtx, taskCancel := context.WithCancel(ctx)
 			now := time.Now()
 			activeTask := &ActiveTask{
-				Task:            task,
-				StartTime:       now,
-				Cancel:          taskCancel,
-				WindowStart:     now, // Initialize sliding window
-				SharedMaxOffset: task.SharedMaxOffset,
+				Task:        task,
+				StartTime:   now,
+				Cancel:      taskCancel,
+				WindowStart: now, // Initialize sliding window
 			}
+			// If the incoming Task carried a shared pointer, copy it into the active task
 			if task.SharedMaxOffset != nil {
+				// activeTask is newly allocated and not yet visible to other goroutines,
+				// so this assignment does not need mutex protection.
+				activeTask.SharedMaxOffset = task.SharedMaxOffset
 				// Prevent infinite hedging of hedged tasks.
 				activeTask.Hedged.Store(1)
 			}
@@ -301,7 +304,6 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 		}
 
 		if readSoFar > 0 {
-
 			// check stopAt again before writing
 			// truncate readSoFar
 			currentStopAt := activeTask.StopAt.Load()
@@ -310,6 +312,21 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 				if readSoFar <= 0 {
 					return nil // stolen completely
 				}
+			}
+
+			if d.Limiter != nil {
+				// Reset stall clock before the wait so the health monitor measures
+				// time from when throttling begins, not from the last network read.
+				activeTask.LastActivity.Store(time.Now().UnixNano())
+				activeTask.WaitingOnLimiter.Store(true)
+				err := d.Limiter.WaitN(ctx, int64(readSoFar))
+				activeTask.WaitingOnLimiter.Store(false)
+				if err != nil {
+					return err
+				}
+
+				// Refresh again after the wait to keep the stall clock current.
+				activeTask.LastActivity.Store(time.Now().UnixNano())
 			}
 
 			_, writeErr := file.WriteAt(buf[:readSoFar], offset)
@@ -323,9 +340,13 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 
 			// Compute newly written bytes deduplicated across racing workers
 			var newlyWritten int64
-			if activeTask.SharedMaxOffset != nil {
+			// Read pointer under RLock to avoid racing with hedger initialization
+			activeTask.SharedMaxOffsetMu.RLock()
+			ptr := activeTask.SharedMaxOffset
+			activeTask.SharedMaxOffsetMu.RUnlock()
+			if ptr != nil {
 				for {
-					maxOff := activeTask.SharedMaxOffset.Load()
+					maxOff := ptr.Load()
 					if offset <= maxOff {
 						// This exact byte range was already reported by the racing worker!
 						newlyWritten = 0
@@ -333,13 +354,13 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 					}
 					if rangeStart >= maxOff {
 						// Entirely new progress
-						if activeTask.SharedMaxOffset.CompareAndSwap(maxOff, offset) {
+						if ptr.CompareAndSwap(maxOff, offset) {
 							newlyWritten = int64(readSoFar)
 							break
 						}
 					} else {
 						// Partially new progress
-						if activeTask.SharedMaxOffset.CompareAndSwap(maxOff, offset) {
+						if ptr.CompareAndSwap(maxOff, offset) {
 							newlyWritten = offset - maxOff
 							break
 						}
@@ -516,18 +537,19 @@ func (d *ConcurrentDownloader) HedgeWork(queue *TaskQueue) bool {
 	}
 
 	// Initialize the shared deduplication state for both tasks
+	bestActive.SharedMaxOffsetMu.Lock()
 	if bestActive.SharedMaxOffset == nil {
 		maxOff := &atomic.Int64{}
 		maxOff.Store(current)
 		bestActive.SharedMaxOffset = maxOff
 	}
-
 	// Create a duplicate task for the remaining byte range
 	hedgedTask := types.Task{
 		Offset:          current,
 		Length:          stopAt - current,
 		SharedMaxOffset: bestActive.SharedMaxOffset,
 	}
+	bestActive.SharedMaxOffsetMu.Unlock()
 
 	queue.Push(hedgedTask)
 	utils.Debug("Balancer: hedged %s (range: %d-%d) - idle worker will race on fresh connection",

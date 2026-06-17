@@ -55,6 +55,10 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 	// Second pass: check for slow and stalled workers
 	stallTimeout := d.Runtime.GetStallTimeout()
 	for workerID, active := range d.activeTasks {
+		// Skip workers that are intentionally blocked by the rate limiter
+		if active.WaitingOnLimiter.Load() {
+			continue
+		}
 
 		// timeSinceActivity := now.Sub(lastTime)
 		taskDuration := now.Sub(active.StartTime)

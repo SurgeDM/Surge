@@ -9,6 +9,7 @@ import {
   authValid, setAuthValid,
   interceptEnabled, setInterceptEnabled,
   notificationsEnabled, setNotificationsEnabled,
+  minFileSize, setMinFileSize,
 } from '../store';
 import { normalizeToken, normalizeServerUrl } from '../lib/utils';
 
@@ -106,6 +107,16 @@ export default function SettingsView() {
     setNotificationsEnabled(checked);
     await browser.storage.local.set({ [STORAGE_KEYS.NOTIFICATIONS]: checked });
   };
+  const handleMinFileSizeChange = async (value: string) => {
+    const num = parseFloat(value);
+    if (!isNaN(num) && num >= 0) {
+      setMinFileSize(num);
+      await browser.storage.local.set({ [STORAGE_KEYS.MIN_FILE_SIZE]: num });
+    } else if (value === '') {
+      setMinFileSize(0);
+      await browser.storage.local.set({ [STORAGE_KEYS.MIN_FILE_SIZE]: 0 });
+    }
+  };
 
   return (
     <div>
@@ -132,6 +143,22 @@ export default function SettingsView() {
             <span class="toggle-slider" />
           </div>
         </label>
+        <div class="settings-field" style="margin-top: 1rem;">
+          <label class="settings-label" for="min-file-size">Minimum File Size to Intercept (MB)</label>
+          <div class="auth-input settings-input-row" style="max-width: 120px;">
+            <input
+              id="min-file-size"
+              type="number"
+              min="0"
+              step="1"
+              value={minFileSize() || ''}
+              onInput={(e) => { void handleMinFileSizeChange((e.target as HTMLInputElement).value); }}
+            />
+          </div>
+          <div class="settings-help">
+            Downloads smaller than this will be handled by the browser. Leave 0 to intercept all.
+          </div>
+        </div>
       </div>
 
       <div class="settings-group">

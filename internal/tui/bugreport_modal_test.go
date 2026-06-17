@@ -214,7 +214,7 @@ func TestUpdate_BugReportModalEscapeCancels(t *testing.T) {
 func newBugReportModalTestModel() RootModel {
 	return RootModel{
 		state:          DashboardState,
-		keys:           Keys,
+		keys:           config.DefaultKeyMap(),
 		Settings:       config.DefaultSettings(),
 		list:           NewDownloadList(80, 20),
 		logViewport:    viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),

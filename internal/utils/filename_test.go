@@ -51,6 +51,12 @@ func TestSanitizeFilename(t *testing.T) {
 		{"mid-length unicode filename", strings.Repeat("中", 100) + ".zip", strings.Repeat("中", 78) + ".zip"},
 		{"unicode filename over limit", strings.Repeat("中", 250) + ".zip", strings.Repeat("中", 78) + ".zip"},
 		{"unicode filename with long extension", strings.Repeat("中", 10) + "." + strings.Repeat("a", 250), strings.Repeat("中", 10) + "." + strings.Repeat("a", 209)},
+		{"trailing period shielded by control char", "file.pdf.\x01", "file.pdf"},
+		{"multiple trailing periods shielded by control char", "report..\x02", "report"},
+		{"trailing space after period", "file . ", "file"},
+		{"trailing period after space", "doc .", "doc"},
+		{"interleaved trailing periods and spaces", "file. .", "file"},
+		{"space-shielded period with control char", "file.txt .\x01", "file.txt"},
 	}
 
 	for _, tt := range tests {
@@ -148,6 +154,62 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 			resp := &http.Response{
 				Header: tt.headers,
 				Body:   io.NopCloser(bytes.NewReader(tt.body)),
+			}
+
+			filename, _, err := DetermineFilename(tt.url, resp)
+			if err != nil {
+				t.Fatalf("Unexpected error: %v", err)
+			}
+
+			if filename != tt.expected {
+				t.Errorf("got %q, want %q", filename, tt.expected)
+			}
+		})
+	}
+}
+
+func TestDetermineFilename_ContentDispositionExtraParams(t *testing.T) {
+	// Regression: the server-supplied Content-Disposition filename must win even
+	// when the header carries extra RFC 6266 parameters (creation-date, size, ...).
+	pdfContent := []byte("%PDF-1.4\n")
+
+	tests := []struct {
+		name     string
+		url      string
+		headers  http.Header
+		expected string
+	}{
+		{
+			name: "filename kept with creation-date param",
+			url:  "https://example.com/download?filename=wrong.txt",
+			headers: http.Header{
+				"Content-Disposition": []string{`attachment; filename="report.pdf"; creation-date="Wed, 12 Feb 1997 16:29:51 -0500"`},
+			},
+			expected: "report.pdf",
+		},
+		{
+			name: "filename kept with size param",
+			url:  "https://example.com/download?filename=wrong.txt",
+			headers: http.Header{
+				"Content-Disposition": []string{`attachment; filename="archive.zip"; size=12345`},
+			},
+			expected: "archive.zip",
+		},
+		{
+			name: "filename* with RFC 5987 encoding is decoded and prioritized",
+			url:  "https://example.com/download",
+			headers: http.Header{
+				"Content-Disposition": []string{`attachment; filename="fallback.pdf"; filename*=UTF-8''report%20Q1.pdf`},
+			},
+			expected: "report Q1.pdf",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			resp := &http.Response{
+				Header: tt.headers,
+				Body:   io.NopCloser(bytes.NewReader(pdfContent)),
 			}
 
 			filename, _, err := DetermineFilename(tt.url, resp)

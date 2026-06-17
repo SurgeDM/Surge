@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +23,7 @@ type SingleDownloader struct {
 	ID           string               // Download ID
 	State        *types.ProgressState // Shared state for TUI polling
 	Runtime      *types.RuntimeConfig
+	Limiter      types.ByteLimiter
 	TotalSize    int64
 	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
 }
@@ -57,9 +59,10 @@ func (d *SingleDownloader) applyClientSettings(client *http.Client) {
 		}
 		if d.Headers != nil {
 			for key, val := range d.Headers {
-				if key != "Range" {
-					req.Header.Set(key, val)
+				if strings.EqualFold(key, "Range") {
+					continue
 				}
+				req.Header.Set(key, val)
 			}
 		}
 		return nil
@@ -87,6 +90,13 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	}
 
 	for key, val := range d.Headers {
+		// Never forward a caller-supplied Range header. This downloader fetches
+		// the whole file in one connection, so a range-capable server would
+		// reply 206 and the strict 200 check below would abort a valid download.
+		// The worker, probe and redirect paths strip Range for the same reason.
+		if strings.EqualFold(key, "Range") {
+			continue
+		}
 		req.Header.Set(key, val)
 	}
 	req.Header.Set("User-Agent", d.Runtime.GetUserAgent())
@@ -140,10 +150,15 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	buf := *bufPtr
 	defer bufPool.Put(bufPtr)
 
+	reader := io.Reader(resp.Body)
+	if d.Limiter != nil {
+		reader = &throttledReader{reader: resp.Body, limiter: d.Limiter, ctx: ctx}
+	}
+
 	if d.State == nil {
-		written, err = io.CopyBuffer(outFile, resp.Body, buf)
+		written, err = io.CopyBuffer(outFile, reader, buf)
 	} else {
-		progressReader := newProgressReader(resp.Body, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
+		progressReader := newProgressReader(reader, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
 		written, err = io.CopyBuffer(outFile, progressReader, buf)
 		progressReader.Flush()
 	}
@@ -181,6 +196,27 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	)
 
 	return nil
+}
+
+type throttledReader struct {
+	reader  io.Reader
+	limiter types.ByteLimiter
+	ctx     context.Context
+}
+
+func (t *throttledReader) Read(p []byte) (int, error) {
+	n, err := t.reader.Read(p)
+	if n > 0 && t.limiter != nil {
+		if waitErr := t.limiter.WaitN(t.ctx, int64(n)); waitErr != nil {
+			// Preserve an underlying transport/read failure from the same Read call.
+			// io.Reader permits returning both n > 0 and err != nil.
+			if err != nil && err != io.EOF {
+				return n, err
+			}
+			return n, waitErr
+		}
+	}
+	return n, err
 }
 
 type progressReader struct {

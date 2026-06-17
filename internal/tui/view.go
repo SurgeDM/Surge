@@ -5,7 +5,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -134,6 +133,10 @@ func (m RootModel) View() tea.View {
 
 	if m.state == SettingsState {
 		return m.wrapView(m.viewSettings())
+	}
+
+	if m.state == SpeedLimitsState {
+		return m.wrapView(m.renderModalWithOverlay(m.viewSpeedLimits()))
 	}
 
 	if m.state == CategoryManagerState {
@@ -368,24 +371,64 @@ func (m RootModel) View() tea.View {
 	// === MAIN DASHBOARD LAYOUT ===
 	layout := CalculateDashboardLayout(m.width, m.height)
 
-	// Footer - keybindings on left, version on bottom-right
-	helpText := m.help.View(m.keys.Dashboard)
-	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
-	versionText := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
+	// Footer - keybindings on left, speed/limit/version on bottom-right
+	helpText := lipgloss.NewStyle().PaddingLeft(2).Render(m.help.View(m.keys.Dashboard))
 
-	// Hide help text at very narrow widths - version is more important
-	var footerContent string
-	if layout.AvailableWidth < 60 {
-		footerContent = versionText
+	// --- Right-side footer: speed ｜ limit ｜ version ---
+	dimSep := lipgloss.NewStyle().Foreground(colors.Gray()).Render(" \uff5c ")
+
+	// Global speed indicator
+	speedBps := m.calcTotalSpeedBps()
+	speedGlyph := lipgloss.NewStyle().Foreground(colors.Cyan()).Render("\u2B07")
+	var speedVal string
+	if speedBps <= 0 {
+		speedVal = lipgloss.NewStyle().Foreground(colors.Gray()).Render("0 B/s")
 	} else {
-		leftFooterWidth := layout.AvailableWidth - lipgloss.Width(versionText)
+		speedVal = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(utils.FormatSpeed(float64(speedBps)))
+	}
+	speedChunk := lipgloss.JoinHorizontal(lipgloss.Center, speedGlyph, " ", speedVal)
+
+	// Global rate limit indicator
+	limitGlyph := lipgloss.NewStyle().Foreground(colors.Pink()).Render("\u26A1")
+	var limitVal string
+	if m.Settings != nil && m.Settings.Network.GlobalRateLimit != nil {
+		if rate, err := utils.ParseRateLimitValue(m.Settings.Network.GlobalRateLimit.Value); err == nil && rate > 0 {
+			limitVal = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(utils.FormatRateLimit(rate))
+		}
+	}
+	var limitChunk string
+	if limitVal != "" {
+		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", limitVal)
+	} else {
+		limitChunk = lipgloss.JoinHorizontal(lipgloss.Center, limitGlyph, " ", lipgloss.NewStyle().Foreground(colors.Gray()).Render("\u221E"))
+	}
+
+	// Version indicator
+	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
+	versionChunk := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
+
+	rightFooter := lipgloss.NewStyle().PaddingRight(2).Render(lipgloss.JoinHorizontal(lipgloss.Center,
+		speedChunk,
+		dimSep,
+		limitChunk,
+		dimSep,
+		versionChunk,
+	))
+
+	// Hide help text at very narrow widths - right footer is more important
+	var footerContent string
+	rightFooterWidth := lipgloss.Width(rightFooter)
+	if layout.AvailableWidth < 60 {
+		footerContent = rightFooter
+	} else {
+		leftFooterWidth := layout.AvailableWidth - rightFooterWidth
 		if leftFooterWidth < 0 {
 			leftFooterWidth = 0
 		}
 		footerContent = lipgloss.JoinHorizontal(
 			lipgloss.Top,
 			lipgloss.NewStyle().Width(leftFooterWidth).Render(helpText),
-			versionText,
+			rightFooter,
 		)
 	}
 	footer := footerContent
@@ -617,12 +660,12 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	if d.done {
 		if elapsed.Seconds() >= 1 {
 			avgSpeed := float64(d.Total) / float64(int(elapsed.Seconds()))
-			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(config.MB))
+			speedStr = fmt.Sprintf("%s (Avg)", utils.FormatSpeed(avgSpeed))
 		} else if d.Speed > 0 {
-			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", d.Speed/float64(config.MB))
+			speedStr = fmt.Sprintf("%s (Avg)", utils.FormatSpeed(d.Speed))
 		} else if elapsed.Seconds() > 0 {
 			avgSpeed := float64(d.Total) / elapsed.Seconds()
-			speedStr = fmt.Sprintf("%.2f MB/s (Avg)", avgSpeed/float64(config.MB))
+			speedStr = fmt.Sprintf("%s (Avg)", utils.FormatSpeed(avgSpeed))
 		} else {
 			speedStr = "N/A"
 		}
@@ -632,9 +675,19 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		etaStr = "..."
 	} else if d.paused || d.Speed == 0 {
 		speedStr = "Paused"
+		if d.RateLimitSet && d.RateLimit > 0 {
+			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
+		} else if d.RateLimitSet {
+			speedStr += " (Limit: \u221E)"
+		}
 		etaStr = "\u221e"
 	} else {
-		speedStr = fmt.Sprintf("%.2f MB/s", d.Speed/float64(config.MB))
+		speedStr = utils.FormatSpeed(d.Speed)
+		if d.RateLimitSet && d.RateLimit > 0 {
+			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
+		} else if d.RateLimitSet {
+			speedStr += " (Limit: \u221E)"
+		}
 		if d.Total > 0 {
 			remaining := d.Total - d.Downloaded
 			etaSeconds := float64(remaining) / d.Speed
@@ -753,16 +806,17 @@ func getDownloadStatus(d *DownloadModel, spinnerView string) string {
 	return status.RenderWithSpinner(spinnerView)
 }
 
-func (m RootModel) calcTotalSpeed() float64 {
-	total := 0.0
+// calcTotalSpeedBps calculates the sum of all active downloads' speed in bytes per second.
+func (m RootModel) calcTotalSpeedBps() int64 {
+	total := int64(0)
 	for _, d := range m.downloads {
 		// Skip completed downloads
 		if d.done {
 			continue
 		}
-		total += d.Speed
+		total += int64(d.Speed)
 	}
-	return total / float64(config.MB)
+	return total
 }
 
 func (m RootModel) ComputeViewStats() ViewStats {

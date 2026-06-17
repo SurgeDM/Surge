@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
@@ -47,6 +48,9 @@ func (s *mockService) ClearCompleted() (int64, error) {
 func (s *mockService) ClearFailed() (int64, error) {
 	return 0, nil
 }
+func (m *mockService) SetRateLimit(id string, rate int64) error           { return nil }
+func (m *mockService) ClearRateLimit(id string) error                     { return nil }
+
 func TestUpdateDashboard_DeleteResilience(t *testing.T) {
 	// This test validates the TUI's defensive layer independently of the service
 	// implementation. Even though Service.Delete currently returns nil for missing
@@ -58,7 +62,7 @@ func TestUpdateDashboard_DeleteResilience(t *testing.T) {
 		state:     DashboardState,
 		downloads: []*DownloadModel{dm},
 		Service:   svc,
-		keys:      Keys,
+		keys:      config.DefaultKeyMap(),
 		list:      NewDownloadList(80, 20),
 	}
 	m.UpdateListItems()
@@ -85,7 +89,7 @@ func TestUpdateDashboard_DeleteSuccess(t *testing.T) {
 		state:     DashboardState,
 		downloads: []*DownloadModel{dm},
 		Service:   svc,
-		keys:      Keys,
+		keys:      config.DefaultKeyMap(),
 		list:      NewDownloadList(80, 20),
 	}
 	m.UpdateListItems()
@@ -108,7 +112,7 @@ func TestUpdateDashboard_DeleteOtherError(t *testing.T) {
 		state:     DashboardState,
 		downloads: []*DownloadModel{dm},
 		Service:   svc,
-		keys:      Keys,
+		keys:      config.DefaultKeyMap(),
 		list:      NewDownloadList(80, 20),
 	}
 	m.UpdateListItems()

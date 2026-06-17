@@ -9,6 +9,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/clipboard"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -235,6 +236,20 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Open folder
+	if key.Matches(msg, m.keys.Dashboard.OpenFolder) {
+		if d := m.GetSelectedDownload(); d != nil {
+			if d.Destination != "" {
+				filePath := d.Destination
+				if !d.done {
+					filePath = d.Destination + types.IncompleteSuffix
+				}
+				_ = utils.OpenContainingFolder(filePath)
+			}
+		}
+		return m, nil
+	}
+
 	// Refresh URL
 	if key.Matches(msg, m.keys.Dashboard.Refresh) {
 		if d := m.GetSelectedDownload(); d != nil {
@@ -280,6 +295,15 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.SettingsSelectedRow = 0
 		m.SettingsIsEditing = false
 		m.SettingsFocusedPane = 1
+		return m, nil
+	}
+
+	if key.Matches(msg, m.keys.Dashboard.SpeedLimits) {
+		m.snapshotSettings()
+		m.state = SpeedLimitsState
+		m.speedLimitsCursor = 0
+		m.speedLimitsIsEditing = false
+		m.SettingsInput.SetValue("")
 		return m, nil
 	}
 

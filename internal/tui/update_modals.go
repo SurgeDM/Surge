@@ -3,6 +3,7 @@ package tui
 import (
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -16,6 +17,149 @@ import (
 
 var openBugReportBrowser = utils.OpenBrowser
 var writeBugReportClipboard = clipboard.Write
+
+func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.speedLimitsIsEditing {
+		if key.Matches(msg, m.keys.Input.Enter) {
+			// Save
+			value := m.SettingsInput.Value()
+			metaList := m.getSpeedLimitsMetadata()
+			if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
+				meta := metaList[m.speedLimitsCursor]
+
+				valueStr := strings.TrimSpace(value)
+				if !utils.IsRateLimitInherit(valueStr) {
+					if _, err := strconv.ParseFloat(valueStr, 64); err != nil {
+						m.speedLimitsError = "Please enter a number (in MB/s)"
+						if strings.HasPrefix(meta.Key, "dl:") {
+							m.speedLimitsError = "Please enter a number (in MB/s) or -1"
+						}
+						return m, nil
+					}
+				}
+
+				oldValues := m.getSpeedLimitsValues()
+				oldVal := oldValues[meta.Key]
+
+				if err := m.setSpeedLimitValue(meta.Key, valueStr); err != nil {
+					m.speedLimitsError = err.Error()
+					return m, nil
+				}
+				m.speedLimitsError = ""
+
+				newValues := m.getSpeedLimitsValues()
+				newVal := newValues[meta.Key]
+
+				oldStr := strings.ReplaceAll(fmt.Sprintf("%v", oldVal), "\u221E", "0 MB/s")
+				newStr := strings.ReplaceAll(fmt.Sprintf("%v", newVal), "\u221E", "0 MB/s")
+
+				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 %s updated: %s \u2192 %s", meta.Label, oldStr, newStr)))
+			}
+			m.speedLimitsIsEditing = false
+			m.SettingsInput.Blur()
+			return m, nil
+		}
+		if key.Matches(msg, m.keys.Input.Esc) {
+			m.speedLimitsIsEditing = false
+			m.speedLimitsError = ""
+			m.SettingsInput.Blur()
+			return m, nil
+		}
+		var cmd tea.Cmd
+		m.SettingsInput, cmd = m.SettingsInput.Update(msg)
+		return m, cmd
+	}
+
+	if key.Matches(msg, m.keys.SpeedLimits.Close) {
+		m.state = DashboardState
+		m.speedLimitsError = ""
+		return m, nil
+	}
+
+	metaList := m.getSpeedLimitsMetadata()
+	if m.speedLimitsCursor >= len(metaList) {
+		m.speedLimitsCursor = len(metaList) - 1
+	}
+	if m.speedLimitsCursor < 0 {
+		m.speedLimitsCursor = 0
+	}
+
+	if key.Matches(msg, m.keys.SpeedLimits.Up) {
+		m.speedLimitsError = ""
+		m.speedLimitsCursor--
+		if m.speedLimitsCursor < 0 {
+			m.speedLimitsCursor = 0
+		}
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.SpeedLimits.Down) {
+		m.speedLimitsError = ""
+		m.speedLimitsCursor++
+		if m.speedLimitsCursor >= len(metaList) {
+			m.speedLimitsCursor = len(metaList) - 1
+		}
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.SpeedLimits.Edit) {
+		m.speedLimitsError = ""
+		if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
+			meta := metaList[m.speedLimitsCursor]
+			values := m.getSpeedLimitsValues()
+			val := values[meta.Key]
+
+			var valStr string
+			if vStr, ok := val.(string); ok {
+				valStr = vStr
+			} else {
+				valStr = fmt.Sprintf("%v", val)
+			}
+			// Strip display-only prefixes before pre-filling the edit input
+			if strings.HasPrefix(valStr, "inherit") {
+				valStr = "-1"
+			} else if bps, err := utils.ParseRateLimitValue(valStr); err == nil {
+				if bps == 0 {
+					valStr = "0"
+				} else {
+					valStr = fmt.Sprintf("%v", float64(bps)/1000000.0)
+					valStr = strings.TrimRight(strings.TrimRight(valStr, "0"), ".")
+					if valStr == "" {
+						valStr = "0"
+					}
+				}
+			}
+
+			m.speedLimitsIsEditing = true
+			m.SettingsInput.SetValue(valStr)
+			m.SettingsInput.Focus()
+			m.SettingsInput.CursorEnd()
+		}
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.SpeedLimits.Reset) {
+		m.speedLimitsError = ""
+		if m.speedLimitsCursor >= 0 && m.speedLimitsCursor < len(metaList) {
+			meta := metaList[m.speedLimitsCursor]
+
+			oldValues := m.getSpeedLimitsValues()
+			oldVal := oldValues[meta.Key]
+
+			if err := m.resetSpeedLimitToDefault(meta.Key, config.DefaultSettings()); err != nil {
+				m.addLogEntry(LogStyleError.Render("\u2716 Reset failed: " + err.Error()))
+			} else {
+				newValues := m.getSpeedLimitsValues()
+				newVal := newValues[meta.Key]
+
+				oldStr := strings.ReplaceAll(fmt.Sprintf("%v", oldVal), "\u221E", "0 MB/s")
+				newStr := strings.ReplaceAll(fmt.Sprintf("%v", newVal), "\u221E", "0 MB/s")
+
+				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 %s reset: %s \u2192 %s", meta.Label, oldStr, newStr)))
+			}
+		}
+		return m, nil
+	}
+
+	return m, nil
+}
 
 func (m RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Duplicate.Continue) {

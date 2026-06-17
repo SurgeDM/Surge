@@ -375,7 +375,10 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		case "link":
 			valueStr = lipgloss.NewStyle().Foreground(colors.Cyan()).Render("Open [Enter]")
 		default:
-			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key, true) + unitStyle.Render(unit)
+			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key, true)
+			if valueStr != "\u221E" {
+				valueStr += unitStyle.Render(unit)
+			}
 			if meta.Key == "max_global_connections" {
 				valueStr += " (Ignored)"
 			}
@@ -653,6 +656,14 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			parsedVal = b
 		}
 	case "string", "auth_token", "link":
+		if key == "global_rate_limit" || key == "default_download_rate_limit" {
+			if _, err := strconv.ParseFloat(value, 64); err == nil {
+				value += " MB/s"
+			}
+			if bps, err := utils.ParseRateLimitValue(value); err == nil {
+				value = utils.FormatRateLimit(bps)
+			}
+		}
 		parsedVal = value
 	case "int":
 		if key == "worker_buffer_size" {
@@ -743,7 +754,10 @@ func (m RootModel) getCurrentSettingMeta() *config.SettingMeta {
 	activeCategory := categories[m.SettingsActiveTab]
 	settingsMap := config.GetSettingsMetadata()
 	settingsList, ok := settingsMap[activeCategory]
-	if !ok || m.SettingsSelectedRow < 0 || m.SettingsSelectedRow >= len(settingsList) {
+	if !ok {
+		return nil
+	}
+	if m.SettingsSelectedRow < 0 || m.SettingsSelectedRow >= len(settingsList) {
 		return nil
 	}
 	return &settingsList[m.SettingsSelectedRow]
@@ -788,6 +802,8 @@ func (m RootModel) getSettingUnit() string {
 		return " seconds"
 	case "slow_worker_threshold", "speed_ema_alpha":
 		return " (0.0-1.0)"
+	case "global_rate_limit", "default_download_rate_limit":
+		return " MB/s"
 	default:
 		return ""
 	}
@@ -817,6 +833,19 @@ func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool
 				secs = v
 			}
 			return fmt.Sprintf("%.0f", secs)
+		}
+	case "global_rate_limit", "default_download_rate_limit":
+		if vStr, ok := value.(string); ok && vStr != "" {
+			if parsed, err := utils.ParseRateLimitValue(vStr); err == nil {
+				if parsed == 0 {
+					return "\u221E"
+				}
+				mb := float64(parsed) / 1000000.0
+				if mb == float64(int64(mb)) {
+					return fmt.Sprintf("%.0f", mb)
+				}
+				return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.3f", mb), "0"), ".")
+			}
 		}
 	}
 

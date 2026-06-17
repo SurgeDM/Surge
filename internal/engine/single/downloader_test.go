@@ -2,7 +2,9 @@ package single
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -382,6 +384,60 @@ func TestSingleDownloader_Download_Success(t *testing.T) {
 	}
 }
 
+func TestSingleDownloader_StripsCallerRangeHeader(t *testing.T) {
+	// Regression: a caller-supplied Range header (e.g. forwarded from the
+	// browser) must NOT be sent by the single downloader. Otherwise a
+	// range-capable server replies 206 and the strict 200 check aborts an
+	// otherwise valid download with "unexpected status code: 206". The fix uses
+	// strings.EqualFold, so non-canonical casings (some clients/proxies forward
+	// a lowercase "range") must be stripped as well.
+	for _, headerKey := range []string{"Range", "range", "RANGE"} {
+		t.Run(headerKey, func(t *testing.T) {
+			tmpDir, cleanup, err := testutil.TempDir("surge-single-range")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+
+			fileSize := int64(64 * 1024)
+			server := testutil.NewMockServerT(t,
+				testutil.WithFileSize(fileSize),
+				testutil.WithRangeSupport(true), // server WOULD answer 206 if Range leaks through
+				testutil.WithFilename("range_test.bin"),
+			)
+			defer server.Close()
+
+			destPath := filepath.Join(tmpDir, "range_test.bin")
+			state := types.NewProgressState("range-test", fileSize)
+			runtime := &types.RuntimeConfig{WorkerBufferSize: 8 * types.KB}
+
+			downloader := NewSingleDownloader("range-id", nil, state, runtime)
+			downloader.Headers = map[string]string{headerKey: "bytes=100-"}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+
+			// Pre-create incomplete file (simulating processing layer)
+			if f, err := os.Create(destPath + ".surge"); err == nil {
+				_ = f.Close()
+			}
+
+			err = downloader.Download(ctx, server.URL(), destPath, fileSize, "range_test.bin")
+			if err != nil {
+				t.Fatalf("Download failed; caller %q header should have been stripped: %v", headerKey, err)
+			}
+
+			// Whole file should be fetched, not a partial range.
+			if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
+				t.Error(err)
+			}
+			if state.Downloaded.Load() != fileSize {
+				t.Errorf("Downloaded %d != fileSize %d", state.Downloaded.Load(), fileSize)
+			}
+		})
+	}
+}
+
 func TestSingleDownloader_Download_Cancellation(t *testing.T) {
 	tmpDir, cleanup, _ := testutil.TempDir("surge-cancel-single")
 	defer cleanup()
@@ -726,5 +782,65 @@ func TestSingleDownloader_Download_BootstrapSize(t *testing.T) {
 	}
 	if state.TotalSize != expectedSize {
 		t.Errorf("Expected state.TotalSize %d, got %d", expectedSize, state.TotalSize)
+	}
+}
+
+type stubLimiter struct {
+	err error
+}
+
+func (s stubLimiter) WaitN(context.Context, int64) error {
+	return s.err
+}
+
+type partialErrorReader struct {
+	n   int
+	err error
+}
+
+func (r partialErrorReader) Read(p []byte) (int, error) {
+	if r.n > len(p) {
+		r.n = len(p)
+	}
+	for i := 0; i < r.n; i++ {
+		p[i] = byte(i)
+	}
+	return r.n, r.err
+}
+
+func TestThrottledReader_PreservesUnderlyingReadError(t *testing.T) {
+	readErr := io.ErrUnexpectedEOF
+	waitErr := errors.New("limiter wait failed")
+	reader := &throttledReader{
+		reader:  partialErrorReader{n: 7, err: readErr},
+		limiter: stubLimiter{err: waitErr},
+		ctx:     context.Background(),
+	}
+
+	buf := make([]byte, 16)
+	n, err := reader.Read(buf)
+	if n != 7 {
+		t.Fatalf("Read bytes = %d, want 7", n)
+	}
+	if !errors.Is(err, readErr) {
+		t.Fatalf("Read error = %v, want %v", err, readErr)
+	}
+}
+
+func TestThrottledReader_UsesLimiterErrorForCleanRead(t *testing.T) {
+	waitErr := errors.New("limiter wait failed")
+	reader := &throttledReader{
+		reader:  partialErrorReader{n: 7, err: nil},
+		limiter: stubLimiter{err: waitErr},
+		ctx:     context.Background(),
+	}
+
+	buf := make([]byte, 16)
+	n, err := reader.Read(buf)
+	if n != 7 {
+		t.Fatalf("Read bytes = %d, want 7", n)
+	}
+	if !errors.Is(err, waitErr) {
+		t.Fatalf("Read error = %v, want %v", err, waitErr)
 	}
 }

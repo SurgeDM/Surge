@@ -20,7 +20,7 @@ The `settings.json` file expects a nested structure divided into `general`, `net
     "theme": 2
   },
   "network": {
-    "max_connections_per_host": 16
+    "max_connections_per_host": 8
   },
   "performance": {
     "max_task_retries": 5
@@ -126,8 +126,10 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 
 | Key                        | Type   | Description                                                                                           | Default |
 | :------------------------- | :----- | :---------------------------------------------------------------------------------------------------- | :------ |
-| `max_connections_per_host` | int    | Maximum concurrent connections allowed to a single host (1-64).                                       | `32`    |
+| `max_connections_per_host` | int    | Maximum concurrent connections allowed to a single host (1-64). *Note: The default is 8 as it provides a stable baseline for most servers. High values may trigger server rate limits.* | `8`    |
 | `max_concurrent_downloads` | int    | Maximum number of downloads running simultaneously (requires restart).                                | `3`     |
+| `global_rate_limit`        | string | Global speed limit across all downloads (e.g. `10 MB/s`, `0` or `∞` for unlimited).                   | `0`     |
+| `default_download_rate_limit` | string | Default speed limit applied to new downloads (e.g. `5 MB/s`, `0` or `∞` for unlimited).            | `0`     |
 | `max_concurrent_probes`    | int    | Maximum number of simultaneous server probes when many downloads are added at once (1-10). Requires restart. | `3`     |
 | `user_agent`               | string | Custom User-Agent string for HTTP requests. Leave empty for default.                                  | `""`    |
 | `proxy_url`                | string | HTTP/HTTPS proxy URL (e.g., `http://127.0.0.1:8080`). Leave empty to use system settings.             | `""`    |

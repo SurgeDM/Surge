@@ -50,9 +50,11 @@ func (mgr *LifecycleManager) Pause(id string) error {
 	if err == nil && entry != nil {
 		if hooks.PublishEvent != nil {
 			_ = hooks.PublishEvent(events.DownloadPausedMsg{
-				DownloadID: id,
-				Filename:   entry.Filename,
-				Downloaded: entry.Downloaded,
+				DownloadID:   id,
+				Filename:     entry.Filename,
+				Downloaded:   entry.Downloaded,
+				RateLimit:    entry.RateLimit,
+				RateLimitSet: entry.RateLimitSet,
 			})
 		}
 		return nil // Already stopped
@@ -311,6 +313,8 @@ func (mgr *LifecycleManager) UpdateURL(id string, newURL string) error {
 func buildResumeConfig(id, outputPath string, entry *types.DownloadEntry, savedState *types.DownloadState, settings *config.Settings) types.DownloadConfig {
 	var destPath, url, filename string
 	var totalSize, downloaded int64
+	var rateLimit int64
+	var rateLimitSet bool
 
 	if entry != nil {
 		destPath = entry.DestPath
@@ -318,12 +322,21 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadEntry, savedS
 		filename = entry.Filename
 		totalSize = entry.TotalSize
 		downloaded = entry.Downloaded
+		rateLimit = entry.RateLimit
+		rateLimitSet = entry.RateLimitSet
 	} else if savedState != nil {
 		destPath = savedState.DestPath
 		url = savedState.URL
 		filename = savedState.Filename
 		totalSize = savedState.TotalSize
 		downloaded = savedState.Downloaded
+		rateLimit = savedState.RateLimit
+		rateLimitSet = savedState.RateLimitSet
+	}
+
+	runtime := settings.ToRuntimeConfig()
+	if !rateLimitSet {
+		rateLimit = runtime.DefaultDownloadRateLimitBps
 	}
 
 	var mirrorURLs []string
@@ -354,6 +367,7 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadEntry, savedS
 		dmState.SyncSessionStart()
 		mirrorURLs = []string{url}
 	}
+	dmState.SetRateLimit(rateLimit, rateLimitSet)
 
 	return types.DownloadConfig{
 		URL:           url,
@@ -366,7 +380,9 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadEntry, savedS
 		IsResume:      true,
 		State:         dmState,
 		SavedState:    savedState,
-		Runtime:       settings.ToRuntimeConfig(),
+		Runtime:       runtime,
 		Mirrors:       mirrorURLs,
+		RateLimitBps:  rateLimit,
+		RateLimitSet:  rateLimitSet,
 	}
 }

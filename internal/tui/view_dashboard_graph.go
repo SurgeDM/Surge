@@ -42,30 +42,39 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 	}
 
 	// Determine Max Speed for scaling
+	currentSpeedBps := float64(m.calcTotalSpeedBps())
+	topSpeedBps := 0.0
+	for _, s := range m.SpeedHistory {
+		if s > topSpeedBps {
+			topSpeedBps = s
+		}
+	}
+	if currentSpeedBps > topSpeedBps {
+		topSpeedBps = currentSpeedBps
+	}
+
 	maxSpeed := 0.0
-	topSpeed := 0.0
 	for _, v := range graphData {
 		if v > maxSpeed {
 			maxSpeed = v
 		}
-		if v > topSpeed {
-			topSpeed = v
-		}
 	}
 
 	if maxSpeed == 0 {
-		maxSpeed = 1.0 // Default scale for empty graph
+		maxSpeed = 1000000.0 // Default scale for empty graph
 	} else {
 		// Add headroom
 		maxSpeed = maxSpeed * GraphHeadroom
-		if maxSpeed < 1.0 {
-			maxSpeed = 1.0
+		if maxSpeed < 1000000.0 {
+			maxSpeed = 1000000.0
 		}
-		if maxSpeed >= 5 {
-			maxSpeed = float64(int((maxSpeed+4.99)/5) * 5)
+		mb := maxSpeed / 1000000.0
+		if mb >= 5 {
+			mb = float64(int((mb+4.99)/5) * 5)
 		} else {
-			maxSpeed = float64(int(maxSpeed + 0.99))
+			mb = float64(int(mb + 0.99))
 		}
+		maxSpeed = mb * 1000000.0
 	}
 
 	buildAxisLines := func(h int, axisStyle lipgloss.Style) []string {
@@ -73,7 +82,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 			if v <= 0 {
 				return "0 MB/s"
 			}
-			return fmt.Sprintf("%.1f MB/s", v)
+			return utils.FormatRateLimit(int64(v))
 		}
 
 		axisLines := make([]string, h)
@@ -136,18 +145,27 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 			currentSpeed = m.SpeedHistory[len(m.SpeedHistory)-1]
 		}
 
-		speedMbps := currentSpeed * 8
-		topMbps := topSpeed * 8
+		speedMbps := currentSpeed * 8 / 1000000.0
+		topMbps := topSpeedBps * 8 / 1000000.0
 
 		valueStyle := lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
 		labelStyleStats := lipgloss.NewStyle().Foreground(colors.LightGray())
 		dimStyle := lipgloss.NewStyle().Foreground(colors.Gray())
 
+		speedStr := "0 MB/s"
+		if currentSpeed > 0 {
+			speedStr = utils.FormatRateLimit(int64(currentSpeed))
+		}
+		topStr := "0 MB/s"
+		if topSpeedBps > 0 {
+			topStr = utils.FormatRateLimit(int64(topSpeedBps))
+		}
+
 		statsContent := lipgloss.JoinVertical(lipgloss.Left,
-			fmt.Sprintf("%s %s", valueStyle.Render("\u25bc"), valueStyle.Render(fmt.Sprintf("%.2f MB/s", currentSpeed))),
+			fmt.Sprintf("%s %s", valueStyle.Render("\u25bc"), valueStyle.Render(speedStr)),
 			dimStyle.Render(fmt.Sprintf("  (%.0f Mbps)", speedMbps)),
 			"",
-			fmt.Sprintf("%s %s", labelStyleStats.Render("Top:"), valueStyle.Render(fmt.Sprintf("%.2f", topSpeed))),
+			fmt.Sprintf("%s %s", labelStyleStats.Render("Top:"), valueStyle.Render(topStr)),
 			dimStyle.Render(fmt.Sprintf("  (%.0f Mbps)", topMbps)),
 			"",
 			fmt.Sprintf("%s %s", labelStyleStats.Render("Total:"), valueStyle.Render(utils.ConvertBytesToHumanReadable(stats.TotalDownloaded))),
