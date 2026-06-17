@@ -85,6 +85,18 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 		t.Fatalf("failed to create partial file: %v", err)
 	}
 
+	if err := state.AddToMasterList(types.DownloadEntry{
+		ID:         id,
+		URL:        url,
+		DestPath:   destPath,
+		Filename:   "file.bin",
+		Status:     "paused",
+		TotalSize:  1000,
+		Downloaded: 250,
+	}); err != nil {
+		t.Fatalf("failed to seed master list: %v", err)
+	}
+
 	if err := state.SaveState(url, destPath, &types.DownloadState{
 		ID:         id,
 		URL:        url,
