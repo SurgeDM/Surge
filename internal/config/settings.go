@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"net"
@@ -70,6 +71,26 @@ type PerformanceSettings struct {
 type CategorySettings struct {
 	CategoryEnabled *Setting   `json:"category_enabled"`
 	Categories      []Category `json:"categories"`
+}
+
+// UnmarshalJSON handles both the new struct format and the old array format for Categories
+// to prevent config wipes when upgrading from older versions.
+func (c *CategorySettings) UnmarshalJSON(data []byte) error {
+	data = bytes.TrimSpace(data)
+	if len(data) > 0 && data[0] == '[' {
+		// Old format: direct array of categories
+		var oldCats []Category
+		if err := json.Unmarshal(data, &oldCats); err != nil {
+			return err
+		}
+		c.Categories = oldCats
+		return nil
+	}
+
+	// New format: CategorySettings object
+	type alias CategorySettings
+	aux := (*alias)(c)
+	return json.Unmarshal(data, aux)
 }
 
 type ExtensionSettings struct {
