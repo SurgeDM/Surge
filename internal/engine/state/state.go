@@ -23,7 +23,9 @@ const (
 )
 
 type SaveStateOptions struct {
+	// SkipFileHash disables file_hash computation entirely for this save.
 	SkipFileHash      bool
+	// InlineHashTimeout limits synchronous hashing time. If zero or negative, DefaultInlineHashTimeout is used.
 	InlineHashTimeout time.Duration
 }
 
@@ -256,7 +258,7 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 func DeleteState(id string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
-	_ = os.Remove(getDetailPath(id))
+	_ = utils.RemoveFile(getDetailPath(id))
 	return nil
 }
 
@@ -497,7 +499,7 @@ func RemoveCompletedDownloads() (int64, error) {
 	for _, e := range list.Downloads {
 		if e.Status == "completed" {
 			count++
-			_ = os.Remove(getDetailPath(e.ID))
+			_ = utils.RemoveFile(getDetailPath(e.ID))
 		} else {
 			out = append(out, e)
 		}
@@ -549,8 +551,10 @@ func UpdateDefaultRateLimit(id string, rate int64) error {
 	found := false
 	for i, e := range list.Downloads {
 		if e.ID == id {
-			list.Downloads[i].RateLimit = rate
-			list.Downloads[i].RateLimitSet = false
+			if !e.RateLimitSet {
+				list.Downloads[i].RateLimit = rate
+				list.Downloads[i].RateLimitSet = false
+			}
 			found = true
 			break
 		}
@@ -639,7 +643,7 @@ func ValidateIntegrity() (int, error) {
 			if os.IsNotExist(statErr) {
 				// File missing - remove orphaned DB entry
 				utils.Debug("Integrity: .surge file missing for %s, removing entry %s", e.DestPath, e.ID)
-				_ = os.Remove(getDetailPath(e.ID))
+				_ = utils.RemoveFile(getDetailPath(e.ID))
 				removed++
 				continue
 			}
@@ -657,8 +661,8 @@ func ValidateIntegrity() (int, error) {
 				if !matches {
 					// File has been tampered with - remove entry and corrupted file
 					utils.Debug("Integrity: hash mismatch for %s (expected %s), removing", surgePath, ds.State.FileHash)
-					_ = os.Remove(surgePath)
-					_ = os.Remove(getDetailPath(e.ID))
+					_ = utils.RemoveFile(surgePath)
+					_ = utils.RemoveFile(getDetailPath(e.ID))
 					removed++
 					continue
 				}
@@ -696,7 +700,7 @@ func ValidateIntegrity() (int, error) {
 			if _, ok := expectedSurgePaths[surgePath]; ok {
 				continue
 			}
-			_ = os.Remove(surgePath)
+			_ = utils.RemoveFile(surgePath)
 			utils.Debug("Integrity: removed orphan .surge file %s", surgePath)
 		}
 	}

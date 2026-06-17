@@ -15,13 +15,16 @@ var (
 )
 
 // Configure sets the base directory for the custom state backend.
-// The path parameter was previously the path to the sqlite file (e.g. downloads.db).
-// We use filepath.Dir(path) to get the state directory.
+// It accepts a file path (e.g., legacy downloads.db) for backward compatibility
+// with existing callers, but extracts and uses the parent directory for Gob state.
 func Configure(path string) {
 	masterMu.Lock()
 	defer masterMu.Unlock()
 	baseDir = filepath.Dir(path)
 	configured = true
+
+	cleanupOrphans(baseDir)
+	cleanupOrphans(filepath.Join(baseDir, "details"))
 }
 
 func ensureDirs() error {
@@ -32,20 +35,6 @@ func ensureDirs() error {
 	if err := os.MkdirAll(detailsDir, 0o755); err != nil {
 		return err
 	}
-	return nil
-}
-
-func initDB() error {
-	masterMu.Lock()
-	defer masterMu.Unlock()
-	if err := ensureDirs(); err != nil {
-		return err
-	}
-
-	// Deferred cleanup of orphans
-	cleanupOrphans(baseDir)
-	cleanupOrphans(filepath.Join(baseDir, "details"))
-
 	return nil
 }
 

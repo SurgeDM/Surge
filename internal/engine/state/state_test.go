@@ -25,11 +25,6 @@ func setupTestDB(t *testing.T) string {
 	dbPath := filepath.Join(tempDir, "surge.db")
 	Configure(dbPath)
 
-	// Initialize DB
-	if err := initDB(); err != nil {
-		t.Fatalf("Failed to init DB: %v", err)
-	}
-
 	return tempDir
 }
 
