@@ -59,6 +59,7 @@ func TestLocalDownloadService_Delete_DBOnlyBroadcastsRemoved(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("failed to seed state: %v", err)
 	}
+	_ = state.AddToMasterList(types.DownloadEntry{ID: id, URL: url, DestPath: destPath, Status: "paused"})
 
 	if err := svc.Delete(id); err != nil {
 		t.Fatalf("delete failed: %v", err)

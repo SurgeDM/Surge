@@ -105,6 +105,24 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 		return fmt.Errorf("failed to write detail state: %w", err)
 	}
 
+	// Update the lightweight index (MasterList)
+	masterMu.Lock()
+	defer masterMu.Unlock()
+	if list, err := loadMasterListUnlocked(); err == nil {
+		for i, e := range list.Downloads {
+			if e.ID == state.ID {
+				list.Downloads[i].URL = state.URL
+				list.Downloads[i].DestPath = state.DestPath
+				list.Downloads[i].Filename = state.Filename
+				list.Downloads[i].TotalSize = state.TotalSize
+				list.Downloads[i].Downloaded = state.Downloaded
+				list.Downloads[i].TimeTaken = state.Elapsed / int64(time.Millisecond)
+				_ = saveMasterListLocked(list)
+				break
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -410,7 +428,7 @@ func UpdateStatus(id string, status string) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("download not found: %s", id)
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
 	}
 	return saveMasterListLocked(list)
 }
@@ -430,7 +448,7 @@ func UpdateURL(id string, newURL string) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("download not found: %s", id)
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
 	}
 	return saveMasterListLocked(list)
 }
@@ -518,7 +536,7 @@ func UpdateRateLimit(id string, rate int64) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("download not found: %s", id)
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
 	}
 	return saveMasterListLocked(list)
 }
@@ -538,7 +556,7 @@ func UpdateDefaultRateLimit(id string, rate int64) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("download not found: %s", id)
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
 	}
 	return saveMasterListLocked(list)
 }
@@ -558,7 +576,7 @@ func ClearRateLimit(id string) error {
 		}
 	}
 	if !found {
-		return fmt.Errorf("download not found: %s", id)
+		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
 	}
 	return saveMasterListLocked(list)
 }

@@ -250,12 +250,16 @@ func TestIntegration_PauseResume_HotPath_Aggregates(t *testing.T) {
 	if entry1.Downloaded != saved1.Downloaded {
 		t.Fatalf("entry downloaded mismatch: entry=%d saved=%d", entry1.Downloaded, saved1.Downloaded)
 	}
-	if saved1.Elapsed != entry1.TimeTaken*int64(time.Millisecond) {
+	diff := saved1.Elapsed - (entry1.TimeTaken * int64(time.Millisecond))
+	if diff < 0 {
+		diff = -diff
+	}
+	if diff >= int64(time.Millisecond) {
 		t.Fatalf(
-			"elapsed persistence mismatch: saved_ns=%d entry_ms=%d expected_saved_ns=%d",
+			"elapsed persistence mismatch: saved_ns=%d entry_ms=%d diff_ns=%d",
 			saved1.Elapsed,
 			entry1.TimeTaken,
-			entry1.TimeTaken*int64(time.Millisecond),
+			diff,
 		)
 	}
 
@@ -445,12 +449,16 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	if entry2.Downloaded != savedFinal.Downloaded {
 		t.Fatalf("entry downloaded mismatch after cold resume: entry=%d saved=%d", entry2.Downloaded, savedFinal.Downloaded)
 	}
-	if savedFinal.Elapsed != entry2.TimeTaken*int64(time.Millisecond) {
+	diff2 := savedFinal.Elapsed - (entry2.TimeTaken * int64(time.Millisecond))
+	if diff2 < 0 {
+		diff2 = -diff2
+	}
+	if diff2 >= int64(time.Millisecond) {
 		t.Fatalf(
-			"elapsed mismatch after cold resume: saved_ns=%d entry_ms=%d expected_saved_ns=%d",
+			"elapsed mismatch after cold resume: saved_ns=%d entry_ms=%d diff_ns=%d",
 			savedFinal.Elapsed,
 			entry2.TimeTaken,
-			entry2.TimeTaken*int64(time.Millisecond),
+			diff2,
 		)
 	}
 

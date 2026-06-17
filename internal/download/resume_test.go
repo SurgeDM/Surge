@@ -36,9 +36,6 @@ func TestIntegration_PauseResume(t *testing.T) {
 	// Force DB init
 	dbPath := filepath.Join(tmpDir, "surge.db")
 	state.Configure(dbPath)
-	if _, err := state.GetDB(); err != nil {
-		t.Fatalf("Failed to init DB: %v", err)
-	}
 	defer state.CloseDB()
 
 	// 2. Setup Mock Server (500MB file)
