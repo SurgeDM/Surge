@@ -214,6 +214,10 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 		return nil, fmt.Errorf("failed to load detail state: %w", err)
 	}
 
+	if ds.State != nil && ds.State.ChunkBitmap == nil {
+		ds.State.ChunkBitmap = []byte{}
+	}
+
 	return ds.State, nil
 }
 
@@ -222,6 +226,9 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 	for _, id := range ids {
 		var ds DetailState
 		if err := loadGob(getDetailPath(id), &ds); err == nil && ds.State != nil {
+			if ds.State.ChunkBitmap == nil {
+				ds.State.ChunkBitmap = []byte{}
+			}
 			states[id] = ds.State
 		}
 	}
