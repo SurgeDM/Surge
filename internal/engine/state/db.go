@@ -5,26 +5,26 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
 var (
-	baseDir    string
-	configured bool
-	masterMu   sync.RWMutex
+	baseDir     string
+	configured  bool
+	masterMu    sync.RWMutex
+	cleanupOnce sync.Once
 )
 
 // Configure sets the base directory for the custom state backend.
-// It accepts a file path (e.g., legacy downloads.db) for backward compatibility
-// with existing callers, but extracts and uses the parent directory for Gob state.
+// It accepts a file path (e.g., legacy downloads.db) for backward compatibility,
+// avoiding a massive refactor of all startup paths that pass a database file path.
+// It extracts and uses the parent directory for Gob state.
 func Configure(path string) {
 	masterMu.Lock()
 	defer masterMu.Unlock()
 	baseDir = filepath.Dir(path)
 	configured = true
-
-	cleanupOrphans(baseDir)
-	cleanupOrphans(filepath.Join(baseDir, "details"))
 }
 
 func ensureDirs() error {
@@ -35,6 +35,10 @@ func ensureDirs() error {
 	if err := os.MkdirAll(detailsDir, 0o755); err != nil {
 		return err
 	}
+	cleanupOnce.Do(func() {
+		cleanupOrphans(baseDir)
+		cleanupOrphans(detailsDir)
+	})
 	return nil
 }
 
@@ -44,7 +48,7 @@ func cleanupOrphans(dir string) {
 		return
 	}
 	for _, entry := range entries {
-		if !entry.IsDir() && len(entry.Name()) >= 4 && entry.Name()[:4] == ".tmp" {
+		if !entry.IsDir() && strings.HasPrefix(entry.Name(), ".tmp-") {
 			_ = os.Remove(filepath.Join(dir, entry.Name()))
 		}
 	}
@@ -55,6 +59,7 @@ func CloseDB() {
 	defer masterMu.Unlock()
 	baseDir = ""
 	configured = false
+	cleanupOnce = sync.Once{}
 }
 
 func atomicWrite(targetPath string, data interface{}) error {

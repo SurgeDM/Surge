@@ -24,7 +24,7 @@ const (
 
 type SaveStateOptions struct {
 	// SkipFileHash disables file_hash computation entirely for this save.
-	SkipFileHash      bool
+	SkipFileHash bool
 	// InlineHashTimeout limits synchronous hashing time. If zero or negative, DefaultInlineHashTimeout is used.
 	InlineHashTimeout time.Duration
 }
