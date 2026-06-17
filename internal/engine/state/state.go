@@ -110,20 +110,22 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 	// Update the lightweight index (MasterList)
 	masterMu.Lock()
 	defer masterMu.Unlock()
-	if list, err := loadMasterListUnlocked(); err == nil {
-		for i, e := range list.Downloads {
-			if e.ID == state.ID {
-				list.Downloads[i].URL = state.URL
-				list.Downloads[i].DestPath = state.DestPath
-				list.Downloads[i].Filename = state.Filename
-				list.Downloads[i].TotalSize = state.TotalSize
-				list.Downloads[i].Downloaded = state.Downloaded
-				list.Downloads[i].TimeTaken = state.Elapsed / int64(time.Millisecond)
-				if err := saveMasterListLocked(list); err != nil {
-					return fmt.Errorf("failed to update master list: %w", err)
-				}
-				break
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return fmt.Errorf("failed to load master list: %w", err)
+	}
+	for i, e := range list.Downloads {
+		if e.ID == state.ID {
+			list.Downloads[i].URL = state.URL
+			list.Downloads[i].DestPath = state.DestPath
+			list.Downloads[i].Filename = state.Filename
+			list.Downloads[i].TotalSize = state.TotalSize
+			list.Downloads[i].Downloaded = state.Downloaded
+			list.Downloads[i].TimeTaken = state.Elapsed / int64(time.Millisecond)
+			if err := saveMasterListLocked(list); err != nil {
+				return fmt.Errorf("failed to update master list: %w", err)
 			}
+			break
 		}
 	}
 
@@ -323,7 +325,10 @@ func AddToMasterList(entry types.DownloadEntry) error {
 		entry.Mirrors = []string{}
 	}
 
-	list, _ := loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
 	found := false
 	for i, e := range list.Downloads {
 		if e.ID == entry.ID {
@@ -344,7 +349,13 @@ func loadMasterListUnlocked() (*types.MasterList, error) {
 	}
 	var ms MasterState
 	if err := loadGob(getMasterPath(), &ms); err != nil {
-		return &types.MasterList{Downloads: []types.DownloadEntry{}}, nil
+		if os.IsNotExist(err) {
+			return &types.MasterList{Downloads: []types.DownloadEntry{}}, nil
+		}
+		return nil, err
+	}
+	if ms.Version != 1 {
+		return nil, fmt.Errorf("unsupported master list version: %d", ms.Version)
 	}
 	return &types.MasterList{Downloads: ms.Downloads}, nil
 }
@@ -353,7 +364,10 @@ func RemoveFromMasterList(id string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
 
-	list, _ := loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
 	out := []types.DownloadEntry{}
 	for _, e := range list.Downloads {
 		if e.ID != id {
@@ -368,7 +382,10 @@ func GetDownload(id string) (*types.DownloadEntry, error) {
 	masterMu.RLock()
 	defer masterMu.RUnlock()
 
-	list, _ := loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return nil, err
+	}
 	for _, e := range list.Downloads {
 		if e.ID == id {
 			return &e, nil
@@ -422,7 +439,10 @@ func UpdateStatus(id string, status string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
 
-	list, _ := loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
 	found := false
 	for i, e := range list.Downloads {
 		if e.ID == id {
@@ -441,7 +461,10 @@ func UpdateURL(id string, newURL string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
 
-	list, _ := loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
 	found := false
 	for i, e := range list.Downloads {
 		if e.ID == id {
@@ -461,7 +484,10 @@ func PauseAllDownloads() error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
 
-	list, _ := loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
 	for i, e := range list.Downloads {
 		if e.Status != "completed" {
 			list.Downloads[i].Status = "paused"
@@ -474,7 +500,10 @@ func ResumeAllDownloads() error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
 
-	list, _ := loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
 	for i, e := range list.Downloads {
 		if e.Status == "paused" {
 			list.Downloads[i].Status = "queued"
@@ -495,7 +524,10 @@ func RemoveCompletedDownloads() (int64, error) {
 	masterMu.Lock()
 	defer masterMu.Unlock()
 
-	list, _ := loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return 0, err
+	}
 	var count int64
 	out := []types.DownloadEntry{}
 	for _, e := range list.Downloads {
@@ -507,7 +539,7 @@ func RemoveCompletedDownloads() (int64, error) {
 		}
 	}
 	list.Downloads = out
-	err := saveMasterListLocked(list)
+	err = saveMasterListLocked(list)
 	return count, err
 }
 
@@ -529,7 +561,10 @@ func computeFileHash(path string) (string, error) {
 func UpdateRateLimit(id string, rate int64) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
-	list, _ := loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
 	found := false
 	for i, e := range list.Downloads {
 		if e.ID == id {
@@ -549,7 +584,10 @@ func UpdateRateLimit(id string, rate int64) error {
 func UpdateDefaultRateLimit(id string, rate int64) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
-	list, _ := loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
 	found := false
 	for i, e := range list.Downloads {
 		if e.ID == id {
@@ -571,7 +609,10 @@ func UpdateDefaultRateLimit(id string, rate int64) error {
 func ClearRateLimit(id string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
-	list, _ := loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
 	found := false
 	for i, e := range list.Downloads {
 		if e.ID == id {
