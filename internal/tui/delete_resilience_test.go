@@ -42,10 +42,10 @@ func (m *mockService) Resume(id string) error                             { retu
 func (m *mockService) UpdateURL(id string, newURL string) error           { return nil }
 func (m *mockService) GetStatus(id string) (*types.DownloadStatus, error) { return nil, nil }
 func (m *mockService) Shutdown() error                                    { return nil }
-func (s *mockService) ClearCompleted() (int64, error) {
+func (m *mockService) ClearCompleted() (int64, error) {
 	return 0, nil
 }
-func (s *mockService) ClearFailed() (int64, error) {
+func (m *mockService) ClearFailed() (int64, error) {
 	return 0, nil
 }
 func (m *mockService) SetRateLimit(id string, rate int64) error { return nil }

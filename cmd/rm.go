@@ -23,6 +23,10 @@ var rmCmd = &cobra.Command{
 		cleanFailed, _ := cmd.Flags().GetBool("clean-failed")
 		purge, _ := cmd.Flags().GetBool("purge")
 
+		if clean && cleanFailed {
+			return fmt.Errorf("--clean and --clean-failed are mutually exclusive")
+		}
+
 		if (clean || cleanFailed) && purge {
 			return fmt.Errorf("--clean and --clean-failed are mutually exclusive with --purge")
 		}
