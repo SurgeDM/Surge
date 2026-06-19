@@ -317,9 +317,7 @@ func AddToMasterList(entry types.DownloadEntry) error {
 	defer masterMu.Unlock()
 
 	if entry.ID == "" {
-		if entry.URLHash != "" {
-			entry.ID = uuid.New().String()
-		}
+		entry.ID = uuid.New().String()
 	}
 	if entry.Mirrors == nil {
 		entry.Mirrors = []string{}
