@@ -607,16 +607,12 @@ func UpdateDefaultRateLimit(id string, rate int64) error {
 	if err != nil {
 		return err
 	}
-	mutated := false
 	for i, e := range list.Downloads {
 		if e.ID == id {
-			if !e.RateLimitSet {
-				list.Downloads[i].RateLimit = rate
-				mutated = true
+			if e.RateLimitSet {
+				return nil // user override takes precedence, no write needed
 			}
-			if !mutated {
-				return nil // entry found but has a user override, no write needed
-			}
+			list.Downloads[i].RateLimit = rate
 			return saveMasterListLocked(list)
 		}
 	}
