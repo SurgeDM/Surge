@@ -287,14 +287,22 @@ func DeleteState(id string) error {
 }
 
 func DeleteTasks(id string) error {
-	// Tasks are inside detail state, if we want to delete tasks, we can clear them in detail state
 	masterMu.Lock()
 	defer masterMu.Unlock()
 	var ds DetailState
 	detailPath := getDetailPath(id)
-	if err := loadGob(detailPath, &ds); err == nil && ds.State != nil {
-		ds.State.Tasks = []types.Task{}
-		_ = atomicWrite(detailPath, ds)
+	if err := loadGob(detailPath, &ds); err != nil {
+		if os.IsNotExist(err) {
+			return nil // nothing to clear
+		}
+		return fmt.Errorf("failed to load detail state: %w", err)
+	}
+	if ds.State == nil {
+		return nil
+	}
+	ds.State.Tasks = []types.Task{}
+	if err := atomicWrite(detailPath, ds); err != nil {
+		return fmt.Errorf("failed to clear tasks: %w", err)
 	}
 	return nil
 }
