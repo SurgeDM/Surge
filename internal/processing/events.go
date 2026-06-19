@@ -335,12 +335,11 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 
 		case events.DownloadRemovedMsg:
 			// Remove resume metadata before touching files so a deleted download does not
-			// come back during startup recovery.
+			// come back during startup recovery. DeleteState atomically removes both the
+			// detail gob and the master list entry, so no separate RemoveFromMasterList call
+			// is needed.
 			if err := state.DeleteState(m.DownloadID); err != nil {
 				utils.Debug("Lifecycle: Failed to delete state: %v", err)
-			}
-			if err := state.RemoveFromMasterList(m.DownloadID); err != nil {
-				utils.Debug("Lifecycle: Failed to remove from master list: %v", err)
 			}
 
 			// Only incomplete working files should be removed here; completed files have

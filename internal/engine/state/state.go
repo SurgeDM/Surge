@@ -4,6 +4,7 @@ import (
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -250,16 +251,24 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 
 func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 	states := make(map[string]*types.DownloadState)
+	var errs []error
 	for _, id := range ids {
 		var ds DetailState
-		if err := loadGob(getDetailPath(id), &ds); err == nil && ds.State != nil {
+		if err := loadGob(getDetailPath(id), &ds); err != nil {
+			if !os.IsNotExist(err) {
+				utils.Debug("LoadStates: failed to load state for %s: %v", id, err)
+				errs = append(errs, fmt.Errorf("id %s: %w", id, err))
+			}
+			continue
+		}
+		if ds.State != nil {
 			if ds.State.ChunkBitmap == nil {
 				ds.State.ChunkBitmap = []byte{}
 			}
 			states[id] = ds.State
 		}
 	}
-	return states, nil
+	return states, errors.Join(errs...)
 }
 
 func DeleteState(id string) error {

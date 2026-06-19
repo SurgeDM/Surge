@@ -13,6 +13,7 @@ var (
 	baseDir     string
 	configured  bool
 	masterMu    sync.RWMutex
+	cleanupMu   sync.Mutex
 	cleanupOnce sync.Once
 )
 
@@ -35,10 +36,12 @@ func ensureDirs() error {
 	if err := os.MkdirAll(detailsDir, 0o755); err != nil {
 		return err
 	}
+	cleanupMu.Lock()
 	cleanupOnce.Do(func() {
 		cleanupOrphans(baseDir)
 		cleanupOrphans(detailsDir)
 	})
+	cleanupMu.Unlock()
 	return nil
 }
 
@@ -59,9 +62,11 @@ func CloseDB() {
 	defer masterMu.Unlock()
 	baseDir = ""
 	configured = false
-	// Safe to reassign because masterMu serialises all access; no concurrent
-	// ensureDirs call can be in-flight while CloseDB holds the write lock.
+	// Reset cleanupOnce under its own dedicated mutex so it is safe to call
+	// concurrently with ensureDirs, which also holds cleanupMu when it reads it.
+	cleanupMu.Lock()
 	cleanupOnce = sync.Once{}
+	cleanupMu.Unlock()
 }
 
 func atomicWrite(targetPath string, data interface{}) error {
