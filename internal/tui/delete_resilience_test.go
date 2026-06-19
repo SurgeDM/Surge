@@ -48,8 +48,8 @@ func (s *mockService) ClearCompleted() (int64, error) {
 func (s *mockService) ClearFailed() (int64, error) {
 	return 0, nil
 }
-func (m *mockService) SetRateLimit(id string, rate int64) error           { return nil }
-func (m *mockService) ClearRateLimit(id string) error                     { return nil }
+func (m *mockService) SetRateLimit(id string, rate int64) error { return nil }
+func (m *mockService) ClearRateLimit(id string) error           { return nil }
 
 func TestUpdateDashboard_DeleteResilience(t *testing.T) {
 	// This test validates the TUI's defensive layer independently of the service

@@ -841,23 +841,22 @@ func (r *rateLimitWrapper) Add(string, string, string, []string, map[string]stri
 func (r *rateLimitWrapper) AddWithID(string, string, string, []string, map[string]string, string, int64, bool) (string, error) {
 	return "", nil
 }
-func (r *rateLimitWrapper) Pause(string) error             { return nil }
-func (r *rateLimitWrapper) Resume(string) error            { return nil }
-func (r *rateLimitWrapper) ResumeBatch([]string) []error   { return nil }
-func (r *rateLimitWrapper) UpdateURL(string, string) error { return nil }
-func (r *rateLimitWrapper) Delete(string) error            { return nil }
-func (r *rateLimitWrapper) Purge(string) error             { return nil }
-func (r *rateLimitWrapper) Publish(interface{}) error      { return nil }
+func (r *rateLimitWrapper) Pause(string) error                              { return nil }
+func (r *rateLimitWrapper) Resume(string) error                             { return nil }
+func (r *rateLimitWrapper) ResumeBatch([]string) []error                    { return nil }
+func (r *rateLimitWrapper) UpdateURL(string, string) error                  { return nil }
+func (r *rateLimitWrapper) Delete(string) error                             { return nil }
+func (r *rateLimitWrapper) Purge(string) error                              { return nil }
+func (r *rateLimitWrapper) Publish(interface{}) error                       { return nil }
 func (r *rateLimitWrapper) GetStatus(string) (*types.DownloadStatus, error) { return nil, nil }
-func (r *rateLimitWrapper) Shutdown() error                { return nil }
-func (r *rateLimitWrapper) ClearCompleted() (int64, error) { return 0, nil }
-func (r *rateLimitWrapper) ClearFailed() (int64, error)    { return 0, nil }
-func (r *rateLimitWrapper) SetRateLimit(string, int64) error { return nil }
-func (r *rateLimitWrapper) ClearRateLimit(string) error    { return nil }
+func (r *rateLimitWrapper) Shutdown() error                                 { return nil }
+func (r *rateLimitWrapper) ClearCompleted() (int64, error)                  { return 0, nil }
+func (r *rateLimitWrapper) ClearFailed() (int64, error)                     { return 0, nil }
+func (r *rateLimitWrapper) SetRateLimit(string, int64) error                { return nil }
+func (r *rateLimitWrapper) ClearRateLimit(string) error                     { return nil }
 func (r *rateLimitWrapper) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
 	return make(chan interface{}), func() {}, nil
 }
-
 
 // TestRateLimitDefaultEndpoint tests the /rate-limit/default endpoint.
 func TestRateLimitDefaultEndpoint(t *testing.T) {
