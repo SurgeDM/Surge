@@ -764,6 +764,8 @@ func (s *LocalDownloadService) ClearCompleted() (int64, error) {
 
 func (s *LocalDownloadService) ClearFailed() (int64, error) {
 	return state.RemoveFailedDownloads()
+}
+
 // SetRateLimit sets the speed limit for a specific download
 func (s *LocalDownloadService) SetRateLimit(id string, rate int64) error {
 	if rate < 0 {

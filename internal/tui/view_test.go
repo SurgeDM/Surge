@@ -400,8 +400,8 @@ func TestView_NetworkActivityShowsFiveAxisLabelsWhenTall(t *testing.T) {
 	view := m.View()
 	plain := ansiEscapeRE.ReplaceAllString(view.Content, "")
 
-	if !strings.Contains(plain, "800 kB/s") || !strings.Contains(plain, "200 kB/s") {
-		t.Fatalf("expected 5-axis labels (including 800 kB/s and 200 kB/s), got:\n%s", plain)
+	if !strings.Contains(plain, "800.0 kB/s") || !strings.Contains(plain, "200.0 kB/s") {
+		t.Fatalf("expected 5-axis labels (including 800.0 kB/s and 200.0 kB/s), got:\n%s", plain)
 	}
 }
 

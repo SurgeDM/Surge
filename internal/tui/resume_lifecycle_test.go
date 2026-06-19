@@ -116,6 +116,17 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 		PausedAt:   time.Now().Unix(),
 		CreatedAt:  time.Now().Unix(),
 	}
+	if err := state.AddToMasterList(types.DownloadEntry{
+		ID:         dm.ID,
+		URL:        dm.URL,
+		DestPath:   dm.Destination,
+		Filename:   dm.Filename,
+		Status:     "paused",
+		TotalSize:  0,
+		Downloaded: 0,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	err = state.SaveState(dm.URL, dm.Destination, manualState)
 	if err != nil {
 		t.Fatal(err)

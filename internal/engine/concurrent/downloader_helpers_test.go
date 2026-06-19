@@ -195,7 +195,17 @@ func TestSetupTasks_BitmapRestoration(t *testing.T) {
 		ChunkBitmap:     savedBitmap,
 		Tasks:           []types.Task{{Offset: 500, Length: 500}},
 	}
-	// Note: state.SaveState and state.LoadState are already used in the codebase.
+	if err := state.AddToMasterList(types.DownloadEntry{
+		ID:         "test-id",
+		URL:        "http://example.com",
+		DestPath:   destPath,
+		Filename:   filepath.Base(destPath),
+		Status:     "paused",
+		TotalSize:  fileSize,
+		Downloaded: 500,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if err := state.SaveState("http://example.com", destPath, savedState); err != nil {
 		t.Fatal(err)
 	}

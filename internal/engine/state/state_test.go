@@ -1,7 +1,7 @@
 package state
 
 import (
-	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -19,22 +19,11 @@ func setupTestDB(t *testing.T) string {
 	}
 
 	// Reset DB singleton
-	dbMu.Lock()
-	if db != nil {
-		_ = db.Close()
-		db = nil
-	}
-	configured = false // Reset configured flag
-	dbMu.Unlock()
+	CloseDB()
 
 	// Configure DB
 	dbPath := filepath.Join(tempDir, "surge.db")
 	Configure(dbPath)
-
-	// Initialize DB
-	if err := initDB(); err != nil {
-		t.Fatalf("Failed to init DB: %v", err)
-	}
 
 	return tempDir
 }
@@ -99,6 +88,7 @@ func TestSaveLoadState(t *testing.T) {
 	if err := SaveState(testURL, testDestPath, originalState); err != nil {
 		t.Fatalf("SaveState failed: %v", err)
 	}
+	_ = AddToMasterList(types.DownloadEntry{ID: id, URL: testURL, DestPath: testDestPath, Status: "paused"})
 
 	// Load state
 	loadedState, err := LoadState(testURL, testDestPath)
@@ -170,6 +160,7 @@ func TestSaveStateWithOptions_ComputesHashForSmallFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveStateWithOptions failed: %v", err)
 	}
+	_ = AddToMasterList(types.DownloadEntry{ID: "hash-small-id", URL: testURL, DestPath: testDestPath, Status: "paused"})
 
 	loaded, err := LoadState(testURL, testDestPath)
 	if err != nil {
@@ -212,6 +203,7 @@ func TestSaveStateWithOptions_SkipsHashOnTimeoutButPersistsState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveStateWithOptions failed: %v", err)
 	}
+	_ = AddToMasterList(types.DownloadEntry{ID: "hash-large-id", URL: testURL, DestPath: testDestPath, Status: "paused"})
 
 	loaded, err := LoadState(testURL, testDestPath)
 	if err != nil {
@@ -257,6 +249,7 @@ func TestDeleteState(t *testing.T) {
 	if err := SaveState(testURL, testDestPath, state); err != nil {
 		t.Fatalf("SaveState failed: %v", err)
 	}
+	_ = AddToMasterList(types.DownloadEntry{ID: id, URL: testURL, DestPath: testDestPath, Status: "paused"})
 
 	// Verify it was saved
 	if _, err := LoadState(testURL, testDestPath); err != nil {
@@ -270,11 +263,10 @@ func TestDeleteState(t *testing.T) {
 
 	// Verify it was deleted
 	_, err := LoadState(testURL, testDestPath)
-	switch err {
-	case nil:
+	if err == nil {
 		t.Error("LoadState should fail after DeleteState")
-	case sql.ErrNoRows:
-		// Acceptable error
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected os.ErrNotExist, got: %v", err)
 	}
 }
 
@@ -300,6 +292,7 @@ func TestStateOverwrite(t *testing.T) {
 	if err := SaveState(testURL, testDestPath, state1); err != nil {
 		t.Fatalf("First SaveState failed: %v", err)
 	}
+	_ = AddToMasterList(types.DownloadEntry{ID: id, URL: testURL, DestPath: testDestPath, Status: "paused"})
 
 	// Second pause at 80% (simulating resume + more downloading)
 	state2 := &types.DownloadState{
@@ -373,12 +366,15 @@ func TestDuplicateURLStateIsolation(t *testing.T) {
 	if err := SaveState(testURL, dest1, state1); err != nil {
 		t.Fatalf("SaveState 1 failed: %v", err)
 	}
+	_ = AddToMasterList(types.DownloadEntry{ID: state1.ID, URL: testURL, DestPath: dest1, Status: "paused"})
 	if err := SaveState(testURL, dest2, state2); err != nil {
 		t.Fatalf("SaveState 2 failed: %v", err)
 	}
+	_ = AddToMasterList(types.DownloadEntry{ID: state2.ID, URL: testURL, DestPath: dest2, Status: "paused"})
 	if err := SaveState(testURL, dest3, state3); err != nil {
 		t.Fatalf("SaveState 3 failed: %v", err)
 	}
+	_ = AddToMasterList(types.DownloadEntry{ID: state3.ID, URL: testURL, DestPath: dest3, Status: "paused"})
 
 	// Load and verify each has its correct state
 	loaded1, err := LoadState(testURL, dest1)
@@ -436,9 +432,16 @@ func TestUpdateStatus(t *testing.T) {
 	if err := AddToMasterList(entry); err != nil {
 		t.Fatalf("AddToMasterList failed: %v", err)
 	}
-	d := getDBHelper()
-	if _, err := d.Exec("INSERT INTO tasks (download_id, offset, length) VALUES (?, ?, ?)", entry.ID, 0, 100); err != nil {
-		t.Fatalf("failed to seed task row: %v", err)
+	// Mock task data using SaveState
+	state := &types.DownloadState{
+		ID:       id,
+		URL:      "https://example.com/status-test.zip",
+		DestPath: filepath.Join(tmpDir, "status-test.zip"),
+		Filename: "status-test.zip",
+		Tasks:    []types.Task{{Offset: 0, Length: 100}},
+	}
+	if err := SaveState("https://example.com/status-test.zip", filepath.Join(tmpDir, "status-test.zip"), state); err != nil {
+		t.Fatalf("SaveState failed: %v", err)
 	}
 
 	// Update status to paused
@@ -668,6 +671,7 @@ func TestMirrorsPersistence(t *testing.T) {
 	if err := SaveState(testURL, testDestPath, state); err != nil {
 		t.Fatalf("SaveState failed: %v", err)
 	}
+	_ = AddToMasterList(types.DownloadEntry{ID: "mirror-state-id", URL: testURL, DestPath: testDestPath, Status: "paused"})
 
 	loadedState, err := LoadState(testURL, testDestPath)
 	if err != nil {
@@ -768,13 +772,9 @@ func TestValidateIntegrity_MissingFile(t *testing.T) {
 		t.Error("Entry should have been removed after integrity check")
 	}
 
-	d := getDBHelper()
-	var taskCount int
-	if err := d.QueryRow("SELECT COUNT(*) FROM tasks WHERE download_id = ?", entry.ID).Scan(&taskCount); err != nil {
-		t.Fatalf("failed to count tasks: %v", err)
-	}
-	if taskCount != 0 {
-		t.Errorf("expected tasks to be removed, got %d", taskCount)
+	// Verify detail state is deleted
+	if _, err := os.Stat(getDetailPath(entry.ID)); !os.IsNotExist(err) {
+		t.Errorf("expected details state to be removed")
 	}
 }
 
@@ -810,11 +810,15 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 	}
 
 	// Set file_hash directly in DB (simulating SaveState having computed it)
-	d := getDBHelper()
-	_, err = d.Exec("UPDATE downloads SET file_hash = ? WHERE id = ?", expectedHash, "integrity-valid")
-	if err != nil {
-		t.Fatalf("Failed to set file_hash: %v", err)
+	state := &types.DownloadState{
+		ID:       "integrity-valid",
+		URL:      "https://example.com/valid.zip",
+		DestPath: destPath,
+		Filename: "valid.zip",
+		FileHash: expectedHash,
 	}
+	ds := DetailState{Version: 1, State: state}
+	_ = atomicWrite(getDetailPath("integrity-valid"), ds)
 
 	// Run integrity check - file exists with matching hash, should keep it
 	removed, err := ValidateIntegrity()
@@ -862,8 +866,15 @@ func TestValidateIntegrity_TamperedFile(t *testing.T) {
 	}
 
 	// Set a fake hash that won't match the file content
-	d := getDBHelper()
-	_, _ = d.Exec("UPDATE downloads SET file_hash = ? WHERE id = ?", "0000000000000000000000000000000000000000000000000000000000000000", "integrity-tampered")
+	state := &types.DownloadState{
+		ID:       "integrity-tampered",
+		URL:      "https://example.com/tampered.zip",
+		DestPath: destPath,
+		Filename: "tampered.zip",
+		FileHash: "0000000000000000000000000000000000000000000000000000000000000000",
+	}
+	ds := DetailState{Version: 1, State: state}
+	_ = atomicWrite(getDetailPath("integrity-tampered"), ds)
 
 	// Run integrity check - hash mismatch, entry AND file should be removed
 	removed, err := ValidateIntegrity()

@@ -141,6 +141,8 @@ func (s *httpAPITestService) ClearCompleted() (int64, error) {
 
 func (s *httpAPITestService) ClearFailed() (int64, error) {
 	return 0, nil
+}
+
 func (s *httpAPITestService) SetRateLimit(id string, rate int64) error {
 	if s.setRateLimitErr != nil {
 		return s.setRateLimitErr
@@ -844,17 +846,18 @@ func (r *rateLimitWrapper) Resume(string) error            { return nil }
 func (r *rateLimitWrapper) ResumeBatch([]string) []error   { return nil }
 func (r *rateLimitWrapper) UpdateURL(string, string) error { return nil }
 func (r *rateLimitWrapper) Delete(string) error            { return nil }
+func (r *rateLimitWrapper) Purge(string) error             { return nil }
+func (r *rateLimitWrapper) Publish(interface{}) error      { return nil }
+func (r *rateLimitWrapper) GetStatus(string) (*types.DownloadStatus, error) { return nil, nil }
+func (r *rateLimitWrapper) Shutdown() error                { return nil }
+func (r *rateLimitWrapper) ClearCompleted() (int64, error) { return 0, nil }
+func (r *rateLimitWrapper) ClearFailed() (int64, error)    { return 0, nil }
+func (r *rateLimitWrapper) SetRateLimit(string, int64) error { return nil }
+func (r *rateLimitWrapper) ClearRateLimit(string) error    { return nil }
 func (r *rateLimitWrapper) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
 	return make(chan interface{}), func() {}, nil
 }
-func (r *rateLimitWrapper) Publish(interface{}) error { return nil }
-func (r *rateLimitWrapper) GetStatus(id string) (*types.DownloadStatus, error) {
-	return nil, errors.New("not found")
-}
-func (r *rateLimitWrapper) Purge(id string) error                    { return nil }
-func (r *rateLimitWrapper) Shutdown() error                          { return nil }
-func (r *rateLimitWrapper) SetRateLimit(id string, rate int64) error { return nil }
-func (r *rateLimitWrapper) ClearRateLimit(id string) error           { return nil }
+
 
 // TestRateLimitDefaultEndpoint tests the /rate-limit/default endpoint.
 func TestRateLimitDefaultEndpoint(t *testing.T) {

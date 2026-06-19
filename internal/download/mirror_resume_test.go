@@ -38,9 +38,6 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	state.CloseDB()
 	dbPath := filepath.Join(tmpDir, "surge.db")
 	state.Configure(dbPath)
-	if _, err := state.GetDB(); err != nil {
-		t.Fatalf("Failed to init DB: %v", err)
-	}
 	defer state.CloseDB()
 
 	// 2. Setup Mock Servers (Primary + Mirror)

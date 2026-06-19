@@ -62,6 +62,17 @@ func TestAutoResume_Enabled(t *testing.T) {
 		PausedAt:   time.Now().Unix(),
 		CreatedAt:  time.Now().Unix(),
 	}
+	if err := state.AddToMasterList(types.DownloadEntry{
+		ID:         testID,
+		URL:        testURL,
+		DestPath:   testDest,
+		Filename:   "resume.zip",
+		Status:     "paused",
+		TotalSize:  1000,
+		Downloaded: 500,
+	}); err != nil {
+		t.Fatal(err)
+	}
 	if err := state.SaveState(testURL, testDest, manualState); err != nil {
 		t.Fatal(err)
 	}
@@ -133,6 +144,17 @@ func TestAutoResume_Disabled(t *testing.T) {
 		Downloaded: 500,
 		PausedAt:   time.Now().Unix(),
 		CreatedAt:  time.Now().Unix(),
+	}
+	if err := state.AddToMasterList(types.DownloadEntry{
+		ID:         testID,
+		URL:        testURL,
+		DestPath:   testDest,
+		Filename:   "resume2.zip",
+		Status:     "paused",
+		TotalSize:  1000,
+		Downloaded: 500,
+	}); err != nil {
+		t.Fatal(err)
 	}
 	if err := state.SaveState(testURL, testDest, manualState); err != nil {
 		t.Fatal(err)
