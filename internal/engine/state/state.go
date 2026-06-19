@@ -556,29 +556,14 @@ func ListAllDownloads() ([]types.DownloadEntry, error) {
 }
 
 func RemoveCompletedDownloads() (int64, error) {
-	masterMu.Lock()
-	defer masterMu.Unlock()
-
-	list, err := loadMasterListUnlocked()
-	if err != nil {
-		return 0, err
-	}
-	var count int64
-	out := []types.DownloadEntry{}
-	for _, e := range list.Downloads {
-		if e.Status == "completed" {
-			count++
-			_ = utils.RemoveFile(getDetailPath(e.ID))
-		} else {
-			out = append(out, e)
-		}
-	}
-	list.Downloads = out
-	err = saveMasterListLocked(list)
-	return count, err
+	return removeDownloadsByStatus("completed")
 }
 
 func RemoveFailedDownloads() (int64, error) {
+	return removeDownloadsByStatus("failed")
+}
+
+func removeDownloadsByStatus(status string) (int64, error) {
 	masterMu.Lock()
 	defer masterMu.Unlock()
 
@@ -589,7 +574,7 @@ func RemoveFailedDownloads() (int64, error) {
 	var count int64
 	out := []types.DownloadEntry{}
 	for _, e := range list.Downloads {
-		if e.Status == "failed" {
+		if e.Status == status {
 			count++
 			_ = utils.RemoveFile(getDetailPath(e.ID))
 		} else {

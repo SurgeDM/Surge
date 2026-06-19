@@ -20,14 +20,14 @@ var rmCmd = &cobra.Command{
 		}
 
 		clean, _ := cmd.Flags().GetBool("clean")
-		clean_failed, _ := cmd.Flags().GetBool("clean-failed")
+		cleanFailed, _ := cmd.Flags().GetBool("clean-failed")
 		purge, _ := cmd.Flags().GetBool("purge")
 
-		if clean && purge {
-			return fmt.Errorf("--clean and --purge are mutually exclusive; use --purge with an ID to also delete that download's files")
+		if (clean || cleanFailed) && purge {
+			return fmt.Errorf("--clean and --clean-failed are mutually exclusive with --purge")
 		}
 
-		if !clean && !clean_failed && len(args) == 0 {
+		if !clean && !cleanFailed && len(args) == 0 {
 			return fmt.Errorf("provide a download ID, or use --clean or --clean-failed")
 		}
 
@@ -39,7 +39,7 @@ var rmCmd = &cobra.Command{
 			}
 			fmt.Printf("Removed %d completed downloads.\n", count)
 			return nil
-		} else if clean_failed {
+		} else if cleanFailed {
 			count, err := state.RemoveFailedDownloads()
 			if err != nil {
 				return fmt.Errorf("error cleaning failed downloads: %w", err)

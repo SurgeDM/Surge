@@ -448,6 +448,7 @@ func (s *RemoteDownloadService) ClearCompleted() (int64, error) {
 		return 0, err
 	}
 	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 	}()
 
@@ -467,6 +468,7 @@ func (s *RemoteDownloadService) ClearFailed() (int64, error) {
 		return 0, err
 	}
 	defer func() {
+		_, _ = io.Copy(io.Discard, resp.Body)
 		_ = resp.Body.Close()
 	}()
 
