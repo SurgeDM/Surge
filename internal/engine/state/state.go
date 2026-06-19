@@ -114,6 +114,7 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 	if err != nil {
 		return fmt.Errorf("failed to load master list: %w", err)
 	}
+	found := false
 	for i, e := range list.Downloads {
 		if e.ID == state.ID {
 			list.Downloads[i].URL = state.URL
@@ -125,8 +126,12 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 			if err := saveMasterListLocked(list); err != nil {
 				return fmt.Errorf("failed to update master list: %w", err)
 			}
+			found = true
 			break
 		}
+	}
+	if !found {
+		utils.Debug("SaveState: ID %s not found in master list; call AddToMasterList first", state.ID)
 	}
 
 	return nil
@@ -222,8 +227,6 @@ func LoadState(url string, destPath string) (*types.DownloadState, error) {
 
 	for _, e := range masterList.Downloads {
 		if e.URL == url && e.DestPath == destPath && e.Status != "completed" {
-			// Find the most recently paused one if duplicates exist
-			// Actually we just get the one that matches
 			foundID = e.ID
 			break
 		}
@@ -262,8 +265,25 @@ func LoadStates(ids []string) (map[string]*types.DownloadState, error) {
 func DeleteState(id string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
-	_ = utils.RemoveFile(getDetailPath(id))
-	return nil
+
+	// Remove detail file, propagating real errors (but not "file not found").
+	if err := utils.RemoveFile(getDetailPath(id)); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("failed to remove detail state: %w", err)
+	}
+
+	// Also remove from the master list so LoadState won't find an orphaned index entry.
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
+	out := make([]types.DownloadEntry, 0, len(list.Downloads))
+	for _, e := range list.Downloads {
+		if e.ID != id {
+			out = append(out, e)
+		}
+	}
+	list.Downloads = out
+	return saveMasterListLocked(list)
 }
 
 func DeleteTasks(id string) error {
@@ -578,7 +598,8 @@ func UpdateRateLimit(id string, rate int64) error {
 	return saveMasterListLocked(list)
 }
 
-// UpdateDefaultRateLimit updates the inherited rate limit of a download in the database
+// UpdateDefaultRateLimit updates the inherited rate limit of a download
+// only if the download does not have a user-set override.
 func UpdateDefaultRateLimit(id string, rate int64) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
@@ -586,21 +607,20 @@ func UpdateDefaultRateLimit(id string, rate int64) error {
 	if err != nil {
 		return err
 	}
-	found := false
+	mutated := false
 	for i, e := range list.Downloads {
 		if e.ID == id {
 			if !e.RateLimitSet {
 				list.Downloads[i].RateLimit = rate
-				list.Downloads[i].RateLimitSet = false
+				mutated = true
 			}
-			found = true
-			break
+			if !mutated {
+				return nil // entry found but has a user override, no write needed
+			}
+			return saveMasterListLocked(list)
 		}
 	}
-	if !found {
-		return fmt.Errorf("%w: %s", types.ErrNotFound, id)
-	}
-	return saveMasterListLocked(list)
+	return fmt.Errorf("%w: %s", types.ErrNotFound, id)
 }
 
 // ClearRateLimit removes a download-specific rate limit override.
@@ -649,7 +669,7 @@ func NormalizeStaleDownloads() (int, error) {
 }
 
 // ValidateIntegrity checks that paused .surge files still exist and haven't been tampered with.
-// Removes orphaned or corrupted entries from the database.
+// Removes orphaned or corrupted entries from the master list.
 // Returns the number of entries removed.
 func ValidateIntegrity() (int, error) {
 	masterMu.Lock()

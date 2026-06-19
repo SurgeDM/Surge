@@ -59,6 +59,8 @@ func CloseDB() {
 	defer masterMu.Unlock()
 	baseDir = ""
 	configured = false
+	// Safe to reassign because masterMu serialises all access; no concurrent
+	// ensureDirs call can be in-flight while CloseDB holds the write lock.
 	cleanupOnce = sync.Once{}
 }
 

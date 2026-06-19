@@ -2,6 +2,7 @@ package types
 
 import (
 	"encoding/binary"
+	"fmt"
 	"sync/atomic"
 )
 
@@ -20,8 +21,11 @@ func (t *Task) GobEncode() ([]byte, error) {
 }
 
 func (t *Task) GobDecode(data []byte) error {
-	if len(data) < 16 {
+	if len(data) == 0 {
 		return nil
+	}
+	if len(data) < 16 {
+		return fmt.Errorf("corrupt task data: expected 16 bytes, got %d", len(data))
 	}
 	t.Offset = int64(binary.LittleEndian.Uint64(data[0:8]))
 	t.Length = int64(binary.LittleEndian.Uint64(data[8:16]))
