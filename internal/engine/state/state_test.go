@@ -1,7 +1,7 @@
 package state
 
 import (
-	"database/sql"
+	"errors"
 	"os"
 	"path/filepath"
 	"testing"
@@ -263,11 +263,10 @@ func TestDeleteState(t *testing.T) {
 
 	// Verify it was deleted
 	_, err := LoadState(testURL, testDestPath)
-	switch err {
-	case nil:
+	if err == nil {
 		t.Error("LoadState should fail after DeleteState")
-	case sql.ErrNoRows:
-		// Acceptable error
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected os.ErrNotExist, got: %v", err)
 	}
 }
 
