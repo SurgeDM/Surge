@@ -1,9 +1,17 @@
-import { createSignal } from 'solid-js';
-import { STORAGE_KEYS } from '../../../lib/storage';
+import { createSignal, For, Show } from 'solid-js';
 import {
-  serverUrl, setServerUrl,
-  serverUrlLocked, setServerUrlLocked,
+  STORAGE_KEYS,
+  addServerProfile,
+  removeServerProfile,
+  resolveActiveServerUrl,
+  type ServerProfile,
+} from '../../../lib/storage';
+import {
+  setServerUrl,
+  setServerUrlLocked,
   serverConnected,
+  serverProfiles, setServerProfiles,
+  activeProfileId, setActiveProfileId,
   authToken, setAuthToken,
   authTokenLocked, setAuthTokenLocked,
   authValid, setAuthValid,
@@ -28,31 +36,62 @@ export default function SettingsView() {
   const [serverStatus, showServerStatus] = saveStatusSignal();
   const [tokenStatus, showTokenStatus] = saveStatusSignal();
   const [tokenFocused, setTokenFocused] = createSignal(false);
+  const [newProfileName, setNewProfileName] = createSignal('');
+  const [newProfileUrl, setNewProfileUrl] = createSignal('');
   const extensionVersion = browser.runtime.getManifest().version;
   const isFirefox = (browser.runtime.getURL as (path?: string) => string)('').startsWith('moz-extension:');
 
-  const handleServerSave = async () => {
-    const url = normalizeServerUrl(serverUrl());
-    setServerUrl(url);
+  // Persist the profile list + active selection and keep the resolved server URL in sync.
+  const persistProfiles = async (profiles: ServerProfile[], activeId: string) => {
+    setServerProfiles(profiles);
+    setActiveProfileId(activeId);
+    const resolvedUrl = resolveActiveServerUrl(profiles, activeId);
+    setServerUrl(resolvedUrl);
+    setServerUrlLocked(resolvedUrl.length > 0);
+    await browser.storage.local.set({
+      [STORAGE_KEYS.PROFILES]: profiles,
+      [STORAGE_KEYS.ACTIVE_PROFILE_ID]: activeId,
+      // Mirror the active URL into the legacy key so older code paths stay consistent.
+      [STORAGE_KEYS.SERVER_URL]: resolvedUrl,
+    });
+  };
+
+  const handleAddProfile = async () => {
+    const url = normalizeServerUrl(newProfileUrl());
+    if (!url) {
+      showServerStatus('Enter a server URL');
+      return;
+    }
+    const name = newProfileName().trim() || url;
     showServerStatus('Saving...');
     try {
-      await browser.storage.local.set({ [STORAGE_KEYS.SERVER_URL]: url });
-      setServerUrlLocked(url.length > 0);
+      const { profiles, activeId } = addServerProfile(serverProfiles(), { name, url });
+      await persistProfiles(profiles, activeId);
+      setNewProfileName('');
+      setNewProfileUrl('');
       showServerStatus('Saved');
     } catch {
       showServerStatus('Failed to save');
     }
   };
 
-  const handleServerDelete = async () => {
-    setServerUrl('');
-    setServerUrlLocked(false);
+  const handleSwitchProfile = async (profileId: string) => {
+    showServerStatus('Switching...');
+    try {
+      await persistProfiles(serverProfiles(), profileId);
+      showServerStatus('Switched');
+    } catch {
+      showServerStatus('Failed to switch');
+    }
+  };
+
+  const handleDeleteProfile = async () => {
     showServerStatus('Removing...');
     try {
-      await browser.storage.local.set({ [STORAGE_KEYS.SERVER_URL]: '' });
+      const { profiles, activeId } = removeServerProfile(serverProfiles(), activeProfileId(), activeProfileId());
+      await persistProfiles(profiles, activeId);
       showServerStatus('Removed');
     } catch {
-      setServerUrlLocked(true);
       showServerStatus('Failed to remove');
     }
   };
@@ -163,23 +202,52 @@ export default function SettingsView() {
 
       <div class="settings-group">
         <h3 class="settings-group-title">Server</h3>
+
+        <Show when={serverProfiles().length > 0}>
+          <div class="settings-field">
+            <label class="settings-label" for="server-profile">Active Server</label>
+            <div class="auth-input settings-input-row">
+              <select
+                id="server-profile"
+                value={activeProfileId()}
+                onChange={(e) => { void handleSwitchProfile((e.target as HTMLSelectElement).value); }}
+              >
+                <For each={serverProfiles()}>
+                  {(profile) => (
+                    <option value={profile.id}>{profile.name} ({profile.url})</option>
+                  )}
+                </For>
+              </select>
+              <button onClick={() => { void handleDeleteProfile(); }}>Delete</button>
+            </div>
+          </div>
+        </Show>
+
         <div class="settings-field">
-          <label class="settings-label" for="server-url">Server URL</label>
+          <label class="settings-label" for="profile-name">
+            {serverProfiles().length > 0 ? 'Add a Server' : 'Server URL'}
+          </label>
           <div class="auth-input settings-input-row">
             <input
-              id="server-url"
+              id="profile-name"
               type="text"
-              value={serverUrl()}
-              placeholder="http://127.0.0.1:1700"
-              disabled={serverUrlLocked()}
-              onInput={(e) => { setServerUrl((e.target as HTMLInputElement).value); }}
+              value={newProfileName()}
+              placeholder="Name (e.g. Home PC)"
+              onInput={(e) => { setNewProfileName((e.target as HTMLInputElement).value); }}
             />
-            <button onClick={() => { void (serverUrlLocked() ? handleServerDelete() : handleServerSave()); }}>
-              {serverUrlLocked() ? 'Delete' : 'Save'}
-            </button>
+          </div>
+          <div class="auth-input settings-input-row" style="margin-top: 0.5rem;">
+            <input
+              id="profile-url"
+              type="text"
+              value={newProfileUrl()}
+              placeholder="http://127.0.0.1:1700"
+              onInput={(e) => { setNewProfileUrl((e.target as HTMLInputElement).value); }}
+            />
+            <button onClick={() => { void handleAddProfile(); }}>Add</button>
           </div>
           {serverStatus() && (
-            <div class={`auth-status below${serverStatus() === 'Saved' || serverStatus() === 'Removed' ? ' ok' : serverStatus().endsWith('...') ? '' : ' err'}`}>{serverStatus()}</div>
+            <div class={`auth-status below${serverStatus() === 'Saved' || serverStatus() === 'Removed' || serverStatus() === 'Switched' ? ' ok' : serverStatus().endsWith('...') ? '' : ' err'}`}>{serverStatus()}</div>
           )}
         </div>
 

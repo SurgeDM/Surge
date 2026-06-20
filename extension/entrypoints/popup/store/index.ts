@@ -5,6 +5,7 @@
 
 import { createSignal } from 'solid-js';
 import { MB } from '../lib/utils';
+import type { ServerProfile } from '../../../lib/storage';
 import type {
   DownloadStatus,
   HistoryEntry,
@@ -89,11 +90,17 @@ export { notificationsEnabled, setNotificationsEnabled };
 const [minFileSize, setMinFileSize] = createSignal(10);
 export { minFileSize, setMinFileSize };
 
-// Surge server URL for API requests
+// Surge server URL for API requests (resolved from the active server profile)
 const [serverUrl, setServerUrl] = createSignal('');
 export { serverUrl, setServerUrl };
 const [serverUrlLocked, setServerUrlLocked] = createSignal(false);
 export { serverUrlLocked, setServerUrlLocked };
+
+// Named server profiles and the active selection
+const [serverProfiles, setServerProfiles] = createSignal<ServerProfile[]>([]);
+export { serverProfiles, setServerProfiles };
+const [activeProfileId, setActiveProfileId] = createSignal('');
+export { activeProfileId, setActiveProfileId };
 
 const [authToken, setAuthToken] = createSignal('');
 export { authToken, setAuthToken };

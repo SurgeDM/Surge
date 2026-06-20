@@ -1,7 +1,12 @@
 import { defineBackground } from 'wxt/utils/define-background';
 import { normalizeToken, normalizeServerUrl } from './popup/lib/utils';
 import { DownloadStatus, HistoryEntry } from './popup/store/types';
-import { STORAGE_KEYS, readStoredNumber } from '../lib/storage';
+import {
+  STORAGE_KEYS,
+  readStoredNumber,
+  migrateServerProfiles,
+  resolveActiveServerUrl,
+} from '../lib/storage';
 import {
   buildDownloadRequestBody,
   buildEventStreamHeaders,
@@ -67,6 +72,11 @@ async function storageGet(key: string): Promise<string | undefined> {
   return typeof result[key] === 'string' ? result[key] : undefined;
 }
 
+async function storageGetRaw(key: string): Promise<unknown> {
+  const result = await browser.storage.local.get(key);
+  return result[key];
+}
+
 async function storageGetBoolean(key: string): Promise<boolean | undefined> {
   const result = await browser.storage.local.get(key);
   return coerceStoredBoolean(result[key]);
@@ -93,21 +103,50 @@ function setCachedDiscoveredServerUrlState(url: string | null): void {
 }
 
 async function loadPersistedState(): Promise<void> {
-  const [token, serverUrl, discoveredServerUrl] = await Promise.all([
+  const [token, serverUrl, discoveredServerUrl, profiles, activeProfileId] = await Promise.all([
     storageGet(STORAGE_KEYS.TOKEN),
     storageGet(STORAGE_KEYS.SERVER_URL),
     storageGet(STORAGE_KEYS.DISCOVERED_SERVER_URL),
+    storageGetRaw(STORAGE_KEYS.PROFILES),
+    storageGet(STORAGE_KEYS.ACTIVE_PROFILE_ID),
   ]);
+
+  // Resolve the active server URL from the profile list, transparently treating a
+  // legacy single SERVER_URL as a default profile. The popup persists the migrated
+  // profile list; the background only reads to stay a passive consumer of storage.
+  const migration = migrateServerProfiles({
+    [STORAGE_KEYS.SERVER_URL]: serverUrl,
+    [STORAGE_KEYS.PROFILES]: profiles,
+    [STORAGE_KEYS.ACTIVE_PROFILE_ID]: activeProfileId,
+  });
+  const activeServerUrl = resolveActiveServerUrl(migration.profiles, migration.activeId);
 
   if (!hasHydratedAuthToken) {
     setCachedAuthTokenState(token || null);
   }
   if (!hasHydratedServerUrl) {
-    setCachedServerUrlState(serverUrl || null);
+    setCachedServerUrlState(activeServerUrl || null);
   }
   if (!hasHydratedDiscoveredServerUrl) {
     setCachedDiscoveredServerUrlState(discoveredServerUrl || null);
   }
+}
+
+async function reresolveActiveServerUrl(): Promise<void> {
+  const [serverUrl, profiles, activeProfileId] = await Promise.all([
+    storageGet(STORAGE_KEYS.SERVER_URL),
+    storageGetRaw(STORAGE_KEYS.PROFILES),
+    storageGet(STORAGE_KEYS.ACTIVE_PROFILE_ID),
+  ]);
+  const migration = migrateServerProfiles({
+    [STORAGE_KEYS.SERVER_URL]: serverUrl,
+    [STORAGE_KEYS.PROFILES]: profiles,
+    [STORAGE_KEYS.ACTIVE_PROFILE_ID]: activeProfileId,
+  });
+  const activeServerUrl = resolveActiveServerUrl(migration.profiles, migration.activeId);
+  setCachedServerUrlState(normalizeServerUrl(activeServerUrl) || null);
+  lastHealthCheck = 0;
+  lastBaseUrlFailureAt = 0;
 }
 
 function ensurePersistedStateLoaded(): Promise<void> {
@@ -787,7 +826,10 @@ export default defineBackground(() => {
   // Storage change propagation
   browser.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local') return;
-    if (changes[STORAGE_KEYS.SERVER_URL]?.newValue !== undefined) {
+    // Re-resolve the active server URL when the profile list or selection changes.
+    if (changes[STORAGE_KEYS.PROFILES] || changes[STORAGE_KEYS.ACTIVE_PROFILE_ID]) {
+      void reresolveActiveServerUrl();
+    } else if (changes[STORAGE_KEYS.SERVER_URL]?.newValue !== undefined) {
       setCachedServerUrlState(normalizeServerUrl(changes[STORAGE_KEYS.SERVER_URL].newValue as string) || null);
       lastHealthCheck = 0;
       lastBaseUrlFailureAt = 0;
