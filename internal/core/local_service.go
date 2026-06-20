@@ -511,17 +511,17 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 }
 
 // Add queues a new download on the local pool without TUI confirmation.
-func (s *LocalDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
-	return s.add(url, path, filename, mirrors, headers, "", isExplicitCategory, totalSize, supportsRange)
+func (s *LocalDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
+	return s.add(url, path, filename, mirrors, headers, "", isExplicitCategory, workers, minChunkSize, totalSize, supportsRange)
 }
 
 // AddWithID queues a new download using a caller-provided id when non-empty.
-func (s *LocalDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
+func (s *LocalDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
 	// Remote or RPC-driven calls use preset IDs and should bypass interactive category routing.
-	return s.add(url, path, filename, mirrors, headers, id, false, totalSize, supportsRange)
+	return s.add(url, path, filename, mirrors, headers, id, false, workers, minChunkSize, totalSize, supportsRange)
 }
 
-func (s *LocalDownloadService) add(url string, path string, filename string, mirrors []string, headers map[string]string, requestedID string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+func (s *LocalDownloadService) add(url string, path string, filename string, mirrors []string, headers map[string]string, requestedID string, isExplicitCategory bool, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
 	if s.Pool == nil {
 		return "", types.ErrPoolNotInit
 	}
@@ -557,6 +557,12 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 	state.DestPath = filepath.Join(outPath, filename) // Best guess until download starts
 
 	runtime := settings.ToRuntimeConfig()
+	if workers > 0 {
+		runtime.Workers = workers
+	}
+	if minChunkSize > 0 {
+		runtime.MinChunkSize = minChunkSize
+	}
 
 	cfg := types.DownloadConfig{
 		URL:                url,

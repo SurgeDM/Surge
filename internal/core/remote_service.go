@@ -131,7 +131,7 @@ func (s *RemoteDownloadService) GetStatus(id string) (*types.DownloadStatus, err
 }
 
 // Add queues a new download.
-func (s *RemoteDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+func (s *RemoteDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
 	req := map[string]interface{}{
 		"url":                  url,
 		"path":                 path,
@@ -140,6 +140,8 @@ func (s *RemoteDownloadService) Add(url string, path string, filename string, mi
 		"headers":              headers,
 		"skip_approval":        true,
 		"is_explicit_category": isExplicitCategory,
+		"workers":              workers,
+		"min_chunk_size":       minChunkSize,
 		"total_size":           totalSize,
 		"supports_range":       supportsRange,
 	}
@@ -158,7 +160,7 @@ func (s *RemoteDownloadService) Add(url string, path string, filename string, mi
 }
 
 // AddWithID queues a new download with a caller-provided id.
-func (s *RemoteDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
+func (s *RemoteDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
 	req := map[string]interface{}{
 		"url":            url,
 		"path":           path,
@@ -167,6 +169,8 @@ func (s *RemoteDownloadService) AddWithID(url string, path string, filename stri
 		"headers":        headers,
 		"skip_approval":  true,
 		"id":             id,
+		"workers":        workers,
+		"min_chunk_size": minChunkSize,
 		"total_size":     totalSize,
 		"supports_range": supportsRange,
 	}
