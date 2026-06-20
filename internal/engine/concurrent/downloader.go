@@ -77,12 +77,12 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 			workers = maxConns
 		}
 		if minChunkSize > 0 {
-			maxPossibleChunks := int(fileSize / minChunkSize)
+			maxPossibleChunks := fileSize / minChunkSize
 			if maxPossibleChunks < 1 {
 				maxPossibleChunks = 1
 			}
-			if workers > maxPossibleChunks {
-				workers = maxPossibleChunks
+			if int64(workers) > maxPossibleChunks {
+				workers = int(maxPossibleChunks)
 			}
 		}
 		return workers
@@ -96,12 +96,12 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 	// 2. Hard constraint: Don't create chunks smaller than MinChunkSize
 	// If file is 20MB and MinChunk is 10MB, we strictly can't have more than 2 workers
 	if minChunkSize > 0 {
-		maxPossibleChunks := int(fileSize / minChunkSize)
+		maxPossibleChunks := fileSize / minChunkSize
 		if maxPossibleChunks < 1 {
 			maxPossibleChunks = 1
 		}
-		if calculatedWorkers > maxPossibleChunks {
-			calculatedWorkers = maxPossibleChunks
+		if int64(calculatedWorkers) > maxPossibleChunks {
+			calculatedWorkers = int(maxPossibleChunks)
 		}
 	}
 

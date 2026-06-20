@@ -83,3 +83,35 @@ func TestGetInitialConnections_ZeroFileSize(t *testing.T) {
 		t.Fatalf("fileSize=0: got %d, want 1", got)
 	}
 }
+
+func TestGetInitialConnections_LargeFileSizeNoOverflow(t *testing.T) {
+	d := &ConcurrentDownloader{
+		Runtime: &types.RuntimeConfig{
+			Workers:                   5,
+			MaxConnectionsPerDownload: 32,
+			MinChunkSize:              1,
+		},
+	}
+	// 10 GB file, 1 byte min chunk → ~1.07e10 chunks, exceeds int32 max (2.1e9)
+	// but fits in int64. Workers=5 should still return 5 (not overflowed value).
+	got := d.getInitialConnections(int64(10 * 1024 * 1024 * 1024))
+	if got != 5 {
+		t.Fatalf("expected 5 workers (no overflow), got %d", got)
+	}
+}
+
+func TestGetInitialConnections_LargeFileSizeSqrtHeuristicNoOverflow(t *testing.T) {
+	d := &ConcurrentDownloader{
+		Runtime: &types.RuntimeConfig{
+			MaxConnectionsPerDownload: 32,
+			MinChunkSize:              1,
+		},
+	}
+	// 10 GB file with √size heuristic and 1-byte min chunk.
+	// √(10*1024*1024) ≈ 3313, clamped to MaxConns=32.
+	// The maxPossibleChunks check should not overflow.
+	got := d.getInitialConnections(int64(10 * 1024 * 1024 * 1024))
+	if got != 32 {
+		t.Fatalf("expected 32 (clamped by MaxConns), got %d", got)
+	}
+}
