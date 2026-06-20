@@ -17,10 +17,10 @@ type DownloadService interface {
 	History() ([]types.DownloadEntry, error)
 
 	// Add queues a new download.
-	Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error)
+	Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error)
 
 	// AddWithID queues a new download with a caller-provided ID.
-	AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error)
+	AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error)
 
 	// Pause pauses an active download.
 	Pause(id string) error

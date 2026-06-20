@@ -20,10 +20,10 @@ import (
 )
 
 // AddDownloadFunc is the lifecycle's handoff into the engine-facing queue layer.
-type AddDownloadFunc func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error)
+type AddDownloadFunc func(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error)
 
 // AddDownloadWithIDFunc preserves caller-chosen ids when a remote/UI layer already owns them.
-type AddDownloadWithIDFunc func(string, string, string, []string, map[string]string, string, int64, bool) (string, error)
+type AddDownloadWithIDFunc func(string, string, string, []string, map[string]string, string, int, int64, int64, bool) (string, error)
 
 // IsNameActiveFunc lets routing treat in-flight downloads as filename conflicts within a directory.
 type IsNameActiveFunc func(dir, name string) bool
@@ -190,6 +190,8 @@ type DownloadRequest struct {
 	Headers            map[string]string
 	IsExplicitCategory bool
 	SkipApproval       bool
+	Workers            int
+	MinChunkSize       int64
 }
 
 // Enqueue probes and reserves a stable destination before dispatching to the queue layer.
@@ -207,6 +209,8 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 			req.Mirrors,
 			req.Headers,
 			req.IsExplicitCategory,
+			req.Workers,
+			req.MinChunkSize,
 			probe.FileSize,
 			probe.SupportsRange,
 		)
@@ -228,6 +232,8 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 			req.Mirrors,
 			req.Headers,
 			requestID,
+			req.Workers,
+			req.MinChunkSize,
 			probe.FileSize,
 			probe.SupportsRange,
 		)
