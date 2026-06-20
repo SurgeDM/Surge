@@ -717,6 +717,31 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
       return Promise.resolve({ duplicates: dups });
     }
 
+    // Bulk clear actions
+    case 'clearCompleted':
+      return (async () => {
+        const r = await apiFetch('/clear-completed', { method: 'POST' });
+        if (!r || !r.ok) return { success: false, deleted: 0 };
+        try {
+          const j = await r.json() as { deleted?: number };
+          return { success: true, deleted: j.deleted ?? 0 };
+        } catch {
+          return { success: true, deleted: 0 };
+        }
+      })();
+
+    case 'clearFailed':
+      return (async () => {
+        const r = await apiFetch('/clear-failed', { method: 'POST' });
+        if (!r || !r.ok) return { success: false, deleted: 0 };
+        try {
+          const j = await r.json() as { deleted?: number };
+          return { success: true, deleted: j.deleted ?? 0 };
+        } catch {
+          return { success: true, deleted: 0 };
+        }
+      })();
+
     default:
       return Promise.resolve({ error: 'Unknown message type' });
   }

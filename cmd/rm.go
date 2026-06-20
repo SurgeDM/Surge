@@ -12,7 +12,7 @@ var rmCmd = &cobra.Command{
 	Use:     "rm <ID>",
 	Aliases: []string{"kill"},
 	Short:   "Remove a download",
-	Long:    `Remove a download by its ID. Use --clean to remove all completed downloads. Use --purge to also delete the file(s) from disk.`,
+	Long:    `Remove a download by its ID. Use --clean to remove all completed downloads. Use --clean-failed to remove all failed downloads. Use --purge to also delete the file(s) from disk.`,
 	Args:    cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if err := initializeGlobalState(); err != nil {
@@ -27,8 +27,11 @@ var rmCmd = &cobra.Command{
 			return fmt.Errorf("--clean and --clean-failed are mutually exclusive")
 		}
 
-		if (clean || cleanFailed) && purge {
-			return fmt.Errorf("--clean and --clean-failed are mutually exclusive with --purge")
+		if clean && purge {
+			return fmt.Errorf("--clean and --purge are mutually exclusive; use --purge with an ID to also delete that download's files")
+		}
+		if cleanFailed && purge {
+			return fmt.Errorf("--clean-failed and --purge are mutually exclusive; use --purge with an ID to also delete that download's files")
 		}
 
 		if !clean && !cleanFailed && len(args) == 0 {
