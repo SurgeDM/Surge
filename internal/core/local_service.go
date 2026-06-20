@@ -558,6 +558,10 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 
 	runtime := settings.ToRuntimeConfig()
 	if workers > 0 {
+		maxConns := runtime.GetMaxConnectionsPerDownload()
+		if workers > maxConns {
+			workers = maxConns
+		}
 		runtime.Workers = workers
 	}
 	if minChunkSize > 0 {

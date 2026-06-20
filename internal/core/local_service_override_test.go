@@ -107,3 +107,25 @@ func TestAdd_PerTaskOverride_BothSet(t *testing.T) {
 		t.Fatalf("expected Runtime.MinChunkSize=%d, got %d", minChunk, cfg.Runtime.MinChunkSize)
 	}
 }
+
+func TestAdd_PerTaskOverride_ClampsWorkersToMaxConnections(t *testing.T) {
+	ch := make(chan interface{}, 8)
+	pool := download.NewWorkerPool(ch, 1)
+	svc := NewLocalDownloadServiceWithInput(pool, ch)
+	defer func() { _ = svc.Shutdown() }()
+
+	outputDir := t.TempDir()
+	id, err := svc.Add("https://example.com/file.bin", outputDir, "file.bin", nil, nil, false, 64, 0, 0, false)
+	if err != nil {
+		t.Fatalf("Add failed: %v", err)
+	}
+
+	cfg := findConfigByID(pool, id)
+	if cfg == nil {
+		t.Fatal("expected config in pool")
+	}
+	maxConns := cfg.Runtime.GetMaxConnectionsPerDownload()
+	if cfg.Runtime.Workers != maxConns {
+		t.Fatalf("expected Runtime.Workers=%d (clamped to MaxConns), got %d", maxConns, cfg.Runtime.Workers)
+	}
+}
