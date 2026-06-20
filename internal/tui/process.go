@@ -156,6 +156,8 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 				headers,
 				requestID,
 				0,
+				0,
+				0,
 				false,
 			)
 		} else {
@@ -166,6 +168,8 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 				mirrors,
 				headers,
 				!isDefaultPath,
+				0,
+				0,
 				0,
 				false,
 			)

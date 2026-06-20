@@ -28,6 +28,8 @@ type DownloadRequest struct {
 	SkipApproval         bool              `json:"skip_approval,omitempty"` // Extension validated request, skip TUI prompt
 	Headers              map[string]string `json:"headers,omitempty"`       // Custom HTTP headers from browser (cookies, auth, etc.)
 	IsExplicitCategory   bool              `json:"is_explicit_category,omitempty"`
+	Workers              int               `json:"workers,omitempty"`        // Per-task worker count override (bypasses √size heuristic when >0)
+	MinChunkSize         int64             `json:"min_chunk_size,omitempty"` // Per-task minimum chunk size override
 }
 
 type BatchDownloadRequest struct {
@@ -400,10 +402,12 @@ func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resol
 			Headers:            req.Headers,
 			IsExplicitCategory: req.IsExplicitCategory,
 			SkipApproval:       req.SkipApproval,
+			Workers:            req.Workers,
+			MinChunkSize:       req.MinChunkSize,
 		})
 	}
 
-	id, err := service.Add(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, 0, false)
+	id, err := service.Add(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, req.Workers, req.MinChunkSize, 0, false)
 	return id, req.Filename, err
 }
 
