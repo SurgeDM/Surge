@@ -827,10 +827,10 @@ type rateLimitWrapper struct {
 
 func (r *rateLimitWrapper) List() ([]types.DownloadStatus, error)   { return nil, nil }
 func (r *rateLimitWrapper) History() ([]types.DownloadEntry, error) { return nil, nil }
-func (r *rateLimitWrapper) Add(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+func (r *rateLimitWrapper) Add(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
 	return "", nil
 }
-func (r *rateLimitWrapper) AddWithID(string, string, string, []string, map[string]string, string, int64, bool) (string, error) {
+func (r *rateLimitWrapper) AddWithID(string, string, string, []string, map[string]string, string, int, int64, int64, bool) (string, error) {
 	return "", nil
 }
 func (r *rateLimitWrapper) Pause(string) error             { return nil }
