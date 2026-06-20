@@ -286,7 +286,7 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 	expectedFile := "from-extension.bin"
 
 	var addCalls int
-	GlobalLifecycle = processing.NewLifecycleManager(func(url, path, filename string, _ []string, headers map[string]string, explicit bool, totalSize int64, supportsRange bool) (string, error) {
+	GlobalLifecycle = processing.NewLifecycleManager(func(url, path, filename string, _ []string, headers map[string]string, explicit bool, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
 		addCalls++
 		if url != probeServer.URL {
 			t.Fatalf("url = %q, want %q", url, probeServer.URL)
@@ -372,7 +372,7 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 
 	// Create a lifecycle manager whose addFunc should never be reached
 	// because the probe will fail first (invalid URL scheme).
-	GlobalLifecycle = processing.NewLifecycleManager(func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+	GlobalLifecycle = processing.NewLifecycleManager(func(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
 		t.Fatal("addFunc should not be called when probe fails")
 		return "", nil
 	}, nil)

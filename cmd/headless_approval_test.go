@@ -54,7 +54,7 @@ func TestHandleDownload_HeadlessMode_AutoApprovesNonDuplicate(t *testing.T) {
 	GlobalPool = download.NewWorkerPool(progressCh, 1)
 
 	// Mock lifecycle to bypass real downloads
-	GlobalLifecycle = processing.NewLifecycleManager(func(url, path, filename string, _ []string, headers map[string]string, explicit bool, totalSize int64, supportsRange bool) (string, error) {
+	GlobalLifecycle = processing.NewLifecycleManager(func(url, path, filename string, _ []string, headers map[string]string, explicit bool, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
 		return "queued-id", nil
 	}, nil)
 

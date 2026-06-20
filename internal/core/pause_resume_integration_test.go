@@ -178,7 +178,7 @@ func TestIntegration_PauseResume_HotPath_Aggregates(t *testing.T) {
 	if f, err := os.Create(destPath + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
+	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, 0, 0, fileSize, true)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
@@ -343,7 +343,7 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	if f, err := os.Create(destPath + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id, err := svc1.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
+	id, err := svc1.Add(server.URL(), outputDir, filename, nil, nil, false, 0, 0, fileSize, true)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
@@ -578,7 +578,7 @@ func TestIntegration_PauseResume_StatusFormulaInvariants(t *testing.T) {
 	if f, err := os.Create(destPath + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
+	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, 0, 0, fileSize, true)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
@@ -676,7 +676,7 @@ func TestIntegration_PauseResume_ConcreteSnapshotDebugString(t *testing.T) {
 	if f, err := os.Create(destPath + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
+	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, 0, 0, fileSize, true)
 	if err != nil {
 		t.Fatalf("add failed: %v", err)
 	}
@@ -752,7 +752,7 @@ func TestIntegration_PauseResumeBatch_ColdPath(t *testing.T) {
 	if f, err := os.Create(destPath1 + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id1, err := svc1.Add(server.URL(), outputDir, "cold1.bin", nil, nil, false, fileSize, true)
+	id1, err := svc1.Add(server.URL(), outputDir, "cold1.bin", nil, nil, false, 0, 0, fileSize, true)
 	if err != nil {
 		t.Fatalf("add 1 failed: %v", err)
 	}
@@ -761,7 +761,7 @@ func TestIntegration_PauseResumeBatch_ColdPath(t *testing.T) {
 	if f, err := os.Create(destPath2 + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id2, err := svc1.Add(server.URL(), outputDir, "cold2.bin", nil, nil, false, fileSize, true)
+	id2, err := svc1.Add(server.URL(), outputDir, "cold2.bin", nil, nil, false, 0, 0, fileSize, true)
 	if err != nil {
 		t.Fatalf("add 2 failed: %v", err)
 	}
@@ -802,7 +802,7 @@ func TestIntegration_PauseResumeBatch_ColdPath(t *testing.T) {
 	if f, err := os.Create(destPathHot + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	idHot, err := svc2.Add(server.URL(), outputDir, "hot1.bin", nil, nil, false, fileSize, true)
+	idHot, err := svc2.Add(server.URL(), outputDir, "hot1.bin", nil, nil, false, 0, 0, fileSize, true)
 	if err != nil {
 		t.Fatalf("add hot failed: %v", err)
 	}

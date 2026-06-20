@@ -697,7 +697,7 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 	cancel()
 
 	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		func(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
 			t.Fatal("enqueue dispatch should not run after context cancellation")
 			return "", nil
 		},
@@ -739,7 +739,7 @@ func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *te
 	})
 
 	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		func(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
 			return "real-id", nil
 		},
 		nil,
@@ -775,7 +775,7 @@ func TestStartDownload_UsesGenericQueuedNameForExplicitFilenameUntilLifecycleCon
 	})
 
 	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		func(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
 			return "real-id", nil
 		},
 		nil,
@@ -1057,7 +1057,7 @@ func TestWithEnqueueContext_OverridesStartDownloadContext(t *testing.T) {
 	cancel()
 
 	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		func(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
 			t.Fatal("enqueue dispatch should not run after shared context cancellation")
 			return "", nil
 		},
