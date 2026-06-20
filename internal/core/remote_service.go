@@ -140,10 +140,14 @@ func (s *RemoteDownloadService) Add(url string, path string, filename string, mi
 		"headers":              headers,
 		"skip_approval":        true,
 		"is_explicit_category": isExplicitCategory,
-		"workers":              workers,
-		"min_chunk_size":       minChunkSize,
 		"total_size":           totalSize,
 		"supports_range":       supportsRange,
+	}
+	if workers > 0 {
+		req["workers"] = workers
+	}
+	if minChunkSize > 0 {
+		req["min_chunk_size"] = minChunkSize
 	}
 
 	resp, err := s.doRequest("POST", "/download", req)
@@ -169,10 +173,14 @@ func (s *RemoteDownloadService) AddWithID(url string, path string, filename stri
 		"headers":        headers,
 		"skip_approval":  true,
 		"id":             id,
-		"workers":        workers,
-		"min_chunk_size": minChunkSize,
 		"total_size":     totalSize,
 		"supports_range": supportsRange,
+	}
+	if workers > 0 {
+		req["workers"] = workers
+	}
+	if minChunkSize > 0 {
+		req["min_chunk_size"] = minChunkSize
 	}
 
 	resp, err := s.doRequest("POST", "/download", req)

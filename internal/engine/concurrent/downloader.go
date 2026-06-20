@@ -85,9 +85,6 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 				workers = maxPossibleChunks
 			}
 		}
-		if workers < 1 {
-			return 1
-		}
 		return workers
 	}
 
