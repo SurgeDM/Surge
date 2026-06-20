@@ -71,6 +71,26 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 		return 1
 	}
 
+	// If caller specified exact worker count, bypass √size heuristic.
+	if workers := d.Runtime.GetWorkers(); workers > 0 {
+		if workers > maxConns {
+			workers = maxConns
+		}
+		if minChunkSize > 0 {
+			maxPossibleChunks := int(fileSize / minChunkSize)
+			if maxPossibleChunks < 1 {
+				maxPossibleChunks = 1
+			}
+			if workers > maxPossibleChunks {
+				workers = maxPossibleChunks
+			}
+		}
+		if workers < 1 {
+			return 1
+		}
+		return workers
+	}
+
 	// 1. Calculate ideal workers using the Square Root heuristic
 	// Convert to float first to avoid integer truncation on small files
 	sizeMB := float64(fileSize) / float64(types.MB)
