@@ -357,6 +357,8 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 				Mirrors:      append([]string(nil), req.Mirrors...),
 				RateLimit:    rateLimit,
 				RateLimitSet: rateLimitSet,
+				Workers:      req.Workers,
+				MinChunkSize: req.MinChunkSize,
 			})
 		}
 

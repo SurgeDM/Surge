@@ -596,6 +596,8 @@ func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queu
 		ActualChunkSize: chunkSize,
 		RateLimit:       rateLimit,
 		RateLimitSet:    rateLimitSet,
+		Workers:         d.Runtime.Workers,
+		MinChunkSize:    d.Runtime.MinChunkSize,
 	}
 	if d.ProgressChan != nil {
 		d.ProgressChan <- events.DownloadPausedMsg{
@@ -605,6 +607,8 @@ func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queu
 			State:        s,
 			RateLimit:    rateLimit,
 			RateLimitSet: rateLimitSet,
+			Workers:      d.Runtime.Workers,
+			MinChunkSize: d.Runtime.MinChunkSize,
 		}
 	}
 

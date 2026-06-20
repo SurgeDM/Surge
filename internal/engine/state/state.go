@@ -124,6 +124,8 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadStat
 			list.Downloads[i].TotalSize = state.TotalSize
 			list.Downloads[i].Downloaded = state.Downloaded
 			list.Downloads[i].TimeTaken = state.Elapsed / int64(time.Millisecond)
+			list.Downloads[i].Workers = state.Workers
+			list.Downloads[i].MinChunkSize = state.MinChunkSize
 			if err := saveMasterListLocked(list); err != nil {
 				return fmt.Errorf("failed to update master list: %w", err)
 			}

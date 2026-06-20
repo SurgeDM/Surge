@@ -91,6 +91,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				Downloaded:   0,
 				RateLimit:    m.RateLimit,
 				RateLimitSet: m.RateLimitSet,
+				Workers:      m.Workers,
+				MinChunkSize: m.MinChunkSize,
 			}
 			if existing, _ := state.GetDownload(m.DownloadID); existing != nil {
 				entry.Mirrors = append([]string(nil), existing.Mirrors...)
@@ -184,6 +186,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				TimeTaken:    snapshot.Elapsed / int64(time.Millisecond),
 				RateLimit:    m.RateLimit,
 				RateLimitSet: m.RateLimitSet,
+				Workers:      m.Workers,
+				MinChunkSize: m.MinChunkSize,
 			}
 			if existing != nil {
 				entry.URL = existing.URL
@@ -363,6 +367,8 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				Status:       "queued",
 				RateLimit:    m.RateLimit,
 				RateLimitSet: m.RateLimitSet,
+				Workers:      m.Workers,
+				MinChunkSize: m.MinChunkSize,
 			}); err != nil {
 				utils.Debug("Lifecycle: Failed to persist queued download: %v", err)
 			}

@@ -104,10 +104,12 @@ type DownloadStartedMsg struct {
 	URL          string
 	Filename     string
 	Total        int64
-	DestPath     string               // Full path to the destination file
+	DestPath     string                // Full path to the destination file
 	State        *types.ProgressState `json:"-"`
 	RateLimit    int64
 	RateLimitSet bool
+	Workers      int
+	MinChunkSize int64
 }
 
 type DownloadPausedMsg struct {
@@ -117,6 +119,8 @@ type DownloadPausedMsg struct {
 	State        *types.DownloadState `json:"-"`
 	RateLimit    int64
 	RateLimitSet bool
+	Workers      int
+	MinChunkSize int64
 }
 
 type DownloadResumedMsg struct {
@@ -132,6 +136,8 @@ type DownloadQueuedMsg struct {
 	Mirrors      []string
 	RateLimit    int64
 	RateLimitSet bool
+	Workers      int
+	MinChunkSize int64
 }
 
 type DownloadRemovedMsg struct {

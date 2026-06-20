@@ -1141,3 +1141,75 @@ func TestNormalizeStaleDownloads(t *testing.T) {
 		t.Errorf("ok-5 status = %q, want queued", dl5.Status)
 	}
 }
+
+func TestSaveLoadState_PreservesOverrideFields(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	testURL := "https://test.example.com/override-state.zip"
+	testDestPath := filepath.Join(tmpDir, "override-state.zip")
+	id := uuid.New().String()
+
+	originalState := &types.DownloadState{
+		ID:           id,
+		URL:          testURL,
+		DestPath:     testDestPath,
+		TotalSize:    1000000,
+		Downloaded:   500000,
+		Filename:     "override-state.zip",
+		Workers:      8,
+		MinChunkSize: 5 * types.MB,
+	}
+
+	if err := SaveState(testURL, testDestPath, originalState); err != nil {
+		t.Fatalf("SaveState failed: %v", err)
+	}
+	_ = AddToMasterList(types.DownloadEntry{ID: id, URL: testURL, DestPath: testDestPath, Status: "paused"})
+
+	loadedState, err := LoadState(testURL, testDestPath)
+	if err != nil {
+		t.Fatalf("LoadState failed: %v", err)
+	}
+	if loadedState.Workers != 8 {
+		t.Errorf("Workers = %d, want 8", loadedState.Workers)
+	}
+	if loadedState.MinChunkSize != 5*types.MB {
+		t.Errorf("MinChunkSize = %d, want %d", loadedState.MinChunkSize, 5*types.MB)
+	}
+}
+
+func TestAddGetDownload_PreservesOverrideFields(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	id := "override-entry-id"
+	entry := types.DownloadEntry{
+		ID:           id,
+		URL:          "https://test.example.com/override-entry.zip",
+		DestPath:     filepath.Join(tmpDir, "override-entry.zip"),
+		Filename:     "override-entry.zip",
+		Status:       "paused",
+		Workers:      8,
+		MinChunkSize: 5 * types.MB,
+	}
+
+	if err := AddToMasterList(entry); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	loaded, err := GetDownload(id)
+	if err != nil {
+		t.Fatalf("GetDownload failed: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected non-nil entry")
+	}
+	if loaded.Workers != 8 {
+		t.Errorf("Workers = %d, want 8", loaded.Workers)
+	}
+	if loaded.MinChunkSize != 5*types.MB {
+		t.Errorf("MinChunkSize = %d, want %d", loaded.MinChunkSize, 5*types.MB)
+	}
+}
