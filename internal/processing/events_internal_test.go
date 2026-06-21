@@ -72,12 +72,14 @@ func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing
 	}
 
 	if err := state.AddToMasterList(types.DownloadEntry{
-		ID:       "download-1",
-		URL:      "https://example.com/video.mp4",
-		URLHash:  state.URLHash("https://example.com/video.mp4"),
-		DestPath: finalPath,
-		Filename: "video.mp4",
-		Status:   "downloading",
+		ID:          "download-1",
+		URL:         "https://example.com/video.mp4",
+		URLHash:     state.URLHash("https://example.com/video.mp4"),
+		DestPath:    finalPath,
+		Filename:    "video.mp4",
+		Status:      "downloading",
+		Workers:     8,
+		MinChunkSize: 4 * types.MB,
 	}); err != nil {
 		t.Fatalf("failed to seed download entry: %v", err)
 	}
@@ -147,6 +149,12 @@ func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing
 	}
 	if calls[0].msg != "disk full" {
 		t.Fatalf("notification msg = %q, want %q", calls[0].msg, "disk full")
+	}
+	if entry.Workers != 8 {
+		t.Fatalf("Workers = %d, want 8 (preserved from existing entry)", entry.Workers)
+	}
+	if entry.MinChunkSize != 4*types.MB {
+		t.Fatalf("MinChunkSize = %d, want %d (preserved from existing entry)", entry.MinChunkSize, 4*types.MB)
 	}
 }
 

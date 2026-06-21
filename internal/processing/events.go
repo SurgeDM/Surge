@@ -235,7 +235,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 			// finalization failure must stay retryable instead of being recorded as done.
 			if err := finalizeCompletedFile(destPath); err != nil {
 				utils.Debug("Lifecycle: Failed to finalize completed file at %s: %v", destPath, err)
-				if err := state.AddToMasterList(types.DownloadEntry{
+				errEntry := types.DownloadEntry{
 					ID:           m.DownloadID,
 					URL:          url,
 					URLHash:      urlHash,
@@ -248,7 +248,12 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 					AvgSpeed:     avgSpeed,
 					RateLimit:    m.RateLimit,
 					RateLimitSet: m.RateLimitSet,
-				}); err != nil {
+				}
+				if existing != nil {
+					errEntry.Workers = existing.Workers
+					errEntry.MinChunkSize = existing.MinChunkSize
+				}
+				if err := state.AddToMasterList(errEntry); err != nil {
 					utils.Debug("Lifecycle: Failed to persist finalization error state: %v", err)
 				}
 				if filename == "" {
@@ -264,7 +269,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				break
 			}
 
-			if err := state.AddToMasterList(types.DownloadEntry{
+			entry := types.DownloadEntry{
 				ID:           m.DownloadID,
 				URL:          url,
 				URLHash:      urlHash,
@@ -278,7 +283,12 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				AvgSpeed:     avgSpeed,
 				RateLimit:    m.RateLimit,
 				RateLimitSet: m.RateLimitSet,
-			}); err != nil {
+			}
+			if existing != nil {
+				entry.Workers = existing.Workers
+				entry.MinChunkSize = existing.MinChunkSize
+			}
+			if err := state.AddToMasterList(entry); err != nil {
 				utils.Debug("Lifecycle: Failed to persist completed download: %v", err)
 			}
 			if err := state.DeleteTasks(m.DownloadID); err != nil {
