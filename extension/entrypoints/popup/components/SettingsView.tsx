@@ -87,6 +87,7 @@ export default function SettingsView() {
       { name: newProfileName(), url: newProfileUrl(), token: newProfileToken() },
       makeStore(),
       browser.storage.local,
+      true, // Set authValid = true because we just successfully connected!
     );
     if (result.ok) {
       setNewProfileName('');
@@ -187,7 +188,7 @@ export default function SettingsView() {
               >
                 <For each={serverProfiles()}>
                   {(profile) => (
-                    <option value={profile.id}>{profile.name} ({profile.url})</option>
+                    <option value={profile.id}>{profile.name} ({profile.url || 'localhost'})</option>
                   )}
                 </For>
               </select>

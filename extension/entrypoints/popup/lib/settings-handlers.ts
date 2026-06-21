@@ -42,6 +42,7 @@ export async function persistProfiles(
   activeId: string,
   store: ProfileStore,
   storage: StorageApi,
+  authValid: boolean = false,
 ): Promise<void> {
   const resolvedUrl = resolveActiveServerUrl(profiles, activeId);
   const resolvedToken = resolveActiveServerToken(profiles, activeId);
@@ -58,7 +59,7 @@ export async function persistProfiles(
   store.setServerUrlLocked(resolvedUrl.length > 0);
   store.setAuthToken(resolvedToken);
   store.setAuthTokenLocked(resolvedToken.length > 0);
-  store.setAuthValid(false);
+  store.setAuthValid(authValid);
 }
 
 /**
@@ -69,13 +70,14 @@ export async function handleAddProfile(
   input: { name: string; url: string; token: string },
   store: ProfileStore,
   storage: StorageApi,
+  authValid: boolean = false,
 ): Promise<{ ok: boolean; error?: string }> {
   const url = normalizeServerUrl(input.url);
   const token = normalizeToken(input.token);
   const name = input.name.trim() || url || 'Auto-Discover (Localhost)';
   try {
     const { profiles, activeId } = addServerProfile(store.getProfiles(), { name, url, token });
-    await persistProfiles(profiles, activeId, store, storage);
+    await persistProfiles(profiles, activeId, store, storage, authValid);
     return { ok: true };
   } catch {
     return { ok: false, error: 'Failed to save' };
