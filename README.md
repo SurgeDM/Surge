@@ -242,13 +242,15 @@ The Surge extension intercepts browser downloads and sends them straight to your
 
 ### Chrome / Edge / Brave
 
-1. Download `extension-chrome.zip` from the latest GitHub release.
-2. Unzip it somewhere on disk.
-3. Open your browser and navigate to `chrome://extensions`.
-4. Enable **"Developer mode"** in the top right corner.
-5. Click **"Load unpacked"**.
-6. Select the unzipped `extension-chrome` folder.
-7. Click the Surge icon in your browser toolbar and enter your **Auth Token** in the settings.
+1. **Stable:** [Get the Extension from Chrome Web Store](https://chrome.google.com/webstore/detail/surge) *(Pending Approval)*
+2. **Development:**
+   - Download `extension-chrome.zip` from the latest GitHub release.
+   - Unzip it somewhere on disk.
+   - Open your browser and navigate to `chrome://extensions`.
+   - Enable **"Developer mode"** in the top right corner.
+   - Click **"Load unpacked"**.
+   - Select the unzipped `extension-chrome` folder.
+   - Click the Surge icon in your browser toolbar and enter your **Auth Token** in the settings.
 
 ### Firefox
 
