@@ -268,6 +268,7 @@ The Surge extension intercepts browser downloads and sends them straight to your
 
 Huge thanks to the teams and sponsors helping us build and ship Surge:
 
+- [FOSS United](https://fossunited.org/) for their generous grant supporting our development. We genuinely love and appreciate everything they do to build and nurture the FOSS ecosystem in India.
 - [Charm](https://charm.sh/) for the incredible terminal UI ecosystem (Bubble Tea, Lip Gloss, and more).
 - [GoReleaser Pro](https://goreleaser.com/pro/) for release automation (provided free for open source).
 
