@@ -78,7 +78,7 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 }
 
 // startDownload initiates a new download
-func (m RootModel) startDownload(url string, mirrors []string, headers map[string]string, path string, isDefaultPath bool, filename, id string) (RootModel, tea.Cmd) {
+func (m RootModel) startDownload(url string, mirrors []string, headers map[string]string, path string, isDefaultPath bool, filename, id string, workers int, minChunkSize int64) (RootModel, tea.Cmd) {
 	if m.Service == nil {
 		m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
 		return m, nil
@@ -114,6 +114,8 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		Headers:            headers,
 		IsExplicitCategory: !isDefaultPath,
 		SkipApproval:       true,
+		Workers:            workers,
+		MinChunkSize:       minChunkSize,
 	}
 
 	optimisticID := requestID
@@ -155,8 +157,8 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 				mirrors,
 				headers,
 				requestID,
-				0,
-				0,
+				workers,
+				minChunkSize,
 				0,
 				false,
 			)
@@ -168,8 +170,8 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 				mirrors,
 				headers,
 				!isDefaultPath,
-				0,
-				0,
+				workers,
+				minChunkSize,
 				0,
 				false,
 			)

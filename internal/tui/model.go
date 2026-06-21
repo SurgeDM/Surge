@@ -149,6 +149,8 @@ type RootModel struct {
 	pendingFilename      string   // Filename pending confirmation
 	pendingMirrors       []string // Mirrors pending confirmation
 	pendingHeaders       map[string]string
+	pendingWorkers       int    // Per-task worker override pending confirmation
+	pendingMinChunkSize  int64  // Per-task min chunk size override pending confirmation
 	duplicateInfo        string // Info about the duplicate
 
 	// Graph Data

@@ -32,6 +32,8 @@ func (m RootModel) handleDownloadRequestMsg(msg events.DownloadRequestMsg, queue
 		m.pendingPath = path
 		m.pendingIsDefaultPath = isDefaultPath
 		m.pendingFilename = msg.Filename
+		m.pendingWorkers = msg.Workers
+		m.pendingMinChunkSize = msg.MinChunkSize
 		m.duplicateInfo = duplicate.Filename
 		m.state = DuplicateWarningState
 		return m, nil
@@ -44,6 +46,8 @@ func (m RootModel) handleDownloadRequestMsg(msg events.DownloadRequestMsg, queue
 		m.pendingPath = path
 		m.pendingIsDefaultPath = isDefaultPath
 		m.pendingFilename = msg.Filename
+		m.pendingWorkers = msg.Workers
+		m.pendingMinChunkSize = msg.MinChunkSize
 		m.inputs[2].SetValue(path)
 		m.inputs[3].SetValue(msg.Filename)
 		m.focusedInput = 2
@@ -55,7 +59,7 @@ func (m RootModel) handleDownloadRequestMsg(msg events.DownloadRequestMsg, queue
 		return m, nil
 	}
 
-	return m.startDownload(msg.URL, msg.Mirrors, msg.Headers, path, isDefaultPath, msg.Filename, msg.ID)
+	return m.startDownload(msg.URL, msg.Mirrors, msg.Headers, path, isDefaultPath, msg.Filename, msg.ID, msg.Workers, msg.MinChunkSize)
 }
 
 func (m RootModel) handleBatchDownloadRequestMsg(msg events.BatchDownloadRequestMsg, queueIfBusy bool) (tea.Model, tea.Cmd) {
