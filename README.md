@@ -242,7 +242,7 @@ The Surge extension intercepts browser downloads and sends them straight to your
 
 ### Chrome / Edge / Brave
 
-1. **Stable:** [Get the Extension from Chrome Web Store](https://chrome.google.com/webstore/detail/surge) *(Pending Approval)*
+1. **Stable:** [Get the Extension from Chrome Web Store](https://chromewebstore.google.com/detail/surgedm/cakjmkhlofkhjmfkjlclgbfdklhdnkgl)
 2. **Development:**
    - Download `extension-chrome.zip` from the latest GitHub release.
    - Unzip it somewhere on disk.
