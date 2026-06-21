@@ -158,12 +158,14 @@ type BatchProgressMsg []ProgressMsg
 // DownloadRequestMsg signals a request to start a download (e.g. from extension)
 // that may need user confirmation or duplicate checking
 type DownloadRequestMsg struct {
-	ID       string
-	URL      string
-	Filename string
-	Path     string
-	Mirrors  []string
-	Headers  map[string]string
+	ID           string
+	URL          string
+	Filename     string
+	Path         string
+	Mirrors      []string
+	Headers      map[string]string
+	Workers      int
+	MinChunkSize int64
 }
 
 // BatchDownloadRequestMsg signals a batch request that should be confirmed once.

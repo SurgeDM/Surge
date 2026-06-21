@@ -189,12 +189,14 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 		urlForAdd, mirrorsForAdd := normalizeDownloadTargets(validated.URL, validated.Mirrors)
 		itemPath := utils.EnsureAbsPath(resolveOutputDir(validated.Path, validated.RelativeToDefaultDir, defaultOutputDir, settings))
 		requests = append(requests, events.DownloadRequestMsg{
-			ID:       uuid.New().String(),
-			URL:      urlForAdd,
-			Filename: validated.Filename,
-			Path:     itemPath,
-			Mirrors:  mirrorsForAdd,
-			Headers:  validated.Headers,
+			ID:           uuid.New().String(),
+			URL:          urlForAdd,
+			Filename:     validated.Filename,
+			Path:         itemPath,
+			Mirrors:      mirrorsForAdd,
+			Headers:      validated.Headers,
+			Workers:      validated.Workers,
+			MinChunkSize: validated.MinChunkSize,
 		})
 	}
 
@@ -234,6 +236,8 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 				Mirrors:      item.Mirrors,
 				SkipApproval: true,
 				Headers:      item.Headers,
+				Workers:      item.Workers,
+				MinChunkSize: item.MinChunkSize,
 			},
 			settings:      settings,
 			outPath:       item.Path,
@@ -349,12 +353,14 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 
 		downloadID := uuid.New().String()
 		if err := service.Publish(events.DownloadRequestMsg{
-			ID:       downloadID,
-			URL:      resolved.urlForAdd,
-			Filename: req.Filename,
-			Path:     resolved.outPath,
-			Mirrors:  resolved.mirrorsForAdd,
-			Headers:  req.Headers,
+			ID:           downloadID,
+			URL:          resolved.urlForAdd,
+			Filename:     req.Filename,
+			Path:         resolved.outPath,
+			Mirrors:      resolved.mirrorsForAdd,
+			Headers:      req.Headers,
+			Workers:      req.Workers,
+			MinChunkSize: req.MinChunkSize,
 		}); err != nil {
 			recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", resolved.urlForAdd, err))
