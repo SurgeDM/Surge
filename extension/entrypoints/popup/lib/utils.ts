@@ -89,9 +89,6 @@ export function normalizeToken(token: string | undefined): string {
   return token.replace(/\s+/g, '');
 }
 
-export function normalizeServerUrl(url: string): string {
-  if (!url) return '';
-  url = url.trim();
-  if (url && !/^https?:\/\//i.test(url)) url = 'http://' + url;
-  return url.replace(/\/+$/, '');
-}
+// Re-exported from the canonical source in lib/storage.ts to avoid duplicating
+// the normalization logic between popup and background contexts.
+export { normalizeServerUrl } from '../../../lib/storage';

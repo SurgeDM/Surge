@@ -66,9 +66,9 @@ export interface ServerProfilesState {
   activeId: string;
 }
 
-// Local copy of the URL normalization used by popup/background so this module
-// stays free of UI imports and can be loaded from the background service worker.
-function normalizeProfileUrl(url: string): string {
+// Canonical URL normalization shared by popup and background contexts.
+// Exported so that popup/lib/utils.ts can re-export it without duplicating the logic.
+export function normalizeServerUrl(url: string): string {
   const trimmed = (url ?? '').trim();
   if (!trimmed) return '';
   const withScheme = /^https?:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
@@ -93,7 +93,7 @@ export function parseServerProfiles(values: Record<string, unknown>): ServerProf
     .map((profile) => ({
       id: profile.id,
       name: profile.name,
-      url: normalizeProfileUrl(profile.url),
+      url: normalizeServerUrl(profile.url),
     }))
     .filter((profile) => profile.url.length > 0);
 }
@@ -120,15 +120,20 @@ function generateProfileId(): string {
   return `profile_${Date.now().toString(36)}_${profileIdCounter}_${random}`;
 }
 
-/** Append a new profile (with a generated id) and make it the active one. */
+/**
+ * Append a new profile (with a generated id) and make it the active one.
+ * Throws if the URL is empty after normalization.
+ */
 export function addServerProfile(
   profiles: ServerProfile[],
   input: { name: string; url: string },
 ): ServerProfilesState {
+  const url = normalizeServerUrl(input.url);
+  if (!url) throw new Error('Profile URL must not be empty after normalization');
   const profile: ServerProfile = {
     id: generateProfileId(),
     name: input.name.trim() || 'Server',
-    url: normalizeProfileUrl(input.url),
+    url,
   };
   const next = [...profiles, profile];
   return { profiles: next, activeId: profile.id };
@@ -162,7 +167,7 @@ export function migrateServerProfiles(values: Record<string, unknown>): ServerPr
     };
   }
 
-  const legacyUrl = normalizeProfileUrl(readStoredString(values, STORAGE_KEYS.SERVER_URL));
+  const legacyUrl = normalizeServerUrl(readStoredString(values, STORAGE_KEYS.SERVER_URL));
   if (!legacyUrl) {
     return { profiles: [], activeId: '', migrated: false };
   }

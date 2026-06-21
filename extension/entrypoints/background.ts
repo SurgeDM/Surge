@@ -4,6 +4,7 @@ import { DownloadStatus, HistoryEntry } from './popup/store/types';
 import {
   STORAGE_KEYS,
   readStoredNumber,
+  parseServerProfiles,
   migrateServerProfiles,
   resolveActiveServerUrl,
 } from '../lib/storage';
@@ -133,17 +134,15 @@ async function loadPersistedState(): Promise<void> {
 }
 
 async function reresolveActiveServerUrl(): Promise<void> {
-  const [serverUrl, profiles, activeProfileId] = await Promise.all([
-    storageGet(STORAGE_KEYS.SERVER_URL),
+  const [profiles, activeProfileId] = await Promise.all([
     storageGetRaw(STORAGE_KEYS.PROFILES),
     storageGet(STORAGE_KEYS.ACTIVE_PROFILE_ID),
   ]);
-  const migration = migrateServerProfiles({
-    [STORAGE_KEYS.SERVER_URL]: serverUrl,
-    [STORAGE_KEYS.PROFILES]: profiles,
-    [STORAGE_KEYS.ACTIVE_PROFILE_ID]: activeProfileId,
-  });
-  const activeServerUrl = resolveActiveServerUrl(migration.profiles, migration.activeId);
+  // Use parseServerProfiles (not migrateServerProfiles) — migration is a startup
+  // concern handled once in loadPersistedState. The change listener only needs to
+  // read the already-persisted profile list and resolve the active URL.
+  const parsed = parseServerProfiles({ [STORAGE_KEYS.PROFILES]: profiles });
+  const activeServerUrl = resolveActiveServerUrl(parsed, activeProfileId ?? '');
   setCachedServerUrlState(normalizeServerUrl(activeServerUrl) || null);
   lastHealthCheck = 0;
   lastBaseUrlFailureAt = 0;
@@ -930,4 +929,5 @@ export const __test__ = {
     processedIds.clear();
   },
   handleDownloadCreated,
+  reresolveActiveServerUrl,
 };

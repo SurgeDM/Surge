@@ -1,11 +1,5 @@
 import { createSignal, For, Show } from 'solid-js';
-import {
-  STORAGE_KEYS,
-  addServerProfile,
-  removeServerProfile,
-  resolveActiveServerUrl,
-  type ServerProfile,
-} from '../../../lib/storage';
+import { STORAGE_KEYS } from '../../../lib/storage';
 import {
   setServerUrl,
   setServerUrlLocked,
@@ -19,7 +13,12 @@ import {
   notificationsEnabled, setNotificationsEnabled,
   minFileSize, setMinFileSize,
 } from '../store';
-import { normalizeToken, normalizeServerUrl } from '../lib/utils';
+import { normalizeToken } from '../lib/utils';
+import {
+  handleAddProfile as _handleAddProfile,
+  handleSwitchProfile as _handleSwitchProfile,
+  handleDeleteProfile as _handleDeleteProfile,
+} from '../lib/settings-handlers';
 
 function saveStatusSignal() {
   const [status, setStatus] = createSignal('');
@@ -41,59 +40,42 @@ export default function SettingsView() {
   const extensionVersion = browser.runtime.getManifest().version;
   const isFirefox = (browser.runtime.getURL as (path?: string) => string)('').startsWith('moz-extension:');
 
-  // Persist the profile list + active selection and keep the resolved server URL in sync.
-  const persistProfiles = async (profiles: ServerProfile[], activeId: string) => {
-    setServerProfiles(profiles);
-    setActiveProfileId(activeId);
-    const resolvedUrl = resolveActiveServerUrl(profiles, activeId);
-    setServerUrl(resolvedUrl);
-    setServerUrlLocked(resolvedUrl.length > 0);
-    await browser.storage.local.set({
-      [STORAGE_KEYS.PROFILES]: profiles,
-      [STORAGE_KEYS.ACTIVE_PROFILE_ID]: activeId,
-      // Mirror the active URL into the legacy key so older code paths stay consistent.
-      [STORAGE_KEYS.SERVER_URL]: resolvedUrl,
-    });
-  };
+  // Build the store accessor / setter bag required by the extracted handler logic.
+  const makeStore = () => ({
+    getProfiles: serverProfiles,
+    getActiveId: activeProfileId,
+    setProfiles: setServerProfiles,
+    setActiveId: setActiveProfileId,
+    setServerUrl,
+    setServerUrlLocked,
+  });
 
   const handleAddProfile = async () => {
-    const url = normalizeServerUrl(newProfileUrl());
-    if (!url) {
-      showServerStatus('Enter a server URL');
-      return;
-    }
-    const name = newProfileName().trim() || url;
     showServerStatus('Saving...');
-    try {
-      const { profiles, activeId } = addServerProfile(serverProfiles(), { name, url });
-      await persistProfiles(profiles, activeId);
+    const result = await _handleAddProfile(
+      { name: newProfileName(), url: newProfileUrl() },
+      makeStore(),
+      browser.storage.local,
+    );
+    if (result.ok) {
       setNewProfileName('');
       setNewProfileUrl('');
       showServerStatus('Saved');
-    } catch {
-      showServerStatus('Failed to save');
+    } else {
+      showServerStatus(result.error ?? 'Failed to save');
     }
   };
 
   const handleSwitchProfile = async (profileId: string) => {
     showServerStatus('Switching...');
-    try {
-      await persistProfiles(serverProfiles(), profileId);
-      showServerStatus('Switched');
-    } catch {
-      showServerStatus('Failed to switch');
-    }
+    const result = await _handleSwitchProfile(profileId, makeStore(), browser.storage.local);
+    showServerStatus(result.ok ? 'Switched' : (result.error ?? 'Failed to switch'));
   };
 
   const handleDeleteProfile = async () => {
     showServerStatus('Removing...');
-    try {
-      const { profiles, activeId } = removeServerProfile(serverProfiles(), activeProfileId(), activeProfileId());
-      await persistProfiles(profiles, activeId);
-      showServerStatus('Removed');
-    } catch {
-      showServerStatus('Failed to remove');
-    }
+    const result = await _handleDeleteProfile(makeStore(), browser.storage.local);
+    showServerStatus(result.ok ? 'Removed' : (result.error ?? 'Failed to remove'));
   };
 
   const handleSaveToken = async () => {

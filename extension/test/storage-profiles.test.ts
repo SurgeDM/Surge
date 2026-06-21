@@ -106,6 +106,25 @@ describe('server profile storage', () => {
       expect(second.profiles[0].id).not.toBe(second.profiles[1].id);
       expect(second.activeId).toBe(second.profiles[1].id);
     });
+
+    it('throws when the url is an empty string', () => {
+      expect(() => addServerProfile([], { name: 'X', url: '' })).toThrow(
+        'Profile URL must not be empty after normalization',
+      );
+    });
+
+    it('throws when the url is whitespace only', () => {
+      expect(() => addServerProfile([], { name: 'X', url: '   ' })).toThrow(
+        'Profile URL must not be empty after normalization',
+      );
+    });
+
+    it('throws when the url normalizes to an empty string', () => {
+      // A url that is blank after trimming still normalizes to ''
+      expect(() => addServerProfile([], { name: 'X', url: '\t\n' })).toThrow(
+        'Profile URL must not be empty after normalization',
+      );
+    });
   });
 
   describe('removeServerProfile', () => {
