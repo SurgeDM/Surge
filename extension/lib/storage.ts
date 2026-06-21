@@ -96,8 +96,7 @@ export function parseServerProfiles(values: Record<string, unknown>): ServerProf
       name: profile.name,
       url: normalizeServerUrl(profile.url),
       token: profile.token || '',
-    }))
-    .filter((profile) => profile.url.length > 0);
+    }));
 }
 
 /** Resolve the active profile by id, falling back to the first profile, or null when empty. */
@@ -136,7 +135,6 @@ export function addServerProfile(
   input: { name: string; url: string; token: string },
 ): ServerProfilesState {
   const url = normalizeServerUrl(input.url);
-  if (!url) throw new Error('Profile URL must not be empty after normalization');
   const profile: ServerProfile = {
     id: generateProfileId(),
     name: input.name.trim() || 'Server',

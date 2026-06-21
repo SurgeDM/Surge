@@ -49,6 +49,7 @@ export function buildPortScanCandidates(
   startPort: number,
   portCount: number,
   preferredUrls: Array<string | null | undefined> = [],
+  baseHost: string = '127.0.0.1',
 ): string[] {
   const candidates: string[] = [];
   const seen = new Set<string>();
@@ -62,7 +63,7 @@ export function buildPortScanCandidates(
 
   preferredUrls.forEach(addCandidate);
   for (let port = startPort; port < startPort + portCount; port++) {
-    addCandidate(`http://127.0.0.1:${port}`);
+    addCandidate(`http://${baseHost}:${port}`);
   }
 
   return candidates;

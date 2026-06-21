@@ -72,10 +72,7 @@ export async function handleAddProfile(
 ): Promise<{ ok: boolean; error?: string }> {
   const url = normalizeServerUrl(input.url);
   const token = normalizeToken(input.token);
-  if (!url) {
-    return { ok: false, error: 'Enter a server URL' };
-  }
-  const name = input.name.trim() || url;
+  const name = input.name.trim() || url || 'Auto-Discover (Localhost)';
   try {
     const { profiles, activeId } = addServerProfile(store.getProfiles(), { name, url, token });
     await persistProfiles(profiles, activeId, store, storage);

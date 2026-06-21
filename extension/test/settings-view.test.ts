@@ -134,27 +134,28 @@ describe('persistProfiles', () => {
 // ---------------------------------------------------------------------------
 
 describe('handleAddProfile', () => {
-  it('returns an error without touching storage when the URL is empty', async () => {
+  it('allows adding a profile with an empty URL (auto-discover)', async () => {
     const store = makeStore();
     const storage = okStorage();
 
     const result = await handleAddProfile({ name: 'Home', url: '', token: '' }, store, storage);
 
-    expect(result.ok).toBe(false);
-    expect(result.error).toBe('Enter a server URL');
-    expect(storage.set).not.toHaveBeenCalled();
-    expect(store.profiles).toHaveLength(0);
+    expect(result.ok).toBe(true);
+    expect(storage.set).toHaveBeenCalledOnce();
+    expect(store.profiles).toHaveLength(1);
+    expect(store.profiles[0].url).toBe('');
   });
 
-  it('returns an error without touching storage when the URL is whitespace only', async () => {
+  it('allows adding a profile with a whitespace-only URL (auto-discover)', async () => {
     const store = makeStore();
     const storage = okStorage();
 
     const result = await handleAddProfile({ name: 'Home', url: '   ', token: '' }, store, storage);
 
-    expect(result.ok).toBe(false);
-    expect(result.error).toBe('Enter a server URL');
-    expect(storage.set).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(storage.set).toHaveBeenCalledOnce();
+    expect(store.profiles).toHaveLength(1);
+    expect(store.profiles[0].url).toBe('');
   });
 
   it('adds a profile and updates signals on success', async () => {
@@ -194,13 +195,13 @@ describe('handleAddProfile', () => {
     expect(store.activeId).toBe('');
   });
 
-  it('falls back to the URL as profile name when name is empty', async () => {
+  it('falls back to Auto-Discover when name and url are both empty', async () => {
     const store = makeStore();
     const storage = okStorage();
 
-    await handleAddProfile({ name: '', url: 'http://host:9000', token: '' }, store, storage);
+    await handleAddProfile({ name: '', url: '', token: '' }, store, storage);
 
-    expect(store.profiles[0].name).toBe('http://host:9000');
+    expect(store.profiles[0].name).toBe('Auto-Discover (Localhost)');
   });
 });
 

@@ -205,17 +205,20 @@ async function persistDiscoveredServerUrl(url: string | null): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function discoverBaseUrl(): Promise<string | null> {
-  // Try the user-configured URL first and only.
+  let baseHost = '127.0.0.1';
   if (cachedServerUrl) {
     const ok = await healthCheck(cachedServerUrl);
     if (ok) return cachedServerUrl;
-    return null;
+    try {
+      baseHost = new URL(cachedServerUrl).hostname || '127.0.0.1';
+    } catch { /* ignore */ }
   }
 
   const candidates = buildPortScanCandidates(
     DEFAULT_PORT,
     MAX_PORT_SCAN,
-    [cachedDiscoveredServerUrl],
+    [cachedServerUrl, cachedDiscoveredServerUrl],
+    baseHost
   );
 
   const token = cachedAuthToken;
@@ -227,20 +230,23 @@ async function discoverBaseUrl(): Promise<string | null> {
 }
 
 async function discoverBaseUrlForToken(token: string): Promise<{ base: string | null; sawUnauthorized: boolean; sawReachable: boolean }> {
+  let baseHost = '127.0.0.1';
   if (cachedServerUrl) {
-    if (!await healthCheck(cachedServerUrl)) return { base: null, sawUnauthorized: false, sawReachable: false };
-    const auth = await checkAuthAtBaseUrl(cachedServerUrl, token);
-    return {
-      base: auth.ok ? cachedServerUrl : null,
-      sawUnauthorized: auth.status === 401,
-      sawReachable: true,
-    };
+    if (await healthCheck(cachedServerUrl)) {
+      const auth = await checkAuthAtBaseUrl(cachedServerUrl, token);
+      if (auth.ok) return { base: cachedServerUrl, sawUnauthorized: false, sawReachable: true };
+      if (auth.status === 401) return { base: null, sawUnauthorized: true, sawReachable: true };
+    }
+    try {
+      baseHost = new URL(cachedServerUrl).hostname || '127.0.0.1';
+    } catch { /* ignore */ }
   }
 
   const candidates = buildPortScanCandidates(
     DEFAULT_PORT,
     MAX_PORT_SCAN,
-    [cachedDiscoveredServerUrl],
+    [cachedServerUrl, cachedDiscoveredServerUrl],
+    baseHost
   );
 
   let sawUnauthorized = false;
@@ -674,9 +680,16 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
       return (async () => {
         const url = normalizeServerUrl(message.url || '');
         const token = normalizeToken(message.token || '');
-        if (!url || !token) return { ok: false, error: 'invalid_input' };
+        if (!token) return { ok: false, error: 'invalid_input' };
         
-        const candidates = buildPortScanCandidates(DEFAULT_PORT, MAX_PORT_SCAN, [url]);
+        let baseHost = '127.0.0.1';
+        if (url) {
+          try {
+            baseHost = new URL(url).hostname || '127.0.0.1';
+          } catch { /* ignore */ }
+        }
+
+        const candidates = buildPortScanCandidates(DEFAULT_PORT, MAX_PORT_SCAN, [url], baseHost);
         let sawUnauthorized = false;
         for (let index = 0; index < candidates.length; index += PORT_SCAN_BATCH_SIZE) {
           const batch = candidates.slice(index, index + PORT_SCAN_BATCH_SIZE);

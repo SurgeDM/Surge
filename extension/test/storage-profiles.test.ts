@@ -108,23 +108,22 @@ describe('server profile storage', () => {
       expect(second.activeId).toBe(second.profiles[1].id);
     });
 
-    it('throws when the url is an empty string', () => {
-      expect(() => addServerProfile([], { name: 'X', url: '', token: '' })).toThrow(
-        'Profile URL must not be empty after normalization',
-      );
+    it('allows an empty string url (auto-discover)', () => {
+      const profiles = addServerProfile([], { name: 'X', url: '', token: '' });
+      expect(profiles.activeId).not.toBe('');
+      expect(profiles.profiles[0].url).toBe('');
     });
 
-    it('throws when the url is whitespace only', () => {
-      expect(() => addServerProfile([], { name: 'X', url: '   ', token: '' })).toThrow(
-        'Profile URL must not be empty after normalization',
-      );
+    it('allows a whitespace only url (auto-discover)', () => {
+      const profiles = addServerProfile([], { name: 'X', url: '   ', token: '' });
+      expect(profiles.activeId).not.toBe('');
+      expect(profiles.profiles[0].url).toBe('');
     });
 
-    it('throws when the url normalizes to an empty string', () => {
-      // A url that is blank after trimming still normalizes to ''
-      expect(() => addServerProfile([], { name: 'X', url: '\t\n', token: '' })).toThrow(
-        'Profile URL must not be empty after normalization',
-      );
+    it('allows a url that normalizes to an empty string (auto-discover)', () => {
+      const profiles = addServerProfile([], { name: 'X', url: '\t\n', token: '' });
+      expect(profiles.activeId).not.toBe('');
+      expect(profiles.profiles[0].url).toBe('');
     });
   });
 

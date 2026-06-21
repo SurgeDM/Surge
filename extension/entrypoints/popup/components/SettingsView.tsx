@@ -56,8 +56,8 @@ export default function SettingsView() {
   const handleConnect = async () => {
     const url = newProfileUrl().trim();
     const token = newProfileToken().trim();
-    if (!url || !token) {
-      showServerStatus('Enter URL and Token');
+    if (!token) {
+      showServerStatus('Enter an Auth Token');
       return;
     }
 
@@ -67,7 +67,6 @@ export default function SettingsView() {
     try {
       const res = await browser.runtime.sendMessage({ type: 'testConnection', url, token }).catch(() => null) as { ok?: boolean; url?: string; error?: string } | null;
       if (res?.ok) {
-        if (res.url) setNewProfileUrl(res.url);
         setConnectionValid(true);
         showServerStatus('Connected');
       } else if (res?.error === 'invalid_token') {
@@ -229,7 +228,7 @@ export default function SettingsView() {
               onInput={(e) => { setNewProfileToken((e.target as HTMLInputElement).value); setConnectionValid(false); }}
               disabled={isConnecting()}
             />
-            <button onClick={() => { void handleConnect(); }} disabled={isConnecting() || !newProfileUrl() || !newProfileToken()}>
+            <button onClick={() => { void handleConnect(); }} disabled={isConnecting() || !newProfileToken()}>
               {isConnecting() ? '...' : 'Connect'}
             </button>
           </div>
