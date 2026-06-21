@@ -11,9 +11,10 @@ import {
   addServerProfile,
   removeServerProfile,
   resolveActiveServerUrl,
+  resolveActiveServerToken,
   type ServerProfile,
 } from '../../../lib/storage';
-import { normalizeServerUrl } from './utils';
+import { normalizeServerUrl, normalizeToken } from './utils';
 
 export interface ProfileStore {
   getProfiles: () => ServerProfile[];
@@ -22,6 +23,9 @@ export interface ProfileStore {
   setActiveId: (id: string) => void;
   setServerUrl: (url: string) => void;
   setServerUrlLocked: (locked: boolean) => void;
+  setAuthToken: (token: string) => void;
+  setAuthTokenLocked: (locked: boolean) => void;
+  setAuthValid: (valid: boolean) => void;
 }
 
 export interface StorageApi {
@@ -40,16 +44,21 @@ export async function persistProfiles(
   storage: StorageApi,
 ): Promise<void> {
   const resolvedUrl = resolveActiveServerUrl(profiles, activeId);
+  const resolvedToken = resolveActiveServerToken(profiles, activeId);
   await storage.set({
     [STORAGE_KEYS.PROFILES]: profiles,
     [STORAGE_KEYS.ACTIVE_PROFILE_ID]: activeId,
     [STORAGE_KEYS.SERVER_URL]: resolvedUrl,
+    [STORAGE_KEYS.TOKEN]: resolvedToken,
   });
   // Only reached when the write succeeded — update reactive state.
   store.setProfiles(profiles);
   store.setActiveId(activeId);
   store.setServerUrl(resolvedUrl);
   store.setServerUrlLocked(resolvedUrl.length > 0);
+  store.setAuthToken(resolvedToken);
+  store.setAuthTokenLocked(resolvedToken.length > 0);
+  store.setAuthValid(false);
 }
 
 /**
@@ -57,17 +66,18 @@ export async function persistProfiles(
  * Returns an object describing the outcome so callers can show status messages.
  */
 export async function handleAddProfile(
-  input: { name: string; url: string },
+  input: { name: string; url: string; token: string },
   store: ProfileStore,
   storage: StorageApi,
 ): Promise<{ ok: boolean; error?: string }> {
   const url = normalizeServerUrl(input.url);
+  const token = normalizeToken(input.token);
   if (!url) {
     return { ok: false, error: 'Enter a server URL' };
   }
   const name = input.name.trim() || url;
   try {
-    const { profiles, activeId } = addServerProfile(store.getProfiles(), { name, url });
+    const { profiles, activeId } = addServerProfile(store.getProfiles(), { name, url, token });
     await persistProfiles(profiles, activeId, store, storage);
     return { ok: true };
   } catch {

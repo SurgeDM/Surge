@@ -59,6 +59,7 @@ export interface ServerProfile {
   id: string;
   name: string;
   url: string;
+  token: string;
 }
 
 export interface ServerProfilesState {
@@ -94,6 +95,7 @@ export function parseServerProfiles(values: Record<string, unknown>): ServerProf
       id: profile.id,
       name: profile.name,
       url: normalizeServerUrl(profile.url),
+      token: profile.token || '',
     }))
     .filter((profile) => profile.url.length > 0);
 }
@@ -112,6 +114,11 @@ export function resolveActiveServerUrl(profiles: ServerProfile[], activeId: stri
   return resolveActiveProfile(profiles, activeId)?.url ?? '';
 }
 
+/** Resolve the active profile's token. Empty string when there is no active profile. */
+export function resolveActiveServerToken(profiles: ServerProfile[], activeId: string): string {
+  return resolveActiveProfile(profiles, activeId)?.token ?? '';
+}
+
 let profileIdCounter = 0;
 
 function generateProfileId(): string {
@@ -126,7 +133,7 @@ function generateProfileId(): string {
  */
 export function addServerProfile(
   profiles: ServerProfile[],
-  input: { name: string; url: string },
+  input: { name: string; url: string; token: string },
 ): ServerProfilesState {
   const url = normalizeServerUrl(input.url);
   if (!url) throw new Error('Profile URL must not be empty after normalization');
@@ -134,6 +141,7 @@ export function addServerProfile(
     id: generateProfileId(),
     name: input.name.trim() || 'Server',
     url,
+    token: input.token || '',
   };
   const next = [...profiles, profile];
   return { profiles: next, activeId: profile.id };
@@ -157,13 +165,27 @@ export function removeServerProfile(
  * Returns migrated: false when nothing needs to change.
  */
 export function migrateServerProfiles(values: Record<string, unknown>): ServerProfilesState & { migrated: boolean } {
-  const existing = parseServerProfiles(values);
+  let existing = parseServerProfiles(values);
+  const legacyToken = readStoredString(values, STORAGE_KEYS.TOKEN);
+
   if (existing.length > 0) {
     const storedActiveId = readStoredString(values, STORAGE_KEYS.ACTIVE_PROFILE_ID);
+    const activeId = resolveActiveProfile(existing, storedActiveId)?.id ?? '';
+
+    let migrated = false;
+    if (activeId && legacyToken) {
+      const activeIdx = existing.findIndex(p => p.id === activeId);
+      if (activeIdx !== -1 && !existing[activeIdx].token) {
+        existing = [...existing];
+        existing[activeIdx] = { ...existing[activeIdx], token: legacyToken };
+        migrated = true;
+      }
+    }
+
     return {
       profiles: existing,
-      activeId: resolveActiveProfile(existing, storedActiveId)?.id ?? '',
-      migrated: false,
+      activeId,
+      migrated,
     };
   }
 
@@ -172,6 +194,6 @@ export function migrateServerProfiles(values: Record<string, unknown>): ServerPr
     return { profiles: [], activeId: '', migrated: false };
   }
 
-  const { profiles, activeId } = addServerProfile([], { name: 'Default', url: legacyUrl });
+  const { profiles, activeId } = addServerProfile([], { name: 'Default', url: legacyUrl, token: legacyToken });
   return { profiles, activeId, migrated: true };
 }

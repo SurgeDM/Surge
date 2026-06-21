@@ -236,7 +236,7 @@ describe('download interception naming', () => {
     });
 
     it('intercepts everything when minFileSize is 0', async () => {
-      (browser.storage.local.get as any).mockImplementation((key: string) => {
+      vi.mocked(browser.storage.local.get).mockImplementation((key: string) => {
         if (key === 'intercept') return Promise.resolve({ intercept: true });
         if (key === 'serverUrl') return Promise.resolve({ serverUrl: 'http://127.0.0.1:1700' });
         if (key === 'minFileSize') return Promise.resolve({ minFileSize: 0 });

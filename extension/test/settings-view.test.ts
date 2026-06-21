@@ -26,8 +26,8 @@ import {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeProfile(id: string, url: string): ServerProfile {
-  return { id, name: id, url };
+function makeProfile(id: string, url: string, token: string = ''): ServerProfile {
+  return { id, name: id, url, token };
 }
 
 function makeStore(initial?: {
@@ -38,11 +38,17 @@ function makeStore(initial?: {
   activeId: string;
   serverUrl: string;
   locked: boolean;
+  authToken: string;
+  authTokenLocked: boolean;
+  authValid: boolean;
 } {
   let profiles = initial?.profiles ?? [];
   let activeId = initial?.activeId ?? '';
   let serverUrl = '';
   let locked = false;
+  let authToken = '';
+  let authTokenLocked = false;
+  let authValid = false;
 
   return {
     // Readable state (for assertions)
@@ -50,6 +56,9 @@ function makeStore(initial?: {
     get activeId() { return activeId; },
     get serverUrl() { return serverUrl; },
     get locked() { return locked; },
+    get authToken() { return authToken; },
+    get authTokenLocked() { return authTokenLocked; },
+    get authValid() { return authValid; },
     // ProfileStore interface
     getProfiles: () => profiles,
     getActiveId: () => activeId,
@@ -57,6 +66,9 @@ function makeStore(initial?: {
     setActiveId: (id) => { activeId = id; },
     setServerUrl: (url) => { serverUrl = url; },
     setServerUrlLocked: (l) => { locked = l; },
+    setAuthToken: (t) => { authToken = t; },
+    setAuthTokenLocked: (l) => { authTokenLocked = l; },
+    setAuthValid: (v) => { authValid = v; },
   };
 }
 
@@ -76,14 +88,17 @@ describe('persistProfiles', () => {
   it('writes storage then updates signals on success', async () => {
     const store = makeStore();
     const storage = okStorage();
-    const profiles = [makeProfile('a', 'http://a:1700')];
+    const profiles = [makeProfile('a', 'http://a:1700', 'secret')];
 
     await persistProfiles(profiles, 'a', store, storage);
 
     expect(store.profiles).toEqual(profiles);
     expect(store.activeId).toBe('a');
     expect(store.serverUrl).toBe('http://a:1700');
+    expect(store.authToken).toBe('secret');
     expect(store.locked).toBe(true);
+    expect(store.authTokenLocked).toBe(true);
+    expect(store.authValid).toBe(false);
     expect(storage.set).toHaveBeenCalledOnce();
   });
 
@@ -123,7 +138,7 @@ describe('handleAddProfile', () => {
     const store = makeStore();
     const storage = okStorage();
 
-    const result = await handleAddProfile({ name: 'Home', url: '' }, store, storage);
+    const result = await handleAddProfile({ name: 'Home', url: '', token: '' }, store, storage);
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('Enter a server URL');
@@ -135,7 +150,7 @@ describe('handleAddProfile', () => {
     const store = makeStore();
     const storage = okStorage();
 
-    const result = await handleAddProfile({ name: 'Home', url: '   ' }, store, storage);
+    const result = await handleAddProfile({ name: 'Home', url: '   ', token: '' }, store, storage);
 
     expect(result.ok).toBe(false);
     expect(result.error).toBe('Enter a server URL');
@@ -147,7 +162,7 @@ describe('handleAddProfile', () => {
     const storage = okStorage();
 
     const result = await handleAddProfile(
-      { name: 'Home', url: '127.0.0.1:1700' },
+      { name: 'Home', url: '127.0.0.1:1700', token: 'secret' },
       store,
       storage,
     );
@@ -155,8 +170,10 @@ describe('handleAddProfile', () => {
     expect(result.ok).toBe(true);
     expect(store.profiles).toHaveLength(1);
     expect(store.profiles[0].url).toBe('http://127.0.0.1:1700');
+    expect(store.profiles[0].token).toBe('secret');
     expect(store.activeId).toBe(store.profiles[0].id);
     expect(store.locked).toBe(true);
+    expect(store.authToken).toBe('secret');
     expect(storage.set).toHaveBeenCalledOnce();
   });
 
@@ -165,7 +182,7 @@ describe('handleAddProfile', () => {
     const storage = failingStorage();
 
     const result = await handleAddProfile(
-      { name: 'Home', url: 'http://host:1700' },
+      { name: 'Home', url: 'http://host:1700', token: '' },
       store,
       storage,
     );
@@ -181,7 +198,7 @@ describe('handleAddProfile', () => {
     const store = makeStore();
     const storage = okStorage();
 
-    await handleAddProfile({ name: '', url: 'http://host:9000' }, store, storage);
+    await handleAddProfile({ name: '', url: 'http://host:9000', token: '' }, store, storage);
 
     expect(store.profiles[0].name).toBe('http://host:9000');
   });

@@ -670,6 +670,36 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
     // Health / connection
     case 'checkHealth': return checkHealthSilent().then(healthy => ({ healthy }));
 
+    case 'testConnection':
+      return (async () => {
+        const url = normalizeServerUrl(message.url || '');
+        const token = normalizeToken(message.token || '');
+        if (!url || !token) return { ok: false, error: 'invalid_input' };
+        
+        const candidates = buildPortScanCandidates(DEFAULT_PORT, MAX_PORT_SCAN, [url]);
+        let sawUnauthorized = false;
+        for (let index = 0; index < candidates.length; index += PORT_SCAN_BATCH_SIZE) {
+          const batch = candidates.slice(index, index + PORT_SCAN_BATCH_SIZE);
+          const results = await Promise.all(batch.map(async (candidate) => {
+            try {
+              const r1 = await fetch(`${candidate}/health`, { signal: AbortSignal.timeout(300) });
+              if (!r1.ok) return { candidate, ok: false, status: 0 };
+              const r2 = await fetch(`${candidate}/list`, {
+                headers: { Authorization: `Bearer ${token}` },
+                signal: AbortSignal.timeout(1000),
+              });
+              return { candidate, ok: r2.ok, status: r2.status };
+            } catch { return { candidate, ok: false, status: 0 }; }
+          }));
+
+          for (const result of results) {
+            if (result.status === 401) sawUnauthorized = true;
+            if (result.ok) return { ok: true, url: result.candidate };
+          }
+        }
+        return { ok: false, error: sawUnauthorized ? 'invalid_token' : 'no_server' };
+      })();
+
     case 'validateAuth':
       return (async () => {
         const token = normalizeToken(message.token || '');

@@ -10,8 +10,8 @@ import {
   type ServerProfile,
 } from '../lib/storage';
 
-function profile(id: string, name: string, url: string): ServerProfile {
-  return { id, name, url };
+function profile(id: string, name: string, url: string, token: string = ''): ServerProfile {
+  return { id, name, url, token };
 }
 
 describe('server profile storage', () => {
@@ -91,37 +91,38 @@ describe('server profile storage', () => {
 
   describe('addServerProfile', () => {
     it('appends a normalized profile and returns it as active', () => {
-      const result = addServerProfile([], { name: 'Local', url: '127.0.0.1:1700' });
+      const result = addServerProfile([], { name: 'Local', url: '127.0.0.1:1700', token: 'secret' });
       expect(result.profiles).toHaveLength(1);
       expect(result.profiles[0].name).toBe('Local');
       expect(result.profiles[0].url).toBe('http://127.0.0.1:1700');
+      expect(result.profiles[0].token).toBe('secret');
       expect(result.profiles[0].id).toBeTruthy();
       expect(result.activeId).toBe(result.profiles[0].id);
     });
 
     it('assigns unique ids across additions', () => {
-      const first = addServerProfile([], { name: 'A', url: 'http://a:1700' });
-      const second = addServerProfile(first.profiles, { name: 'B', url: 'http://b:1700' });
+      const first = addServerProfile([], { name: 'A', url: 'http://a:1700', token: '' });
+      const second = addServerProfile(first.profiles, { name: 'B', url: 'http://b:1700', token: '' });
       expect(second.profiles).toHaveLength(2);
       expect(second.profiles[0].id).not.toBe(second.profiles[1].id);
       expect(second.activeId).toBe(second.profiles[1].id);
     });
 
     it('throws when the url is an empty string', () => {
-      expect(() => addServerProfile([], { name: 'X', url: '' })).toThrow(
+      expect(() => addServerProfile([], { name: 'X', url: '', token: '' })).toThrow(
         'Profile URL must not be empty after normalization',
       );
     });
 
     it('throws when the url is whitespace only', () => {
-      expect(() => addServerProfile([], { name: 'X', url: '   ' })).toThrow(
+      expect(() => addServerProfile([], { name: 'X', url: '   ', token: '' })).toThrow(
         'Profile URL must not be empty after normalization',
       );
     });
 
     it('throws when the url normalizes to an empty string', () => {
       // A url that is blank after trimming still normalizes to ''
-      expect(() => addServerProfile([], { name: 'X', url: '\t\n' })).toThrow(
+      expect(() => addServerProfile([], { name: 'X', url: '\t\n', token: '' })).toThrow(
         'Profile URL must not be empty after normalization',
       );
     });
@@ -157,12 +158,14 @@ describe('server profile storage', () => {
     it('migrates an existing single SERVER_URL into a default profile', () => {
       const values = {
         [STORAGE_KEYS.SERVER_URL]: 'http://127.0.0.1:1700',
+        [STORAGE_KEYS.TOKEN]: 'legacy-token',
       };
       const result = migrateServerProfiles(values);
       expect(result.migrated).toBe(true);
       expect(result.profiles).toHaveLength(1);
       expect(result.profiles[0].name).toBe('Default');
       expect(result.profiles[0].url).toBe('http://127.0.0.1:1700');
+      expect(result.profiles[0].token).toBe('legacy-token');
       expect(result.activeId).toBe(result.profiles[0].id);
     });
 
