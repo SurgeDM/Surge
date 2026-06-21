@@ -31,7 +31,7 @@ func TestStartDownload_EnforcesAbsolutePath(t *testing.T) {
 	relPath := "subdir"
 	url := "http://example.com/file.zip"
 
-	m, _ = m.startDownload(url, nil, nil, relPath, false, "file.zip", "test-id-1")
+	m, _ = m.startDownload(url, nil, nil, relPath, false, "file.zip", "test-id-1", 0, 0)
 
 	// We expect the new download to be appended
 	if len(m.downloads) != 1 {

@@ -677,7 +677,7 @@ func TestStartDownload_UsesProvidedIDWhenServiceSupportsIt(t *testing.T) {
 	}
 
 	requestID := "request-id-123"
-	updated, _ := m.startDownload("https://example.com/file.bin", nil, nil, t.TempDir(), false, "file.bin", requestID)
+	updated, _ := m.startDownload("https://example.com/file.bin", nil, nil, t.TempDir(), false, "file.bin", requestID, 0, 0)
 
 	if len(updated.downloads) != 1 {
 		t.Fatalf("expected 1 queued download, got %d", len(updated.downloads))
@@ -714,7 +714,7 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 		logViewport:   viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	updated, cmd := m.startDownload("https://example.com/file.bin", nil, nil, t.TempDir(), false, "file.bin", "")
+	updated, cmd := m.startDownload("https://example.com/file.bin", nil, nil, t.TempDir(), false, "file.bin", "", 0, 0)
 	if cmd == nil {
 		t.Fatal("expected enqueue command")
 	}
@@ -754,7 +754,7 @@ func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *te
 		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	updated, _ := m.startDownload("https://example.com/100MB.bin", nil, nil, targetDir, true, "", "")
+	updated, _ := m.startDownload("https://example.com/100MB.bin", nil, nil, targetDir, true, "", "", 0, 0)
 
 	if len(updated.downloads) != 1 {
 		t.Fatalf("expected 1 optimistic queued download, got %d", len(updated.downloads))
@@ -790,7 +790,7 @@ func TestStartDownload_UsesGenericQueuedNameForExplicitFilenameUntilLifecycleCon
 		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	updated, _ := m.startDownload("https://example.com/archive.zip", nil, nil, targetDir, false, "archive.zip", "")
+	updated, _ := m.startDownload("https://example.com/archive.zip", nil, nil, targetDir, false, "archive.zip", "", 0, 0)
 
 	if len(updated.downloads) != 1 {
 		t.Fatalf("expected 1 optimistic queued download, got %d", len(updated.downloads))
@@ -1067,7 +1067,7 @@ func TestWithEnqueueContext_OverridesStartDownloadContext(t *testing.T) {
 	m := InitialRootModel(1700, "test-version", svc, orchestrator, false)
 	m = m.WithEnqueueContext(ctx, func() {})
 
-	_, cmd := m.startDownload("https://example.com/file.bin", nil, nil, t.TempDir(), false, "file.bin", "")
+	_, cmd := m.startDownload("https://example.com/file.bin", nil, nil, t.TempDir(), false, "file.bin", "", 0, 0)
 	if cmd == nil {
 		t.Fatal("expected enqueue command")
 	}
