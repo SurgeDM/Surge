@@ -35,11 +35,6 @@ type NoKeys struct{}
 func (NoKeys) ShortHelp() []key.Binding  { return nil }
 func (NoKeys) FullHelp() [][]key.Binding { return nil }
 
-// View renders the confirmation modal content (without the box wrapper or help text)
-func (m ConfirmationModal) view() string {
-	return m.renderBody(0)
-}
-
 // renderBody handles joining message and detail with a gap and optional wrapping.
 func (m ConfirmationModal) renderBody(width int) string {
 	msg := m.Message
