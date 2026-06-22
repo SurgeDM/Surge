@@ -15,7 +15,7 @@ func TestServiceCommandRegistration(t *testing.T) {
 			subcommands := cmd.Commands()
 			assert.NotEmpty(t, subcommands)
 
-			names := []string{}
+			names := make([]string, 0, len(subcommands))
 			for _, sub := range subcommands {
 				names = append(names, sub.Name())
 			}

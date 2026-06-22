@@ -52,7 +52,7 @@ func (m *RootModel) refreshLogViewportContent() {
 	// Bottom-align entries if they don't fill the viewport
 	height := m.logViewport.Height()
 	if height > 0 && len(wrappedEntries) < height {
-		padding := make([]string, height-len(wrappedEntries))
+		padding := make([]string, height-len(wrappedEntries), height)
 		wrappedEntries = append(padding, wrappedEntries...)
 	}
 

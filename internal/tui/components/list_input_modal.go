@@ -35,7 +35,7 @@ type ListInputModal struct {
 
 // viewContent renders the list items (without box wrapper or help text).
 func (m ListInputModal) viewContent() string {
-	var rows []string
+	rows := make([]string, 0, 3*len(m.Items))
 
 	for i, item := range m.Items {
 		var prefix string

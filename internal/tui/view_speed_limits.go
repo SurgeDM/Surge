@@ -16,7 +16,7 @@ func (m RootModel) viewSpeedLimits() string {
 	metaList := m.getSpeedLimitsMetadata()
 	values := m.getSpeedLimitsValues()
 
-	var items []components.ListInputItem
+	items := make([]components.ListInputItem, 0, len(metaList))
 
 	for i, meta := range metaList {
 		val := values[meta.Key]

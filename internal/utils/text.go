@@ -97,7 +97,7 @@ type charInfo struct {
 }
 
 func getCharInfos(s string) []charInfo {
-	var infos []charInfo
+	infos := make([]charInfo, 0, len(s))
 	inAnsi := false
 	for _, r := range s {
 		if r == '\x1b' {
