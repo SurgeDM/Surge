@@ -149,8 +149,17 @@ func getAnsiState(infos []charInfo, endIdx int) string {
 
 func stringWidth(s string) int {
 	var width int
-	for _, info := range getCharInfos(s) {
-		width += info.w
+	inAnsi := false
+	for _, r := range s {
+		if r == '\x1b' {
+			inAnsi = true
+		}
+		if !inAnsi {
+			width += runewidth.RuneWidth(r)
+		}
+		if inAnsi && r != '\x1b' && r != '[' && r >= 0x40 && r <= 0x7E {
+			inAnsi = false
+		}
 	}
 	return width
 }
