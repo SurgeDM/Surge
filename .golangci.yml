@@ -1,9 +1,18 @@
 version: "2"
 
+run:
+  skip-dirs:
+    - extension
+
 linters:
+  enable:
+    - prealloc
   exclusions:
     rules:
       - path: _test\.go
         linters:
           - staticcheck
         text: "SA5011"
+      - path: extension/
+        linters:
+          - govet
