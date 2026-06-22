@@ -122,7 +122,7 @@ func TestLocalDownloadService_Delete_ActiveWithoutDB_RemovesPartialFile(t *testi
 	if f, err := os.Create(filepath.Join(outputDir, filename) + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, 0, false)
+	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, 0, 0, 0, false)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)
 	}
@@ -279,7 +279,7 @@ func TestLocalDownloadService_AddWithID_UsesProvidedID(t *testing.T) {
 
 	requestID := "provided-id-001"
 	outputDir := t.TempDir()
-	gotID, err := svc.AddWithID("https://example.com/file.bin", outputDir, "file.bin", nil, nil, requestID, 0, false)
+	gotID, err := svc.AddWithID("https://example.com/file.bin", outputDir, "file.bin", nil, nil, requestID, 0, 0, 0, false)
 	if err != nil {
 		t.Fatalf("AddWithID failed: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	if f, err := os.Create(filepath.Join(outputDir, filename) + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, fileSize, true)
+	id, err := svc.Add(server.URL(), outputDir, filename, nil, nil, false, 0, 0, fileSize, true)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)
 	}
@@ -447,7 +447,7 @@ func TestLocalDownloadService_BatchProgress(t *testing.T) {
 	if f, err := os.Create(filepath.Join(tempDir, "test-file") + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	_, err = svc.Add(ts.URL, tempDir, "test-file", nil, nil, false, 0, false)
+	_, err = svc.Add(ts.URL, tempDir, "test-file", nil, nil, false, 0, 0, 0, false)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)
 	}
@@ -493,7 +493,7 @@ func TestLocalDownloadService_ResumeRejectedWhilePausing(t *testing.T) {
 	if f, err := os.Create(filepath.Join(outputDir, "resume-race.bin") + ".surge"); err == nil {
 		_ = f.Close()
 	}
-	id, err := svc.Add(server.URL(), outputDir, "resume-race.bin", nil, nil, false, 0, false)
+	id, err := svc.Add(server.URL(), outputDir, "resume-race.bin", nil, nil, false, 0, 0, 0, false)
 	if err != nil {
 		t.Fatalf("failed to add download: %v", err)
 	}

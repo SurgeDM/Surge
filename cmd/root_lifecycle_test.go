@@ -34,10 +34,10 @@ var _ core.DownloadService = (*countingLifecycleService)(nil)
 
 func (s *countingLifecycleService) List() ([]types.DownloadStatus, error)   { return nil, nil }
 func (s *countingLifecycleService) History() ([]types.DownloadEntry, error) { return nil, nil }
-func (s *countingLifecycleService) Add(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+func (s *countingLifecycleService) Add(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
 	return "", nil
 }
-func (s *countingLifecycleService) AddWithID(string, string, string, []string, map[string]string, string, int64, bool) (string, error) {
+func (s *countingLifecycleService) AddWithID(string, string, string, []string, map[string]string, string, int, int64, int64, bool) (string, error) {
 	return "", nil
 }
 func (s *countingLifecycleService) Pause(string) error             { return nil }
@@ -481,7 +481,7 @@ func TestProcessDownloads_UsesSharedEnqueueContext(t *testing.T) {
 
 	dispatchCalled := false
 	GlobalLifecycle = processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+		func(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
 			dispatchCalled = true
 			return "", nil
 		},

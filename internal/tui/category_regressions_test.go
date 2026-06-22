@@ -38,7 +38,7 @@ func TestStartDownload_RoutesDefaultPathWithURLDerivedFilename(t *testing.T) {
 	}
 
 	m := newCategoryTestModel(t, settings)
-	m, _ = m.startDownload("https://example.com/screenshot.jpg", nil, nil, rootDir, true, "", "")
+	m, _ = m.startDownload("https://example.com/screenshot.jpg", nil, nil, rootDir, true, "", "", 0, 0)
 
 	if len(m.downloads) != 1 {
 		t.Fatalf("expected 1 download, got %d", len(m.downloads))

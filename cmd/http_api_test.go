@@ -52,11 +52,11 @@ func (s *httpAPITestService) History() ([]types.DownloadEntry, error) {
 	return s.history, nil
 }
 
-func (s *httpAPITestService) Add(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+func (s *httpAPITestService) Add(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
 	return "", errors.New("not implemented")
 }
 
-func (s *httpAPITestService) AddWithID(string, string, string, []string, map[string]string, string, int64, bool) (string, error) {
+func (s *httpAPITestService) AddWithID(string, string, string, []string, map[string]string, string, int, int64, int64, bool) (string, error) {
 	return "", errors.New("not implemented")
 }
 
@@ -113,7 +113,7 @@ type batchAddRecordingService struct {
 	failOn string
 }
 
-func (s *batchAddRecordingService) Add(url string, _ string, _ string, _ []string, _ map[string]string, _ bool, _ int64, _ bool) (string, error) {
+func (s *batchAddRecordingService) Add(url string, _ string, _ string, _ []string, _ map[string]string, _ bool, _ int, _ int64, _ int64, _ bool) (string, error) {
 	if url == s.failOn {
 		return "", errors.New("enqueue failed")
 	}
@@ -845,10 +845,10 @@ type rateLimitWrapper struct {
 
 func (r *rateLimitWrapper) List() ([]types.DownloadStatus, error)   { return nil, nil }
 func (r *rateLimitWrapper) History() ([]types.DownloadEntry, error) { return nil, nil }
-func (r *rateLimitWrapper) Add(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+func (r *rateLimitWrapper) Add(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
 	return "", nil
 }
-func (r *rateLimitWrapper) AddWithID(string, string, string, []string, map[string]string, string, int64, bool) (string, error) {
+func (r *rateLimitWrapper) AddWithID(string, string, string, []string, map[string]string, string, int, int64, int64, bool) (string, error) {
 	return "", nil
 }
 func (r *rateLimitWrapper) Pause(string) error                              { return nil }

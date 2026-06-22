@@ -53,6 +53,9 @@ type DownloadState struct {
 	FileHash     string `json:"file_hash,omitempty"`
 	RateLimit    int64  `json:"rate_limit,omitempty"`
 	RateLimitSet bool   `json:"rate_limit_set,omitempty"`
+
+	Workers      int   `json:"workers,omitempty"`
+	MinChunkSize int64 `json:"min_chunk_size,omitempty"`
 }
 
 // DownloadEntry is the durable record used for history and lifecycle recovery.
@@ -71,6 +74,9 @@ type DownloadEntry struct {
 	Mirrors      []string `json:"mirrors,omitempty"`
 	RateLimit    int64    `json:"rate_limit,omitempty"`
 	RateLimitSet bool     `json:"rate_limit_set,omitempty"`
+
+	Workers      int   `json:"workers,omitempty"`
+	MinChunkSize int64 `json:"min_chunk_size,omitempty"`
 }
 
 // MasterList holds all tracked downloads.

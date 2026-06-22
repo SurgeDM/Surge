@@ -165,7 +165,7 @@ func (m RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.C
 	if key.Matches(msg, m.keys.Duplicate.Continue) {
 		// Continue anyway - startDownload handles unique filename generation
 		m.state = DashboardState
-		updated, cmd := m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
+		updated, cmd := m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "", m.pendingWorkers, m.pendingMinChunkSize)
 		nextModel, nextCmd := updated.showNextPendingRequest()
 		return nextModel, tea.Batch(cmd, nextCmd)
 	}
@@ -251,7 +251,7 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 				continue
 			}
 			var cmd tea.Cmd
-			m, cmd = m.startDownload(request.URL, request.Mirrors, request.Headers, requestPath, isDefaultPath, request.Filename, request.ID)
+			m, cmd = m.startDownload(request.URL, request.Mirrors, request.Headers, requestPath, isDefaultPath, request.Filename, request.ID, request.Workers, request.MinChunkSize)
 			if cmd != nil {
 				batchCmds = append(batchCmds, cmd)
 			}
@@ -264,7 +264,7 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 				continue
 			}
 			var cmd tea.Cmd
-			m, cmd = m.startDownload(url, nil, nil, path, true, "", "")
+			m, cmd = m.startDownload(url, nil, nil, path, true, "", "", 0, 0)
 			if cmd != nil {
 				batchCmds = append(batchCmds, cmd)
 			}

@@ -83,6 +83,7 @@ type ByteLimiter interface {
 // opt-out settings where disabling a behavior is meaningful.
 type RuntimeConfig struct {
 	MaxConnectionsPerDownload   int
+	Workers                     int
 	UserAgent                   string
 	ProxyURL                    string
 	CustomDNS                   string
@@ -114,6 +115,15 @@ func (r *RuntimeConfig) GetMaxConnectionsPerDownload() int {
 		return PerDownloadMax
 	}
 	return r.MaxConnectionsPerDownload
+}
+
+// GetWorkers returns the explicit worker count if set (>0), or 0 to indicate
+// "use heuristic" (caller must fall back to √size calculation).
+func (r *RuntimeConfig) GetWorkers() int {
+	if r == nil || r.Workers <= 0 {
+		return 0
+	}
+	return r.Workers
 }
 
 func (r *RuntimeConfig) GetMinChunkSize() int64 {
@@ -177,6 +187,7 @@ func (r *RuntimeConfig) GetSpeedEmaAlpha() float64 {
 func DefaultRuntimeConfig() *RuntimeConfig {
 	return &RuntimeConfig{
 		MaxConnectionsPerDownload:   PerDownloadMax,
+		Workers:                     0,
 		UserAgent:                   DefaultUserAgent,
 		ProxyURL:                    "",
 		CustomDNS:                   "",

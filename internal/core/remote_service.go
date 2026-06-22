@@ -131,7 +131,7 @@ func (s *RemoteDownloadService) GetStatus(id string) (*types.DownloadStatus, err
 }
 
 // Add queues a new download.
-func (s *RemoteDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+func (s *RemoteDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
 	req := map[string]interface{}{
 		"url":                  url,
 		"path":                 path,
@@ -142,6 +142,12 @@ func (s *RemoteDownloadService) Add(url string, path string, filename string, mi
 		"is_explicit_category": isExplicitCategory,
 		"total_size":           totalSize,
 		"supports_range":       supportsRange,
+	}
+	if workers > 0 {
+		req["workers"] = workers
+	}
+	if minChunkSize > 0 {
+		req["min_chunk_size"] = minChunkSize
 	}
 
 	resp, err := s.doRequest("POST", "/download", req)
@@ -158,7 +164,7 @@ func (s *RemoteDownloadService) Add(url string, path string, filename string, mi
 }
 
 // AddWithID queues a new download with a caller-provided id.
-func (s *RemoteDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
+func (s *RemoteDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
 	req := map[string]interface{}{
 		"url":            url,
 		"path":           path,
@@ -169,6 +175,12 @@ func (s *RemoteDownloadService) AddWithID(url string, path string, filename stri
 		"id":             id,
 		"total_size":     totalSize,
 		"supports_range": supportsRange,
+	}
+	if workers > 0 {
+		req["workers"] = workers
+	}
+	if minChunkSize > 0 {
+		req["min_chunk_size"] = minChunkSize
 	}
 
 	resp, err := s.doRequest("POST", "/download", req)

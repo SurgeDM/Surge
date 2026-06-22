@@ -26,10 +26,10 @@ func (m *mockService) Purge(id string) error {
 
 func (m *mockService) List() ([]types.DownloadStatus, error)   { return nil, nil }
 func (m *mockService) History() ([]types.DownloadEntry, error) { return nil, nil }
-func (m *mockService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, totalSize int64, supportsRange bool) (string, error) {
+func (m *mockService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
 	return "", nil
 }
-func (m *mockService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, totalSize int64, supportsRange bool) (string, error) {
+func (m *mockService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
 	return "", nil
 }
 func (m *mockService) ResumeBatch(ids []string) []error { return nil }

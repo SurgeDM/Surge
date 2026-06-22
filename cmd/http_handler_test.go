@@ -286,7 +286,7 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 	expectedFile := "from-extension.bin"
 
 	var addCalls int
-	GlobalLifecycle = processing.NewLifecycleManager(func(url, path, filename string, _ []string, headers map[string]string, explicit bool, totalSize int64, supportsRange bool) (string, error) {
+	GlobalLifecycle = processing.NewLifecycleManager(func(url, path, filename string, _ []string, headers map[string]string, explicit bool, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
 		addCalls++
 		if url != probeServer.URL {
 			t.Fatalf("url = %q, want %q", url, probeServer.URL)
@@ -372,7 +372,7 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 
 	// Create a lifecycle manager whose addFunc should never be reached
 	// because the probe will fail first (invalid URL scheme).
-	GlobalLifecycle = processing.NewLifecycleManager(func(string, string, string, []string, map[string]string, bool, int64, bool) (string, error) {
+	GlobalLifecycle = processing.NewLifecycleManager(func(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
 		t.Fatal("addFunc should not be called when probe fails")
 		return "", nil
 	}, nil)
@@ -409,6 +409,72 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 	}
 	if !found {
 		t.Fatal("expected errored download entry in master list after probe failure via HTTP API")
+	}
+}
+
+func TestHandleDownload_ForwardsPerTaskOverridesToLifecycle(t *testing.T) {
+	setupIsolatedCmdState(t)
+
+	progressCh := make(chan any, 10)
+	GlobalProgressCh = progressCh
+	GlobalPool = download.NewWorkerPool(progressCh, 1)
+
+	origLifecycle := GlobalLifecycle
+	origService := GlobalService
+	t.Cleanup(func() {
+		GlobalLifecycle = origLifecycle
+		GlobalService = origService
+		GlobalPool = nil
+		GlobalProgressCh = nil
+	})
+
+	probeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Range", "bytes 0-0/1024")
+		w.Header().Set("Content-Length", "1")
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte("x"))
+	}))
+	defer probeServer.Close()
+
+	tempDir := t.TempDir()
+
+	var gotWorkers int
+	var gotMinChunkSize int64
+	GlobalLifecycle = processing.NewLifecycleManager(func(_, _, _ string, _ []string, _ map[string]string, _ bool, workers int, minChunkSize int64, _ int64, _ bool) (string, error) {
+		gotWorkers = workers
+		gotMinChunkSize = minChunkSize
+		return "override-id", nil
+	}, nil)
+
+	svc := core.NewLocalDownloadService(nil)
+	GlobalService = svc
+	t.Cleanup(func() {
+		_ = svc.Shutdown()
+	})
+
+	minChunk := int64(8 * 1024 * 1024)
+	body := fmt.Sprintf(`{
+		"url": %q,
+		"filename": "override-test.bin",
+		"path": %q,
+		"skip_approval": true,
+		"workers": 12,
+		"min_chunk_size": %d
+	}`, probeServer.URL, tempDir, minChunk)
+
+	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handleDownload(rec, req, "", svc)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if gotWorkers != 12 {
+		t.Fatalf("expected lifecycle addFunc to receive workers=12, got %d", gotWorkers)
+	}
+	if gotMinChunkSize != minChunk {
+		t.Fatalf("expected lifecycle addFunc to receive minChunkSize=%d, got %d", minChunk, gotMinChunkSize)
 	}
 }
 

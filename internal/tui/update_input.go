@@ -104,6 +104,8 @@ func (m RootModel) submitInputForm() (tea.Model, tea.Cmd) {
 		m.pendingPath = path
 		m.pendingIsDefaultPath = isDefaultPath
 		m.pendingFilename = filename
+		m.pendingWorkers = 0
+		m.pendingMinChunkSize = 0
 		m.duplicateInfo = d.Filename
 		m.state = DuplicateWarningState
 		return m, nil
@@ -115,7 +117,7 @@ func (m RootModel) submitInputForm() (tea.Model, tea.Cmd) {
 	m.inputs[2].SetValue(path) // Keep path for next download
 	m.inputs[3].SetValue("")
 
-	return m.startDownload(url, mirrors, nil, path, isDefaultPath, filename, "")
+	return m.startDownload(url, mirrors, nil, path, isDefaultPath, filename, "", 0, 0)
 }
 
 // parseURLInput splits a comma-separated URL string into a primary URL and mirrors.
@@ -172,7 +174,7 @@ func (m RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, 
 		}
 
 		m.state = DashboardState
-		updated, cmd := m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "")
+		updated, cmd := m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "", m.pendingWorkers, m.pendingMinChunkSize)
 		nextModel, nextCmd := updated.showNextPendingRequest()
 		return nextModel, tea.Batch(cmd, nextCmd)
 	}

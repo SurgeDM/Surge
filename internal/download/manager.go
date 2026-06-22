@@ -146,6 +146,8 @@ func TUIDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			State:        cfg.State,
 			RateLimit:    rateLimit,
 			RateLimitSet: rateLimitSet,
+			Workers:      cfg.Runtime.Workers,
+			MinChunkSize: cfg.Runtime.MinChunkSize,
 		})
 	}
 

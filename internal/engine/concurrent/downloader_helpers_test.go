@@ -18,8 +18,9 @@ func TestHandlePause_CompletionBoundary(t *testing.T) {
 	destPath := filepath.Join(tmpDir, "test.bin")
 	state := types.NewProgressState("test-id", fileSize)
 	downloader := &ConcurrentDownloader{
-		ID:    "test-id",
-		State: state,
+		ID:      "test-id",
+		State:   state,
+		Runtime: &types.RuntimeConfig{},
 	}
 
 	queue := NewTaskQueue()
@@ -43,8 +44,9 @@ func TestHandlePause_Normal(t *testing.T) {
 	destPath := filepath.Join(tmpDir, "test.bin")
 	state := types.NewProgressState("test-id", fileSize)
 	downloader := &ConcurrentDownloader{
-		ID:    "test-id",
-		State: state,
+		ID:      "test-id",
+		State:   state,
+		Runtime: &types.RuntimeConfig{},
 	}
 
 	queue := NewTaskQueue()
@@ -70,6 +72,7 @@ func TestHandlePause_UsesLiveRateLimitFromState(t *testing.T) {
 		URL:          "http://example.com/file.bin",
 		State:        state,
 		ProgressChan: progressCh,
+		Runtime:      &types.RuntimeConfig{},
 		RateLimitBps: 1,
 		RateLimitSet: false,
 	}

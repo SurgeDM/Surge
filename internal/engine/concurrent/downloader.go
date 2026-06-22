@@ -71,6 +71,23 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 		return 1
 	}
 
+	// If caller specified exact worker count, bypass √size heuristic.
+	if workers := d.Runtime.GetWorkers(); workers > 0 {
+		if workers > maxConns {
+			workers = maxConns
+		}
+		if minChunkSize > 0 {
+			maxPossibleChunks := fileSize / minChunkSize
+			if maxPossibleChunks < 1 {
+				maxPossibleChunks = 1
+			}
+			if int64(workers) > maxPossibleChunks {
+				workers = int(maxPossibleChunks)
+			}
+		}
+		return workers
+	}
+
 	// 1. Calculate ideal workers using the Square Root heuristic
 	// Convert to float first to avoid integer truncation on small files
 	sizeMB := float64(fileSize) / float64(types.MB)
@@ -79,12 +96,12 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 	// 2. Hard constraint: Don't create chunks smaller than MinChunkSize
 	// If file is 20MB and MinChunk is 10MB, we strictly can't have more than 2 workers
 	if minChunkSize > 0 {
-		maxPossibleChunks := int(fileSize / minChunkSize)
+		maxPossibleChunks := fileSize / minChunkSize
 		if maxPossibleChunks < 1 {
 			maxPossibleChunks = 1
 		}
-		if calculatedWorkers > maxPossibleChunks {
-			calculatedWorkers = maxPossibleChunks
+		if int64(calculatedWorkers) > maxPossibleChunks {
+			calculatedWorkers = int(maxPossibleChunks)
 		}
 	}
 
@@ -579,6 +596,8 @@ func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queu
 		ActualChunkSize: chunkSize,
 		RateLimit:       rateLimit,
 		RateLimitSet:    rateLimitSet,
+		Workers:         d.Runtime.Workers,
+		MinChunkSize:    d.Runtime.MinChunkSize,
 	}
 	if d.ProgressChan != nil {
 		d.ProgressChan <- events.DownloadPausedMsg{
@@ -588,6 +607,8 @@ func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queu
 			State:        s,
 			RateLimit:    rateLimit,
 			RateLimitSet: rateLimitSet,
+			Workers:      d.Runtime.Workers,
+			MinChunkSize: d.Runtime.MinChunkSize,
 		}
 	}
 

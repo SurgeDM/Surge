@@ -28,6 +28,8 @@ type DownloadRequest struct {
 	SkipApproval         bool              `json:"skip_approval,omitempty"` // Extension validated request, skip TUI prompt
 	Headers              map[string]string `json:"headers,omitempty"`       // Custom HTTP headers from browser (cookies, auth, etc.)
 	IsExplicitCategory   bool              `json:"is_explicit_category,omitempty"`
+	Workers              int               `json:"workers,omitempty"`        // Per-task worker count override (bypasses √size heuristic when >0)
+	MinChunkSize         int64             `json:"min_chunk_size,omitempty"` // Per-task minimum chunk size override
 }
 
 type BatchDownloadRequest struct {
@@ -187,12 +189,14 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 		urlForAdd, mirrorsForAdd := normalizeDownloadTargets(validated.URL, validated.Mirrors)
 		itemPath := utils.EnsureAbsPath(resolveOutputDir(validated.Path, validated.RelativeToDefaultDir, defaultOutputDir, settings))
 		requests = append(requests, events.DownloadRequestMsg{
-			ID:       uuid.New().String(),
-			URL:      urlForAdd,
-			Filename: validated.Filename,
-			Path:     itemPath,
-			Mirrors:  mirrorsForAdd,
-			Headers:  validated.Headers,
+			ID:           uuid.New().String(),
+			URL:          urlForAdd,
+			Filename:     validated.Filename,
+			Path:         itemPath,
+			Mirrors:      mirrorsForAdd,
+			Headers:      validated.Headers,
+			Workers:      validated.Workers,
+			MinChunkSize: validated.MinChunkSize,
 		})
 	}
 
@@ -232,6 +236,8 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 				Mirrors:      item.Mirrors,
 				SkipApproval: true,
 				Headers:      item.Headers,
+				Workers:      item.Workers,
+				MinChunkSize: item.MinChunkSize,
 			},
 			settings:      settings,
 			outPath:       item.Path,
@@ -347,12 +353,14 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 
 		downloadID := uuid.New().String()
 		if err := service.Publish(events.DownloadRequestMsg{
-			ID:       downloadID,
-			URL:      resolved.urlForAdd,
-			Filename: req.Filename,
-			Path:     resolved.outPath,
-			Mirrors:  resolved.mirrorsForAdd,
-			Headers:  req.Headers,
+			ID:           downloadID,
+			URL:          resolved.urlForAdd,
+			Filename:     req.Filename,
+			Path:         resolved.outPath,
+			Mirrors:      resolved.mirrorsForAdd,
+			Headers:      req.Headers,
+			Workers:      req.Workers,
+			MinChunkSize: req.MinChunkSize,
 		}); err != nil {
 			recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", resolved.urlForAdd, err))
@@ -400,10 +408,12 @@ func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resol
 			Headers:            req.Headers,
 			IsExplicitCategory: req.IsExplicitCategory,
 			SkipApproval:       req.SkipApproval,
+			Workers:            req.Workers,
+			MinChunkSize:       req.MinChunkSize,
 		})
 	}
 
-	id, err := service.Add(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, 0, false)
+	id, err := service.Add(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, req.Workers, req.MinChunkSize, 0, false)
 	return id, req.Filename, err
 }
 

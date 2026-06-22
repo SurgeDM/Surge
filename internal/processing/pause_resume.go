@@ -339,6 +339,17 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadEntry, savedS
 		rateLimit = runtime.DefaultDownloadRateLimitBps
 	}
 
+	if savedState != nil && savedState.Workers > 0 {
+		runtime.Workers = savedState.Workers
+	} else if entry != nil && entry.Workers > 0 {
+		runtime.Workers = entry.Workers
+	}
+	if savedState != nil && savedState.MinChunkSize > 0 {
+		runtime.MinChunkSize = savedState.MinChunkSize
+	} else if entry != nil && entry.MinChunkSize > 0 {
+		runtime.MinChunkSize = entry.MinChunkSize
+	}
+
 	var mirrorURLs []string
 	var dmState *types.ProgressState
 
