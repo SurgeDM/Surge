@@ -343,11 +343,17 @@ func LoadSettings() (*Settings, error) {
 
 	settings := DefaultSettings() // Start with defaults to fill any missing fields
 	if err := json.Unmarshal(data, settings); err != nil {
-		utils.Debug("Warning: corrupt settings file %s: %v - using defaults", path, err)
-		defaults := DefaultSettings()
-		defaults.StartupWarnings = append(defaults.StartupWarnings,
-			fmt.Sprintf("Config: settings file is corrupt (%v) - all settings reset to defaults", err))
-		return defaults, nil
+		if _, ok := err.(*json.UnmarshalTypeError); ok {
+			utils.Debug("Warning: type mismatch in settings file %s: %v - keeping valid fields", path, err)
+			settings.StartupWarnings = append(settings.StartupWarnings,
+				fmt.Sprintf("Config: some fields had type mismatches and were reset to defaults (%v)", err))
+		} else {
+			utils.Debug("Warning: corrupt settings file %s: %v - using defaults", path, err)
+			defaults := DefaultSettings()
+			defaults.StartupWarnings = append(defaults.StartupWarnings,
+				fmt.Sprintf("Config: settings file is corrupt (%v) - all settings reset to defaults", err))
+			return defaults, nil
+		}
 	}
 
 	// Validate settings and roll back individual invalid fields to defaults
