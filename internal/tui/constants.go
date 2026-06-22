@@ -1,15 +1,8 @@
 package tui
 
-import (
-	"time"
-
-	"github.com/SurgeDM/Surge/internal/engine/types"
-)
+import "time"
 
 const (
-	// === Timeouts and Intervals ===
-	TickInterval = 200 * time.Millisecond
-
 	// === Layout Ratios ===
 	ListWidthRatio         = 0.6  // Dashboard: List takes 60% width
 	SettingsWidthRatio     = 0.72 // Modals: Settings/Category use 72% width
@@ -23,7 +16,6 @@ const (
 
 	MinSettingsWidth      = 64
 	MaxSettingsWidth      = 130
-	MinSettingsHeight     = 12
 	DefaultSettingsHeight = 26
 
 	MinRightColumnWidth = 50 // Hide right column if narrow
@@ -32,8 +24,6 @@ const (
 
 	MinGraphHeight      = 9
 	MinGraphHeightShort = 5
-	MinListHeight       = 10
-	MinChunkMapHeight   = 4
 	MinChunkMapVisibleH = 18 // Min term height to show chunk map
 
 	// === Component Heights ===
@@ -41,7 +31,6 @@ const (
 	HeaderHeightMax    = 11
 	HeaderHeightMin    = 3
 	FilePickerHeight   = 12
-	CardHeight         = 2 // Compact rows for downloads list
 
 	// === Padding and Offsets ===
 	DefaultPaddingX        = 1
@@ -54,25 +43,18 @@ const (
 
 	// === Layout Offsets (Clean Math) ===
 	InternalPaddingHeight = 2 // Standard internal vertical padding
-	InternalPaddingWidth  = 2 // Standard internal horizontal padding
 	FooterHeight          = 1 // Application-wide footer height (keybindings)
 	DividerHeight         = 1 // Horizontal/Vertical divider line
 
 	// === Graph Configuration ===
-	GraphAxisWidth  = 10
-	GraphStatsWidth = 18
-	GraphHeadroom   = 1.1 // Scale max speed by 110% for visual headroom
+	GraphAxisWidth      = 10
+	GraphStatsWidth     = 18
+	GraphHeadroom       = 1.1                    // Scale max speed by 110% for visual headroom
+	GraphUpdateInterval = 500 * time.Millisecond // Interval at which the speed history is updated
+	GraphHistoryPoints  = 60                     // 60 points * 0.5s = 30s of history
 
 	// === Input Dimensions ===
 	InputWidth        = 40
 	MinSettingsInputW = 8
 	MaxSettingsInputW = 48
-
-	// === Channel Buffers ===
-	ProgressChannelBuffer = types.ProgressChannelBuffer
-
-	// === Units ===
-	KB = types.KB
-	MB = types.MB
-	GB = types.GB
 )

@@ -10,7 +10,6 @@ import (
 
 // === Layout Styles ===
 var (
-	AppStyle          lipgloss.Style
 	PaneStyle         lipgloss.Style
 	ActivePaneStyle   lipgloss.Style
 	LogoStyle         lipgloss.Style
@@ -48,10 +47,6 @@ func rebuildStyles() {
 	BoxStyle = lipgloss.NewStyle().Border(lipgloss.RoundedBorder())
 	ModalPaddingStyle = lipgloss.NewStyle().Padding(PopupPaddingY, PopupPaddingX)
 	LayoutGapStyle = lipgloss.NewStyle().MarginTop(1)
-
-	AppStyle = lipgloss.NewStyle().
-		Background(lipgloss.Color("0")).
-		Foreground(colors.White())
 
 	PaneStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).

@@ -26,6 +26,7 @@ type ConfirmationModal struct {
 	YesNoFocused     int
 	YesLabel         string
 	NoLabel          string
+	ButtonColor      color.Color // Active button background color; defaults to colors.Pink() when nil
 }
 
 // NoKeys satisfies help.KeyMap for informational modals with no interactive bindings.
@@ -73,19 +74,23 @@ func (m ConfirmationModal) renderBody(width int) string {
 		content = lipgloss.JoinVertical(lipgloss.Center,
 			content,
 			"",
-			renderYesNoButtons(yesLabel, noLabel, m.YesNoFocused),
+			renderYesNoButtons(yesLabel, noLabel, m.YesNoFocused, m.ButtonColor),
 		)
 	}
 
 	return content
 }
 
-func renderYesNoButtons(yesLabel, noLabel string, focused int) string {
+func renderYesNoButtons(yesLabel, noLabel string, focused int, btnColor color.Color) string {
 	pad := "   "
 
-	activeFirst := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Pink()).Bold(true).Underline(true)
-	activeRest := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Pink()).Bold(true)
-	activePad := lipgloss.NewStyle().Background(colors.Pink())
+	if btnColor == nil {
+		btnColor = colors.Pink()
+	}
+
+	activeFirst := lipgloss.NewStyle().Foreground(colors.White()).Background(btnColor).Bold(true).Underline(true)
+	activeRest := lipgloss.NewStyle().Foreground(colors.White()).Background(btnColor).Bold(true)
+	activePad := lipgloss.NewStyle().Background(btnColor)
 
 	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236")).Underline(true)
 	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236"))
@@ -181,38 +186,6 @@ func (m ConfirmationModal) RenderWithBtopBox(
 
 	// Title goes in the box border
 	return renderBox(titleStyle.Render(" "+m.Title+" "), "", fullContent, m.Width, m.Height, m.BorderColor)
-}
-
-// Centered returns the modal centered in the given dimensions (for standalone use)
-// Help text is pushed to the last line
-func (m ConfirmationModal) Centered(width, height int) string {
-	boxStyle := lipgloss.NewStyle().
-		Border(lipgloss.DoubleBorder()).
-		BorderForeground(m.BorderColor).
-		Padding(1, 4)
-
-	innerWidth := m.Width - boxStyle.GetHorizontalFrameSize()
-
-	// Get content without help
-	mainContent := m.view()
-
-	// Style and center help text
-	helpStyle := lipgloss.NewStyle().
-		Foreground(colors.Gray()).
-		Width(innerWidth).
-		Align(lipgloss.Center)
-	helpText := helpStyle.Render(m.Help.View(m.Keys))
-
-	// Full content with spacing to push help down
-	fullContent := lipgloss.JoinVertical(lipgloss.Center,
-		mainContent,
-		"",
-		"",
-		helpText,
-	)
-
-	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center,
-		boxStyle.Render(fullContent))
 }
 
 func getDetailStyle() lipgloss.Style {

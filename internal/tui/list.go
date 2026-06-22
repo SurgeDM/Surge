@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	"io"
-	"sync"
 
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
@@ -28,30 +27,15 @@ func (i DownloadItem) Title() string {
 	return i.download.Filename
 }
 
-var (
-	stylePausing  lipgloss.Style
-	styleResuming lipgloss.Style
-	listStyleOnce sync.Once
-)
-
-func initListStyles() {
-	listStyleOnce.Do(func() {
-		stylePausing = lipgloss.NewStyle().Foreground(colors.StatePaused())
-		styleResuming = lipgloss.NewStyle().Foreground(colors.StateDownloading())
-	})
-}
-
 func (i DownloadItem) Description() string {
 	d := i.download
-	initListStyles()
 
 	// Get styled status using the shared component
 	var styledStatus string
 	if d.pausing {
-		// Custom "Pausing..." style using existing colors
-		styledStatus = stylePausing.Render(i.spinnerView + " Pausing...")
+		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused()).Render(i.spinnerView + " Pausing...")
 	} else if d.resuming {
-		styledStatus = styleResuming.Render(i.spinnerView + " Resuming...")
+		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(i.spinnerView + " Resuming...")
 	} else {
 		status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
 		styledStatus = status.RenderWithSpinner(i.spinnerView)

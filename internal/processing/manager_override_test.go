@@ -7,11 +7,11 @@ import (
 
 func TestEnqueue_PerTaskOverrideForwarding(t *testing.T) {
 	tests := []struct {
-		name          string
-		workers       int
-		minChunkSize  int64
-		wantWorkers   int
-		wantMinChunk  int64
+		name         string
+		workers      int
+		minChunkSize int64
+		wantWorkers  int
+		wantMinChunk int64
 	}{
 		{
 			name:         "zero values stay zero",
@@ -66,11 +66,11 @@ func TestEnqueue_PerTaskOverrideForwarding(t *testing.T) {
 
 func TestEnqueueWithID_PerTaskOverrideForwarding(t *testing.T) {
 	tests := []struct {
-		name          string
-		workers       int
-		minChunkSize  int64
-		wantWorkers   int
-		wantMinChunk  int64
+		name         string
+		workers      int
+		minChunkSize int64
+		wantWorkers  int
+		wantMinChunk int64
 	}{
 		{
 			name:         "zero values stay zero",

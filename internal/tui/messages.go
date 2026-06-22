@@ -4,9 +4,6 @@ import (
 	"github.com/SurgeDM/Surge/internal/version"
 )
 
-// notificationTickMsg is sent to check if a notification should be cleared
-type notificationTickMsg struct{}
-
 // UpdateCheckResultMsg is sent when the update check is complete
 type UpdateCheckResultMsg struct {
 	Info *version.UpdateInfo

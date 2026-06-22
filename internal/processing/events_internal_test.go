@@ -72,13 +72,13 @@ func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing
 	}
 
 	if err := state.AddToMasterList(types.DownloadEntry{
-		ID:          "download-1",
-		URL:         "https://example.com/video.mp4",
-		URLHash:     state.URLHash("https://example.com/video.mp4"),
-		DestPath:    finalPath,
-		Filename:    "video.mp4",
-		Status:      "downloading",
-		Workers:     8,
+		ID:           "download-1",
+		URL:          "https://example.com/video.mp4",
+		URLHash:      state.URLHash("https://example.com/video.mp4"),
+		DestPath:     finalPath,
+		Filename:     "video.mp4",
+		Status:       "downloading",
+		Workers:      8,
 		MinChunkSize: 4 * types.MB,
 	}); err != nil {
 		t.Fatalf("failed to seed download entry: %v", err)

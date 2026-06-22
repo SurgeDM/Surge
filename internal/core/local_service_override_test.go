@@ -18,12 +18,12 @@ func findConfigByID(pool *download.WorkerPool, id string) *types.DownloadConfig 
 
 func TestAdd_PerTaskOverride(t *testing.T) {
 	tests := []struct {
-		name            string
-		workers         int
-		minChunkSize    int64
-		wantWorkers     int
-		wantMinChunk    int64
-		checkClamped    bool
+		name         string
+		workers      int
+		minChunkSize int64
+		wantWorkers  int
+		wantMinChunk int64
+		checkClamped bool
 	}{
 		{
 			name:         "zero/defaults",

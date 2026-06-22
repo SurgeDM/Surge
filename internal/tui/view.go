@@ -493,7 +493,7 @@ func (m RootModel) View() tea.View {
 		}
 
 		graphBox := m.renderGraphBox(layout.RightWidth, layout.GraphHeight, stats)
-		detailBox := m.renderDetailsBox(layout.RightWidth, layout.DetailHeight, detailContent)
+		detailBox := renderBtopBox("", PaneTitleStyle.Render(" File Details "), detailContent, layout.RightWidth, layout.DetailHeight, colors.Gray())
 
 		var rightParts []string
 		if layout.GraphHeight >= layout.MinGraphHeight {
@@ -512,7 +512,7 @@ func (m RootModel) View() tea.View {
 	var body string
 	if layout.HideRightColumn {
 		if layout.VerticalLayout {
-			detailBox := m.renderDetailsBox(layout.LeftWidth, layout.DetailHeight, detailContent)
+			detailBox := renderBtopBox("", PaneTitleStyle.Render(" File Details "), detailContent, layout.LeftWidth, layout.DetailHeight, colors.Gray())
 			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox, detailBox)
 		} else {
 
@@ -844,156 +844,48 @@ func (m RootModel) renderTabs(activeTab, activeCount, queuedCount, doneCount int
 }
 
 func (m RootModel) viewQuitConfirm() string {
-	w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 60, 10)
-	innerWidth := w - (components.BorderFrameWidth * 2)
-
-	messageStyle := lipgloss.NewStyle().
-		Foreground(colors.White()).
-		Width(innerWidth).
-		Align(lipgloss.Center)
-
-	detailStyle := lipgloss.NewStyle().
-		Foreground(colors.Magenta()).
-		Bold(true).
-		Width(innerWidth).
-		Align(lipgloss.Center)
-
-	pad := "   "
-
-	activeFirst := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Pink()).Bold(true).Underline(true)
-	activeRest := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Pink()).Bold(true)
-	activePad := lipgloss.NewStyle().Background(colors.Pink())
-
-	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236")).Underline(true)
-	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236"))
-	inactivePad := lipgloss.NewStyle().Background(lipgloss.Color("236"))
-
-	renderBtn := func(padStyle, firstStyle, restStyle lipgloss.Style, first, rest string) string {
-		return padStyle.Render(pad) + firstStyle.Render(first) + restStyle.Render(rest) + padStyle.Render(pad)
-	}
-
-	yesFirst, yesRest, yesPad := activeFirst, activeRest, activePad
-	noFirst, noRest, noPad := inactiveFirst, inactiveRest, inactivePad
-	if m.quitConfirmFocused == 1 {
-		yesFirst, yesRest, yesPad = inactiveFirst, inactiveRest, inactivePad
-		noFirst, noRest, noPad = activeFirst, activeRest, activePad
-	}
-
-	yesBtn := renderBtn(yesPad, yesFirst, yesRest, "Y", "ep!")
-	noBtn := renderBtn(noPad, noFirst, noRest, "N", "ope")
-
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, "     ", noBtn)
-	centeredButtons := lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(buttons)
-
 	stats := m.ComputeViewStats()
 	detail := ""
 	if stats.ActiveCount > 0 {
 		detail = fmt.Sprintf("%d active download(s) will be paused", stats.ActiveCount)
 	}
-
-	helpStyle := lipgloss.NewStyle().Foreground(colors.Gray()).Width(innerWidth).Align(lipgloss.Center)
-	helpText := helpStyle.Render(m.help.View(m.keys.QuitConfirm))
-
-	var lines []string
-	lines = append(lines, messageStyle.Render("Are you sure you want to quit?"))
-	if detail != "" {
-		lines = append(lines, detailStyle.Render(detail))
+	w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 60, 10)
+	modal := components.ConfirmationModal{
+		Title:            "Quit Surge",
+		Message:          "Are you sure you want to quit?",
+		Detail:           detail,
+		Keys:             m.keys.QuitConfirm,
+		Help:             m.help,
+		BorderColor:      colors.Pink(),
+		ButtonColor:      colors.Pink(),
+		Width:            w,
+		Height:           h,
+		ShowYesNoButtons: true,
+		YesNoFocused:     m.quitConfirmFocused,
+		YesLabel:         "Yep!",
+		NoLabel:          "Nope",
 	}
-	lines = append(lines, "")
-	lines = append(lines, "")
-	lines = append(lines, centeredButtons)
-
-	innerHeight := h - components.BorderFrameHeight
-	contentHeight := lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, lines...))
-	helpHeight := lipgloss.Height(helpText)
-	spacing := innerHeight - contentHeight - helpHeight
-	if spacing < 0 {
-		spacing = 0
-	}
-	for i := 0; i < spacing; i++ {
-		lines = append(lines, "")
-	}
-	// Replace last line with help text if there was space, otherwise just append
-	if len(lines) > 0 && spacing > 0 {
-		lines[len(lines)-1] = helpText
-	} else {
-		lines = append(lines, helpText)
-	}
-
-	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	return renderBtopBox(PaneTitleStyle.Render(" Quit Surge "), "", content, w, h, colors.Pink())
+	return modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 }
 
 func (m RootModel) viewRestartConfirm() string {
 	w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 60, 10)
-	innerWidth := w - (components.BorderFrameWidth * 2)
-
-	messageStyle := lipgloss.NewStyle().
-		Foreground(colors.White()).
-		Width(innerWidth).
-		Align(lipgloss.Center)
-
-	detailStyle := lipgloss.NewStyle().
-		Foreground(colors.Orange()).
-		Bold(true).
-		Width(innerWidth).
-		Align(lipgloss.Center)
-
-	pad := "   "
-
-	activeFirst := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Orange()).Bold(true).Underline(true)
-	activeRest := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Orange()).Bold(true)
-	activePad := lipgloss.NewStyle().Background(colors.Orange())
-
-	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236")).Underline(true)
-	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236"))
-	inactivePad := lipgloss.NewStyle().Background(lipgloss.Color("236"))
-
-	renderBtn := func(padStyle, firstStyle, restStyle lipgloss.Style, first, rest string) string {
-		return padStyle.Render(pad) + firstStyle.Render(first) + restStyle.Render(rest) + padStyle.Render(pad)
+	modal := components.ConfirmationModal{
+		Title:            "Restart Required",
+		Message:          "Settings saved!",
+		Detail:           "Restart now to take effect?",
+		Keys:             m.keys.QuitConfirm,
+		Help:             m.help,
+		BorderColor:      colors.Orange(),
+		ButtonColor:      colors.Orange(),
+		Width:            w,
+		Height:           h,
+		ShowYesNoButtons: true,
+		YesNoFocused:     m.quitConfirmFocused,
+		YesLabel:         "Yes",
+		NoLabel:          "No",
 	}
-
-	yesFirst, yesRest, yesPad := activeFirst, activeRest, activePad
-	noFirst, noRest, noPad := inactiveFirst, inactiveRest, inactivePad
-	if m.quitConfirmFocused == 1 {
-		yesFirst, yesRest, yesPad = inactiveFirst, inactiveRest, inactivePad
-		noFirst, noRest, noPad = activeFirst, activeRest, activePad
-	}
-
-	yesBtn := renderBtn(yesPad, yesFirst, yesRest, "Y", "es")
-	noBtn := renderBtn(noPad, noFirst, noRest, "N", "o")
-
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, "     ", noBtn)
-	centeredButtons := lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(buttons)
-
-	helpStyle := lipgloss.NewStyle().Foreground(colors.Gray()).Width(innerWidth).Align(lipgloss.Center)
-	helpText := helpStyle.Render(m.help.View(m.keys.QuitConfirm))
-
-	var lines []string
-	lines = append(lines, messageStyle.Render("Settings saved!"))
-	lines = append(lines, detailStyle.Render("Restart now to take effect?"))
-	lines = append(lines, "")
-	lines = append(lines, "")
-	lines = append(lines, centeredButtons)
-
-	innerHeight := h - components.BorderFrameHeight
-	contentHeight := lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, lines...))
-	helpHeight := lipgloss.Height(helpText)
-	spacing := innerHeight - contentHeight - helpHeight
-	if spacing < 0 {
-		spacing = 0
-	}
-	for i := 0; i < spacing; i++ {
-		lines = append(lines, "")
-	}
-	if len(lines) > 0 && spacing > 0 {
-		lines[len(lines)-1] = helpText
-	} else {
-		lines = append(lines, helpText)
-	}
-
-	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	return renderBtopBox(PaneTitleStyle.Render(" Restart Required "), "", content, w, h, colors.Orange())
+	return modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 }
 
 func (m RootModel) viewPurgeConfirm() string {
@@ -1030,74 +922,22 @@ func (m RootModel) viewPurgeConfirm() string {
 
 func (m RootModel) viewCategoryResetConfirm() string {
 	w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 60, 10)
-	innerWidth := w - (components.BorderFrameWidth * 2)
-
-	messageStyle := lipgloss.NewStyle().
-		Foreground(colors.White()).
-		Width(innerWidth).
-		Align(lipgloss.Center)
-
-	detailStyle := lipgloss.NewStyle().
-		Foreground(colors.Orange()).
-		Bold(true).
-		Width(innerWidth).
-		Align(lipgloss.Center)
-
-	pad := "   "
-
-	activeFirst := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Orange()).Bold(true).Underline(true)
-	activeRest := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.Orange()).Bold(true)
-	activePad := lipgloss.NewStyle().Background(colors.Orange())
-
-	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236")).Underline(true)
-	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236"))
-	inactivePad := lipgloss.NewStyle().Background(lipgloss.Color("236"))
-
-	renderBtn := func(padStyle, firstStyle, restStyle lipgloss.Style, first, rest string) string {
-		return padStyle.Render(pad) + firstStyle.Render(first) + restStyle.Render(rest) + padStyle.Render(pad)
+	modal := components.ConfirmationModal{
+		Title:            "Category Reset",
+		Message:          "Reset all categories to defaults?",
+		Detail:           "This will overwrite your custom rules.",
+		Keys:             m.keys.QuitConfirm,
+		Help:             m.help,
+		BorderColor:      colors.Orange(),
+		ButtonColor:      colors.Orange(),
+		Width:            w,
+		Height:           h,
+		ShowYesNoButtons: true,
+		YesNoFocused:     m.quitConfirmFocused,
+		YesLabel:         "Yes",
+		NoLabel:          "No",
 	}
-
-	yesFirst, yesRest, yesPad := activeFirst, activeRest, activePad
-	noFirst, noRest, noPad := inactiveFirst, inactiveRest, inactivePad
-	if m.quitConfirmFocused == 1 {
-		yesFirst, yesRest, yesPad = inactiveFirst, inactiveRest, inactivePad
-		noFirst, noRest, noPad = activeFirst, activeRest, activePad
-	}
-
-	yesBtn := renderBtn(yesPad, yesFirst, yesRest, "Y", "es")
-	noBtn := renderBtn(noPad, noFirst, noRest, "N", "o")
-
-	buttons := lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, "     ", noBtn)
-	centeredButtons := lipgloss.NewStyle().Width(innerWidth).Align(lipgloss.Center).Render(buttons)
-
-	helpStyle := lipgloss.NewStyle().Foreground(colors.Gray()).Width(innerWidth).Align(lipgloss.Center)
-	helpText := helpStyle.Render(m.help.View(m.keys.QuitConfirm))
-
-	var lines []string
-	lines = append(lines, messageStyle.Render("Reset all categories to defaults?"))
-	lines = append(lines, detailStyle.Render("This will overwrite your custom rules."))
-	lines = append(lines, "")
-	lines = append(lines, "")
-	lines = append(lines, centeredButtons)
-
-	innerHeight := h - components.BorderFrameHeight
-	contentHeight := lipgloss.Height(lipgloss.JoinVertical(lipgloss.Left, lines...))
-	helpHeight := lipgloss.Height(helpText)
-	spacing := innerHeight - contentHeight - helpHeight
-	if spacing < 0 {
-		spacing = 0
-	}
-	for i := 0; i < spacing; i++ {
-		lines = append(lines, "")
-	}
-	if len(lines) > 0 && spacing > 0 {
-		lines[len(lines)-1] = helpText
-	} else {
-		lines = append(lines, helpText)
-	}
-
-	content := lipgloss.JoinVertical(lipgloss.Left, lines...)
-	return renderBtopBox(PaneTitleStyle.Render(" Category Reset "), "", content, w, h, colors.Orange())
+	return modal.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 }
 
 // renderBtopBox creates a btop-style box with title embedded in the top border

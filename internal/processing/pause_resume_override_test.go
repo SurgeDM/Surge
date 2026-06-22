@@ -10,22 +10,22 @@ import (
 func TestBuildResumeConfig_OverridesFromSavedState(t *testing.T) {
 	settings := config.DefaultSettings()
 	entry := &types.DownloadEntry{
-		ID:        "test-id",
-		URL:       "http://example.com/file.zip",
-		DestPath:  "/tmp/file.zip",
-		Filename:  "file.zip",
-		TotalSize: 1000,
-		Workers:   4,
+		ID:           "test-id",
+		URL:          "http://example.com/file.zip",
+		DestPath:     "/tmp/file.zip",
+		Filename:     "file.zip",
+		TotalSize:    1000,
+		Workers:      4,
 		MinChunkSize: 5 * types.MB,
 	}
 	savedState := &types.DownloadState{
-		ID:          "test-id",
-		URL:         "http://example.com/file.zip",
-		DestPath:    "/tmp/file.zip",
-		Filename:    "file.zip",
-		TotalSize:   1000,
-		Downloaded:  500,
-		Workers:     8,
+		ID:           "test-id",
+		URL:          "http://example.com/file.zip",
+		DestPath:     "/tmp/file.zip",
+		Filename:     "file.zip",
+		TotalSize:    1000,
+		Downloaded:   500,
+		Workers:      8,
 		MinChunkSize: 5 * types.MB,
 	}
 
@@ -41,12 +41,12 @@ func TestBuildResumeConfig_OverridesFromSavedState(t *testing.T) {
 func TestBuildResumeConfig_OverridesFallbackToEntry(t *testing.T) {
 	settings := config.DefaultSettings()
 	entry := &types.DownloadEntry{
-		ID:        "test-id",
-		URL:       "http://example.com/file.zip",
-		DestPath:  "/tmp/file.zip",
-		Filename:  "file.zip",
-		TotalSize: 1000,
-		Workers:   8,
+		ID:           "test-id",
+		URL:          "http://example.com/file.zip",
+		DestPath:     "/tmp/file.zip",
+		Filename:     "file.zip",
+		TotalSize:    1000,
+		Workers:      8,
 		MinChunkSize: 5 * types.MB,
 	}
 
@@ -62,22 +62,22 @@ func TestBuildResumeConfig_OverridesFallbackToEntry(t *testing.T) {
 func TestBuildResumeConfig_SavedStatePriorityForMinChunkSize(t *testing.T) {
 	settings := config.DefaultSettings()
 	entry := &types.DownloadEntry{
-		ID:          "test-id",
-		URL:         "http://example.com/file.zip",
-		DestPath:    "/tmp/file.zip",
-		Filename:    "file.zip",
-		TotalSize:   1000,
-		Workers:     4,
+		ID:           "test-id",
+		URL:          "http://example.com/file.zip",
+		DestPath:     "/tmp/file.zip",
+		Filename:     "file.zip",
+		TotalSize:    1000,
+		Workers:      4,
 		MinChunkSize: 2 * types.MB,
 	}
 	savedState := &types.DownloadState{
-		ID:          "test-id",
-		URL:         "http://example.com/file.zip",
-		DestPath:    "/tmp/file.zip",
-		Filename:    "file.zip",
-		TotalSize:   1000,
-		Downloaded:  500,
-		Workers:     8,
+		ID:           "test-id",
+		URL:          "http://example.com/file.zip",
+		DestPath:     "/tmp/file.zip",
+		Filename:     "file.zip",
+		TotalSize:    1000,
+		Downloaded:   500,
+		Workers:      8,
 		MinChunkSize: 10 * types.MB,
 	}
 
@@ -100,11 +100,11 @@ func TestBuildResumeConfig_NoOverridesUsesDefaults(t *testing.T) {
 		TotalSize: 1000,
 	}
 	savedState := &types.DownloadState{
-		ID:        "test-id",
-		URL:       "http://example.com/file.zip",
-		DestPath:  "/tmp/file.zip",
-		Filename:  "file.zip",
-		TotalSize: 1000,
+		ID:         "test-id",
+		URL:        "http://example.com/file.zip",
+		DestPath:   "/tmp/file.zip",
+		Filename:   "file.zip",
+		TotalSize:  1000,
 		Downloaded: 500,
 	}
 

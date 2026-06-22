@@ -151,10 +151,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		return m, nil
 
-	case notificationTickMsg:
-		// Notification tick is still used but logs don't expire
-		return m, nil
-
 	case extensionTokenFlashFadeMsg:
 		m.ExtensionTokenCopied = false
 		return m, nil

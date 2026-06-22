@@ -104,7 +104,7 @@ type DownloadStartedMsg struct {
 	URL          string
 	Filename     string
 	Total        int64
-	DestPath     string                // Full path to the destination file
+	DestPath     string               // Full path to the destination file
 	State        *types.ProgressState `json:"-"`
 	RateLimit    int64
 	RateLimitSet bool

@@ -1,25 +1,14 @@
 package tui
 
 import (
-	"fmt"
 	"image/color"
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/tui/colors"
-	"github.com/SurgeDM/Surge/internal/utils"
 
 	"charm.land/lipgloss/v2"
 )
 
-// GraphStats contains the statistics to overlay on the graph
-type GraphStats struct {
-	DownloadSpeed int64 // Current download speed in B/s
-	DownloadTop   int64 // Top download speed in B/s
-	DownloadTotal int64 // Total downloaded bytes
-}
-
-// graphColors returns the gradient slice for the graph from the current palette.
-// Called per-render so it always reflects the active theme.
 func graphColors() []color.Color {
 	return []color.Color{
 		colors.ProgressStart(), // Bottom
@@ -34,8 +23,7 @@ func graphColors() []color.Color {
 // data: speed history data points
 // width, height: dimensions of the graph
 // maxVal: maximum value for scaling
-// stats: stats to display in overlay box (pass nil to skip)
-func renderMultiLineGraph(data []float64, width, height int, maxVal float64, stats *GraphStats) string {
+func renderMultiLineGraph(data []float64, width, height int, maxVal float64) string {
 	if width < 1 || height < 1 {
 		return ""
 	}
@@ -141,84 +129,5 @@ func renderMultiLineGraph(data []float64, width, height int, maxVal float64, sta
 	}
 	graphStr := graphBuilder.String()
 
-	// 4. If stats provided, overlay them on the right side
-	if stats != nil {
-		graphStr = overlayStatsBox(graphStr, stats, width, height)
-	}
-
 	return graphStr
-}
-
-// overlayStatsBox renders stats on top of the graph in the top-right area
-func overlayStatsBox(graph string, stats *GraphStats, width, height int) string {
-	// Create the stats box content - btop style
-	valueStyle := lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
-	labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray())
-	headerStyle := lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true)
-	dimStyle := lipgloss.NewStyle().Foreground(colors.Gray())
-
-	speedMbps := float64(stats.DownloadSpeed) * 8 / 1000000.0
-	topMbps := float64(stats.DownloadTop) * 8 / 1000000.0
-
-	speedStr := "0 MB/s"
-	if stats.DownloadSpeed > 0 {
-		speedStr = utils.FormatRateLimit(stats.DownloadSpeed)
-	}
-	topStr := "0 MB/s"
-	if stats.DownloadTop > 0 {
-		topStr = utils.FormatRateLimit(stats.DownloadTop)
-	}
-
-	// Compact stats box like btop
-	statsLines := []string{
-		headerStyle.Render("download"),
-		fmt.Sprintf("%s %s  %s",
-			valueStyle.Render("\u25bc"),
-			valueStyle.Render(speedStr),
-			dimStyle.Render(fmt.Sprintf("(%.0f Mbps)", speedMbps)),
-		),
-		fmt.Sprintf("%s %s %s  %s",
-			labelStyle.Render("\u25bc"),
-			labelStyle.Render("Top:"),
-			valueStyle.Render(topStr),
-			dimStyle.Render(fmt.Sprintf("(%.0f Mbps)", topMbps)),
-		),
-		fmt.Sprintf("%s %s %s",
-			labelStyle.Render("\u25bc"),
-			labelStyle.Render("Total:"),
-			valueStyle.Render(utils.ConvertBytesToHumanReadable(stats.DownloadTotal)),
-		),
-	}
-
-	statsBox := lipgloss.JoinVertical(lipgloss.Right, statsLines...)
-	statsWidth := lipgloss.Width(statsBox)
-	statsHeight := lipgloss.Height(statsBox)
-
-	if statsWidth >= width || statsHeight >= height {
-		return graph
-	}
-
-	// Overlay by merging graph lines with stats lines on the right
-	graphLines := strings.Split(graph, "\n")
-	statsBoxLines := strings.Split(statsBox, "\n")
-
-	for i := 0; i < len(statsBoxLines) && i < len(graphLines); i++ {
-		graphLineWidth := lipgloss.Width(graphLines[i])
-		statsLineWidth := lipgloss.Width(statsBoxLines[i])
-
-		keepWidth := graphLineWidth - statsLineWidth - DividerHeight
-		if keepWidth < 0 {
-			keepWidth = 0
-		}
-
-		graphRunes := []rune(graphLines[i])
-		if keepWidth < len(graphRunes) {
-			graphLines[i] = string(graphRunes[:keepWidth]) + " " + statsBoxLines[i]
-		} else {
-			padding := keepWidth - len(graphRunes)
-			graphLines[i] = graphLines[i] + strings.Repeat(" ", padding) + " " + statsBoxLines[i]
-		}
-	}
-
-	return strings.Join(graphLines, "\n")
 }
