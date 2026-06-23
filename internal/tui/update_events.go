@@ -186,7 +186,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if msg.Elapsed.Seconds() > 0 {
 					speed = float64(d.Total) / msg.Elapsed.Seconds()
 				}
-				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 Done: %s (%.2f MB/s)", d.Filename, speed/float64(utils.MiB))))
+				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 Done: %s (%.2f MiB/s)", d.Filename, speed/float64(utils.MiB))))
 			}
 		}
 		m.UpdateListItems()
