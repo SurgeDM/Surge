@@ -115,3 +115,38 @@ func TestGetInitialConnections_LargeFileSizeSqrtHeuristicNoOverflow(t *testing.T
 		t.Fatalf("expected 32 (clamped by MaxConns), got %d", got)
 	}
 }
+
+func TestGetEffectiveSizeForWorkers_FreshDownload(t *testing.T) {
+	d := &ConcurrentDownloader{}
+	fileSize := int64(100 * types.MB)
+	got := d.getEffectiveSizeForWorkers(fileSize, nil, false)
+	if got != fileSize {
+		t.Fatalf("Fresh download: got %d, want %d", got, fileSize)
+	}
+}
+
+func TestGetEffectiveSizeForWorkers_Resume(t *testing.T) {
+	d := &ConcurrentDownloader{}
+	fileSize := int64(100 * types.MB)
+	savedState := &types.DownloadState{
+		TotalSize:  fileSize,
+		Downloaded: int64(98 * types.MB),
+	}
+	got := d.getEffectiveSizeForWorkers(fileSize, savedState, true)
+	if got != int64(2*types.MB) {
+		t.Fatalf("Resume: got %d, want %d", got, int64(2*types.MB))
+	}
+}
+
+func TestGetEffectiveSizeForWorkers_ResumeNegative(t *testing.T) {
+	d := &ConcurrentDownloader{}
+	fileSize := int64(100 * types.MB)
+	savedState := &types.DownloadState{
+		TotalSize:  fileSize,
+		Downloaded: int64(102 * types.MB), // Downloaded more than total size somehow
+	}
+	got := d.getEffectiveSizeForWorkers(fileSize, savedState, true)
+	if got != 0 {
+		t.Fatalf("Resume negative: got %d, want 0", got)
+	}
+}
