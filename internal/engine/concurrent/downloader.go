@@ -258,7 +258,19 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	}
 	d.TotalSize = fileSize
 
-	numConns := d.getInitialConnections(fileSize)
+	// Load saved state early to determine remaining size for connection count heuristic
+	savedState, err := state.LoadState(d.URL, destPath)
+	isResume := err == nil && savedState != nil && len(savedState.Tasks) > 0
+
+	effectiveSizeForWorkers := fileSize
+	if isResume && savedState.TotalSize > 0 {
+		effectiveSizeForWorkers = savedState.TotalSize - savedState.Downloaded
+		if effectiveSizeForWorkers < 0 {
+			effectiveSizeForWorkers = 0
+		}
+	}
+
+	numConns := d.getInitialConnections(effectiveSizeForWorkers)
 	chunkSize := d.determineChunkSize(fileSize, numConns)
 
 	workerMirrors := d.getWorkerMirrors(activeMirrors)
@@ -285,7 +297,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		d.State.InitBitmap(fileSize, chunkSize)
 	}
 
-	tasks, err := d.setupTasks(destPath, fileSize, chunkSize, outFile)
+	tasks, err := d.setupTasks(destPath, fileSize, chunkSize, outFile, savedState, isResume)
 	if err != nil {
 		return err
 	}
@@ -377,9 +389,7 @@ func (d *ConcurrentDownloader) getWorkerMirrors(activeMirrors []string) []string
 	return mirrors
 }
 
-func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize int64, outFile *os.File) ([]types.Task, error) {
-	savedState, err := state.LoadState(d.URL, destPath)
-	isResume := err == nil && savedState != nil && len(savedState.Tasks) > 0
+func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize int64, outFile *os.File, savedState *types.DownloadState, isResume bool) ([]types.Task, error) {
 
 	if isResume {
 		if d.State != nil {

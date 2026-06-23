@@ -122,7 +122,7 @@ func TestSetupTasks_NewDownload(t *testing.T) {
 		Runtime: &types.RuntimeConfig{},
 	}
 
-	tasks, err := downloader.setupTasks(destPath, fileSize, chunkSize, f)
+	tasks, err := downloader.setupTasks(destPath, fileSize, chunkSize, f, nil, false)
 	if err != nil {
 		t.Fatalf("setupTasks failed: %v", err)
 	}
@@ -227,7 +227,7 @@ func TestSetupTasks_BitmapRestoration(t *testing.T) {
 	// 1. InitBitmap
 	progState.InitBitmap(fileSize, chunkSize)
 	// 2. setupTasks (which calls RestoreBitmap)
-	_, err := downloader.setupTasks(destPath, fileSize, chunkSize, f)
+	_, err := downloader.setupTasks(destPath, fileSize, chunkSize, f, savedState, true)
 	if err != nil {
 		t.Fatal(err)
 	}
