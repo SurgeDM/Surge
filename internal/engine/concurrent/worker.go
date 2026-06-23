@@ -173,11 +173,8 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 		}
 
 		if lastErr != nil {
-			// Log failed task but continue with next task
-			// If we modified StopAt we should probably reset it or push the remaining part?
-			// TODO: Could optimize by pushing only remaining part if we track that.
-			queue.Push(task)
-			utils.Debug("task at offset %d failed after %d retries: %v", task.Offset, maxRetries, lastErr)
+			utils.Debug("Worker %d: task at offset %d failed after %d retries: %v", id, task.Offset, maxRetries, lastErr)
+			return lastErr
 		}
 	}
 }
