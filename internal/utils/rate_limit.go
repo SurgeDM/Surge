@@ -147,15 +147,7 @@ func FormatRateLimit(bps int64) string {
 	if bps <= 0 {
 		return "\u221E"
 	}
-	return ConvertBytesToHumanReadable(bps) + "/s"
-}
-
-// FormatSpeed formats a live speed value (unlike FormatRateLimit, 0 means "0 B/s", not "infinity")
-func FormatSpeed(speedBps float64) string {
-	if speedBps <= 0 {
-		return "0 B/s"
-	}
-	return ConvertBytesToHumanReadable(int64(math.Round(speedBps))) + "/s"
+	return FormatBytes(bps) + "/s"
 }
 
 // IsRateLimitInherit checks if the string is one of the recognized aliases for inheriting the default limit.

@@ -1,11 +1,14 @@
 package tui
 
-import "github.com/SurgeDM/Surge/internal/engine/types"
+import (
+	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
+)
 
 // Unit constants re-exported for use in test files within this package.
 const (
-	KB                    = types.KB
-	MB                    = types.MB
-	GB                    = types.GB
+	KB                    = utils.KiB
+	MB                    = utils.MiB
+	GB                    = utils.GiB
 	ProgressChannelBuffer = types.ProgressChannelBuffer
 )

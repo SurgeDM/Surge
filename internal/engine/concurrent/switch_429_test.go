@@ -15,13 +15,14 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
-	fileSize := int64(256 * types.KB)
+	fileSize := int64(256 * utils.KiB)
 
 	server1 := testutil.NewMockServerT(t,
 		testutil.WithFileSize(fileSize),
@@ -44,8 +45,9 @@ func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 1,
 		MaxTaskRetries:            5,
-		MinChunkSize:              64 * types.KB,
-		DialHedgeCount:            0,
+		MinChunkSize:              64 * utils.KiB,
+		DialHedgeCount:            0, // Disable hedging for deterministic failover test
+>>>>>>> 0b5d63d (refactor: move size constants to utils package and replace size_converter with standardized units)
 	}
 
 	downloader := NewConcurrentDownloader("switch429-id", nil, state, runtime)
@@ -90,7 +92,7 @@ func TestConcurrentDownloader_BackoffOnSingleMirror(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
-	fileSize := int64(1 * types.MB)
+	fileSize := int64(1 * utils.MiB) // Use enough size so it doesn't just finish instantly on 1st byte
 
 	server := testutil.NewMockServerT(t,
 		testutil.WithFileSize(fileSize),
@@ -106,8 +108,9 @@ func TestConcurrentDownloader_BackoffOnSingleMirror(t *testing.T) {
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 1,
 		MaxTaskRetries:            5,
-		MinChunkSize:              64 * types.KB,
-		DialHedgeCount:            0,
+		MinChunkSize:              64 * utils.KiB,
+		DialHedgeCount:            0, // Disable hedging for deterministic backoff timing
+>>>>>>> 0b5d63d (refactor: move size constants to utils package and replace size_converter with standardized units)
 	}
 
 	downloader := NewConcurrentDownloader("backoff-id", nil, state, runtime)

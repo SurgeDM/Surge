@@ -4,12 +4,13 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestTaskRangeAssignment(t *testing.T) {
 	runtime := &types.RuntimeConfig{
-		MinChunkSize: 1 * types.MB,
+		MinChunkSize: 1 * utils.MiB,
 	}
 
 	d := &ConcurrentDownloader{
@@ -25,14 +26,14 @@ func TestTaskRangeAssignment(t *testing.T) {
 	}{
 		{
 			name:      "Exact division",
-			fileSize:  100 * types.MB,
+			fileSize:  100 * utils.MiB,
 			numConns:  4,
-			wantChunk: 25 * types.MB,
+			wantChunk: 25 * utils.MiB,
 			wantTasks: 4,
 		},
 		{
 			name:     "Uneven division",
-			fileSize: 100*types.MB + 123, // clearly not divisible by 4 aligned
+			fileSize: 100*utils.MiB + 123, // clearly not divisible by 4 aligned
 			numConns: 4,
 			// 100MB / 4 = 25MB. 123 bytes remainder.
 			// Calculation: (104857600 + 123) / 4 = 26214430.
@@ -40,14 +41,14 @@ func TestTaskRangeAssignment(t *testing.T) {
 			// So chunk size is 25MB.
 			// 4 tasks of 25MB = 100MB.
 			// Remainder 123 bytes -> 5th task.
-			wantChunk: 25 * types.MB,
+			wantChunk: 25 * utils.MiB,
 			wantTasks: 5,
 		},
 		{
 			name:      "Small file",
-			fileSize:  10 * types.MB,
+			fileSize:  10 * utils.MiB,
 			numConns:  2,
-			wantChunk: 5 * types.MB,
+			wantChunk: 5 * utils.MiB,
 			wantTasks: 2,
 		},
 	}
@@ -77,7 +78,7 @@ func TestTaskRangeAssignment(t *testing.T) {
 func TestCalculateChunkSize_EdgeCases(t *testing.T) {
 	// Setup with known min chunk size
 	runtime := &types.RuntimeConfig{
-		MinChunkSize: 2 * types.MB,
+		MinChunkSize: 2 * utils.MiB,
 	}
 	d := &ConcurrentDownloader{
 		Runtime: runtime,
@@ -91,27 +92,27 @@ func TestCalculateChunkSize_EdgeCases(t *testing.T) {
 	}{
 		{
 			name:      "Zero connections (safety check)",
-			fileSize:  100 * types.MB,
+			fileSize:  100 * utils.MiB,
 			numConns:  0,
-			wantChunk: 2 * types.MB, // Fallback to MinChunkSize
+			wantChunk: 2 * utils.MiB,
 		},
 		{
 			name:      "Negative connections (safety check)",
-			fileSize:  100 * types.MB,
+			fileSize:  100 * utils.MiB,
 			numConns:  -5,
-			wantChunk: 2 * types.MB, // Fallback to MinChunkSize
+			wantChunk: 2 * utils.MiB,
 		},
 		{
 			name:      "Chunk size smaller than MinChunkSize (clamping)",
-			fileSize:  10 * types.MB,
-			numConns:  10,           // 1MB per conn
-			wantChunk: 2 * types.MB, // Clamped to MinChunkSize (2MB)
+			fileSize:  10 * utils.MiB,
+			numConns:  10, // 1MB per conn
+			wantChunk: 2 * utils.MiB,
 		},
 		{
 			name:      "Chunk size alignment (unaligned division)",
-			fileSize:  100*types.MB + 123, // Not perfectly divisible
-			numConns:  4,                  // ~25MB
-			wantChunk: 25 * types.MB,      // 25MB is aligned to 4KB
+			fileSize:  100*utils.MiB + 123, // Not perfectly divisible
+			numConns:  4,                   // ~25MB
+			wantChunk: 25 * utils.MiB,
 		},
 		{
 			name: "Chunk size alignment (force unaligned)",
@@ -119,15 +120,15 @@ func TestCalculateChunkSize_EdgeCases(t *testing.T) {
 			// (10MB + 2KB) / 2 = 5MB + 1KB.
 			// 5MB + 1KB is NOT aligned to 4KB (AlignSize).
 			// Should round down to nearest 4KB -> 5MB.
-			fileSize:  10*types.MB + 2*types.KB,
+			fileSize:  10*utils.MiB + 2*utils.KiB,
 			numConns:  2,
-			wantChunk: 5 * types.MB,
+			wantChunk: 5 * utils.MiB,
 		},
 		{
 			name:      "Very small file (less than MinChunkSize)",
-			fileSize:  1 * types.MB,
+			fileSize:  1 * utils.MiB,
 			numConns:  1,
-			wantChunk: 2 * types.MB, // Clamped to MinChunkSize
+			wantChunk: 2 * utils.MiB,
 		},
 	}
 
@@ -157,7 +158,7 @@ func TestCalculateChunkSize_EdgeCases(t *testing.T) {
 		// 1KB / 4KB = 0 (integer division).
 		// 0 * 4KB = 0.
 		// Should become 4KB (AlignSize) by the safety check.
-		got := dSmall.calculateChunkSize(1*types.KB, 1)
+		got := dSmall.calculateChunkSize(1*utils.KiB, 1)
 		assert.Equal(t, int64(types.AlignSize), got, "Should be bumped to AlignSize")
 	})
 }

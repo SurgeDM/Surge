@@ -92,7 +92,7 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 
 	// 1. Calculate ideal workers using the Square Root heuristic
 	// Convert to float first to avoid integer truncation on small files
-	sizeMB := float64(fileSize) / float64(types.MB)
+	sizeMB := float64(fileSize) / float64(utils.MiB)
 	calculatedWorkers := int(math.Round(math.Sqrt(sizeMB)))
 
 	// 2. Hard constraint: Don't create chunks smaller than MinChunkSize
@@ -170,7 +170,7 @@ func (d *ConcurrentDownloader) determineChunkSize(fileSize int64, numConns int) 
 		// Sequential mode: Use small fixed chunks (MinChunkSize) to ensure strict ordering
 		chunkSize := d.Runtime.GetMinChunkSize()
 		if chunkSize <= 0 {
-			chunkSize = 2 * types.MB // Default 2MB if not configured
+			chunkSize = 2 * utils.MiB // Default 2MB if not configured
 		}
 		// Align to 4KB
 		chunkSize = (chunkSize / types.AlignSize) * types.AlignSize
@@ -669,7 +669,7 @@ func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *ht
 		return 0, fmt.Errorf("failed to bootstrap concurrent download: %w", err)
 	}
 	defer func() {
-		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 32*types.KB))
+		_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 32*utils.KiB))
 		_ = resp.Body.Close()
 	}()
 

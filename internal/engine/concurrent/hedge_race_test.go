@@ -1,10 +1,11 @@
 package concurrent
 
 import (
-	"github.com/SurgeDM/Surge/internal/engine/types"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/SurgeDM/Surge/internal/engine/types"
 )
 
 // TestHedgeSharedMaxOffsetRace exercises concurrent hedging and pointer reads.

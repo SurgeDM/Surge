@@ -49,8 +49,8 @@ func (i DownloadItem) Description() string {
 
 	// Format: "⬇ Downloading • 45% • 2.5 MB/s • 50 MB / 100 MB"
 	sizeInfo := fmt.Sprintf("%s / %s",
-		utils.ConvertBytesToHumanReadable(d.Downloaded),
-		utils.ConvertBytesToHumanReadable(d.Total))
+		utils.FormatBytes(d.Downloaded),
+		utils.FormatBytes(d.Total))
 
 	speedInfo := ""
 	if d.Speed > 0 {

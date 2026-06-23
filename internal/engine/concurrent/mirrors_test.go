@@ -10,13 +10,14 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func TestMirrors_HappyPath(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
-	fileSize := int64(20 * types.MB)
+	fileSize := int64(20 * utils.MiB)
 
 	// Server 1
 	server1 := testutil.NewMockServerT(t,
@@ -75,7 +76,7 @@ func TestMirrors_Failover(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
-	fileSize := int64(512 * types.KB)
+	fileSize := int64(512 * utils.KiB)
 
 	// Server 1 (Bad Server - Always returns 500)
 	badHandler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

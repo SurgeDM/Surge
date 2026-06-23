@@ -384,14 +384,14 @@ func TestFormatSize_Table(t *testing.T) {
 	}{
 		{name: "zero", bytes: 0, want: "0 B"},
 		{name: "bytes", bytes: 512, want: "512 B"},
-		{name: "kb", bytes: 1024, want: "1.0 kB"},
-		{name: "kb-fraction", bytes: 1536, want: "1.5 kB"},
-		{name: "mb", bytes: 1024 * 1024, want: "1.0 MB"},
+		{name: "kb", bytes: 1024, want: "1.0 KiB"},
+		{name: "kb-fraction", bytes: 1536, want: "1.5 KiB"},
+		{name: "mb", bytes: 1024 * 1024, want: "1.0 MiB"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := utils.ConvertBytesToHumanReadable(tt.bytes); got != tt.want {
+			if got := utils.FormatBytes(tt.bytes); got != tt.want {
 				t.Fatalf("ConvertBytesToHumanReadable(%d) = %q, want %q", tt.bytes, got, tt.want)
 			}
 		})
@@ -407,7 +407,7 @@ func TestPrintDownloadDetail_TextAndJSON(t *testing.T) {
 		Progress:   55.5,
 		Downloaded: 1110,
 		TotalSize:  2000,
-		Speed:      2.5,
+		Speed:      2.5 * float64(utils.MiB),
 		Error:      "sample error",
 	}
 
@@ -417,7 +417,7 @@ func TestPrintDownloadDetail_TextAndJSON(t *testing.T) {
 	if !strings.Contains(textOut, "ID:         "+status.ID) {
 		t.Fatalf("expected text output to contain ID, got: %s", textOut)
 	}
-	if !strings.Contains(textOut, "Speed:      2.5 MB/s") {
+	if !strings.Contains(textOut, "Speed:      2.5 MiB/s") {
 		t.Fatalf("expected text output to contain speed, got: %s", textOut)
 	}
 	if !strings.Contains(textOut, "Error:      sample error") {

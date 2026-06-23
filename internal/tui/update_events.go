@@ -7,9 +7,9 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
-	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/tui/components"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -186,7 +186,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 				} else if msg.Elapsed.Seconds() > 0 {
 					speed = float64(d.Total) / msg.Elapsed.Seconds()
 				}
-				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 Done: %s (%.2f MB/s)", d.Filename, speed/float64(config.MB))))
+				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 Done: %s (%.2f MB/s)", d.Filename, speed/float64(utils.MiB))))
 			}
 		}
 		m.UpdateListItems()

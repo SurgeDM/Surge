@@ -5,6 +5,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func findConfigByID(pool *download.WorkerPool, id string) *types.DownloadConfig {
@@ -42,9 +43,9 @@ func TestAdd_PerTaskOverride(t *testing.T) {
 		{
 			name:         "minChunk-only",
 			workers:      0,
-			minChunkSize: 10 * types.MB,
+			minChunkSize: 10 * utils.MiB,
 			wantWorkers:  0,
-			wantMinChunk: 10 * types.MB,
+			wantMinChunk: 10 * utils.MiB,
 		},
 		{
 			name:         "workers-clamped",

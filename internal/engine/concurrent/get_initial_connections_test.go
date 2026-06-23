@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func TestGetInitialConnections_SqrtHeuristic(t *testing.T) {
@@ -11,7 +12,7 @@ func TestGetInitialConnections_SqrtHeuristic(t *testing.T) {
 		Runtime: &types.RuntimeConfig{},
 	}
 	// 100 MB file → √100 = 10 workers
-	fileSize := int64(100 * types.MB)
+	fileSize := int64(100 * utils.MiB)
 	got := d.getInitialConnections(fileSize)
 	if got != 10 {
 		t.Fatalf("Workers=0, 100MB file: got %d, want 10 (√size)", got)
@@ -25,7 +26,7 @@ func TestGetInitialConnections_WorkersOverrideBypassesSqrt(t *testing.T) {
 		},
 	}
 	// 100 MB file would give √100=10, but Workers=8 should bypass
-	fileSize := int64(100 * types.MB)
+	fileSize := int64(100 * utils.MiB)
 	got := d.getInitialConnections(fileSize)
 	if got != 8 {
 		t.Fatalf("Workers=8, 100MB file: got %d, want 8 (bypass √size)", got)
@@ -39,7 +40,7 @@ func TestGetInitialConnections_WorkersClampedByMaxConnections(t *testing.T) {
 			Workers:                   64,
 		},
 	}
-	fileSize := int64(100 * types.MB)
+	fileSize := int64(100 * utils.MiB)
 	got := d.getInitialConnections(fileSize)
 	if got != 32 {
 		t.Fatalf("Workers=64, MaxConns=32: got %d, want 32 (clamped by ceiling)", got)
@@ -50,11 +51,11 @@ func TestGetInitialConnections_WorkersClampedByMinChunkSize(t *testing.T) {
 	d := &ConcurrentDownloader{
 		Runtime: &types.RuntimeConfig{
 			Workers:      16,
-			MinChunkSize: 2 * types.MB,
+			MinChunkSize: 2 * utils.MiB,
 		},
 	}
 	// 10 MB file / 2 MB min chunk = 5 max chunks
-	fileSize := int64(10 * types.MB)
+	fileSize := int64(10 * utils.MiB)
 	got := d.getInitialConnections(fileSize)
 	if got != 5 {
 		t.Fatalf("Workers=16, 10MB file, MinChunk=2MB: got %d, want 5 (clamped by minChunkSize)", got)
@@ -67,7 +68,7 @@ func TestGetInitialConnections_WorkersMinimumOne(t *testing.T) {
 			Workers: 1,
 		},
 	}
-	fileSize := int64(100 * types.MB)
+	fileSize := int64(100 * utils.MiB)
 	got := d.getInitialConnections(fileSize)
 	if got != 1 {
 		t.Fatalf("Workers=1: got %d, want 1", got)

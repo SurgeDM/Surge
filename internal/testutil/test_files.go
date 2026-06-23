@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // TempDir creates a temporary directory for test files and returns a cleanup function.
@@ -35,7 +35,7 @@ func CreateTestFile(dir, name string, size int64, random bool) (string, error) {
 
 	if random {
 		// Write in chunks for large files
-		chunkSize := int64(64 * types.KB) // 64KB
+		chunkSize := int64(64 * utils.KiB) // 64KB
 		chunk := make([]byte, chunkSize)
 		remaining := size
 
@@ -77,7 +77,7 @@ func CreateSurgeFile(dir, name string, totalSize, downloadedSize int64) (string,
 
 	// Fill downloaded portion with data
 	if downloadedSize > 0 {
-		chunk := make([]byte, min(downloadedSize, 64*types.KB))
+		chunk := make([]byte, min(downloadedSize, 64*utils.KiB))
 		for i := range chunk {
 			chunk[i] = byte(i % 256)
 		}

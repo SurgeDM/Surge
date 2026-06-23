@@ -80,7 +80,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 	buildAxisLines := func(h int, axisStyle lipgloss.Style) []string {
 		label := func(v float64) string {
 			if v <= 0 {
-				return "0 MB/s"
+				return "0 MiB/s"
 			}
 			return utils.FormatRateLimit(int64(v))
 		}
@@ -152,11 +152,11 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 		labelStyleStats := lipgloss.NewStyle().Foreground(colors.LightGray())
 		dimStyle := lipgloss.NewStyle().Foreground(colors.Gray())
 
-		speedStr := "0 MB/s"
+		speedStr := "0 MiB/s"
 		if currentSpeed > 0 {
 			speedStr = utils.FormatRateLimit(int64(currentSpeed))
 		}
-		topStr := "0 MB/s"
+		topStr := "0 MiB/s"
 		if topSpeedBps > 0 {
 			topStr = utils.FormatRateLimit(int64(topSpeedBps))
 		}
@@ -168,7 +168,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 			fmt.Sprintf("%s %s", labelStyleStats.Render("Top:"), valueStyle.Render(topStr)),
 			dimStyle.Render(fmt.Sprintf("  (%.0f Mbps)", topMbps)),
 			"",
-			fmt.Sprintf("%s %s", labelStyleStats.Render("Total:"), valueStyle.Render(utils.ConvertBytesToHumanReadable(stats.TotalDownloaded))),
+			fmt.Sprintf("%s %s", labelStyleStats.Render("Total:"), valueStyle.Render(utils.FormatBytes(stats.TotalDownloaded))),
 		)
 
 		statsBoxStyle := lipgloss.NewStyle().

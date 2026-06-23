@@ -3,6 +3,8 @@ package types
 import (
 	"testing"
 	"time"
+
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func TestRuntimeConfig_Getters(t *testing.T) {
@@ -106,8 +108,8 @@ func TestRuntimeConfig_Getters(t *testing.T) {
 		r := &RuntimeConfig{
 			MaxConnectionsPerDownload: 128,
 			UserAgent:                 "CustomAgent/1.0",
-			MinChunkSize:              4 * MB,
-			WorkerBufferSize:          1 * MB,
+			MinChunkSize:              4 * utils.MiB,
+			WorkerBufferSize:          1 * utils.MiB,
 			MaxTaskRetries:            5,
 			SlowWorkerThreshold:       0.75,
 			SlowWorkerGracePeriod:     10 * time.Second,
@@ -121,12 +123,12 @@ func TestRuntimeConfig_Getters(t *testing.T) {
 		if got := r.GetUserAgent(); got != "CustomAgent/1.0" {
 			t.Errorf("GetUserAgent = %s, want CustomAgent/1.0", got)
 		}
-		if got := r.GetMinChunkSize(); got != 4*MB {
-			t.Errorf("GetMinChunkSize = %d, want %d", got, 4*MB)
+		if got := r.GetMinChunkSize(); got != 4*utils.MiB {
+			t.Errorf("GetMinChunkSize = %d, want %d", got, 4*utils.MiB)
 		}
 
-		if got := r.GetWorkerBufferSize(); got != 1*MB {
-			t.Errorf("GetWorkerBufferSize = %d, want %d", got, 1*MB)
+		if got := r.GetWorkerBufferSize(); got != 1*utils.MiB {
+			t.Errorf("GetWorkerBufferSize = %d, want %d", got, 1*utils.MiB)
 		}
 		if got := r.GetMaxTaskRetries(); got != 5 {
 			t.Errorf("GetMaxTaskRetries = %d, want 5", got)
@@ -186,14 +188,14 @@ func TestDefaultRuntimeConfig_PopulatesDefaults(t *testing.T) {
 
 func TestSizeConstants(t *testing.T) {
 	// Verify size constant relationships
-	if KB != 1024 {
-		t.Errorf("KB = %d, want 1024", KB)
+	if utils.KiB != 1024 {
+		t.Errorf("KB = %d, want 1024", utils.KiB)
 	}
-	if MB != 1024*KB {
-		t.Errorf("MB = %d, want %d", MB, 1024*KB)
+	if utils.MiB != 1024*utils.KiB {
+		t.Errorf("MB = %d, want %d", utils.MiB, 1024*utils.KiB)
 	}
-	if GB != 1024*MB {
-		t.Errorf("GB = %d, want %d", GB, 1024*MB)
+	if utils.GiB != 1024*utils.MiB {
+		t.Errorf("GB = %d, want %d", utils.GiB, 1024*utils.MiB)
 	}
 
 	// Verify alignment

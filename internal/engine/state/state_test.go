@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/google/uuid"
 )
 
@@ -1159,7 +1160,7 @@ func TestSaveLoadState_PreservesOverrideFields(t *testing.T) {
 		Downloaded:   500000,
 		Filename:     "override-state.zip",
 		Workers:      8,
-		MinChunkSize: 5 * types.MB,
+		MinChunkSize: 5 * utils.MiB,
 	}
 
 	if err := SaveState(testURL, testDestPath, originalState); err != nil {
@@ -1174,8 +1175,8 @@ func TestSaveLoadState_PreservesOverrideFields(t *testing.T) {
 	if loadedState.Workers != 8 {
 		t.Errorf("Workers = %d, want 8", loadedState.Workers)
 	}
-	if loadedState.MinChunkSize != 5*types.MB {
-		t.Errorf("MinChunkSize = %d, want %d", loadedState.MinChunkSize, 5*types.MB)
+	if loadedState.MinChunkSize != 5*utils.MiB {
+		t.Errorf("MinChunkSize = %d, want %d", loadedState.MinChunkSize, 5*utils.MiB)
 	}
 }
 
@@ -1192,7 +1193,7 @@ func TestAddGetDownload_PreservesOverrideFields(t *testing.T) {
 		Filename:     "override-entry.zip",
 		Status:       "paused",
 		Workers:      8,
-		MinChunkSize: 5 * types.MB,
+		MinChunkSize: 5 * utils.MiB,
 	}
 
 	if err := AddToMasterList(entry); err != nil {
@@ -1209,7 +1210,7 @@ func TestAddGetDownload_PreservesOverrideFields(t *testing.T) {
 	if loaded.Workers != 8 {
 		t.Errorf("Workers = %d, want 8", loaded.Workers)
 	}
-	if loaded.MinChunkSize != 5*types.MB {
-		t.Errorf("MinChunkSize = %d, want %d", loaded.MinChunkSize, 5*types.MB)
+	if loaded.MinChunkSize != 5*utils.MiB {
+		t.Errorf("MinChunkSize = %d, want %d", loaded.MinChunkSize, 5*utils.MiB)
 	}
 }

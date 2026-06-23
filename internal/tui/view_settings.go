@@ -671,7 +671,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			if err != nil {
 				return fmt.Errorf("invalid number")
 			}
-			parsedVal = int(v * float64(config.KB))
+			parsedVal = int(v * float64(utils.KiB))
 		} else {
 			v, err := strconv.Atoi(value)
 			if err != nil {
@@ -686,7 +686,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			if err != nil {
 				return fmt.Errorf("invalid number")
 			}
-			parsedVal = int64(v * float64(config.MB))
+			parsedVal = int64(v * float64(utils.MiB))
 		} else {
 			v, err := strconv.ParseInt(value, 10, 64)
 			if err != nil {
@@ -814,12 +814,12 @@ func formatSettingValueForEdit(value interface{}, typ config.SettingType, key st
 	switch key {
 	case "min_chunk_size":
 		if v, ok := asFloat64(value); ok {
-			mb := v / float64(config.MB)
+			mb := v / float64(utils.MiB)
 			return fmt.Sprintf("%.1f", mb)
 		}
 	case "worker_buffer_size":
 		if v, ok := asFloat64(value); ok {
-			kb := v / float64(config.KB)
+			kb := v / float64(utils.KiB)
 			return fmt.Sprintf("%.0f", kb)
 		}
 	case "slow_worker_grace_period", "stall_timeout":

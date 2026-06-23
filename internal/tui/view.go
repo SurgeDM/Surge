@@ -651,9 +651,9 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 
 	// Size
 	if d.done {
-		sizeStr = utils.ConvertBytesToHumanReadable(d.Total)
+		sizeStr = utils.FormatBytes(d.Total)
 	} else {
-		sizeStr = fmt.Sprintf("%s / %s", utils.ConvertBytesToHumanReadable(d.Downloaded), utils.ConvertBytesToHumanReadable(d.Total))
+		sizeStr = fmt.Sprintf("%s / %s", utils.FormatBytes(d.Downloaded), utils.FormatBytes(d.Total))
 	}
 
 	// Speed & ETA

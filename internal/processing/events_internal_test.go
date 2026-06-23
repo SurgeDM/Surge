@@ -13,6 +13,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/state"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func TestFinalizeCompletedFile_CopiesAcrossDevicesOnEXDEV(t *testing.T) {
@@ -79,7 +80,7 @@ func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing
 		Filename:     "video.mp4",
 		Status:       "downloading",
 		Workers:      8,
-		MinChunkSize: 4 * types.MB,
+		MinChunkSize: 4 * utils.MiB,
 	}); err != nil {
 		t.Fatalf("failed to seed download entry: %v", err)
 	}
@@ -153,8 +154,8 @@ func TestStartEventWorker_MarksCompletionAsErrorWhenFinalizationFails(t *testing
 	if entry.Workers != 8 {
 		t.Fatalf("Workers = %d, want 8 (preserved from existing entry)", entry.Workers)
 	}
-	if entry.MinChunkSize != 4*types.MB {
-		t.Fatalf("MinChunkSize = %d, want %d (preserved from existing entry)", entry.MinChunkSize, 4*types.MB)
+	if entry.MinChunkSize != 4*utils.MiB {
+		t.Fatalf("MinChunkSize = %d, want %d (preserved from existing entry)", entry.MinChunkSize, 4*utils.MiB)
 	}
 }
 

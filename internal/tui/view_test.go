@@ -400,8 +400,8 @@ func TestView_NetworkActivityShowsFiveAxisLabelsWhenTall(t *testing.T) {
 	view := m.View()
 	plain := ansiEscapeRE.ReplaceAllString(view.Content, "")
 
-	if !strings.Contains(plain, "800.0 kB/s") || !strings.Contains(plain, "200.0 kB/s") {
-		t.Fatalf("expected 5-axis labels (including 800.0 kB/s and 200.0 kB/s), got:\n%s", plain)
+	if !strings.Contains(plain, "781 KiB/s") || !strings.Contains(plain, "195 KiB/s") {
+		t.Fatalf("expected 5-axis labels (including 781 KiB/s and 195 KiB/s), got:\n%s", plain)
 	}
 }
 
@@ -673,11 +673,11 @@ func TestFooter_ActiveSpeedShowsMBps(t *testing.T) {
 	}
 
 	last := footerLine(m)
-	if !strings.Contains(last, "MB/s") {
-		t.Errorf("footer should show MB/s for active download, got: %q", last)
+	if !strings.Contains(last, "MiB/s") {
+		t.Errorf("footer should show MiB/s for active download, got: %q", last)
 	}
-	if !strings.Contains(last, "2.6") {
-		t.Errorf("footer should show 2.6 MB/s, got: %q", last)
+	if !strings.Contains(last, "2.5") {
+		t.Errorf("footer should show 2.5 MiB/s, got: %q", last)
 	}
 }
 
@@ -692,8 +692,8 @@ func TestFooter_ActiveSpeedShowsKBps(t *testing.T) {
 	}
 
 	last := footerLine(m)
-	if !strings.Contains(last, "kB/s") {
-		t.Errorf("footer should show kB/s for sub-MB/s speed, got: %q", last)
+	if !strings.Contains(last, "KiB/s") {
+		t.Errorf("footer should show KiB/s for sub-MiB/s speed, got: %q", last)
 	}
 }
 

@@ -308,7 +308,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan interface{}) {
 				if m.Elapsed.Seconds() <= 0 {
 					notify(title, "Download complete!")
 				} else {
-					notify(title, fmt.Sprintf("Download complete in %s (%.2f MB/s)", m.Elapsed.Truncate(time.Second), avgSpeed/float64(types.MB)))
+					notify(title, fmt.Sprintf("Download complete in %s (%.2f MB/s)", m.Elapsed.Truncate(time.Second), avgSpeed/float64(utils.MiB)))
 				}
 			}
 

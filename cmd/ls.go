@@ -137,12 +137,12 @@ func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote 
 
 	for _, d := range downloads {
 		progress := fmt.Sprintf("%.1f%%", d.Progress)
-		size := utils.ConvertBytesToHumanReadable(d.TotalSize)
+		size := utils.FormatBytes(d.TotalSize)
 
 		// Speed display
 		var speed string
 		if d.Speed > 0 {
-			speed = fmt.Sprintf("%.1f MB/s", d.Speed)
+			speed = utils.FormatSpeed(d.Speed)
 		} else {
 			speed = "-"
 		}
@@ -253,9 +253,9 @@ func printDownloadDetail(d types.DownloadStatus, jsonOutput bool) {
 	fmt.Printf("Filename:   %s\n", d.Filename)
 	fmt.Printf("Status:     %s\n", d.Status)
 	fmt.Printf("Progress:   %.1f%%\n", d.Progress)
-	fmt.Printf("Downloaded: %s / %s\n", utils.ConvertBytesToHumanReadable(d.Downloaded), utils.ConvertBytesToHumanReadable(d.TotalSize))
+	fmt.Printf("Downloaded: %s / %s\n", utils.FormatBytes(d.Downloaded), utils.FormatBytes(d.TotalSize))
 	if d.Speed > 0 {
-		fmt.Printf("Speed:      %.1f MB/s\n", d.Speed)
+		fmt.Printf("Speed:      %s\n", utils.FormatSpeed(d.Speed))
 	}
 	if d.Error != "" {
 		fmt.Printf("Error:      %s\n", d.Error)

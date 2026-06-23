@@ -10,10 +10,11 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func TestPrewarmConnections_Reuse(t *testing.T) {
-	fileSize := int64(1 * types.KB)
+	fileSize := int64(1 * utils.KiB)
 	server := testutil.NewMockServerT(t,
 		testutil.WithFileSize(fileSize),
 		testutil.WithRangeSupport(true),

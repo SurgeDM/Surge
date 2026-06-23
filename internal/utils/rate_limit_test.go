@@ -63,9 +63,9 @@ func TestFormatRateLimit(t *testing.T) {
 		{"Zero", 0, "\u221E"},
 		{"Negative", -100, "\u221E"},
 		{"Bytes", 500, "500 B/s"},
-		{"Kilobytes", 1000, "1.0 kB/s"},
-		{"Megabytes", 1000000, "1.0 MB/s"},
-		{"Gigabytes", 1000000000, "1.0 GB/s"},
+		{"Kilobytes", 1024, "1.0 KiB/s"},
+		{"Megabytes", 1024 * 1024, "1.0 MiB/s"},
+		{"Gigabytes", 1024 * 1024 * 1024, "1.0 GiB/s"},
 	}
 
 	for _, tt := range tests {

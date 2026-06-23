@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func TestDefaultSettings(t *testing.T) {
@@ -241,8 +243,8 @@ func TestSaveAndLoadSettings(t *testing.T) {
 	original.Network.MaxConnectionsPerDownload.Value = 16
 	original.Network.MaxConcurrentDownloads.Value = 7
 	original.Network.UserAgent.Value = "TestAgent/1.0"
-	original.Network.MinChunkSize.Value = int64(1 * MB)
-	original.Network.WorkerBufferSize.Value = 256 * KB
+	original.Network.MinChunkSize.Value = int64(1 * utils.MiB)
+	original.Network.WorkerBufferSize.Value = 256 * utils.KiB
 	original.Network.DialHedgeCount.Value = 6
 	original.Performance.MaxTaskRetries.Value = 5
 	original.Performance.SlowWorkerThreshold.Value = 0.5

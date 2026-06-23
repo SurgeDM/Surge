@@ -3,22 +3,18 @@ package types
 import (
 	"context"
 	"time"
-)
 
-const (
-	KB = 1 << 10
-	MB = 1 << 20
-	GB = 1 << 30
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 const (
 	IncompleteSuffix = ".surge"
 
-	MinChunk     = 2 * MB
-	AlignSize    = 4 * KB
-	WorkerBuffer = 512 * KB
+	MinChunk     = 2 * utils.MiB
+	AlignSize    = 4 * utils.KiB
+	WorkerBuffer = 512 * utils.KiB
 
-	WorkerBatchSize     = 1 * MB
+	WorkerBatchSize     = 1 * utils.MiB
 	WorkerBatchInterval = 200 * time.Millisecond
 
 	PerDownloadMax = 32

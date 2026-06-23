@@ -5,6 +5,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func TestBuildResumeConfig_OverridesFromSavedState(t *testing.T) {
@@ -16,7 +17,7 @@ func TestBuildResumeConfig_OverridesFromSavedState(t *testing.T) {
 		Filename:     "file.zip",
 		TotalSize:    1000,
 		Workers:      4,
-		MinChunkSize: 5 * types.MB,
+		MinChunkSize: 5 * utils.MiB,
 	}
 	savedState := &types.DownloadState{
 		ID:           "test-id",
@@ -26,15 +27,15 @@ func TestBuildResumeConfig_OverridesFromSavedState(t *testing.T) {
 		TotalSize:    1000,
 		Downloaded:   500,
 		Workers:      8,
-		MinChunkSize: 5 * types.MB,
+		MinChunkSize: 5 * utils.MiB,
 	}
 
 	cfg := buildResumeConfig("test-id", "/tmp", entry, savedState, settings)
 	if cfg.Runtime.Workers != 8 {
 		t.Fatalf("expected Runtime.Workers=8 (from savedState), got %d", cfg.Runtime.Workers)
 	}
-	if cfg.Runtime.MinChunkSize != 5*types.MB {
-		t.Fatalf("expected Runtime.MinChunkSize=%d (from savedState), got %d", 5*types.MB, cfg.Runtime.MinChunkSize)
+	if cfg.Runtime.MinChunkSize != 5*utils.MiB {
+		t.Fatalf("expected Runtime.MinChunkSize=%d (from savedState), got %d", 5*utils.MiB, cfg.Runtime.MinChunkSize)
 	}
 }
 
@@ -47,15 +48,15 @@ func TestBuildResumeConfig_OverridesFallbackToEntry(t *testing.T) {
 		Filename:     "file.zip",
 		TotalSize:    1000,
 		Workers:      8,
-		MinChunkSize: 5 * types.MB,
+		MinChunkSize: 5 * utils.MiB,
 	}
 
 	cfg := buildResumeConfig("test-id", "/tmp", entry, nil, settings)
 	if cfg.Runtime.Workers != 8 {
 		t.Fatalf("expected Runtime.Workers=8 (from entry fallback), got %d", cfg.Runtime.Workers)
 	}
-	if cfg.Runtime.MinChunkSize != 5*types.MB {
-		t.Fatalf("expected Runtime.MinChunkSize=%d (from entry fallback), got %d", 5*types.MB, cfg.Runtime.MinChunkSize)
+	if cfg.Runtime.MinChunkSize != 5*utils.MiB {
+		t.Fatalf("expected Runtime.MinChunkSize=%d (from entry fallback), got %d", 5*utils.MiB, cfg.Runtime.MinChunkSize)
 	}
 }
 
@@ -68,7 +69,7 @@ func TestBuildResumeConfig_SavedStatePriorityForMinChunkSize(t *testing.T) {
 		Filename:     "file.zip",
 		TotalSize:    1000,
 		Workers:      4,
-		MinChunkSize: 2 * types.MB,
+		MinChunkSize: 2 * utils.MiB,
 	}
 	savedState := &types.DownloadState{
 		ID:           "test-id",
@@ -78,15 +79,15 @@ func TestBuildResumeConfig_SavedStatePriorityForMinChunkSize(t *testing.T) {
 		TotalSize:    1000,
 		Downloaded:   500,
 		Workers:      8,
-		MinChunkSize: 10 * types.MB,
+		MinChunkSize: 10 * utils.MiB,
 	}
 
 	cfg := buildResumeConfig("test-id", "/tmp", entry, savedState, settings)
 	if cfg.Runtime.Workers != 8 {
 		t.Fatalf("expected Runtime.Workers=8 (from savedState), got %d", cfg.Runtime.Workers)
 	}
-	if cfg.Runtime.MinChunkSize != 10*types.MB {
-		t.Fatalf("expected Runtime.MinChunkSize=%d (from savedState), got %d", 10*types.MB, cfg.Runtime.MinChunkSize)
+	if cfg.Runtime.MinChunkSize != 10*utils.MiB {
+		t.Fatalf("expected Runtime.MinChunkSize=%d (from savedState), got %d", 10*utils.MiB, cfg.Runtime.MinChunkSize)
 	}
 }
 

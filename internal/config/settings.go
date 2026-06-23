@@ -485,11 +485,6 @@ func CategoryOrder() []string {
 }
 
 const (
-	KB = 1 << 10
-	MB = 1 << 20
-)
-
-const (
 	ThemeAdaptive = 0
 	ThemeLight    = 1
 	ThemeDark     = 2
@@ -763,18 +758,18 @@ func DefaultSettings() *Settings {
 			MinChunkSize: &Setting{
 				Key:          "min_chunk_size",
 				Label:        "Min Chunk Size",
-				Description:  "Minimum download chunk size in MB (e.g., 2).",
+				Description:  "Minimum download chunk size in MiB (e.g., 2).",
 				Type:         TypeInt64,
-				DefaultValue: int64(2 * MB),
-				Value:        int64(2 * MB),
+				DefaultValue: int64(2 * utils.MiB),
+				Value:        int64(2 * utils.MiB),
 				ValidateFunc: func(val any) error {
 					vInt, err := parseAnyInt(val)
 					if err != nil {
 						return err
 					}
 					v := int64(vInt)
-					if v < 100*KB {
-						return fmt.Errorf("min chunk size must be at least 100KB")
+					if v < 100*utils.KiB {
+						return fmt.Errorf("min chunk size must be at least 100KiB")
 					}
 					return nil
 				},
@@ -782,17 +777,17 @@ func DefaultSettings() *Settings {
 			WorkerBufferSize: &Setting{
 				Key:          "worker_buffer_size",
 				Label:        "Worker Buffer Size",
-				Description:  "I/O buffer size per worker in KB (e.g., 512).",
+				Description:  "I/O buffer size per worker in KiB (e.g., 512).",
 				Type:         TypeInt,
-				DefaultValue: int(512 * KB),
-				Value:        int(512 * KB),
+				DefaultValue: int(512 * utils.KiB),
+				Value:        int(512 * utils.KiB),
 				ValidateFunc: func(val any) error {
 					v, err := parseAnyInt(val)
 					if err != nil {
 						return err
 					}
-					if v < 1*KB {
-						return fmt.Errorf("worker buffer size must be at least 1KB")
+					if v < 1*utils.KiB {
+						return fmt.Errorf("worker buffer size must be at least 1KiB")
 					}
 					return nil
 				},

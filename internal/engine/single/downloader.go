@@ -30,7 +30,7 @@ type SingleDownloader struct {
 
 var bufPool = sync.Pool{
 	New: func() any {
-		b := make([]byte, 32*types.KB)
+		b := make([]byte, 32*utils.KiB)
 		return &b
 	},
 }
@@ -192,7 +192,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	utils.Debug("\nDownloaded %s in %s (%s/s)\n",
 		destPath,
 		elapsed.Round(time.Second),
-		utils.ConvertBytesToHumanReadable(int64(speed)),
+		utils.FormatBytes(int64(speed)),
 	)
 
 	return nil

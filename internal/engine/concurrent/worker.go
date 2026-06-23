@@ -479,7 +479,7 @@ func (d *ConcurrentDownloader) StealWork(queue *TaskQueue) bool {
 
 	queue.Push(stolenTask)
 	utils.Debug("Balancer: stole %s from worker %d (new range: %d-%d)",
-		utils.ConvertBytesToHumanReadable(stolenTask.Length), bestID, stolenTask.Offset, stolenTask.Offset+stolenTask.Length)
+		utils.FormatBytes(stolenTask.Length), bestID, stolenTask.Offset, stolenTask.Offset+stolenTask.Length)
 
 	return true
 }
@@ -546,7 +546,7 @@ func (d *ConcurrentDownloader) HedgeWork(queue *TaskQueue) bool {
 
 	queue.Push(hedgedTask)
 	utils.Debug("Balancer: hedged %s (range: %d-%d) - idle worker will race on fresh connection",
-		utils.ConvertBytesToHumanReadable(hedgedTask.Length), hedgedTask.Offset, hedgedTask.Offset+hedgedTask.Length)
+		utils.FormatBytes(hedgedTask.Length), hedgedTask.Offset, hedgedTask.Offset+hedgedTask.Length)
 
 	return true
 }
