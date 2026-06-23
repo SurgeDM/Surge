@@ -738,7 +738,7 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 		status.Progress = float64(status.Downloaded) * 100 / float64(status.TotalSize)
 	}
 
-	// Calculate speed (MB/s) only for active downloads.
+	// Calculate speed (bytes/s) only for active downloads.
 	if status.Status == "downloading" {
 		sessionDownloaded := downloaded - sessionStart
 		if sessionElapsed.Seconds() > 0 && sessionDownloaded > 0 {
