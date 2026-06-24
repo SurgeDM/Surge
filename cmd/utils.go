@@ -126,13 +126,13 @@ func ValidateAndNormalizeURL(rawURL string) (string, error) {
 	}
 
 	if u.Scheme == "" {
-		if strings.Contains(rawURL, ".") && !strings.Contains(rawURL, string(os.PathSeparator)) {
-			// Could be a domain (e.g. example.com/file.zip), try prepending https
-			return "https://" + rawURL, nil
-		}
 		// Could be a local file path
 		if info, err := os.Stat(rawURL); err == nil && !info.IsDir() {
 			return rawURL, nil
+		}
+		if strings.Contains(rawURL, ".") && !strings.Contains(rawURL, string(os.PathSeparator)) {
+			// Could be a domain (e.g. example.com/file.zip), try prepending https
+			return "https://" + rawURL, nil
 		}
 		return "", fmt.Errorf("missing or unsupported scheme (must be http://, https://, or magnet:)")
 	}
