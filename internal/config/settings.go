@@ -894,6 +894,8 @@ func DefaultSettings() *Settings {
 						v = actual
 					case int:
 						v = float64(actual)
+					case int64:
+						v = float64(actual)
 					default:
 						return fmt.Errorf("invalid type")
 					}
@@ -966,6 +968,8 @@ func DefaultSettings() *Settings {
 					case float64:
 						v = actual
 					case int:
+						v = float64(actual)
+					case int64:
 						v = float64(actual)
 					default:
 						return fmt.Errorf("invalid type")
