@@ -45,7 +45,7 @@ Usage:
 }
 
 func handleSearchOperation(cmd *cobra.Command, settings *config.Settings, args []string) error {
-	var terms []string
+	terms := make([]string, 0, len(args))
 	for _, arg := range args {
 		terms = append(terms, strings.ToLower(arg))
 	}
