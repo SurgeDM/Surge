@@ -23,20 +23,23 @@ import (
 
 // ConcurrentDownloader handles multi-connection downloads
 type ConcurrentDownloader struct {
-	ProgressChan chan<- any           // Channel for events (start/complete/error)
-	ID           string               // Download ID
-	State        *types.ProgressState // Shared state for TUI polling
-	activeTasks  map[int]*ActiveTask
-	activeMu     sync.Mutex
-	URL          string // For pause/resume
-	DestPath     string // For pause/resume
+	URL          string
+	DestPath     string
+	ID           string
+	TotalSize    int64
+	ProgressChan chan<- any
+	State        *types.ProgressState
 	Runtime      *types.RuntimeConfig
+	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
 	Limiter      types.ByteLimiter
 	RateLimitBps int64
 	RateLimitSet bool
-	TotalSize    int64
-	bufPool      sync.Pool
-	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
+
+	activeTasks      map[int]*ActiveTask
+	activeMu         sync.Mutex
+	bufPool          sync.Pool
+	taskRequeueCount map[int64]int
+	taskRequeueMu    sync.Mutex
 }
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
@@ -46,11 +49,12 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 	}
 
 	return &ConcurrentDownloader{
-		ID:           id,
-		ProgressChan: progressCh,
-		State:        progState,
-		activeTasks:  make(map[int]*ActiveTask),
-		Runtime:      runtime,
+		ID:               id,
+		ProgressChan:     progressCh,
+		State:            progState,
+		activeTasks:      make(map[int]*ActiveTask),
+		taskRequeueCount: make(map[int64]int),
+		Runtime:          runtime,
 		bufPool: sync.Pool{
 			New: func() any {
 				// Use configured buffer size
@@ -518,27 +522,29 @@ func (d *ConcurrentDownloader) executeWorkers(ctx context.Context, cancel contex
 	var wg sync.WaitGroup
 	workerErrors := make(chan error, numConns)
 
-	// Start workers
 	for i := 0; i < numConns; i++ {
 		wg.Add(1)
 		go func(workerID int) {
 			defer wg.Done()
 			err := d.worker(ctx, workerID, workerMirrors, outFile, queue, fileSize, client)
-			if err != nil && !errors.Is(err, context.Canceled) {
+			if err != nil {
+				if errors.Is(err, context.Canceled) {
+					return
+				}
 				workerErrors <- err
-				cancel()
 			}
 		}(i)
 	}
 
-	// Wait for all workers to complete
+	var orphanCount int
 	go func() {
 		wg.Wait()
-		close(workerErrors)
+		orphanCount = queue.Len()
 		queue.Close()
+		close(workerErrors)
+		_ = cancel
 	}()
 
-	// Check for errors or pause
 	var downloadErr error
 	seenErrors := make(map[string]bool)
 	for err := range workerErrors {
@@ -550,6 +556,16 @@ func (d *ConcurrentDownloader) executeWorkers(ctx context.Context, cancel contex
 			}
 		}
 	}
+
+	if orphanCount > 0 && ctx.Err() == nil {
+		orphanErr := fmt.Errorf("%d chunk(s) could not be completed", orphanCount)
+		downloadErr = errors.Join(downloadErr, orphanErr)
+	}
+
+	if downloadErr != nil {
+		cancel()
+	}
+
 	return downloadErr
 }
 

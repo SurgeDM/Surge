@@ -41,6 +41,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 		var lastErr error
 		maxRetries := d.Runtime.GetMaxTaskRetries()
+		var activeTask *ActiveTask
 		for attempt := 0; attempt < maxRetries; attempt++ {
 			if attempt > 0 {
 
@@ -62,7 +63,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			// Register active task with per-task cancellable context
 			taskCtx, taskCancel := context.WithCancel(ctx)
 			now := time.Now()
-			activeTask := &ActiveTask{
+			activeTask = &ActiveTask{
 				Task:        task,
 				StartTime:   now,
 				Cancel:      taskCancel,
@@ -174,7 +175,32 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 		if lastErr != nil {
 			utils.Debug("Worker %d: task at offset %d failed after %d retries: %v", id, task.Offset, maxRetries, lastErr)
-			return lastErr
+
+			d.activeMu.Lock()
+			delete(d.activeTasks, id)
+			d.activeMu.Unlock()
+
+			d.taskRequeueMu.Lock()
+			count := d.taskRequeueCount[task.Offset]
+			d.taskRequeueCount[task.Offset] = count + 1
+			d.taskRequeueMu.Unlock()
+
+			maxRequeues := maxRetries * 2
+			if count >= maxRequeues {
+				return fmt.Errorf("task at offset %d failed after %d requeue attempts: %w", task.Offset, count, lastErr)
+			}
+
+			if remaining := activeTask.RemainingTask(); remaining != nil {
+				originalEnd := task.Offset + task.Length
+				if remaining.Offset+remaining.Length > originalEnd {
+					remaining.Length = originalEnd - remaining.Offset
+				}
+				if remaining.Length > 0 {
+					queue.Push(*remaining)
+					utils.Debug("Worker %d: re-queued %d bytes at offset %d (requeue %d/%d)",
+						id, remaining.Length, remaining.Offset, count+1, maxRequeues)
+				}
+			}
 		}
 	}
 }
