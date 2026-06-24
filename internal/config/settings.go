@@ -1209,13 +1209,13 @@ func (s *Settings) Clone() *Settings {
 	if s == nil {
 		return nil
 	}
-	data, err := json.Marshal(s)
+	data, err := toml.Marshal(s)
 	if err != nil {
 		utils.Debug("Warning: failed to marshal settings for Clone: %v", err)
 		return nil
 	}
 	cloned := DefaultSettings()
-	if err := json.Unmarshal(data, cloned); err != nil {
+	if err := toml.Unmarshal(data, cloned); err != nil {
 		utils.Debug("Warning: failed to unmarshal settings for Clone: %v", err)
 	}
 	return cloned

@@ -10,7 +10,7 @@ import (
 	"sync"
 
 	"charm.land/lipgloss/v2"
-	"github.com/BurntSushi/toml"
+	"github.com/pelletier/go-toml/v2"
 )
 
 type Palette struct {
