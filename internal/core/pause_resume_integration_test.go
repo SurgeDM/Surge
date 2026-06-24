@@ -240,6 +240,16 @@ func TestIntegration_PauseResume_HotPath_Aggregates(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state.GetDownload failed: %v", err)
 	}
+	// Wait for master list to catch up (SaveState writes detail then master)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if entry1 != nil && entry1.Downloaded == saved1.Downloaded {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+		entry1, _ = state.GetDownload(id)
+	}
+
 	if entry1 == nil {
 		t.Fatal("missing master-list entry after pause")
 		return
@@ -439,6 +449,17 @@ func TestIntegration_PauseResume_ColdPath_StateContinuity(t *testing.T) {
 	if err != nil {
 		t.Fatalf("state.GetDownload failed: %v", err)
 	}
+
+	// Wait for master list to catch up (SaveState writes detail then master)
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if entry2 != nil && entry2.Downloaded == savedFinal.Downloaded {
+			break
+		}
+		time.Sleep(50 * time.Millisecond)
+		entry2, _ = state.GetDownload(id)
+	}
+
 	if entry2 == nil {
 		t.Fatal("missing entry after second pause")
 		return

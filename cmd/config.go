@@ -31,29 +31,29 @@ Usage:
 		}
 
 		if len(args) == 0 {
-			fmt.Println("Available Surge Settings:\n")
+			cmd.Printf("Available Surge Settings:\n\n")
 			for _, cat := range settings.CategoriesList {
 				// Don't clutter with Categories struct unless needed, but it's ok to list everything
 				if cat.Name == "Categories" {
-					fmt.Printf("[%s]\n", cat.Name)
+					cmd.Printf("[%s]\n", cat.Name)
 					set := settings.FindSetting("Categories", "category_enabled")
 					if set != nil {
-						fmt.Printf("  %-32s : %v\n", "Categories.category_enabled", set.Value)
-						fmt.Printf("      %s\n", set.Description)
+						cmd.Printf("  %-32s : %v\n", "Categories.category_enabled", set.Value)
+						cmd.Printf("      %s\n", set.Description)
 					}
-					fmt.Println()
+					cmd.Println()
 					continue
 				}
 
-				fmt.Printf("[%s]\n", cat.Name)
+				cmd.Printf("[%s]\n", cat.Name)
 				for _, set := range cat.Settings {
 					pathStr := fmt.Sprintf("%s.%s", cat.Name, set.Key)
-					fmt.Printf("  %-32s : %v\n", pathStr, set.Value)
+					cmd.Printf("  %-32s : %v\n", pathStr, set.Value)
 					if set.Description != "" {
-						fmt.Printf("      %s\n", set.Description)
+						cmd.Printf("      %s\n", set.Description)
 					}
 				}
-				fmt.Println()
+				cmd.Println()
 			}
 			return nil
 		}
@@ -70,8 +70,8 @@ Usage:
 			if err != nil {
 				return err
 			}
-			fmt.Printf("%s\n", set.Description)
-			fmt.Printf("Current Value: %v\n", set.Value)
+			cmd.Printf("%s\n", set.Description)
+			cmd.Printf("Current Value: %v\n", set.Value)
 			return nil
 		}
 
@@ -81,12 +81,12 @@ Usage:
 			if err := config.ResetSetting(settings, path); err != nil {
 				return err
 			}
-			fmt.Printf("Reset %s to default value.\n", path)
+			cmd.Printf("Reset %s to default value.\n", path)
 		} else {
 			if err := config.SetSetting(settings, path, value); err != nil {
 				return err
 			}
-			fmt.Printf("Set %s to %s\n", path, value)
+			cmd.Printf("Set %s to %s\n", path, value)
 		}
 
 		// Save the modified settings

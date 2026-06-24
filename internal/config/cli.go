@@ -76,13 +76,16 @@ func SetSetting(s *Settings, path string, valueStr string) error {
 		if err != nil {
 			return fmt.Errorf("invalid boolean value: %w", err)
 		}
-	case "int", "int64":
-		val, err = strconv.ParseInt(valueStr, 10, 64)
+	case "int":
+		val, err = strconv.ParseInt(valueStr, 10, 0)
 		if err != nil {
 			return fmt.Errorf("invalid integer value: %w", err)
 		}
-		if target.Type == "int" {
-			val = int(val.(int64))
+		val = int(val.(int64))
+	case "int64":
+		val, err = strconv.ParseInt(valueStr, 10, 64)
+		if err != nil {
+			return fmt.Errorf("invalid integer value: %w", err)
 		}
 	case "float64":
 		val, err = strconv.ParseFloat(valueStr, 64)

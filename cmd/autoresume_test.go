@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -38,14 +37,11 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 2. Settings with AutoResume = true
-	settingsPath := filepath.Join(surgeDir, "settings.json")
 	settings := config.DefaultSettings()
 	settings.General.AutoResume.Value = true
 	settings.General.DefaultDownloadDir.Value = tmpDir
 
-	data, _ := json.Marshal(settings)
-	if err := os.WriteFile(settingsPath, data, 0o644); err != nil {
+	if err := config.SaveSettings(settings); err != nil {
 		t.Fatal(err)
 	}
 

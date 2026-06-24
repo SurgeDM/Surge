@@ -1068,6 +1068,10 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 
 func setupIsolatedCmdState(t *testing.T) {
 	t.Helper()
+	origSettings := globalSettings
+	globalSettings = nil
+	t.Cleanup(func() { globalSettings = origSettings })
+
 	setupXDGEnvIsolation(t)
 	resetGlobalEnqueueContext()
 

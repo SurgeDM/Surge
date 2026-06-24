@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -27,14 +26,11 @@ func TestAutoResume_Enabled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 2. Create settings file with AutoResume = true
-	settingsPath := filepath.Join(surgeDir, "settings.json")
 	settings := config.DefaultSettings()
 	settings.General.AutoResume.Value = true
 	settings.General.DefaultDownloadDir.Value = tmpDir
 
-	data, _ := json.Marshal(settings)
-	if err := os.WriteFile(settingsPath, data, 0o644); err != nil {
+	if err := config.SaveSettings(settings); err != nil {
 		t.Fatal(err)
 	}
 
@@ -111,13 +107,10 @@ func TestAutoResume_Disabled(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 2. Settings with AutoResume = false
-	settingsPath := filepath.Join(surgeDir, "settings.json")
 	settings := config.DefaultSettings()
 	settings.General.AutoResume.Value = false
 
-	data, _ := json.Marshal(settings)
-	if err := os.WriteFile(settingsPath, data, 0o644); err != nil {
+	if err := config.SaveSettings(settings); err != nil {
 		t.Fatal(err)
 	}
 

@@ -41,6 +41,10 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	GlobalLifecycleCleanup = nil
 	GlobalService = nil
 
+	origSettings := globalSettings
+	globalSettings = nil
+	t.Cleanup(func() { globalSettings = origSettings })
+
 	// Ensure a clean state DB for the test scope.
 	state.CloseDB()
 	state.Configure(filepath.Join(tempDir, "surge.db"))

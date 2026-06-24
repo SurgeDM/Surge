@@ -337,7 +337,14 @@ func LoadSettings() (*Settings, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return DefaultSettings(), nil
+			settings := DefaultSettings()
+			// Check if old settings.json exists
+			jsonPath := filepath.Join(GetSurgeDir(), "settings.json")
+			if _, statErr := os.Stat(jsonPath); statErr == nil {
+				settings.StartupWarnings = append(settings.StartupWarnings,
+					"Config: 'settings.json' is no longer supported. Settings have been reset to defaults and saved to 'settings.toml'. Please re-configure your options.")
+			}
+			return settings, nil
 		}
 		return nil, err
 	}
@@ -1137,7 +1144,7 @@ func SaveSettings(s *Settings) error {
 			if set := s.FindSetting("Categories", "category_enabled"); set != nil {
 				catMap["category_enabled"] = set.Value
 			}
-			var catsRaw []map[string]any
+			catsRaw := make([]map[string]any, 0, len(s.Categories.Categories))
 			for _, c := range s.Categories.Categories {
 				cMap := map[string]any{
 					"name":        c.Name,
