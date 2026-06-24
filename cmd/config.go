@@ -36,90 +36,102 @@ Usage:
 		}
 
 		isSetOperation := len(args) >= 2 && strings.Contains(args[0], ".")
-		if !isSetOperation {
-			var terms []string
-			for _, arg := range args {
-				terms = append(terms, strings.ToLower(arg))
-			}
+		if isSetOperation {
+			return handleSetOperation(cmd, settings, args)
+		}
 
-			if len(terms) > 0 {
-				cmd.Printf("Search Results:\n\n")
-			} else {
-				cmd.Printf("Available Surge Settings:\n\n")
-			}
+		return handleSearchOperation(cmd, settings, args)
+	},
+}
 
-			foundAny := false
-			for _, cat := range settings.CategoriesList {
-				if cat.Name == "Categories" {
-					set := settings.FindSetting("Categories", "category_enabled")
-					if set != nil {
-						pathStr := "Categories.category_enabled"
-						if matchesSearch(cat.Name, pathStr, set.Description, terms) {
-							cmd.Printf("[%s]\n", cat.Name)
-							cmd.Printf("  %-32s : %v\n", pathStr, set.Value)
-							cmd.Printf("      %s\n", set.Description)
-							cmd.Println()
-							foundAny = true
-						}
-					}
-					continue
-				}
+func handleSearchOperation(cmd *cobra.Command, settings *config.Settings, args []string) error {
+	var terms []string
+	for _, arg := range args {
+		terms = append(terms, strings.ToLower(arg))
+	}
 
-				var matchingSets []*config.Setting
-				for _, set := range cat.Settings {
-					pathStr := fmt.Sprintf("%s.%s", cat.Name, set.Key)
-					if matchesSearch(cat.Name, pathStr, set.Description, terms) {
-						matchingSets = append(matchingSets, set)
-					}
-				}
+	if len(terms) > 0 {
+		cmd.Printf("Search Results:\n\n")
+	} else {
+		cmd.Printf("Available Surge Settings:\n\n")
+	}
 
-				if len(matchingSets) > 0 {
-					cmd.Printf("[%s]\n", cat.Name)
-					for _, set := range matchingSets {
-						pathStr := fmt.Sprintf("%s.%s", cat.Name, set.Key)
-						cmd.Printf("  %-32s : %v\n", pathStr, set.Value)
-						if set.Description != "" {
-							cmd.Printf("      %s\n", set.Description)
-						}
-					}
-					cmd.Println()
+	foundAny := false
+	for _, cat := range settings.CategoriesList {
+		if cat.Name == "Categories" {
+			set := settings.FindSetting("Categories", "category_enabled")
+			if set != nil {
+				pathStr := "Categories.category_enabled"
+				if matchesSearch(cat.Name, pathStr, set.Description, terms) {
+					printSetting(cmd, cat.Name, pathStr, set)
 					foundAny = true
 				}
 			}
+			continue
+		}
 
-			if !foundAny && len(terms) > 0 {
-				cmd.Printf("No settings found matching your search.\n")
+		var matchingSets []*config.Setting
+		for _, set := range cat.Settings {
+			pathStr := fmt.Sprintf("%s.%s", cat.Name, set.Key)
+			if matchesSearch(cat.Name, pathStr, set.Description, terms) {
+				matchingSets = append(matchingSets, set)
 			}
-			return nil
 		}
 
-		if len(args) > 2 {
-			return fmt.Errorf("too many arguments for config set operation")
-		}
-
-		path := args[0]
-		value := args[1]
-
-		// SET or RESET operation
-		if value == "default" {
-			if err := config.ResetSetting(settings, path); err != nil {
-				return err
+		if len(matchingSets) > 0 {
+			cmd.Printf("[%s]\n", cat.Name)
+			for _, set := range matchingSets {
+				pathStr := fmt.Sprintf("%s.%s", cat.Name, set.Key)
+				cmd.Printf("  %-32s : %v\n", pathStr, set.Value)
+				if set.Description != "" {
+					cmd.Printf("      %s\n", set.Description)
+				}
 			}
-			cmd.Printf("Reset %s to default value.\n", path)
-		} else {
-			if err := config.SetSetting(settings, path, value); err != nil {
-				return err
-			}
-			cmd.Printf("Set %s to %s\n", path, value)
+			cmd.Println()
+			foundAny = true
 		}
+	}
 
-		// Save the modified settings
-		if err := config.SaveSettings(settings); err != nil {
-			return fmt.Errorf("failed to save settings: %w", err)
+	if !foundAny && len(terms) > 0 {
+		cmd.Printf("No settings found matching your search.\n")
+	}
+	return nil
+}
+
+func printSetting(cmd *cobra.Command, catName, pathStr string, set *config.Setting) {
+	cmd.Printf("[%s]\n", catName)
+	cmd.Printf("  %-32s : %v\n", pathStr, set.Value)
+	if set.Description != "" {
+		cmd.Printf("      %s\n", set.Description)
+	}
+	cmd.Println()
+}
+
+func handleSetOperation(cmd *cobra.Command, settings *config.Settings, args []string) error {
+	if len(args) > 2 {
+		return fmt.Errorf("too many arguments for config set operation")
+	}
+
+	path := args[0]
+	value := args[1]
+
+	if value == "default" {
+		if err := config.ResetSetting(settings, path); err != nil {
+			return err
 		}
+		cmd.Printf("Reset %s to default value.\n", path)
+	} else {
+		if err := config.SetSetting(settings, path, value); err != nil {
+			return err
+		}
+		cmd.Printf("Set %s to %s\n", path, value)
+	}
 
-		return nil
-	},
+	if err := config.SaveSettings(settings); err != nil {
+		return fmt.Errorf("failed to save settings: %w", err)
+	}
+
+	return nil
 }
 
 func matchesSearch(catName, pathStr, desc string, terms []string) bool {
