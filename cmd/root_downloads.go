@@ -461,8 +461,15 @@ func processDownloads(urls []string, outputDir string, port int) int {
 			continue
 		}
 
-		url, mirrors := ParseURLArg(arg)
-		if url == "" {
+		urlArg, mirrors := ParseURLArg(arg)
+		if urlArg == "" {
+			continue
+		}
+
+		// Ensure the URL is valid and normalized
+		url, err := ValidateAndNormalizeURL(urlArg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error adding %s: %v\n", urlArg, err)
 			continue
 		}
 
@@ -473,13 +480,13 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		// CLI explicit arg means we do not auto-route when user provided an explicit output path.
 		isExplicit := isExplicitOutputPath(outPath, config.Resolve[string](settings.General.DefaultDownloadDir))
 		if lifecycle == nil {
-			err := fmt.Errorf("lifecycle manager unavailable")
+			err = fmt.Errorf("lifecycle manager unavailable")
 			recordPreflightDownloadError(url, outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", url, err))
 			continue
 		}
 
-		_, _, err := lifecycle.Enqueue(currentEnqueueContext(), &processing.DownloadRequest{
+		_, _, err = lifecycle.Enqueue(currentEnqueueContext(), &processing.DownloadRequest{
 			URL:                url,
 			Path:               outPath,
 			Mirrors:            mirrors,

@@ -99,6 +99,7 @@ Usage:
 }
 
 func init() {
+	configCmd.AddCommand(categoryCmd)
 	rootCmd.AddCommand(configCmd)
 }
 

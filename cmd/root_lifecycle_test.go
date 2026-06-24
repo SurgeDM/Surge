@@ -271,7 +271,7 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 	)
 	defer server.Close()
 
-	count := processDownloads([]string{server.URL() + "/" + filename}, defaultDir, 0)
+	count := processDownloads([]string{server.URL() + "/" + filename}, "", 0)
 	if count != 1 {
 		t.Fatalf("expected 1 successful add, got %d", count)
 	}
@@ -378,7 +378,7 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 	)
 	defer server.Close()
 
-	count := processDownloads([]string{server.URL() + "/" + filename}, defaultDir, 0)
+	count := processDownloads([]string{server.URL() + "/" + filename}, "", 0)
 	if count != 1 {
 		t.Fatalf("expected 1 successful add, got %d", count)
 	}

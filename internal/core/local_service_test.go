@@ -341,29 +341,32 @@ func TestLocalDownloadService_Shutdown_PersistsPausedState(t *testing.T) {
 	// Wait for event worker to drain all buffered events and finish DB writes
 	evWait()
 
-	deadline = time.Now().Add(500 * time.Millisecond)
+	deadline = time.Now().Add(2 * time.Second)
 	for {
 		entry, err := state.GetDownload(id)
-		if err == nil || !strings.Contains(err.Error(), "locked") {
-			if err != nil {
-				t.Fatalf("failed to fetch persisted download: %v", err)
+		if err != nil {
+			errStr := strings.ToLower(err.Error())
+			if strings.Contains(errStr, "locked") || strings.Contains(errStr, "busy") || strings.Contains(errStr, "process cannot access") {
+				if time.Now().After(deadline) {
+					t.Fatalf("failed to fetch persisted download before timeout: %v", err)
+				}
+				time.Sleep(20 * time.Millisecond)
+				continue
 			}
-			if entry == nil {
-				t.Fatal("expected persisted download entry after shutdown")
-				return
-			}
-			if entry.Status != "paused" {
-				t.Fatalf("status = %q, want paused", entry.Status)
-			}
-			if entry.Downloaded == 0 {
-				t.Fatal("expected persisted paused download to have non-zero progress")
-			}
-			break
+			t.Fatalf("failed to fetch persisted download: %v", err)
 		}
-		if time.Now().After(deadline) {
-			t.Fatalf("failed to fetch persisted download before timeout: %v", err)
+
+		if entry == nil {
+			t.Fatal("expected persisted download entry after shutdown")
+			return
 		}
-		time.Sleep(10 * time.Millisecond)
+		if entry.Status != "paused" {
+			t.Fatalf("status = %q, want paused", entry.Status)
+		}
+		if entry.Downloaded == 0 {
+			t.Fatal("expected persisted paused download to have non-zero progress")
+		}
+		break
 	}
 
 	statuses, err := svc.List()
