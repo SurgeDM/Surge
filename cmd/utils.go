@@ -126,10 +126,6 @@ func ValidateAndNormalizeURL(rawURL string) (string, error) {
 	}
 
 	if u.Scheme == "" {
-		// Could be a local file path
-		if info, err := os.Stat(rawURL); err == nil && !info.IsDir() {
-			return rawURL, nil
-		}
 		// Could be a domain (e.g. example.com/file.zip or github.com/release/v1.0.0), try prepending https
 		if strings.Contains(rawURL, ".") {
 			return "https://" + rawURL, nil

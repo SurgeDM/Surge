@@ -666,8 +666,8 @@ func TestRootCmd_InvalidURL(t *testing.T) {
 		t.Fatal("expected error for invalid URL argument, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "invalid URL \"asjidaida\": missing or unsupported scheme") {
-		t.Errorf("expected error to mention 'missing or unsupported scheme', got %q", err.Error())
+	if !strings.Contains(err.Error(), "no valid URLs") {
+		t.Errorf("expected error to mention 'no valid URLs', got %q", err.Error())
 	}
 }
 
