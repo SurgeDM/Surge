@@ -47,27 +47,98 @@ func TestConfigCmd_Get(t *testing.T) {
 	}
 
 	out := buf.String()
-	if !strings.Contains(out, "Current Value: false") { // Default
-		t.Errorf("expected output to contain 'Current Value: false', got %q", out)
+	if !strings.Contains(out, "General.auto_resume") || !strings.Contains(out, ": false") { // Default
+		t.Errorf("expected output to contain the setting and value, got %q", out)
 	}
 }
 
-func TestConfigCmd_InvalidPath(t *testing.T) {
+func TestConfigCmd_Search(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("AppData", t.TempDir())
 
-	buf := new(bytes.Buffer)
-	rootCmd.SetOut(buf)
-	rootCmd.SetErr(buf)
-	rootCmd.SetArgs([]string{"config", "aoidiasdias"})
-
-	err := rootCmd.Execute()
-	if err == nil {
-		t.Fatal("expected error for invalid config path, got nil")
+	tests := []struct {
+		name            string
+		args            []string
+		wantContains    []string
+		wantNotContains []string
+	}{
+		{
+			name: "single term match",
+			args: []string{"config", "general"},
+			wantContains: []string{
+				"Search Results:",
+				"[General]",
+				"General.auto_resume",
+			},
+			wantNotContains: []string{
+				"[Network]",
+				"Network.max_concurrent_downloads",
+			},
+		},
+		{
+			name: "multiple terms filtering",
+			args: []string{"config", "general", "auto"},
+			wantContains: []string{
+				"Search Results:",
+				"General.auto_resume",
+				"General.auto_start",
+			},
+			wantNotContains: []string{
+				"General.theme",
+			},
+		},
+		{
+			name: "case insensitivity",
+			args: []string{"config", "gEnErAl", "AuTo"},
+			wantContains: []string{
+				"Search Results:",
+				"General.auto_resume",
+			},
+		},
+		{
+			name: "match description",
+			args: []string{"config", "watch", "clipboard"},
+			wantContains: []string{
+				"Search Results:",
+				"General.clipboard_monitor",
+			},
+		},
+		{
+			name: "no match",
+			args: []string{"config", "aoidiasdias"},
+			wantContains: []string{
+				"No settings found matching your search.",
+			},
+			wantNotContains: []string{
+				"[General]",
+				"General.auto_resume",
+			},
+		},
 	}
 
-	if !strings.Contains(err.Error(), "invalid config path format: expected Category.Key") {
-		t.Errorf("expected error to mention 'invalid config path format: expected Category.Key', got %q", err.Error())
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			buf := new(bytes.Buffer)
+			rootCmd.SetOut(buf)
+			rootCmd.SetErr(buf)
+			rootCmd.SetArgs(tt.args)
+
+			if err := rootCmd.Execute(); err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			out := buf.String()
+			for _, want := range tt.wantContains {
+				if !strings.Contains(out, want) {
+					t.Errorf("expected output to contain %q\nOutput: %q", want, out)
+				}
+			}
+			for _, notWant := range tt.wantNotContains {
+				if strings.Contains(out, notWant) {
+					t.Errorf("expected output NOT to contain %q\nOutput: %q", notWant, out)
+				}
+			}
+		})
 	}
 }
 

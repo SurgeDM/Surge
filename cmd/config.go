@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"strings"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/spf13/cobra"
@@ -23,60 +24,83 @@ Usage:
   surge config Network.Max_Concurrent_Downloads (Gets a value)
   surge config Performance.Stall_Timeout default (Resets to default)
   surge config open                         (Opens settings file in editor)`,
-	Args: cobra.RangeArgs(0, 2),
+	Args: cobra.ArbitraryArgs,
 	RunE: func(cmd *cobra.Command, args []string) error {
 		settings, err := config.LoadSettings()
 		if err != nil {
 			return fmt.Errorf("failed to load settings: %w", err)
 		}
 
-		if len(args) == 0 {
-			cmd.Printf("Available Surge Settings:\n\n")
-			for _, cat := range settings.CategoriesList {
-				// Don't clutter with Categories struct unless needed, but it's ok to list everything
-				if cat.Name == "Categories" {
-					cmd.Printf("[%s]\n", cat.Name)
-					set := settings.FindSetting("Categories", "category_enabled")
-					if set != nil {
-						cmd.Printf("  %-32s : %v\n", "Categories.category_enabled", set.Value)
-						cmd.Printf("      %s\n", set.Description)
-					}
-					cmd.Println()
-					continue
-				}
-
-				cmd.Printf("[%s]\n", cat.Name)
-				for _, set := range cat.Settings {
-					pathStr := fmt.Sprintf("%s.%s", cat.Name, set.Key)
-					cmd.Printf("  %-32s : %v\n", pathStr, set.Value)
-					if set.Description != "" {
-						cmd.Printf("      %s\n", set.Description)
-					}
-				}
-				cmd.Println()
-			}
-			return nil
-		}
-
-		path := args[0]
-
-		if path == "open" {
+		if len(args) > 0 && args[0] == "open" {
 			return openSettingsFile()
 		}
 
-		// GET operation
-		if len(args) == 1 {
-			set, err := config.GetSetting(settings, path)
-			if err != nil {
-				return err
+		isSetOperation := len(args) >= 2 && strings.Contains(args[0], ".")
+		if !isSetOperation {
+			var terms []string
+			for _, arg := range args {
+				terms = append(terms, strings.ToLower(arg))
 			}
-			cmd.Printf("%s\n", set.Description)
-			cmd.Printf("Current Value: %v\n", set.Value)
+
+			if len(terms) > 0 {
+				cmd.Printf("Search Results:\n\n")
+			} else {
+				cmd.Printf("Available Surge Settings:\n\n")
+			}
+
+			foundAny := false
+			for _, cat := range settings.CategoriesList {
+				if cat.Name == "Categories" {
+					set := settings.FindSetting("Categories", "category_enabled")
+					if set != nil {
+						pathStr := "Categories.category_enabled"
+						if matchesSearch(cat.Name, pathStr, set.Description, terms) {
+							cmd.Printf("[%s]\n", cat.Name)
+							cmd.Printf("  %-32s : %v\n", pathStr, set.Value)
+							cmd.Printf("      %s\n", set.Description)
+							cmd.Println()
+							foundAny = true
+						}
+					}
+					continue
+				}
+
+				var matchingSets []*config.Setting
+				for _, set := range cat.Settings {
+					pathStr := fmt.Sprintf("%s.%s", cat.Name, set.Key)
+					if matchesSearch(cat.Name, pathStr, set.Description, terms) {
+						matchingSets = append(matchingSets, set)
+					}
+				}
+
+				if len(matchingSets) > 0 {
+					cmd.Printf("[%s]\n", cat.Name)
+					for _, set := range matchingSets {
+						pathStr := fmt.Sprintf("%s.%s", cat.Name, set.Key)
+						cmd.Printf("  %-32s : %v\n", pathStr, set.Value)
+						if set.Description != "" {
+							cmd.Printf("      %s\n", set.Description)
+						}
+					}
+					cmd.Println()
+					foundAny = true
+				}
+			}
+
+			if !foundAny && len(terms) > 0 {
+				cmd.Printf("No settings found matching your search.\n")
+			}
 			return nil
 		}
 
-		// SET or RESET operation
+		if len(args) > 2 {
+			return fmt.Errorf("too many arguments for config set operation")
+		}
+
+		path := args[0]
 		value := args[1]
+
+		// SET or RESET operation
 		if value == "default" {
 			if err := config.ResetSetting(settings, path); err != nil {
 				return err
@@ -96,6 +120,19 @@ Usage:
 
 		return nil
 	},
+}
+
+func matchesSearch(catName, pathStr, desc string, terms []string) bool {
+	if len(terms) == 0 {
+		return true
+	}
+	searchTarget := strings.ToLower(fmt.Sprintf("%s %s %s", catName, pathStr, desc))
+	for _, term := range terms {
+		if !strings.Contains(searchTarget, term) {
+			return false
+		}
+	}
+	return true
 }
 
 func init() {
