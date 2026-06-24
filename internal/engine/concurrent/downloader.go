@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine"
@@ -40,6 +41,7 @@ type ConcurrentDownloader struct {
 	bufPool          sync.Pool
 	taskRequeueCount map[int64]int
 	taskRequeueMu    sync.Mutex
+	active429Count   atomic.Int32
 }
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
@@ -542,7 +544,6 @@ func (d *ConcurrentDownloader) executeWorkers(ctx context.Context, cancel contex
 		orphanCount = queue.Len()
 		queue.Close()
 		close(workerErrors)
-		_ = cancel
 	}()
 
 	var downloadErr error
@@ -783,4 +784,30 @@ func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *h
 
 	utils.Debug("Pre-warming complete: %d connections hot", completed)
 	// Remaining pings will be cancelled by defer cancelPings()
+}
+
+func (d *ConcurrentDownloader) report429() {
+	d.active429Count.Add(1)
+}
+
+func (d *ConcurrentDownloader) clear429() {
+	if d.active429Count.Load() > 0 {
+		d.active429Count.Add(-1)
+	}
+}
+
+func (d *ConcurrentDownloader) sleepBackoff(ctx context.Context, attempt int, numConns int) {
+	base := time.Duration(1<<attempt) * types.RetryBaseDelay
+	active429 := d.active429Count.Load()
+	if active429 > 2 {
+		scale := active429
+		if scale > 8 {
+			scale = 8
+		}
+		base *= time.Duration(scale)
+	}
+	select {
+	case <-time.After(base):
+	case <-ctx.Done():
+	}
 }

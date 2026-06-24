@@ -46,7 +46,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			if attempt > 0 {
 
 				if len(mirrors) == 1 {
-					time.Sleep(time.Duration(1<<attempt) * types.RetryBaseDelay) // Exponential backoff incase of failure
+					d.sleepBackoff(ctx, attempt, len(d.activeTasks)+1)
 				}
 
 				// FAILOVER: Switch mirror on retry
@@ -149,6 +149,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			d.activeMu.Unlock()
 
 			if lastErr == nil {
+				d.clear429()
 				// Check if we stopped early due to stealing
 				stopAt := activeTask.StopAt.Load()
 				current := activeTask.CurrentOffset.Load()
@@ -185,7 +186,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			d.taskRequeueCount[task.Offset] = count + 1
 			d.taskRequeueMu.Unlock()
 
-			maxRequeues := maxRetries * 2
+			maxRequeues := maxRetries
 			if count >= maxRequeues {
 				return fmt.Errorf("task at offset %d failed after %d requeue attempts: %w", task.Offset, count, lastErr)
 			}
@@ -241,6 +242,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 
 	// Handle rate limiting explicitly
 	if resp.StatusCode == http.StatusTooManyRequests {
+		d.report429()
 		return fmt.Errorf("rate limited (429)")
 	}
 
