@@ -23,26 +23,55 @@ Usage:
   surge config Network.Max_Concurrent_Downloads (Gets a value)
   surge config Performance.Stall_Timeout default (Resets to default)
   surge config open                         (Opens settings file in editor)`,
-	Args: cobra.RangeArgs(1, 2),
+	Args: cobra.RangeArgs(0, 2),
 	RunE: func(cmd *cobra.Command, args []string) error {
+		settings, err := config.LoadSettings()
+		if err != nil {
+			return fmt.Errorf("failed to load settings: %w", err)
+		}
+
+		if len(args) == 0 {
+			fmt.Println("Available Surge Settings:\n")
+			for _, cat := range settings.CategoriesList {
+				// Don't clutter with Categories struct unless needed, but it's ok to list everything
+				if cat.Name == "Categories" {
+					fmt.Printf("[%s]\n", cat.Name)
+					set := settings.FindSetting("Categories", "category_enabled")
+					if set != nil {
+						fmt.Printf("  %-32s : %v\n", "Categories.category_enabled", set.Value)
+						fmt.Printf("      %s\n", set.Description)
+					}
+					fmt.Println()
+					continue
+				}
+
+				fmt.Printf("[%s]\n", cat.Name)
+				for _, set := range cat.Settings {
+					pathStr := fmt.Sprintf("%s.%s", cat.Name, set.Key)
+					fmt.Printf("  %-32s : %v\n", pathStr, set.Value)
+					if set.Description != "" {
+						fmt.Printf("      %s\n", set.Description)
+					}
+				}
+				fmt.Println()
+			}
+			return nil
+		}
+
 		path := args[0]
 
 		if path == "open" {
 			return openSettingsFile()
 		}
 
-		settings, err := config.LoadSettings()
-		if err != nil {
-			return fmt.Errorf("failed to load settings: %w", err)
-		}
-
 		// GET operation
 		if len(args) == 1 {
-			val, err := config.GetSettingString(settings, path)
+			set, err := config.GetSetting(settings, path)
 			if err != nil {
 				return err
 			}
-			fmt.Println(val)
+			fmt.Printf("%s\n", set.Description)
+			fmt.Printf("Current Value: %v\n", set.Value)
 			return nil
 		}
 

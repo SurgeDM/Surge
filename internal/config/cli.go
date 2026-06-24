@@ -16,24 +16,33 @@ func ParseConfigPath(path string) (category string, key string, err error) {
 	return parts[0], parts[1], nil
 }
 
-// GetSettingString returns the string representation of a setting.
-func GetSettingString(s *Settings, path string) (string, error) {
+// GetSetting returns the *Setting object for a given path.
+func GetSetting(s *Settings, path string) (*Setting, error) {
 	catName, key, err := ParseConfigPath(path)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	for _, cat := range s.CategoriesList {
 		if strings.EqualFold(cat.Name, catName) {
 			for _, set := range cat.Settings {
 				if strings.EqualFold(set.Key, key) {
-					return fmt.Sprintf("%v", set.Value), nil
+					return set, nil
 				}
 			}
-			return "", fmt.Errorf("setting key %q not found in category %q", key, cat.Name)
+			return nil, fmt.Errorf("setting key %q not found in category %q", key, cat.Name)
 		}
 	}
-	return "", fmt.Errorf("category %q not found", catName)
+	return nil, fmt.Errorf("category %q not found", catName)
+}
+
+// GetSettingString returns the string representation of a setting.
+func GetSettingString(s *Settings, path string) (string, error) {
+	set, err := GetSetting(s, path)
+	if err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("%v", set.Value), nil
 }
 
 // SetSetting updates a setting from a string input.
