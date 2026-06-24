@@ -2,9 +2,12 @@ package cmd
 
 import (
 	"fmt"
+	"os"
 	"strings"
 
+	"charm.land/lipgloss/v2/table"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 )
 
@@ -57,11 +60,16 @@ var categoryListCmd = &cobra.Command{
 			return nil
 		}
 
-		cmd.Printf("%-20s %-30s %s\n", "NAME", "PATTERN", "PATH")
-		cmd.Printf("%-20s %-30s %s\n", strings.Repeat("-", 20), strings.Repeat("-", 30), strings.Repeat("-", 20))
-		for _, cat := range settings.Categories.Categories {
-			cmd.Printf("%-20s %-30s %s\n", cat.Name, cat.Pattern, cat.Path)
+		width, _, err := term.GetSize(uintptr(os.Stdout.Fd()))
+		if err != nil || width < 1 {
+			width = 80
 		}
+
+		t := table.New().Headers("NAME", "PATTERN", "PATH").Width(width)
+		for _, cat := range settings.Categories.Categories {
+			t.Row(cat.Name, cat.Pattern, cat.Path)
+		}
+		cmd.Println(t.Render())
 		return nil
 	},
 }

@@ -7,7 +7,13 @@ import (
 	"runtime"
 	"strings"
 
+	"time"
+
+	"charm.land/lipgloss/v2"
+	"charm.land/lipgloss/v2/table"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
+	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 )
 
@@ -60,38 +66,41 @@ func handleSearchOperation(cmd *cobra.Command, settings *config.Settings, args [
 		cmd.Printf("Available Surge Settings:\n\n")
 	}
 
+	width, _, err := term.GetSize(uintptr(os.Stdout.Fd()))
+	if err != nil || width < 1 {
+		width = 100
+	}
+
+	headerStyle := lipgloss.NewStyle().Foreground(colors.Magenta()).Bold(true).Padding(0, 1)
+	nameStyle := lipgloss.NewStyle().Foreground(colors.White()).Padding(0, 1)
+	valueStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Padding(0, 1)
+	borderStyle := lipgloss.NewStyle().Foreground(colors.LightGray())
+
 	foundAny := false
+
 	for _, cat := range settings.CategoriesList {
 		if cat.Name == "Categories" {
 			set := settings.FindSetting("Categories", "category_enabled")
-			if set != nil {
-				pathStr := "Categories.category_enabled"
-				if matchesSearch(cat.Name, pathStr, set.Description, terms) {
-					printSetting(cmd, cat.Name, pathStr, set)
-					foundAny = true
-				}
+			if set != nil && matchesSearch(cat.Name, cat.Name+"."+set.Key, set.Description, terms) {
+				t := buildCategoryTable(cat.Name, width, headerStyle, nameStyle, valueStyle, borderStyle)
+				t.Row(set.Key, formatValue(set))
+				cmd.Println(t.Render())
+				foundAny = true
 			}
 			continue
 		}
 
-		var matchingSets []*config.Setting
+		t := buildCategoryTable(cat.Name, width, headerStyle, nameStyle, valueStyle, borderStyle)
+		hasAnyRow := false
 		for _, set := range cat.Settings {
 			pathStr := fmt.Sprintf("%s.%s", cat.Name, set.Key)
 			if matchesSearch(cat.Name, pathStr, set.Description, terms) {
-				matchingSets = append(matchingSets, set)
+				t.Row(set.Key, formatValue(set))
+				hasAnyRow = true
 			}
 		}
-
-		if len(matchingSets) > 0 {
-			cmd.Printf("[%s]\n", cat.Name)
-			for _, set := range matchingSets {
-				pathStr := fmt.Sprintf("%s.%s", cat.Name, set.Key)
-				cmd.Printf("  %-32s : %v\n", pathStr, set.Value)
-				if set.Description != "" {
-					cmd.Printf("      %s\n", set.Description)
-				}
-			}
-			cmd.Println()
+		if hasAnyRow {
+			cmd.Println(t.Render())
 			foundAny = true
 		}
 	}
@@ -102,13 +111,42 @@ func handleSearchOperation(cmd *cobra.Command, settings *config.Settings, args [
 	return nil
 }
 
-func printSetting(cmd *cobra.Command, catName, pathStr string, set *config.Setting) {
-	cmd.Printf("[%s]\n", catName)
-	cmd.Printf("  %-32s : %v\n", pathStr, set.Value)
-	if set.Description != "" {
-		cmd.Printf("      %s\n", set.Description)
+func buildCategoryTable(name string, width int, headerStyle, nameStyle, valueStyle, borderStyle lipgloss.Style) *table.Table {
+	return table.New().
+		Headers(name, "").
+		Width(width).
+		BorderBottom(true).
+		BorderHeader(true).
+		BorderTop(false).
+		BorderLeft(false).
+		BorderRight(false).
+		BorderColumn(false).
+		BorderRow(false).
+		BorderStyle(borderStyle).
+		StyleFunc(func(row, col int) lipgloss.Style {
+			switch {
+			case row == table.HeaderRow:
+				return headerStyle
+			case col == 0:
+				return nameStyle
+			default:
+				return valueStyle
+			}
+		})
+}
+
+func formatValue(set *config.Setting) string {
+	if set.Type == config.TypeDuration {
+		switch v := set.Value.(type) {
+		case int64:
+			return time.Duration(v).String()
+		case float64:
+			return time.Duration(int64(v)).String()
+		case int:
+			return time.Duration(int64(v)).String()
+		}
 	}
-	cmd.Println()
+	return fmt.Sprintf("%v", set.Value)
 }
 
 func handleSetOperation(cmd *cobra.Command, settings *config.Settings, args []string) error {

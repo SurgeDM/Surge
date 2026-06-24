@@ -28,8 +28,8 @@ func TestConfigCmd_List(t *testing.T) {
 	if !strings.Contains(out, "Available Surge Settings:") {
 		t.Errorf("expected output to contain 'Available Surge Settings:', got %q", out)
 	}
-	if !strings.Contains(out, "[General]") {
-		t.Errorf("expected output to contain '[General]', got %q", out)
+	if !strings.Contains(out, "General") {
+		t.Errorf("expected output to contain 'General', got %q", out)
 	}
 }
 
@@ -47,7 +47,7 @@ func TestConfigCmd_Get(t *testing.T) {
 	}
 
 	out := buf.String()
-	if !strings.Contains(out, "General.auto_resume") || !strings.Contains(out, ": false") { // Default
+	if !strings.Contains(out, "auto_resume") || !strings.Contains(out, "false") { // Default
 		t.Errorf("expected output to contain the setting and value, got %q", out)
 	}
 }
@@ -67,12 +67,12 @@ func TestConfigCmd_Search(t *testing.T) {
 			args: []string{"config", "general"},
 			wantContains: []string{
 				"Search Results:",
-				"[General]",
-				"General.auto_resume",
+				"General",
+				"auto_resume",
 			},
 			wantNotContains: []string{
-				"[Network]",
-				"Network.max_concurrent_downloads",
+				"Network",
+				"max_concurrent_downloads",
 			},
 		},
 		{
@@ -80,11 +80,11 @@ func TestConfigCmd_Search(t *testing.T) {
 			args: []string{"config", "general", "auto"},
 			wantContains: []string{
 				"Search Results:",
-				"General.auto_resume",
-				"General.auto_start",
+				"auto_resume",
+				"auto_start",
 			},
 			wantNotContains: []string{
-				"General.theme",
+				"theme",
 			},
 		},
 		{
@@ -92,7 +92,7 @@ func TestConfigCmd_Search(t *testing.T) {
 			args: []string{"config", "gEnErAl", "AuTo"},
 			wantContains: []string{
 				"Search Results:",
-				"General.auto_resume",
+				"auto_resume",
 			},
 		},
 		{
@@ -100,7 +100,7 @@ func TestConfigCmd_Search(t *testing.T) {
 			args: []string{"config", "watch", "clipboard"},
 			wantContains: []string{
 				"Search Results:",
-				"General.clipboard_monitor",
+				"clipboard_monitor",
 			},
 		},
 		{
@@ -110,8 +110,8 @@ func TestConfigCmd_Search(t *testing.T) {
 				"No settings found matching your search.",
 			},
 			wantNotContains: []string{
-				"[General]",
-				"General.auto_resume",
+				"General",
+				"auto_resume",
 			},
 		},
 	}
