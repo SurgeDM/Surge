@@ -31,6 +31,17 @@ Usage:
   surge config Performance.Stall_Timeout default (Resets to default)
   surge config open                         (Opens settings file in editor)`,
 	Args: cobra.ArbitraryArgs,
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		if len(args) == 0 {
+			return config.GetSettingPaths(), cobra.ShellCompDirectiveNoFileComp
+		}
+		if len(args) == 1 {
+			if _, _, err := config.ParseConfigPath(args[0]); err == nil {
+				return []string{"default"}, cobra.ShellCompDirectiveNoFileComp
+			}
+		}
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		settings, err := config.LoadSettings()
 		if err != nil {
@@ -190,7 +201,6 @@ func matchesSearch(catName, pathStr, desc string, terms []string) bool {
 }
 
 func init() {
-	configCmd.AddCommand(categoryCmd)
 	rootCmd.AddCommand(configCmd)
 }
 

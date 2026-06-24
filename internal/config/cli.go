@@ -134,3 +134,26 @@ func ResetSetting(s *Settings, path string) error {
 
 	return fmt.Errorf("setting %q not found", path)
 }
+
+func GetSettingPaths() []string {
+	s := DefaultSettings()
+	paths := make([]string, 0)
+	for _, cat := range s.CategoriesList {
+		for _, set := range cat.Settings {
+			paths = append(paths, fmt.Sprintf("%s.%s", cat.Name, set.Key))
+		}
+	}
+	return paths
+}
+
+func GetCategoryNames() []string {
+	s, err := LoadSettings()
+	if err != nil {
+		return nil
+	}
+	names := make([]string, 0, len(s.Categories.Categories))
+	for _, cat := range s.Categories.Categories {
+		names = append(names, cat.Name)
+	}
+	return names
+}

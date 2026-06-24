@@ -17,8 +17,11 @@ import (
 var categoryCmd = &cobra.Command{
 	Use:   "category [name]",
 	Short: "Manage custom download categories",
-	Long:  "List, add, remove, or view custom download categories used for sorting downloads.",
+	Long:  "Manage custom download categories used for sorting downloads.\n\nSubcommands:\n  list    List all custom categories\n  add     Add a new category\n  remove  Remove a category\n\nRun 'surge category <name>' to view details for a specific category.",
 	Args:  cobra.MaximumNArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return config.GetCategoryNames(), cobra.ShellCompDirectiveNoFileComp
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		settings, err := config.LoadSettings()
 		if err != nil {
@@ -137,6 +140,9 @@ var categoryRemoveCmd = &cobra.Command{
 	Use:   "remove <name>",
 	Short: "Remove a custom category",
 	Args:  cobra.ExactArgs(1),
+	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return config.GetCategoryNames(), cobra.ShellCompDirectiveNoFileComp
+	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		name := args[0]
 
@@ -154,6 +160,7 @@ var categoryRemoveCmd = &cobra.Command{
 }
 
 func init() {
+	rootCmd.AddCommand(categoryCmd)
 	categoryCmd.AddCommand(categoryListCmd)
 	categoryCmd.AddCommand(categoryAddCmd)
 	categoryCmd.AddCommand(categoryRemoveCmd)
