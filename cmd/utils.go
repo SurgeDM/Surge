@@ -134,12 +134,12 @@ func ValidateAndNormalizeURL(rawURL string) (string, error) {
 			// Could be a domain (e.g. example.com/file.zip), try prepending https
 			return "https://" + rawURL, nil
 		}
-		return "", fmt.Errorf("missing or unsupported scheme (must be http://, https://, or magnet:)")
+		return "", fmt.Errorf("missing or unsupported scheme (must be http:// or https://)")
 	}
 
 	scheme := strings.ToLower(u.Scheme)
-	if scheme != "http" && scheme != "https" && scheme != "ftp" && scheme != "magnet" && scheme != "file" {
-		return "", fmt.Errorf("unsupported URL scheme: %s", u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return "", fmt.Errorf("unsupported URL scheme: %s (must be http:// or https://)", u.Scheme)
 	}
 
 	return rawURL, nil

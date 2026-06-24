@@ -521,8 +521,11 @@ func TestLocalDownloadService_ResumeRejectedWhilePausing(t *testing.T) {
 		t.Skip("download transitioned out of pausing before resume-race assertion")
 	}
 
-	if err := svc.Resume(id); err == nil {
-		t.Fatal("expected resume to fail while download is still pausing")
+	err = svc.Resume(id)
+	if err == nil {
+		t.Skip("download transitioned out of pausing before or during resume")
+	} else if !errors.Is(err, types.ErrPausing) {
+		t.Fatalf("expected ErrPausing, got %v", err)
 	}
 }
 

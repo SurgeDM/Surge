@@ -479,6 +479,23 @@ var rootCmd = &cobra.Command{
 			return nil
 		}
 
+		if len(args) > 0 {
+			var validFound bool
+			for _, arg := range args {
+				urlArg, _ := ParseURLArg(arg)
+				if urlArg == "" {
+					continue
+				}
+				if _, err := ValidateAndNormalizeURL(urlArg); err != nil {
+					return fmt.Errorf("invalid URL %q: %w", arg, err)
+				}
+				validFound = true
+			}
+			if !validFound {
+				return fmt.Errorf("no valid URLs provided in arguments")
+			}
+		}
+
 		releaseLock, err := acquireRootInstanceLock()
 		if err != nil {
 			return err

@@ -52,6 +52,25 @@ func TestConfigCmd_Get(t *testing.T) {
 	}
 }
 
+func TestConfigCmd_InvalidPath(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("AppData", t.TempDir())
+
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+	rootCmd.SetArgs([]string{"config", "aoidiasdias"})
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error for invalid config path, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "invalid config path format: expected Category.Key") {
+		t.Errorf("expected error to mention 'invalid config path format: expected Category.Key', got %q", err.Error())
+	}
+}
+
 func TestConfigCmd_SetAndReset(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("AppData", t.TempDir())
