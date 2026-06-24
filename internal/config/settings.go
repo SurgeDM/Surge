@@ -227,17 +227,17 @@ func (s *Setting) Resolve() any {
 		return nil
 	}
 	switch s.Type {
-	case "bool":
+	case TypeBool:
 		return Resolve[bool](s)
-	case "int":
+	case TypeInt:
 		return Resolve[int](s)
-	case "int64":
+	case TypeInt64:
 		return Resolve[int64](s)
-	case "float64":
+	case TypeFloat64:
 		return Resolve[float64](s)
-	case "string", "auth_token", "link":
+	case TypeString, TypeAuthToken, TypeLink:
 		return Resolve[string](s)
-	case "duration":
+	case TypeDuration:
 		return Resolve[time.Duration](s)
 	}
 	return s.Value
@@ -418,11 +418,11 @@ func LoadSettings() (*Settings, error) {
 
 // SettingMeta provides metadata for a single setting (for UI rendering).
 type SettingMeta struct {
-	Key             string // JSON key name
-	Label           string // Human-readable label
-	Description     string // Help text displayed in right pane
-	Type            string // "string", "int", "int64", "bool", "duration", "float64", "auth_token", "link"
-	RequiresRestart bool   // Whether changing this setting requires an application restart
+	Key             string      // JSON key name
+	Label           string      // Human-readable label
+	Description     string      // Help text displayed in right pane
+	Type            SettingType // "string", "int", "int64", "bool", "duration", "float64", "auth_token", "link"
+	RequiresRestart bool        // Whether changing this setting requires an application restart
 }
 
 var (
@@ -475,6 +475,19 @@ const (
 	ThemeDark     = 2
 )
 
+func parseAnyInt(val any) (int, error) {
+	switch v := val.(type) {
+	case int:
+		return v, nil
+	case int64:
+		return int(v), nil
+	case float64:
+		return int(v), nil
+	default:
+		return 0, fmt.Errorf("invalid type: %T", val)
+	}
+}
+
 // DefaultSettings returns a new Settings instance with sensible defaults.
 func DefaultSettings() *Settings {
 	defaultDir := GetDownloadsDir()
@@ -485,7 +498,7 @@ func DefaultSettings() *Settings {
 				Key:          "default_download_dir",
 				Label:        "Default Download Dir",
 				Description:  "Default directory for new downloads. Leave empty to use current directory.",
-				Type:         "string",
+				Type:         TypeString,
 				DefaultValue: defaultDir,
 				Value:        defaultDir,
 				ValidateFunc: func(val any) error {
@@ -508,7 +521,7 @@ func DefaultSettings() *Settings {
 				Key:          "warn_on_duplicate",
 				Label:        "Warn on Duplicate",
 				Description:  "Show warning when adding a download that already exists.",
-				Type:         "bool",
+				Type:         TypeBool,
 				DefaultValue: true,
 				Value:        true,
 			},
@@ -516,7 +529,7 @@ func DefaultSettings() *Settings {
 				Key:          "download_complete_notification",
 				Label:        "Download Complete Notification",
 				Description:  "Show system notification when a download finishes.",
-				Type:         "bool",
+				Type:         TypeBool,
 				DefaultValue: true,
 				Value:        true,
 			},
@@ -524,7 +537,7 @@ func DefaultSettings() *Settings {
 				Key:          "allow_remote_open_actions",
 				Label:        "Allow Remote Open Actions",
 				Description:  "Allow /open-file and /open-folder API calls from non-loopback clients. Disabled by default for security.",
-				Type:         "bool",
+				Type:         TypeBool,
 				NeedsRestart: true,
 				DefaultValue: false,
 				Value:        false,
@@ -533,7 +546,7 @@ func DefaultSettings() *Settings {
 				Key:          "auto_resume",
 				Label:        "Auto Resume",
 				Description:  "Automatically resume paused downloads on startup.",
-				Type:         "bool",
+				Type:         TypeBool,
 				NeedsRestart: true,
 				DefaultValue: false,
 				Value:        false,
@@ -542,7 +555,7 @@ func DefaultSettings() *Settings {
 				Key:          "auto_start",
 				Label:        "Automatic Startup",
 				Description:  "Start Surge automatically when the system boots (requires service installation).",
-				Type:         "bool",
+				Type:         TypeBool,
 				DefaultValue: false,
 				Value:        false,
 			},
@@ -550,7 +563,7 @@ func DefaultSettings() *Settings {
 				Key:          "skip_update_check",
 				Label:        "Skip Update Check",
 				Description:  "Disable automatic check for new versions on startup.",
-				Type:         "bool",
+				Type:         TypeBool,
 				NeedsRestart: true,
 				DefaultValue: false,
 				Value:        false,
@@ -559,7 +572,7 @@ func DefaultSettings() *Settings {
 				Key:          "clipboard_monitor",
 				Label:        "Clipboard Monitor",
 				Description:  "Watch clipboard for URLs and prompt to download them.",
-				Type:         "bool",
+				Type:         TypeBool,
 				NeedsRestart: true,
 				DefaultValue: true,
 				Value:        true,
@@ -568,19 +581,13 @@ func DefaultSettings() *Settings {
 				Key:          "theme",
 				Label:        "App Theme",
 				Description:  "UI Theme (System, Light, Dark).",
-				Type:         "int",
+				Type:         TypeInt,
 				DefaultValue: ThemeAdaptive,
 				Value:        ThemeAdaptive,
 				ValidateFunc: func(val any) error {
-					v, ok := val.(int)
-					if !ok {
-						if f, ok := val.(float64); ok {
-							v = int(f)
-						} else if i64, ok := val.(int64); ok {
-							v = int(i64)
-						} else {
-							return fmt.Errorf("invalid type")
-						}
+					v, err := parseAnyInt(val)
+					if err != nil {
+						return err
 					}
 					if v < 0 || v > 2 {
 						return fmt.Errorf("theme must be 0, 1, or 2")
@@ -592,7 +599,7 @@ func DefaultSettings() *Settings {
 				Key:          "theme_path",
 				Label:        "Theme File",
 				Description:  "Path to a custom .toml color scheme.",
-				Type:         "string",
+				Type:         TypeString,
 				DefaultValue: "",
 				Value:        "",
 			},
@@ -600,20 +607,14 @@ func DefaultSettings() *Settings {
 				Key:          "log_retention_count",
 				Label:        "Log Retention Count",
 				Description:  "Number of recent log files to keep.",
-				Type:         "int",
+				Type:         TypeInt,
 				NeedsRestart: true,
 				DefaultValue: 5,
 				Value:        5,
 				ValidateFunc: func(val any) error {
-					v, ok := val.(int)
-					if !ok {
-						if f, ok := val.(float64); ok {
-							v = int(f)
-						} else if i64, ok := val.(int64); ok {
-							v = int(i64)
-						} else {
-							return fmt.Errorf("invalid type")
-						}
+					v, err := parseAnyInt(val)
+					if err != nil {
+						return err
 					}
 					if v < 1 || v > 100 {
 						return fmt.Errorf("must be between 1 and 100")
@@ -625,7 +626,7 @@ func DefaultSettings() *Settings {
 				Key:          "live_speed_graph",
 				Label:        "Live Speed Graph",
 				Description:  "Use live speed for graph instead of EMA smoothed speed.",
-				Type:         "bool",
+				Type:         TypeBool,
 				DefaultValue: false,
 				Value:        false,
 			},
@@ -635,19 +636,13 @@ func DefaultSettings() *Settings {
 				Key:          "max_connections_per_host",
 				Label:        "Max Connections/Download",
 				Description:  "Maximum concurrent connections per download (1-64).",
-				Type:         "int",
+				Type:         TypeInt,
 				DefaultValue: 32,
 				Value:        32,
 				ValidateFunc: func(val any) error {
-					v, ok := val.(int)
-					if !ok {
-						if f, ok := val.(float64); ok {
-							v = int(f)
-						} else if i64, ok := val.(int64); ok {
-							v = int(i64)
-						} else {
-							return fmt.Errorf("invalid type")
-						}
+					v, err := parseAnyInt(val)
+					if err != nil {
+						return err
 					}
 					if v < 1 || v > 64 {
 						return fmt.Errorf("must be between 1 and 64")
@@ -659,20 +654,14 @@ func DefaultSettings() *Settings {
 				Key:          "max_concurrent_downloads",
 				Label:        "Max Concurrent Downloads",
 				Description:  "Maximum number of downloads running at once (1-10).",
-				Type:         "int",
+				Type:         TypeInt,
 				NeedsRestart: true,
 				DefaultValue: 3,
 				Value:        3,
 				ValidateFunc: func(val any) error {
-					v, ok := val.(int)
-					if !ok {
-						if f, ok := val.(float64); ok {
-							v = int(f)
-						} else if i64, ok := val.(int64); ok {
-							v = int(i64)
-						} else {
-							return fmt.Errorf("invalid type")
-						}
+					v, err := parseAnyInt(val)
+					if err != nil {
+						return err
 					}
 					if v < 1 || v > 10 {
 						return fmt.Errorf("must be between 1 and 10")
@@ -684,20 +673,14 @@ func DefaultSettings() *Settings {
 				Key:          "max_concurrent_probes",
 				Label:        "Max Concurrent Probes",
 				Description:  "Maximum number of simultaneous server probes when adding many downloads at once (1-10).",
-				Type:         "int",
+				Type:         TypeInt,
 				NeedsRestart: true,
 				DefaultValue: 3,
 				Value:        3,
 				ValidateFunc: func(val any) error {
-					v, ok := val.(int)
-					if !ok {
-						if f, ok := val.(float64); ok {
-							v = int(f)
-						} else if i64, ok := val.(int64); ok {
-							v = int(i64)
-						} else {
-							return fmt.Errorf("invalid type")
-						}
+					v, err := parseAnyInt(val)
+					if err != nil {
+						return err
 					}
 					if v < 1 || v > 10 {
 						return fmt.Errorf("must be between 1 and 10")
@@ -709,7 +692,7 @@ func DefaultSettings() *Settings {
 				Key:          "user_agent",
 				Label:        "User Agent",
 				Description:  "Custom User-Agent string for HTTP requests. Leave empty for default.",
-				Type:         "string",
+				Type:         TypeString,
 				DefaultValue: "",
 				Value:        "",
 			},
@@ -717,7 +700,7 @@ func DefaultSettings() *Settings {
 				Key:          "proxy_url",
 				Label:        "Proxy URL",
 				Description:  "HTTP/HTTPS proxy URL (e.g. http://127.0.0.1:1700). Leave empty to use system default.",
-				Type:         "string",
+				Type:         TypeString,
 				DefaultValue: "",
 				Value:        "",
 				ValidateFunc: func(val any) error {
@@ -738,7 +721,7 @@ func DefaultSettings() *Settings {
 				Key:          "custom_dns",
 				Label:        "Custom DNS Server",
 				Description:  "Set custom DNS (e.g., 1.1.1.1:53, 94.140.14.14:53). Leave empty for system.",
-				Type:         "string",
+				Type:         TypeString,
 				DefaultValue: "",
 				Value:        "",
 				ValidateFunc: func(val any) error {
@@ -753,7 +736,7 @@ func DefaultSettings() *Settings {
 				Key:          "sequential_download",
 				Label:        "Sequential Download",
 				Description:  "Download pieces in order (Streaming Mode). May be slower.",
-				Type:         "bool",
+				Type:         TypeBool,
 				DefaultValue: false,
 				Value:        false,
 			},
@@ -761,21 +744,15 @@ func DefaultSettings() *Settings {
 				Key:          "min_chunk_size",
 				Label:        "Min Chunk Size",
 				Description:  "Minimum download chunk size in MB (e.g., 2).",
-				Type:         "int64",
+				Type:         TypeInt64,
 				DefaultValue: int64(2 * MB),
 				Value:        int64(2 * MB),
 				ValidateFunc: func(val any) error {
-					var v int64
-					switch actual := val.(type) {
-					case int64:
-						v = actual
-					case int:
-						v = int64(actual)
-					case float64:
-						v = int64(actual)
-					default:
-						return fmt.Errorf("invalid type")
+					vInt, err := parseAnyInt(val)
+					if err != nil {
+						return err
 					}
+					v := int64(vInt)
 					if v < 100*KB {
 						return fmt.Errorf("min chunk size must be at least 100KB")
 					}
@@ -786,19 +763,13 @@ func DefaultSettings() *Settings {
 				Key:          "worker_buffer_size",
 				Label:        "Worker Buffer Size",
 				Description:  "I/O buffer size per worker in KB (e.g., 512).",
-				Type:         "int",
+				Type:         TypeInt,
 				DefaultValue: int(512 * KB),
 				Value:        int(512 * KB),
 				ValidateFunc: func(val any) error {
-					v, ok := val.(int)
-					if !ok {
-						if f, ok := val.(float64); ok {
-							v = int(f)
-						} else if i64, ok := val.(int64); ok {
-							v = int(i64)
-						} else {
-							return fmt.Errorf("invalid type")
-						}
+					v, err := parseAnyInt(val)
+					if err != nil {
+						return err
 					}
 					if v < 1*KB {
 						return fmt.Errorf("worker buffer size must be at least 1KB")
@@ -810,19 +781,13 @@ func DefaultSettings() *Settings {
 				Key:          "dial_hedge_count",
 				Label:        "Dial Hedge Count",
 				Description:  "Number of extra connections to dial pre-emptively to avoid slow connects (0-16).",
-				Type:         "int",
+				Type:         TypeInt,
 				DefaultValue: 4,
 				Value:        4,
 				ValidateFunc: func(val any) error {
-					v, ok := val.(int)
-					if !ok {
-						if f, ok := val.(float64); ok {
-							v = int(f)
-						} else if i64, ok := val.(int64); ok {
-							v = int(i64)
-						} else {
-							return fmt.Errorf("invalid type")
-						}
+					v, err := parseAnyInt(val)
+					if err != nil {
+						return err
 					}
 					if v < 0 || v > 16 {
 						return fmt.Errorf("must be between 0 and 16")
@@ -834,7 +799,7 @@ func DefaultSettings() *Settings {
 				Key:          "global_rate_limit",
 				Label:        "Global Rate Limit",
 				Description:  "Cap total download bandwidth (e.g., 10MB/s, 80Mbps). Use 0 to disable.",
-				Type:         "string",
+				Type:         TypeString,
 				DefaultValue: "0",
 				Value:        "0",
 				ValidateFunc: func(val any) error {
@@ -846,7 +811,7 @@ func DefaultSettings() *Settings {
 				Key:          "default_download_rate_limit",
 				Label:        "Default Download Rate Limit",
 				Description:  "Default cap per download (e.g., 2MB/s). Use 0 to disable.",
-				Type:         "string",
+				Type:         TypeString,
 				DefaultValue: "0",
 				Value:        "0",
 				ValidateFunc: func(val any) error {
@@ -860,19 +825,13 @@ func DefaultSettings() *Settings {
 				Key:          "max_task_retries",
 				Label:        "Max Task Retries",
 				Description:  "Number of times to retry a failed chunk before giving up.",
-				Type:         "int",
+				Type:         TypeInt,
 				DefaultValue: 3,
 				Value:        3,
 				ValidateFunc: func(val any) error {
-					v, ok := val.(int)
-					if !ok {
-						if f, ok := val.(float64); ok {
-							v = int(f)
-						} else if i64, ok := val.(int64); ok {
-							v = int(i64)
-						} else {
-							return fmt.Errorf("invalid type")
-						}
+					v, err := parseAnyInt(val)
+					if err != nil {
+						return err
 					}
 					if v < 0 || v > 10 {
 						return fmt.Errorf("must be between 0 and 10")
@@ -884,7 +843,7 @@ func DefaultSettings() *Settings {
 				Key:          "slow_worker_threshold",
 				Label:        "Slow Worker Threshold",
 				Description:  "Restart workers slower than this fraction of mean speed (0.0-1.0, 0 disables relative slow-worker checks).",
-				Type:         "float64",
+				Type:         TypeFloat64,
 				DefaultValue: 0.3,
 				Value:        0.3,
 				ValidateFunc: func(val any) error {
@@ -909,7 +868,7 @@ func DefaultSettings() *Settings {
 				Key:          "slow_worker_grace_period",
 				Label:        "Slow Worker Grace",
 				Description:  "Grace period before checking worker speed (e.g., 5s, 0 checks immediately).",
-				Type:         "duration",
+				Type:         TypeDuration,
 				DefaultValue: 5 * time.Second,
 				Value:        5 * time.Second,
 				ValidateFunc: func(val any) error {
@@ -934,7 +893,7 @@ func DefaultSettings() *Settings {
 				Key:          "stall_timeout",
 				Label:        "Stall Timeout",
 				Description:  "Restart workers with no data for this duration (e.g., 5s, 0 disables stall detection).",
-				Type:         "duration",
+				Type:         TypeDuration,
 				DefaultValue: 3 * time.Second,
 				Value:        3 * time.Second,
 				ValidateFunc: func(val any) error {
@@ -959,7 +918,7 @@ func DefaultSettings() *Settings {
 				Key:          "speed_ema_alpha",
 				Label:        "Speed EMA Alpha",
 				Description:  "Exponential moving average smoothing factor (0.0-1.0, 0 disables smoothing).",
-				Type:         "float64",
+				Type:         TypeFloat64,
 				DefaultValue: 0.3,
 				Value:        0.3,
 				ValidateFunc: func(val any) error {
@@ -986,7 +945,7 @@ func DefaultSettings() *Settings {
 				Key:          "category_enabled",
 				Label:        "Manage Categories",
 				Description:  "Sort downloads into subfolders by file type. Press Enter to open Category Manager.",
-				Type:         "bool",
+				Type:         TypeBool,
 				DefaultValue: false,
 				Value:        false,
 			},
@@ -997,7 +956,7 @@ func DefaultSettings() *Settings {
 				Key:          "extension_prompt",
 				Label:        "Extension Prompt",
 				Description:  "Prompt for confirmation when adding downloads via browser extension.",
-				Type:         "bool",
+				Type:         TypeBool,
 				DefaultValue: true,
 				Value:        true,
 			},
@@ -1005,7 +964,7 @@ func DefaultSettings() *Settings {
 				Key:          "chrome_extension_url",
 				Label:        "Get Chrome Extension",
 				Description:  "Open the Surge Chrome extension page.",
-				Type:         "link",
+				Type:         TypeLink,
 				DefaultValue: "https://github.com/SurgeDM/Surge/releases/latest",
 				Value:        "https://github.com/SurgeDM/Surge/releases/latest",
 			},
@@ -1013,7 +972,7 @@ func DefaultSettings() *Settings {
 				Key:          "firefox_extension_url",
 				Label:        "Get Firefox Extension",
 				Description:  "Open the Surge Firefox extension page.",
-				Type:         "link",
+				Type:         TypeLink,
 				DefaultValue: "https://addons.mozilla.org/en-US/firefox/addon/surge/",
 				Value:        "https://addons.mozilla.org/en-US/firefox/addon/surge/",
 			},
@@ -1021,7 +980,7 @@ func DefaultSettings() *Settings {
 				Key:          "auth_token",
 				Label:        "Auth Token",
 				Description:  "Your authentication token. Use this to connect the Browser Extension to Surge.",
-				Type:         "auth_token",
+				Type:         TypeAuthToken,
 				DefaultValue: "",
 				Value:        "",
 			},
@@ -1029,7 +988,7 @@ func DefaultSettings() *Settings {
 				Key:          "instructions_url",
 				Label:        "Setup Instructions",
 				Description:  "View detailed instructions on how to set up the Surge browser extension.",
-				Type:         "link",
+				Type:         TypeLink,
 				DefaultValue: "https://github.com/SurgeDM/Surge#browser-extension",
 				Value:        "https://github.com/SurgeDM/Surge#browser-extension",
 			},
@@ -1170,6 +1129,53 @@ func SaveSettings(s *Settings) error {
 		raw[catKey] = catMap
 	}
 	return writeTOMLAtomic(GetSettingsPath(), raw)
+}
+
+// AddCategory adds a new custom download category and saves settings.
+func (s *Settings) AddCategory(name, pattern, path string) error {
+	for _, cat := range s.Categories.Categories {
+		if strings.EqualFold(cat.Name, name) {
+			return fmt.Errorf("category %q already exists", name)
+		}
+	}
+	s.Categories.Categories = append(s.Categories.Categories, Category{
+		Name:    name,
+		Pattern: pattern,
+		Path:    path,
+	})
+	return SaveSettings(s)
+}
+
+// UpdateCategory updates an existing custom download category and saves settings.
+func (s *Settings) UpdateCategory(name, pattern, path string) error {
+	for i, cat := range s.Categories.Categories {
+		if strings.EqualFold(cat.Name, name) {
+			s.Categories.Categories[i].Pattern = pattern
+			s.Categories.Categories[i].Path = path
+			return SaveSettings(s)
+		}
+	}
+	return fmt.Errorf("category %q not found", name)
+}
+
+// RemoveCategory removes a custom download category by name and saves settings.
+func (s *Settings) RemoveCategory(name string) error {
+	found := false
+	var newCats []Category
+	for _, cat := range s.Categories.Categories {
+		if strings.EqualFold(cat.Name, name) {
+			found = true
+			continue
+		}
+		newCats = append(newCats, cat)
+	}
+
+	if !found {
+		return fmt.Errorf("category %q not found", name)
+	}
+
+	s.Categories.Categories = newCats
+	return SaveSettings(s)
 }
 
 // ToRuntimeConfig creates the engine runtime config from validated settings.

@@ -71,33 +71,33 @@ func SetSetting(s *Settings, path string, valueStr string) error {
 
 	var val any
 	switch target.Type {
-	case "bool":
+	case TypeBool:
 		val, err = strconv.ParseBool(valueStr)
 		if err != nil {
 			return fmt.Errorf("invalid boolean value: %w", err)
 		}
-	case "int":
+	case TypeInt:
 		val, err = strconv.ParseInt(valueStr, 10, 0)
 		if err != nil {
 			return fmt.Errorf("invalid integer value: %w", err)
 		}
 		val = int(val.(int64))
-	case "int64":
+	case TypeInt64:
 		val, err = strconv.ParseInt(valueStr, 10, 64)
 		if err != nil {
 			return fmt.Errorf("invalid integer value: %w", err)
 		}
-	case "float64":
+	case TypeFloat64:
 		val, err = strconv.ParseFloat(valueStr, 64)
 		if err != nil {
 			return fmt.Errorf("invalid float value: %w", err)
 		}
-	case "duration":
+	case TypeDuration:
 		val, err = time.ParseDuration(valueStr)
 		if err != nil {
 			return fmt.Errorf("invalid duration value: %w", err)
 		}
-	case "string", "auth_token", "link":
+	case TypeString, TypeAuthToken, TypeLink:
 		val = valueStr
 	default:
 		return fmt.Errorf("unsupported setting type %q", target.Type)

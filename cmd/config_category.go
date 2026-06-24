@@ -80,26 +80,15 @@ var categoryAddCmd = &cobra.Command{
 			return err
 		}
 
-		// Check if exists
-		for i, cat := range settings.Categories.Categories {
-			if strings.EqualFold(cat.Name, name) {
-				settings.Categories.Categories[i].Pattern = pattern
-				settings.Categories.Categories[i].Path = path
-				if err := config.SaveSettings(settings); err != nil {
-					return err
+		err = settings.AddCategory(name, pattern, path)
+		if err != nil {
+			if strings.Contains(err.Error(), "already exists") {
+				if updateErr := settings.UpdateCategory(name, pattern, path); updateErr != nil {
+					return updateErr
 				}
 				cmd.Printf("Updated existing category '%s'.\n", name)
 				return nil
 			}
-		}
-
-		settings.Categories.Categories = append(settings.Categories.Categories, config.Category{
-			Name:    name,
-			Pattern: pattern,
-			Path:    path,
-		})
-
-		if err := config.SaveSettings(settings); err != nil {
 			return err
 		}
 		cmd.Printf("Added new category '%s'.\n", name)
@@ -119,25 +108,9 @@ var categoryRemoveCmd = &cobra.Command{
 			return err
 		}
 
-		found := false
-		var newCats []config.Category
-		for _, cat := range settings.Categories.Categories {
-			if strings.EqualFold(cat.Name, name) {
-				found = true
-				continue
-			}
-			newCats = append(newCats, cat)
-		}
-
-		if !found {
-			return fmt.Errorf("category '%s' not found", name)
-		}
-
-		settings.Categories.Categories = newCats
-		if err := config.SaveSettings(settings); err != nil {
+		if err := settings.RemoveCategory(name); err != nil {
 			return err
 		}
-
 		cmd.Printf("Removed category '%s'.\n", name)
 		return nil
 	},

@@ -357,7 +357,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		valueStr = m.SettingsInput.View() + unitStyle.Render(unit)
 	} else {
 		switch meta.Type {
-		case "auth_token":
+		case config.TypeAuthToken:
 			token := GetAuthToken()
 			if token == "" {
 				valueStr = lipgloss.NewStyle().Foreground(colors.Gray()).Render("(Not generated yet)")
@@ -372,7 +372,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 					valueStr = displayToken + lipgloss.NewStyle().Foreground(colors.Gray()).Render(" [Enter to Copy]")
 				}
 			}
-		case "link":
+		case config.TypeLink:
 			valueStr = lipgloss.NewStyle().Foreground(colors.Cyan()).Render("Open [Enter]")
 		default:
 			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key, true)
@@ -633,7 +633,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 	var parsedVal any
 
 	switch setting.Type {
-	case "bool":
+	case config.TypeBool:
 		// Typically toggled unless explicitly typed out
 		if value == "" {
 			if key == "auto_start" {
@@ -655,7 +655,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			}
 			parsedVal = b
 		}
-	case "string", "auth_token", "link":
+	case config.TypeString, config.TypeAuthToken, config.TypeLink:
 		if key == "global_rate_limit" || key == "default_download_rate_limit" {
 			if _, err := strconv.ParseFloat(value, 64); err == nil {
 				value += " MB/s"
@@ -694,7 +694,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			}
 			parsedVal = v
 		}
-	case "duration":
+	case config.TypeDuration:
 		if _, err := strconv.ParseFloat(value, 64); err == nil {
 			value += "s"
 		}
@@ -703,7 +703,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			return fmt.Errorf("invalid duration")
 		}
 		parsedVal = v
-	case "float64":
+	case config.TypeFloat64:
 		v, err := strconv.ParseFloat(value, 64)
 		if err != nil {
 			return fmt.Errorf("invalid number")
@@ -764,12 +764,12 @@ func (m RootModel) getCurrentSettingMeta() *config.SettingMeta {
 }
 
 // getCurrentSettingType returns the type of the currently selected setting
-func (m RootModel) getCurrentSettingType() string {
+func (m RootModel) getCurrentSettingType() config.SettingType {
 	meta := m.getCurrentSettingMeta()
 	if meta != nil {
 		return meta.Type
 	}
-	return "string"
+	return config.TypeString
 }
 
 // getSettingsCount returns the number of settings in the current category
@@ -810,7 +810,7 @@ func (m RootModel) getSettingUnit() string {
 }
 
 // formatSettingValueForEdit returns a plain value without units for editing
-func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool) string {
+func formatSettingValueForEdit(value interface{}, typ config.SettingType, key string, truncate bool) string {
 	switch key {
 	case "min_chunk_size":
 		if v, ok := asFloat64(value); ok {
@@ -867,13 +867,13 @@ func formatSettingValueForEdit(value interface{}, typ, key string, truncate bool
 }
 
 // formatSettingValue formats a setting value for display
-func formatSettingValue(value interface{}, typ string, truncate bool) string {
+func formatSettingValue(value interface{}, typ config.SettingType, truncate bool) string {
 	if value == nil {
 		return "-"
 	}
 
 	switch typ {
-	case "bool":
+	case config.TypeBool:
 		if b, ok := value.(bool); ok {
 			if b {
 				return "True"
@@ -886,7 +886,7 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 			}
 			return "False"
 		}
-	case "duration":
+	case config.TypeDuration:
 		if d, ok := value.(time.Duration); ok {
 			return d.String()
 		}
@@ -898,19 +898,19 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 		if v, ok := asFloat64(value); ok {
 			return time.Duration(v).String()
 		}
-	case "int64":
+	case config.TypeInt64:
 		if v, ok := asFloat64(value); ok {
 			return fmt.Sprintf("%d", int64(v))
 		}
-	case "int":
+	case config.TypeInt:
 		if v, ok := asFloat64(value); ok {
 			return fmt.Sprintf("%d", int(v))
 		}
-	case "float64":
+	case config.TypeFloat64:
 		if v, ok := asFloat64(value); ok {
 			return fmt.Sprintf("%.2f", v)
 		}
-	case "string", "link":
+	case config.TypeString, config.TypeLink:
 		if s, ok := value.(string); ok {
 			if s == "" {
 				return "(default)"
@@ -920,7 +920,7 @@ func formatSettingValue(value interface{}, typ string, truncate bool) string {
 			}
 			return s
 		}
-	case "auth_token":
+	case config.TypeAuthToken:
 		return "********"
 	}
 
