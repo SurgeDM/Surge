@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -118,7 +119,7 @@ var categoryAddCmd = &cobra.Command{
 
 		err = settings.AddCategory(name, pattern, path)
 		if err != nil {
-			if strings.Contains(err.Error(), "already exists") {
+			if errors.Is(err, config.ErrCategoryExists) {
 				if updateErr := settings.UpdateCategory(name, pattern, path); updateErr != nil {
 					return updateErr
 				}

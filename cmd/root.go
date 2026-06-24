@@ -487,7 +487,7 @@ var rootCmd = &cobra.Command{
 					continue
 				}
 				if _, err := ValidateAndNormalizeURL(urlArg); err != nil {
-					return fmt.Errorf("invalid URL %q: %w", arg, err)
+					return fmt.Errorf("invalid URL %q: %w", urlArg, err)
 				}
 				validFound = true
 			}
