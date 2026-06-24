@@ -5,8 +5,10 @@ import (
 	"os"
 	"strings"
 
+	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
 )
@@ -62,12 +64,38 @@ var categoryListCmd = &cobra.Command{
 
 		width, _, err := term.GetSize(uintptr(os.Stdout.Fd()))
 		if err != nil || width < 1 {
-			width = 80
+			width = 100
 		}
 
-		t := table.New().Headers("NAME", "PATTERN", "PATH").Width(width)
+		headerStyle := lipgloss.NewStyle().Foreground(colors.Magenta()).Bold(true).Padding(0, 1)
+		nameStyle := lipgloss.NewStyle().Foreground(colors.White()).Padding(0, 1)
+		valueStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Padding(0, 1)
+		borderStyle := lipgloss.NewStyle().Foreground(colors.LightGray())
+
+		t := table.New().
+			Headers("Name", "Description", "Pattern", "Path").
+			Width(width).
+			BorderBottom(true).
+			BorderHeader(true).
+			BorderTop(false).
+			BorderLeft(false).
+			BorderRight(false).
+			BorderColumn(false).
+			BorderRow(false).
+			BorderStyle(borderStyle).
+			StyleFunc(func(row, col int) lipgloss.Style {
+				switch {
+				case row == table.HeaderRow:
+					return headerStyle
+				case col == 0:
+					return nameStyle
+				default:
+					return valueStyle
+				}
+			})
+
 		for _, cat := range settings.Categories.Categories {
-			t.Row(cat.Name, cat.Pattern, cat.Path)
+			t.Row(cat.Name, cat.Description, cat.Pattern, cat.Path)
 		}
 		cmd.Println(t.Render())
 		return nil
