@@ -274,7 +274,6 @@ func (k *KeyMap) ApplyConfig(cfg *KeyMapConfig) {
 			if field.Type() == reflect.TypeFor[key.Binding]() {
 				fieldName := strings.ToLower(t.Field(i).Name)
 				if bCfg, ok := ciMap[fieldName]; ok {
-					utils.Debug("Applying custom keybinding for %s.%s", t.Name(), t.Field(i).Name)
 					if len(bCfg.Keys) > 0 {
 						helpDesc := bCfg.Help
 						if helpDesc == "" {
