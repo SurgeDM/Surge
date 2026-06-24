@@ -35,6 +35,10 @@ Usage:
 			return openSettingsFile()
 		}
 
+		if len(args) > 0 && args[0] == "help" {
+			return cmd.Help()
+		}
+
 		isSetOperation := len(args) >= 2 && strings.Contains(args[0], ".")
 		if isSetOperation {
 			return handleSetOperation(cmd, settings, args)
