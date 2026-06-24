@@ -342,7 +342,7 @@ func LoadSettings() (*Settings, error) {
 			jsonPath := filepath.Join(GetSurgeDir(), "settings.json")
 			if _, statErr := os.Stat(jsonPath); statErr == nil {
 				settings.StartupWarnings = append(settings.StartupWarnings,
-					"Config: 'settings.json' is no longer supported. Settings have been reset to defaults and saved to 'settings.toml'. Please re-configure your options.")
+					"Config: 'settings.json' is no longer supported. Settings have been reset to defaults. Please re-configure your options via 'surge config' or by editing 'settings.toml'.")
 			}
 			return settings, nil
 		}
@@ -1209,14 +1209,33 @@ func (s *Settings) Clone() *Settings {
 	if s == nil {
 		return nil
 	}
-	data, err := toml.Marshal(s)
-	if err != nil {
-		utils.Debug("Warning: failed to marshal settings for Clone: %v", err)
-		return nil
-	}
 	cloned := DefaultSettings()
-	if err := toml.Unmarshal(data, cloned); err != nil {
-		utils.Debug("Warning: failed to unmarshal settings for Clone: %v", err)
+
+	// Deep copy standard settings
+	for i, clonedCat := range cloned.CategoriesList {
+		if i >= len(s.CategoriesList) {
+			break
+		}
+		sourceCat := s.CategoriesList[i]
+		for j, clonedSetting := range clonedCat.Settings {
+			if j >= len(sourceCat.Settings) {
+				break
+			}
+			sourceSetting := sourceCat.Settings[j]
+			clonedSetting.Value = sourceSetting.Value
+		}
 	}
+
+	// Deep copy custom categories
+	if len(s.Categories.Categories) > 0 {
+		cloned.Categories.Categories = make([]Category, len(s.Categories.Categories))
+		copy(cloned.Categories.Categories, s.Categories.Categories)
+	}
+
+	// Deep copy startup warnings
+	if len(s.StartupWarnings) > 0 {
+		cloned.StartupWarnings = append([]string(nil), s.StartupWarnings...)
+	}
+
 	return cloned
 }
