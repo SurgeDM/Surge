@@ -15,6 +15,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
+	"github.com/pelletier/go-toml/v2"
 )
 
 type Settings struct {
@@ -323,13 +324,13 @@ func (s *Settings) FindSetting(categoryName, key string) *Setting {
 	return nil
 }
 
-// GetSettingsPath returns the path to the settings JSON file.
+// GetSettingsPath returns the path to the settings TOML file.
 func GetSettingsPath() string {
-	return filepath.Join(GetSurgeDir(), "settings.json")
+	return filepath.Join(GetSurgeDir(), "settings.toml")
 }
 
 // LoadSettings loads settings from disk. Returns defaults if file doesn't exist
-// or if the JSON is corrupt, so the application can always start.
+// or if the file is corrupt, so the application can always start.
 func LoadSettings() (*Settings, error) {
 	path := GetSettingsPath()
 
@@ -342,17 +343,63 @@ func LoadSettings() (*Settings, error) {
 	}
 
 	settings := DefaultSettings() // Start with defaults to fill any missing fields
-	if err := json.Unmarshal(data, settings); err != nil {
-		if _, ok := err.(*json.UnmarshalTypeError); ok {
-			utils.Debug("Warning: type mismatch in settings file %s: %v - keeping valid fields", path, err)
-			settings.StartupWarnings = append(settings.StartupWarnings,
-				fmt.Sprintf("Config: some fields had type mismatches and were reset to defaults (%v)", err))
-		} else {
-			utils.Debug("Warning: corrupt settings file %s: %v - using defaults", path, err)
-			defaults := DefaultSettings()
-			defaults.StartupWarnings = append(defaults.StartupWarnings,
-				fmt.Sprintf("Config: settings file is corrupt (%v) - all settings reset to defaults", err))
-			return defaults, nil
+
+	var raw map[string]any
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		utils.Debug("Warning: corrupt settings file %s: %v - using defaults", path, err)
+		settings.StartupWarnings = append(settings.StartupWarnings,
+			fmt.Sprintf("Config: settings file is corrupt (%v) - all settings reset to defaults", err))
+		return settings, nil
+	}
+
+	// Assign mapped values to settings
+	for catName, catRaw := range raw {
+		if strings.EqualFold(catName, "categories") {
+			if catMap, ok := catRaw.(map[string]any); ok {
+				if enabled, ok := catMap["category_enabled"]; ok {
+					if set := settings.FindSetting("Categories", "category_enabled"); set != nil {
+						set.Value = enabled
+					}
+				}
+				if catsRaw, ok := catMap["categories"]; ok {
+					if catsList, ok := catsRaw.([]any); ok {
+						var parsedCats []Category
+						for _, cAny := range catsList {
+							if cMap, ok := cAny.(map[string]any); ok {
+								parsed := Category{}
+								if n, ok := cMap["name"].(string); ok {
+									parsed.Name = n
+								}
+								if d, ok := cMap["description"].(string); ok {
+									parsed.Description = d
+								}
+								if pt, ok := cMap["pattern"].(string); ok {
+									parsed.Pattern = pt
+								}
+								if p, ok := cMap["path"].(string); ok {
+									parsed.Path = p
+								}
+								parsedCats = append(parsedCats, parsed)
+							}
+						}
+						settings.Categories.Categories = parsedCats
+					}
+				}
+			}
+			continue
+		}
+
+		if catMap, ok := catRaw.(map[string]any); ok {
+			for _, cat := range settings.CategoriesList {
+				if strings.EqualFold(cat.Name, catName) {
+					for key, val := range catMap {
+						if set := settings.FindSetting(cat.Name, key); set != nil {
+							set.Value = val
+						}
+					}
+					break
+				}
+			}
 		}
 	}
 
@@ -522,6 +569,8 @@ func DefaultSettings() *Settings {
 					if !ok {
 						if f, ok := val.(float64); ok {
 							v = int(f)
+						} else if i64, ok := val.(int64); ok {
+							v = int(i64)
 						} else {
 							return fmt.Errorf("invalid type")
 						}
@@ -553,6 +602,8 @@ func DefaultSettings() *Settings {
 					if !ok {
 						if f, ok := val.(float64); ok {
 							v = int(f)
+						} else if i64, ok := val.(int64); ok {
+							v = int(i64)
 						} else {
 							return fmt.Errorf("invalid type")
 						}
@@ -585,6 +636,8 @@ func DefaultSettings() *Settings {
 					if !ok {
 						if f, ok := val.(float64); ok {
 							v = int(f)
+						} else if i64, ok := val.(int64); ok {
+							v = int(i64)
 						} else {
 							return fmt.Errorf("invalid type")
 						}
@@ -608,6 +661,8 @@ func DefaultSettings() *Settings {
 					if !ok {
 						if f, ok := val.(float64); ok {
 							v = int(f)
+						} else if i64, ok := val.(int64); ok {
+							v = int(i64)
 						} else {
 							return fmt.Errorf("invalid type")
 						}
@@ -631,6 +686,8 @@ func DefaultSettings() *Settings {
 					if !ok {
 						if f, ok := val.(float64); ok {
 							v = int(f)
+						} else if i64, ok := val.(int64); ok {
+							v = int(i64)
 						} else {
 							return fmt.Errorf("invalid type")
 						}
@@ -730,6 +787,8 @@ func DefaultSettings() *Settings {
 					if !ok {
 						if f, ok := val.(float64); ok {
 							v = int(f)
+						} else if i64, ok := val.(int64); ok {
+							v = int(i64)
 						} else {
 							return fmt.Errorf("invalid type")
 						}
@@ -752,6 +811,8 @@ func DefaultSettings() *Settings {
 					if !ok {
 						if f, ok := val.(float64); ok {
 							v = int(f)
+						} else if i64, ok := val.(int64); ok {
+							v = int(i64)
 						} else {
 							return fmt.Errorf("invalid type")
 						}
@@ -800,6 +861,8 @@ func DefaultSettings() *Settings {
 					if !ok {
 						if f, ok := val.(float64); ok {
 							v = int(f)
+						} else if i64, ok := val.(int64); ok {
+							v = int(i64)
 						} else {
 							return fmt.Errorf("invalid type")
 						}
@@ -1047,9 +1110,55 @@ func writeJSONAtomic(path string, v any) error {
 	return os.Rename(tempPath, path)
 }
 
+// writeTOMLAtomic marshals v as TOML and writes it to path atomically
+// using a temp-file-then-rename strategy.
+func writeTOMLAtomic(path string, v any) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	data, err := toml.Marshal(v)
+	if err != nil {
+		return err
+	}
+	tempPath := path + ".tmp"
+	if err := os.WriteFile(tempPath, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tempPath, path)
+}
+
 // SaveSettings saves settings to disk atomically.
 func SaveSettings(s *Settings) error {
-	return writeJSONAtomic(GetSettingsPath(), s)
+	raw := make(map[string]any)
+	for _, cat := range s.CategoriesList {
+		catKey := strings.ToLower(cat.Name)
+		if cat.Name == "Categories" {
+			catMap := make(map[string]any)
+			if set := s.FindSetting("Categories", "category_enabled"); set != nil {
+				catMap["category_enabled"] = set.Value
+			}
+			var catsRaw []map[string]any
+			for _, c := range s.Categories.Categories {
+				cMap := map[string]any{
+					"name":        c.Name,
+					"description": c.Description,
+					"pattern":     c.Pattern,
+					"path":        c.Path,
+				}
+				catsRaw = append(catsRaw, cMap)
+			}
+			catMap["categories"] = catsRaw
+			raw[catKey] = catMap
+			continue
+		}
+
+		catMap := make(map[string]any)
+		for _, set := range cat.Settings {
+			catMap[set.Key] = set.Value
+		}
+		raw[catKey] = catMap
+	}
+	return writeTOMLAtomic(GetSettingsPath(), raw)
 }
 
 // ToRuntimeConfig creates the engine runtime config from validated settings.

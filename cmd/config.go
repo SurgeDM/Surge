@@ -1,0 +1,108 @@
+package cmd
+
+import (
+	"fmt"
+	"os"
+	"os/exec"
+	"runtime"
+
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/spf13/cobra"
+)
+
+var configCmd = &cobra.Command{
+	Use:   "config [path] [value]",
+	Short: "Manage application settings",
+	Long: `Manage Surge application settings.
+
+Provides a command-line interface to get, set, or reset settings in the configuration file.
+To list all available settings or view documentation, refer to the UI or documentation.
+
+Usage:
+  surge config General.Auto_Resume true     (Sets a value)
+  surge config Network.Max_Concurrent_Downloads (Gets a value)
+  surge config Performance.Stall_Timeout default (Resets to default)
+  surge config open                         (Opens settings file in editor)`,
+	Args: cobra.RangeArgs(1, 2),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		path := args[0]
+
+		if path == "open" {
+			return openSettingsFile()
+		}
+
+		settings, err := config.LoadSettings()
+		if err != nil {
+			return fmt.Errorf("failed to load settings: %w", err)
+		}
+
+		// GET operation
+		if len(args) == 1 {
+			val, err := config.GetSettingString(settings, path)
+			if err != nil {
+				return err
+			}
+			fmt.Println(val)
+			return nil
+		}
+
+		// SET or RESET operation
+		value := args[1]
+		if value == "default" {
+			if err := config.ResetSetting(settings, path); err != nil {
+				return err
+			}
+			fmt.Printf("Reset %s to default value.\n", path)
+		} else {
+			if err := config.SetSetting(settings, path, value); err != nil {
+				return err
+			}
+			fmt.Printf("Set %s to %s\n", path, value)
+		}
+
+		// Save the modified settings
+		if err := config.SaveSettings(settings); err != nil {
+			return fmt.Errorf("failed to save settings: %w", err)
+		}
+
+		return nil
+	},
+}
+
+func init() {
+	rootCmd.AddCommand(configCmd)
+}
+
+func openSettingsFile() error {
+	path := config.GetSettingsPath()
+
+	var command string
+	var args []string
+
+	if editor := os.Getenv("EDITOR"); editor != "" {
+		command = editor
+		args = []string{path}
+	} else {
+		switch runtime.GOOS {
+		case "windows":
+			command = "cmd"
+			args = []string{"/c", "start", "", path}
+		case "darwin":
+			command = "open"
+			args = []string{path}
+		default: // linux, bsd, etc
+			command = "xdg-open"
+			args = []string{path}
+		}
+	}
+
+	cmd := exec.Command(command, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("failed to open editor: %w", err)
+	}
+	return nil
+}

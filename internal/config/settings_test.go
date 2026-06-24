@@ -222,8 +222,8 @@ func TestGetSettingsPath(t *testing.T) {
 		t.Errorf("Settings path should be under surge dir. Path: %s, SurgeDir: %s", path, surgeDir)
 	}
 
-	if !strings.HasSuffix(path, "settings.json") {
-		t.Errorf("Settings path should end with 'settings.json', got: %s", path)
+	if !strings.HasSuffix(path, "settings.toml") {
+		t.Errorf("Settings path should end with 'settings.toml', got: %s", path)
 	}
 }
 
