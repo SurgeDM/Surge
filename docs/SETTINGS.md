@@ -4,44 +4,41 @@ This document covers all configuration options available in Surge. For CLI comma
 
 ## Configuration File
 
-You can **access the settings in TUI** or if you prefer
-from the `settings.json` file located in the application data directory:
+You can **access the settings in TUI** or configure them via the CLI tool `surge config`. 
+If you prefer manual editing, you can modify the `settings.toml` file located in the application data directory:
 
-- **Windows:** `%APPDATA%\surge\settings.json`
-- **macOS:** `~/Library/Application Support/surge/settings.json`
-- **Linux:** `~/.config/surge/settings.json`
+- **Windows:** `%APPDATA%\surge\settings.toml`
+- **macOS:** `~/Library/Application Support/surge/settings.toml`
+- **Linux:** `~/.config/surge/settings.toml`
 
-The `settings.json` file expects a nested structure divided into `general`, `network`, `performance`, and `categories` sections. For example:
+The `settings.toml` file expects a structure divided into `[general]`, `[network]`, `[performance]`, and `[categories]` sections. For example:
 
-```json
-{
-  "general": {
-    "default_download_dir": "/path/to/downloads",
-    "theme": 2
-  },
-  "network": {
-    "max_connections_per_host": 8
-  },
-  "performance": {
-    "max_task_retries": 5
-  },
-  "categories": {
-    "category_enabled": true
-  }
-}
+```toml
+[general]
+default_download_dir = "/path/to/downloads"
+theme = 2
+
+[network]
+max_connections_per_host = 8
+
+[performance]
+max_task_retries = 5
+
+[categories]
+category_enabled = true
 ```
 
 *Note: You do not need to specify all keys. Surge will automatically infer missing keys and use their internal default values.*
 
 ## Configuration Validation
 
-Surge implements a self-healing configuration system to ensure the application remains stable even if the `settings.json` file is manually edited with invalid values.
+Surge implements a self-healing configuration system to ensure the application remains stable even if the `settings.toml` file is manually edited with invalid values.
 
-- **Range Enforcement**: Numeric values (like connection limits and concurrent downloads) are strictly enforced. If a value is set outside its safe operating range in the JSON file, Surge will automatically reset that specific field to its default value on startup while preserving your other valid settings.
+- **Range Enforcement**: Numeric values (like connection limits and concurrent downloads) are strictly enforced. If a value is set outside its safe operating range in the TOML file, Surge will automatically reset that specific field to its default value on startup while preserving your other valid settings.
 - **Path Verification**: Paths like `default_download_dir` and individual category paths are verified for existence and accessibility. Broken or inaccessible paths are rolled back to the system's default Downloads directory.
 - **Syntactic Validation**: Proxy URLs and DNS server lists are validated for correct syntax.
 - **Category Integrity**: If a custom category has an invalid regular expression pattern, it is automatically pruned from the active list to prevent engine crashes.
-- **Corrupt JSON Fallback**: If the `settings.json` file is completely unparseable (e.g., missing brackets or commas), Surge will log a warning and start with all factory default settings for that session.
+- **Corrupt TOML Fallback**: If the `settings.toml` file is completely unparseable, Surge will log a warning and start with all factory default settings for that session.
 ## Keymap Configuration
 
 Surge allows you to customize your keyboard shortcuts by editing the `keymap.json` file located in the application config directory:
@@ -93,7 +90,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 
 | Directory   | Purpose                           | Linux                        | macOS                                       | Windows                 |
 | :---------- | :-------------------------------- | :--------------------------- | :------------------------------------------ | :---------------------- |
-| **Config**  | `settings.json`, `keymap.json`    | `~/.config/surge/`           | `~/Library/Application Support/surge/`      | `%APPDATA%\surge\`      |
+| **Config**  | `settings.toml`, `keymap.json`    | `~/.config/surge/`           | `~/Library/Application Support/surge/`      | `%APPDATA%\surge\`      |
 | **State**   | Database (`surge.db`), auth token | `~/.local/state/surge/`      | `~/Library/Application Support/surge/`      | `%APPDATA%\surge\`      |
 | **Logs**    | Timestamped `.log` files          | `~/.local/state/surge/logs/` | `~/Library/Application Support/surge/logs/` | `%APPDATA%\surge\logs\` |
 | **Themes**  | Custom `.toml` theme files        | `~/.config/surge/themes/`    | `~/Library/Application Support/surge/themes/` | `%APPDATA%\surge\themes\` |
