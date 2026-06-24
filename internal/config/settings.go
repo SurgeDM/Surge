@@ -3,6 +3,7 @@ package config
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/url"
@@ -17,6 +18,8 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/pelletier/go-toml/v2"
 )
+
+var ErrCategoryExists = errors.New("category already exists")
 
 type Settings struct {
 	General     GeneralSettings     `json:"general"`
@@ -324,6 +327,15 @@ func (s *Settings) FindSetting(categoryName, key string) *Setting {
 	return nil
 }
 
+func (s *Settings) FindSettingsCategory(name string) *SettingsCategory {
+	for _, cat := range s.CategoriesList {
+		if cat.Name == name {
+			return cat
+		}
+	}
+	return nil
+}
+
 // GetSettingsPath returns the path to the settings TOML file.
 func GetSettingsPath() string {
 	return filepath.Join(GetSurgeDir(), "settings.toml")
@@ -407,6 +419,14 @@ func LoadSettings() (*Settings, error) {
 					break
 				}
 			}
+		}
+	}
+
+	// Normalize loaded values to their proper types (handles TOML type coercion
+	// such as durations stored as strings, ints stored as int64, etc.)
+	for _, cat := range settings.CategoriesList {
+		for _, set := range cat.Settings {
+			set.Value = set.Resolve()
 		}
 	}
 
@@ -965,8 +985,8 @@ func DefaultSettings() *Settings {
 				Label:        "Get Chrome Extension",
 				Description:  "Open the Surge Chrome extension page.",
 				Type:         TypeLink,
-				DefaultValue: "https://github.com/SurgeDM/Surge/releases/latest",
-				Value:        "https://github.com/SurgeDM/Surge/releases/latest",
+				DefaultValue: "https://chromewebstore.google.com/detail/surge-download-manager/cakjmkhlofkhjmfkjlclgbfdklhdnkgl",
+				Value:        "https://chromewebstore.google.com/detail/surge-download-manager/cakjmkhlofkhjmfkjlclgbfdklhdnkgl",
 			},
 			FirefoxExtensionURL: &Setting{
 				Key:          "firefox_extension_url",
@@ -1124,6 +1144,12 @@ func SaveSettings(s *Settings) error {
 
 		catMap := make(map[string]any)
 		for _, set := range cat.Settings {
+			if set.Type == TypeDuration {
+				if d, ok := set.Value.(time.Duration); ok {
+					catMap[set.Key] = d.String()
+					continue
+				}
+			}
 			catMap[set.Key] = set.Value
 		}
 		raw[catKey] = catMap
@@ -1135,7 +1161,7 @@ func SaveSettings(s *Settings) error {
 func (s *Settings) AddCategory(name, pattern, path string) error {
 	for _, cat := range s.Categories.Categories {
 		if strings.EqualFold(cat.Name, name) {
-			return fmt.Errorf("category %q already exists", name)
+			return fmt.Errorf("%w: %q", ErrCategoryExists, name)
 		}
 	}
 	s.Categories.Categories = append(s.Categories.Categories, Category{
@@ -1221,18 +1247,15 @@ func (s *Settings) Clone() *Settings {
 	}
 	cloned := DefaultSettings()
 
-	// Deep copy standard settings
-	for i, clonedCat := range cloned.CategoriesList {
-		if i >= len(s.CategoriesList) {
-			break
+	for _, clonedCat := range cloned.CategoriesList {
+		sourceCat := s.FindSettingsCategory(clonedCat.Name)
+		if sourceCat == nil {
+			continue
 		}
-		sourceCat := s.CategoriesList[i]
-		for j, clonedSetting := range clonedCat.Settings {
-			if j >= len(sourceCat.Settings) {
-				break
+		for _, clonedSetting := range clonedCat.Settings {
+			if sourceSetting := s.FindSetting(sourceCat.Name, clonedSetting.Key); sourceSetting != nil {
+				clonedSetting.Value = sourceSetting.Value
 			}
-			sourceSetting := sourceCat.Settings[j]
-			clonedSetting.Value = sourceSetting.Value
 		}
 	}
 
