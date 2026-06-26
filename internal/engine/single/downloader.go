@@ -231,6 +231,7 @@ type progressReader struct {
 	batchInterval time.Duration
 	written       int64
 	pending       int64
+	pendingStart  int64
 	lastFlush     time.Time
 	readChecks    uint8
 }
@@ -256,6 +257,9 @@ func (w *progressReader) Read(p []byte) (int, error) {
 
 	written := int64(n)
 	w.written += written
+	if w.pending == 0 {
+		w.pendingStart = w.written - written
+	}
 	w.pending += written
 	if w.pending >= w.batchSize {
 		w.flushWithTime(time.Now())
@@ -293,6 +297,9 @@ func (w *progressReader) flushWithTime(now time.Time) {
 		return
 	}
 
+	if w.pending > 0 {
+		w.state.UpdateChunkStatus(w.pendingStart, w.pending, types.ChunkCompleted)
+	}
 	w.state.Downloaded.Store(w.written)
 	w.state.VerifiedProgress.Store(w.written)
 	w.pending = 0
