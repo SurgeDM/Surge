@@ -160,7 +160,7 @@ func TestConcurrentDownloader_AllMirrors429ThenRecover(t *testing.T) {
 				if written+n > fileSize {
 					n = fileSize - written
 				}
-				w.Write(buf[:n])
+				_, _ = w.Write(buf[:n])
 				written += n
 			}
 		}
@@ -236,7 +236,7 @@ func TestConcurrentDownloader_429RespectsRetryAfterHeader(t *testing.T) {
 			w.Header().Set("Content-Length", strconv.FormatInt(fileSize, 10))
 			w.WriteHeader(http.StatusOK)
 			buf := make([]byte, fileSize)
-			w.Write(buf)
+			_, _ = w.Write(buf)
 		}),
 	)
 	defer server.Close()
@@ -371,7 +371,7 @@ func TestConcurrentDownloader_503WithRetryAfterTreatedAsThrottle(t *testing.T) {
 			w.Header().Set("Content-Length", strconv.FormatInt(fileSize, 10))
 			w.WriteHeader(http.StatusPartialContent)
 			buf := make([]byte, fileSize)
-			w.Write(buf)
+			_, _ = w.Write(buf)
 		}),
 	)
 	defer server.Close()
@@ -478,7 +478,7 @@ func TestConcurrentDownloader_Bare503IsGeneric(t *testing.T) {
 			w.Header().Set("Content-Length", strconv.FormatInt(fileSize, 10))
 			w.WriteHeader(http.StatusPartialContent)
 			buf := make([]byte, fileSize)
-			w.Write(buf)
+			_, _ = w.Write(buf)
 		}),
 	)
 	defer server.Close()
