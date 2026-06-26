@@ -1,4 +1,4 @@
-package processing_test
+package probe_test
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/probe"
 )
 
 func TestProbeRedirectRange(t *testing.T) {
@@ -26,7 +26,7 @@ func TestProbeRedirectRange(t *testing.T) {
 	}))
 	defer redirect.Close()
 
-	res, err := processing.ProbeServer(context.Background(), redirect.URL, "", nil)
+	res, err := probe.ProbeServer(context.Background(), redirect.URL, "", nil)
 	if err != nil {
 		t.Fatalf("ProbeServer failed: %v", err)
 	}
@@ -55,7 +55,7 @@ func TestProbeRedirect_SameOriginPreservesAuthHeaders(t *testing.T) {
 	server := httptest.NewServer(mux)
 	defer server.Close()
 
-	_, err := processing.ProbeServer(context.Background(), server.URL+"/redirect", "", map[string]string{
+	_, err := probe.ProbeServer(context.Background(), server.URL+"/redirect", "", map[string]string{
 		"Authorization": "Bearer same-origin",
 		"Cookie":        "session=same-origin",
 		"X-API-Key":     "same-origin-key",
@@ -96,7 +96,7 @@ func TestProbeRedirect_CrossOriginForwardsExplicitHeaders(t *testing.T) {
 	}))
 	defer redirect.Close()
 
-	_, err := processing.ProbeServer(context.Background(), redirect.URL, "", map[string]string{
+	_, err := probe.ProbeServer(context.Background(), redirect.URL, "", map[string]string{
 		"Authorization": "Bearer cross-origin",
 		"Cookie":        "session=cross-origin",
 		"X-API-Key":     "cross-origin-key",
@@ -139,7 +139,7 @@ func TestProbeServer_RetryWithoutRangeReusesHeaderSetup(t *testing.T) {
 	}))
 	defer server.Close()
 
-	res, err := processing.ProbeServer(context.Background(), server.URL, "", map[string]string{
+	res, err := probe.ProbeServer(context.Background(), server.URL, "", map[string]string{
 		"Authorization": "Bearer retry-test",
 	})
 	if err != nil {

@@ -8,7 +8,7 @@ This is intentionally short. If you see something that can be better, open a PR.
 
 - `cmd/`: CLI commands and startup wiring (`surge get`, `surge server`, etc.).
 - `internal/core/`: service layer (`LocalDownloadService`) that orchestrates add/pause/resume/delete/list.
-- `internal/download/`: high-level download flow (`TUIDownload`) and worker-pool lifecycle.
+- `internal/download/`: high-level download flow (`RunDownload`) and worker-pool lifecycle.
 - `internal/engine/`: low-level engine code.
 - `internal/engine/probe.go`: probe logic (range support, metadata, mirror probing).
 - `internal/engine/concurrent/`: concurrent HTTP downloader and worker/retry/failover logic.
