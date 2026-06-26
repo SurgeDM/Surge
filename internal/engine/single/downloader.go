@@ -83,6 +83,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		d.State.SetURL(rawurl)
 		d.State.SetDestPath(destPath)
 		d.State.ActiveWorkers.Store(1)
+		defer d.State.ActiveWorkers.Store(0)
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)

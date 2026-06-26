@@ -382,8 +382,8 @@ func TestSingleDownloader_Download_Success(t *testing.T) {
 	if state.Downloaded.Load() != fileSize {
 		t.Errorf("Downloaded %d != fileSize %d", state.Downloaded.Load(), fileSize)
 	}
-	if state.ActiveWorkers.Load() != 1 {
-		t.Errorf("ActiveWorkers = %d, want 1 (single-threaded should report 1 connection)", state.ActiveWorkers.Load())
+	if state.ActiveWorkers.Load() != 0 {
+		t.Errorf("ActiveWorkers = %d, want 0 (should clear after download completes)", state.ActiveWorkers.Load())
 	}
 }
 
@@ -526,8 +526,8 @@ func TestSingleDownloader_Download_ProgressTracking(t *testing.T) {
 	if state.VerifiedProgress.Load() != fileSize {
 		t.Errorf("Verified progress %d != file size %d", state.VerifiedProgress.Load(), fileSize)
 	}
-	if state.ActiveWorkers.Load() != 1 {
-		t.Errorf("ActiveWorkers = %d, want 1 (single-threaded should report 1 connection)", state.ActiveWorkers.Load())
+	if state.ActiveWorkers.Load() != 0 {
+		t.Errorf("ActiveWorkers = %d, want 0 (should clear after download completes)", state.ActiveWorkers.Load())
 	}
 }
 
