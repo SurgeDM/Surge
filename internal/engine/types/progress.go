@@ -436,7 +436,6 @@ func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkSta
 	ps.mu.Lock()
 
 	if ps.ActualChunkSize == 0 || len(ps.ChunkBitmap) == 0 {
-		utils.Debug("UpdateChunkStatus skipped: ActualChunkSize=%d, BitmapLen=%d", ps.ActualChunkSize, len(ps.ChunkBitmap))
 		ps.mu.Unlock()
 		return
 	}

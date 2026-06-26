@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -622,7 +623,33 @@ func (p *WorkerPool) worker() {
 
 		if isPaused {
 			utils.Debug("WorkerPool: Download %s paused cleanly", localCfg.ID)
-			// If paused, we keep it in downloads map for potential resume via ExtractPausedConfig
+			// The concurrent downloader sends DownloadPausedMsg itself via handlePause()
+			// (which causes RunDownload to return nil). When a single-threaded download is
+			// paused, RunDownload returns a non-nil error, and the pool must fill the gap.
+			if err != nil && localCfg.ProgressCh != nil {
+				var downloaded int64
+				var rateLimit int64
+				var rateLimitSet bool
+				var workers int
+				var minChunkSize int64
+				if localCfg.State != nil {
+					downloaded = localCfg.State.Downloaded.Load()
+				}
+				if localCfg.Runtime != nil {
+					workers = localCfg.Runtime.Workers
+					minChunkSize = localCfg.Runtime.MinChunkSize
+				}
+				rateLimit, rateLimitSet = localCfg.RateLimitBps, localCfg.RateLimitSet
+				safeSendProgress(localCfg.ProgressCh, events.DownloadPausedMsg{
+					DownloadID:   localCfg.ID,
+					Filename:     localCfg.Filename,
+					Downloaded:   downloaded,
+					RateLimit:    rateLimit,
+					RateLimitSet: rateLimitSet,
+					Workers:      workers,
+					MinChunkSize: minChunkSize,
+				})
+			}
 		} else if err != nil {
 			if localCfg.State != nil {
 				localCfg.State.SetError(err)
