@@ -50,6 +50,7 @@ func initializeGlobalState() error {
 
 	// Config logging
 	utils.ConfigureDebug(logsDir)
+	utils.Debug("Surge %s (commit %s)", Version, Commit)
 
 	// Clean up old logs (keeping retention-1 because a new log will be created immediately after)
 	retention := config.Resolve[int](getSettings().General.LogRetentionCount)
