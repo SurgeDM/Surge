@@ -313,6 +313,7 @@ func TestProgressState_SessionReset(t *testing.T) {
 	ps.SessionStartBytes = 100
 	ps.SavedElapsed = 10 * time.Second
 	ps.Done.Store(true)
+	ps.ActiveWorkers.Store(8)
 	ps.InitBitmap(1000, 100)
 
 	// Simulate some activity
@@ -334,6 +335,9 @@ func TestProgressState_SessionReset(t *testing.T) {
 	}
 	if ps.Done.Load() {
 		t.Error("Done should be false after reset")
+	}
+	if ps.ActiveWorkers.Load() != 0 {
+		t.Errorf("ActiveWorkers = %d, want 0", ps.ActiveWorkers.Load())
 	}
 
 	// Verify bitmap was cleared

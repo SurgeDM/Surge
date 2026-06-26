@@ -247,6 +247,7 @@ func (ps *ProgressState) SessionReset() {
 	ps.SessionStartBytes = 0
 	ps.StartTime = time.Now()
 	ps.SavedElapsed = 0
+	ps.ActiveWorkers.Store(0)
 	ps.Done.Store(false)
 	ps.Paused.Store(false)
 	ps.Pausing.Store(false)
