@@ -105,6 +105,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 	resp, err := client.Do(req)
 	if err != nil {
+		utils.Debug("Single downloader: GET %s failed: %v", rawurl, err)
 		return err
 	}
 	defer func() {
@@ -114,6 +115,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	}()
 
 	if resp.StatusCode != http.StatusOK {
+		utils.Debug("Single downloader: unexpected status %d for %s", resp.StatusCode, rawurl)
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 
@@ -168,6 +170,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
+		utils.Debug("Single downloader: copy error for %s: %v", rawurl, err)
 		return fmt.Errorf("copy error: %w", err)
 	}
 

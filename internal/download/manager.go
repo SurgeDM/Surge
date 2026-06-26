@@ -238,6 +238,11 @@ func RunDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		if d.TotalSize > 0 {
 			effectiveTotalSize = d.TotalSize
 		}
+		if downloadErr != nil {
+			utils.Debug("Single-threaded download failed: %v", downloadErr)
+		} else {
+			utils.Debug("Single-threaded download completed: %d bytes", effectiveTotalSize)
+		}
 	}
 
 	// Only send completion if NO error AND not paused
