@@ -47,6 +47,13 @@ const (
 	SpeedEMAAlpha       = 0.3
 
 	ProgressChannelBuffer = 100
+
+	RateLimitBaseBackoff  = 1 * time.Second
+	RateLimitMaxBackoff   = 30 * time.Second
+	RateLimitMinBackoff   = 500 * time.Millisecond
+	RateLimitJitterFraction = 0.2
+	RateLimitPenaltyDecay = 60 * time.Second
+	RateLimitMaxRetries   = 6
 )
 
 type DownloadConfig struct {
