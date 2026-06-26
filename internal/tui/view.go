@@ -673,6 +673,9 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	} else if d.resuming {
 		speedStr = "Resuming..."
 		etaStr = "..."
+	} else if d.rateLimited {
+		speedStr = "Rate limited, retrying..."
+		etaStr = "..."
 	} else if d.paused || d.Speed == 0 {
 		speedStr = "Paused"
 		if d.RateLimitSet && d.RateLimit > 0 {

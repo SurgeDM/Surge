@@ -22,6 +22,7 @@ type ProgressState struct {
 	Error         atomic.Pointer[error]
 	Paused        atomic.Bool
 	Pausing       atomic.Bool // Intermediate state: Pause requested but workers not yet exited
+	RateLimited   atomic.Bool // Set when the downloader is backing off due to HTTP 429/rate-limit
 	cancelFunc    context.CancelFunc
 
 	VerifiedProgress  atomic.Int64  // Verified bytes written to disk (for UI progress)
@@ -251,6 +252,7 @@ func (ps *ProgressState) SessionReset() {
 	ps.Done.Store(false)
 	ps.Paused.Store(false)
 	ps.Pausing.Store(false)
+	ps.RateLimited.Store(false)
 	ps.Error.Store(nil)
 
 	// Clear mirrors error status

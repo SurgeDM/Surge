@@ -26,6 +26,7 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 	d.Speed = msg.Speed
 	d.Elapsed = msg.Elapsed
 	d.Connections = msg.ActiveConnections
+	d.rateLimited = msg.RateLimited
 
 	// Keep "Resuming..." visible until we observe actual transfer.
 	if d.resuming && (d.Speed > 0 || d.Downloaded > prevDownloaded) {

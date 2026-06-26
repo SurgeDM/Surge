@@ -252,6 +252,7 @@ func (s *LocalDownloadService) reportProgressLoop() {
 				Speed:             currentSpeed,
 				Elapsed:           totalElapsed,
 				ActiveConnections: int(connections),
+				RateLimited:       cfg.State.RateLimited.Load(),
 			}
 
 			// Chunk snapshots are expensive due to bitmap/progress copies.

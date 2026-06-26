@@ -141,10 +141,16 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 				ra = 5 * time.Second
 			}
 			utils.Debug("Single downloader: rate limited (%d), waiting %v (retry %d/%d)", resp.StatusCode, ra, rlRetries, maxRlRetries)
+			if d.State != nil {
+				d.State.RateLimited.Store(true)
+			}
 			select {
 			case <-dlCtx.Done():
 				return dlCtx.Err()
 			case <-time.After(ra):
+			}
+			if d.State != nil {
+				d.State.RateLimited.Store(false)
 			}
 			continue
 		}
