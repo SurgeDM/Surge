@@ -16,7 +16,7 @@ import (
 type activeDownload struct {
 	config types.DownloadConfig
 	cancel context.CancelFunc
-	// running is true while the worker goroutine is executing TUIDownload for this config.
+	// running is true while the worker goroutine is executing RunDownload for this config.
 	running atomic.Bool
 }
 
@@ -594,11 +594,11 @@ func (p *WorkerPool) worker() {
 		delete(p.queued, cfg.ID)
 		p.downloads[cfg.ID] = ad
 
-		// Make a local copy for TUIDownload to mutate safely
+		// Make a local copy for RunDownload to mutate safely
 		localCfg := ad.config
 		p.mu.Unlock()
 
-		err := TUIDownload(ctx, &localCfg)
+		err := RunDownload(ctx, &localCfg)
 		ad.running.Store(false)
 
 		// Sync back mutated fields cleanly under lock
@@ -627,7 +627,7 @@ func (p *WorkerPool) worker() {
 			if localCfg.State != nil {
 				localCfg.State.SetError(err)
 			}
-			// Note: DownloadErrorMsg is already emitted by TUIDownload on the same progressCh.
+			// Note: DownloadErrorMsg is already emitted by RunDownload on the same progressCh.
 			// Clean up errored download from tracking (don't save to .surge)
 			p.mu.Lock()
 			delete(p.downloads, localCfg.ID)

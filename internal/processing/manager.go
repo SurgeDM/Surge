@@ -16,6 +16,8 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	probing "github.com/SurgeDM/Surge/internal/probe"
+
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -201,7 +203,7 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 	}
 
 	utils.Debug("Lifecycle: Enqueue %s (Filename: %s)", req.URL, req.Filename)
-	return mgr.enqueueResolved(ctx, req, func(finalPath, finalFilename string, probe *ProbeResult) (string, error) {
+	return mgr.enqueueResolved(ctx, req, func(finalPath, finalFilename string, probeResult *probing.ProbeResult) (string, error) {
 		return mgr.addFunc(
 			req.URL,
 			finalPath,
@@ -211,8 +213,8 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 			req.IsExplicitCategory,
 			req.Workers,
 			req.MinChunkSize,
-			probe.FileSize,
-			probe.SupportsRange,
+			probeResult.FileSize,
+			probeResult.SupportsRange,
 		)
 	})
 }
@@ -224,7 +226,7 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 	}
 
 	utils.Debug("Lifecycle: EnqueueWithID %s (%s)", req.URL, requestID)
-	return mgr.enqueueResolved(ctx, req, func(finalPath, finalFilename string, probe *ProbeResult) (string, error) {
+	return mgr.enqueueResolved(ctx, req, func(finalPath, finalFilename string, probeResult *probing.ProbeResult) (string, error) {
 		return mgr.addWithIDFunc(
 			req.URL,
 			finalPath,
@@ -234,15 +236,15 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 			requestID,
 			req.Workers,
 			req.MinChunkSize,
-			probe.FileSize,
-			probe.SupportsRange,
+			probeResult.FileSize,
+			probeResult.SupportsRange,
 		)
 	})
 }
 
 // enqueueResolved prepares the final path and working file before handing the
 // download to the engine, so workers and lifecycle events agree on one stable destination.
-func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadRequest, dispatch func(string, string, *ProbeResult) (string, error)) (string, string, error) {
+func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadRequest, dispatch func(string, string, *probing.ProbeResult) (string, error)) (string, string, error) {
 	if req.URL == "" {
 		return "", "", types.ErrURLRequired
 	}
@@ -264,7 +266,7 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 		defer func() { mgr.probeSem <- struct{}{} }()
 	}
 
-	probe, probeErr := ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
+	probeResult, probeErr := probing.ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
 	if probeErr != nil {
 		// Distinguish between terminal client errors (invalid scheme, etc) and
 		// server-side rejections or timeouts that we can optimistically ignore.
@@ -275,7 +277,7 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 			isTerminal = !errors.As(probeErr, &opErr) && // not a network-layer error
 				strings.Contains(urlErr.Error(), "unsupported protocol scheme")
 		}
-		isTerminal = isTerminal || errors.Is(probeErr, ErrProbeRequestCreation)
+		isTerminal = isTerminal || errors.Is(probeErr, probing.ErrProbeRequestCreation)
 
 		if isTerminal {
 			return "", "", probeErr
@@ -288,11 +290,11 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 		// Mark range support as "unknown, try it" by keeping size at zero and
 		// setting SupportsRange so the download path can attempt a concurrent
 		// bootstrap before falling back to single-stream mode.
-		probe = &ProbeResult{}
-		probe.SupportsRange = true
+		probeResult = &probing.ProbeResult{}
+		probeResult.SupportsRange = true
 		if req.Filename != "" {
-			probe.Filename = req.Filename
-			probe.DetectedFilename = req.Filename
+			probeResult.Filename = req.Filename
+			probeResult.DetectedFilename = req.Filename
 		}
 	}
 
@@ -309,7 +311,7 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 			req.Path,
 			!req.IsExplicitCategory,
 			settings,
-			probe,
+			probeResult,
 			isNameActive,
 		)
 		if err != nil {
@@ -326,7 +328,7 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 		}
 
 		surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
-		newID, err := dispatch(finalPath, finalFilename, probe)
+		newID, err := dispatch(finalPath, finalFilename, probeResult)
 		if err != nil {
 			_ = os.Remove(surgePath)
 			return "", "", err

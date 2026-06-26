@@ -37,6 +37,7 @@ type ConcurrentDownloader struct {
 	TotalSize    int64
 	bufPool      sync.Pool
 	Headers      map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
+	hostLimiter  *engine.HostRateLimiter
 }
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
@@ -51,6 +52,7 @@ func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.
 		State:        progState,
 		activeTasks:  make(map[int]*ActiveTask),
 		Runtime:      runtime,
+		hostLimiter:  engine.DefaultHostRateLimiter,
 		bufPool: sync.Pool{
 			New: func() any {
 				// Use configured buffer size
@@ -228,6 +230,10 @@ func (d *ConcurrentDownloader) applyClientSettings(client *http.Client) {
 // Uses pre-probed metadata (file size already known)
 func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, candidateMirrors []string, activeMirrors []string, destPath string, fileSize int64) error {
 	utils.Debug("ConcurrentDownloader.Download: %s -> %s (size: %d, mirrors: %d)", rawurl, destPath, fileSize, len(activeMirrors))
+
+	if d.hostLimiter == nil {
+		d.hostLimiter = engine.DefaultHostRateLimiter
+	}
 
 	d.initMirrorStatus(rawurl, candidateMirrors, activeMirrors, destPath)
 

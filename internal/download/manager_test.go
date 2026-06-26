@@ -12,7 +12,6 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/engine/events"
 	"github.com/SurgeDM/Surge/internal/engine/types"
-	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/testutil"
 )
 
@@ -140,7 +139,7 @@ func TestUniqueFilePath_MultipleExtensions(t *testing.T) {
 	}
 }
 
-func TestTUIDownload_StartedEventUsesFullDestPath(t *testing.T) {
+func TestRunDownload_StartedEventUsesFullDestPath(t *testing.T) {
 	tmpDir := t.TempDir()
 	fileSize := int64(2 * 1024 * 1024)
 	server := testutil.NewStreamingMockServerT(t,
@@ -176,7 +175,7 @@ func TestTUIDownload_StartedEventUsesFullDestPath(t *testing.T) {
 
 	errCh := make(chan error, 1)
 	go func() {
-		errCh <- TUIDownload(ctx, &cfg)
+		errCh <- RunDownload(ctx, &cfg)
 	}()
 
 	deadline := time.After(5 * time.Second)
@@ -201,7 +200,7 @@ func TestTUIDownload_StartedEventUsesFullDestPath(t *testing.T) {
 	}
 }
 
-func TestTUIDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
+func TestRunDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
 	tmpDir := t.TempDir()
 	fileSize := int64(2 * 1024 * 1024)
 	server := testutil.NewStreamingMockServerT(t,
@@ -232,8 +231,8 @@ func TestTUIDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
 		SupportsRange: true,
 	}
 
-	if err := TUIDownload(context.Background(), &cfg); err != nil {
-		t.Fatalf("TUIDownload failed: %v", err)
+	if err := RunDownload(context.Background(), &cfg); err != nil {
+		t.Fatalf("RunDownload failed: %v", err)
 	}
 	_, stateTotal, _, _, _, _ := cfg.State.GetProgress()
 	if stateTotal != fileSize {
@@ -257,7 +256,7 @@ func TestTUIDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
 	}
 }
 
-func TestTUIDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
+func TestRunDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
 	tmpDir := t.TempDir()
 	content := []byte("fallback download content")
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -292,8 +291,8 @@ func TestTUIDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
 		SupportsRange: true,
 	}
 
-	if err := TUIDownload(context.Background(), &cfg); err != nil {
-		t.Fatalf("TUIDownload failed: %v", err)
+	if err := RunDownload(context.Background(), &cfg); err != nil {
+		t.Fatalf("RunDownload failed: %v", err)
 	}
 
 	got, err := os.ReadFile(surgePath)
@@ -325,7 +324,7 @@ func TestTUIDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
 	}
 }
 
-func TestTUIDownload_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T) {
+func TestRunDownload_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T) {
 	tmpDir := t.TempDir()
 	fileSize := 10 * 1024
 	server := testutil.NewMockServerT(t,
@@ -360,8 +359,8 @@ func TestTUIDownload_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T)
 		}
 	}()
 
-	if err := TUIDownload(context.Background(), &cfg); err != nil {
-		t.Fatalf("TUIDownload should have succeeded via fallback: %v", err)
+	if err := RunDownload(context.Background(), &cfg); err != nil {
+		t.Fatalf("RunDownload should have succeeded via fallback: %v", err)
 	}
 
 	// Verification:
@@ -500,287 +499,6 @@ func TestUniqueFilePath_SpecialCharactersInName(t *testing.T) {
 
 	if result != expected {
 		t.Errorf("uniqueFilePath() = %v, want %v", result, expected)
-	}
-}
-
-func TestProbeServer_RangeSupported(t *testing.T) {
-	server := testutil.NewMockServerT(t,
-		testutil.WithFileSize(1024*1024), // 1MB
-		testutil.WithRangeSupport(true),
-		testutil.WithFilename("testfile.bin"),
-	)
-	defer server.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	result, err := processing.ProbeServer(ctx, server.URL(), "", nil)
-	if err != nil {
-		t.Fatalf("probeServer failed: %v", err)
-	}
-
-	if !result.SupportsRange {
-		t.Error("Expected SupportsRange to be true")
-	}
-	if result.FileSize != 1024*1024 {
-		t.Errorf("Expected FileSize 1048576, got %d", result.FileSize)
-	}
-}
-
-func TestProbeServer_RangeNotSupported(t *testing.T) {
-	server := testutil.NewMockServerT(t,
-		testutil.WithFileSize(2048),
-		testutil.WithRangeSupport(false),
-	)
-	defer server.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	result, err := processing.ProbeServer(ctx, server.URL(), "", nil)
-	if err != nil {
-		t.Fatalf("probeServer failed: %v", err)
-	}
-
-	if result.SupportsRange {
-		t.Error("Expected SupportsRange to be false")
-	}
-	if result.FileSize != 2048 {
-		t.Errorf("Expected FileSize 2048, got %d", result.FileSize)
-	}
-}
-
-func TestProbeServer_CustomFilenameHint(t *testing.T) {
-	server := testutil.NewMockServerT(t,
-		testutil.WithFileSize(1024),
-		testutil.WithFilename("server-file.zip"),
-	)
-	defer server.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	// Provide a custom filename hint
-	result, err := processing.ProbeServer(ctx, server.URL(), "my-custom-file.zip", nil)
-	if err != nil {
-		t.Fatalf("probeServer failed: %v", err)
-	}
-
-	if result.Filename != "my-custom-file.zip" {
-		t.Errorf("Expected Filename 'my-custom-file.zip', got '%s'", result.Filename)
-	}
-}
-
-func TestProbeServer_ContentType(t *testing.T) {
-	server := testutil.NewMockServerT(t,
-		testutil.WithFileSize(1024),
-		testutil.WithContentType("application/zip"),
-	)
-	defer server.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-
-	result, err := processing.ProbeServer(ctx, server.URL(), "", nil)
-	if err != nil {
-		t.Fatalf("probeServer failed: %v", err)
-	}
-
-	if result.ContentType != "application/zip" {
-		t.Errorf("Expected ContentType 'application/zip', got '%s'", result.ContentType)
-	}
-}
-
-func TestProbeServer_InvalidURL(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := processing.ProbeServer(ctx, "http://invalid-host-that-does-not-exist.test:9999/file", "", nil)
-	if err == nil {
-		t.Error("Expected error for invalid URL")
-	}
-}
-
-func TestProbeServer_ContextCancellation(t *testing.T) {
-	server := testutil.NewMockServerT(t,
-		testutil.WithFileSize(1024),
-		testutil.WithLatency(5*time.Second), // Long latency
-	)
-	defer server.Close()
-
-	// Cancel immediately
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-
-	_, err := processing.ProbeServer(ctx, server.URL(), "", nil)
-	if err == nil {
-		t.Error("Expected error when context is cancelled")
-	}
-}
-
-func TestProbeServer_UnexpectedStatusCode(t *testing.T) {
-	// Create a custom server that returns 404
-	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusNotFound)
-	}))
-	defer server.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := processing.ProbeServer(ctx, server.URL, "", nil)
-	if err == nil {
-		t.Error("Expected error for 404 status")
-	}
-}
-
-func TestProbeServer_ServerError(t *testing.T) {
-	// Create a custom server that returns 500
-	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-	}))
-	defer server.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	_, err := processing.ProbeServer(ctx, server.URL, "", nil)
-	if err == nil {
-		t.Error("Expected error for 500 status")
-	}
-}
-
-func TestProbeServer_ZeroFileSize(t *testing.T) {
-	// Server returns 200 OK with no Content-Length header
-	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer server.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	result, err := processing.ProbeServer(ctx, server.URL, "", nil)
-	if err != nil {
-		t.Fatalf("probeServer failed: %v", err)
-	}
-
-	// FileSize should be 0 when Content-Length is missing
-	if result.FileSize != 0 {
-		t.Errorf("Expected FileSize 0, got %d", result.FileSize)
-	}
-}
-
-func TestProbeServer_ContentRangeFormats(t *testing.T) {
-	tests := []struct {
-		name          string
-		contentRange  string
-		expectedSize  int64
-		supportsRange bool
-	}{
-		{
-			name:          "Standard format",
-			contentRange:  "bytes 0-0/1048576",
-			expectedSize:  1048576,
-			supportsRange: true,
-		},
-		{
-			name:          "Unknown size",
-			contentRange:  "bytes 0-0/*",
-			expectedSize:  0,
-			supportsRange: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-				w.Header().Set("Content-Range", tt.contentRange)
-				w.Header().Set("Content-Length", "1")
-				w.WriteHeader(http.StatusPartialContent)
-				_, _ = w.Write([]byte("x"))
-			}))
-			defer server.Close()
-
-			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-			defer cancel()
-
-			result, err := processing.ProbeServer(ctx, server.URL, "", nil)
-			if err != nil {
-				t.Fatalf("probeServer failed: %v", err)
-			}
-
-			if result.SupportsRange != tt.supportsRange {
-				t.Errorf("SupportsRange = %v, want %v", result.SupportsRange, tt.supportsRange)
-			}
-			if result.FileSize != tt.expectedSize {
-				t.Errorf("FileSize = %d, want %d", result.FileSize, tt.expectedSize)
-			}
-		})
-	}
-}
-
-func TestProbeServer_LargeFile(t *testing.T) {
-	// Test with a large file size (10GB)
-	largeSize := int64(10 * 1024 * 1024 * 1024) // 10GB
-
-	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-0/%d", largeSize))
-		w.Header().Set("Content-Length", "1")
-		w.WriteHeader(http.StatusPartialContent)
-		_, _ = w.Write([]byte("x"))
-	}))
-	defer server.Close()
-
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	result, err := processing.ProbeServer(ctx, server.URL, "", nil)
-	if err != nil {
-		t.Fatalf("probeServer failed: %v", err)
-	}
-
-	if result.FileSize != largeSize {
-		t.Errorf("FileSize = %d, want %d", result.FileSize, largeSize)
-	}
-}
-
-func TestProbeResult_Fields(t *testing.T) {
-	pr := &processing.ProbeResult{
-		FileSize:      123456789,
-		SupportsRange: true,
-		Filename:      "document.pdf",
-		ContentType:   "application/pdf",
-	}
-
-	if pr.FileSize != 123456789 {
-		t.Errorf("FileSize = %d, want 123456789", pr.FileSize)
-	}
-	if !pr.SupportsRange {
-		t.Error("SupportsRange should be true")
-	}
-	if pr.Filename != "document.pdf" {
-		t.Errorf("Filename = '%s', want 'document.pdf'", pr.Filename)
-	}
-	if pr.ContentType != "application/pdf" {
-		t.Errorf("ContentType = '%s', want 'application/pdf'", pr.ContentType)
-	}
-}
-
-func TestProbeResult_ZeroValues(t *testing.T) {
-	pr := &processing.ProbeResult{}
-
-	if pr.FileSize != 0 {
-		t.Errorf("FileSize = %d, want 0", pr.FileSize)
-	}
-	if pr.SupportsRange {
-		t.Error("SupportsRange should be false by default")
-	}
-	if pr.Filename != "" {
-		t.Errorf("Filename = '%s', want empty", pr.Filename)
-	}
-	if pr.ContentType != "" {
-		t.Errorf("ContentType = '%s', want empty", pr.ContentType)
 	}
 }
 

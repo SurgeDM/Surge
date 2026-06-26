@@ -9,6 +9,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/probe"
 	"github.com/SurgeDM/Surge/internal/processing"
 )
 
@@ -167,13 +168,13 @@ func TestResolveDestination_Priority(t *testing.T) {
 	defaultDir := "/downloads"
 
 	// 1. User defined beats all
-	_, name, _ := processing.ResolveDestination("http://example.com/file.zip", "user.txt", defaultDir, false, settings, &processing.ProbeResult{DetectedFilename: "probe.zip"}, nil)
+	_, name, _ := processing.ResolveDestination("http://example.com/file.zip", "user.txt", defaultDir, false, settings, &probe.ProbeResult{DetectedFilename: "probe.zip"}, nil)
 	if name != "user.txt" {
 		t.Errorf("Expected user.txt as candidate priority, got %s", name)
 	}
 
 	// 2. Probe beats URL fallback
-	_, name, _ = processing.ResolveDestination("http://example.com/file.zip", "", defaultDir, false, settings, &processing.ProbeResult{DetectedFilename: "probe.zip"}, nil)
+	_, name, _ = processing.ResolveDestination("http://example.com/file.zip", "", defaultDir, false, settings, &probe.ProbeResult{DetectedFilename: "probe.zip"}, nil)
 	if name != "probe.zip" {
 		t.Errorf("Expected probe.zip, got %s", name)
 	}
@@ -185,14 +186,14 @@ func TestResolveDestination_Priority(t *testing.T) {
 	}
 
 	// 4. URL Fallback when probe has empty filename
-	_, name, _ = processing.ResolveDestination("http://example.com/some.rar", "", defaultDir, false, settings, &processing.ProbeResult{DetectedFilename: ""}, nil)
+	_, name, _ = processing.ResolveDestination("http://example.com/some.rar", "", defaultDir, false, settings, &probe.ProbeResult{DetectedFilename: ""}, nil)
 	if name != "some.rar" {
 		t.Errorf("Expected some.rar, got %s", name)
 	}
 
 	// 5. Long candidate hint is preserved (but truncated)
 	longHint := "WrTLulKik3KpjnMuO-0gDohCI1WaybS779E_l6yr1UHGRMFfTkE7B5t5Ys5_N2qu8u6HmpGsrEZKftnkvhgxcvRqn6Pp9kceoiJRSTvPjlX8oDQW70mjRG9HlCYBmFoOYLJ7t133YpIR5xQXdPT8QWAMMUNyp6K3jeNJ3YmAez-_9MdrMBv6HlBRmDwSBwrubB895P34XJ40NUUmb6t0ITGTyZVc3kUBZ_emFeD-h8m-S--dzrdsyXdUQGI0amVV7cMetT2bifXVgzJaFn4mGZAvs7bIwe63xm1ARB2jF4hQ0V0hq8Db_6F4yH4_37XoubaVenavjGN5gW3uR2_FLFGc5JCMtlRwsBvF9wxcLTpWvn9IW61s-1aiAHnUbL9eesMzzY5DLXXgTkxTDre21UP4L6kNymwWFhjdbFzxIzBg_Z1RzzIzXVSYXu1O71Hvpu_FSW4N881BlaIZNCZPPtqqDrSwq3wdYECu_Sm1WxQ3kZOU9wjNu_03YHlpsYTm8lLK3EsxVGSgmpiLxLS4XI7lqVWI1_20Lkako4spInGKQYkq-E2S6k6opM58WLuz3-DyW0s-BTpUWPvYoazIc3eY_f4bCmy3uXsZ165iukgHvOnS6_ruKFw3kQMDuZVe"
-	_, name, _ = processing.ResolveDestination("http://example.com/"+longHint, longHint, defaultDir, false, settings, &processing.ProbeResult{DetectedFilename: "correct.rar"}, nil)
+	_, name, _ = processing.ResolveDestination("http://example.com/"+longHint, longHint, defaultDir, false, settings, &probe.ProbeResult{DetectedFilename: "correct.rar"}, nil)
 	if name == "correct.rar" {
 		t.Errorf("Expected longHint to be used because heuristic was removed, but got correct.rar")
 	}

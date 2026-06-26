@@ -11,6 +11,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/engine/types"
+	probing "github.com/SurgeDM/Surge/internal/probe"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -158,13 +159,13 @@ func GetCategoryPath(filename, defaultDir string, settings *config.Settings) (st
 
 // getBaseFilename keeps naming deterministic across retries by preferring the
 // most authoritative source available before uniqueness is applied.
-func getBaseFilename(url, candidate string, probe *ProbeResult) string {
+func getBaseFilename(url, candidate string, pr *probing.ProbeResult) string {
 	if candidate != "" {
 		return candidate
 	}
-	if probe != nil {
-		if probe.DetectedFilename != "" {
-			return probe.DetectedFilename
+	if pr != nil {
+		if pr.DetectedFilename != "" {
+			return pr.DetectedFilename
 		}
 	}
 	return InferFilenameFromURL(url)
@@ -172,8 +173,8 @@ func getBaseFilename(url, candidate string, probe *ProbeResult) string {
 
 // ResolveDestination centralizes routing and naming so CLI, TUI, and API
 // requests all land on the same final path before the engine starts downloading.
-func ResolveDestination(url, candidateFilename, defaultDir string, routeToCategory bool, settings *config.Settings, probe *ProbeResult, isNameActive func(string, string) bool) (string, string, error) {
-	filename := getBaseFilename(url, candidateFilename, probe)
+func ResolveDestination(url, candidateFilename, defaultDir string, routeToCategory bool, settings *config.Settings, pr *probing.ProbeResult, isNameActive func(string, string) bool) (string, string, error) {
+	filename := getBaseFilename(url, candidateFilename, pr)
 
 	destPath := defaultDir
 	if routeToCategory && settings != nil && config.Resolve[bool](settings.Categories.CategoryEnabled) && filename != "" {

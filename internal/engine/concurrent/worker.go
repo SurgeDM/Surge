@@ -2,6 +2,7 @@ package concurrent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -9,13 +10,13 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/engine"
 	"github.com/SurgeDM/Surge/internal/engine/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // worker downloads tasks from the queue
 func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []string, file *os.File, queue *TaskQueue, totalSize int64, client *http.Client) error {
-	// Get pooled buffer
 	bufPtr := d.bufPool.Get().(*[]byte)
 	defer d.bufPool.Put(bufPtr)
 	buf := *bufPtr
@@ -23,57 +24,51 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 	utils.Debug("Worker %d started", id)
 	defer utils.Debug("Worker %d finished", id)
 
-	// Initial mirror assignment: Round Robin based on ID
 	currentMirrorIdx := id % len(mirrors)
 
-	for {
-		// Get next task
-		task, ok := queue.Pop()
+	mirrorHosts := make([]string, len(mirrors))
+	for i, m := range mirrors {
+		mirrorHosts[i] = engine.MirrorHost(m)
+	}
 
+	for {
+		task, ok := queue.Pop()
 		if !ok {
-			return nil // Queue closed, no more work
+			return nil
 		}
 
-		// Update active workers
 		if d.State != nil {
 			d.State.ActiveWorkers.Add(1)
 		}
 
 		var lastErr error
 		maxRetries := d.Runtime.GetMaxTaskRetries()
-		for attempt := 0; attempt < maxRetries; attempt++ {
-			if attempt > 0 {
+		genericAttempt := 0
+		rlRetries := 0
 
-				if len(mirrors) == 1 {
-					time.Sleep(time.Duration(1<<attempt) * types.RetryBaseDelay) // Exponential backoff incase of failure
+		for {
+			idx, wait := d.hostLimiter.PickMirror(mirrorHosts, currentMirrorIdx, time.Now())
+			currentMirrorIdx = idx
+			if wait > 0 {
+				if !interruptibleSleep(ctx, wait) {
+					if d.State != nil {
+						d.State.ActiveWorkers.Add(-1)
+					}
+					return ctx.Err()
 				}
-
-				// FAILOVER: Switch mirror on retry
-				// Report error for the previous mirror
-				d.ReportMirrorError(mirrors[currentMirrorIdx])
-
-				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
-				utils.Debug("Worker %d: switching to mirror %s (attempt %d)", id, mirrors[currentMirrorIdx], attempt+1)
 			}
-
-			// Use current mirror
 			currentURL := mirrors[currentMirrorIdx]
 
-			// Register active task with per-task cancellable context
 			taskCtx, taskCancel := context.WithCancel(ctx)
 			now := time.Now()
 			activeTask := &ActiveTask{
 				Task:        task,
 				StartTime:   now,
 				Cancel:      taskCancel,
-				WindowStart: now, // Initialize sliding window
+				WindowStart: now,
 			}
-			// If the incoming Task carried a shared pointer, copy it into the active task
 			if task.SharedMaxOffset != nil {
-				// activeTask is newly allocated and not yet visible to other goroutines,
-				// so this assignment does not need mutex protection.
 				activeTask.SharedMaxOffset = task.SharedMaxOffset
-				// Prevent infinite hedging of hedged tasks.
 				activeTask.Hedged.Store(1)
 			}
 			activeTask.CurrentOffset.Store(task.Offset)
@@ -84,7 +79,6 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			d.activeTasks[id] = activeTask
 			d.activeMu.Unlock()
 
-			// Update chunk status to Downloading
 			if d.State != nil {
 				utils.Debug("Worker %d: Setting range %d-%d to Downloading", id, task.Offset, task.Offset+task.Length)
 				d.State.UpdateChunkStatus(task.Offset, task.Length, types.ChunkDownloading)
@@ -95,34 +89,23 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			taskStart := time.Now()
 			lastErr = d.downloadTask(taskCtx, currentURL, file, activeTask, buf, client, totalSize)
 
-			// CRITICAL: Capture external cancellation state BEFORE calling taskCancel()
-			// If we call taskCancel() first, taskCtx.Err() will always be non-nil
 			wasExternallyCancelled := taskCtx.Err() != nil
 
-			taskCancel() // Clean up context resources
+			taskCancel()
 			utils.Debug("Worker %d: Task offset=%d length=%d took %v", id, task.Offset, task.Length, time.Since(taskStart))
 
-			// Check for PARENT context cancellation (pause/shutdown)
-			// This preserves active task info for pause handler to collect
 			if ctx.Err() != nil {
-				// DON'T delete from activeTasks - pause handler needs it
 				if d.State != nil {
 					d.State.ActiveWorkers.Add(-1)
 				}
 				return ctx.Err()
 			}
 
-			// Check if TASK context was cancelled by Health Monitor (not by us calling taskCancel)
-			// but parent context is still fine
 			if wasExternallyCancelled && lastErr != nil {
-				// Health monitor cancelled this task - re-queue REMAINING work only
-
-				// Force rotation to next mirror to avoid getting stuck on the slow one
 				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
 				utils.Debug("Worker %d: Health check cancelled task, rotating from mirror %s to %s", id, mirrors[(currentMirrorIdx+len(mirrors)-1)%len(mirrors)], mirrors[currentMirrorIdx])
 
 				if remaining := activeTask.RemainingTask(); remaining != nil {
-					// Clamp to original task end (don't go past original boundary)
 					originalEnd := task.Offset + task.Length
 					if remaining.Offset+remaining.Length > originalEnd {
 						remaining.Length = originalEnd - remaining.Offset
@@ -133,41 +116,52 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 							id, remaining.Length, remaining.Offset)
 					}
 				}
-				// Delete from active tasks and move to next task (don't retry from scratch)
 				d.activeMu.Lock()
 				delete(d.activeTasks, id)
 				d.activeMu.Unlock()
-				// Clear lastErr so the fallthrough logic doesn't re-queue the original task
 				lastErr = nil
-				break // Exit retry loop, get next task
+				break
 			}
 
-			// Only delete from activeTasks on normal completion (not cancelled)
 			d.activeMu.Lock()
 			delete(d.activeTasks, id)
 			d.activeMu.Unlock()
 
 			if lastErr == nil {
-				// Check if we stopped early due to stealing
+				d.hostLimiter.RecordSuccess(mirrorHosts[currentMirrorIdx])
 				stopAt := activeTask.StopAt.Load()
 				current := activeTask.CurrentOffset.Load()
 				if current < task.Offset+task.Length && current >= stopAt {
-					// We were stopped early this is expected success for the partial work
-					// The stolen part is already in the queue
 					utils.Debug("Worker stopped early due to stealing")
 				}
 				break
 			}
 
-			// Resume-on-retry: update task to reflect remaining work
-			// This prevents double-counting bytes on retry
-			current := activeTask.CurrentOffset.Load()
-			if current > task.Offset {
-				task = types.Task{Offset: current, Length: task.Offset + task.Length - current}
+			var rlErr *rateLimitError
+			if errors.As(lastErr, &rlErr) {
+				d.hostLimiter.Penalize(mirrorHosts[currentMirrorIdx], rlErr.retryAfter, rlErr.explicit, time.Now())
+				d.ReportMirrorError(currentURL)
+				rlRetries++
+				if rlRetries > types.RateLimitMaxRetries {
+					break
+				}
+				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
+				resumeOnRetryOffset(&task, activeTask)
+				continue
 			}
+
+			genericAttempt++
+			if genericAttempt >= maxRetries {
+				break
+			}
+			d.ReportMirrorError(mirrors[currentMirrorIdx])
+			currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
+			if len(mirrors) == 1 {
+				interruptibleSleep(ctx, time.Duration(1<<genericAttempt)*types.RetryBaseDelay)
+			}
+			resumeOnRetryOffset(&task, activeTask)
 		}
 
-		// Update active workers
 		if d.State != nil {
 			d.State.ActiveWorkers.Add(-1)
 		}
@@ -214,8 +208,10 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 	}()
 
 	// Handle rate limiting explicitly
-	if resp.StatusCode == http.StatusTooManyRequests {
-		return fmt.Errorf("rate limited (429)")
+	if resp.StatusCode == http.StatusTooManyRequests ||
+		(resp.StatusCode == http.StatusServiceUnavailable && resp.Header.Get("Retry-After") != "") {
+		ra, ok := engine.ParseRetryAfter(resp.Header.Get("Retry-After"), time.Now())
+		return &rateLimitError{retryAfter: ra, explicit: ok}
 	}
 
 	// Validate status code
@@ -553,4 +549,13 @@ func (d *ConcurrentDownloader) HedgeWork(queue *TaskQueue) bool {
 		utils.ConvertBytesToHumanReadable(hedgedTask.Length), hedgedTask.Offset, hedgedTask.Offset+hedgedTask.Length)
 
 	return true
+}
+
+func resumeOnRetryOffset(task *types.Task, activeTask *ActiveTask) {
+	current := activeTask.CurrentOffset.Load()
+	if current > task.Offset {
+		oldStart := task.Offset
+		task.Offset = current
+		task.Length = oldStart + task.Length - current
+	}
 }
