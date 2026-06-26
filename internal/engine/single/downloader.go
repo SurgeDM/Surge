@@ -86,7 +86,13 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		defer d.State.ActiveWorkers.Store(0)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
+	dlCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	if d.State != nil {
+		d.State.SetCancelFunc(cancel)
+	}
+
+	req, err := http.NewRequestWithContext(dlCtx, http.MethodGet, rawurl, nil)
 	if err != nil {
 		return err
 	}
