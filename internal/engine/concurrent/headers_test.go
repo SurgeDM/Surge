@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -61,7 +62,7 @@ func TestConcurrentDownloader_CustomHeaders(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "headers_test.bin")
-	progState := types.NewProgressState("headers-test", fileSize)
+	progState := progress.New("headers-test", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 2}
 
 	downloader := NewConcurrentDownloader("headers-test", nil, progState, runtime)
@@ -139,7 +140,7 @@ func TestConcurrentDownloader_DefaultUserAgent(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "default_ua_test.bin")
-	progState := types.NewProgressState("ua-test", fileSize)
+	progState := progress.New("ua-test", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 1,
 		UserAgent:                 "SurgeDownloader/1.0",
@@ -203,7 +204,7 @@ func TestConcurrentDownloader_RangeHeaderNotOverridden(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "range_test.bin")
-	progState := types.NewProgressState("range-test", fileSize)
+	progState := progress.New("range-test", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 1}
 
 	downloader := NewConcurrentDownloader("range-test", nil, progState, runtime)
@@ -283,7 +284,7 @@ func TestConcurrentDownloader_HeadersForwardedOnRedirect(t *testing.T) {
 	defer redirectServer.Close()
 
 	destPath := filepath.Join(tmpDir, "redirect_headers_test.bin")
-	progState := types.NewProgressState("redirect-headers-test", fileSize)
+	progState := progress.New("redirect-headers-test", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 1}
 
 	downloader := NewConcurrentDownloader("redirect-headers-test", nil, progState, runtime)

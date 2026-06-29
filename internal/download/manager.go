@@ -13,6 +13,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/engine/concurrent"
 	"github.com/SurgeDM/Surge/internal/engine/single"
 	"github.com/SurgeDM/Surge/internal/probe"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -122,13 +123,13 @@ func RunDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	utils.Debug("Destination path: %s", finalDestPath)
 
 	if cfg.State != nil {
-		cfg.State.SetFilename(finalFilename)
-		cfg.State.SetDestPath(finalDestPath)
+		cfg.State.(*progress.DownloadProgress).SetFilename(finalFilename)
+		cfg.State.(*progress.DownloadProgress).SetDestPath(finalDestPath)
 	}
 
 	currentRateLimit := func() (int64, bool) {
 		if cfg.State != nil {
-			return cfg.State.GetRateLimit()
+			return cfg.State.(*progress.DownloadProgress).GetRateLimit()
 		}
 		return cfg.RateLimitBps, cfg.RateLimitSet
 	}
@@ -152,12 +153,12 @@ func RunDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 
 	// Update shared state if we have a valid size
 	if cfg.State != nil && cfg.TotalSize > 0 {
-		cfg.State.SetTotalSize(cfg.TotalSize)
+		cfg.State.(*progress.DownloadProgress).SetTotalSize(cfg.TotalSize)
 	}
 
 	effectiveTotalSize := cfg.TotalSize
 	if cfg.State != nil && effectiveTotalSize <= 0 {
-		_, stateTotal, _, _, _, _ := cfg.State.GetProgress()
+		_, stateTotal, _, _, _, _ := cfg.State.(*progress.DownloadProgress).GetProgress()
 		if stateTotal > 0 {
 			effectiveTotalSize = stateTotal
 		}
@@ -196,7 +197,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 			utils.Debug("Found %d active mirrors from %d candidates", len(activeMirrors), len(mirrors))
 		}
 
-		d := concurrent.NewConcurrentDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
+		d := concurrent.NewConcurrentDownloader(cfg.ID, cfg.ProgressCh, cfg.State.(*progress.DownloadProgress), cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.Limiter = cfg.Limiter
 		d.RateLimitBps = cfg.RateLimitBps
@@ -216,7 +217,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 
 			// Reset progress state cleanly for single-stream restart from byte 0
 			if cfg.State != nil {
-				cfg.State.SessionReset()
+				cfg.State.(*progress.DownloadProgress).SessionReset()
 			}
 
 			// Truncate the working file to zero to prevent stale tail bytes
@@ -229,7 +230,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 	if !useConcurrent {
 		// Fallback to single-threaded downloader
 		utils.Debug("Using single-threaded downloader")
-		d := single.NewSingleDownloader(cfg.ID, cfg.ProgressCh, cfg.State, cfg.Runtime)
+		d := single.NewSingleDownloader(cfg.ID, cfg.ProgressCh, cfg.State.(*progress.DownloadProgress), cfg.Runtime)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.Limiter = cfg.Limiter
 		// Pass effectiveTotalSize here as well
@@ -251,11 +252,11 @@ func RunDownload(ctx context.Context, cfg *types.DownloadConfig) error {
 		return nil // Return nil so worker can remove it from active map
 	}
 
-	isPaused := cfg.State != nil && cfg.State.IsPaused()
+	isPaused := cfg.State != nil && cfg.State.(*progress.DownloadProgress).IsPaused()
 	if downloadErr == nil && !isPaused {
 		var elapsed time.Duration
 		if cfg.State != nil {
-			_, elapsed = cfg.State.FinalizeSession(effectiveTotalSize)
+			_, elapsed = cfg.State.(*progress.DownloadProgress).FinalizeSession(effectiveTotalSize)
 		} else {
 			elapsed = time.Since(start)
 		}

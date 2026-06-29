@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
@@ -120,7 +121,7 @@ func TestWorkerPool_Pause_ActiveDownload(t *testing.T) {
 	pool := NewWorkerPool(ch, 3)
 
 	// Create a progress state
-	state := types.NewProgressState("test-id", 1000)
+	state := progress.New("test-id", 1000)
 	state.Downloaded.Store(500)
 	state.VerifiedProgress.Store(700)
 
@@ -195,10 +196,10 @@ func TestWorkerPool_PauseAll_MultipleDownloads(t *testing.T) {
 	pool := NewWorkerPool(ch, 3)
 
 	// Add multiple active downloads
-	states := make([]*types.ProgressState, 3)
+	states := make([]*progress.DownloadProgress, 3)
 	for i := 0; i < 3; i++ {
 		id := string(rune('a' + i))
-		states[i] = types.NewProgressState(id, 1000)
+		states[i] = progress.New(id, 1000)
 		pool.mu.Lock()
 		pool.downloads[id] = &activeDownload{
 			config: types.DownloadConfig{
@@ -224,8 +225,8 @@ func TestWorkerPool_PauseAll_SkipsAlreadyPaused(t *testing.T) {
 	pool := NewWorkerPool(ch, 3)
 
 	// Add one paused and one active download
-	activeState := types.NewProgressState("active", 1000)
-	pausedState := types.NewProgressState("paused", 1000)
+	activeState := progress.New("active", 1000)
+	pausedState := progress.New("paused", 1000)
 	pausedState.Paused.Store(true)
 
 	pool.mu.Lock()
@@ -245,8 +246,8 @@ func TestWorkerPool_PauseAll_SkipsCompletedDownloads(t *testing.T) {
 	pool := NewWorkerPool(ch, 3)
 
 	// Add one completed and one active download
-	activeState := types.NewProgressState("active", 1000)
-	doneState := types.NewProgressState("done", 1000)
+	activeState := progress.New("active", 1000)
+	doneState := progress.New("done", 1000)
 	doneState.Done.Store(true)
 
 	pool.mu.Lock()
@@ -273,7 +274,7 @@ func TestWorkerPool_Cancel_RemovesFromMap(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 3)
 
-	state := types.NewProgressState("test-id", 1000)
+	state := progress.New("test-id", 1000)
 
 	pool.mu.Lock()
 	ad := &activeDownload{
@@ -324,7 +325,7 @@ func TestWorkerPool_Cancel_CallsCancelFunc(t *testing.T) {
 	pool := NewWorkerPool(ch, 3)
 
 	ctx, cancel := context.WithCancel(context.Background())
-	state := types.NewProgressState("test-id", 1000)
+	state := progress.New("test-id", 1000)
 
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
@@ -362,7 +363,7 @@ func TestWorkerPool_Cancel_MarksDone(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 3)
 
-	state := types.NewProgressState("test-id", 1000)
+	state := progress.New("test-id", 1000)
 
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
@@ -394,7 +395,7 @@ func TestWorkerPool_Cancel_DoesNotRemoveIncompleteFile(t *testing.T) {
 		t.Fatalf("failed to create .surge file: %v", err)
 	}
 
-	state := types.NewProgressState("test-id", 1000)
+	state := progress.New("test-id", 1000)
 	state.DestPath = destPath
 
 	pool.mu.Lock()
@@ -466,7 +467,7 @@ func TestWorkerPool_GracefulShutdown_PausesAll(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 3)
 
-	state := types.NewProgressState("test-id", 1000)
+	state := progress.New("test-id", 1000)
 
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
@@ -514,7 +515,7 @@ func TestWorkerPool_GracefulShutdown_WaitsPastSoftTimeout(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 1)
 
-	ps := types.NewProgressState("wait-test-id", 1000)
+	ps := progress.New("wait-test-id", 1000)
 	pool.mu.Lock()
 	ad := &activeDownload{
 		config: types.DownloadConfig{
@@ -572,7 +573,7 @@ func TestWorkerPool_GracefulShutdown_ClearsStalePausingWithoutWorker(t *testing.
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 1)
 
-	ps := types.NewProgressState("stale-pausing-id", 1000)
+	ps := progress.New("stale-pausing-id", 1000)
 	ps.Pause()
 	ps.SetPausing(true)
 
@@ -618,7 +619,7 @@ func TestWorkerPool_ConcurrentPauseCancel(t *testing.T) {
 	// Add multiple downloads
 	for i := 0; i < 10; i++ {
 		id := string(rune('a' + i))
-		state := types.NewProgressState(id, 1000)
+		state := progress.New(id, 1000)
 		pool.mu.Lock()
 		pool.downloads[id] = &activeDownload{
 			config: types.DownloadConfig{ID: id, State: state},
@@ -693,7 +694,7 @@ func TestWorkerPool_ExtractPausedConfig_WhilePausing(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 3)
 
-	state := types.NewProgressState("test-id", 1000)
+	state := progress.New("test-id", 1000)
 	state.Paused.Store(true)
 	state.SetPausing(true)
 
@@ -724,7 +725,7 @@ func TestWorkerPool_ExtractPausedConfig_NotPaused(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 3)
 
-	state := types.NewProgressState("test-id", 1000)
+	state := progress.New("test-id", 1000)
 	// NOT paused
 
 	pool.mu.Lock()
@@ -745,7 +746,7 @@ func TestWorkerPool_ExtractPausedConfig_Success(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 3)
 
-	state := types.NewProgressState("test-id", 1000)
+	state := progress.New("test-id", 1000)
 	state.Paused.Store(true)
 	state.SetDestPath("/tmp/final.bin")
 	state.SetFilename("final.bin")
@@ -815,7 +816,7 @@ func TestWorkerPool_PauseResume_Idempotency(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 3)
 
-	state := types.NewProgressState("idempotent-test", 1000)
+	state := progress.New("idempotent-test", 1000)
 
 	pool.mu.Lock()
 	pool.downloads["idempotent-test"] = &activeDownload{
@@ -861,7 +862,7 @@ func TestWorkerPool_GetStatus_IncludesDestPath(t *testing.T) {
 	pool := NewWorkerPool(ch, 1)
 
 	destPath := "/tmp/status-dest.bin"
-	st := types.NewProgressState("status-id", 1024)
+	st := progress.New("status-id", 1024)
 	st.DestPath = destPath
 
 	pool.mu.Lock()
@@ -887,7 +888,7 @@ func TestWorkerPool_UpdateURL(t *testing.T) {
 	ch := make(chan any, 10)
 	pool := NewWorkerPool(ch, 3)
 
-	activeState := types.NewProgressState("active-id", 1000)
+	activeState := progress.New("active-id", 1000)
 	pool.mu.Lock()
 	ad := &activeDownload{
 		config: types.DownloadConfig{

@@ -114,3 +114,18 @@ type CancelResult struct {
 	Completed bool
 	WasQueued bool
 }
+
+type MirrorStatus struct {
+	URL    string
+	Active bool
+	Error  bool
+}
+
+// ChunkStatus represents the status of a visualization chunk
+type ChunkStatus int
+
+const (
+	ChunkPending     ChunkStatus = 0 // 00
+	ChunkDownloading ChunkStatus = 1 // 01
+	ChunkCompleted   ChunkStatus = 2 // 10 (Bit 2 set)
+)

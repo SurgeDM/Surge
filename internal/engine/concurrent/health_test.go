@@ -5,13 +5,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
 func TestHealth_LastManStanding(t *testing.T) {
 	// 1. Setup mock state with high historical speed
 	// Say we downloaded 100MB in 10s => 10MB/s global average
-	state := types.NewProgressState("test", 1000)
+	state := progress.New("test", 1000)
 	state.VerifiedProgress.Store(100 * 1024 * 1024)
 
 	runtime := &types.RuntimeConfig{
@@ -59,7 +60,7 @@ func TestHealth_MultipleWorkers(t *testing.T) {
 		SlowWorkerThreshold:   0.5,
 		SlowWorkerGracePeriod: 0,
 	}
-	state := types.NewProgressState("test", 1000)
+	state := progress.New("test", 1000)
 	d := NewConcurrentDownloader("test", nil, state, runtime)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -109,7 +110,7 @@ func TestHealth_GracePeriod(t *testing.T) {
 		SlowWorkerThreshold:   0.5,
 		SlowWorkerGracePeriod: 5 * time.Second,
 	}
-	state := types.NewProgressState("test", 1000)
+	state := progress.New("test", 1000)
 	d := NewConcurrentDownloader("test", nil, state, runtime)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -153,7 +154,7 @@ func TestHealth_StallDetection(t *testing.T) {
 		SlowWorkerGracePeriod: 0,               // Instant check
 		StallTimeout:          1 * time.Second, // Short timeout for test
 	}
-	state := types.NewProgressState("test", 1000)
+	state := progress.New("test", 1000)
 	d := NewConcurrentDownloader("test", nil, state, runtime)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -188,7 +189,7 @@ func TestHealth_ZeroStallTimeoutDisablesStallDetection(t *testing.T) {
 		SlowWorkerGracePeriod: 0,
 		StallTimeout:          0, // Disabled
 	}
-	state := types.NewProgressState("test", 1000)
+	state := progress.New("test", 1000)
 	d := NewConcurrentDownloader("test", nil, state, runtime)
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -221,7 +222,7 @@ func TestHealth_ZeroSlowWorkerThresholdDisablesSlowCheck(t *testing.T) {
 		SlowWorkerThreshold:   0, // Disabled
 		SlowWorkerGracePeriod: 0,
 	}
-	state := types.NewProgressState("test", 1000)
+	state := progress.New("test", 1000)
 	d := NewConcurrentDownloader("test", nil, state, runtime)
 
 	ctx, cancel := context.WithCancel(context.Background())

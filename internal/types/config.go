@@ -60,7 +60,7 @@ type DownloadConfig struct {
 	Filename   string
 	IsResume   bool
 	ProgressCh chan<- any
-	State      *ProgressState
+	State      interface{}
 	SavedState *DownloadState
 	Runtime    *RuntimeConfig
 	Mirrors    []string

@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -183,7 +184,7 @@ func TestSingleDownloader_StreamingServer(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "stream_single.bin")
-	state := types.NewProgressState("stream-single", fileSize)
+	state := progress.New("stream-single", fileSize)
 	runtime := &types.RuntimeConfig{}
 
 	downloader := NewSingleDownloader("stream-id", nil, state, runtime)
@@ -224,7 +225,7 @@ func TestSingleDownloader_FailAfterBytes(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "failafter_single.bin")
-	state := types.NewProgressState("failafter-single", fileSize)
+	state := progress.New("failafter-single", fileSize)
 	runtime := &types.RuntimeConfig{}
 
 	downloader := NewSingleDownloader("failafter-id", nil, state, runtime)
@@ -294,7 +295,7 @@ func TestSingleDownloader_NilState(t *testing.T) {
 // =============================================================================
 
 func TestNewSingleDownloader(t *testing.T) {
-	state := types.NewProgressState("test", 1000)
+	state := progress.New("test", 1000)
 	runtime := &types.RuntimeConfig{}
 
 	downloader := NewSingleDownloader("test-id", nil, state, runtime)
@@ -355,7 +356,7 @@ func TestSingleDownloader_Download_Success(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "single_test.bin")
-	state := types.NewProgressState("single-test", fileSize)
+	state := progress.New("single-test", fileSize)
 	runtime := &types.RuntimeConfig{WorkerBufferSize: 8 * utils.KiB}
 
 	downloader := NewSingleDownloader("single-id", nil, state, runtime)
@@ -411,7 +412,7 @@ func TestSingleDownloader_StripsCallerRangeHeader(t *testing.T) {
 			defer server.Close()
 
 			destPath := filepath.Join(tmpDir, "range_test.bin")
-			state := types.NewProgressState("range-test", fileSize)
+			state := progress.New("range-test", fileSize)
 			runtime := &types.RuntimeConfig{WorkerBufferSize: 8 * utils.KiB}
 
 			downloader := NewSingleDownloader("range-id", nil, state, runtime)
@@ -455,7 +456,7 @@ func TestSingleDownloader_Download_Cancellation(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "cancel_single.bin")
-	state := types.NewProgressState("cancel-single", fileSize)
+	state := progress.New("cancel-single", fileSize)
 	runtime := &types.RuntimeConfig{}
 
 	downloader := NewSingleDownloader("cancel-id", nil, state, runtime)
@@ -500,7 +501,7 @@ func TestSingleDownloader_Download_ProgressTracking(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "progress_single.bin")
-	state := types.NewProgressState("progress-single", fileSize)
+	state := progress.New("progress-single", fileSize)
 	runtime := &types.RuntimeConfig{WorkerBufferSize: 16 * utils.KiB}
 
 	downloader := NewSingleDownloader("progress-id", nil, state, runtime)
@@ -543,7 +544,7 @@ func TestSingleDownloader_Download_ServerError(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "error_single.bin")
-	state := types.NewProgressState("error-single", 1024)
+	state := progress.New("error-single", 1024)
 	runtime := &types.RuntimeConfig{}
 
 	downloader := NewSingleDownloader("error-id", nil, state, runtime)
@@ -575,7 +576,7 @@ func TestSingleDownloader_Download_WithLatency(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "latency_single.bin")
-	state := types.NewProgressState("latency-single", fileSize)
+	state := progress.New("latency-single", fileSize)
 	runtime := &types.RuntimeConfig{}
 
 	downloader := NewSingleDownloader("latency-id", nil, state, runtime)
@@ -618,7 +619,7 @@ func TestSingleDownloader_Download_ContentIntegrity(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "content_single.bin")
-	state := types.NewProgressState("content-single", fileSize)
+	state := progress.New("content-single", fileSize)
 	runtime := &types.RuntimeConfig{}
 
 	downloader := NewSingleDownloader("content-id", nil, state, runtime)
@@ -729,7 +730,7 @@ func BenchmarkSingleDownloader(b *testing.B) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "bench_single.bin")
-	state := types.NewProgressState("bench-single", fileSize)
+	state := progress.New("bench-single", fileSize)
 	runtime := &types.RuntimeConfig{}
 
 	downloader := NewSingleDownloader("bench-id", nil, state, runtime)
@@ -766,7 +767,7 @@ func TestSingleDownloader_Download_BootstrapSize(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "bootstrap_single.bin")
-	state := types.NewProgressState("bootstrap-id", 0) // Unknown size
+	state := progress.New("bootstrap-id", 0) // Unknown size
 	runtime := &types.RuntimeConfig{}
 
 	downloader := NewSingleDownloader("bootstrap-id", nil, state, runtime)

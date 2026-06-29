@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/download"
-	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/progress"
+	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -75,7 +76,7 @@ func TestIntegration_MirrorResume(t *testing.T) {
 		eventWG.Wait()
 	}()
 
-	progState := types.NewProgressState(uuid.New().String(), fileSize)
+	progState := progress.New(uuid.New().String(), fileSize)
 
 	filename := "mirrorfile.bin"
 	outputPath := tmpDir
@@ -171,7 +172,7 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	// 5. Resume without explicit mirrors
 	// Create new config simulating a resumption where we don't know the mirrors initially.
 	// Resume now receives preloaded state from the caller.
-	resumeState := types.NewProgressState(savedState.ID, fileSize)
+	resumeState := progress.New(savedState.ID, fileSize)
 	resumeCfg := types.DownloadConfig{
 		URL:           primary.URL(),
 		OutputPath:    outputPath,

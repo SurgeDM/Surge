@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -19,9 +20,9 @@ import (
 // NOTE: Pause/resume is NOT supported because this downloader is only used when
 // the server doesn't support Range headers. If interrupted, the download must restart.
 type SingleDownloader struct {
-	ProgressChan chan<- any           // Channel for events (start/complete/error)
-	ID           string               // Download ID
-	State        *types.ProgressState // Shared state for TUI polling
+	ProgressChan chan<- any                 // Channel for events (start/complete/error)
+	ID           string                     // Download ID
+	State        *progress.DownloadProgress // Shared state for TUI polling
 	Runtime      *types.RuntimeConfig
 	Limiter      types.ByteLimiter
 	TotalSize    int64
@@ -36,7 +37,7 @@ var bufPool = sync.Pool{
 }
 
 // NewSingleDownloader creates a new single-threaded downloader with all required parameters
-func NewSingleDownloader(id string, progressCh chan<- any, state *types.ProgressState, runtime *types.RuntimeConfig) *SingleDownloader {
+func NewSingleDownloader(id string, progressCh chan<- any, state *progress.DownloadProgress, runtime *types.RuntimeConfig) *SingleDownloader {
 	if runtime == nil {
 		runtime = types.DefaultRuntimeConfig()
 	}
@@ -273,7 +274,7 @@ func (t *throttledReader) Read(p []byte) (int, error) {
 
 type progressReader struct {
 	reader        io.Reader
-	state         *types.ProgressState
+	state         *progress.DownloadProgress
 	batchSize     int64
 	batchInterval time.Duration
 	written       int64
@@ -283,7 +284,7 @@ type progressReader struct {
 	readChecks    uint8
 }
 
-func newProgressReader(reader io.Reader, state *types.ProgressState, batchSize int64, batchInterval time.Duration) *progressReader {
+func newProgressReader(reader io.Reader, state *progress.DownloadProgress, batchSize int64, batchInterval time.Duration) *progressReader {
 	if batchSize <= 0 {
 		batchSize = types.WorkerBatchSize
 	}

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
@@ -17,7 +18,7 @@ func TestWorkerPool_RateLimit_QueuedUpdateHonored(t *testing.T) {
 	pool := NewWorkerPool(ch, 1)
 
 	id := "queued-rate-test"
-	state := types.NewProgressState(id, 0)
+	state := progress.New(id, 0)
 	cfg := types.DownloadConfig{
 		ID:           id,
 		URL:          "http://example.com/file.bin",
@@ -108,7 +109,7 @@ func TestWorkerPool_RateLimit_DefaultChangeUpdatesInheritedActiveLimiter(t *test
 	oldRate := int64(1)
 	newRate := int64(10 * 1024 * 1024)
 	limiter := engine.NewRateLimiter(oldRate, rateLimiterBurst(oldRate))
-	state := types.NewProgressState(id, 0)
+	state := progress.New(id, 0)
 	state.SetRateLimit(oldRate, false)
 
 	pool.mu.Lock()
@@ -177,7 +178,7 @@ func TestWorkerPool_RateLimit_DefaultChangeLeavesExplicitActiveLimiter(t *testin
 	explicitRate := int64(1)
 	newDefaultRate := int64(10 * 1024 * 1024)
 	limiter := engine.NewRateLimiter(explicitRate, rateLimiterBurst(explicitRate))
-	state := types.NewProgressState(id, 0)
+	state := progress.New(id, 0)
 	state.SetRateLimit(explicitRate, true)
 
 	pool.mu.Lock()

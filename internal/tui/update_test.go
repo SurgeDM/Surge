@@ -1,6 +1,8 @@
 package tui
 
 import (
+	engineprogress "github.com/SurgeDM/Surge/internal/progress"
+
 	"context"
 	"errors"
 	"os"
@@ -93,7 +95,7 @@ func TestUpdate_DownloadStartedKeepsResuming(t *testing.T) {
 		Filename:   "file",
 		Total:      100,
 		DestPath:   "/tmp/file",
-		State:      types.NewProgressState("id-1", 100),
+		State:      engineprogress.New("id-1", 100),
 	}
 
 	updated, _ := m.Update(msg)
@@ -128,7 +130,7 @@ func TestUpdate_DownloadStartedPropagatesRateLimit(t *testing.T) {
 		Filename:     "file",
 		Total:        100,
 		DestPath:     "/tmp/file",
-		State:        types.NewProgressState("id-1", 100),
+		State:        engineprogress.New("id-1", 100),
 		RateLimit:    2 * 1024 * 1024,
 		RateLimitSet: true,
 	})
@@ -151,7 +153,7 @@ func TestUpdate_DownloadStartedNewDownloadPropagatesRateLimit(t *testing.T) {
 		Filename:     "file",
 		Total:        100,
 		DestPath:     "/tmp/file",
-		State:        types.NewProgressState("id-1", 100),
+		State:        engineprogress.New("id-1", 100),
 		RateLimit:    3 * 1024 * 1024,
 		RateLimitSet: true,
 	})
@@ -183,7 +185,7 @@ func TestUpdate_EnqueueSuccessMergesOptimisticEntryAfterStart(t *testing.T) {
 		Filename:   "file.bin",
 		Total:      100,
 		DestPath:   "/tmp/file.bin",
-		State:      types.NewProgressState("real-1", 100),
+		State:      engineprogress.New("real-1", 100),
 	})
 	m2 := updated.(RootModel)
 	if len(m2.downloads) != 2 {

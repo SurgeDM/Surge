@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -350,10 +351,10 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadEntry, savedS
 	}
 
 	var mirrorURLs []string
-	var dmState *types.ProgressState
+	var dmState *progress.DownloadProgress
 
 	if savedState != nil {
-		dmState = types.NewProgressState(id, savedState.TotalSize)
+		dmState = progress.New(id, savedState.TotalSize)
 		dmState.Downloaded.Store(savedState.Downloaded)
 		dmState.VerifiedProgress.Store(savedState.Downloaded)
 		if savedState.Elapsed > 0 {
@@ -370,7 +371,7 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadEntry, savedS
 		dmState.DestPath = destPath
 		dmState.SyncSessionStart()
 	} else {
-		dmState = types.NewProgressState(id, totalSize)
+		dmState = progress.New(id, totalSize)
 		dmState.Downloaded.Store(downloaded)
 		dmState.VerifiedProgress.Store(downloaded)
 		dmState.DestPath = destPath

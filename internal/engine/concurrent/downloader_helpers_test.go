@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
 )
@@ -15,7 +16,7 @@ func TestHandlePause_CompletionBoundary(t *testing.T) {
 
 	fileSize := int64(1000)
 	destPath := filepath.Join(tmpDir, "test.bin")
-	state := types.NewProgressState("test-id", fileSize)
+	state := progress.New("test-id", fileSize)
 	downloader := &ConcurrentDownloader{
 		ID:      "test-id",
 		State:   state,
@@ -41,7 +42,7 @@ func TestHandlePause_Normal(t *testing.T) {
 
 	fileSize := int64(1000)
 	destPath := filepath.Join(tmpDir, "test.bin")
-	state := types.NewProgressState("test-id", fileSize)
+	state := progress.New("test-id", fileSize)
 	downloader := &ConcurrentDownloader{
 		ID:      "test-id",
 		State:   state,
@@ -63,7 +64,7 @@ func TestHandlePause_UsesLiveRateLimitFromState(t *testing.T) {
 
 	fileSize := int64(1000)
 	destPath := filepath.Join(tmpDir, "test.bin")
-	state := types.NewProgressState("test-id", fileSize)
+	state := progress.New("test-id", fileSize)
 	state.SetRateLimit(3*1024*1024, true)
 	progressCh := make(chan any, 1)
 	downloader := &ConcurrentDownloader{
@@ -94,8 +95,8 @@ func TestHandlePause_UsesLiveRateLimitFromState(t *testing.T) {
 	if msg.State == nil {
 		t.Fatal("expected pause state")
 	}
-	if msg.State.RateLimit != 3*1024*1024 || !msg.State.RateLimitSet {
-		t.Fatalf("pause state rate limit = (%d, %v), want (%d, true)", msg.State.RateLimit, msg.State.RateLimitSet, 3*1024*1024)
+	if msg.State.(*progress.DownloadProgress).RateLimit != 3*1024*1024 || !msg.State.(*progress.DownloadProgress).RateLimitSet {
+		t.Fatalf("pause state rate limit = (%d, %v), want (%d, true)", msg.State.(*progress.DownloadProgress).RateLimit, msg.State.(*progress.DownloadProgress).RateLimitSet, 3*1024*1024)
 	}
 }
 
@@ -114,7 +115,7 @@ func TestSetupTasks_NewDownload(t *testing.T) {
 	}
 	defer func() { _ = f.Close() }()
 
-	state := types.NewProgressState("test-id", fileSize)
+	state := progress.New("test-id", fileSize)
 	downloader := &ConcurrentDownloader{
 		ID:      "test-id",
 		State:   state,
@@ -146,7 +147,7 @@ func TestGetWorkerMirrors(t *testing.T) {
 }
 
 func TestInitMirrorStatus(t *testing.T) {
-	state := types.NewProgressState("test-id", 1000)
+	state := progress.New("test-id", 1000)
 	d := &ConcurrentDownloader{ID: "test-id", State: state}
 
 	primary := "http://primary.com"
@@ -215,7 +216,7 @@ func TestSetupTasks_BitmapRestoration(t *testing.T) {
 	f, _ := os.Create(destPath + types.IncompleteSuffix)
 	defer func() { _ = f.Close() }()
 
-	progState := types.NewProgressState("test-id", fileSize)
+	progState := progress.New("test-id", fileSize)
 	downloader := &ConcurrentDownloader{
 		ID:    "test-id",
 		URL:   "http://example.com",
@@ -247,7 +248,7 @@ func TestHandlePause_CompletionFinalization(t *testing.T) {
 
 	fileSize := int64(1000)
 	destPath := filepath.Join(tmpDir, "test.bin")
-	progState := types.NewProgressState("test-id", fileSize)
+	progState := progress.New("test-id", fileSize)
 	downloader := &ConcurrentDownloader{
 		ID:    "test-id",
 		State: progState,

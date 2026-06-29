@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -34,7 +35,7 @@ func TestMirrors_HappyPath(t *testing.T) {
 	defer server2.Close()
 
 	destPath := filepath.Join(tmpDir, "mirror_test.bin")
-	state := types.NewProgressState("mirror-test", fileSize)
+	state := progress.New("mirror-test", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 4, // Enough connections to use both
 	}
@@ -94,7 +95,7 @@ func TestMirrors_Failover(t *testing.T) {
 	defer goodServer.Close()
 
 	destPath := filepath.Join(tmpDir, "failover_test.bin")
-	state := types.NewProgressState("failover-test", fileSize)
+	state := progress.New("failover-test", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 4,
 		MaxTaskRetries:            5, // Need retries to switch

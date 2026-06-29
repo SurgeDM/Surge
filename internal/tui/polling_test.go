@@ -1,6 +1,8 @@
 package tui
 
 import (
+	engineprogress "github.com/SurgeDM/Surge/internal/progress"
+
 	"os"
 	"path/filepath"
 	"testing"
@@ -9,7 +11,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/download"
-	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/processing"
 	"github.com/SurgeDM/Surge/internal/types"
 )
@@ -37,7 +38,7 @@ func TestStateSync(t *testing.T) {
 
 	downloadID := "external-id"
 	// Create the "worker" state - this is the source of truth
-	workerState := types.NewProgressState(downloadID, 1000)
+	workerState := engineprogress.New(downloadID, 1000)
 
 	p := tea.NewProgram(m, tea.WithoutRenderer(), tea.WithInput(nil))
 

@@ -1,4 +1,4 @@
-package types
+package progress
 
 import (
 	"context"
@@ -6,10 +6,12 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/types"
+
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-type ProgressState struct {
+type DownloadProgress struct {
 	ID            string
 	Downloaded    atomic.Int64
 	TotalSize     int64
@@ -31,7 +33,7 @@ type ProgressState struct {
 	RateLimitBps      int64         // Effective per-download rate limit in bytes/sec
 	RateLimitSet      bool          // Whether RateLimitBps is an explicit per-download override
 
-	Mirrors []MirrorStatus
+	Mirrors []types.MirrorStatus
 
 	ChunkBitmap     []byte
 	ChunkProgress   []int64
@@ -41,70 +43,64 @@ type ProgressState struct {
 	mu sync.Mutex // Protects TotalSize, StartTime, SessionStartBytes, SavedElapsed, Mirrors
 }
 
-type MirrorStatus struct {
-	URL    string
-	Active bool
-	Error  bool
-}
-
-func (ps *ProgressState) SetDestPath(path string) {
+func (ps *DownloadProgress) SetDestPath(path string) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.DestPath = path
 }
 
-func (ps *ProgressState) GetDestPath() string {
+func (ps *DownloadProgress) GetDestPath() string {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	return ps.DestPath
 }
 
-func (ps *ProgressState) SetFilename(filename string) {
+func (ps *DownloadProgress) SetFilename(filename string) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.Filename = filename
 }
 
-func (ps *ProgressState) GetFilename() string {
+func (ps *DownloadProgress) GetFilename() string {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	return ps.Filename
 }
 
-func (ps *ProgressState) SetURL(url string) {
+func (ps *DownloadProgress) SetURL(url string) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.URL = url
 }
 
-func (ps *ProgressState) GetURL() string {
+func (ps *DownloadProgress) GetURL() string {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	return ps.URL
 }
 
-func (ps *ProgressState) SetRateLimit(rate int64, explicit bool) {
+func (ps *DownloadProgress) SetRateLimit(rate int64, explicit bool) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.RateLimitBps = rate
 	ps.RateLimitSet = explicit
 }
 
-func (ps *ProgressState) GetRateLimit() (int64, bool) {
+func (ps *DownloadProgress) GetRateLimit() (int64, bool) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	return ps.RateLimitBps, ps.RateLimitSet
 }
 
-func NewProgressState(id string, totalSize int64) *ProgressState {
-	return &ProgressState{
+func New(id string, totalSize int64) *DownloadProgress {
+	return &DownloadProgress{
 		ID:        id,
 		TotalSize: totalSize,
 		StartTime: time.Now(),
 	}
 }
 
-func (ps *ProgressState) SetTotalSize(size int64) {
+func (ps *DownloadProgress) SetTotalSize(size int64) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -119,25 +115,25 @@ func (ps *ProgressState) SetTotalSize(size int64) {
 	ps.StartTime = time.Now()
 }
 
-func (ps *ProgressState) SyncSessionStart() {
+func (ps *DownloadProgress) SyncSessionStart() {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.SessionStartBytes = ps.VerifiedProgress.Load()
 	ps.StartTime = time.Now()
 }
 
-func (ps *ProgressState) SetError(err error) {
+func (ps *DownloadProgress) SetError(err error) {
 	ps.Error.Store(&err)
 }
 
-func (ps *ProgressState) GetError() error {
+func (ps *DownloadProgress) GetError() error {
 	if e := ps.Error.Load(); e != nil {
 		return *e
 	}
 	return nil
 }
 
-func (ps *ProgressState) GetProgress() (downloaded int64, total int64, totalElapsed time.Duration, sessionElapsed time.Duration, connections int32, sessionStartBytes int64) {
+func (ps *DownloadProgress) GetProgress() (downloaded int64, total int64, totalElapsed time.Duration, sessionElapsed time.Duration, connections int32, sessionStartBytes int64) {
 	downloaded = ps.VerifiedProgress.Load()
 	connections = ps.ActiveWorkers.Load()
 	paused := ps.Paused.Load()
@@ -167,7 +163,7 @@ func (ps *ProgressState) GetProgress() (downloaded int64, total int64, totalElap
 	return
 }
 
-func (ps *ProgressState) Pause() {
+func (ps *DownloadProgress) Pause() {
 	ps.Paused.Store(true)
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
@@ -176,35 +172,35 @@ func (ps *ProgressState) Pause() {
 	}
 }
 
-func (ps *ProgressState) SetCancelFunc(cancel context.CancelFunc) {
+func (ps *DownloadProgress) SetCancelFunc(cancel context.CancelFunc) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.cancelFunc = cancel
 }
 
-func (ps *ProgressState) Resume() {
+func (ps *DownloadProgress) Resume() {
 	ps.Paused.Store(false)
 }
 
-func (ps *ProgressState) IsPaused() bool {
+func (ps *DownloadProgress) IsPaused() bool {
 	return ps.Paused.Load()
 }
 
-func (ps *ProgressState) SetPausing(pausing bool) {
+func (ps *DownloadProgress) SetPausing(pausing bool) {
 	ps.Pausing.Store(pausing)
 }
 
-func (ps *ProgressState) IsPausing() bool {
+func (ps *DownloadProgress) IsPausing() bool {
 	return ps.Pausing.Load()
 }
 
-func (ps *ProgressState) SetSavedElapsed(d time.Duration) {
+func (ps *DownloadProgress) SetSavedElapsed(d time.Duration) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.SavedElapsed = d
 }
 
-func (ps *ProgressState) GetSavedElapsed() time.Duration {
+func (ps *DownloadProgress) GetSavedElapsed() time.Duration {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	return ps.SavedElapsed
@@ -212,7 +208,7 @@ func (ps *ProgressState) GetSavedElapsed() time.Duration {
 
 // FinalizeSession closes the current session and accumulates its elapsed time into total elapsed.
 // It returns (sessionElapsed, totalElapsedAfterFinalize).
-func (ps *ProgressState) FinalizeSession(downloaded int64) (time.Duration, time.Duration) {
+func (ps *DownloadProgress) FinalizeSession(downloaded int64) (time.Duration, time.Duration) {
 	if downloaded < 0 {
 		downloaded = ps.VerifiedProgress.Load()
 	}
@@ -239,7 +235,7 @@ func (ps *ProgressState) FinalizeSession(downloaded int64) (time.Duration, time.
 }
 
 // SessionReset wipes the current progress and session state, allowing for a fresh start (e.g. fallback).
-func (ps *ProgressState) SessionReset() {
+func (ps *DownloadProgress) SessionReset() {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -269,39 +265,30 @@ func (ps *ProgressState) SessionReset() {
 
 // FinalizePauseSession finalizes the current session for a pause transition.
 // It keeps timing/data frozen while paused and returns total elapsed after finalize.
-func (ps *ProgressState) FinalizePauseSession(downloaded int64) time.Duration {
+func (ps *DownloadProgress) FinalizePauseSession(downloaded int64) time.Duration {
 	_, total := ps.FinalizeSession(downloaded)
 	return total
 }
 
-func (ps *ProgressState) SetMirrors(mirrors []MirrorStatus) {
+func (ps *DownloadProgress) SetMirrors(mirrors []types.MirrorStatus) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	// Deep copy to prevent race conditions if caller modifies the slice
-	ps.Mirrors = make([]MirrorStatus, len(mirrors))
+	ps.Mirrors = make([]types.MirrorStatus, len(mirrors))
 	copy(ps.Mirrors, mirrors)
 }
 
-func (ps *ProgressState) GetMirrors() []MirrorStatus {
+func (ps *DownloadProgress) GetMirrors() []types.MirrorStatus {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	// Return a copy
 	if len(ps.Mirrors) == 0 {
 		return nil
 	}
-	mirrors := make([]MirrorStatus, len(ps.Mirrors))
+	mirrors := make([]types.MirrorStatus, len(ps.Mirrors))
 	copy(mirrors, ps.Mirrors)
 	return mirrors
 }
-
-// ChunkStatus represents the status of a visualization chunk
-type ChunkStatus int
-
-const (
-	ChunkPending     ChunkStatus = 0 // 00
-	ChunkDownloading ChunkStatus = 1 // 01
-	ChunkCompleted   ChunkStatus = 2 // 10 (Bit 2 set)
-)
 
 // bitmapLayout returns the number of tracked chunks and backing bytes for a
 // 2-bit-per-chunk bitmap.
@@ -320,7 +307,7 @@ func bitmapLayout(totalSize, chunkSize int64) (numChunks int, bytesNeeded int, o
 }
 
 // InitBitmap initializes the chunk bitmap
-func (ps *ProgressState) InitBitmap(totalSize int64, chunkSize int64) {
+func (ps *DownloadProgress) InitBitmap(totalSize int64, chunkSize int64) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -346,7 +333,7 @@ func (ps *ProgressState) InitBitmap(totalSize int64, chunkSize int64) {
 }
 
 // RestoreBitmap restores the chunk bitmap from saved state
-func (ps *ProgressState) RestoreBitmap(bitmap []byte, actualChunkSize int64) {
+func (ps *DownloadProgress) RestoreBitmap(bitmap []byte, actualChunkSize int64) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -371,7 +358,7 @@ func (ps *ProgressState) RestoreBitmap(bitmap []byte, actualChunkSize int64) {
 }
 
 // SetChunkProgress updates chunk progress array from external sources (e.g. remote events).
-func (ps *ProgressState) SetChunkProgress(progress []int64) {
+func (ps *DownloadProgress) SetChunkProgress(progress []int64) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -385,14 +372,14 @@ func (ps *ProgressState) SetChunkProgress(progress []int64) {
 }
 
 // SetChunkState sets the 2-bit state for a specific chunk index (thread-safe)
-func (ps *ProgressState) SetChunkState(index int, status ChunkStatus) {
+func (ps *DownloadProgress) SetChunkState(index int, status types.ChunkStatus) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	ps.setChunkState(index, status)
 }
 
 // setChunkState sets the 2-bit state (internal, expects lock)
-func (ps *ProgressState) setChunkState(index int, status ChunkStatus) {
+func (ps *DownloadProgress) setChunkState(index int, status types.ChunkStatus) {
 	if index < 0 || index >= ps.BitmapWidth {
 		return
 	}
@@ -411,30 +398,30 @@ func (ps *ProgressState) setChunkState(index int, status ChunkStatus) {
 }
 
 // GetChunkState gets the 2-bit state for a specific chunk index (thread-safe)
-func (ps *ProgressState) GetChunkState(index int) ChunkStatus {
+func (ps *DownloadProgress) GetChunkState(index int) types.ChunkStatus {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 	return ps.getChunkState(index)
 }
 
 // getChunkState gets the 2-bit state (internal, expects lock)
-func (ps *ProgressState) getChunkState(index int) ChunkStatus {
+func (ps *DownloadProgress) getChunkState(index int) types.ChunkStatus {
 	if index < 0 || index >= ps.BitmapWidth {
-		return ChunkPending
+		return types.ChunkPending
 	}
 
 	byteIndex := index / 4
 	if byteIndex >= len(ps.ChunkBitmap) {
-		return ChunkPending
+		return types.ChunkPending
 	}
 	bitOffset := (index % 4) * 2
 
 	val := (ps.ChunkBitmap[byteIndex] >> bitOffset) & 3
-	return ChunkStatus(val)
+	return types.ChunkStatus(val)
 }
 
 // UpdateChunkStatus updates the bitmap based on byte range
-func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkStatus) {
+func (ps *DownloadProgress) UpdateChunkStatus(offset, length int64, status types.ChunkStatus) {
 	ps.mu.Lock()
 
 	if ps.ActualChunkSize == 0 || len(ps.ChunkBitmap) == 0 {
@@ -483,7 +470,7 @@ func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkSta
 		}
 
 		switch status {
-		case ChunkCompleted:
+		case types.ChunkCompleted:
 			increment := overlap
 			remainingSpace := (chunkEnd - chunkStart) - ps.ChunkProgress[i]
 
@@ -498,16 +485,16 @@ func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkSta
 
 			if ps.ChunkProgress[i] >= (chunkEnd - chunkStart) {
 				ps.ChunkProgress[i] = chunkEnd - chunkStart
-				ps.setChunkState(i, ChunkCompleted)
+				ps.setChunkState(i, types.ChunkCompleted)
 			} else {
-				if ps.getChunkState(i) != ChunkCompleted {
-					ps.setChunkState(i, ChunkDownloading)
+				if ps.getChunkState(i) != types.ChunkCompleted {
+					ps.setChunkState(i, types.ChunkDownloading)
 				}
 			}
-		case ChunkDownloading:
+		case types.ChunkDownloading:
 			current := ps.getChunkState(i)
-			if current != ChunkCompleted {
-				ps.setChunkState(i, ChunkDownloading)
+			if current != types.ChunkCompleted {
+				ps.setChunkState(i, types.ChunkDownloading)
 			}
 		}
 	}
@@ -520,7 +507,7 @@ func (ps *ProgressState) UpdateChunkStatus(offset, length int64, status ChunkSta
 }
 
 // RecalculateProgress reconstructs ChunkProgress from remaining tasks (for resume)
-func (ps *ProgressState) RecalculateProgress(remainingTasks []Task) {
+func (ps *DownloadProgress) RecalculateProgress(remainingTasks []types.Task) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 
@@ -591,23 +578,23 @@ func (ps *ProgressState) RecalculateProgress(remainingTasks []Task) {
 
 		if ps.ChunkProgress[i] >= chunkSize {
 			ps.ChunkProgress[i] = chunkSize
-			ps.setChunkState(i, ChunkCompleted)
+			ps.setChunkState(i, types.ChunkCompleted)
 		} else if ps.ChunkProgress[i] > 0 {
-			ps.setChunkState(i, ChunkDownloading)
+			ps.setChunkState(i, types.ChunkDownloading)
 		} else {
 			ps.ChunkProgress[i] = 0
-			ps.setChunkState(i, ChunkPending)
+			ps.setChunkState(i, types.ChunkPending)
 		}
 	}
 }
 
 // GetBitmap returns a copy of the bitmap and metadata
-func (ps *ProgressState) GetBitmap() ([]byte, int, int64, int64, []int64) {
+func (ps *DownloadProgress) GetBitmap() ([]byte, int, int64, int64, []int64) {
 	return ps.GetBitmapSnapshot(true)
 }
 
 // GetBitmapSnapshot returns a copy of bitmap metadata and optionally chunk progress.
-func (ps *ProgressState) GetBitmapSnapshot(includeProgress bool) ([]byte, int, int64, int64, []int64) {
+func (ps *DownloadProgress) GetBitmapSnapshot(includeProgress bool) ([]byte, int, int64, int64, []int64) {
 	ps.mu.Lock()
 	defer ps.mu.Unlock()
 

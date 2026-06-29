@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/download"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -595,7 +596,7 @@ func TestLocalDownloadService_SetRateLimit_UpdatesPool(t *testing.T) {
 		URL:          ts.URL,
 		RateLimitBps: 0,
 		RateLimitSet: false,
-		State:        &types.ProgressState{},
+		State:        &progress.DownloadProgress{},
 	}
 	pool.Add(cfg)
 
@@ -646,7 +647,7 @@ func TestLocalDownloadService_ClearRateLimit_UpdatesPool(t *testing.T) {
 		URL:          ts.URL,
 		RateLimitBps: 3 * 1024 * 1024,
 		RateLimitSet: true,
-		State:        &types.ProgressState{},
+		State:        &progress.DownloadProgress{},
 	}
 	pool.Add(cfg)
 

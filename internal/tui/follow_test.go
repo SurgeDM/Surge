@@ -1,6 +1,8 @@
 package tui
 
 import (
+	engineprogress "github.com/SurgeDM/Surge/internal/progress"
+
 	"testing"
 
 	"charm.land/bubbles/v2/viewport"
@@ -19,7 +21,7 @@ func TestAutoFollow_BrandNewDownload(t *testing.T) {
 		DownloadID: "new-1",
 		Filename:   "new-file",
 		Total:      100,
-		State:      types.NewProgressState("new-1", 100),
+		State:      engineprogress.New("new-1", 100),
 	}
 
 	updated, _ := m.Update(msg)
@@ -49,7 +51,7 @@ func TestAutoFollow_ExistingDownloadRestart(t *testing.T) {
 		DownloadID: "existing-1",
 		Filename:   "file",
 		Total:      100,
-		State:      types.NewProgressState("existing-1", 100),
+		State:      engineprogress.New("existing-1", 100),
 	}
 
 	updated, _ := m.Update(msg)
@@ -72,7 +74,7 @@ func TestAutoFollow_SuppressedByPin(t *testing.T) {
 		DownloadID: "new-1",
 		Filename:   "new-file",
 		Total:      100,
-		State:      types.NewProgressState("new-1", 100),
+		State:      engineprogress.New("new-1", 100),
 	}
 
 	updated, _ := m.Update(msg)
@@ -104,7 +106,7 @@ func TestAutoFollow_QueuedToActiveTransition(t *testing.T) {
 		DownloadID: "id-1",
 		Filename:   "file",
 		Total:      100,
-		State:      types.NewProgressState("id-1", 100),
+		State:      engineprogress.New("id-1", 100),
 	}
 
 	updated, _ := m.Update(msg)

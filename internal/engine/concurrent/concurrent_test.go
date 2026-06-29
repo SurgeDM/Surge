@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -48,7 +49,7 @@ func TestConcurrentDownloader_Download(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "test_download.bin")
-	state := types.NewProgressState("test-id", fileSize)
+	state := progress.New("test-id", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 4}
 
 	downloader := NewConcurrentDownloader("test-id", nil, state, runtime)
@@ -88,7 +89,7 @@ func TestConcurrentDownloader_WithLatency(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "latency_test.bin")
-	state := types.NewProgressState("latency-test", fileSize)
+	state := progress.New("latency-test", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 2}
 
 	downloader := NewConcurrentDownloader("latency-id", nil, state, runtime)
@@ -133,7 +134,7 @@ func TestConcurrentDownloader_SlowDownload(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "slow_test.bin")
-	state := types.NewProgressState("slow-test", fileSize)
+	state := progress.New("slow-test", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 4}
 
 	downloader := NewConcurrentDownloader("slow-id", nil, state, runtime)
@@ -174,7 +175,7 @@ func TestConcurrentDownloader_RespectServerConnectionLimit(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "connlimit_test.bin")
-	state := types.NewProgressState("connlimit-test", fileSize)
+	state := progress.New("connlimit-test", fileSize)
 	// Client configured for more connections than server allows
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 8, // More than server allows
@@ -222,7 +223,7 @@ func TestConcurrentDownloader_ContentIntegrity(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "integrity_test.bin")
-	state := types.NewProgressState("integrity-test", fileSize)
+	state := progress.New("integrity-test", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 4,
 		MinChunkSize:              16 * utils.KiB,
@@ -295,7 +296,7 @@ func TestConcurrentDownloader_SmallFile(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "small_test.bin")
-	state := types.NewProgressState("test-download", fileSize)
+	state := progress.New("test-download", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 4,
 		MinChunkSize:              16 * utils.KiB,
@@ -336,7 +337,7 @@ func TestConcurrentDownloader_MediumFile(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "medium_test.bin")
-	state := types.NewProgressState("test-download", fileSize)
+	state := progress.New("test-download", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 8,
 		MinChunkSize:              64 * utils.KiB,
@@ -382,7 +383,7 @@ func TestConcurrentDownloader_Cancellation(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "cancel_test.bin")
-	state := types.NewProgressState("cancel-test", fileSize)
+	state := progress.New("cancel-test", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 4}
 
 	downloader := NewConcurrentDownloader("cancel-id", nil, state, runtime)
@@ -424,7 +425,7 @@ func TestConcurrentDownloader_PauseAtCompletionFinalizesAsCompleted(t *testing.T
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "pause_completion_test.bin")
-	progressState := types.NewProgressState("pause-complete-test", fileSize)
+	progressState := progress.New("pause-complete-test", fileSize)
 	progressState.Pause()
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 4,
@@ -465,7 +466,7 @@ func TestConcurrentDownloader_ProgressTracking(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "progress_test.bin")
-	state := types.NewProgressState("progress-test", fileSize)
+	state := progress.New("progress-test", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 4}
 
 	downloader := NewConcurrentDownloader("progress-id", nil, state, runtime)
@@ -508,7 +509,7 @@ func TestConcurrentDownloader_RetryOnFailure(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "retry_test.bin")
-	state := types.NewProgressState("retry-test", fileSize)
+	state := progress.New("retry-test", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 2,
 		MaxTaskRetries:            10, // Need more retries since each attempt only gets 20KB
@@ -554,7 +555,7 @@ func TestConcurrentDownloader_FailOnNthRequest(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "failnth_test.bin")
-	state := types.NewProgressState("failnth-test", fileSize)
+	state := progress.New("failnth-test", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 1, // Single connection for predictable request order
 		MaxTaskRetries:            5,
@@ -626,7 +627,7 @@ func TestConcurrentDownloader_ResumePartialDownload(t *testing.T) {
 	}
 
 	// Now resume download
-	progressState := types.NewProgressState("resume-test", fileSize)
+	progressState := progress.New("resume-test", fileSize)
 	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 2}
 
 	downloader := NewConcurrentDownloader(downloadID, nil, progressState, runtime)
@@ -757,7 +758,7 @@ func TestConcurrentDownloader_Download_BootstrapSize(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "bootstrap_test.bin")
-	state := types.NewProgressState("bootstrap-id", 0) // Unknown size
+	state := progress.New("bootstrap-id", 0) // Unknown size
 	runtime := &types.RuntimeConfig{MaxConnectionsPerDownload: 1}
 
 	downloader := NewConcurrentDownloader("bootstrap-id", nil, state, runtime)
@@ -790,7 +791,7 @@ func TestConcurrentDownloader_Download_BootstrapFail_Non206(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "bootstrap_fail.bin")
-	state := types.NewProgressState("bootstrap-fail-id", 0)
+	state := progress.New("bootstrap-fail-id", 0)
 	downloader := NewConcurrentDownloader("bootstrap-fail-id", nil, state, nil)
 
 	if f, err := os.Create(destPath + ".surge"); err == nil {
@@ -818,7 +819,7 @@ func TestConcurrentDownloader_Download_BootstrapFail_InvalidRange(t *testing.T) 
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "bootstrap_invalid.bin")
-	state := types.NewProgressState("bootstrap-invalid-id", 0)
+	state := progress.New("bootstrap-invalid-id", 0)
 	downloader := NewConcurrentDownloader("bootstrap-invalid-id", nil, state, nil)
 
 	if f, err := os.Create(destPath + ".surge"); err == nil {

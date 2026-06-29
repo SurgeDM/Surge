@@ -1,4 +1,4 @@
-package types
+package progress
 
 import (
 	"context"
@@ -6,8 +6,8 @@ import (
 	"time"
 )
 
-func TestNewProgressState(t *testing.T) {
-	ps := NewProgressState("test-id", 1000)
+func TestNew(t *testing.T) {
+	ps := New("test-id", 1000)
 
 	if ps.ID != "test-id" {
 		t.Errorf("ID = %s, want test-id", ps.ID)
@@ -33,8 +33,8 @@ func TestNewProgressState(t *testing.T) {
 	}
 }
 
-func TestProgressState_RateLimitAccessors(t *testing.T) {
-	ps := NewProgressState("test-id", 1000)
+func TestDownloadProgress_RateLimitAccessors(t *testing.T) {
+	ps := New("test-id", 1000)
 
 	ps.SetRateLimit(3*1024*1024, true)
 
@@ -56,8 +56,8 @@ func TestProgressState_RateLimitAccessors(t *testing.T) {
 	}
 }
 
-func TestProgressState_SetTotalSize(t *testing.T) {
-	ps := NewProgressState("test", 100)
+func TestDownloadProgress_SetTotalSize(t *testing.T) {
+	ps := New("test", 100)
 	ps.Downloaded.Store(50)
 	ps.VerifiedProgress.Store(40)
 
@@ -71,8 +71,8 @@ func TestProgressState_SetTotalSize(t *testing.T) {
 	}
 }
 
-func TestProgressState_SetTotalSize_Idempotent(t *testing.T) {
-	ps := NewProgressState("test-idempotent", 100)
+func TestDownloadProgress_SetTotalSize_Idempotent(t *testing.T) {
+	ps := New("test-idempotent", 100)
 
 	// Simulate a session that started 5 seconds ago
 	originalStartTime := time.Now().Add(-5 * time.Second)
@@ -95,8 +95,8 @@ func TestProgressState_SetTotalSize_Idempotent(t *testing.T) {
 	}
 }
 
-func TestProgressState_SyncSessionStart(t *testing.T) {
-	ps := NewProgressState("test", 100)
+func TestDownloadProgress_SyncSessionStart(t *testing.T) {
+	ps := New("test", 100)
 	ps.Downloaded.Store(75)
 	ps.VerifiedProgress.Store(60)
 
@@ -112,8 +112,8 @@ func TestProgressState_SyncSessionStart(t *testing.T) {
 	}
 }
 
-func TestProgressState_Error(t *testing.T) {
-	ps := NewProgressState("test", 100)
+func TestDownloadProgress_Error(t *testing.T) {
+	ps := New("test", 100)
 
 	// Initially no error
 	if err := ps.GetError(); err != nil {
@@ -129,8 +129,8 @@ func TestProgressState_Error(t *testing.T) {
 	}
 }
 
-func TestProgressState_PauseResume(t *testing.T) {
-	ps := NewProgressState("test", 100)
+func TestDownloadProgress_PauseResume(t *testing.T) {
+	ps := New("test", 100)
 
 	// Initially not paused
 	if ps.IsPaused() {
@@ -150,8 +150,8 @@ func TestProgressState_PauseResume(t *testing.T) {
 	}
 }
 
-func TestProgressState_PauseWithCancelFunc(t *testing.T) {
-	ps := NewProgressState("test", 100)
+func TestDownloadProgress_PauseWithCancelFunc(t *testing.T) {
+	ps := New("test", 100)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ps.SetCancelFunc(cancel)
@@ -174,8 +174,8 @@ func TestProgressState_PauseWithCancelFunc(t *testing.T) {
 	}
 }
 
-func TestProgressState_GetProgress(t *testing.T) {
-	ps := NewProgressState("test", 1000)
+func TestDownloadProgress_GetProgress(t *testing.T) {
+	ps := New("test", 1000)
 	ps.VerifiedProgress.Store(500)
 	ps.ActiveWorkers.Store(4)
 	ps.SessionStartBytes = 100
@@ -202,8 +202,8 @@ func TestProgressState_GetProgress(t *testing.T) {
 	}
 }
 
-func TestProgressState_AtomicOperations(t *testing.T) {
-	ps := NewProgressState("test", 1000)
+func TestDownloadProgress_AtomicOperations(t *testing.T) {
+	ps := New("test", 1000)
 
 	// Test concurrent increment
 	done := make(chan bool, 10)
@@ -223,8 +223,8 @@ func TestProgressState_AtomicOperations(t *testing.T) {
 	}
 }
 
-func TestProgressState_ElapsedCalculation(t *testing.T) {
-	ps := NewProgressState("test-elapsed", 100)
+func TestDownloadProgress_ElapsedCalculation(t *testing.T) {
+	ps := New("test-elapsed", 100)
 
 	// Simulate previous session
 	savedElapsed := 5 * time.Second
@@ -246,8 +246,8 @@ func TestProgressState_ElapsedCalculation(t *testing.T) {
 	}
 }
 
-func TestProgressState_GetProgress_PausedFreezesElapsed(t *testing.T) {
-	ps := NewProgressState("test-paused-elapsed", 100)
+func TestDownloadProgress_GetProgress_PausedFreezesElapsed(t *testing.T) {
+	ps := New("test-paused-elapsed", 100)
 	ps.VerifiedProgress.Store(50)
 	ps.SetSavedElapsed(5 * time.Second)
 	ps.StartTime = time.Now().Add(-3 * time.Second)
@@ -263,8 +263,8 @@ func TestProgressState_GetProgress_PausedFreezesElapsed(t *testing.T) {
 	}
 }
 
-func TestProgressState_FinalizeSession_AccumulatesElapsed(t *testing.T) {
-	ps := NewProgressState("finalize-session", 100)
+func TestDownloadProgress_FinalizeSession_AccumulatesElapsed(t *testing.T) {
+	ps := New("finalize-session", 100)
 	ps.VerifiedProgress.Store(80)
 	ps.StartTime = time.Now().Add(-2 * time.Second)
 
@@ -287,8 +287,8 @@ func TestProgressState_FinalizeSession_AccumulatesElapsed(t *testing.T) {
 	}
 }
 
-func TestProgressState_FinalizePauseSession_UsesVerifiedWhenDownloadedUnknown(t *testing.T) {
-	ps := NewProgressState("finalize-pause", 100)
+func TestDownloadProgress_FinalizePauseSession_UsesVerifiedWhenDownloadedUnknown(t *testing.T) {
+	ps := New("finalize-pause", 100)
 	ps.VerifiedProgress.Store(55)
 	ps.StartTime = time.Now().Add(-1200 * time.Millisecond)
 	ps.Pause()
@@ -306,8 +306,8 @@ func TestProgressState_FinalizePauseSession_UsesVerifiedWhenDownloadedUnknown(t 
 	}
 }
 
-func TestProgressState_SessionReset(t *testing.T) {
-	ps := NewProgressState("test-reset", 1000)
+func TestDownloadProgress_SessionReset(t *testing.T) {
+	ps := New("test-reset", 1000)
 	ps.Downloaded.Store(500)
 	ps.VerifiedProgress.Store(450)
 	ps.SessionStartBytes = 100

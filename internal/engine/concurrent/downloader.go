@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -22,9 +23,9 @@ import (
 
 // ConcurrentDownloader handles multi-connection downloads
 type ConcurrentDownloader struct {
-	ProgressChan chan<- any           // Channel for events (start/complete/error)
-	ID           string               // Download ID
-	State        *types.ProgressState // Shared state for TUI polling
+	ProgressChan chan<- any                 // Channel for events (start/complete/error)
+	ID           string                     // Download ID
+	State        *progress.DownloadProgress // Shared state for TUI polling
 	activeTasks  map[int]*ActiveTask
 	activeMu     sync.Mutex
 	URL          string // For pause/resume
@@ -40,7 +41,7 @@ type ConcurrentDownloader struct {
 }
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
-func NewConcurrentDownloader(id string, progressCh chan<- any, progState *types.ProgressState, runtime *types.RuntimeConfig) *ConcurrentDownloader {
+func NewConcurrentDownloader(id string, progressCh chan<- any, progState *progress.DownloadProgress, runtime *types.RuntimeConfig) *ConcurrentDownloader {
 	if runtime == nil {
 		runtime = types.DefaultRuntimeConfig()
 	}

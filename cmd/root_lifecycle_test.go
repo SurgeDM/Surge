@@ -16,6 +16,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -84,7 +85,7 @@ func (s *countingLifecycleService) ClearFailed() (int64, error) {
 
 func TestBuildActiveDownloadChecker(t *testing.T) {
 	getAll := func() []types.DownloadConfig {
-		state := types.NewProgressState("dl-2", 0)
+		state := progress.New("dl-2", 0)
 		state.SetFilename("from-state.iso")
 		state.SetDestPath("/downloads/from-state.iso")
 

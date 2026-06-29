@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -40,7 +41,7 @@ func TestConcurrentDownloader_SwitchOn429(t *testing.T) {
 	defer server2.Close()
 
 	destPath := filepath.Join(tmpDir, "switch429_test.bin")
-	state := types.NewProgressState("switch429-test", fileSize)
+	state := progress.New("switch429-test", fileSize)
 
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 1,
@@ -102,7 +103,7 @@ func TestConcurrentDownloader_BackoffOnSingleMirror(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "backoff_test.bin")
-	state := types.NewProgressState("backoff-test", fileSize)
+	state := progress.New("backoff-test", fileSize)
 
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 1,
@@ -177,7 +178,7 @@ func TestConcurrentDownloader_AllMirrors429ThenRecover(t *testing.T) {
 	defer server2.Close()
 
 	destPath := filepath.Join(tmpDir, "all429_test.bin")
-	state := types.NewProgressState("all429-test", fileSize)
+	state := progress.New("all429-test", fileSize)
 
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 2,
@@ -242,7 +243,7 @@ func TestConcurrentDownloader_429RespectsRetryAfterHeader(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "retryafter_test.bin")
-	state := types.NewProgressState("retryafter-test", fileSize)
+	state := progress.New("retryafter-test", fileSize)
 
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 1,
@@ -307,7 +308,7 @@ func TestConcurrentDownloader_429DoesNotTearDownWithHealthyMirror(t *testing.T) 
 	defer server2.Close()
 
 	destPath := filepath.Join(tmpDir, "429healthy_test.bin")
-	state := types.NewProgressState("429healthy-test", fileSize)
+	state := progress.New("429healthy-test", fileSize)
 
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 4,
@@ -377,7 +378,7 @@ func TestConcurrentDownloader_503WithRetryAfterTreatedAsThrottle(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "503_test.bin")
-	state := types.NewProgressState("503-test", fileSize)
+	state := progress.New("503-test", fileSize)
 
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 1,
@@ -428,7 +429,7 @@ func TestConcurrentDownloader_Persistent429ExhaustsBudget(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "persistent429_test.bin")
-	state := types.NewProgressState("persistent429-test", fileSize)
+	state := progress.New("persistent429-test", fileSize)
 
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 1,
@@ -484,7 +485,7 @@ func TestConcurrentDownloader_Bare503IsGeneric(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "bare503_test.bin")
-	state := types.NewProgressState("bare503-test", fileSize)
+	state := progress.New("bare503-test", fileSize)
 
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 1,

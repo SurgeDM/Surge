@@ -1,6 +1,8 @@
 package tui
 
 import (
+	engineprogress "github.com/SurgeDM/Surge/internal/progress"
+
 	"fmt"
 	"strings"
 	"time"
@@ -128,7 +130,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 				progressCmd = d.progress.SetPercent(0)
 			}
 			if d.state == nil && msg.State != nil {
-				d.state = msg.State
+				d.state = msg.State.(*engineprogress.DownloadProgress)
 			}
 			if d.state != nil {
 				d.state.SetTotalSize(msg.Total) // Keep state updated for verification if needed
@@ -146,7 +148,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			newDownload.RateLimit = msg.RateLimit
 			newDownload.RateLimitSet = msg.RateLimitSet
 			if msg.State != nil {
-				newDownload.state = msg.State
+				newDownload.state = msg.State.(*engineprogress.DownloadProgress)
 			}
 			newDownload.started = true
 			m.downloads = append(m.downloads, newDownload)

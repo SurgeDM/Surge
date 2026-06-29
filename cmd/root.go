@@ -18,6 +18,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/core"
 	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/tui"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -111,10 +112,10 @@ func buildActiveDownloadChecker(getAll func() []types.DownloadConfig) processing
 				}
 			}
 			if cfg.State != nil {
-				if stateName := strings.TrimSpace(cfg.State.GetFilename()); stateName != "" {
+				if stateName := strings.TrimSpace(cfg.State.(*progress.DownloadProgress).GetFilename()); stateName != "" {
 					existingName = stateName
 				}
-				if stateDestPath := strings.TrimSpace(cfg.State.GetDestPath()); stateDestPath != "" {
+				if stateDestPath := strings.TrimSpace(cfg.State.(*progress.DownloadProgress).GetDestPath()); stateDestPath != "" {
 					existingDir = filepath.Dir(stateDestPath)
 					if existingName == "" {
 						existingName = filepath.Base(stateDestPath)

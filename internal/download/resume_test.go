@@ -10,8 +10,9 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/download"
-	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/progress"
+	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/google/uuid"
@@ -70,7 +71,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 		eventWG.Wait()
 	}()
 
-	progState := types.NewProgressState(uuid.New().String(), fileSize)
+	progState := progress.New(uuid.New().String(), fileSize)
 
 	cfg := types.DownloadConfig{
 		URL:           url,

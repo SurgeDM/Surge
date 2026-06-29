@@ -12,6 +12,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/download"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -217,7 +218,7 @@ func (s *LocalDownloadService) reportProgressLoop() {
 
 		activeConfigs := s.Pool.GetAll()
 		for _, cfg := range activeConfigs {
-			if cfg.State == nil || cfg.State.IsPaused() || cfg.State.Done.Load() {
+			if cfg.State == nil || cfg.State.(*progress.DownloadProgress).IsPaused() || cfg.State.(*progress.DownloadProgress).Done.Load() {
 				// Clean up speed history for inactive
 				delete(lastSpeeds, cfg.ID)
 				delete(lastChunkSnapshot, cfg.ID)
@@ -225,7 +226,7 @@ func (s *LocalDownloadService) reportProgressLoop() {
 			}
 
 			// Calculate Progress
-			downloaded, total, totalElapsed, sessionElapsed, connections, sessionStart := cfg.State.GetProgress()
+			downloaded, total, totalElapsed, sessionElapsed, connections, sessionStart := cfg.State.(*progress.DownloadProgress).GetProgress()
 
 			// Calculate Speed with EMA
 			sessionDownloaded := downloaded - sessionStart
@@ -251,13 +252,13 @@ func (s *LocalDownloadService) reportProgressLoop() {
 				Speed:             currentSpeed,
 				Elapsed:           totalElapsed,
 				ActiveConnections: int(connections),
-				RateLimited:       cfg.State.RateLimited.Load(),
+				RateLimited:       cfg.State.(*progress.DownloadProgress).RateLimited.Load(),
 			}
 
 			// Chunk snapshots are expensive due to bitmap/progress copies.
 			// Send them at a lower cadence than scalar progress fields.
 			if time.Since(lastChunkSnapshot[cfg.ID]) >= 500*time.Millisecond {
-				bitmap, width, _, chunkSize, chunkProgress := cfg.State.GetBitmapSnapshot(true)
+				bitmap, width, _, chunkSize, chunkProgress := cfg.State.(*progress.DownloadProgress).GetBitmapSnapshot(true)
 				if width > 0 && len(bitmap) > 0 {
 					msg.ChunkBitmap = bitmap
 					msg.BitmapWidth = width
@@ -422,11 +423,11 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 
 			if cfg.State != nil {
 				// Calculate progress and speed (thread-safe)
-				downloaded, totalSize, _, sessionElapsed, connections, sessionStart := cfg.State.GetProgress()
+				downloaded, totalSize, _, sessionElapsed, connections, sessionStart := cfg.State.(*progress.DownloadProgress).GetProgress()
 
 				status.TotalSize = totalSize
 				status.Downloaded = downloaded
-				if dp := cfg.State.GetDestPath(); dp != "" {
+				if dp := cfg.State.(*progress.DownloadProgress).GetDestPath(); dp != "" {
 					status.DestPath = dp
 				}
 
@@ -438,11 +439,11 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 				status.Connections = int(connections)
 
 				// Update status based on state
-				if cfg.State.IsPausing() {
+				if cfg.State.(*progress.DownloadProgress).IsPausing() {
 					status.Status = "pausing"
-				} else if cfg.State.IsPaused() {
+				} else if cfg.State.(*progress.DownloadProgress).IsPaused() {
 					status.Status = "paused"
-				} else if cfg.State.Done.Load() {
+				} else if cfg.State.(*progress.DownloadProgress).Done.Load() {
 					status.Status = "completed"
 				}
 
@@ -552,7 +553,7 @@ func (s *LocalDownloadService) add(url string, path string, filename string, mir
 		return "", types.ErrIDExists
 	}
 
-	state := types.NewProgressState(id, 0)
+	state := progress.New(id, 0)
 	state.DestPath = filepath.Join(outPath, filename) // Best guess until download starts
 
 	runtime := settings.ToRuntimeConfig()

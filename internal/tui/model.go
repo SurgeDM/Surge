@@ -1,6 +1,8 @@
 package tui
 
 import (
+	engineprogress "github.com/SurgeDM/Surge/internal/progress"
+
 	"context"
 	"fmt"
 	"os"
@@ -103,7 +105,7 @@ type DownloadModel struct {
 
 	// Unified architecture: View Model updated by events
 	// No direct state access or polling reporter
-	state *types.ProgressState // Keep for now if needed for details view, but mostly passive
+	state *engineprogress.DownloadProgress // Keep for now if needed for details view, but mostly passive
 
 	done        bool
 	started     bool // Engine has confirmed start
@@ -245,7 +247,7 @@ type RootModel struct {
 // NewDownloadModel creates a new download model
 func NewDownloadModel(id string, url string, filename string, total int64) *DownloadModel {
 	// Create dummy state container for compatibility if needed
-	state := types.NewProgressState(id, total)
+	state := engineprogress.New(id, total)
 	return &DownloadModel{
 		ID:            id,
 		URL:           url,

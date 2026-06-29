@@ -9,6 +9,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/download"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -509,7 +510,7 @@ func TestIntegration_PauseResume_ResumeBatchRejectsPausing(t *testing.T) {
 	defer evCleanup()
 
 	id := "resume-batch-pausing-id"
-	ps := types.NewProgressState(id, 1024)
+	ps := progress.New(id, 1024)
 	ps.Pause()
 	ps.SetPausing(true)
 

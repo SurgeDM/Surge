@@ -493,7 +493,7 @@ func TestHandleDownload_PathTraversal(t *testing.T) {
 // func TestHandleDownload_StatusQuery(t *testing.T) {
 // 	// Setup mock download
 // 	id := "test-status-id"
-// 	state := types.NewProgressState(id, 2000)
+// 	state := progress.New(id, 2000)
 // 	state.Downloaded.Store(1000)
 // 	GlobalPool.Add(types.DownloadConfig{
 // 		ID:    id,

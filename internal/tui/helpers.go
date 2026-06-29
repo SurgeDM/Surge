@@ -1,6 +1,8 @@
 package tui
 
 import (
+	engineprogress "github.com/SurgeDM/Surge/internal/progress"
+
 	"fmt"
 	"os"
 	"path/filepath"
@@ -158,7 +160,7 @@ func (m RootModel) checkForDuplicate(url string) *processing.DuplicateResult {
 		active := make(map[string]*types.DownloadConfig)
 		for _, d := range m.downloads {
 			if !d.done {
-				state := &types.ProgressState{}
+				state := &engineprogress.DownloadProgress{}
 				// Create dummy config to pass into processing duplicate check
 				active[d.ID] = &types.DownloadConfig{
 					URL:      d.URL,

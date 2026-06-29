@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/engine"
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -84,20 +85,20 @@ func syncConfigFromState(cfg *types.DownloadConfig) {
 	if cfg.State == nil {
 		return
 	}
-	if fn := cfg.State.GetFilename(); fn != "" {
+	if fn := cfg.State.(*progress.DownloadProgress).GetFilename(); fn != "" {
 		cfg.Filename = fn
 	}
-	if dp := cfg.State.GetDestPath(); dp != "" {
+	if dp := cfg.State.(*progress.DownloadProgress).GetDestPath(); dp != "" {
 		cfg.DestPath = dp
 	}
-	if ms := cfg.State.GetMirrors(); len(ms) > 0 {
+	if ms := cfg.State.(*progress.DownloadProgress).GetMirrors(); len(ms) > 0 {
 		var urls []string
 		for _, m := range ms {
 			urls = append(urls, m.URL)
 		}
 		cfg.Mirrors = urls
 	}
-	if _, totalSize, _, _, _, _ := cfg.State.GetProgress(); totalSize > 0 {
+	if _, totalSize, _, _, _, _ := cfg.State.(*progress.DownloadProgress).GetProgress(); totalSize > 0 {
 		cfg.TotalSize = totalSize
 	}
 }
@@ -106,7 +107,7 @@ func syncConfigFromState(cfg *types.DownloadConfig) {
 func resolveDestPath(cfg *types.DownloadConfig) string {
 	destPath := cfg.DestPath
 	if destPath == "" && cfg.State != nil {
-		destPath = cfg.State.GetDestPath()
+		destPath = cfg.State.(*progress.DownloadProgress).GetDestPath()
 	}
 	if destPath == "" && cfg.OutputPath != "" && cfg.Filename != "" {
 		destPath = filepath.Join(cfg.OutputPath, cfg.Filename)
@@ -146,7 +147,7 @@ func (p *WorkerPool) ensureLimiterForConfigLocked(cfg *types.DownloadConfig) {
 
 	// If state already carries an explicit rate, prefer it over cfg default.
 	if cfg.State != nil {
-		if stateRate, stateSet := cfg.State.GetRateLimit(); stateSet {
+		if stateRate, stateSet := cfg.State.(*progress.DownloadProgress).GetRateLimit(); stateSet {
 			cfg.RateLimitBps = stateRate
 			cfg.RateLimitSet = true
 		}
@@ -158,7 +159,7 @@ func (p *WorkerPool) ensureLimiterForConfigLocked(cfg *types.DownloadConfig) {
 		cfg.RateLimitBps = rate
 	}
 	if cfg.State != nil {
-		cfg.State.SetRateLimit(rate, cfg.RateLimitSet)
+		cfg.State.(*progress.DownloadProgress).SetRateLimit(rate, cfg.RateLimitSet)
 	}
 
 	limiter := p.downloadLimiters[cfg.ID]
@@ -209,7 +210,7 @@ func (p *WorkerPool) ActiveCount() int {
 	count := 0
 	for _, ad := range p.downloads {
 		// Count if not completed and not fully paused
-		if ad.config.State != nil && !ad.config.State.Done.Load() && !ad.config.State.IsPaused() {
+		if ad.config.State != nil && !ad.config.State.(*progress.DownloadProgress).Done.Load() && !ad.config.State.(*progress.DownloadProgress).IsPaused() {
 			count++
 		}
 	}
@@ -251,18 +252,18 @@ func (p *WorkerPool) Pause(downloadID string) bool {
 	// Set paused flag and cancel context
 	if ad.config.State != nil {
 		// Idempotency: If already paused, do nothing.
-		if ad.config.State.IsPaused() {
+		if ad.config.State.(*progress.DownloadProgress).IsPaused() {
 			return true
 		}
 		// If transition is already in progress, still ensure worker context is canceled.
-		if ad.config.State.IsPausing() {
+		if ad.config.State.(*progress.DownloadProgress).IsPausing() {
 			if ad.cancel != nil {
 				ad.cancel()
 			}
 			return true
 		}
-		ad.config.State.SetPausing(true) // Mark as transitioning to pause
-		ad.config.State.Pause()
+		ad.config.State.(*progress.DownloadProgress).SetPausing(true) // Mark as transitioning to pause
+		ad.config.State.(*progress.DownloadProgress).Pause()
 	}
 	// Always cancel worker context as a safety net (single downloader does not set state cancel itself).
 	if ad.cancel != nil {
@@ -303,7 +304,7 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 		cfg.RateLimitBps = rate
 		p.queued[id] = cfg
 		if cfg.State != nil {
-			cfg.State.SetRateLimit(rate, false)
+			cfg.State.(*progress.DownloadProgress).SetRateLimit(rate, false)
 		}
 		limiter := p.downloadLimiters[id]
 		if limiter == nil {
@@ -320,7 +321,7 @@ func (p *WorkerPool) SetDefaultDownloadRateLimit(rate int64) {
 		}
 		ad.config.RateLimitBps = rate
 		if ad.config.State != nil {
-			ad.config.State.SetRateLimit(rate, false)
+			ad.config.State.(*progress.DownloadProgress).SetRateLimit(rate, false)
 		}
 		limiter := p.downloadLimiters[id]
 		if limiter == nil {
@@ -347,7 +348,7 @@ func (p *WorkerPool) SetDownloadRateLimit(downloadID string, rate int64) bool {
 		ad.config.RateLimitBps = rate
 		ad.config.RateLimitSet = true
 		if ad.config.State != nil {
-			ad.config.State.SetRateLimit(rate, true)
+			ad.config.State.(*progress.DownloadProgress).SetRateLimit(rate, true)
 		}
 		found = true
 	}
@@ -355,7 +356,7 @@ func (p *WorkerPool) SetDownloadRateLimit(downloadID string, rate int64) bool {
 		cfg.RateLimitBps = rate
 		cfg.RateLimitSet = true
 		if cfg.State != nil {
-			cfg.State.SetRateLimit(rate, true)
+			cfg.State.(*progress.DownloadProgress).SetRateLimit(rate, true)
 		}
 		p.queued[downloadID] = cfg
 		found = true
@@ -393,7 +394,7 @@ func (p *WorkerPool) ClearDownloadRateLimit(downloadID string) bool {
 		ad.config.RateLimitBps = defaultRate
 		ad.config.RateLimitSet = false
 		if ad.config.State != nil {
-			ad.config.State.SetRateLimit(defaultRate, false)
+			ad.config.State.(*progress.DownloadProgress).SetRateLimit(defaultRate, false)
 		}
 		found = true
 	}
@@ -401,7 +402,7 @@ func (p *WorkerPool) ClearDownloadRateLimit(downloadID string) bool {
 		cfg.RateLimitBps = defaultRate
 		cfg.RateLimitSet = false
 		if cfg.State != nil {
-			cfg.State.SetRateLimit(defaultRate, false)
+			cfg.State.(*progress.DownloadProgress).SetRateLimit(defaultRate, false)
 		}
 		p.queued[downloadID] = cfg
 		found = true
@@ -429,7 +430,7 @@ func (p *WorkerPool) PauseAll() {
 	ids := make([]string, 0, len(p.downloads)) // This stores the uuids of the downloads to be paused
 	for id, ad := range p.downloads {
 		// Only pause downloads that are actually active (not already paused or done or pausing)
-		if ad != nil && ad.config.State != nil && !ad.config.State.IsPaused() && !ad.config.State.Done.Load() && !ad.config.State.IsPausing() {
+		if ad != nil && ad.config.State != nil && !ad.config.State.(*progress.DownloadProgress).IsPaused() && !ad.config.State.(*progress.DownloadProgress).Done.Load() && !ad.config.State.(*progress.DownloadProgress).IsPausing() {
 			ids = append(ids, id)
 		}
 	}
@@ -467,7 +468,7 @@ func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
 	if activeExists && ad != nil {
 		result.Filename = ad.config.Filename
 		result.DestPath = resolveDestPath(&ad.config)
-		result.Completed = ad.config.State != nil && ad.config.State.Done.Load()
+		result.Completed = ad.config.State != nil && ad.config.State.(*progress.DownloadProgress).Done.Load()
 
 		// Cancel the context to stop workers
 		if ad.cancel != nil {
@@ -487,7 +488,7 @@ func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
 
 		// Mark as done to stop polling
 		if ad.config.State != nil {
-			ad.config.State.Done.Store(true)
+			ad.config.State.(*progress.DownloadProgress).Done.Store(true)
 		}
 	} else if queuedExists {
 		result.Filename = qCfg.Filename
@@ -509,7 +510,7 @@ func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfi
 	}
 
 	// Cannot extract if still pausing or not actually paused
-	if ad.config.State == nil || !ad.config.State.IsPaused() || ad.config.State.IsPausing() {
+	if ad.config.State == nil || !ad.config.State.(*progress.DownloadProgress).IsPaused() || ad.config.State.(*progress.DownloadProgress).IsPausing() {
 		p.mu.Unlock()
 		return nil
 	}
@@ -524,7 +525,7 @@ func (p *WorkerPool) ExtractPausedConfig(downloadID string) *types.DownloadConfi
 
 	cfg.Limiter = nil
 	if cfg.State != nil {
-		cfg.State.Resume()
+		cfg.State.(*progress.DownloadProgress).Resume()
 	}
 	return &cfg
 }
@@ -543,7 +544,7 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 	}
 
 	if exists && ad != nil {
-		if ad.config.State != nil && !ad.config.State.IsPaused() {
+		if ad.config.State != nil && !ad.config.State.(*progress.DownloadProgress).IsPaused() {
 			if ad.running.Load() {
 				p.mu.Unlock()
 				return types.ErrActiveUpdate
@@ -551,7 +552,7 @@ func (p *WorkerPool) UpdateURL(downloadID string, newURL string) error {
 		}
 		ad.config.URL = newURL
 		if ad.config.State != nil {
-			ad.config.State.SetURL(newURL)
+			ad.config.State.(*progress.DownloadProgress).SetURL(newURL)
 		}
 	}
 	p.mu.Unlock()
@@ -585,7 +586,7 @@ func (p *WorkerPool) worker() {
 			done:   make(chan struct{}),
 		}
 		if ad.config.State != nil {
-			ad.config.State.SetCancelFunc(cancel)
+			ad.config.State.(*progress.DownloadProgress).SetCancelFunc(cancel)
 		}
 		ad.running.Store(true)
 
@@ -621,11 +622,11 @@ func (p *WorkerPool) worker() {
 		// 1. If Pause() was called: State.IsPaused() is true. We keep the task in p.downloads (so it can be resumed).
 		// 2. If finished/error: We remove from p.downloads.
 
-		isPaused := localCfg.State != nil && localCfg.State.IsPaused()
+		isPaused := localCfg.State != nil && localCfg.State.(*progress.DownloadProgress).IsPaused()
 
 		// Clear "Pausing" transition state now that worker has exited
 		if localCfg.State != nil {
-			localCfg.State.SetPausing(false)
+			localCfg.State.(*progress.DownloadProgress).SetPausing(false)
 		}
 
 		if isPaused {
@@ -640,7 +641,7 @@ func (p *WorkerPool) worker() {
 				var workers int
 				var minChunkSize int64
 				if localCfg.State != nil {
-					downloaded = localCfg.State.Downloaded.Load()
+					downloaded = localCfg.State.(*progress.DownloadProgress).Downloaded.Load()
 				}
 				if localCfg.Runtime != nil {
 					workers = localCfg.Runtime.Workers
@@ -659,7 +660,7 @@ func (p *WorkerPool) worker() {
 			}
 		} else if err != nil {
 			if localCfg.State != nil {
-				localCfg.State.SetError(err)
+				localCfg.State.(*progress.DownloadProgress).SetError(err)
 			}
 			// Note: DownloadErrorMsg is already emitted by RunDownload on the same progressCh.
 			// Clean up errored download from tracking (don't save to .surge)
@@ -671,7 +672,7 @@ func (p *WorkerPool) worker() {
 		} else {
 			// Only mark as done if not paused
 			if localCfg.State != nil {
-				localCfg.State.Done.Store(true)
+				localCfg.State.(*progress.DownloadProgress).Done.Store(true)
 			}
 			// Note: DownloadCompleteMsg is sent by the progress reporter when it detects Done=true
 
@@ -691,7 +692,7 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 	var adURL, adFilename, adDestPath string
 	var adRateLimitBps int64
 	var adRateLimitSet bool
-	var adState *types.ProgressState
+	var adState *progress.DownloadProgress
 
 	p.mu.RLock()
 	ad, exists := p.downloads[id]
@@ -702,7 +703,7 @@ func (p *WorkerPool) GetStatus(id string) *types.DownloadStatus {
 		adDestPath = ad.config.DestPath
 		adRateLimitBps = ad.config.RateLimitBps
 		adRateLimitSet = ad.config.RateLimitSet
-		adState = ad.config.State
+		adState = ad.config.State.(*progress.DownloadProgress)
 	}
 	p.mu.RUnlock()
 
@@ -821,11 +822,11 @@ drainLoop:
 		p.mu.Lock()
 		stillPausing := false
 		for _, ad := range p.downloads {
-			if ad.config.State != nil && ad.config.State.IsPausing() {
+			if ad.config.State != nil && ad.config.State.(*progress.DownloadProgress).IsPausing() {
 				// If no worker is running this download anymore, pausing is stale.
 				// Normalize it so shutdown can proceed.
 				if !ad.running.Load() {
-					ad.config.State.SetPausing(false)
+					ad.config.State.(*progress.DownloadProgress).SetPausing(false)
 					continue
 				}
 				stillPausing = true

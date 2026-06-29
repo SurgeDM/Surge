@@ -3,6 +3,7 @@ package download
 import (
 	"testing"
 
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
@@ -21,7 +22,7 @@ func TestWorkerPool_GetStatus_Active(t *testing.T) {
 	pool := NewWorkerPool(ch, 3)
 
 	id := "test-id"
-	state := types.NewProgressState(id, 1000)
+	state := progress.New(id, 1000)
 	state.Downloaded.Store(500)
 	state.VerifiedProgress.Store(500)
 
@@ -64,7 +65,7 @@ func TestWorkerPool_GetStatus_Paused(t *testing.T) {
 	pool := NewWorkerPool(ch, 3)
 
 	id := "test-id"
-	state := types.NewProgressState(id, 1000)
+	state := progress.New(id, 1000)
 	state.VerifiedProgress.Store(500)
 	state.SessionStartBytes = 100
 	state.Pause()
@@ -94,7 +95,7 @@ func TestWorkerPool_GetStatus_Completed(t *testing.T) {
 	pool := NewWorkerPool(ch, 3)
 
 	id := "test-id"
-	state := types.NewProgressState(id, 1000)
+	state := progress.New(id, 1000)
 	state.Done.Store(true)
 
 	pool.mu.Lock()

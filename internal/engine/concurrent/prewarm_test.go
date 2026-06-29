@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/progress"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -49,7 +50,7 @@ func TestConcurrentDownloader_PrewarmConnections(t *testing.T) {
 		_ = f.Close()
 	}
 
-	state := types.NewProgressState("prewarm-test", fileSize)
+	state := progress.New("prewarm-test", fileSize)
 	runtime := &types.RuntimeConfig{
 		MaxConnectionsPerDownload: 2,
 		DialHedgeCount:            2, // Enable hedging
