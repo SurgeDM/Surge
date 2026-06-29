@@ -19,6 +19,9 @@ type activeDownload struct {
 	cancel context.CancelFunc
 	// running is true while the worker goroutine is executing RunDownload for this config.
 	running atomic.Bool
+	// done is closed by the worker when it stops (running becomes false).
+	// Callers waiting for the worker to exit should select on this channel.
+	done chan struct{}
 }
 
 // WorkerPool manages the download workers and tasks.
@@ -52,10 +55,9 @@ var (
 	gracefulShutdownPausePollInterval = 100 * time.Millisecond
 	// gracefulShutdownPauseHardTimeout prevents indefinite shutdown hangs if a worker is stuck.
 	gracefulShutdownPauseHardTimeout = 30 * time.Second
+	// The timeout/poll interval vars below are kept for graceful-shutdown use only.
 	// cancelStopWaitTimeout bounds how long Cancel waits for an active worker to exit.
 	cancelStopWaitTimeout = 3 * time.Second
-	// cancelStopPollInterval controls polling cadence while waiting for cancel to take effect.
-	cancelStopPollInterval = 10 * time.Millisecond
 )
 
 func NewWorkerPool(progressCh chan<- any, maxDownloads int) *WorkerPool {
@@ -475,9 +477,13 @@ func (p *WorkerPool) Cancel(downloadID string) types.CancelResult {
 
 		// Best effort: wait for worker to exit so delete cleanup doesn't race with
 		// downloader startup that can recreate the .surge file after removal.
-		deadline := time.Now().Add(cancelStopWaitTimeout)
-		for ad.running.Load() && time.Now().Before(deadline) {
-			time.Sleep(cancelStopPollInterval)
+		if ad.running.Load() {
+			deadline := time.NewTimer(cancelStopWaitTimeout)
+			select {
+			case <-ad.done:
+			case <-deadline.C:
+			}
+			deadline.Stop()
 		}
 
 		// Mark as done to stop polling
@@ -577,6 +583,7 @@ func (p *WorkerPool) worker() {
 		ad := &activeDownload{
 			config: cfg,
 			cancel: cancel,
+			done:   make(chan struct{}),
 		}
 		if ad.config.State != nil {
 			ad.config.State.SetCancelFunc(cancel)
@@ -601,6 +608,7 @@ func (p *WorkerPool) worker() {
 
 		err := RunDownload(ctx, &localCfg)
 		ad.running.Store(false)
+		close(ad.done) // unblock any Cancel caller waiting for this worker to exit
 
 		// Sync back mutated fields cleanly under lock
 		p.mu.Lock()

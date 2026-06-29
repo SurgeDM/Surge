@@ -17,12 +17,28 @@ type TaskQueue struct {
 	idleWorkers atomic.Int64 // Atomic counter for idle workers
 	waiting     atomic.Int64 // Number of workers currently waiting on cond
 	size        atomic.Int64 // Queue size to avoid lock contention in Len callers
+	// workerIdleCh is written (non-blocking) whenever a worker transitions to idle.
+	// Consumers (e.g. the balancer) can select on WorkerIdleCh() for zero-latency
+	// notification instead of polling on a fixed ticker.
+	workerIdleCh chan struct{}
 }
 
 func NewTaskQueue() *TaskQueue {
-	tq := &TaskQueue{}
+	tq := &TaskQueue{
+		// Buffer of 1 so the sending worker never blocks; excess signals are
+		// coalesced (one pending notification is enough to wake the balancer).
+		workerIdleCh: make(chan struct{}, 1),
+	}
 	tq.cond = sync.NewCond(&tq.mu)
 	return tq
+}
+
+// WorkerIdleCh returns a channel that receives a value whenever a worker
+// transitions from busy to idle (i.e. Pop blocks because the queue is empty).
+// The channel has a buffer of 1 – signals are coalesced, not queued, so the
+// receiver must re-check IdleWorkers() after waking.
+func (q *TaskQueue) WorkerIdleCh() <-chan struct{} {
+	return q.workerIdleCh
 }
 
 func (q *TaskQueue) Push(t types.Task) {
@@ -52,6 +68,12 @@ func (q *TaskQueue) Pop() (types.Task, bool) {
 	for len(q.tasks) == q.head && !q.done {
 		q.idleWorkers.Add(1)
 		q.waiting.Add(1)
+		// Notify the balancer that a new idle worker is available.
+		// Non-blocking send coalesces concurrent notifications into one.
+		select {
+		case q.workerIdleCh <- struct{}{}:
+		default:
+		}
 		q.cond.Wait()
 		q.waiting.Add(-1)
 		q.idleWorkers.Add(-1)

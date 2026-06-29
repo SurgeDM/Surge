@@ -106,9 +106,9 @@ type DownloadModel struct {
 	// No direct state access or polling reporter
 	state *types.ProgressState // Keep for now if needed for details view, but mostly passive
 
-	done     bool
-	started  bool // Engine has confirmed start
-	err      error
+	done        bool
+	started     bool // Engine has confirmed start
+	err         error
 	paused      bool
 	pausing     bool // UI state: transitioning to pause
 	resuming    bool // UI state: waiting for async resume

@@ -20,7 +20,7 @@ func TestParseRetryAfter_Seconds(t *testing.T) {
 
 func TestParseRetryAfter_HTTPDate(t *testing.T) {
 	now := time.Now()
-	future := now.Add(5 * time.Second).UTC().Format("Mon, 02 Jan 2006 15:04:05") + " GMT"
+	future := now.Add(5*time.Second).UTC().Format("Mon, 02 Jan 2006 15:04:05") + " GMT"
 	d, ok := ParseRetryAfter(future, now)
 	if !ok {
 		t.Fatalf("expected ok=true for HTTP-date form: %q", future)
@@ -46,7 +46,7 @@ func TestParseRetryAfter_Garbage(t *testing.T) {
 
 func TestParseRetryAfter_PastDate(t *testing.T) {
 	now := time.Now()
-	past := now.Add(-10 * time.Second).UTC().Format("Mon, 02 Jan 2006 15:04:05") + " GMT"
+	past := now.Add(-10*time.Second).UTC().Format("Mon, 02 Jan 2006 15:04:05") + " GMT"
 	d, ok := ParseRetryAfter(past, now)
 	if !ok {
 		t.Fatalf("expected ok=true for past HTTP-date: %q", past)

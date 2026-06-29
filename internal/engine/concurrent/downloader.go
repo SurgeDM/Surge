@@ -453,14 +453,15 @@ func (d *ConcurrentDownloader) startHelpers(ctx context.Context, wg *sync.WaitGr
 }
 
 func (d *ConcurrentDownloader) runBalancer(ctx context.Context, queue *TaskQueue) {
-	ticker := time.NewTicker(200 * time.Millisecond)
-	defer ticker.Stop()
+	idleCh := queue.WorkerIdleCh()
 
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case <-ticker.C:
+		case <-idleCh:
+			// A worker just went idle. Drain: keep trying to give idle workers
+			// something to do until we run out of idle workers or work to assign.
 			for queue.IdleWorkers() > 0 {
 				didWork := false
 				if queue.Len() == 0 {
