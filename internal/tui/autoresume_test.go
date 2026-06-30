@@ -1,0 +1,168 @@
+package tui
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/types"
+)
+
+func TestAutoResume_Enabled(t *testing.T) {
+	// 1. Setup Environment with isolated config roots
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
+
+	// config.GetSurgeDir() will now be under tmpDir/surge
+	surgeDir := config.GetSurgeDir()
+	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	settings := config.DefaultSettings()
+	settings.General.AutoResume.Value = true
+	settings.General.DefaultDownloadDir.Value = tmpDir
+
+	if err := config.SaveSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Configure State DB
+	// 3. Configure State DB
+	_ = testutil.SetupStateDB(t)
+
+	// 4. Seed DB with a paused download
+	testID := "resume-id-1"
+	testURL := "http://example.com/resume.zip"
+	testDest := filepath.Join(tmpDir, "resume.zip")
+
+	manualState := &types.DownloadState{
+		ID:         testID,
+		URL:        testURL,
+		Filename:   "resume.zip",
+		DestPath:   testDest,
+		TotalSize:  1000,
+		Downloaded: 500,
+		PausedAt:   time.Now().Unix(),
+		CreatedAt:  time.Now().Unix(),
+	}
+	if err := store.AddToMasterList(types.DownloadEntry{
+		ID:         testID,
+		URL:        testURL,
+		DestPath:   testDest,
+		Filename:   "resume.zip",
+		Status:     "paused",
+		TotalSize:  1000,
+		Downloaded: 500,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveState(testURL, testDest, manualState); err != nil {
+		t.Fatal(err)
+	}
+
+	// 5. Initialize Model
+	bus := orchestrator.NewEventBus()
+	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	svc := service.NewLocalDownloadService(mgr)
+
+	m := InitialRootModel(1700, "test-version", svc, mgr, false)
+
+	// 6. Verify Download is Resumed
+	found := false
+	for _, d := range m.downloads {
+		if d.ID == testID {
+			found = true
+			if !d.resuming {
+				t.Error("Download should have resuming=true when AutoResume is enabled")
+			}
+			// It starts as paused, waiting for Init() to resume
+		}
+	}
+
+	if !found {
+		t.Error("Paused download was not loaded into the model")
+	}
+}
+
+func TestAutoResume_Disabled(t *testing.T) {
+	// 1. Setup Environment
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
+
+	surgeDir := config.GetSurgeDir()
+	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	settings := config.DefaultSettings()
+	settings.General.AutoResume.Value = false
+
+	if err := config.SaveSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+
+	// 3. Configure State DB
+	// 3. Configure State DB
+	_ = testutil.SetupStateDB(t)
+
+	// 4. Seed DB with a paused download
+	testID := "resume-id-2"
+	testURL := "http://example.com/resume2.zip"
+	testDest := filepath.Join(tmpDir, "resume2.zip")
+
+	manualState := &types.DownloadState{
+		ID:         testID,
+		URL:        testURL,
+		Filename:   "resume2.zip",
+		DestPath:   testDest,
+		TotalSize:  1000,
+		Downloaded: 500,
+		PausedAt:   time.Now().Unix(),
+		CreatedAt:  time.Now().Unix(),
+	}
+	if err := store.AddToMasterList(types.DownloadEntry{
+		ID:         testID,
+		URL:        testURL,
+		DestPath:   testDest,
+		Filename:   "resume2.zip",
+		Status:     "paused",
+		TotalSize:  1000,
+		Downloaded: 500,
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.SaveState(testURL, testDest, manualState); err != nil {
+		t.Fatal(err)
+	}
+
+	// 5. Initialize Model
+	bus := orchestrator.NewEventBus()
+	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	svc := service.NewLocalDownloadService(mgr)
+
+	m := InitialRootModel(1700, "test-version", svc, mgr, false)
+
+	// 6. Verify Download is Resumed
+	found := false
+	for _, d := range m.downloads {
+		if d.ID == testID {
+			found = true
+			if !d.paused {
+				t.Error("Download SHOULD be paused when AutoResume is disabled")
+			}
+		}
+	}
+
+	if !found {
+		t.Error("Paused download was not loaded into the model")
+	}
+}

@@ -117,6 +117,7 @@ func (eb *EventBus) Subscribe() (<-chan any, func()) {
 			for i, listener := range eb.listeners {
 				if listener == outCh {
 					eb.listeners = append(eb.listeners[:i], eb.listeners[i+1:]...)
+					close(outCh)
 					break
 				}
 			}

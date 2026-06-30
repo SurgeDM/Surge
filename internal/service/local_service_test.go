@@ -216,7 +216,10 @@ func TestLocalDownloadService_HistoryAndList(t *testing.T) {
 	defer ts.Close()
 	defer svc.Shutdown()
 
-	_, _ = svc.Add(ts.URL, tmpDir, "list1.txt", nil, nil, false, 1, 0, 0, false)
+	_, err := svc.Add(ts.URL, tmpDir, "list1.txt", nil, nil, false, 1, 0, 0, false)
+	if err != nil {
+		t.Fatalf("Add failed: %v", err)
+	}
 	
 	// Add a dummy completed download to store
 	testutil.SeedMasterList(t, types.DownloadEntry{
