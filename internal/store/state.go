@@ -392,7 +392,8 @@ func loadMasterListUnlocked() (*types.MasterList, error) {
 		return nil, err
 	}
 	if ms.Version != 2 {
-		return nil, fmt.Errorf("unsupported master list version: %d", ms.Version)
+		utils.Debug("Master list version %d is unsupported, starting fresh.", ms.Version)
+		return &types.MasterList{Downloads: []types.DownloadRecord{}}, nil
 	}
 	return &types.MasterList{Downloads: ms.Downloads}, nil
 }
