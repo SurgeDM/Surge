@@ -216,7 +216,24 @@ func TestLocalDownloadService_HistoryAndList(t *testing.T) {
 	defer ts.Close()
 	defer svc.Shutdown()
 
-	_, err := svc.Add(ts.URL, tmpDir, "list1.txt", nil, nil, false, 1, 0, 0, false)
+	blockCh := make(chan struct{})
+	listTs := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1024")
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		if r.Header.Get("Range") != "bytes=0-0" {
+			select {
+			case <-blockCh:
+			case <-r.Context().Done():
+			}
+		}
+	}))
+	defer listTs.Close()
+	defer close(blockCh)
+
+	_, err := svc.Add(listTs.URL, tmpDir, "list1.txt", nil, nil, false, 1, 0, 0, false)
 	if err != nil {
 		t.Fatalf("Add failed: %v", err)
 	}

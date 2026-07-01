@@ -13,19 +13,21 @@ import (
 type EventBus struct {
 	InputCh    chan types.DownloadEvent
 	listeners  []chan types.DownloadEvent
-	listenerMu sync.Mutex
-	ctx        context.Context
-	cancel     context.CancelFunc
-	wg         sync.WaitGroup
+	listenerMu    sync.Mutex
+	unsubscribeCh chan chan types.DownloadEvent
+	ctx           context.Context
+	cancel        context.CancelFunc
+	wg            sync.WaitGroup
 }
 
 func NewEventBus() *EventBus {
 	ctx, cancel := context.WithCancel(context.Background())
 	eb := &EventBus{
-		InputCh:   make(chan types.DownloadEvent, 100),
-		listeners: make([]chan types.DownloadEvent, 0),
-		ctx:       ctx,
-		cancel:    cancel,
+		InputCh:       make(chan types.DownloadEvent, 100),
+		listeners:     make([]chan types.DownloadEvent, 0),
+		unsubscribeCh: make(chan chan types.DownloadEvent, 10),
+		ctx:           ctx,
+		cancel:        cancel,
 	}
 	eb.wg.Add(1)
 	go eb.broadcastLoop()
@@ -83,6 +85,17 @@ func (eb *EventBus) broadcastLoop() {
 					}
 				}()
 			}
+			
+		case chToClose := <-eb.unsubscribeCh:
+			eb.listenerMu.Lock()
+			for i, listener := range eb.listeners {
+				if listener == chToClose {
+					eb.listeners = append(eb.listeners[:i], eb.listeners[i+1:]...)
+					close(chToClose)
+					break
+				}
+			}
+			eb.listenerMu.Unlock()
 		}
 	}
 }
@@ -109,14 +122,9 @@ func (eb *EventBus) Subscribe() (<-chan types.DownloadEvent, func()) {
 	var once sync.Once
 	cleanup := func() {
 		once.Do(func() {
-			eb.listenerMu.Lock()
-			defer eb.listenerMu.Unlock()
-			for i, listener := range eb.listeners {
-				if listener == outCh {
-					eb.listeners = append(eb.listeners[:i], eb.listeners[i+1:]...)
-					close(outCh)
-					break
-				}
+			select {
+			case eb.unsubscribeCh <- outCh:
+			case <-eb.ctx.Done():
 			}
 		})
 	}

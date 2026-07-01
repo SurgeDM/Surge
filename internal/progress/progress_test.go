@@ -14,8 +14,8 @@ func TestNew(t *testing.T) {
 	if ps.ID != "test-id" {
 		t.Errorf("ID = %s, want test-id", ps.ID)
 	}
-	if ps.Bytes.TotalSize != 1000 {
-		t.Errorf("TotalSize = %d, want 1000", ps.Bytes.TotalSize)
+	if ps.Bytes.TotalSize.Load() != 1000 {
+		t.Errorf("TotalSize = %d, want 1000", ps.Bytes.TotalSize.Load())
 	}
 	if ps.Bytes.Downloaded.Load() != 0 {
 		t.Errorf("Downloaded = %d, want 0", ps.Bytes.Downloaded.Load())
@@ -65,8 +65,8 @@ func TestDownloadProgress_SetTotalSize(t *testing.T) {
 
 	ps.SetTotalSize(200)
 
-	if ps.Bytes.TotalSize != 200 {
-		t.Errorf("TotalSize = %d, want 200", ps.Bytes.TotalSize)
+	if ps.Bytes.TotalSize.Load() != 200 {
+		t.Errorf("TotalSize = %d, want 200", ps.Bytes.TotalSize.Load())
 	}
 	if ps.Session.GetSessionStartBytesForTest() != 40 {
 		t.Errorf("SessionStartBytes = %d, want 40", ps.Session.GetSessionStartBytesForTest())

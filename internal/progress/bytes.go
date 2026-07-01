@@ -6,10 +6,10 @@ import "sync/atomic"
 type ByteTracker struct {
 	Downloaded       atomic.Int64
 	VerifiedProgress atomic.Int64
-	TotalSize        int64 // Immutable after initialization via SetTotalSize
+	TotalSize        atomic.Int64 // Updated dynamically if size is discovered during download
 }
 
 // SetTotalSize initializes the total size.
 func (b *ByteTracker) SetTotalSize(size int64) {
-	b.TotalSize = size
+	b.TotalSize.Store(size)
 }

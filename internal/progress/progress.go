@@ -95,7 +95,7 @@ func (ps *DownloadProgress) GetRateLimit() (int64, bool) {
 }
 
 func (ps *DownloadProgress) SetTotalSize(size int64) {
-	if ps.Bytes.TotalSize == size && !ps.Session.StartTime().IsZero() {
+	if ps.Bytes.TotalSize.Load() == size && !ps.Session.StartTime().IsZero() {
 		return
 	}
 	ps.Bytes.SetTotalSize(size)
@@ -119,7 +119,7 @@ func (ps *DownloadProgress) GetError() error {
 
 func (ps *DownloadProgress) GetProgress() (downloaded int64, total int64, totalElapsed time.Duration, sessionElapsed time.Duration, connections int32, sessionStartBytes int64) {
 	downloaded = ps.Bytes.VerifiedProgress.Load()
-	total = ps.Bytes.TotalSize
+	total = ps.Bytes.TotalSize.Load()
 	connections = ps.ActiveWorkers.Load()
 	paused := ps.Paused.Load()
 
@@ -227,7 +227,7 @@ func (ps *DownloadProgress) InitBitmap(totalSize int64, chunkSize int64) {
 }
 
 func (ps *DownloadProgress) RestoreBitmap(bitmap []byte, actualChunkSize int64) {
-	ps.Bitmap.RestoreBitmap(ps.Bytes.TotalSize, bitmap, actualChunkSize)
+	ps.Bitmap.RestoreBitmap(ps.Bytes.TotalSize.Load(), bitmap, actualChunkSize)
 }
 
 func (ps *DownloadProgress) SetChunkProgress(progress []int64) {
@@ -243,14 +243,14 @@ func (ps *DownloadProgress) GetChunkState(index int) types.ChunkStatus {
 }
 
 func (ps *DownloadProgress) UpdateChunkStatus(offset, length int64, status types.ChunkStatus) {
-	increment := ps.Bitmap.UpdateChunkStatus(ps.Bytes.TotalSize, offset, length, status)
+	increment := ps.Bitmap.UpdateChunkStatus(ps.Bytes.TotalSize.Load(), offset, length, status)
 	if increment > 0 {
 		ps.Bytes.VerifiedProgress.Add(increment)
 	}
 }
 
 func (ps *DownloadProgress) RecalculateProgress(remainingTasks []types.Task) {
-	totalVerified := ps.Bitmap.RecalculateProgress(ps.Bytes.TotalSize, remainingTasks)
+	totalVerified := ps.Bitmap.RecalculateProgress(ps.Bytes.TotalSize.Load(), remainingTasks)
 	ps.Bytes.VerifiedProgress.Store(totalVerified)
 }
 
@@ -259,5 +259,5 @@ func (ps *DownloadProgress) GetBitmap() ([]byte, int, int64, int64, []int64) {
 }
 
 func (ps *DownloadProgress) GetBitmapSnapshot(includeProgress bool) ([]byte, int, int64, int64, []int64) {
-	return ps.Bitmap.GetBitmapSnapshot(ps.Bytes.TotalSize, includeProgress)
+	return ps.Bitmap.GetBitmapSnapshot(ps.Bytes.TotalSize.Load(), includeProgress)
 }
