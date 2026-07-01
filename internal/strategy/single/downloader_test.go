@@ -787,8 +787,8 @@ func TestSingleDownloader_Download_BootstrapSize(t *testing.T) {
 	if downloader.TotalSize != expectedSize {
 		t.Errorf("Expected TotalSize %d, got %d", expectedSize, downloader.TotalSize)
 	}
-	if state.Bytes.TotalSize != expectedSize {
-		t.Errorf("Expected state.Bytes.TotalSize %d, got %d", expectedSize, state.Bytes.TotalSize)
+	if state.Bytes.TotalSize.Load() != expectedSize {
+		t.Errorf("Expected state.Bytes.TotalSize %d, got %d", expectedSize, state.Bytes.TotalSize.Load())
 	}
 }
 
