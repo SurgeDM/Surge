@@ -380,8 +380,8 @@ func TestSingleDownloader_Download_Success(t *testing.T) {
 	}
 
 	// Verify progress was tracked
-	if state.Downloaded.Load() != fileSize {
-		t.Errorf("Downloaded %d != fileSize %d", state.Downloaded.Load(), fileSize)
+	if state.Bytes.Downloaded.Load() != fileSize {
+		t.Errorf("Downloaded %d != fileSize %d", state.Bytes.Downloaded.Load(), fileSize)
 	}
 	if state.ActiveWorkers.Load() != 0 {
 		t.Errorf("ActiveWorkers = %d, want 0 (should clear after download completes)", state.ActiveWorkers.Load())
@@ -435,8 +435,8 @@ func TestSingleDownloader_StripsCallerRangeHeader(t *testing.T) {
 			if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
 				t.Error(err)
 			}
-			if state.Downloaded.Load() != fileSize {
-				t.Errorf("Downloaded %d != fileSize %d", state.Downloaded.Load(), fileSize)
+			if state.Bytes.Downloaded.Load() != fileSize {
+				t.Errorf("Downloaded %d != fileSize %d", state.Bytes.Downloaded.Load(), fileSize)
 			}
 		})
 	}
@@ -520,12 +520,12 @@ func TestSingleDownloader_Download_ProgressTracking(t *testing.T) {
 	}
 
 	// Verify final progress equals file size
-	finalProgress := state.Downloaded.Load()
+	finalProgress := state.Bytes.Downloaded.Load()
 	if finalProgress != fileSize {
 		t.Errorf("Final progress %d != file size %d", finalProgress, fileSize)
 	}
-	if state.VerifiedProgress.Load() != fileSize {
-		t.Errorf("Verified progress %d != file size %d", state.VerifiedProgress.Load(), fileSize)
+	if state.Bytes.VerifiedProgress.Load() != fileSize {
+		t.Errorf("Verified progress %d != file size %d", state.Bytes.VerifiedProgress.Load(), fileSize)
 	}
 	if state.ActiveWorkers.Load() != 0 {
 		t.Errorf("ActiveWorkers = %d, want 0 (should clear after download completes)", state.ActiveWorkers.Load())
@@ -787,8 +787,8 @@ func TestSingleDownloader_Download_BootstrapSize(t *testing.T) {
 	if downloader.TotalSize != expectedSize {
 		t.Errorf("Expected TotalSize %d, got %d", expectedSize, downloader.TotalSize)
 	}
-	if state.TotalSize != expectedSize {
-		t.Errorf("Expected state.TotalSize %d, got %d", expectedSize, state.TotalSize)
+	if state.Bytes.TotalSize != expectedSize {
+		t.Errorf("Expected state.Bytes.TotalSize %d, got %d", expectedSize, state.Bytes.TotalSize)
 	}
 }
 

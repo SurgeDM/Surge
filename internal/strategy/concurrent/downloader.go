@@ -402,15 +402,15 @@ func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize i
 
 	if isResume {
 		if d.State != nil {
-			d.State.Downloaded.Store(savedState.Downloaded)
-			d.State.VerifiedProgress.Store(savedState.Downloaded)
+			d.State.Bytes.Downloaded.Store(savedState.Downloaded)
+			d.State.Bytes.VerifiedProgress.Store(savedState.Downloaded)
 			d.State.SetSavedElapsed(time.Duration(savedState.Elapsed))
 			d.State.SyncSessionStart()
 
 			if len(savedState.ChunkBitmap) > 0 && savedState.ActualChunkSize > 0 {
 				d.State.RestoreBitmap(savedState.ChunkBitmap, savedState.ActualChunkSize)
 				d.State.RecalculateProgress(savedState.Tasks)
-				d.State.Downloaded.Store(d.State.VerifiedProgress.Load())
+				d.State.Bytes.Downloaded.Store(d.State.Bytes.VerifiedProgress.Load())
 				d.State.SyncSessionStart()
 				utils.Debug("Restored chunk map: size %d", savedState.ActualChunkSize)
 			}
@@ -423,7 +423,7 @@ func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize i
 		return nil, fmt.Errorf("failed to preallocate file: %w", err)
 	}
 	if d.State != nil {
-		d.State.Downloaded.Store(0)
+		d.State.Bytes.Downloaded.Store(0)
 		d.State.SyncSessionStart()
 	}
 	return createTasks(fileSize, chunkSize), nil
@@ -498,7 +498,7 @@ func (d *ConcurrentDownloader) runCompletionMonitor(ctx context.Context, queue *
 			// 2. All workers are idle OR we've accounted for all bytes
 			// Ensure queue is empty (no pending retries) before considering byte count.
 			// This protects against cutting off active retries even if byte count seems high (due to overlaps etc).
-			isDone := queue.Len() == 0 && (int(queue.IdleWorkers()) == numConns || (d.State != nil && d.State.Downloaded.Load() >= fileSize))
+			isDone := queue.Len() == 0 && (int(queue.IdleWorkers()) == numConns || (d.State != nil && d.State.Bytes.Downloaded.Load() >= fileSize))
 			if isDone {
 				queue.Close()
 				return

@@ -233,8 +233,8 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	}
 
 	if d.State != nil {
-		d.State.Downloaded.Store(written)
-		d.State.VerifiedProgress.Store(written)
+		d.State.Bytes.Downloaded.Store(written)
+		d.State.Bytes.VerifiedProgress.Store(written)
 	}
 
 	elapsed := time.Since(start)
@@ -348,8 +348,8 @@ func (w *progressReader) flushWithTime(now time.Time) {
 	if w.pending > 0 {
 		w.state.UpdateChunkStatus(w.pendingStart, w.pending, types.ChunkCompleted)
 	}
-	w.state.Downloaded.Store(w.written)
-	w.state.VerifiedProgress.Store(w.written)
+	w.state.Bytes.Downloaded.Store(w.written)
+	w.state.Bytes.VerifiedProgress.Store(w.written)
 	w.pending = 0
 	w.lastFlush = now
 	w.readChecks = 0

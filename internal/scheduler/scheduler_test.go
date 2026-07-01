@@ -123,8 +123,8 @@ func TestScheduler_Pause_ActiveDownload(t *testing.T) {
 
 	// Create a progress state
 	state := progress.New("test-id", 1000)
-	state.Downloaded.Store(500)
-	state.VerifiedProgress.Store(700)
+	state.Bytes.Downloaded.Store(500)
+	state.Bytes.VerifiedProgress.Store(700)
 
 	// Manually add an active download
 	pool.mu.Lock()
@@ -397,7 +397,7 @@ func TestScheduler_Cancel_DoesNotRemoveIncompleteFile(t *testing.T) {
 	}
 
 	state := progress.New("test-id", 1000)
-	state.DestPath = destPath
+	state.SetDestPath(destPath)
 
 	pool.mu.Lock()
 	pool.downloads["test-id"] = &activeDownload{
@@ -864,7 +864,7 @@ func TestScheduler_GetStatus_IncludesDestPath(t *testing.T) {
 
 	destPath := "/tmp/status-dest.bin"
 	st := progress.New("status-id", 1024)
-	st.DestPath = destPath
+	st.SetDestPath(destPath)
 
 	pool.mu.Lock()
 	pool.downloads["status-id"] = &activeDownload{

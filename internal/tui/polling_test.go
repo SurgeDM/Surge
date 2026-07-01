@@ -47,7 +47,7 @@ func TestStateSync(t *testing.T) {
 		// Simulate worker updating the state -> Send Progress Event
 		// Note: The ProgressReporter reads from VerifiedProgress (via GetProgress)
 		time.Sleep(300 * time.Millisecond)
-		workerState.VerifiedProgress.Store(500)
+		workerState.Bytes.VerifiedProgress.Store(500)
 		p.Send(types.DownloadEvent{
 			Type:       types.EventProgress,
 			DownloadID: downloadID,

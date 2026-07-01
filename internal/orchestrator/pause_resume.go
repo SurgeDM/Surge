@@ -351,8 +351,8 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadRecord, saved
 
 	if savedState != nil {
 		dmState = progress.New(id, savedState.TotalSize)
-		dmState.Downloaded.Store(savedState.Downloaded)
-		dmState.VerifiedProgress.Store(savedState.Downloaded)
+		dmState.Bytes.Downloaded.Store(savedState.Downloaded)
+		dmState.Bytes.VerifiedProgress.Store(savedState.Downloaded)
 		if savedState.Elapsed > 0 {
 			dmState.SetSavedElapsed(time.Duration(savedState.Elapsed))
 		}
@@ -364,13 +364,13 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadRecord, saved
 			}
 			dmState.SetMirrors(mirrors)
 		}
-		dmState.DestPath = destPath
+		dmState.SetDestPath(destPath)
 		dmState.SyncSessionStart()
 	} else {
 		dmState = progress.New(id, totalSize)
-		dmState.Downloaded.Store(downloaded)
-		dmState.VerifiedProgress.Store(downloaded)
-		dmState.DestPath = destPath
+		dmState.Bytes.Downloaded.Store(downloaded)
+		dmState.Bytes.VerifiedProgress.Store(downloaded)
+		dmState.SetDestPath(destPath)
 		dmState.SyncSessionStart()
 		mirrorURLs = []string{url}
 	}

@@ -110,12 +110,12 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	// Wait until download really started so Pause() has an attached cancel func.
 	deadline := time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
-		if progState.Downloaded.Load() > 0 {
+		if progState.Bytes.Downloaded.Load() > 0 {
 			break
 		}
 		time.Sleep(50 * time.Millisecond)
 	}
-	if progState.Downloaded.Load() == 0 {
+	if progState.Bytes.Downloaded.Load() == 0 {
 		t.Fatal("download did not make initial progress before pause")
 	}
 

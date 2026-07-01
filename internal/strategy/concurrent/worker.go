@@ -239,7 +239,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			d.State.UpdateChunkStatus(pendingStart, pendingBytes, types.ChunkCompleted)
 
 			// Update Downloaded Counter (Atomic)
-			d.State.Downloaded.Add(pendingBytes)
+			d.State.Bytes.Downloaded.Add(pendingBytes)
 
 			pendingBytes = 0
 			pendingStart = -1

@@ -99,7 +99,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	deadline := time.Now().Add(15 * time.Second)
 	progressed := false
 	for time.Now().Before(deadline) {
-		if progState.Downloaded.Load() > 0 {
+		if progState.Bytes.Downloaded.Load() > 0 {
 			progressed = true
 			break
 		}

@@ -49,8 +49,8 @@ func TestProgressAggregator_Loop(t *testing.T) {
 	pool.Add(cfg)
 
 	// Update state manually to simulate progress
-	state.Downloaded.Store(512)
-	state.VerifiedProgress.Store(512)
+	state.Bytes.Downloaded.Store(512)
+	state.Bytes.VerifiedProgress.Store(512)
 
 	// 5. Subscribe and check for BatchProgressMsg
 	sub, cleanup := eb.Subscribe()

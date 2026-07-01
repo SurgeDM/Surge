@@ -69,13 +69,14 @@ func TestRestoreBitmap(t *testing.T) {
 	// Restore
 	state.RestoreBitmap(bitmap, 1024*1024) // 1MB chunk size
 
-	// Verify
-	if state.ActualChunkSize != 1024*1024 {
-		t.Errorf("Expected ActualChunkSize 1MB, got %d", state.ActualChunkSize)
+	_, width, _, actualChunkSize, _ := state.GetBitmap()
+
+	if actualChunkSize != 1024*1024 {
+		t.Errorf("Expected ActualChunkSize 1MB, got %d", actualChunkSize)
 	}
 
-	if state.BitmapWidth != 100 {
-		t.Errorf("Expected BitmapWidth 100, got %d", state.BitmapWidth)
+	if width != 100 {
+		t.Errorf("Expected BitmapWidth 100, got %d", width)
 	}
 
 	if state.GetChunkState(0) != types.ChunkCompleted {

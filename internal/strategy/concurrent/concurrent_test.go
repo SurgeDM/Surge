@@ -474,7 +474,7 @@ func TestConcurrentDownloader_ProgressTracking(t *testing.T) {
 		t.Fatalf("Download failed: %v", err)
 	}
 
-	finalDownloaded := state.Downloaded.Load()
+	finalDownloaded := state.Bytes.Downloaded.Load()
 	if finalDownloaded != fileSize {
 		t.Errorf("Final downloaded %d != file size %d", finalDownloaded, fileSize)
 	}

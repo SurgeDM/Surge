@@ -379,7 +379,7 @@ func (mgr *LifecycleManager) dispatchToScheduler(req *DownloadRequest, requestID
 	}
 
 	state := progress.New(id, 0)
-	state.DestPath = filepath.Join(finalPath, finalFilename)
+	state.SetDestPath(filepath.Join(finalPath, finalFilename))
 
 	runtime := settings.ToRuntimeConfig()
 	if req.Workers > 0 {

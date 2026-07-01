@@ -13,7 +13,7 @@ func TestHealth_LastManStanding(t *testing.T) {
 	// 1. Setup mock state with high historical speed
 	// Say we downloaded 100MB in 10s => 10MB/s global average
 	state := progress.New("test", 1000)
-	state.VerifiedProgress.Store(100 * 1024 * 1024)
+	state.Bytes.VerifiedProgress.Store(100 * 1024 * 1024)
 
 	runtime := &types.RuntimeConfig{
 		SlowWorkerThreshold:   0.5,
@@ -33,7 +33,7 @@ func TestHealth_LastManStanding(t *testing.T) {
 
 	// Hack: Set State.StartTime to 10s ago
 	// This is safe here because we are single-threaded in setup
-	state.StartTime = now.Add(-10 * time.Second)
+	state.Session.SetStartTimeForTest(now.Add(-10 * time.Second))
 
 	active := &ActiveTask{
 		StartTime: now.Add(-10 * time.Second), // Started long ago

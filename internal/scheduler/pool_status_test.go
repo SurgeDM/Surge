@@ -23,8 +23,8 @@ func TestWorkerPool_GetStatus_Active(t *testing.T) {
 
 	id := "test-id"
 	state := progress.New(id, 1000)
-	state.Downloaded.Store(500)
-	state.VerifiedProgress.Store(500)
+	state.Bytes.Downloaded.Store(500)
+	state.Bytes.VerifiedProgress.Store(500)
 
 	pool.mu.Lock()
 	pool.downloads[id] = &activeDownload{
@@ -66,8 +66,8 @@ func TestWorkerPool_GetStatus_Paused(t *testing.T) {
 
 	id := "test-id"
 	state := progress.New(id, 1000)
-	state.VerifiedProgress.Store(500)
-	state.SessionStartBytes = 100
+	state.Bytes.VerifiedProgress.Store(500)
+	state.Session.SetSessionStartBytesForTest(100)
 	state.Pause()
 
 	pool.mu.Lock()

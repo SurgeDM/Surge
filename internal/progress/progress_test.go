@@ -14,11 +14,11 @@ func TestNew(t *testing.T) {
 	if ps.ID != "test-id" {
 		t.Errorf("ID = %s, want test-id", ps.ID)
 	}
-	if ps.TotalSize != 1000 {
-		t.Errorf("TotalSize = %d, want 1000", ps.TotalSize)
+	if ps.Bytes.TotalSize != 1000 {
+		t.Errorf("TotalSize = %d, want 1000", ps.Bytes.TotalSize)
 	}
-	if ps.Downloaded.Load() != 0 {
-		t.Errorf("Downloaded = %d, want 0", ps.Downloaded.Load())
+	if ps.Bytes.Downloaded.Load() != 0 {
+		t.Errorf("Downloaded = %d, want 0", ps.Bytes.Downloaded.Load())
 	}
 	if ps.ActiveWorkers.Load() != 0 {
 		t.Errorf("ActiveWorkers = %d, want 0", ps.ActiveWorkers.Load())
@@ -60,16 +60,16 @@ func TestDownloadProgress_RateLimitAccessors(t *testing.T) {
 
 func TestDownloadProgress_SetTotalSize(t *testing.T) {
 	ps := New("test", 100)
-	ps.Downloaded.Store(50)
-	ps.VerifiedProgress.Store(40)
+	ps.Bytes.Downloaded.Store(50)
+	ps.Bytes.VerifiedProgress.Store(40)
 
 	ps.SetTotalSize(200)
 
-	if ps.TotalSize != 200 {
-		t.Errorf("TotalSize = %d, want 200", ps.TotalSize)
+	if ps.Bytes.TotalSize != 200 {
+		t.Errorf("TotalSize = %d, want 200", ps.Bytes.TotalSize)
 	}
-	if ps.SessionStartBytes != 40 {
-		t.Errorf("SessionStartBytes = %d, want 40", ps.SessionStartBytes)
+	if ps.Session.GetSessionStartBytesForTest() != 40 {
+		t.Errorf("SessionStartBytes = %d, want 40", ps.Session.GetSessionStartBytesForTest())
 	}
 }
 
@@ -78,38 +78,38 @@ func TestDownloadProgress_SetTotalSize_Idempotent(t *testing.T) {
 
 	// Simulate a session that started 5 seconds ago
 	originalStartTime := time.Now().Add(-5 * time.Second)
-	ps.StartTime = originalStartTime
+	ps.Session.SetStartTimeForTest(originalStartTime)
 
 	// Call SetTotalSize with the SAME size
 	ps.SetTotalSize(100)
 
 	// Verify StartTime was NOT reset to Now
-	if !ps.StartTime.Equal(originalStartTime) {
-		t.Errorf("StartTime was reset despite same size: got %v, want %v", ps.StartTime, originalStartTime)
+	if !ps.Session.StartTime().Equal(originalStartTime) {
+		t.Errorf("StartTime was reset despite same size: got %v, want %v", ps.Session.StartTime(), originalStartTime)
 	}
 
 	// Call SetTotalSize with a DIFFERENT size
 	ps.SetTotalSize(200)
 
 	// Verify StartTime WAS reset (should be later than original)
-	if !ps.StartTime.After(originalStartTime) {
-		t.Errorf("StartTime was NOT reset for new size: got %v, want > %v", ps.StartTime, originalStartTime)
+	if !ps.Session.StartTime().After(originalStartTime) {
+		t.Errorf("StartTime was NOT reset for new size: got %v, want > %v", ps.Session.StartTime(), originalStartTime)
 	}
 }
 
 func TestDownloadProgress_SyncSessionStart(t *testing.T) {
 	ps := New("test", 100)
-	ps.Downloaded.Store(75)
-	ps.VerifiedProgress.Store(60)
+	ps.Bytes.Downloaded.Store(75)
+	ps.Bytes.VerifiedProgress.Store(60)
 
 	beforeSync := time.Now()
 	ps.SyncSessionStart()
 	afterSync := time.Now()
 
-	if ps.SessionStartBytes != 60 {
-		t.Errorf("SessionStartBytes = %d, want 60", ps.SessionStartBytes)
+	if ps.Session.GetSessionStartBytesForTest() != 60 {
+		t.Errorf("SessionStartBytes = %d, want 60", ps.Session.GetSessionStartBytesForTest())
 	}
-	if ps.StartTime.Before(beforeSync) || ps.StartTime.After(afterSync) {
+	if ps.Session.StartTime().Before(beforeSync) || ps.Session.StartTime().After(afterSync) {
 		t.Error("StartTime should be updated to current time")
 	}
 }
@@ -178,9 +178,9 @@ func TestDownloadProgress_PauseWithCancelFunc(t *testing.T) {
 
 func TestDownloadProgress_GetProgress(t *testing.T) {
 	ps := New("test", 1000)
-	ps.VerifiedProgress.Store(500)
+	ps.Bytes.VerifiedProgress.Store(500)
 	ps.ActiveWorkers.Store(4)
-	ps.SessionStartBytes = 100
+	ps.Session.SetSessionStartBytesForTest(100)
 
 	downloaded, total, totalElapsed, sessionElapsed, connections, sessionStart := ps.GetProgress()
 
@@ -211,7 +211,7 @@ func TestDownloadProgress_AtomicOperations(t *testing.T) {
 	done := make(chan bool, 10)
 	for i := 0; i < 10; i++ {
 		go func() {
-			ps.Downloaded.Add(100)
+			ps.Bytes.Downloaded.Add(100)
 			done <- true
 		}()
 	}
@@ -220,8 +220,8 @@ func TestDownloadProgress_AtomicOperations(t *testing.T) {
 		<-done
 	}
 
-	if ps.Downloaded.Load() != 1000 {
-		t.Errorf("Downloaded = %d, want 1000 after 10 concurrent adds of 100", ps.Downloaded.Load())
+	if ps.Bytes.Downloaded.Load() != 1000 {
+		t.Errorf("Downloaded = %d, want 1000 after 10 concurrent adds of 100", ps.Bytes.Downloaded.Load())
 	}
 }
 
@@ -233,7 +233,7 @@ func TestDownloadProgress_ElapsedCalculation(t *testing.T) {
 	ps.SetSavedElapsed(savedElapsed)
 
 	// Simulate current session start 2 seconds ago
-	ps.StartTime = time.Now().Add(-2 * time.Second)
+	ps.Session.SetStartTimeForTest(time.Now().Add(-2 * time.Second))
 
 	_, _, totalElapsed, sessionElapsed, _, _ := ps.GetProgress()
 
@@ -250,9 +250,9 @@ func TestDownloadProgress_ElapsedCalculation(t *testing.T) {
 
 func TestDownloadProgress_GetProgress_PausedFreezesElapsed(t *testing.T) {
 	ps := New("test-paused-elapsed", 100)
-	ps.VerifiedProgress.Store(50)
+	ps.Bytes.VerifiedProgress.Store(50)
 	ps.SetSavedElapsed(5 * time.Second)
-	ps.StartTime = time.Now().Add(-3 * time.Second)
+	ps.Session.SetStartTimeForTest(time.Now().Add(-3 * time.Second))
 	ps.Pause()
 
 	_, _, totalElapsed, sessionElapsed, _, _ := ps.GetProgress()
@@ -267,8 +267,8 @@ func TestDownloadProgress_GetProgress_PausedFreezesElapsed(t *testing.T) {
 
 func TestDownloadProgress_FinalizeSession_AccumulatesElapsed(t *testing.T) {
 	ps := New("finalize-session", 100)
-	ps.VerifiedProgress.Store(80)
-	ps.StartTime = time.Now().Add(-2 * time.Second)
+	ps.Bytes.VerifiedProgress.Store(80)
+	ps.Session.SetStartTimeForTest(time.Now().Add(-2 * time.Second))
 
 	sessionElapsed, totalElapsed := ps.FinalizeSession(80)
 
@@ -281,18 +281,18 @@ func TestDownloadProgress_FinalizeSession_AccumulatesElapsed(t *testing.T) {
 	if got := ps.GetSavedElapsed(); got < 1500*time.Millisecond || got > 3*time.Second {
 		t.Fatalf("GetSavedElapsed = %v, want around 2s", got)
 	}
-	if ps.SessionStartBytes != 80 {
-		t.Fatalf("SessionStartBytes = %d, want 80", ps.SessionStartBytes)
+	if ps.Session.GetSessionStartBytesForTest() != 80 {
+		t.Fatalf("SessionStartBytes = %d, want 80", ps.Session.GetSessionStartBytesForTest())
 	}
-	if ps.VerifiedProgress.Load() != 80 {
-		t.Fatalf("VerifiedProgress = %d, want 80", ps.VerifiedProgress.Load())
+	if ps.Bytes.VerifiedProgress.Load() != 80 {
+		t.Fatalf("VerifiedProgress = %d, want 80", ps.Bytes.VerifiedProgress.Load())
 	}
 }
 
 func TestDownloadProgress_FinalizePauseSession_UsesVerifiedWhenDownloadedUnknown(t *testing.T) {
 	ps := New("finalize-pause", 100)
-	ps.VerifiedProgress.Store(55)
-	ps.StartTime = time.Now().Add(-1200 * time.Millisecond)
+	ps.Bytes.VerifiedProgress.Store(55)
+	ps.Session.SetStartTimeForTest(time.Now().Add(-1200 * time.Millisecond))
 	ps.Pause()
 
 	totalElapsed := ps.FinalizePauseSession(-1)
@@ -300,20 +300,20 @@ func TestDownloadProgress_FinalizePauseSession_UsesVerifiedWhenDownloadedUnknown
 	if totalElapsed < time.Second || totalElapsed > 2500*time.Millisecond {
 		t.Fatalf("totalElapsed = %v, want around 1.2s", totalElapsed)
 	}
-	if ps.SessionStartBytes != 55 {
-		t.Fatalf("SessionStartBytes = %d, want 55", ps.SessionStartBytes)
+	if ps.Session.GetSessionStartBytesForTest() != 55 {
+		t.Fatalf("SessionStartBytes = %d, want 55", ps.Session.GetSessionStartBytesForTest())
 	}
-	if ps.VerifiedProgress.Load() != 55 {
-		t.Fatalf("VerifiedProgress = %d, want 55", ps.VerifiedProgress.Load())
+	if ps.Bytes.VerifiedProgress.Load() != 55 {
+		t.Fatalf("VerifiedProgress = %d, want 55", ps.Bytes.VerifiedProgress.Load())
 	}
 }
 
 func TestDownloadProgress_SessionReset(t *testing.T) {
 	ps := New("test-reset", 1000)
-	ps.Downloaded.Store(500)
-	ps.VerifiedProgress.Store(450)
-	ps.SessionStartBytes = 100
-	ps.SavedElapsed = 10 * time.Second
+	ps.Bytes.Downloaded.Store(500)
+	ps.Bytes.VerifiedProgress.Store(450)
+	ps.Session.SetSessionStartBytesForTest(100)
+	ps.Session.SetSavedElapsed(10 * time.Second)
 	ps.Done.Store(true)
 	ps.ActiveWorkers.Store(8)
 	ps.InitBitmap(1000, 100)
@@ -323,17 +323,17 @@ func TestDownloadProgress_SessionReset(t *testing.T) {
 
 	ps.SessionReset()
 
-	if ps.Downloaded.Load() != 0 {
-		t.Errorf("Downloaded = %d, want 0", ps.Downloaded.Load())
+	if ps.Bytes.Downloaded.Load() != 0 {
+		t.Errorf("Downloaded = %d, want 0", ps.Bytes.Downloaded.Load())
 	}
-	if ps.VerifiedProgress.Load() != 0 {
-		t.Errorf("VerifiedProgress = %d, want 0", ps.VerifiedProgress.Load())
+	if ps.Bytes.VerifiedProgress.Load() != 0 {
+		t.Errorf("VerifiedProgress = %d, want 0", ps.Bytes.VerifiedProgress.Load())
 	}
-	if ps.SessionStartBytes != 0 {
-		t.Errorf("SessionStartBytes = %d, want 0", ps.SessionStartBytes)
+	if ps.Session.GetSessionStartBytesForTest() != 0 {
+		t.Errorf("SessionStartBytes = %d, want 0", ps.Session.GetSessionStartBytesForTest())
 	}
-	if ps.SavedElapsed != 0 {
-		t.Errorf("SavedElapsed = %v, want 0", ps.SavedElapsed)
+	if ps.Session.GetSavedElapsed() != 0 {
+		t.Errorf("SavedElapsed = %v, want 0", ps.Session.GetSavedElapsed())
 	}
 	if ps.Done.Load() {
 		t.Error("Done should be false after reset")

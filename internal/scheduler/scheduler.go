@@ -641,7 +641,7 @@ func (p *Scheduler) worker() {
 				var workers int
 				var minChunkSize int64
 				if localCfg.ProgressState != nil {
-					downloaded = cfgProgress(&localCfg).Downloaded.Load()
+					downloaded = cfgProgress(&localCfg).Bytes.Downloaded.Load()
 				}
 				if localCfg.Runtime != nil {
 					workers = localCfg.Runtime.Workers
