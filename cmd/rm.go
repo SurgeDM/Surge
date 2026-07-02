@@ -1,10 +1,10 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/http"
 
-	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/spf13/cobra"
 )
 
@@ -39,19 +39,38 @@ var rmCmd = &cobra.Command{
 		}
 
 		if clean {
-			// Remove completed downloads from DB
-			count, err := store.RemoveCompletedDownloads()
+			baseURL, token, err := resolveAPIConnection(true)
 			if err != nil {
-				return fmt.Errorf("error cleaning downloads: %w", err)
+				return err
 			}
-			fmt.Printf("Removed %d completed downloads.\n", count)
+			resp, err := doAPIRequest(http.MethodPost, baseURL, token, "/clear-completed", nil)
+			if err != nil {
+				return fmt.Errorf("failed to send request to server: %w", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("server error: %s", resp.Status)
+			}
+			var res map[string]int64
+			_ = json.NewDecoder(resp.Body).Decode(&res)
+			fmt.Printf("Removed %d completed downloads.\n", res["deleted"])
 			return nil
 		} else if cleanFailed {
-			count, err := store.RemoveFailedDownloads()
+			baseURL, token, err := resolveAPIConnection(true)
 			if err != nil {
-				return fmt.Errorf("error cleaning failed downloads: %w", err)
+				return err
 			}
-			fmt.Printf("Removed %d failed downloads.\n", count)
+			resp, err := doAPIRequest(http.MethodPost, baseURL, token, "/clear-failed", nil)
+			if err != nil {
+				return fmt.Errorf("failed to send request to server: %w", err)
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				return fmt.Errorf("server error: %s", resp.Status)
+			}
+			var res map[string]int64
+			_ = json.NewDecoder(resp.Body).Decode(&res)
+			fmt.Printf("Removed %d failed downloads.\n", res["deleted"])
 			return nil
 		}
 

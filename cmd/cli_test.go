@@ -437,43 +437,7 @@ func TestPrintDownloadDetail_TextAndJSON(t *testing.T) {
 	}
 }
 
-func TestRmClean_Offline_Works(t *testing.T) {
-	setupIsolatedCmdState(t)
-	removeActivePort() // Ensure offline mode
 
-	completed := types.DownloadRecord{
-		ID:          "rm-clean-offline-id",
-		URL:         "https://example.com/completed.bin",
-		Filename:    "completed.bin",
-		DestPath:    filepath.Join(t.TempDir(), "completed.bin"),
-		Status:      "completed",
-		TotalSize:   100,
-		Downloaded:  100,
-		CompletedAt: 1,
-	}
-	if err := store.AddToMasterList(completed); err != nil {
-		t.Fatalf("failed to seed completed download: %v", err)
-	}
-
-	if err := rmCmd.Flags().Set("clean", "true"); err != nil {
-		t.Fatalf("failed to set clean flag: %v", err)
-	}
-	defer func() { _ = rmCmd.Flags().Set("clean", "false") }()
-
-	_ = captureStdout(t, func() {
-		if err := rmCmd.RunE(rmCmd, []string{}); err != nil {
-			t.Fatalf("rm clean failed: %v", err)
-		}
-	})
-
-	entry, err := store.GetDownload(completed.ID)
-	if err != nil {
-		t.Fatalf("failed to query completed entry after clean: %v", err)
-	}
-	if entry != nil {
-		t.Fatalf("expected completed entry to be removed by offline --clean, got %+v", entry)
-	}
-}
 
 func TestAddCmdRunE_ReturnsExpectedErrors(t *testing.T) {
 	t.Run("no running server", func(t *testing.T) {
@@ -545,6 +509,16 @@ func TestActionCommandsRunE_ReturnNoServerErrors(t *testing.T) {
 					return err
 				}
 				return rmCmd.RunE(rmCmd, []string{"deadbeef"})
+			},
+		},
+		{
+			name: "rm_clean",
+			run: func() error {
+				if err := rmCmd.Flags().Set("clean", "true"); err != nil {
+					return err
+				}
+				defer func() { _ = rmCmd.Flags().Set("clean", "false") }()
+				return rmCmd.RunE(rmCmd, []string{})
 			},
 		},
 		{
