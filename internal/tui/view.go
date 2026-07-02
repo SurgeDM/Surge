@@ -515,11 +515,9 @@ func (m RootModel) View() tea.View {
 			detailBox := renderBtopBox("", PaneTitleStyle.Render(" File Details "), detailContent, layout.LeftWidth, layout.DetailHeight, colors.Gray())
 			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox, detailBox)
 		} else {
-
 			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
 		}
 	} else {
-
 		leftColumn := lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
 		body = lipgloss.JoinHorizontal(lipgloss.Top, leftColumn, rightColumn)
 	}

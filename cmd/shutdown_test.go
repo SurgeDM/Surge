@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 	"testing"
 
-	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/types"
 )
 
 func TestExecuteGlobalShutdown_Once(t *testing.T) {
@@ -39,8 +39,8 @@ type fakeShutdownService struct {
 	onShutdown func()
 }
 
-func (f *fakeShutdownService) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
-	ch := make(chan interface{})
+func (f *fakeShutdownService) StreamEvents(context.Context) (<-chan types.DownloadEvent, func(), error) {
+	ch := make(chan types.DownloadEvent)
 	return ch, func() { close(ch) }, nil
 }
 

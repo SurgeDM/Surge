@@ -13,8 +13,8 @@ import (
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/engine/state"
-	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -397,7 +397,7 @@ func resolveDownloadID(partialID string) (string, error) {
 	}
 
 	// 2. Get all downloads from database
-	downloads, err := state.ListAllDownloads()
+	downloads, err := store.ListAllDownloads()
 	if err == nil {
 		for _, d := range downloads {
 			candidates = append(candidates, d.ID)

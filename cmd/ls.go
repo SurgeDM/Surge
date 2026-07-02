@@ -9,8 +9,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/engine/state"
-	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/spf13/cobra"
 )
@@ -94,7 +94,7 @@ func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote 
 
 	// Fall back to database only when not explicitly targeting a remote host.
 	if len(downloads) == 0 && (!strictRemote || baseURL == "") {
-		dbDownloads, err := state.ListAllDownloads()
+		dbDownloads, err := store.ListAllDownloads()
 		if err != nil {
 			return fmt.Errorf("error listing downloads: %w", err)
 		}
@@ -206,12 +206,12 @@ func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, toke
 	}
 
 	// Fall back to database - search through all downloads
-	downloads, err := state.ListAllDownloads()
+	downloads, err := store.ListAllDownloads()
 	if err != nil {
 		return fmt.Errorf("error listing downloads: %w", err)
 	}
 
-	var found *types.DownloadEntry
+	var found *types.DownloadRecord
 	for _, d := range downloads {
 		if d.ID == fullID {
 			found = &d

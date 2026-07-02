@@ -5,11 +5,11 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-func (m RootModel) handleDownloadRequestMsg(msg events.DownloadRequestMsg, queueIfBusy bool) (tea.Model, tea.Cmd) {
+func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy bool) (tea.Model, tea.Cmd) {
 	if queueIfBusy && (m.state == ExtensionConfirmationState || m.state == DuplicateWarningState || m.state == BatchConfirmState) {
 		m.pendingRequestQueue = append(m.pendingRequestQueue, msg)
 		return m, nil
@@ -59,17 +59,17 @@ func (m RootModel) handleDownloadRequestMsg(msg events.DownloadRequestMsg, queue
 		return m, nil
 	}
 
-	return m.startDownload(msg.URL, msg.Mirrors, msg.Headers, path, isDefaultPath, msg.Filename, msg.ID, msg.Workers, msg.MinChunkSize)
+	return m.startDownload(msg.URL, msg.Mirrors, msg.Headers, path, isDefaultPath, msg.Filename, msg.DownloadID, msg.Workers, msg.MinChunkSize)
 }
 
-func (m RootModel) handleBatchDownloadRequestMsg(msg events.BatchDownloadRequestMsg, queueIfBusy bool) (tea.Model, tea.Cmd) {
+func (m RootModel) handleBatchDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy bool) (tea.Model, tea.Cmd) {
 	if queueIfBusy && (m.state == ExtensionConfirmationState || m.state == DuplicateWarningState || m.state == BatchConfirmState) {
 		m.pendingBatchRequestQueue = append(m.pendingBatchRequestQueue, msg)
 		return m, nil
 	}
 
 	m.pendingBatchURLs = nil
-	m.pendingBatchRequests = append([]events.DownloadRequestMsg(nil), msg.Requests...)
+	m.pendingBatchRequests = append([]types.DownloadEvent(nil), msg.BatchEvents...)
 	m.batchFilePath = strings.TrimSpace(msg.Path)
 	if m.batchFilePath == "" {
 		m.batchFilePath = m.defaultDownloadPath()

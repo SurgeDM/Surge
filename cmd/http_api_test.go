@@ -12,17 +12,16 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/engine/events"
-	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/types"
 )
 
 type httpAPITestService struct {
-	history               []types.DownloadEntry
+	history               []types.DownloadRecord
 	historyErr            error
 	statusByID            map[string]*types.DownloadStatus
 	getStatusErr          error
-	streamMsgs            []interface{}
+	streamMsgs            []types.DownloadEvent
 	rateLimitCalls        []string
 	rateLimitValues       map[string]int64
 	clearRateLimitID      []string
@@ -45,18 +44,18 @@ func (s *httpAPITestService) List() ([]types.DownloadStatus, error) {
 	return nil, nil
 }
 
-func (s *httpAPITestService) History() ([]types.DownloadEntry, error) {
+func (s *httpAPITestService) History() ([]types.DownloadRecord, error) {
 	if s.historyErr != nil {
 		return nil, s.historyErr
 	}
 	return s.history, nil
 }
 
-func (s *httpAPITestService) Add(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
+func (s *httpAPITestService) Add(string, string, string, []string, map[string]string, bool, int, int64) (string, error) {
 	return "", errors.New("not implemented")
 }
 
-func (s *httpAPITestService) AddWithID(string, string, string, []string, map[string]string, string, int, int64, int64, bool) (string, error) {
+func (s *httpAPITestService) AddWithID(string, string, string, []string, map[string]string, string, int, int64) (string, error) {
 	return "", errors.New("not implemented")
 }
 
@@ -83,8 +82,8 @@ func (s *httpAPITestService) Purge(string) error {
 	return nil
 }
 
-func (s *httpAPITestService) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
-	channel := make(chan interface{}, len(s.streamMsgs))
+func (s *httpAPITestService) StreamEvents(context.Context) (<-chan types.DownloadEvent, func(), error) {
+	channel := make(chan types.DownloadEvent, len(s.streamMsgs))
 	for _, msg := range s.streamMsgs {
 		channel <- msg
 	}
@@ -93,16 +92,16 @@ func (s *httpAPITestService) StreamEvents(context.Context) (<-chan interface{}, 
 	return channel, cleanup, nil
 }
 
-func (s *httpAPITestService) Publish(interface{}) error {
+func (s *httpAPITestService) Publish(types.DownloadEvent) error {
 	return nil
 }
 
 type publishRecordingHTTPService struct {
 	*httpAPITestService
-	published []interface{}
+	published []types.DownloadEvent
 }
 
-func (s *publishRecordingHTTPService) Publish(msg interface{}) error {
+func (s *publishRecordingHTTPService) Publish(msg types.DownloadEvent) error {
 	s.published = append(s.published, msg)
 	return nil
 }
@@ -113,7 +112,7 @@ type batchAddRecordingService struct {
 	failOn string
 }
 
-func (s *batchAddRecordingService) Add(url string, _ string, _ string, _ []string, _ map[string]string, _ bool, _ int, _ int64, _ int64, _ bool) (string, error) {
+func (s *batchAddRecordingService) Add(url string, _ string, _ string, _ []string, _ map[string]string, _ bool, _ int, _ int64) (string, error) {
 	if url == s.failOn {
 		return "", errors.New("enqueue failed")
 	}
@@ -209,7 +208,7 @@ func TestEnsureOpenActionRequestAllowed_RemoteToggle(t *testing.T) {
 
 func TestHistoryEndpoint_SortsMostRecentFirst(t *testing.T) {
 	service := &httpAPITestService{
-		history: []types.DownloadEntry{
+		history: []types.DownloadRecord{
 			{ID: "old", CompletedAt: 10},
 			{ID: "new", CompletedAt: 30},
 			{ID: "middle", CompletedAt: 20},
@@ -227,7 +226,7 @@ func TestHistoryEndpoint_SortsMostRecentFirst(t *testing.T) {
 		t.Fatalf("expected status 200, got %d", recorder.Code)
 	}
 
-	var got []types.DownloadEntry
+	var got []types.DownloadRecord
 	if err := json.Unmarshal(recorder.Body.Bytes(), &got); err != nil {
 		t.Fatalf("failed to parse response: %v", err)
 	}
@@ -243,8 +242,9 @@ func TestHistoryEndpoint_SortsMostRecentFirst(t *testing.T) {
 
 func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 	service := &httpAPITestService{
-		streamMsgs: []interface{}{
-			events.DownloadQueuedMsg{
+		streamMsgs: []types.DownloadEvent{
+			types.DownloadEvent{
+				Type:       types.EventQueued,
 				DownloadID: "queue-1",
 				Filename:   "archive.zip",
 				URL:        "https://example.com/archive.zip",
@@ -295,7 +295,7 @@ func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 	if !strings.Contains(text, "event: queued") {
 		t.Fatalf("expected queued SSE event, got %q", text)
 	}
-	if !strings.Contains(text, `"DownloadID":"queue-1"`) {
+	if !strings.Contains(text, `"download_id":"queue-1"`) {
 		t.Fatalf("expected queued payload in SSE body, got %q", text)
 	}
 }
@@ -329,15 +329,12 @@ func TestHandleBatchDownload_ConfirmPublishesSingleBatchRequest(t *testing.T) {
 	if len(service.published) != 1 {
 		t.Fatalf("expected 1 published message, got %d", len(service.published))
 	}
-	msg, ok := service.published[0].(events.BatchDownloadRequestMsg)
-	if !ok {
-		t.Fatalf("expected BatchDownloadRequestMsg, got %T", service.published[0])
+	msg := service.published[0]
+	if len(msg.BatchEvents) != 2 {
+		t.Fatalf("expected 2 batch requests, got %d", len(msg.BatchEvents))
 	}
-	if len(msg.Requests) != 2 {
-		t.Fatalf("expected 2 batch requests, got %d", len(msg.Requests))
-	}
-	if msg.Requests[0].URL != "https://example.com/one.zip" || msg.Requests[1].URL != "https://example.com/two.zip" {
-		t.Fatalf("unexpected batch URLs: %#v", msg.Requests)
+	if msg.BatchEvents[0].URL != "https://example.com/one.zip" || msg.BatchEvents[1].URL != "https://example.com/two.zip" {
+		t.Fatalf("unexpected batch URLs: %#v", msg.BatchEvents)
 	}
 }
 
@@ -424,7 +421,7 @@ func TestResolveDownloadDestPath(t *testing.T) {
 				statusByID: map[string]*types.DownloadStatus{
 					"fallback": {ID: "fallback", DestPath: ""},
 				},
-				history: []types.DownloadEntry{{ID: "fallback", DestPath: "C:\\tmp\\b.bin"}},
+				history: []types.DownloadRecord{{ID: "fallback", DestPath: "C:\\tmp\\b.bin"}},
 			},
 			id:       "fallback",
 			wantPath: `C:\tmp\b.bin`,
@@ -432,7 +429,7 @@ func TestResolveDownloadDestPath(t *testing.T) {
 		{
 			name: "history entry has no destination path",
 			service: &httpAPITestService{
-				history: []types.DownloadEntry{{ID: "bad", DestPath: "."}},
+				history: []types.DownloadRecord{{ID: "bad", DestPath: "."}},
 			},
 			id:        "bad",
 			wantErrIs: ErrNoDestinationPath,
@@ -440,7 +437,7 @@ func TestResolveDownloadDestPath(t *testing.T) {
 		{
 			name: "id absent returns not found",
 			service: &httpAPITestService{
-				history: []types.DownloadEntry{{ID: "other", DestPath: "C:\\tmp\\c.bin"}},
+				history: []types.DownloadRecord{{ID: "other", DestPath: "C:\\tmp\\c.bin"}},
 			},
 			id:        "missing",
 			wantErrIs: ErrDownloadNotFound,
@@ -457,7 +454,7 @@ func TestResolveDownloadDestPath(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			var service core.DownloadService
+			var service service.DownloadService
 			if !test.useNilService {
 				service = test.service
 			}
@@ -511,7 +508,7 @@ func TestOpenEndpoints_ReturnMappedResolveStatuses(t *testing.T) {
 			name: "missing download returns 404",
 			path: "/open-folder?id=missing",
 			service: &httpAPITestService{
-				history: []types.DownloadEntry{},
+				history: []types.DownloadRecord{},
 			},
 			statusCode: http.StatusNotFound,
 		},
@@ -528,7 +525,7 @@ func TestOpenEndpoints_ReturnMappedResolveStatuses(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			mux := http.NewServeMux()
-			var service core.DownloadService
+			var service service.DownloadService
 			if !test.useNil {
 				service = test.service
 			}
@@ -843,12 +840,12 @@ type rateLimitWrapper struct {
 	svc *httpAPITestService
 }
 
-func (r *rateLimitWrapper) List() ([]types.DownloadStatus, error)   { return nil, nil }
-func (r *rateLimitWrapper) History() ([]types.DownloadEntry, error) { return nil, nil }
-func (r *rateLimitWrapper) Add(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
+func (r *rateLimitWrapper) List() ([]types.DownloadStatus, error)    { return nil, nil }
+func (r *rateLimitWrapper) History() ([]types.DownloadRecord, error) { return nil, nil }
+func (r *rateLimitWrapper) Add(string, string, string, []string, map[string]string, bool, int, int64) (string, error) {
 	return "", nil
 }
-func (r *rateLimitWrapper) AddWithID(string, string, string, []string, map[string]string, string, int, int64, int64, bool) (string, error) {
+func (r *rateLimitWrapper) AddWithID(string, string, string, []string, map[string]string, string, int, int64) (string, error) {
 	return "", nil
 }
 func (r *rateLimitWrapper) Pause(string) error                              { return nil }
@@ -857,15 +854,15 @@ func (r *rateLimitWrapper) ResumeBatch([]string) []error                    { re
 func (r *rateLimitWrapper) UpdateURL(string, string) error                  { return nil }
 func (r *rateLimitWrapper) Delete(string) error                             { return nil }
 func (r *rateLimitWrapper) Purge(string) error                              { return nil }
-func (r *rateLimitWrapper) Publish(interface{}) error                       { return nil }
+func (r *rateLimitWrapper) Publish(types.DownloadEvent) error               { return nil }
 func (r *rateLimitWrapper) GetStatus(string) (*types.DownloadStatus, error) { return nil, nil }
 func (r *rateLimitWrapper) Shutdown() error                                 { return nil }
 func (r *rateLimitWrapper) ClearCompleted() (int64, error)                  { return 0, nil }
 func (r *rateLimitWrapper) ClearFailed() (int64, error)                     { return 0, nil }
 func (r *rateLimitWrapper) SetRateLimit(string, int64) error                { return nil }
 func (r *rateLimitWrapper) ClearRateLimit(string) error                     { return nil }
-func (r *rateLimitWrapper) StreamEvents(context.Context) (<-chan interface{}, func(), error) {
-	return make(chan interface{}), func() {}, nil
+func (r *rateLimitWrapper) StreamEvents(context.Context) (<-chan types.DownloadEvent, func(), error) {
+	return make(chan types.DownloadEvent), func() {}, nil
 }
 
 // TestRateLimitDefaultEndpoint tests the /rate-limit/default endpoint.

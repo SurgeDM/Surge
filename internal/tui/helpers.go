@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	engineprogress "github.com/SurgeDM/Surge/internal/progress"
+
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,8 +15,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/engine/types"
-	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -153,23 +155,23 @@ func (m *RootModel) openDirectoryPicker(origin FilePickerOrigin, originalPath, b
 }
 
 // checkForDuplicate checks if a compatible download already exists
-func (m RootModel) checkForDuplicate(url string) *processing.DuplicateResult {
-	activeDownloads := func() map[string]*types.DownloadConfig {
-		active := make(map[string]*types.DownloadConfig)
+func (m RootModel) checkForDuplicate(url string) *orchestrator.DuplicateResult {
+	activeDownloads := func() map[string]*types.DownloadRecord {
+		active := make(map[string]*types.DownloadRecord)
 		for _, d := range m.downloads {
 			if !d.done {
-				state := &types.ProgressState{}
+				state := &engineprogress.DownloadProgress{}
 				// Create dummy config to pass into processing duplicate check
-				active[d.ID] = &types.DownloadConfig{
-					URL:      d.URL,
-					Filename: d.Filename,
-					State:    state,
+				active[d.ID] = &types.DownloadRecord{
+					URL:           d.URL,
+					Filename:      d.Filename,
+					ProgressState: state,
 				}
 			}
 		}
 		return active
 	}
-	return processing.CheckForDuplicate(url, activeDownloads)
+	return orchestrator.CheckForDuplicate(url, activeDownloads)
 }
 
 // renderEmptyMessage provides a consistent visual for "no data" states in dashboard panes.

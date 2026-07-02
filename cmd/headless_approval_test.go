@@ -8,11 +8,11 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
-	"github.com/SurgeDM/Surge/internal/engine/state"
-	"github.com/SurgeDM/Surge/internal/engine/types"
-	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/scheduler"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/types"
 )
 
 func TestHandleDownload_HeadlessMode_AutoApprovesNonDuplicate(t *testing.T) {
@@ -49,16 +49,15 @@ func TestHandleDownload_HeadlessMode_AutoApprovesNonDuplicate(t *testing.T) {
 	}))
 	defer probeServer.Close()
 
-	progressCh := make(chan any, 10)
+	progressCh := make(chan types.DownloadEvent, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
+	GlobalPool = scheduler.New(progressCh, 1)
 
-	// Mock lifecycle to bypass real downloads
-	GlobalLifecycle = processing.NewLifecycleManager(func(url, path, filename string, _ []string, headers map[string]string, explicit bool, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
-		return "queued-id", nil
-	}, nil)
+	eventBus := orchestrator.NewEventBus()
+	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
 
-	svc := core.NewLocalDownloadService(GlobalPool)
+	svc := service.NewLocalDownloadService(GlobalLifecycle)
 	GlobalService = svc
 
 	// Verify it auto-approves even with ExtensionPrompt=true
@@ -99,20 +98,23 @@ func TestHandleDownload_HeadlessMode_RejectsDuplicateWithWarn(t *testing.T) {
 		t.Fatalf("SaveSettings failed: %v", err)
 	}
 
-	progressCh := make(chan any, 10)
+	progressCh := make(chan types.DownloadEvent, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
+	GlobalPool = scheduler.New(progressCh, 1)
 
 	// Seed the DB with a "duplicate" entry
 	url := "http://example.com/duplicate.bin"
-	_ = state.AddToMasterList(types.DownloadEntry{
+	_ = store.AddToMasterList(types.DownloadRecord{
 		ID:       "dup-id",
 		URL:      url,
 		Filename: "duplicate.bin",
 		Status:   "completed",
 	})
 
-	svc := core.NewLocalDownloadService(GlobalPool)
+	eventBus := orchestrator.NewEventBus()
+	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	svc := service.NewLocalDownloadService(GlobalLifecycle)
 	GlobalService = svc
 
 	// Verify it still rejects duplicates when WarnOnDuplicate is on
@@ -152,14 +154,17 @@ func TestHandleDownload_HeadlessMode_RejectsExtensionPromptDuplicate(t *testing.
 	}
 
 	url := "http://example.com/already-downloaded.bin"
-	_ = state.AddToMasterList(types.DownloadEntry{
+	_ = store.AddToMasterList(types.DownloadRecord{
 		ID: "ext-dup-id", URL: url, Filename: "already-downloaded.bin", Status: "completed",
 	})
 
-	progressCh := make(chan any, 10)
+	progressCh := make(chan types.DownloadEvent, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = download.NewWorkerPool(progressCh, 1)
-	svc := core.NewLocalDownloadService(GlobalPool)
+	GlobalPool = scheduler.New(progressCh, 1)
+	eventBus := orchestrator.NewEventBus()
+	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	svc := service.NewLocalDownloadService(GlobalLifecycle)
 	GlobalService = svc
 
 	body := fmt.Sprintf(`{"url": %q, "skip_approval": false}`, url)

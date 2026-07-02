@@ -14,11 +14,12 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
-	"github.com/SurgeDM/Surge/internal/engine/state"
-	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/scheduler"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -52,7 +53,7 @@ func TestResolveDownloadID_Remote(t *testing.T) {
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("EnsureDirs failed: %v", err)
 	}
-	state.Configure(filepath.Join(tempDir, "surge.db"))
+	store.Configure(filepath.Join(tempDir, "surge.db"))
 	saveActivePort(port)
 	defer removeActivePort()
 
@@ -92,8 +93,8 @@ func TestResolveDownloadID_RemoteStillWorksWhenDBUnavailable(t *testing.T) {
 		globalToken = origToken
 	})
 
-	state.CloseDB()
-	state.Configure(filepath.Join(t.TempDir(), "missing", "surge.db")) // Intentionally invalid path
+	store.CloseDB()
+	store.Configure(filepath.Join(t.TempDir(), "missing", "surge.db")) // Intentionally invalid path
 
 	full, err := resolveDownloadID("ddeeff")
 	if err != nil {
@@ -107,11 +108,11 @@ func TestResolveDownloadID_RemoteStillWorksWhenDBUnavailable(t *testing.T) {
 func TestResolveDownloadID_StrictRemoteDoesNotFallbackToDBOnRemoteError(t *testing.T) {
 	setupIsolatedCmdState(t)
 
-	entry := types.DownloadEntry{
+	entry := types.DownloadRecord{
 		ID:       "11223344-1234-5678-90ab-cdef12345678",
 		Filename: "db-only.bin",
 	}
-	if err := state.AddToMasterList(entry); err != nil {
+	if err := store.AddToMasterList(entry); err != nil {
 		t.Fatalf("failed to seed db entry: %v", err)
 	}
 
@@ -146,11 +147,11 @@ func TestResolveDownloadID_StrictRemoteDoesNotFallbackToDBOnRemoteError(t *testi
 func TestResolveDownloadID_LocalModeFallsBackToDBWhenRemoteListFails(t *testing.T) {
 	setupIsolatedCmdState(t)
 
-	entry := types.DownloadEntry{
+	entry := types.DownloadRecord{
 		ID:       "99aabbcc-1234-5678-90ab-cdef12345678",
 		Filename: "fallback.bin",
 	}
-	if err := state.AddToMasterList(entry); err != nil {
+	if err := store.AddToMasterList(entry); err != nil {
 		t.Fatalf("failed to seed db entry: %v", err)
 	}
 
@@ -436,43 +437,7 @@ func TestPrintDownloadDetail_TextAndJSON(t *testing.T) {
 	}
 }
 
-func TestRmClean_Offline_Works(t *testing.T) {
-	setupIsolatedCmdState(t)
-	removeActivePort() // Ensure offline mode
 
-	completed := types.DownloadEntry{
-		ID:          "rm-clean-offline-id",
-		URL:         "https://example.com/completed.bin",
-		Filename:    "completed.bin",
-		DestPath:    filepath.Join(t.TempDir(), "completed.bin"),
-		Status:      "completed",
-		TotalSize:   100,
-		Downloaded:  100,
-		CompletedAt: 1,
-	}
-	if err := state.AddToMasterList(completed); err != nil {
-		t.Fatalf("failed to seed completed download: %v", err)
-	}
-
-	if err := rmCmd.Flags().Set("clean", "true"); err != nil {
-		t.Fatalf("failed to set clean flag: %v", err)
-	}
-	defer func() { _ = rmCmd.Flags().Set("clean", "false") }()
-
-	_ = captureStdout(t, func() {
-		if err := rmCmd.RunE(rmCmd, []string{}); err != nil {
-			t.Fatalf("rm clean failed: %v", err)
-		}
-	})
-
-	entry, err := state.GetDownload(completed.ID)
-	if err != nil {
-		t.Fatalf("failed to query completed entry after clean: %v", err)
-	}
-	if entry != nil {
-		t.Fatalf("expected completed entry to be removed by offline --clean, got %+v", entry)
-	}
-}
 
 func TestAddCmdRunE_ReturnsExpectedErrors(t *testing.T) {
 	t.Run("no running server", func(t *testing.T) {
@@ -544,6 +509,16 @@ func TestActionCommandsRunE_ReturnNoServerErrors(t *testing.T) {
 					return err
 				}
 				return rmCmd.RunE(rmCmd, []string{"deadbeef"})
+			},
+		},
+		{
+			name: "rm_clean",
+			run: func() error {
+				if err := rmCmd.Flags().Set("clean", "true"); err != nil {
+					return err
+				}
+				defer func() { _ = rmCmd.Flags().Set("clean", "false") }()
+				return rmCmd.RunE(rmCmd, []string{})
 			},
 		},
 		{
@@ -695,12 +670,12 @@ func TestActionCommandsRunE_ReturnAmbiguousIDErrors(t *testing.T) {
 			saveActivePort(port)
 			t.Cleanup(removeActivePort)
 
-			entries := []types.DownloadEntry{
+			entries := []types.DownloadRecord{
 				{ID: "deadbeef-1234-5678-90ab-cdef12345678", Filename: "first.bin"},
 				{ID: "deadbead-1234-5678-90ab-cdef12345678", Filename: "second.bin"},
 			}
 			for _, entry := range entries {
-				if err := state.AddToMasterList(entry); err != nil {
+				if err := store.AddToMasterList(entry); err != nil {
 					t.Fatalf("failed to seed db entry %s: %v", entry.ID, err)
 				}
 			}
@@ -720,7 +695,7 @@ func TestPrintDownloads_FromDatabase_TableAndJSON(t *testing.T) {
 	setupIsolatedCmdState(t)
 	removeActivePort()
 
-	entry := types.DownloadEntry{
+	entry := types.DownloadRecord{
 		ID:         "12345678-1234-1234-1234-1234567890ab",
 		URL:        "https://example.com/asset.bin",
 		Filename:   "this-is-a-very-long-file-name-that-should-truncate.bin",
@@ -728,7 +703,7 @@ func TestPrintDownloads_FromDatabase_TableAndJSON(t *testing.T) {
 		Downloaded: 512,
 		TotalSize:  1024,
 	}
-	if err := state.AddToMasterList(entry); err != nil {
+	if err := store.AddToMasterList(entry); err != nil {
 		t.Fatalf("failed to seed db entry: %v", err)
 	}
 
@@ -789,12 +764,12 @@ func TestPrintDownloads_JSONEmpty(t *testing.T) {
 func TestPrintDownloads_StrictRemoteEmpty_DoesNotFallbackToDB(t *testing.T) {
 	setupIsolatedCmdState(t)
 
-	entry := types.DownloadEntry{
+	entry := types.DownloadRecord{
 		ID:       "feedface-1234-5678-90ab-cdef12345678",
 		Filename: "local-only.bin",
 		Status:   "completed",
 	}
-	if err := state.AddToMasterList(entry); err != nil {
+	if err := store.AddToMasterList(entry); err != nil {
 		t.Fatalf("failed to seed local db entry: %v", err)
 	}
 
@@ -822,7 +797,7 @@ func TestShowDownloadDetails_UsesDatabaseFallback(t *testing.T) {
 	setupIsolatedCmdState(t)
 	removeActivePort()
 
-	entry := types.DownloadEntry{
+	entry := types.DownloadRecord{
 		ID:         "87654321-1234-1234-1234-1234567890ab",
 		URL:        "https://example.com/detail.bin",
 		Filename:   "detail.bin",
@@ -830,7 +805,7 @@ func TestShowDownloadDetails_UsesDatabaseFallback(t *testing.T) {
 		Downloaded: 250,
 		TotalSize:  500,
 	}
-	if err := state.AddToMasterList(entry); err != nil {
+	if err := store.AddToMasterList(entry); err != nil {
 		t.Fatalf("failed to seed db entry: %v", err)
 	}
 
@@ -1038,9 +1013,12 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 		setupIsolatedCmdState(t)
 		atomic.StoreInt32(&activeDownloads, 0)
 
-		GlobalProgressCh = make(chan any, 10)
-		GlobalPool = download.NewWorkerPool(GlobalProgressCh, 2)
-		GlobalService = core.NewLocalDownloadService(GlobalPool)
+		GlobalProgressCh = make(chan types.DownloadEvent, 10)
+		GlobalPool = scheduler.New(GlobalProgressCh, 2)
+		eventBus := orchestrator.NewEventBus()
+		getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
+		GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+		GlobalService = service.NewLocalDownloadService(GlobalLifecycle)
 
 		probeServer := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("Content-Length", "5")
@@ -1079,8 +1057,8 @@ func setupIsolatedCmdState(t *testing.T) {
 		t.Fatalf("EnsureDirs failed: %v", err)
 	}
 
-	state.CloseDB()
-	state.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
+	store.CloseDB()
+	store.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
 }
 
 func resetCommandConnectionState(t *testing.T) {

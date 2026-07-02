@@ -1,6 +1,9 @@
 package tui
 
 import (
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	engineprogress "github.com/SurgeDM/Surge/internal/progress"
+
 	"context"
 	"errors"
 	"os"
@@ -13,12 +16,30 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
-	"github.com/SurgeDM/Surge/internal/engine/events"
-	"github.com/SurgeDM/Surge/internal/engine/types"
-	"github.com/SurgeDM/Surge/internal/processing"
+
+	"github.com/SurgeDM/Surge/internal/scheduler"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/types"
 )
+
+type updateMockService struct {
+	service.DownloadService
+	addFunc func(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error)
+}
+
+func (m *updateMockService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
+	if m.addFunc != nil {
+		return m.addFunc(url, path, filename, mirrors, headers, isExplicitCategory, workers, minChunkSize)
+	}
+	return "mock-id", nil
+}
+
+func (m *updateMockService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error) {
+	if m.addFunc != nil {
+		return m.addFunc(url, path, filename, mirrors, headers, false, workers, minChunkSize)
+	}
+	return id, nil
+}
 
 var errTest = errors.New("test error")
 
@@ -88,13 +109,14 @@ func TestUpdate_DownloadStartedKeepsResuming(t *testing.T) {
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	msg := events.DownloadStartedMsg{
+	msg := types.DownloadEvent{
+		Type:       types.EventStarted,
 		DownloadID: "id-1",
 		URL:        "http://example.com/file",
 		Filename:   "file",
 		Total:      100,
 		DestPath:   "/tmp/file",
-		State:      types.NewProgressState("id-1", 100),
+		State:      &types.DownloadRecord{ProgressState: engineprogress.New("id-1", 100)},
 	}
 
 	updated, _ := m.Update(msg)
@@ -123,13 +145,14 @@ func TestUpdate_DownloadStartedPropagatesRateLimit(t *testing.T) {
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	updated, _ := m.Update(events.DownloadStartedMsg{
+	updated, _ := m.Update(types.DownloadEvent{
+		Type:         types.EventStarted,
 		DownloadID:   "id-1",
 		URL:          "http://example.com/file",
 		Filename:     "file",
 		Total:        100,
 		DestPath:     "/tmp/file",
-		State:        types.NewProgressState("id-1", 100),
+		State:        &types.DownloadRecord{ProgressState: engineprogress.New("id-1", 100)},
 		RateLimit:    2 * 1024 * 1024,
 		RateLimitSet: true,
 	})
@@ -146,13 +169,14 @@ func TestUpdate_DownloadStartedNewDownloadPropagatesRateLimit(t *testing.T) {
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	updated, _ := m.Update(events.DownloadStartedMsg{
+	updated, _ := m.Update(types.DownloadEvent{
+		Type:         types.EventStarted,
 		DownloadID:   "id-1",
 		URL:          "http://example.com/file",
 		Filename:     "file",
 		Total:        100,
 		DestPath:     "/tmp/file",
-		State:        types.NewProgressState("id-1", 100),
+		State:        &types.DownloadRecord{ProgressState: engineprogress.New("id-1", 100)},
 		RateLimit:    3 * 1024 * 1024,
 		RateLimitSet: true,
 	})
@@ -178,13 +202,14 @@ func TestUpdate_EnqueueSuccessMergesOptimisticEntryAfterStart(t *testing.T) {
 		logViewport:        viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	updated, _ := m.Update(events.DownloadStartedMsg{
+	updated, _ := m.Update(types.DownloadEvent{
+		Type:       types.EventStarted,
 		DownloadID: "real-1",
 		URL:        "http://example.com/file",
 		Filename:   "file.bin",
 		Total:      100,
 		DestPath:   "/tmp/file.bin",
-		State:      types.NewProgressState("real-1", 100),
+		State:      &types.DownloadRecord{ProgressState: engineprogress.New("real-1", 100)},
 	})
 	m2 := updated.(RootModel)
 	if len(m2.downloads) != 2 {
@@ -221,7 +246,8 @@ func TestUpdate_PauseResumeEventsNormalizeFlags(t *testing.T) {
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	updated, _ := m.Update(events.DownloadPausedMsg{
+	updated, _ := m.Update(types.DownloadEvent{
+		Type:       types.EventPaused,
 		DownloadID: "id-1",
 		Filename:   "file",
 		Downloaded: 50,
@@ -232,7 +258,8 @@ func TestUpdate_PauseResumeEventsNormalizeFlags(t *testing.T) {
 		t.Fatalf("Expected paused=true and others false after DownloadPausedMsg, got paused=%v pausing=%v resuming=%v", d.paused, d.pausing, d.resuming)
 	}
 
-	updated, _ = m2.Update(events.DownloadResumedMsg{
+	updated, _ = m2.Update(types.DownloadEvent{
+		Type:       types.EventResumed,
 		DownloadID: "id-1",
 		Filename:   "file",
 	})
@@ -252,7 +279,8 @@ func TestUpdate_DownloadPausedPropagatesRateLimit(t *testing.T) {
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	updated, _ := m.Update(events.DownloadPausedMsg{
+	updated, _ := m.Update(types.DownloadEvent{
+		Type:         types.EventPaused,
 		DownloadID:   "id-1",
 		Filename:     "file",
 		Downloaded:   50,
@@ -272,7 +300,8 @@ func TestUpdate_DownloadQueuedPropagatesRateLimit(t *testing.T) {
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	updated, _ := m.Update(events.DownloadQueuedMsg{
+	updated, _ := m.Update(types.DownloadEvent{
+		Type:         types.EventQueued,
 		DownloadID:   "id-1",
 		Filename:     "file",
 		URL:          "http://example.com/file",
@@ -298,7 +327,8 @@ func TestUpdate_DownloadQueuedExistingDownloadPropagatesRateLimit(t *testing.T) 
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	updated, _ := m.Update(events.DownloadQueuedMsg{
+	updated, _ := m.Update(types.DownloadEvent{
+		Type:         types.EventQueued,
 		DownloadID:   "id-1",
 		Filename:     "file",
 		URL:          "http://example.com/file",
@@ -323,7 +353,8 @@ func TestProcessProgressMsg_ClearsResumingOnTransfer(t *testing.T) {
 	}
 
 	// No transfer yet: keep resuming.
-	m.processProgressMsg(events.ProgressMsg{
+	m.processProgressMsg(types.DownloadEvent{
+		Type:       types.EventProgress,
 		DownloadID: "id-1",
 		Downloaded: 50,
 		Total:      100,
@@ -334,7 +365,8 @@ func TestProcessProgressMsg_ClearsResumingOnTransfer(t *testing.T) {
 	}
 
 	// Transfer observed: clear resuming.
-	m.processProgressMsg(events.ProgressMsg{
+	m.processProgressMsg(types.DownloadEvent{
+		Type:       types.EventProgress,
 		DownloadID: "id-1",
 		Downloaded: 60,
 		Total:      100,
@@ -356,7 +388,8 @@ func TestUpdate_DownloadComplete_UsesAverageSpeed(t *testing.T) {
 
 	elapsed := 4 * time.Second
 	avgSpeed := float64(26400000) / elapsed.Seconds()
-	updated, _ := m.Update(events.DownloadCompleteMsg{
+	updated, _ := m.Update(types.DownloadEvent{
+		Type:       types.EventComplete,
 		DownloadID: "id-1",
 		Filename:   "file.bin",
 		Elapsed:    elapsed,
@@ -424,7 +457,8 @@ func TestUpdate_DownloadRemovedRemovesFromModelAndList(t *testing.T) {
 	}
 	m.UpdateListItems()
 
-	updated, _ := m.Update(events.DownloadRemovedMsg{
+	updated, _ := m.Update(types.DownloadEvent{
+		Type:       types.EventRemoved,
 		DownloadID: "id-1",
 		Filename:   "file",
 	})
@@ -448,7 +482,8 @@ func TestUpdate_DownloadRemoved_NoOpWhenUnknownID(t *testing.T) {
 	}
 	m.UpdateListItems()
 
-	updated, _ := m.Update(events.DownloadRemovedMsg{
+	updated, _ := m.Update(types.DownloadEvent{
+		Type:       types.EventRemoved,
 		DownloadID: "id-unknown",
 		Filename:   "file",
 	})
@@ -467,7 +502,8 @@ func TestProcessProgressMsg_UpdatesElapsed(t *testing.T) {
 	}
 
 	elapsed := 12 * time.Second
-	m.processProgressMsg(events.ProgressMsg{
+	m.processProgressMsg(types.DownloadEvent{
+		Type:       types.EventProgress,
 		DownloadID: "id-1",
 		Downloaded: 400,
 		Total:      1000,
@@ -489,9 +525,8 @@ func TestGenerateUniqueFilename_IncompleteSuffixConstant(t *testing.T) {
 
 func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	// Setup initial model
-	ch := make(chan any, 100)
-	pool := download.NewWorkerPool(ch, 1)
-	svc := core.NewLocalDownloadServiceWithInput(pool, ch)
+	bus := orchestrator.NewEventBus()
+	svc := service.NewLocalDownloadService(orchestrator.NewLifecycleManager(nil, bus))
 	t.Cleanup(func() { _ = svc.Shutdown() })
 
 	m := RootModel{
@@ -506,7 +541,8 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	m.Settings.Extension.ExtensionPrompt.Value = true
 	m.Settings.General.WarnOnDuplicate.Value = true
 
-	msg := events.DownloadRequestMsg{
+	msg := types.DownloadEvent{
+		Type:     types.EventRequest,
 		URL:      "http://example.com/test.zip",
 		Filename: "test.zip",
 		Path:     "/tmp/downloads",
@@ -573,12 +609,14 @@ func TestUpdate_DownloadRequestMsg_QueuesWhileConfirmationActive(t *testing.T) {
 	}
 	m.Settings.Extension.ExtensionPrompt.Value = true
 
-	first := events.DownloadRequestMsg{
+	first := types.DownloadEvent{
+		Type:     types.EventRequest,
 		URL:      "https://example.com/first.zip",
 		Filename: "first.zip",
 		Path:     "/tmp/downloads",
 	}
-	second := events.DownloadRequestMsg{
+	second := types.DownloadEvent{
+		Type:     types.EventRequest,
 		URL:      "https://example.com/second.zip",
 		Filename: "second.zip",
 		Path:     "/tmp/downloads",
@@ -619,15 +657,17 @@ func TestUpdate_BatchDownloadRequestMsg_QueuesWhileConfirmationActive(t *testing
 	}
 	m.Settings.Extension.ExtensionPrompt.Value = true
 
-	first := events.DownloadRequestMsg{
+	first := types.DownloadEvent{
+		Type:     types.EventRequest,
 		URL:      "https://example.com/first.zip",
 		Filename: "first.zip",
 		Path:     "/tmp/downloads",
 	}
-	batch := events.BatchDownloadRequestMsg{
+	batch := types.DownloadEvent{
+		Type: types.EventBatchRequest,
 		Path: "/tmp/batch",
-		Requests: []events.DownloadRequestMsg{
-			{URL: "https://example.com/one.zip", Path: "/tmp/batch"},
+		BatchEvents: []types.DownloadEvent{
+			{Type: types.EventRequest, URL: "https://example.com/one.zip", Path: "/tmp/batch"},
 			{URL: "https://example.com/two.zip", Path: "/tmp/batch"},
 		},
 	}
@@ -661,12 +701,9 @@ func TestUpdate_BatchDownloadRequestMsg_QueuesWhileConfirmationActive(t *testing
 }
 
 func TestStartDownload_UsesProvidedIDWhenServiceSupportsIt(t *testing.T) {
-	ch := make(chan any, 16)
-	pool := download.NewWorkerPool(ch, 1)
-	svc := core.NewLocalDownloadServiceWithInput(pool, ch)
-	t.Cleanup(func() {
-		_ = svc.Shutdown()
-	})
+	svc := &updateMockService{
+		DownloadService: &mockService{},
+	}
 
 	m := RootModel{
 		Settings: config.DefaultSettings(),
@@ -688,26 +725,21 @@ func TestStartDownload_UsesProvidedIDWhenServiceSupportsIt(t *testing.T) {
 }
 
 func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
-	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
-	t.Cleanup(func() {
-		_ = svc.Shutdown()
-	})
-
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
+	svc := &updateMockService{
+		DownloadService: &mockService{},
+		addFunc: func(string, string, string, []string, map[string]string, bool, int, int64) (string, error) {
 			t.Fatal("enqueue dispatch should not run after context cancellation")
 			return "", nil
 		},
-		nil,
-	)
+	}
 
 	m := RootModel{
 		Settings:      config.DefaultSettings(),
 		Service:       svc,
-		Orchestrator:  orchestrator,
+		Orchestrator:  orchestrator.NewLifecycleManager(scheduler.New(make(chan types.DownloadEvent, 16), 1), orchestrator.NewEventBus()),
 		enqueueCtx:    ctx,
 		cancelEnqueue: func() {},
 		list:          NewDownloadList(80, 20),
@@ -733,23 +765,18 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 }
 
 func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *testing.T) {
-	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
-	t.Cleanup(func() {
-		_ = svc.Shutdown()
-	})
-
-	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
+	svc := &updateMockService{
+		DownloadService: &mockService{},
+		addFunc: func(string, string, string, []string, map[string]string, bool, int, int64) (string, error) {
 			return "real-id", nil
 		},
-		nil,
-	)
+	}
 
 	targetDir := t.TempDir()
 	m := RootModel{
 		Settings:     config.DefaultSettings(),
 		Service:      svc,
-		Orchestrator: orchestrator,
+		Orchestrator: orchestrator.NewLifecycleManager(nil, orchestrator.NewEventBus()),
 		list:         NewDownloadList(80, 20),
 		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
@@ -769,23 +796,18 @@ func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *te
 }
 
 func TestStartDownload_UsesGenericQueuedNameForExplicitFilenameUntilLifecycleConfirms(t *testing.T) {
-	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
-	t.Cleanup(func() {
-		_ = svc.Shutdown()
-	})
-
-	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
+	svc := &updateMockService{
+		DownloadService: &mockService{},
+		addFunc: func(string, string, string, []string, map[string]string, bool, int, int64) (string, error) {
 			return "real-id", nil
 		},
-		nil,
-	)
+	}
 
 	targetDir := t.TempDir()
 	m := RootModel{
 		Settings:     config.DefaultSettings(),
 		Service:      svc,
-		Orchestrator: orchestrator,
+		Orchestrator: orchestrator.NewLifecycleManager(nil, orchestrator.NewEventBus()),
 		list:         NewDownloadList(80, 20),
 		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
@@ -1048,23 +1070,18 @@ func TestQuitConfirm_UnrelatedKeyIgnored(t *testing.T) {
 }
 
 func TestWithEnqueueContext_OverridesStartDownloadContext(t *testing.T) {
-	svc := core.NewLocalDownloadServiceWithInput(nil, nil)
-	t.Cleanup(func() {
-		_ = svc.Shutdown()
-	})
-
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	orchestrator := processing.NewLifecycleManager(
-		func(string, string, string, []string, map[string]string, bool, int, int64, int64, bool) (string, error) {
+	svc := &updateMockService{
+		DownloadService: &mockService{},
+		addFunc: func(string, string, string, []string, map[string]string, bool, int, int64) (string, error) {
 			t.Fatal("enqueue dispatch should not run after shared context cancellation")
 			return "", nil
 		},
-		nil,
-	)
+	}
 
-	m := InitialRootModel(1700, "test-version", svc, orchestrator, false)
+	m := InitialRootModel(1700, "test-version", svc, orchestrator.NewLifecycleManager(scheduler.New(make(chan types.DownloadEvent, 16), 1), orchestrator.NewEventBus()), false)
 	m = m.WithEnqueueContext(ctx, func() {})
 
 	_, cmd := m.startDownload("https://example.com/file.bin", nil, nil, t.TempDir(), false, "file.bin", "", 0, 0)
@@ -1092,7 +1109,7 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 		state:          DashboardState,
 		keys:           config.DefaultKeyMap(),
 		urlUpdateInput: textinput.New(),
-		Service:        core.NewLocalDownloadServiceWithInput(nil, nil),
+		Service:        service.NewLocalDownloadService(orchestrator.NewLifecycleManager(nil, orchestrator.NewEventBus())),
 	}
 	m.UpdateListItems()
 	m.list.Select(0) // Select the paused download

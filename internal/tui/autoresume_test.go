@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
-	"github.com/SurgeDM/Surge/internal/engine/state"
-	"github.com/SurgeDM/Surge/internal/engine/types"
-	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/types"
 )
 
 func TestAutoResume_Enabled(t *testing.T) {
@@ -35,20 +35,15 @@ func TestAutoResume_Enabled(t *testing.T) {
 	}
 
 	// 3. Configure State DB
-	state.CloseDB() // Ensure clean state
-	t.Cleanup(state.CloseDB)
-	dbPath := filepath.Join(surgeDir, "state", "surge.db")
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	state.Configure(dbPath)
+	// 3. Configure State DB
+	_ = testutil.SetupStateDB(t)
 
 	// 4. Seed DB with a paused download
 	testID := "resume-id-1"
 	testURL := "http://example.com/resume.zip"
 	testDest := filepath.Join(tmpDir, "resume.zip")
 
-	manualState := &types.DownloadState{
+	manualState := &types.DownloadRecord{
 		ID:         testID,
 		URL:        testURL,
 		Filename:   "resume.zip",
@@ -58,7 +53,7 @@ func TestAutoResume_Enabled(t *testing.T) {
 		PausedAt:   time.Now().Unix(),
 		CreatedAt:  time.Now().Unix(),
 	}
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := store.AddToMasterList(types.DownloadRecord{
 		ID:         testID,
 		URL:        testURL,
 		DestPath:   testDest,
@@ -69,15 +64,16 @@ func TestAutoResume_Enabled(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.SaveState(testURL, testDest, manualState); err != nil {
+	if err := store.SaveState(testURL, testDest, manualState); err != nil {
 		t.Fatal(err)
 	}
 
 	// 5. Initialize Model
-	ch := make(chan any, 10)
-	pool := download.NewWorkerPool(ch, 1)
+	bus := orchestrator.NewEventBus()
+	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	svc := service.NewLocalDownloadService(mgr)
 
-	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, ch), processing.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1700, "test-version", svc, mgr, false)
 
 	// 6. Verify Download is Resumed
 	found := false
@@ -115,20 +111,15 @@ func TestAutoResume_Disabled(t *testing.T) {
 	}
 
 	// 3. Configure State DB
-	state.CloseDB() // Ensure clean state
-	t.Cleanup(state.CloseDB)
-	dbPath := filepath.Join(surgeDir, "state", "surge.db")
-	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
-		t.Fatal(err)
-	}
-	state.Configure(dbPath)
+	// 3. Configure State DB
+	_ = testutil.SetupStateDB(t)
 
 	// 4. Seed DB with a paused download
 	testID := "resume-id-2"
 	testURL := "http://example.com/resume2.zip"
 	testDest := filepath.Join(tmpDir, "resume2.zip")
 
-	manualState := &types.DownloadState{
+	manualState := &types.DownloadRecord{
 		ID:         testID,
 		URL:        testURL,
 		Filename:   "resume2.zip",
@@ -138,7 +129,7 @@ func TestAutoResume_Disabled(t *testing.T) {
 		PausedAt:   time.Now().Unix(),
 		CreatedAt:  time.Now().Unix(),
 	}
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := store.AddToMasterList(types.DownloadRecord{
 		ID:         testID,
 		URL:        testURL,
 		DestPath:   testDest,
@@ -149,15 +140,16 @@ func TestAutoResume_Disabled(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.SaveState(testURL, testDest, manualState); err != nil {
+	if err := store.SaveState(testURL, testDest, manualState); err != nil {
 		t.Fatal(err)
 	}
 
 	// 5. Initialize Model
-	ch := make(chan any, 10)
-	pool := download.NewWorkerPool(ch, 1)
+	bus := orchestrator.NewEventBus()
+	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	svc := service.NewLocalDownloadService(mgr)
 
-	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, ch), processing.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1700, "test-version", svc, mgr, false)
 
 	// 6. Verify Download is Resumed
 	found := false

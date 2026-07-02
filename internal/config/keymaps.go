@@ -211,7 +211,6 @@ func GetKeyMapConfigPath() string {
 
 // LoadKeyMap loads the keymap configuration from file.
 func LoadKeyMap() (*KeyMap, error) {
-
 	defaults := DefaultKeyMap()
 	path := GetKeyMapConfigPath()
 	utils.Debug("Loading keymap from %s", path)

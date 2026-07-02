@@ -1,0 +1,58 @@
+package orchestrator
+
+import (
+	"strings"
+
+	"github.com/SurgeDM/Surge/internal/progress"
+	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/types"
+)
+
+// DuplicateResult represents the outcome of a duplicate check
+type DuplicateResult struct {
+	Exists   bool
+	IsActive bool
+	Filename string
+	URL      string
+}
+
+// CheckForDuplicate inspects active and persisted downloads for duplicate URLs.
+// It always performs the scan regardless of settings.General.WarnOnDuplicate.
+// Policy decisions (whether to warn, block, or auto-approve) are the caller's
+// responsibility. This separation is required so that headless mode can always
+// distinguish duplicates from new downloads, even when WarnOnDuplicate is off.
+func CheckForDuplicate(url string, activeDownloads func() map[string]*types.DownloadRecord) *DuplicateResult {
+	normalizedInputURL := strings.TrimRight(url, "/")
+
+	// Check active downloads
+	if activeDownloads != nil {
+		active := activeDownloads()
+		for _, d := range active {
+			normalizedExistingURL := strings.TrimRight(d.URL, "/")
+			if normalizedExistingURL == normalizedInputURL {
+				isActive := false
+				if d.ProgressState != nil && !progress.CfgProgress(d).Done.Load() {
+					isActive = true
+				}
+
+				return &DuplicateResult{
+					Exists:   true,
+					IsActive: isActive,
+					Filename: d.Filename,
+					URL:      d.URL,
+				}
+			}
+		}
+	}
+
+	// Check persisted completed/paused/queued entries in DB.
+	if exists, err := store.CheckDownloadExists(normalizedInputURL); err == nil && exists {
+		return &DuplicateResult{
+			Exists:   true,
+			IsActive: false,
+			URL:      normalizedInputURL,
+		}
+	}
+
+	return nil
+}

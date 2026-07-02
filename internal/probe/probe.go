@@ -13,8 +13,8 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/engine"
-	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/transport"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -91,11 +91,11 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 	}
 
 	// Standardize on PoolMaxConnsPerHost for probes to match the eventual download path
-	transport := engine.DefaultNetworkPool.AcquireTransport(proxyURL, customDNS, types.PoolMaxConnsPerHost)
-	defer engine.DefaultNetworkPool.ReleaseTransport(transport)
+	transport_ := transport.DefaultNetworkPool.AcquireTransport(proxyURL, customDNS, types.PoolMaxConnsPerHost)
+	defer transport.DefaultNetworkPool.ReleaseTransport(transport_)
 
 	client := &http.Client{
-		Transport: transport,
+		Transport: transport_,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if len(via) >= 10 {
 				return fmt.Errorf("stopped after 10 redirects")

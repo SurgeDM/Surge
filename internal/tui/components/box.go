@@ -94,7 +94,6 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 			borderStyler.Render(strings.Repeat(horizontal, remainingWidth)) +
 			rightTitle +
 			borderStyler.Render(topRight)
-
 	} else if leftTitle != "" {
 		// Case 2: Only Left Title
 		remainingWidth := innerWidth - leftTitleWidth - lipgloss.Width(horizontal)
@@ -105,7 +104,6 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 		topBorder = borderStyler.Render(topLeft+horizontal) +
 			leftTitle +
 			borderStyler.Render(strings.Repeat(horizontal, remainingWidth)+topRight)
-
 	} else if rightTitle != "" {
 		// Case 3: Only Right Title
 		remainingWidth := innerWidth - rightTitleWidth - lipgloss.Width(horizontal)
@@ -116,7 +114,6 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 		topBorder = borderStyler.Render(topLeft+strings.Repeat(horizontal, remainingWidth)) +
 			rightTitle +
 			borderStyler.Render(horizontal+topRight)
-
 	} else {
 		// Case 4: No Title
 		topBorder = borderStyler.Render(topLeft + strings.Repeat(horizontal, innerWidth) + topRight)

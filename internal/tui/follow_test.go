@@ -1,11 +1,12 @@
 package tui
 
 import (
+	engineprogress "github.com/SurgeDM/Surge/internal/progress"
+
 	"testing"
 
 	"charm.land/bubbles/v2/viewport"
-	"github.com/SurgeDM/Surge/internal/engine/events"
-	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/types"
 )
 
 func TestAutoFollow_BrandNewDownload(t *testing.T) {
@@ -16,11 +17,12 @@ func TestAutoFollow_BrandNewDownload(t *testing.T) {
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	msg := events.DownloadStartedMsg{
+	msg := types.DownloadEvent{
+		Type:       types.EventStarted,
 		DownloadID: "new-1",
 		Filename:   "new-file",
 		Total:      100,
-		State:      types.NewProgressState("new-1", 100),
+		State:      &types.DownloadRecord{ProgressState: engineprogress.New("new-1", 100)},
 	}
 
 	updated, _ := m.Update(msg)
@@ -46,11 +48,12 @@ func TestAutoFollow_ExistingDownloadRestart(t *testing.T) {
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	msg := events.DownloadStartedMsg{
+	msg := types.DownloadEvent{
+		Type:       types.EventStarted,
 		DownloadID: "existing-1",
 		Filename:   "file",
 		Total:      100,
-		State:      types.NewProgressState("existing-1", 100),
+		State:      &types.DownloadRecord{ProgressState: engineprogress.New("existing-1", 100)},
 	}
 
 	updated, _ := m.Update(msg)
@@ -69,11 +72,12 @@ func TestAutoFollow_SuppressedByPin(t *testing.T) {
 		logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
 
-	msg := events.DownloadStartedMsg{
+	msg := types.DownloadEvent{
+		Type:       types.EventStarted,
 		DownloadID: "new-1",
 		Filename:   "new-file",
 		Total:      100,
-		State:      types.NewProgressState("new-1", 100),
+		State:      &types.DownloadRecord{ProgressState: engineprogress.New("new-1", 100)},
 	}
 
 	updated, _ := m.Update(msg)
@@ -101,11 +105,12 @@ func TestAutoFollow_QueuedToActiveTransition(t *testing.T) {
 	// Update list to reflect initial state
 	m.UpdateListItems()
 
-	msg := events.DownloadStartedMsg{
+	msg := types.DownloadEvent{
+		Type:       types.EventStarted,
 		DownloadID: "id-1",
 		Filename:   "file",
 		Total:      100,
-		State:      types.NewProgressState("id-1", 100),
+		State:      &types.DownloadRecord{ProgressState: engineprogress.New("id-1", 100)},
 	}
 
 	updated, _ := m.Update(msg)

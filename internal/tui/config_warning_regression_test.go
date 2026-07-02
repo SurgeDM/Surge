@@ -163,10 +163,10 @@ func TestConfigWarning_SystemLogMsg_UsesInfoStyle(t *testing.T) {
 		list:        NewDownloadList(80, 20),
 	}
 
-	from := "github.com/SurgeDM/Surge/internal/engine/events"
-	_ = from // suppress unused import - events imported via update_events.go
+	from := "github.com/SurgeDM/Surge/internal/types"
+	_ = from // suppress unused import - events imported via update_types.go
 
-	// Use the events.SystemLogMsg path directly
+	// Use the types.DownloadEvent path directly
 	m.addLogEntry(LogStyleStarted.Render("ℹ Startup integrity check: no issues found"))
 
 	if len(m.logEntries) == 0 {

@@ -1,0 +1,67 @@
+package service
+
+import (
+	"context"
+
+	"github.com/SurgeDM/Surge/internal/types"
+)
+
+// DownloadService defines the interface for interacting with the download engine.
+// This abstraction allows the TUI to switch between a local embedded backend
+// and a remote daemon connection.
+type DownloadService interface {
+	// List returns the status of all active and completed downloads.
+	List() ([]types.DownloadStatus, error)
+
+	// History returns completed downloads
+	History() ([]types.DownloadRecord, error)
+
+	// Add queues a new download.
+	Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error)
+
+	// AddWithID queues a new download with a caller-provided ID.
+	AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error)
+
+	// Pause pauses an active download.
+	Pause(id string) error
+
+	// Resume resumes a paused download.
+	Resume(id string) error
+
+	// ResumeBatch resumes multiple paused downloads efficiently.
+	ResumeBatch(ids []string) []error
+
+	// UpdateURL updates the URL of a paused or errored download
+	UpdateURL(id string, newURL string) error
+
+	// Delete cancels and removes a download.
+	Delete(id string) error
+
+	// Purge cancels and removes a download, and deletes its files from disk.
+	Purge(id string) error
+
+	// StreamEvents returns a channel that receives real-time download types.
+	// For local mode, this is a direct channel.
+	// For remote mode, this is sourced from SSE.
+	StreamEvents(ctx context.Context) (<-chan types.DownloadEvent, func(), error)
+
+	// Publish emits an event into the service's event stream.
+	Publish(msg types.DownloadEvent) error
+
+	// GetStatus returns a status for a single download by id.
+	GetStatus(id string) (*types.DownloadStatus, error)
+
+	// Shutdown handles graceful shutdown of the service
+	Shutdown() error
+
+	//Clear completed downloads from surge
+	ClearCompleted() (int64, error)
+
+	//Clear failed downloads from surge
+	ClearFailed() (int64, error)
+	// SetRateLimit sets the speed limit for a specific download
+	SetRateLimit(id string, rate int64) error
+
+	// ClearRateLimit removes a download's rate limit override so it inherits the default.
+	ClearRateLimit(id string) error
+}

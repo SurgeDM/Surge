@@ -12,9 +12,8 @@ import (
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/engine/events"
-	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -29,7 +28,7 @@ type rateLimitSettingsService interface {
 	SetDefaultRateLimit(rate int64) error
 }
 
-func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service core.DownloadService) {
+func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service service.DownloadService) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 			"status": "ok",
@@ -291,7 +290,7 @@ func parseRateLimitQuery(w http.ResponseWriter, r *http.Request) (int64, string,
 	return rate, rateStr, true
 }
 
-func eventsHandler(service core.DownloadService) http.HandlerFunc {
+func eventsHandler(service service.DownloadService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
@@ -322,7 +321,7 @@ func eventsHandler(service core.DownloadService) http.HandlerFunc {
 					return
 				}
 
-				frames, err := events.EncodeSSEMessages(msg)
+				frames, err := types.EncodeSSEMessages(msg)
 				if err != nil {
 					utils.Debug("Error encoding SSE event: %v", err)
 					continue
@@ -379,7 +378,7 @@ func writeJSONResponse(w http.ResponseWriter, status int, payload interface{}) {
 	}
 }
 
-func resolveDownloadDestPath(service core.DownloadService, id string) (string, error) {
+func resolveDownloadDestPath(service service.DownloadService, id string) (string, error) {
 	if service == nil {
 		return "", ErrServiceUnavailable
 	}

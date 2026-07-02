@@ -10,14 +10,14 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
-	"github.com/SurgeDM/Surge/internal/engine/state"
-	"github.com/SurgeDM/Surge/internal/engine/types"
-	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/scheduler"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/types"
 )
 
-func startAuthedTestServer(t *testing.T, service core.DownloadService, token string) string {
+func startAuthedTestServer(t *testing.T, service service.DownloadService, token string) string {
 	t.Helper()
 
 	mux := http.NewServeMux()
@@ -32,19 +32,20 @@ func startAuthedTestServer(t *testing.T, service core.DownloadService, token str
 func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	tempDir := setupXDGEnvIsolation(t)
 
-	state.CloseDB()
+	store.CloseDB()
 	if err := initializeGlobalState(); err != nil {
 		t.Fatalf("initializeGlobalState failed: %v", err)
 	}
 
-	GlobalProgressCh = make(chan any, 100)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 2)
+	GlobalProgressCh = make(chan types.DownloadEvent, 100)
+	GlobalPool = scheduler.New(GlobalProgressCh, 2)
 
 	// Start server
-	svc := core.NewLocalDownloadService(GlobalPool)
+	eventBus := orchestrator.NewEventBus()
+	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
+	lifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	svc := service.NewLocalDownloadService(lifecycle)
 	t.Cleanup(func() { _ = svc.Shutdown() })
-
-	lifecycle := processing.NewLifecycleManager(nil, nil)
 	stream, streamCleanup, err := svc.StreamEvents(context.Background())
 	if err != nil {
 		t.Fatalf("failed to open event stream: %v", err)
@@ -85,7 +86,7 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 		t.Fatalf("failed to create partial file: %v", err)
 	}
 
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := store.AddToMasterList(types.DownloadRecord{
 		ID:         id,
 		URL:        url,
 		DestPath:   destPath,
@@ -97,7 +98,7 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 		t.Fatalf("failed to seed master list: %v", err)
 	}
 
-	if err := state.SaveState(url, destPath, &types.DownloadState{
+	if err := store.SaveState(url, destPath, &types.DownloadRecord{
 		ID:         id,
 		URL:        url,
 		DestPath:   destPath,
@@ -132,7 +133,7 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	deadline := time.Now().Add(2 * time.Second)
 	for time.Now().Before(deadline) {
 		_, statErr := os.Stat(incompletePath)
-		entry, dbErr := state.GetDownload(id)
+		entry, dbErr := store.GetDownload(id)
 		if dbErr != nil {
 			t.Fatalf("failed to query entry after delete: %v", dbErr)
 		}
@@ -145,7 +146,7 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	if _, err := os.Stat(incompletePath); !os.IsNotExist(err) {
 		t.Fatalf("expected partial file to be deleted, stat err: %v", err)
 	}
-	entry, err := state.GetDownload(id)
+	entry, err := store.GetDownload(id)
 	if err != nil {
 		t.Fatalf("failed to query entry after delete: %v", err)
 	}

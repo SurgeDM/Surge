@@ -9,12 +9,12 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/engine/events"
-	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
+func (m *RootModel) processProgressMsg(msg types.DownloadEvent) tea.Cmd {
 	d := m.FindDownloadByID(msg.DownloadID)
 	if d == nil || d.done || d.paused {
 		return nil
@@ -25,7 +25,7 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 	d.Total = msg.Total
 	d.Speed = msg.Speed
 	d.Elapsed = msg.Elapsed
-	d.Connections = msg.ActiveConnections
+	d.Connections = msg.Connections
 	d.rateLimited = msg.RateLimited
 
 	// Keep "Resuming..." visible until we observe actual transfer.
@@ -41,7 +41,7 @@ func (m *RootModel) processProgressMsg(msg events.ProgressMsg) tea.Cmd {
 		// We only get bitmap, no progress array (to save bandwidth)
 		// State needs to be updated carefully
 		if d.state != nil {
-			d.state.RestoreBitmap(msg.ChunkBitmap, msg.ActualChunkSize)
+			d.state.RestoreBitmap(msg.ChunkBitmap, msg.ChunkSize)
 		}
 		if d.state != nil && len(msg.ChunkProgress) > 0 {
 			d.state.SetChunkProgress(msg.ChunkProgress)
@@ -94,7 +94,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	resolvedPath := path
 	resolvedFilename := candidateFilename
 	optimisticFilename := candidateFilename
-	if p, f, err := processing.ResolveDestination(url, candidateFilename, path, isDefaultPath, m.Settings, nil, nil); err == nil {
+	if p, f, err := orchestrator.ResolveDestination(url, candidateFilename, path, isDefaultPath, m.Settings, nil, nil); err == nil {
 		resolvedPath = p
 		resolvedFilename = f
 		if candidateFilename != "" {
@@ -107,7 +107,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	}
 
 	// Call Orchestrator Enqueue
-	req := &processing.DownloadRequest{
+	req := &orchestrator.DownloadRequest{
 		URL:                url,
 		Filename:           candidateFilename,
 		Path:               path,
@@ -125,7 +125,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	}
 	displayName := optimisticFilename
 	if displayName == "" {
-		displayName = processing.InferFilenameFromURL(url)
+		displayName = orchestrator.InferFilenameFromURL(url)
 	}
 	if displayName == "" {
 		displayName = "Queued"
@@ -160,8 +160,6 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 				requestID,
 				workers,
 				minChunkSize,
-				0,
-				false,
 			)
 		} else {
 			newID, err = m.Service.Add(
@@ -173,8 +171,6 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 				!isDefaultPath,
 				workers,
 				minChunkSize,
-				0,
-				false,
 			)
 		}
 		if err != nil {

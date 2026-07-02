@@ -7,24 +7,47 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
-	"github.com/SurgeDM/Surge/internal/engine/events"
-	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/types"
 )
 
-func newOverrideTestModel(t *testing.T, addFunc processing.AddDownloadFunc) RootModel {
-	t.Helper()
-	ch := make(chan any, 16)
-	pool := download.NewWorkerPool(ch, 1)
-	svc := core.NewLocalDownloadServiceWithInput(pool, ch)
-	t.Cleanup(func() { _ = svc.Shutdown() })
+type overrideMockService struct {
+	service.DownloadService
+	addFunc func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64) (string, error)
+}
 
-	orchestrator := processing.NewLifecycleManager(addFunc, nil)
+func (m *overrideMockService) Add(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64) (string, error) {
+	if m.addFunc != nil {
+		return m.addFunc(url, path, filename, mirrors, headers, isExplicit, workers, minChunkSize)
+	}
+	return "mock-id", nil
+}
+
+func (m *overrideMockService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error) {
+	if m.addFunc != nil {
+		return m.addFunc(url, path, filename, mirrors, headers, false, workers, minChunkSize)
+	}
+	return id, nil
+}
+
+func newOverrideTestModel(t *testing.T, addFunc func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64) (string, error)) RootModel {
+	t.Helper()
+
+	bus := orchestrator.NewEventBus()
+	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	baseSvc := service.NewLocalDownloadService(mgr)
+	t.Cleanup(func() { _ = baseSvc.Shutdown() })
+
+	svc := &overrideMockService{
+		DownloadService: baseSvc,
+		addFunc:         addFunc,
+	}
+
 	return RootModel{
 		Settings:      config.DefaultSettings(),
 		Service:       svc,
-		Orchestrator:  orchestrator,
+		Orchestrator:  nil,
 		list:          NewDownloadList(80, 20),
 		keys:          config.DefaultKeyMap(),
 		inputs:        []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
@@ -49,7 +72,7 @@ func TestOverride_ExtensionConfirmPreservesWorkersAndMinChunkSize(t *testing.T) 
 	var capturedWorkers int
 	var capturedMinChunkSize int64
 
-	addFunc := func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64, fileSize int64, supportsRange bool) (string, error) {
+	addFunc := func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64) (string, error) {
 		capturedWorkers = workers
 		capturedMinChunkSize = minChunkSize
 		return "real-id", nil
@@ -59,7 +82,8 @@ func TestOverride_ExtensionConfirmPreservesWorkersAndMinChunkSize(t *testing.T) 
 	m.Settings.Extension.ExtensionPrompt.Value = true
 	m.Settings.General.WarnOnDuplicate.Value = false
 
-	msg := events.DownloadRequestMsg{
+	msg := types.DownloadEvent{
+		Type:         types.EventRequest,
 		URL:          "http://example.com/file.zip",
 		Filename:     "file.zip",
 		Path:         t.TempDir(),
@@ -99,7 +123,7 @@ func TestOverride_DuplicateContinuePreservesWorkersAndMinChunkSize(t *testing.T)
 	var capturedWorkers int
 	var capturedMinChunkSize int64
 
-	addFunc := func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64, fileSize int64, supportsRange bool) (string, error) {
+	addFunc := func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64) (string, error) {
 		capturedWorkers = workers
 		capturedMinChunkSize = minChunkSize
 		return "real-id", nil
@@ -114,7 +138,8 @@ func TestOverride_DuplicateContinuePreservesWorkersAndMinChunkSize(t *testing.T)
 		Filename: "file.zip",
 	})
 
-	msg := events.DownloadRequestMsg{
+	msg := types.DownloadEvent{
+		Type:         types.EventRequest,
 		URL:          "http://example.com/file.zip",
 		Filename:     "file.zip",
 		Path:         t.TempDir(),
@@ -151,7 +176,7 @@ func TestOverride_ManualURLDuplicateDoesNotInheritStaleOverride(t *testing.T) {
 	var capturedWorkers int
 	var capturedMinChunkSize int64
 
-	addFunc := func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64, fileSize int64, supportsRange bool) (string, error) {
+	addFunc := func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64) (string, error) {
 		capturedWorkers = workers
 		capturedMinChunkSize = minChunkSize
 		return "real-id", nil
@@ -206,7 +231,7 @@ func TestOverride_BatchConfirmPreservesWorkersAndMinChunkSize(t *testing.T) {
 		minChunkSize int64
 	}
 
-	addFunc := func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64, fileSize int64, supportsRange bool) (string, error) {
+	addFunc := func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64) (string, error) {
 		captured = append(captured, struct {
 			workers      int
 			minChunkSize int64
@@ -218,10 +243,11 @@ func TestOverride_BatchConfirmPreservesWorkersAndMinChunkSize(t *testing.T) {
 	m.Settings.General.WarnOnDuplicate.Value = false
 
 	batchPath := t.TempDir()
-	batchMsg := events.BatchDownloadRequestMsg{
+	batchMsg := types.DownloadEvent{
+		Type: types.EventBatchRequest,
 		Path: batchPath,
-		Requests: []events.DownloadRequestMsg{
-			{URL: "http://example.com/one.zip", Filename: "one.zip", Path: batchPath, Workers: 2, MinChunkSize: 256 * 1024},
+		BatchEvents: []types.DownloadEvent{
+			{Type: types.EventRequest, URL: "http://example.com/one.zip", Filename: "one.zip", Path: batchPath, Workers: 2, MinChunkSize: 256 * 1024},
 			{URL: "http://example.com/two.zip", Filename: "two.zip", Path: batchPath, Workers: 6, MinChunkSize: 1 << 20},
 		},
 	}

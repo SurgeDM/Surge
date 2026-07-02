@@ -7,23 +7,51 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/service"
 )
 
 func newCategoryTestModel(t *testing.T, settings *config.Settings) RootModel {
 	t.Helper()
-	ch := make(chan any, 16)
-	pool := download.NewWorkerPool(ch, 1)
-	svc := core.NewLocalDownloadServiceWithInput(pool, ch)
-	t.Cleanup(func() { _ = svc.Shutdown() })
-	return RootModel{
-		Settings: settings,
-		Service:  svc,
-		list:     NewDownloadList(80, 20),
-		keys:     config.DefaultKeyMap(),
-		inputs:   []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
+	bus := orchestrator.NewEventBus()
+	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	baseSvc := service.NewLocalDownloadService(mgr)
+	t.Cleanup(func() { _ = baseSvc.Shutdown() })
+
+	svc := &categoryMockService{
+		DownloadService: baseSvc,
+		addFunc: func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64) (string, error) {
+			return "mock-id", nil
+		},
 	}
+
+	return RootModel{
+		Settings:     settings,
+		Service:      svc,
+		Orchestrator: nil,
+		list:         NewDownloadList(80, 20),
+		keys:         config.DefaultKeyMap(),
+		inputs:       []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
+	}
+}
+
+type categoryMockService struct {
+	service.DownloadService
+	addFunc func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64) (string, error)
+}
+
+func (m *categoryMockService) Add(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64) (string, error) {
+	if m.addFunc != nil {
+		return m.addFunc(url, path, filename, mirrors, headers, isExplicit, workers, minChunkSize)
+	}
+	return "mock-id", nil
+}
+
+func (m *categoryMockService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error) {
+	if m.addFunc != nil {
+		return m.addFunc(url, path, filename, mirrors, headers, false, workers, minChunkSize)
+	}
+	return id, nil
 }
 
 func TestStartDownload_RoutesDefaultPathWithURLDerivedFilename(t *testing.T) {

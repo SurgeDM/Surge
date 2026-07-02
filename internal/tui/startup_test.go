@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
-	"github.com/SurgeDM/Surge/internal/engine/state"
-	"github.com/SurgeDM/Surge/internal/engine/types"
-	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/types"
 )
 
 // TestTUI_Startup_HandlesResume verifies that TUI initialization handles resume logic correctly
@@ -33,11 +33,11 @@ func TestTUI_Startup_HandlesResume(t *testing.T) {
 	seedDownload(t, testID, testURL, testDest, "queued")
 
 	// 3. Initialize TUI Model (Simulate StartTUI)
-	progressChan := make(chan any, 10)
-	pool := download.NewWorkerPool(progressChan, 3)
+	bus := orchestrator.NewEventBus()
+	mgr := orchestrator.NewLifecycleManager(nil, bus)
 
 	// PASSING noResume=false (default)
-	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1700, "test-version", service.NewLocalDownloadService(mgr), mgr, false)
 
 	// 4. Verify Download is Active in Model
 	// InitialRootModel loads downloads and should set paused=false for "queued" items
@@ -82,10 +82,10 @@ func TestTUI_Startup_LoadsCompletedTiming(t *testing.T) {
 	const timeTakenMs = int64(2500)
 	const avgSpeed = float64(2 * 1024 * 1024) // 2 MB/s
 
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := store.AddToMasterList(types.DownloadRecord{
 		ID:         testID,
 		URL:        testURL,
-		URLHash:    state.URLHash(testURL),
+		URLHash:    "dummy-hash",
 		DestPath:   testDest,
 		Filename:   filepath.Base(testDest),
 		Status:     "completed",
@@ -97,9 +97,9 @@ func TestTUI_Startup_LoadsCompletedTiming(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	progressChan := make(chan any, 10)
-	pool := download.NewWorkerPool(progressChan, 3)
-	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
+	bus := orchestrator.NewEventBus()
+	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	m := InitialRootModel(1700, "test-version", service.NewLocalDownloadService(mgr), mgr, false)
 
 	var found *DownloadModel
 	for _, d := range m.downloads {
@@ -135,10 +135,10 @@ func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
 	testID := "tui-error-id"
 	testURL := "http://example.com/error.bin"
 	testDest := filepath.Join(tmpDir, "error.bin")
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := store.AddToMasterList(types.DownloadRecord{
 		ID:       testID,
 		URL:      testURL,
-		URLHash:  state.URLHash(testURL),
+		URLHash:  "dummy-hash",
 		DestPath: testDest,
 		Filename: filepath.Base(testDest),
 		Status:   "error",
@@ -146,9 +146,9 @@ func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	progressChan := make(chan any, 10)
-	pool := download.NewWorkerPool(progressChan, 3)
-	m := InitialRootModel(1700, "test-version", core.NewLocalDownloadServiceWithInput(pool, progressChan), processing.NewLifecycleManager(nil, nil), false)
+	bus := orchestrator.NewEventBus()
+	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	m := InitialRootModel(1700, "test-version", service.NewLocalDownloadService(mgr), mgr, false)
 
 	var found *DownloadModel
 	for _, d := range m.downloads {
@@ -184,15 +184,11 @@ func setupTestEnv(t *testing.T, tmpDir string) {
 	}
 
 	// Configure DB
-	dbPath := filepath.Join(surgeDir, "state", "surge.db")
-	_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
-	state.CloseDB()
-	t.Cleanup(state.CloseDB)
-	state.Configure(dbPath)
+	_ = testutil.SetupStateDB(t)
 }
 
 func seedDownload(t *testing.T, id, url, dest, status string) {
-	manualState := &types.DownloadState{
+	manualState := &types.DownloadRecord{
 		ID:         id,
 		URL:        url,
 		Filename:   filepath.Base(dest),
@@ -202,7 +198,7 @@ func seedDownload(t *testing.T, id, url, dest, status string) {
 		PausedAt:   0,
 		CreatedAt:  time.Now().Unix(),
 	}
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := store.AddToMasterList(types.DownloadRecord{
 		ID:         id,
 		URL:        url,
 		DestPath:   dest,
@@ -213,7 +209,7 @@ func seedDownload(t *testing.T, id, url, dest, status string) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.SaveState(url, dest, manualState); err != nil {
+	if err := store.SaveState(url, dest, manualState); err != nil {
 		t.Fatal(err)
 	}
 }

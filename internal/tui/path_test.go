@@ -6,8 +6,6 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -17,12 +15,9 @@ func TestStartDownload_EnforcesAbsolutePath(t *testing.T) {
 	tmpDir, _ := os.MkdirTemp("", "surge-test")
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	ch := make(chan any, 10)
-	pool := download.NewWorkerPool(ch, 1)
-
 	m := RootModel{
 		Settings:  config.DefaultSettings(),
-		Service:   core.NewLocalDownloadServiceWithInput(pool, ch),
+		Service:   &mockService{},
 		downloads: []*DownloadModel{},
 		list:      NewDownloadList(80, 20), // Initialize list
 	}

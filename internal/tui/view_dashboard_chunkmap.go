@@ -22,7 +22,6 @@ func (m *RootModel) renderChunkMapBox(width, height int, selected *DownloadModel
 	if len(bitmap) == 0 || bitmapWidth == 0 {
 		innerContent = renderEmptyMessage(contentWidth, contentHeight, "Chunk visualization not available")
 	} else {
-
 		targetRows := contentHeight
 		if targetRows < 3 {
 			targetRows = 3
@@ -46,7 +45,6 @@ func (m *RootModel) renderChunkMapBox(width, height int, selected *DownloadModel
 		chunkContentWrapper := chunkMapPadding.Render(chunkMap.View())
 
 		innerContent = lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Top, chunkContentWrapper)
-
 	}
 
 	return renderBtopBox("", PaneTitleStyle.Render(" Chunk Map "), innerContent, width, height, colors.Gray())

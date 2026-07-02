@@ -11,7 +11,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/bugreport"
 	"github.com/SurgeDM/Surge/internal/clipboard"
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -189,7 +189,6 @@ func (m RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.C
 }
 
 func (m RootModel) updateQuitConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-
 	confirmQuit := func() (tea.Model, tea.Cmd) {
 		if m.cancelEnqueue != nil {
 			m.cancelEnqueue()
@@ -225,7 +224,6 @@ func (m RootModel) updateQuitConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-
 	if key.Matches(msg, m.keys.BatchConfirm.Confirm) {
 		// Add all URLs as downloads, skipping duplicates
 		path := strings.TrimSpace(m.inputs[2].Value())
@@ -251,7 +249,7 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 				continue
 			}
 			var cmd tea.Cmd
-			m, cmd = m.startDownload(request.URL, request.Mirrors, request.Headers, requestPath, isDefaultPath, request.Filename, request.ID, request.Workers, request.MinChunkSize)
+			m, cmd = m.startDownload(request.URL, request.Mirrors, request.Headers, requestPath, isDefaultPath, request.Filename, request.DownloadID, request.Workers, request.MinChunkSize)
 			if cmd != nil {
 				batchCmds = append(batchCmds, cmd)
 			}
@@ -296,7 +294,6 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 }
 
 func (m RootModel) updateURLUpdate(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-
 	if key.Matches(msg, m.keys.Input.Esc) {
 		m.state = DashboardState
 		m.urlUpdateInput.SetValue("")

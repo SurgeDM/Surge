@@ -1,0 +1,1216 @@
+package store
+
+import (
+	"errors"
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/SurgeDM/Surge/internal/types"
+	"github.com/SurgeDM/Surge/internal/utils"
+	"github.com/google/uuid"
+)
+
+func setupTestDB(t *testing.T) string {
+	// Create temp directory for test
+	tempDir, err := os.MkdirTemp("", "surge-test-*")
+	if err != nil {
+		t.Fatalf("Failed to create temp dir: %v", err)
+	}
+
+	// Reset DB singleton
+	CloseDB()
+
+	// Configure DB
+	dbPath := filepath.Join(tempDir, "surge.db")
+	Configure(dbPath)
+
+	return tempDir
+}
+
+func TestURLHash(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		wantLen int
+	}{
+		{"simple URL", "https://example.com/file.zip", 16},
+		{"URL with path", "https://example.com/path/to/file.zip", 16},
+		{"URL with query", "https://example.com/file.zip?token=abc", 16},
+		{"different domain", "https://other.org/download", 16},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			hash := URLHash(tt.url)
+			if len(hash) != tt.wantLen {
+				t.Errorf("URLHash(%s) length = %d, want %d", tt.url, len(hash), tt.wantLen)
+			}
+		})
+	}
+}
+
+func TestURLHashUniqueness(t *testing.T) {
+	url1 := "https://example.com/file1.zip"
+	url2 := "https://example.com/file2.zip"
+
+	hash1 := URLHash(url1)
+	hash2 := URLHash(url2)
+
+	if hash1 == hash2 {
+		t.Errorf("Different URLs produced same hash: %s", hash1)
+	}
+}
+
+func TestSaveLoadState(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	testURL := "https://test.example.com/save-load-test.zip"
+	testDestPath := filepath.Join(tmpDir, "testfile.zip")
+
+	id := uuid.New().String()
+	originalState := &types.DownloadRecord{
+		ID:         id,
+		URL:        testURL,
+		DestPath:   testDestPath,
+		TotalSize:  1000000,
+		Downloaded: 500000,
+		Tasks: []types.Task{
+			{Offset: 500000, Length: 250000},
+			{Offset: 750000, Length: 250000},
+		},
+		Filename: "save-load-test.zip",
+	}
+
+	// Save state
+	if err := SaveState(testURL, testDestPath, originalState); err != nil {
+		t.Fatalf("SaveState failed: %v", err)
+	}
+	_ = AddToMasterList(types.DownloadRecord{ID: id, URL: testURL, DestPath: testDestPath, Status: "paused"})
+
+	// Load state
+	loadedState, err := LoadState(testURL, testDestPath)
+	if err != nil {
+		t.Fatalf("LoadState failed: %v", err)
+	}
+
+	// Verify fields
+	if loadedState.ID != originalState.ID {
+		t.Errorf("ID = %s, want %s", loadedState.ID, originalState.ID)
+	}
+	if loadedState.URL != originalState.URL {
+		t.Errorf("URL = %s, want %s", loadedState.URL, originalState.URL)
+	}
+	if loadedState.Downloaded != originalState.Downloaded {
+		t.Errorf("Downloaded = %d, want %d", loadedState.Downloaded, originalState.Downloaded)
+	}
+	if loadedState.TotalSize != originalState.TotalSize {
+		t.Errorf("TotalSize = %d, want %d", loadedState.TotalSize, originalState.TotalSize)
+	}
+	if len(loadedState.Tasks) != len(originalState.Tasks) {
+		t.Errorf("Tasks count = %d, want %d", len(loadedState.Tasks), len(originalState.Tasks))
+	}
+	if loadedState.Filename != originalState.Filename {
+		t.Errorf("Filename = %s, want %s", loadedState.Filename, originalState.Filename)
+	}
+
+	// Verify hashes were set
+	if loadedState.URLHash == "" {
+		t.Error("URLHash was not set")
+	}
+}
+
+func TestSaveStateWithOptions_ComputesHashForSmallFile(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	testURL := "https://test.example.com/hash-small.zip"
+	testDestPath := filepath.Join(tmpDir, "hash-small.zip")
+	surgePath := testDestPath + types.IncompleteSuffix
+	content := []byte("small paused content")
+	if err := os.WriteFile(surgePath, content, 0o644); err != nil {
+		t.Fatalf("failed to write .surge file: %v", err)
+	}
+	expectedHash, timedOut, err := computeFileHashMD5WithTimeout(surgePath, time.Second)
+	if err != nil {
+		t.Fatalf("computeFileHashMD5WithTimeout failed: %v", err)
+	}
+	if timedOut {
+		t.Fatal("computeFileHashMD5WithTimeout unexpectedly timed out")
+	}
+
+	downloadState := &types.DownloadRecord{
+		ID:         "hash-small-id",
+		URL:        testURL,
+		DestPath:   testDestPath,
+		Filename:   "hash-small.zip",
+		TotalSize:  int64(len(content)),
+		Downloaded: int64(len(content) / 2),
+		Tasks: []types.Task{
+			{Offset: int64(len(content) / 2), Length: int64(len(content) / 2)},
+		},
+	}
+
+	err = SaveStateWithOptions(testURL, testDestPath, downloadState, SaveStateOptions{
+		InlineHashTimeout: time.Second,
+	})
+	if err != nil {
+		t.Fatalf("SaveStateWithOptions failed: %v", err)
+	}
+	_ = AddToMasterList(types.DownloadRecord{ID: "hash-small-id", URL: testURL, DestPath: testDestPath, Status: "paused"})
+
+	loaded, err := LoadState(testURL, testDestPath)
+	if err != nil {
+		t.Fatalf("LoadState failed: %v", err)
+	}
+	if loaded.FileHash != expectedHash {
+		t.Fatalf("FileHash = %q, want %q", loaded.FileHash, expectedHash)
+	}
+}
+
+func TestSaveStateWithOptions_SkipsHashOnTimeoutButPersistsState(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	testURL := "https://test.example.com/hash-large.zip"
+	testDestPath := filepath.Join(tmpDir, "hash-large.zip")
+	surgePath := testDestPath + types.IncompleteSuffix
+	content := make([]byte, 256*1024)
+	if err := os.WriteFile(surgePath, content, 0o644); err != nil {
+		t.Fatalf("failed to write .surge file: %v", err)
+	}
+
+	downloadState := &types.DownloadRecord{
+		ID:         "hash-large-id",
+		URL:        testURL,
+		DestPath:   testDestPath,
+		Filename:   "hash-large.zip",
+		TotalSize:  int64(len(content)),
+		Downloaded: 128 * 1024,
+		Tasks: []types.Task{
+			{Offset: 128 * 1024, Length: 64 * 1024},
+			{Offset: 192 * 1024, Length: 64 * 1024},
+		},
+	}
+
+	err := SaveStateWithOptions(testURL, testDestPath, downloadState, SaveStateOptions{
+		InlineHashTimeout: time.Nanosecond, // force timeout/skip
+	})
+	if err != nil {
+		t.Fatalf("SaveStateWithOptions failed: %v", err)
+	}
+	_ = AddToMasterList(types.DownloadRecord{ID: "hash-large-id", URL: testURL, DestPath: testDestPath, Status: "paused"})
+
+	loaded, err := LoadState(testURL, testDestPath)
+	if err != nil {
+		t.Fatalf("LoadState failed: %v", err)
+	}
+	if loaded.FileHash != "" {
+		t.Fatalf("FileHash = %q, want empty when hash is skipped", loaded.FileHash)
+	}
+	if len(loaded.Tasks) != 2 {
+		t.Fatalf("Tasks count = %d, want 2", len(loaded.Tasks))
+	}
+
+	entry, err := GetDownload(downloadState.ID)
+	if err != nil {
+		t.Fatalf("GetDownload failed: %v", err)
+	}
+	if entry == nil {
+		t.Fatal("expected persisted download entry")
+		return
+	}
+	if entry.Status != "paused" {
+		t.Fatalf("entry status = %q, want paused", entry.Status)
+	}
+}
+
+func TestDeleteState(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	testURL := "https://test.example.com/delete-test.zip"
+	testDestPath := filepath.Join(tmpDir, "delete-test.zip")
+	id := "test-id-delete"
+
+	state := &types.DownloadRecord{
+		ID:       id,
+		URL:      testURL,
+		DestPath: testDestPath,
+		Filename: "delete-test.zip",
+	}
+
+	// Save state
+	if err := SaveState(testURL, testDestPath, state); err != nil {
+		t.Fatalf("SaveState failed: %v", err)
+	}
+	_ = AddToMasterList(types.DownloadRecord{ID: id, URL: testURL, DestPath: testDestPath, Status: "paused"})
+
+	// Verify it was saved
+	if _, err := LoadState(testURL, testDestPath); err != nil {
+		t.Fatalf("State was not saved properly: %v", err)
+	}
+
+	// Delete state
+	if err := DeleteState(id); err != nil {
+		t.Fatalf("DeleteState failed: %v", err)
+	}
+
+	// Verify it was deleted
+	_, err := LoadState(testURL, testDestPath)
+	if err == nil {
+		t.Error("LoadState should fail after DeleteState")
+	} else if !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("expected os.ErrNotExist, got: %v", err)
+	}
+}
+
+func TestStateOverwrite(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	testURL := "https://test.example.com/overwrite-test.zip"
+	testDestPath := filepath.Join(tmpDir, "overwrite-test.zip")
+	id := "test-id-overwrite"
+
+	// First pause at 30%
+	state1 := &types.DownloadRecord{
+		ID:         id,
+		URL:        testURL,
+		DestPath:   testDestPath,
+		TotalSize:  1000000,
+		Downloaded: 300000, // 30%
+		Tasks:      []types.Task{{Offset: 300000, Length: 700000}},
+		Filename:   "overwrite-test.zip",
+	}
+	if err := SaveState(testURL, testDestPath, state1); err != nil {
+		t.Fatalf("First SaveState failed: %v", err)
+	}
+	_ = AddToMasterList(types.DownloadRecord{ID: id, URL: testURL, DestPath: testDestPath, Status: "paused"})
+
+	// Second pause at 80% (simulating resume + more downloading)
+	state2 := &types.DownloadRecord{
+		ID:         id,
+		URL:        testURL,
+		DestPath:   testDestPath,
+		TotalSize:  1000000,
+		Downloaded: 800000, // 80%
+		Tasks:      []types.Task{{Offset: 800000, Length: 200000}},
+		Filename:   "overwrite-test.zip",
+	}
+	if err := SaveState(testURL, testDestPath, state2); err != nil {
+		t.Fatalf("Second SaveState failed: %v", err)
+	}
+
+	// Load and verify it's 80%, not 30%
+	loaded, err := LoadState(testURL, testDestPath)
+	if err != nil {
+		t.Fatalf("LoadState failed: %v", err)
+	}
+
+	if loaded.Downloaded != 800000 {
+		t.Errorf("Downloaded = %d, want 800000 (state should be overwritten)", loaded.Downloaded)
+	}
+	if len(loaded.Tasks) != 1 || loaded.Tasks[0].Offset != 800000 {
+		t.Errorf("Tasks not properly overwritten, got offset %d", loaded.Tasks[0].Offset)
+	}
+}
+
+func TestDuplicateURLStateIsolation(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	testURL := "https://example.com/samefile.zip"
+	dest1 := filepath.Join(tmpDir, "samefile.zip")
+	dest2 := filepath.Join(tmpDir, "samefile(1).zip")
+	dest3 := filepath.Join(tmpDir, "samefile(2).zip")
+
+	// Create 3 downloads of the same URL with different destinations
+	// IMPORTANT: Must allow separate IDs or rely on unique constraints?
+	// The new DB schema has ID as Primary Key.
+	// If we don't provide ID, SaveState generates one.
+
+	state1 := &types.DownloadRecord{
+		URL:        testURL,
+		DestPath:   dest1,
+		TotalSize:  1000000,
+		Downloaded: 100000, // 10%
+		Tasks:      []types.Task{{Offset: 100000, Length: 900000}},
+		Filename:   "samefile.zip",
+	}
+	state2 := &types.DownloadRecord{
+		URL:        testURL,
+		DestPath:   dest2,
+		TotalSize:  1000000,
+		Downloaded: 500000, // 50%
+		Tasks:      []types.Task{{Offset: 500000, Length: 500000}},
+		Filename:   "samefile(1).zip",
+	}
+	state3 := &types.DownloadRecord{
+		URL:        testURL,
+		DestPath:   dest3,
+		TotalSize:  1000000,
+		Downloaded: 900000, // 90%
+		Tasks:      []types.Task{{Offset: 900000, Length: 100000}},
+		Filename:   "samefile(2).zip",
+	}
+
+	// Save all three states
+	if err := SaveState(testURL, dest1, state1); err != nil {
+		t.Fatalf("SaveState 1 failed: %v", err)
+	}
+	_ = AddToMasterList(types.DownloadRecord{ID: state1.ID, URL: testURL, DestPath: dest1, Status: "paused"})
+	if err := SaveState(testURL, dest2, state2); err != nil {
+		t.Fatalf("SaveState 2 failed: %v", err)
+	}
+	_ = AddToMasterList(types.DownloadRecord{ID: state2.ID, URL: testURL, DestPath: dest2, Status: "paused"})
+	if err := SaveState(testURL, dest3, state3); err != nil {
+		t.Fatalf("SaveState 3 failed: %v", err)
+	}
+	_ = AddToMasterList(types.DownloadRecord{ID: state3.ID, URL: testURL, DestPath: dest3, Status: "paused"})
+
+	// Load and verify each has its correct state
+	loaded1, err := LoadState(testURL, dest1)
+	if err != nil {
+		t.Fatalf("LoadState 1 failed: %v", err)
+	}
+	if loaded1.Downloaded != 100000 {
+		t.Errorf("State 1 Downloaded = %d, want 100000", loaded1.Downloaded)
+	}
+	if loaded1.DestPath != dest1 {
+		t.Errorf("State 1 DestPath = %s, want %s", loaded1.DestPath, dest1)
+	}
+
+	loaded2, err := LoadState(testURL, dest2)
+	if err != nil {
+		t.Fatalf("LoadState 2 failed: %v", err)
+	}
+	if loaded2.Downloaded != 500000 {
+		t.Errorf("State 2 Downloaded = %d, want 500000", loaded2.Downloaded)
+	}
+	if loaded2.DestPath != dest2 {
+		t.Errorf("State 2 DestPath = %s, want %s", loaded2.DestPath, dest2)
+	}
+
+	loaded3, err := LoadState(testURL, dest3)
+	if err != nil {
+		t.Fatalf("LoadState 3 failed: %v", err)
+	}
+	if loaded3.Downloaded != 900000 {
+		t.Errorf("State 3 Downloaded = %d, want 900000", loaded3.Downloaded)
+	}
+	if loaded3.DestPath != dest3 {
+		t.Errorf("State 3 DestPath = %s, want %s", loaded3.DestPath, dest3)
+	}
+}
+
+// =============================================================================
+// UpdateStatus Tests
+// =============================================================================
+
+func TestUpdateStatus(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	id := "test-status-id"
+	entry := types.DownloadRecord{
+		ID:       id,
+		URL:      "https://example.com/status-test.zip",
+		DestPath: filepath.Join(tmpDir, "status-test.zip"),
+		Filename: "status-test.zip",
+		Status:   "downloading",
+	}
+
+	if err := AddToMasterList(entry); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+	// Mock task data using SaveState
+	state := &types.DownloadRecord{
+		ID:       id,
+		URL:      "https://example.com/status-test.zip",
+		DestPath: filepath.Join(tmpDir, "status-test.zip"),
+		Filename: "status-test.zip",
+		Tasks:    []types.Task{{Offset: 0, Length: 100}},
+	}
+	if err := SaveState("https://example.com/status-test.zip", filepath.Join(tmpDir, "status-test.zip"), state); err != nil {
+		t.Fatalf("SaveState failed: %v", err)
+	}
+
+	// Update status to paused
+	if err := UpdateStatus(id, "paused"); err != nil {
+		t.Fatalf("UpdateStatus failed: %v", err)
+	}
+
+	// Verify
+	loaded, err := GetDownload(id)
+	if err != nil {
+		t.Fatalf("GetDownload failed: %v", err)
+	}
+	if loaded.Status != "paused" {
+		t.Errorf("Status = %s, want 'paused'", loaded.Status)
+	}
+}
+
+func TestUpdateStatus_NotFound(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	err := UpdateStatus("nonexistent-id", "paused")
+	if err == nil {
+		t.Error("UpdateStatus should fail for nonexistent ID")
+	}
+}
+
+// =============================================================================
+// PauseAllDownloads Tests
+// =============================================================================
+
+func TestPauseAllDownloads(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	// Add downloads with various statuses
+	entries := []types.DownloadRecord{
+		{ID: "dl-1", URL: "https://a.com/1", DestPath: "/tmp/1", Status: "downloading"},
+		{ID: "dl-2", URL: "https://a.com/2", DestPath: "/tmp/2", Status: "queued"},
+		{ID: "dl-3", URL: "https://a.com/3", DestPath: "/tmp/3", Status: "completed"},
+	}
+
+	for _, e := range entries {
+		if err := AddToMasterList(e); err != nil {
+			t.Fatalf("AddToMasterList failed: %v", err)
+		}
+	}
+
+	// Pause all
+	if err := PauseAllDownloads(); err != nil {
+		t.Fatalf("PauseAllDownloads failed: %v", err)
+	}
+
+	// Verify non-completed are paused
+	dl1, _ := GetDownload("dl-1")
+	dl2, _ := GetDownload("dl-2")
+	dl3, _ := GetDownload("dl-3")
+
+	if dl1.Status != "paused" {
+		t.Errorf("dl-1 status = %s, want 'paused'", dl1.Status)
+	}
+	if dl2.Status != "paused" {
+		t.Errorf("dl-2 status = %s, want 'paused'", dl2.Status)
+	}
+	if dl3.Status != "completed" {
+		t.Errorf("dl-3 status = %s, want 'completed' (should not change)", dl3.Status)
+	}
+}
+
+// =============================================================================
+// ResumeAllDownloads Tests
+// =============================================================================
+
+func TestResumeAllDownloads(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	// Add paused and other downloads
+	entries := []types.DownloadRecord{
+		{ID: "dl-1", URL: "https://b.com/1", DestPath: "/tmp/1", Status: "paused"},
+		{ID: "dl-2", URL: "https://b.com/2", DestPath: "/tmp/2", Status: "paused"},
+		{ID: "dl-3", URL: "https://b.com/3", DestPath: "/tmp/3", Status: "completed"},
+	}
+
+	for _, e := range entries {
+		if err := AddToMasterList(e); err != nil {
+			t.Fatalf("AddToMasterList failed: %v", err)
+		}
+	}
+
+	// Resume all
+	if err := ResumeAllDownloads(); err != nil {
+		t.Fatalf("ResumeAllDownloads failed: %v", err)
+	}
+
+	// Verify paused are now queued
+	dl1, _ := GetDownload("dl-1")
+	dl2, _ := GetDownload("dl-2")
+	dl3, _ := GetDownload("dl-3")
+
+	if dl1.Status != "queued" {
+		t.Errorf("dl-1 status = %s, want 'queued'", dl1.Status)
+	}
+	if dl2.Status != "queued" {
+		t.Errorf("dl-2 status = %s, want 'queued'", dl2.Status)
+	}
+	if dl3.Status != "completed" {
+		t.Errorf("dl-3 status = %s, want 'completed' (should not change)", dl3.Status)
+	}
+}
+
+// =============================================================================
+// ListAllDownloads Tests
+// =============================================================================
+
+func TestListAllDownloads(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	// Add downloads
+	entries := []types.DownloadRecord{
+		{ID: "list-1", URL: "https://c.com/1", DestPath: "/tmp/1", Status: "completed"},
+		{ID: "list-2", URL: "https://c.com/2", DestPath: "/tmp/2", Status: "paused"},
+	}
+
+	for _, e := range entries {
+		if err := AddToMasterList(e); err != nil {
+			t.Fatalf("AddToMasterList failed: %v", err)
+		}
+	}
+
+	// List all
+	downloads, err := ListAllDownloads()
+	if err != nil {
+		t.Fatalf("ListAllDownloads failed: %v", err)
+	}
+
+	if len(downloads) != 2 {
+		t.Errorf("ListAllDownloads returned %d items, want 2", len(downloads))
+	}
+}
+
+func TestListAllDownloads_Empty(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	downloads, err := ListAllDownloads()
+	if err != nil {
+		t.Fatalf("ListAllDownloads failed: %v", err)
+	}
+
+	if len(downloads) != 0 {
+		t.Errorf("ListAllDownloads returned %d items, want 0", len(downloads))
+	}
+}
+
+// =============================================================================
+// RemoveCompletedDownloads Tests
+// =============================================================================
+
+func TestRemoveCompletedDownloads(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	// Add downloads with various statuses
+	entries := []types.DownloadRecord{
+		{ID: "rm-1", URL: "https://d.com/1", DestPath: "/tmp/1", Status: "completed"},
+		{ID: "rm-2", URL: "https://d.com/2", DestPath: "/tmp/2", Status: "completed"},
+		{ID: "rm-3", URL: "https://d.com/3", DestPath: "/tmp/3", Status: "paused"},
+	}
+
+	for _, e := range entries {
+		if err := AddToMasterList(e); err != nil {
+			t.Fatalf("AddToMasterList failed: %v", err)
+		}
+	}
+
+	// Remove completed
+	count, err := RemoveCompletedDownloads()
+	if err != nil {
+		t.Fatalf("RemoveCompletedDownloads failed: %v", err)
+	}
+
+	if count != 2 {
+		t.Errorf("RemoveCompletedDownloads returned count = %d, want 2", count)
+	}
+
+	// Verify only paused remains
+	downloads, _ := ListAllDownloads()
+	if len(downloads) != 1 {
+		t.Errorf("Expected 1 download remaining, got %d", len(downloads))
+	}
+	if downloads[0].ID != "rm-3" {
+		t.Errorf("Remaining download ID = %s, want 'rm-3'", downloads[0].ID)
+	}
+}
+
+func TestMirrorsPersistence(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	testURL := "https://example.com/mirror-test.zip"
+	testDestPath := filepath.Join(tmpDir, "mirror-test.zip")
+	mirrors := []string{
+		"https://mirror1.example.com/file.zip",
+		"https://mirror2.example.com/file.zip",
+	}
+
+	// 1. Test DownloadRecord (Resume)
+	state := &types.DownloadRecord{
+		ID:         "mirror-state-id",
+		URL:        testURL,
+		DestPath:   testDestPath,
+		TotalSize:  1000,
+		Downloaded: 100,
+		Filename:   "mirror-test.zip",
+		Mirrors:    mirrors,
+	}
+
+	if err := SaveState(testURL, testDestPath, state); err != nil {
+		t.Fatalf("SaveState failed: %v", err)
+	}
+	_ = AddToMasterList(types.DownloadRecord{ID: "mirror-state-id", URL: testURL, DestPath: testDestPath, Status: "paused"})
+
+	loadedState, err := LoadState(testURL, testDestPath)
+	if err != nil {
+		t.Fatalf("LoadState failed: %v", err)
+	}
+
+	if len(loadedState.Mirrors) != 2 {
+		t.Errorf("Loaded mirrors count = %d, want 2", len(loadedState.Mirrors))
+	} else {
+		if loadedState.Mirrors[0] != mirrors[0] || loadedState.Mirrors[1] != mirrors[1] {
+			t.Errorf("Loaded mirrors mismatch: %v", loadedState.Mirrors)
+		}
+	}
+
+	// 2. Test DownloadRecord (Master List / Completed)
+	entry := types.DownloadRecord{
+		ID:          "mirror-entry-id",
+		URL:         testURL,
+		DestPath:    testDestPath + ".completed",
+		TotalSize:   1000,
+		Downloaded:  1000,
+		Status:      "completed",
+		Mirrors:     mirrors,
+		CompletedAt: time.Now().Unix(),
+	}
+
+	if err := AddToMasterList(entry); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	loadedEntries, err := LoadCompletedDownloads()
+	if err != nil {
+		t.Fatalf("LoadCompletedDownloads failed: %v", err)
+	}
+
+	foundVal := false
+	for _, e := range loadedEntries {
+		if e.ID == "mirror-entry-id" {
+			foundVal = true
+			if len(e.Mirrors) != 2 {
+				t.Errorf("Entry mirrors count = %d, want 2", len(e.Mirrors))
+			} else {
+				if e.Mirrors[0] != mirrors[0] || e.Mirrors[1] != mirrors[1] {
+					t.Errorf("Entry mirrors mismatch: %v", e.Mirrors)
+				}
+			}
+			break
+		}
+	}
+	if !foundVal {
+		t.Error("Completed download not found in list")
+	}
+}
+
+// =============================================================================
+// ValidateIntegrity Tests
+// =============================================================================
+
+func TestValidateIntegrity_MissingFile(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	destPath := filepath.Join(tmpDir, "missing.zip")
+	// Insert a paused download - but DO NOT create the .surge file
+	entry := types.DownloadRecord{
+		ID:       "integrity-missing",
+		URL:      "https://example.com/missing.zip",
+		DestPath: destPath,
+		Filename: "missing.zip",
+		Status:   "paused",
+	}
+	if err := AddToMasterList(entry); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	// Verify entry exists
+	dl, err := GetDownload("integrity-missing")
+	if err != nil || dl == nil {
+		t.Fatalf("Expected entry to exist before integrity check")
+	}
+
+	// Run integrity check - file is missing, entry should be removed
+	removed, err := ValidateIntegrity()
+	if err != nil {
+		t.Fatalf("ValidateIntegrity failed: %v", err)
+	}
+	if removed != 1 {
+		t.Errorf("ValidateIntegrity removed = %d, want 1", removed)
+	}
+
+	// Verify entry is gone
+	dl, err = GetDownload("integrity-missing")
+	if err != nil {
+		t.Fatalf("GetDownload failed: %v", err)
+	}
+	if dl != nil {
+		t.Error("Entry should have been removed after integrity check")
+	}
+
+	// Verify detail state is deleted
+	if _, err := os.Stat(getDetailPath(entry.ID)); !os.IsNotExist(err) {
+		t.Errorf("expected details state to be removed")
+	}
+}
+
+func TestValidateIntegrity_ValidFile(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	destPath := filepath.Join(tmpDir, "valid.zip")
+	surgePath := destPath + types.IncompleteSuffix
+
+	// Create a .surge file with known content
+	content := []byte("hello world test content")
+	if err := os.WriteFile(surgePath, content, 0o644); err != nil {
+		t.Fatalf("Failed to create .surge file: %v", err)
+	}
+
+	// Compute expected hash
+	expectedHash, err := computeFileHash(surgePath)
+	if err != nil {
+		t.Fatalf("computeFileHash failed: %v", err)
+	}
+
+	// Insert a paused download with correct file hash
+	if err := AddToMasterList(types.DownloadRecord{
+		ID:       "integrity-valid",
+		URL:      "https://example.com/valid.zip",
+		DestPath: destPath,
+		Filename: "valid.zip",
+		Status:   "paused",
+	}); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	// Set file_hash directly in DB (simulating SaveState having computed it)
+	state := &types.DownloadRecord{
+		ID:       "integrity-valid",
+		URL:      "https://example.com/valid.zip",
+		DestPath: destPath,
+		Filename: "valid.zip",
+		FileHash: expectedHash,
+	}
+	ds := DetailState{Version: 1, State: state}
+	_ = atomicWrite(getDetailPath("integrity-valid"), ds)
+
+	// Run integrity check - file exists with matching hash, should keep it
+	removed, err := ValidateIntegrity()
+	if err != nil {
+		t.Fatalf("ValidateIntegrity failed: %v", err)
+	}
+	if removed != 0 {
+		t.Errorf("ValidateIntegrity removed = %d, want 0 (file is valid)", removed)
+	}
+
+	// Verify entry still exists
+	dl, _ := GetDownload("integrity-valid")
+	if dl == nil {
+		t.Error("Valid entry should not have been removed")
+	}
+
+	// Verify .surge file still exists
+	if _, err := os.Stat(surgePath); os.IsNotExist(err) {
+		t.Error("Valid .surge file should not have been deleted")
+	}
+}
+
+func TestValidateIntegrity_TamperedFile(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	destPath := filepath.Join(tmpDir, "tampered.zip")
+	surgePath := destPath + types.IncompleteSuffix
+
+	// Create a .surge file
+	if err := os.WriteFile(surgePath, []byte("original content"), 0o644); err != nil {
+		t.Fatalf("Failed to create .surge file: %v", err)
+	}
+
+	// Insert entry with a WRONG hash (simulating tampering)
+	if err := AddToMasterList(types.DownloadRecord{
+		ID:       "integrity-tampered",
+		URL:      "https://example.com/tampered.zip",
+		DestPath: destPath,
+		Filename: "tampered.zip",
+		Status:   "paused",
+	}); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	// Set a fake hash that won't match the file content
+	state := &types.DownloadRecord{
+		ID:       "integrity-tampered",
+		URL:      "https://example.com/tampered.zip",
+		DestPath: destPath,
+		Filename: "tampered.zip",
+		FileHash: "0000000000000000000000000000000000000000000000000000000000000000",
+	}
+	ds := DetailState{Version: 1, State: state}
+	_ = atomicWrite(getDetailPath("integrity-tampered"), ds)
+
+	// Run integrity check - hash mismatch, entry AND file should be removed
+	removed, err := ValidateIntegrity()
+	if err != nil {
+		t.Fatalf("ValidateIntegrity failed: %v", err)
+	}
+	if removed != 1 {
+		t.Errorf("ValidateIntegrity removed = %d, want 1", removed)
+	}
+
+	// Verify entry is gone
+	dl, _ := GetDownload("integrity-tampered")
+	if dl != nil {
+		t.Error("Tampered entry should have been removed")
+	}
+
+	// Verify .surge file was deleted
+	if _, err := os.Stat(surgePath); !os.IsNotExist(err) {
+		t.Error("Tampered .surge file should have been deleted")
+	}
+}
+
+func TestValidateIntegrity_CompletedIgnored(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	// Insert a completed download - should NOT be touched by integrity check
+	if err := AddToMasterList(types.DownloadRecord{
+		ID:          "integrity-completed",
+		URL:         "https://example.com/done.zip",
+		DestPath:    filepath.Join(tmpDir, "done.zip"),
+		Filename:    "done.zip",
+		Status:      "completed",
+		CompletedAt: time.Now().Unix(),
+	}); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	removed, err := ValidateIntegrity()
+	if err != nil {
+		t.Fatalf("ValidateIntegrity failed: %v", err)
+	}
+	if removed != 0 {
+		t.Errorf("ValidateIntegrity removed = %d, want 0 (completed downloads ignored)", removed)
+	}
+
+	// Verify entry still exists
+	dl, _ := GetDownload("integrity-completed")
+	if dl == nil {
+		t.Error("Completed entry should not have been affected")
+	}
+}
+
+func TestValidateIntegrity_QueuedWithoutPartialFileRemoved(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	destPath := filepath.Join(tmpDir, "queued-never-started.bin")
+
+	if err := AddToMasterList(types.DownloadRecord{
+		ID:         "integrity-queued-fresh",
+		URL:        "https://example.com/queued-never-started.bin",
+		DestPath:   destPath,
+		Filename:   "queued-never-started.bin",
+		Status:     "queued",
+		TotalSize:  0,
+		Downloaded: 0,
+	}); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	removed, err := ValidateIntegrity()
+	if err != nil {
+		t.Fatalf("ValidateIntegrity failed: %v", err)
+	}
+	if removed != 1 {
+		t.Errorf("ValidateIntegrity removed = %d, want 1", removed)
+	}
+
+	dl, err := GetDownload("integrity-queued-fresh")
+	if err != nil {
+		t.Fatalf("GetDownload failed: %v", err)
+	}
+	if dl != nil {
+		t.Fatal("queued entry should be removed when no partial file exists")
+	}
+}
+
+func TestValidateIntegrity_DeletesOrphanSurgeFile(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	// Seed one normal completed entry so tmpDir is a known download directory.
+	if err := AddToMasterList(types.DownloadRecord{
+		ID:          "integrity-known-dir",
+		URL:         "https://example.com/known.zip",
+		DestPath:    filepath.Join(tmpDir, "known.zip"),
+		Filename:    "known.zip",
+		Status:      "completed",
+		CompletedAt: time.Now().Unix(),
+	}); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	orphanPath := filepath.Join(tmpDir, "orphan.bin"+types.IncompleteSuffix)
+	if err := os.WriteFile(orphanPath, []byte("orphan"), 0o644); err != nil {
+		t.Fatalf("failed to create orphan .surge file: %v", err)
+	}
+
+	removed, err := ValidateIntegrity()
+	if err != nil {
+		t.Fatalf("ValidateIntegrity failed: %v", err)
+	}
+	if removed != 0 {
+		t.Errorf("ValidateIntegrity removed = %d, want 0 (no paused/queued DB entries removed)", removed)
+	}
+
+	if _, err := os.Stat(orphanPath); !os.IsNotExist(err) {
+		t.Errorf("orphan .surge file should be removed, stat err: %v", err)
+	}
+}
+
+func TestValidateIntegrity_PreservesNonCompletedSurgeFile(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	destPath := filepath.Join(tmpDir, "active.bin")
+	surgePath := destPath + types.IncompleteSuffix
+
+	if err := AddToMasterList(types.DownloadRecord{
+		ID:       "integrity-active",
+		URL:      "https://example.com/active.bin",
+		DestPath: destPath,
+		Filename: "active.bin",
+		Status:   "downloading",
+	}); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	if err := os.WriteFile(surgePath, []byte("partial"), 0o644); err != nil {
+		t.Fatalf("failed to create active .surge file: %v", err)
+	}
+
+	removed, err := ValidateIntegrity()
+	if err != nil {
+		t.Fatalf("ValidateIntegrity failed: %v", err)
+	}
+	if removed != 0 {
+		t.Errorf("ValidateIntegrity removed = %d, want 0", removed)
+	}
+
+	if _, err := os.Stat(surgePath); err != nil {
+		t.Fatalf("active .surge file should be preserved, stat err: %v", err)
+	}
+}
+
+// =============================================================================
+// AvgSpeed Persistence Tests
+// =============================================================================
+
+func TestAvgSpeedPersistence(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	entry := types.DownloadRecord{
+		ID:          "speed-test",
+		URL:         "https://example.com/speed.zip",
+		DestPath:    filepath.Join(tmpDir, "speed.zip"),
+		Filename:    "speed.zip",
+		Status:      "completed",
+		TotalSize:   100 * 1024 * 1024, // 100 MB
+		Downloaded:  100 * 1024 * 1024,
+		CompletedAt: time.Now().Unix(),
+		TimeTaken:   10000,                  // 10 seconds in ms
+		AvgSpeed:    10.0 * 1024.0 * 1024.0, // 10 MB/s
+	}
+
+	if err := AddToMasterList(entry); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	// Verify via GetDownload
+	loaded, err := GetDownload("speed-test")
+	if err != nil {
+		t.Fatalf("GetDownload failed: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("GetDownload returned nil")
+		return
+	}
+	if loaded.AvgSpeed != entry.AvgSpeed {
+		t.Errorf("AvgSpeed = %f, want %f", loaded.AvgSpeed, entry.AvgSpeed)
+	}
+
+	// Verify via LoadMasterList
+	list, err := LoadMasterList()
+	if err != nil {
+		t.Fatalf("LoadMasterList failed: %v", err)
+	}
+	found := false
+	for _, e := range list.Downloads {
+		if e.ID == "speed-test" {
+			found = true
+			if e.AvgSpeed != entry.AvgSpeed {
+				t.Errorf("LoadMasterList AvgSpeed = %f, want %f", e.AvgSpeed, entry.AvgSpeed)
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("Entry not found in master list")
+	}
+}
+
+func TestNormalizeStaleDownloads(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	entries := []types.DownloadRecord{
+		{ID: "stale-1", URL: "https://a.com/1", DestPath: "/tmp/1", Status: "downloading"},
+		{ID: "stale-2", URL: "https://a.com/2", DestPath: "/tmp/2", Status: "downloading"},
+		{ID: "ok-3", URL: "https://a.com/3", DestPath: "/tmp/3", Status: "paused"},
+		{ID: "ok-4", URL: "https://a.com/4", DestPath: "/tmp/4", Status: "completed"},
+		{ID: "ok-5", URL: "https://a.com/5", DestPath: "/tmp/5", Status: "queued"},
+	}
+	for _, e := range entries {
+		if err := AddToMasterList(e); err != nil {
+			t.Fatalf("AddToMasterList failed: %v", err)
+		}
+	}
+
+	normalized, err := NormalizeStaleDownloads()
+	if err != nil {
+		t.Fatalf("NormalizeStaleDownloads failed: %v", err)
+	}
+	if normalized != 2 {
+		t.Fatalf("normalized = %d, want 2", normalized)
+	}
+
+	// Verify downloading entries became paused
+	for _, id := range []string{"stale-1", "stale-2"} {
+		dl, _ := GetDownload(id)
+		if dl.Status != "paused" {
+			t.Errorf("%s status = %q, want paused", id, dl.Status)
+		}
+	}
+	// Verify other statuses untouched
+	dl3, _ := GetDownload("ok-3")
+	if dl3.Status != "paused" {
+		t.Errorf("ok-3 status = %q, want paused", dl3.Status)
+	}
+	dl4, _ := GetDownload("ok-4")
+	if dl4.Status != "completed" {
+		t.Errorf("ok-4 status = %q, want completed", dl4.Status)
+	}
+	dl5, _ := GetDownload("ok-5")
+	if dl5.Status != "queued" {
+		t.Errorf("ok-5 status = %q, want queued", dl5.Status)
+	}
+}
+
+func TestSaveLoadState_PreservesOverrideFields(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	testURL := "https://test.example.com/override-state.zip"
+	testDestPath := filepath.Join(tmpDir, "override-state.zip")
+	id := uuid.New().String()
+
+	originalState := &types.DownloadRecord{
+		ID:           id,
+		URL:          testURL,
+		DestPath:     testDestPath,
+		TotalSize:    1000000,
+		Downloaded:   500000,
+		Filename:     "override-state.zip",
+		Workers:      8,
+		MinChunkSize: 5 * utils.MiB,
+	}
+
+	if err := SaveState(testURL, testDestPath, originalState); err != nil {
+		t.Fatalf("SaveState failed: %v", err)
+	}
+	_ = AddToMasterList(types.DownloadRecord{ID: id, URL: testURL, DestPath: testDestPath, Status: "paused"})
+
+	loadedState, err := LoadState(testURL, testDestPath)
+	if err != nil {
+		t.Fatalf("LoadState failed: %v", err)
+	}
+	if loadedState.Workers != 8 {
+		t.Errorf("Workers = %d, want 8", loadedState.Workers)
+	}
+	if loadedState.MinChunkSize != 5*utils.MiB {
+		t.Errorf("MinChunkSize = %d, want %d", loadedState.MinChunkSize, 5*utils.MiB)
+	}
+}
+
+func TestAddGetDownload_PreservesOverrideFields(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	id := "override-entry-id"
+	entry := types.DownloadRecord{
+		ID:           id,
+		URL:          "https://test.example.com/override-entry.zip",
+		DestPath:     filepath.Join(tmpDir, "override-entry.zip"),
+		Filename:     "override-entry.zip",
+		Status:       "paused",
+		Workers:      8,
+		MinChunkSize: 5 * utils.MiB,
+	}
+
+	if err := AddToMasterList(entry); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	loaded, err := GetDownload(id)
+	if err != nil {
+		t.Fatalf("GetDownload failed: %v", err)
+	}
+	if loaded == nil {
+		t.Fatal("expected non-nil entry")
+	}
+	if loaded.Workers != 8 {
+		t.Errorf("Workers = %d, want 8", loaded.Workers)
+	}
+	if loaded.MinChunkSize != 5*utils.MiB {
+		t.Errorf("MinChunkSize = %d, want %d", loaded.MinChunkSize, 5*utils.MiB)
+	}
+}

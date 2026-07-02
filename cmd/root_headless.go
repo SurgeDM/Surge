@@ -5,13 +5,13 @@ import (
 	"fmt"
 	"sync/atomic"
 
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/engine/events"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // StartHeadlessConsumer starts a goroutine to consume progress messages and log to stdout
-func StartHeadlessConsumer(service core.DownloadService) {
+func StartHeadlessConsumer(service service.DownloadService) {
 	go func() {
 		if service == nil {
 			return
@@ -24,23 +24,25 @@ func StartHeadlessConsumer(service core.DownloadService) {
 		defer cleanup()
 
 		for msg := range stream {
-			switch m := msg.(type) {
-			case events.DownloadStartedMsg:
-				fmt.Printf("Started: %s [%s]\n", m.Filename, truncateID(m.DownloadID))
-			case events.DownloadCompleteMsg:
+			switch msg.Type {
+			case types.EventStarted:
+				fmt.Printf("Started: %s [%s]\n", msg.Filename, truncateID(msg.DownloadID))
+			case types.EventComplete:
 				atomic.AddInt32(&activeDownloads, -1)
-				fmt.Printf("Completed: %s [%s] (in %s)\n", m.Filename, truncateID(m.DownloadID), m.Elapsed)
-			case events.DownloadErrorMsg:
+				fmt.Printf("Completed: %s [%s] (in %s)\n", msg.Filename, truncateID(msg.DownloadID), msg.Elapsed)
+			case types.EventError:
 				atomic.AddInt32(&activeDownloads, -1)
-				fmt.Printf("Error: %s [%s]: %v\n", m.Filename, truncateID(m.DownloadID), m.Err)
-			case events.DownloadQueuedMsg:
-				fmt.Printf("Queued: %s [%s]\n", m.Filename, truncateID(m.DownloadID))
-			case events.DownloadPausedMsg:
-				fmt.Printf("Paused: %s [%s]\n", m.Filename, truncateID(m.DownloadID))
-			case events.DownloadResumedMsg:
-				fmt.Printf("Resumed: %s [%s]\n", m.Filename, truncateID(m.DownloadID))
-			case events.DownloadRemovedMsg:
-				fmt.Printf("Removed: %s [%s]\n", m.Filename, truncateID(m.DownloadID))
+				fmt.Printf("Error: %s [%s]: %v\n", msg.Filename, truncateID(msg.DownloadID), msg.Err)
+			case types.EventQueued:
+				fmt.Printf("Queued: %s [%s]\n", msg.Filename, truncateID(msg.DownloadID))
+			case types.EventPaused:
+				fmt.Printf("Paused: %s [%s]\n", msg.Filename, truncateID(msg.DownloadID))
+			case types.EventResumed:
+				fmt.Printf("Resumed: %s [%s]\n", msg.Filename, truncateID(msg.DownloadID))
+			case types.EventRemoved:
+				fmt.Printf("Removed: %s [%s]\n", msg.Filename, truncateID(msg.DownloadID))
+			case types.EventProgress, types.EventRequest, types.EventBatchRequest, types.EventBatchProgress, types.EventSystem:
+				// Streaming/internal events are intentionally not logged to stdout.
 			}
 		}
 	}()

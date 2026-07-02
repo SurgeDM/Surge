@@ -4,10 +4,9 @@ import (
 	"context"
 	"testing"
 
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/engine/events"
-	"github.com/SurgeDM/Surge/internal/engine/types"
+	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui"
+	"github.com/SurgeDM/Surge/internal/types"
 )
 
 type fakeRemoteDownloadService struct {
@@ -18,17 +17,17 @@ type fakeRemoteDownloadService struct {
 	lastExplicit bool
 }
 
-var _ core.DownloadService = (*fakeRemoteDownloadService)(nil)
+var _ service.DownloadService = (*fakeRemoteDownloadService)(nil)
 
 func (f *fakeRemoteDownloadService) List() ([]types.DownloadStatus, error) {
 	return nil, nil
 }
 
-func (f *fakeRemoteDownloadService) History() ([]types.DownloadEntry, error) {
+func (f *fakeRemoteDownloadService) History() ([]types.DownloadRecord, error) {
 	return nil, nil
 }
 
-func (f *fakeRemoteDownloadService) Add(url, path, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
+func (f *fakeRemoteDownloadService) Add(url, path, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
 	f.addCalls++
 	f.lastURL = url
 	f.lastPath = path
@@ -37,7 +36,7 @@ func (f *fakeRemoteDownloadService) Add(url, path, filename string, mirrors []st
 	return "remote-add-id", nil
 }
 
-func (f *fakeRemoteDownloadService) AddWithID(url, path, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64, totalSize int64, supportsRange bool) (string, error) {
+func (f *fakeRemoteDownloadService) AddWithID(url, path, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error) {
 	return id, nil
 }
 
@@ -53,12 +52,12 @@ func (f *fakeRemoteDownloadService) Delete(id string) error { return nil }
 
 func (f *fakeRemoteDownloadService) Purge(id string) error { return nil }
 
-func (f *fakeRemoteDownloadService) StreamEvents(ctx context.Context) (<-chan interface{}, func(), error) {
-	ch := make(chan interface{})
+func (f *fakeRemoteDownloadService) StreamEvents(ctx context.Context) (<-chan types.DownloadEvent, func(), error) {
+	ch := make(chan types.DownloadEvent)
 	return ch, func() { close(ch) }, nil
 }
 
-func (f *fakeRemoteDownloadService) Publish(msg interface{}) error { return nil }
+func (f *fakeRemoteDownloadService) Publish(msg types.DownloadEvent) error { return nil }
 
 func (f *fakeRemoteDownloadService) GetStatus(id string) (*types.DownloadStatus, error) {
 	return nil, nil
@@ -96,7 +95,8 @@ func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
 	m.Settings.Extension.ExtensionPrompt.Value = false
 	m.Settings.General.WarnOnDuplicate.Value = false
 
-	updated, cmd := m.Update(events.DownloadRequestMsg{
+	updated, cmd := m.Update(types.DownloadEvent{
+		Type:     types.EventRequest,
 		URL:      "https://example.com/file.bin",
 		Filename: "file.bin",
 		Path:     ".",

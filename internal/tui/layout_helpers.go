@@ -228,7 +228,6 @@ func CalculateDashboardLayout(termW, termH int) DashboardLayout {
 			l.GraphHeight = targetGraphH
 			l.DetailHeight = l.AvailableHeight - l.GraphHeight
 		}
-
 	}
 
 	// 4. Download List Dimensions

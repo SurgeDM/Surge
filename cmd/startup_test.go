@@ -7,11 +7,11 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
-	"github.com/SurgeDM/Surge/internal/engine/state"
-	"github.com/SurgeDM/Surge/internal/engine/types"
-	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/scheduler"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -33,29 +33,12 @@ func TestServer_Startup_HandlesResume(t *testing.T) {
 	seedDownload(t, testID, testURL, testDest, "queued")
 
 	// 3. Initialize Global Pool (required for resumePausedDownloads)
-	GlobalProgressCh = make(chan any, 10)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 3)
-	GlobalService = core.NewLocalDownloadServiceWithInput(GlobalPool, GlobalProgressCh)
-
-	GlobalLifecycle = processing.NewLifecycleManager(nil, nil, nil)
-	GlobalLifecycle.SetEngineHooks(processing.EngineHooks{
-		Pause:               GlobalPool.Pause,
-		ExtractPausedConfig: GlobalPool.ExtractPausedConfig,
-		AddConfig:           GlobalPool.Add,
-		GetStatus:           GlobalPool.GetStatus,
-		Cancel:              GlobalPool.Cancel,
-		UpdateURL:           GlobalPool.UpdateURL,
-		PublishEvent:        GlobalService.Publish,
-	})
-	if svc, ok := GlobalService.(*core.LocalDownloadService); ok {
-		svc.SetLifecycleHooks(core.LifecycleHooks{
-			Pause:       GlobalLifecycle.Pause,
-			Resume:      GlobalLifecycle.Resume,
-			ResumeBatch: GlobalLifecycle.ResumeBatch,
-			Cancel:      GlobalLifecycle.Cancel,
-			UpdateURL:   GlobalLifecycle.UpdateURL,
-		})
-	}
+	GlobalProgressCh = make(chan types.DownloadEvent, 10)
+	GlobalPool = scheduler.New(GlobalProgressCh, 3)
+	eventBus := orchestrator.NewEventBus()
+	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	GlobalService = service.NewLocalDownloadService(GlobalLifecycle)
 	defer func() {
 		if GlobalService != nil {
 			_ = GlobalService.Shutdown()
@@ -105,7 +88,7 @@ func TestStartupIntegrityCheck_RemovesMissingPausedEntry(t *testing.T) {
 	msg := runStartupIntegrityCheck()
 	utils.Debug("%s", msg)
 
-	entry, err := state.GetDownload(testID)
+	entry, err := store.GetDownload(testID)
 	if err != nil {
 		t.Fatalf("GetDownload failed: %v", err)
 	}
@@ -141,12 +124,12 @@ func setupTestEnv(t *testing.T, tmpDir string) {
 	// Configure DB
 	dbPath := filepath.Join(surgeDir, "state", "surge.db")
 	_ = os.MkdirAll(filepath.Dir(dbPath), 0o755)
-	state.CloseDB()
-	state.Configure(dbPath)
+	store.CloseDB()
+	store.Configure(dbPath)
 }
 
 func seedDownload(t *testing.T, id, url, dest, status string) {
-	manualState := &types.DownloadState{
+	manualState := &types.DownloadRecord{
 		ID:         id,
 		URL:        url,
 		Filename:   filepath.Base(dest),
@@ -156,7 +139,7 @@ func seedDownload(t *testing.T, id, url, dest, status string) {
 		PausedAt:   0,
 		CreatedAt:  time.Now().Unix(),
 	}
-	if err := state.AddToMasterList(types.DownloadEntry{
+	if err := store.AddToMasterList(types.DownloadRecord{
 		ID:         id,
 		URL:        url,
 		DestPath:   dest,
@@ -167,7 +150,7 @@ func seedDownload(t *testing.T, id, url, dest, status string) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if err := state.SaveState(url, dest, manualState); err != nil {
+	if err := store.SaveState(url, dest, manualState); err != nil {
 		t.Fatal(err)
 	}
 }

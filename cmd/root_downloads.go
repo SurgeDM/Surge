@@ -10,10 +10,9 @@ import (
 	"sync/atomic"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/engine/events"
-	"github.com/SurgeDM/Surge/internal/engine/types"
-	"github.com/SurgeDM/Surge/internal/processing"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/google/uuid"
 )
@@ -48,7 +47,7 @@ type resolvedDownloadRequest struct {
 	isActive      bool
 }
 
-func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir string, service core.DownloadService) {
+func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir string, service service.DownloadService) {
 	if handleDownloadStatusRequest(w, r, service) {
 		return
 	}
@@ -90,7 +89,7 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 	})
 }
 
-func handleDownloadStatusRequest(w http.ResponseWriter, r *http.Request, service core.DownloadService) bool {
+func handleDownloadStatusRequest(w http.ResponseWriter, r *http.Request, service service.DownloadService) bool {
 	if r.Method != http.MethodGet {
 		return false
 	}
@@ -152,7 +151,7 @@ func validateDownloadRequest(req DownloadRequest) (DownloadRequest, error) {
 	return req, nil
 }
 
-func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir string, service core.DownloadService) {
+func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir string, service service.DownloadService) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -174,7 +173,7 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 
 	settings := getSettings()
 	sharedPath := utils.EnsureAbsPath(resolveOutputDir(req.Path, false, defaultOutputDir, settings))
-	requests := make([]events.DownloadRequestMsg, 0, len(req.Downloads))
+	requests := make([]types.DownloadEvent, 0, len(req.Downloads))
 
 	for _, item := range req.Downloads {
 		if item.Path == "" {
@@ -188,8 +187,9 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 		}
 		urlForAdd, mirrorsForAdd := normalizeDownloadTargets(validated.URL, validated.Mirrors)
 		itemPath := utils.EnsureAbsPath(resolveOutputDir(validated.Path, validated.RelativeToDefaultDir, defaultOutputDir, settings))
-		requests = append(requests, events.DownloadRequestMsg{
-			ID:           uuid.New().String(),
+		requests = append(requests, types.DownloadEvent{
+			Type:         types.EventRequest,
+			DownloadID:   uuid.New().String(),
 			URL:          urlForAdd,
 			Filename:     validated.Filename,
 			Path:         itemPath,
@@ -209,10 +209,11 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 			return
 		}
 		batchID := uuid.New().String()
-		if err := service.Publish(events.BatchDownloadRequestMsg{
-			ID:       batchID,
-			Path:     sharedPath,
-			Requests: requests,
+		if err := service.Publish(types.DownloadEvent{
+			Type:        types.EventBatchRequest,
+			DownloadID:  batchID,
+			Path:        sharedPath,
+			BatchEvents: requests,
 		}); err != nil {
 			http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
 			return
@@ -316,8 +317,8 @@ func normalizeDownloadTargets(url string, mirrors []string) (string, []string) {
 }
 
 func resolveDuplicateState(urlForAdd string, settings *config.Settings) (bool, bool) {
-	activeDownloadsFunc := func() map[string]*types.DownloadConfig {
-		active := make(map[string]*types.DownloadConfig)
+	activeDownloadsFunc := func() map[string]*types.DownloadRecord {
+		active := make(map[string]*types.DownloadRecord)
 		for _, cfg := range GlobalPool.GetAll() {
 			c := cfg
 			active[c.ID] = &c
@@ -325,14 +326,14 @@ func resolveDuplicateState(urlForAdd string, settings *config.Settings) (bool, b
 		return active
 	}
 
-	dupResult := processing.CheckForDuplicate(urlForAdd, activeDownloadsFunc)
+	dupResult := orchestrator.CheckForDuplicate(urlForAdd, activeDownloadsFunc)
 	if dupResult == nil {
 		return false, false
 	}
 	return dupResult.Exists, dupResult.IsActive
 }
 
-func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadService, resolved *resolvedDownloadRequest) bool {
+func maybeRequireDownloadApproval(w http.ResponseWriter, service service.DownloadService, resolved *resolvedDownloadRequest) bool {
 	req := resolved.request
 
 	// EXTENSION VETTING SHORTCUT:
@@ -352,8 +353,9 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 		utils.Debug("Requesting TUI confirmation for: %s (Duplicate: %v)", req.URL, resolved.isDuplicate)
 
 		downloadID := uuid.New().String()
-		if err := service.Publish(events.DownloadRequestMsg{
-			ID:           downloadID,
+		if err := service.Publish(types.DownloadEvent{
+			Type:         types.EventRequest,
+			DownloadID:   downloadID,
 			URL:          resolved.urlForAdd,
 			Filename:     req.Filename,
 			Path:         resolved.outPath,
@@ -392,7 +394,7 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service core.DownloadSe
 	return true
 }
 
-func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resolved *resolvedDownloadRequest) (string, string, error) {
+func enqueueDownloadRequest(r *http.Request, service service.DownloadService, resolved *resolvedDownloadRequest) (string, string, error) {
 	lifecycle, err := lifecycleForLocalService(service)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to initialize lifecycle manager: %w", err)
@@ -400,7 +402,7 @@ func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resol
 
 	req := resolved.request
 	if lifecycle != nil {
-		return lifecycle.Enqueue(r.Context(), &processing.DownloadRequest{
+		return lifecycle.Enqueue(r.Context(), &orchestrator.DownloadRequest{
 			URL:                resolved.urlForAdd,
 			Filename:           req.Filename,
 			Path:               resolved.outPath,
@@ -413,7 +415,7 @@ func enqueueDownloadRequest(r *http.Request, service core.DownloadService, resol
 		})
 	}
 
-	id, err := service.Add(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, req.Workers, req.MinChunkSize, 0, false)
+	id, err := service.Add(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, req.Workers, req.MinChunkSize)
 	return id, req.Filename, err
 }
 
@@ -486,7 +488,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 			continue
 		}
 
-		_, _, err = lifecycle.Enqueue(currentEnqueueContext(), &processing.DownloadRequest{
+		_, _, err = lifecycle.Enqueue(currentEnqueueContext(), &orchestrator.DownloadRequest{
 			URL:                url,
 			Path:               outPath,
 			Mirrors:            mirrors,

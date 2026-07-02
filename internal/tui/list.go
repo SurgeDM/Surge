@@ -219,7 +219,6 @@ func applyListTheme(l *list.Model) {
 
 // UpdateListItems updates the list with filtered downloads based on active tab
 func (m *RootModel) UpdateListItems() {
-
 	if m.list.Width() == 0 {
 		return
 	}

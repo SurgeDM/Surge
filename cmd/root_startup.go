@@ -6,7 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -14,7 +14,7 @@ func runStartupIntegrityCheck() string {
 	// Normalize downloads stuck in "downloading" status from a prior crash/kill.
 	// This must happen before ValidateIntegrity so the newly-paused entries
 	// are included in the integrity check and eligible for auto-resume.
-	if normalized, err := state.NormalizeStaleDownloads(); err != nil {
+	if normalized, err := store.NormalizeStaleDownloads(); err != nil {
 		msg := fmt.Sprintf("Startup: failed to normalize stale downloads: %v", err)
 		utils.Debug("%s", msg)
 	} else if normalized > 0 {
@@ -24,7 +24,7 @@ func runStartupIntegrityCheck() string {
 	// Validate integrity of paused/queued downloads before auto-resume.
 	// This removes entries whose .surge files are missing/tampered and
 	// also cleans orphan .surge files that no longer have DB entries.
-	if removed, err := state.ValidateIntegrity(); err != nil {
+	if removed, err := store.ValidateIntegrity(); err != nil {
 		msg := fmt.Sprintf("Startup integrity check failed: %v", err)
 		return msg
 	} else if removed > 0 {
@@ -46,7 +46,7 @@ func initializeGlobalState() error {
 	}
 
 	// Config engine state
-	state.Configure(stateDBPath)
+	store.Configure(stateDBPath)
 
 	// Config logging
 	utils.ConfigureDebug(logsDir)
@@ -76,7 +76,7 @@ func getSettings() *config.Settings {
 func resumePausedDownloads() {
 	settings := getSettings()
 
-	pausedEntries, err := state.LoadPausedDownloads()
+	pausedEntries, err := store.LoadPausedDownloads()
 	if err != nil {
 		return
 	}

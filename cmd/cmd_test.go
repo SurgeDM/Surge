@@ -1,6 +1,8 @@
 package cmd
 
 import (
+	"github.com/SurgeDM/Surge/internal/types"
+
 	"bytes"
 	"encoding/json"
 	"fmt"
@@ -15,16 +17,16 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/core"
-	"github.com/SurgeDM/Surge/internal/download"
+	"github.com/SurgeDM/Surge/internal/scheduler"
+	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/spf13/cobra"
 )
 
 func init() {
 	// Initialize GlobalPool for tests
-	GlobalProgressCh = make(chan any, 100)
-	GlobalPool = download.NewWorkerPool(GlobalProgressCh, 4)
+	GlobalProgressCh = make(chan types.DownloadEvent, 100)
+	GlobalPool = scheduler.New(GlobalProgressCh, 4)
 }
 
 // =============================================================================
@@ -412,7 +414,7 @@ func TestHandleDownload_MethodNotAllowed(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPut, "/download", nil)
 	rec := httptest.NewRecorder()
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	handleDownload(rec, req, "", svc)
 
 	if rec.Code != http.StatusMethodNotAllowed {
@@ -424,7 +426,7 @@ func TestHandleDownload_InvalidJSON(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString("not json"))
 	rec := httptest.NewRecorder()
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	handleDownload(rec, req, "", svc)
 
 	if rec.Code != http.StatusBadRequest {
@@ -440,7 +442,7 @@ func TestHandleDownload_MissingURL(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	handleDownload(rec, req, "", svc)
 
 	if rec.Code != http.StatusBadRequest {
@@ -456,7 +458,7 @@ func TestHandleDownload_EmptyURL(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	handleDownload(rec, req, "", svc)
 
 	if rec.Code != http.StatusBadRequest {
@@ -480,7 +482,7 @@ func TestHandleDownload_PathTraversal(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(tt.body))
 			rec := httptest.NewRecorder()
-			svc := core.NewLocalDownloadService(nil)
+			svc := service.NewLocalDownloadService(nil)
 			handleDownload(rec, req, "", svc)
 
 			if rec.Code != http.StatusBadRequest {
@@ -493,9 +495,9 @@ func TestHandleDownload_PathTraversal(t *testing.T) {
 // func TestHandleDownload_StatusQuery(t *testing.T) {
 // 	// Setup mock download
 // 	id := "test-status-id"
-// 	state := types.NewProgressState(id, 2000)
+// 	state := progress.New(id, 2000)
 // 	state.Downloaded.Store(1000)
-// 	GlobalPool.Add(types.DownloadConfig{
+// 	GlobalPool.Add(types.DownloadRecord{
 // 		ID:    id,
 // 		URL:   "http://example.com/test",
 // 		State: state,
@@ -532,7 +534,7 @@ func TestHandleDownload_StatusQuery_NotFound(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/download?id=missing-id", nil)
 	rec := httptest.NewRecorder()
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	handleDownload(rec, req, "", svc)
 
 	if rec.Code != http.StatusNotFound {
@@ -919,7 +921,7 @@ func TestStartHTTPServer_HealthEndpoint(t *testing.T) {
 	port := ln.Addr().(*net.TCPAddr).Port
 
 	// Start server in background
-	svc := core.NewLocalDownloadService(nil) // Mock service with nil pool/chan for health check
+	svc := service.NewLocalDownloadService(nil) // Mock service with nil pool/chan for health check
 	go startHTTPServer(ln, port, "", svc, "")
 
 	// Give server time to start
@@ -957,7 +959,7 @@ func TestStartHTTPServer_HasCORSHeaders(t *testing.T) {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
 
@@ -980,7 +982,7 @@ func TestStartHTTPServer_OptionsRequest(t *testing.T) {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
 
@@ -1005,7 +1007,7 @@ func TestStartHTTPServer_DownloadEndpoint_MethodNotAllowed(t *testing.T) {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
 
@@ -1033,7 +1035,7 @@ func TestStartHTTPServer_DownloadEndpoint_BadRequest(t *testing.T) {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
 
@@ -1061,7 +1063,7 @@ func TestStartHTTPServer_DownloadEndpoint_MissingURL(t *testing.T) {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
 
@@ -1089,7 +1091,7 @@ func TestStartHTTPServer_NotFoundEndpoint(t *testing.T) {
 	}
 	port := ln.Addr().(*net.TCPAddr).Port
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
 	time.Sleep(50 * time.Millisecond)
 
@@ -1130,7 +1132,7 @@ func TestHandleDownload_ValidRequest_NoServerProgram(t *testing.T) {
 		}
 	}()
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	handleDownload(rec, req, "", svc)
 }
 
@@ -1138,7 +1140,7 @@ func TestHandleDownload_EmptyBody(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(""))
 	rec := httptest.NewRecorder()
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	handleDownload(rec, req, "", svc)
 
 	// Empty body causes EOF error on decode
@@ -1155,7 +1157,7 @@ func TestHandleDownload_LargeURL(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	// This should handle large URLs gracefully (validation issues)
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	handleDownload(rec, req, "", svc)
 
 	// Should fail on URL validation or JSON parsing
@@ -1173,7 +1175,7 @@ func TestHandleDownload_SpecialCharactersInPath(t *testing.T) {
 		}
 	}()
 
-	svc := core.NewLocalDownloadService(nil)
+	svc := service.NewLocalDownloadService(nil)
 	handleDownload(rec, req, "", svc)
 }
 

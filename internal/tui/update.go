@@ -13,7 +13,6 @@ import (
 )
 
 func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
-
 	if m.state == DashboardState && m.searchActive {
 		var cmd tea.Cmd
 		m.searchInput, cmd = m.searchInput.Update(msg)
@@ -103,7 +102,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
-
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
@@ -208,7 +206,6 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyPressMsg:
 		switch m.state {
-
 		case DashboardState:
 			return m.updateDashboard(msg)
 

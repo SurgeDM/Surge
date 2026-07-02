@@ -7,18 +7,18 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/engine/state"
+	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func resetSharedStateDB() error {
 	// Reset any pre-existing global DB state (e.g. left by an init or an
 	// isolated test cleanup) before pointing the package at the shared suite DB.
-	state.CloseDB()
+	store.CloseDB()
 	if err := config.EnsureDirs(); err != nil {
 		return err
 	}
-	state.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
+	store.Configure(filepath.Join(config.GetStateDir(), "surge.db"))
 	return nil
 }
 
@@ -45,7 +45,7 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	if err == nil {
-		state.CloseDB()
+		store.CloseDB()
 		_ = os.RemoveAll(tmpDir)
 	}
 	os.Exit(code)
