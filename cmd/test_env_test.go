@@ -41,6 +41,7 @@ func setupXDGEnvIsolation(t *testing.T) string {
 
 	t.Setenv("APPDATA", tempDir)
 	t.Setenv("USERPROFILE", tempDir)
+	t.Setenv("SystemRoot", tempDir)
 	t.Setenv("XDG_CONFIG_HOME", tempDir)
 	t.Setenv("XDG_DATA_HOME", tempDir)
 	t.Setenv("XDG_STATE_HOME", tempDir)

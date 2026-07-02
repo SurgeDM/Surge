@@ -365,7 +365,7 @@ func TestConcurrentDownloader_503WithRetryAfterTreatedAsThrottle(t *testing.T) {
 		testutil.WithHandler(func(w http.ResponseWriter, r *http.Request) {
 			n := count.Add(1)
 			if n == 1 {
-				w.Header().Set("Retry-After", "1")
+				w.Header().Set("Retry-After", "2")
 				w.WriteHeader(http.StatusServiceUnavailable)
 				return
 			}
@@ -407,7 +407,7 @@ func TestConcurrentDownloader_503WithRetryAfterTreatedAsThrottle(t *testing.T) {
 		t.Fatalf("Download failed: %v", err)
 	}
 
-	if elapsed < 900*time.Millisecond {
+	if elapsed < 1500*time.Millisecond {
 		t.Errorf("Expected backoff after 503+Retry-After, but completed in %v", elapsed)
 	}
 }
