@@ -375,7 +375,7 @@ func (m RootModel) View() tea.View {
 	helpText := lipgloss.NewStyle().PaddingLeft(2).Render(m.help.View(m.keys.Dashboard))
 
 	// --- Right-side footer: speed ｜ limit ｜ version ---
-	dimSep := lipgloss.NewStyle().Foreground(colors.Gray()).Render(" \uff5c ")
+	dimSep := lipgloss.NewStyle().Foreground(colors.Gray()).Render(" \u2502 ")
 
 	// Global speed indicator
 	speedBps := m.calcTotalSpeedBps()
