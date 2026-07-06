@@ -309,36 +309,28 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 
 		surgePath := filepath.Join(finalPath, finalFilename) + types.IncompleteSuffix
 
-		newID, err := mgr.dispatchToScheduler(req, requestID, finalPath, finalFilename, probeResult)
+		cfg, err := mgr.buildDownloadRecord(req, requestID, finalPath, finalFilename, probeResult)
 		if err != nil {
 			_ = os.Remove(surgePath)
 			return "", "", err
 		}
 
-		var rateLimit int64
-		var rateLimitSet bool
-		if st := mgr.pool.GetStatus(newID); st != nil {
-			rateLimit = st.RateLimit
-			rateLimitSet = st.RateLimitSet
-		} else if settings != nil && settings.Network.DefaultDownloadRateLimit != nil {
-			if parsed, err := utils.ParseRateLimitValue(settings.Network.DefaultDownloadRateLimit.Value); err == nil {
-				rateLimit = parsed
-			}
-		}
 		queuedEvent := types.DownloadEvent{
 			Type:         types.EventQueued,
-			DownloadID:   newID,
+			DownloadID:   cfg.ID,
 			Filename:     finalFilename,
 			URL:          req.URL,
 			DestPath:     filepath.Join(finalPath, finalFilename),
 			Mirrors:      append([]string(nil), req.Mirrors...),
-			RateLimit:    rateLimit,
-			RateLimitSet: rateLimitSet,
+			RateLimit:    cfg.RateLimit,
+			RateLimitSet: cfg.RateLimitSet,
 			Workers:      req.Workers,
 			MinChunkSize: req.MinChunkSize,
 		}
 		// Persist synchronously before publishing so the download survives a restart
 		// even if the event bus is full and Publish returns DeadlineExceeded.
+		// Doing this BEFORE pool.Add prevents EventStarted from racing with this
+		// persistence and corrupting the status to "queued" if it starts instantly.
 		if err := store.AddToMasterList(types.DownloadRecord{
 			ID:           queuedEvent.DownloadID,
 			URL:          queuedEvent.URL,
@@ -358,7 +350,9 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 			_ = mgr.eventBus.Publish(queuedEvent)
 		}
 
-		return newID, finalFilename, nil
+		mgr.pool.Add(*cfg)
+
+		return cfg.ID, finalFilename, nil
 	}
 
 	return "", "", fmt.Errorf("failed to reserve unique working file for %q after %d attempts", req.URL, maxWorkingFileReservationAttempts)
@@ -370,9 +364,9 @@ func (mgr *LifecycleManager) IsNameActive(dir, name string) bool {
 	return mgr.buildIsNameActive()(dir, name)
 }
 
-func (mgr *LifecycleManager) dispatchToScheduler(req *DownloadRequest, requestID string, finalPath string, finalFilename string, probeResult *probing.ProbeResult) (string, error) {
+func (mgr *LifecycleManager) buildDownloadRecord(req *DownloadRequest, requestID string, finalPath string, finalFilename string, probeResult *probing.ProbeResult) (*types.DownloadRecord, error) {
 	if mgr.pool == nil {
-		return "", types.ErrPoolNotInit
+		return nil, types.ErrPoolNotInit
 	}
 
 	settings := mgr.GetSettings()
@@ -382,7 +376,7 @@ func (mgr *LifecycleManager) dispatchToScheduler(req *DownloadRequest, requestID
 	}
 
 	if st := mgr.pool.GetStatus(id); st != nil {
-		return "", types.ErrIDExists
+		return nil, types.ErrIDExists
 	}
 
 	state := progress.New(id, 0)
@@ -429,6 +423,5 @@ func (mgr *LifecycleManager) dispatchToScheduler(req *DownloadRequest, requestID
 		cfg.ProgressCh = mgr.eventBus.InputCh
 	}
 
-	mgr.pool.Add(cfg)
-	return id, nil
+	return &cfg, nil
 }
