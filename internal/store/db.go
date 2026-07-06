@@ -42,7 +42,7 @@ func ensureDirs() error {
 	}
 	cleanupMu.Lock()
 	cleanupOnce.Do(func() {
-		cleanupOrphans(baseDir)
+		cleanupOrphans(dir)
 		cleanupOrphans(detailsDir)
 	})
 	cleanupMu.Unlock()
