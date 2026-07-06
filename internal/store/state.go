@@ -322,19 +322,7 @@ func LoadMasterList() (*types.MasterList, error) {
 	masterMu.RLock()
 	defer masterMu.RUnlock()
 
-	if baseDir == "" {
-		return &types.MasterList{Downloads: []types.DownloadRecord{}}, nil
-	}
-
-	var ms MasterState
-	err := loadGob(getMasterPath(), &ms)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return &types.MasterList{Downloads: []types.DownloadRecord{}}, nil
-		}
-		return nil, err
-	}
-	return &types.MasterList{Downloads: ms.Downloads}, nil
+	return loadMasterListUnlocked()
 }
 
 func saveMasterListLocked(list *types.MasterList) error {
@@ -392,8 +380,9 @@ func loadMasterListUnlocked() (*types.MasterList, error) {
 		return nil, err
 	}
 	if ms.Version != 2 {
-		utils.Debug("Master list version %d is unsupported, starting fresh.", ms.Version)
-		return &types.MasterList{Downloads: []types.DownloadRecord{}}, nil
+		return nil, fmt.Errorf("master list has unsupported version %d (expected 2); "+
+			"run 'surge --reset-settings' or remove %s to start fresh",
+			ms.Version, getMasterPath())
 	}
 	return &types.MasterList{Downloads: ms.Downloads}, nil
 }

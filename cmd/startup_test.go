@@ -154,3 +154,38 @@ func seedDownload(t *testing.T, id, url, dest, status string) {
 		t.Fatal(err)
 	}
 }
+
+func TestGetSettings_LoadError_PopulatesStartupWarnings(t *testing.T) {
+	tmpDir, err := os.MkdirTemp("", "surge-getsettings-test")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+
+	originalXDG := os.Getenv("XDG_CONFIG_HOME")
+	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	defer func() {
+		if originalXDG == "" {
+			_ = os.Unsetenv("XDG_CONFIG_HOME")
+		} else {
+			_ = os.Setenv("XDG_CONFIG_HOME", originalXDG)
+		}
+	}()
+
+	// Force an error when reading settings.toml by creating a directory with its name
+	surgeDir := config.GetSurgeDir()
+	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(config.GetSettingsPath(), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	globalSettings = nil // Ensure we don't return cached settings
+	defer func() { globalSettings = nil }()
+
+	settings := getSettings()
+	if len(settings.StartupWarnings) == 0 {
+		t.Error("expected StartupWarnings when LoadSettings fails")
+	}
+}

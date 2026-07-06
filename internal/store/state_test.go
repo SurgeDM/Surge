@@ -1214,3 +1214,55 @@ func TestAddGetDownload_PreservesOverrideFields(t *testing.T) {
 		t.Errorf("MinChunkSize = %d, want %d", loaded.MinChunkSize, 5*utils.MiB)
 	}
 }
+
+// =============================================================================
+// Versioning Tests
+// =============================================================================
+
+func TestLoadMasterList_UnsupportedVersion_ReturnsError(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	// Write a v1 master state
+	ms := MasterState{
+		Version:   1,
+		Downloads: []types.DownloadRecord{},
+	}
+	if err := atomicWrite(getMasterPath(), ms); err != nil {
+		t.Fatalf("failed to write v1 state: %v", err)
+	}
+
+	// Verify LoadMasterList returns an error
+	list, err := LoadMasterList()
+	if err == nil {
+		t.Error("expected error for unsupported version")
+	}
+	if list != nil {
+		t.Error("expected nil list for unsupported version")
+	}
+}
+
+func TestLoadMasterListUnlocked_UnsupportedVersion_ReturnsError(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	// Write a v3 master state
+	ms := MasterState{
+		Version:   3,
+		Downloads: []types.DownloadRecord{},
+	}
+	if err := atomicWrite(getMasterPath(), ms); err != nil {
+		t.Fatalf("failed to write v3 state: %v", err)
+	}
+
+	// Verify loadMasterListUnlocked returns an error
+	list, err := loadMasterListUnlocked()
+	if err == nil {
+		t.Error("expected error for unsupported version")
+	}
+	if list != nil {
+		t.Error("expected nil list for unsupported version")
+	}
+}

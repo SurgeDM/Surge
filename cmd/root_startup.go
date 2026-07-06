@@ -68,7 +68,11 @@ func getSettings() *config.Settings {
 	}
 	settings, err := config.LoadSettings()
 	if err != nil {
-		return config.DefaultSettings()
+		utils.Debug("Warning: failed to load settings: %v - using defaults", err)
+		defaults := config.DefaultSettings()
+		defaults.StartupWarnings = append(defaults.StartupWarnings,
+			fmt.Sprintf("Config: failed to read settings file (%v) - all settings reset to defaults", err))
+		return defaults
 	}
 	return settings
 }
