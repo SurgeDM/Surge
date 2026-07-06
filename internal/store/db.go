@@ -29,10 +29,14 @@ func Configure(path string) {
 }
 
 func ensureDirs() error {
-	if !configured || baseDir == "" {
+	masterMu.RLock()
+	isConfigured := configured
+	dir := baseDir
+	masterMu.RUnlock()
+	if !isConfigured || dir == "" {
 		return fmt.Errorf("state backend not configured")
 	}
-	detailsDir := filepath.Join(baseDir, "details")
+	detailsDir := filepath.Join(dir, "details")
 	if err := os.MkdirAll(detailsDir, 0o755); err != nil {
 		return err
 	}

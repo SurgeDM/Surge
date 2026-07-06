@@ -18,6 +18,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	probing "github.com/SurgeDM/Surge/internal/probe"
 	"github.com/SurgeDM/Surge/internal/progress"
+	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
 
 	"github.com/SurgeDM/Surge/internal/scheduler"
@@ -314,29 +315,47 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 			return "", "", err
 		}
 
-		if mgr.eventBus != nil {
-			var rateLimit int64
-			var rateLimitSet bool
-			if st := mgr.pool.GetStatus(newID); st != nil {
-				rateLimit = st.RateLimit
-				rateLimitSet = st.RateLimitSet
-			} else if settings != nil && settings.Network.DefaultDownloadRateLimit != nil {
-				if parsed, err := utils.ParseRateLimitValue(settings.Network.DefaultDownloadRateLimit.Value); err == nil {
-					rateLimit = parsed
-				}
+		var rateLimit int64
+		var rateLimitSet bool
+		if st := mgr.pool.GetStatus(newID); st != nil {
+			rateLimit = st.RateLimit
+			rateLimitSet = st.RateLimitSet
+		} else if settings != nil && settings.Network.DefaultDownloadRateLimit != nil {
+			if parsed, err := utils.ParseRateLimitValue(settings.Network.DefaultDownloadRateLimit.Value); err == nil {
+				rateLimit = parsed
 			}
-			_ = mgr.eventBus.Publish(types.DownloadEvent{
-				Type:         types.EventQueued,
-				DownloadID:   newID,
-				Filename:     finalFilename,
-				URL:          req.URL,
-				DestPath:     filepath.Join(finalPath, finalFilename),
-				Mirrors:      append([]string(nil), req.Mirrors...),
-				RateLimit:    rateLimit,
-				RateLimitSet: rateLimitSet,
-				Workers:      req.Workers,
-				MinChunkSize: req.MinChunkSize,
-			})
+		}
+		queuedEvent := types.DownloadEvent{
+			Type:         types.EventQueued,
+			DownloadID:   newID,
+			Filename:     finalFilename,
+			URL:          req.URL,
+			DestPath:     filepath.Join(finalPath, finalFilename),
+			Mirrors:      append([]string(nil), req.Mirrors...),
+			RateLimit:    rateLimit,
+			RateLimitSet: rateLimitSet,
+			Workers:      req.Workers,
+			MinChunkSize: req.MinChunkSize,
+		}
+		// Persist synchronously before publishing so the download survives a restart
+		// even if the event bus is full and Publish returns DeadlineExceeded.
+		if err := store.AddToMasterList(types.DownloadRecord{
+			ID:           queuedEvent.DownloadID,
+			URL:          queuedEvent.URL,
+			URLHash:      store.URLHash(queuedEvent.URL),
+			DestPath:     queuedEvent.DestPath,
+			Filename:     queuedEvent.Filename,
+			Mirrors:      append([]string(nil), queuedEvent.Mirrors...),
+			Status:       "queued",
+			RateLimit:    queuedEvent.RateLimit,
+			RateLimitSet: queuedEvent.RateLimitSet,
+			Workers:      queuedEvent.Workers,
+			MinChunkSize: queuedEvent.MinChunkSize,
+		}); err != nil {
+			utils.Debug("Lifecycle: Failed to persist queued download synchronously: %v", err)
+		}
+		if mgr.eventBus != nil {
+			_ = mgr.eventBus.Publish(queuedEvent)
 		}
 
 		return newID, finalFilename, nil

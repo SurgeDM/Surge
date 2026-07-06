@@ -111,11 +111,11 @@ func buildActiveDownloadChecker(getAll func() []types.DownloadRecord) orchestrat
 					existingName = filepath.Base(cfg.DestPath)
 				}
 			}
-			if cfg.ProgressState != nil {
-				if stateName := strings.TrimSpace(cfg.ProgressState.(*progress.DownloadProgress).GetFilename()); stateName != "" {
+			if ps := progress.CfgProgress(&cfg); ps != nil {
+				if stateName := strings.TrimSpace(ps.GetFilename()); stateName != "" {
 					existingName = stateName
 				}
-				if stateDestPath := strings.TrimSpace(cfg.ProgressState.(*progress.DownloadProgress).GetDestPath()); stateDestPath != "" {
+				if stateDestPath := strings.TrimSpace(ps.GetDestPath()); stateDestPath != "" {
 					existingDir = filepath.Dir(stateDestPath)
 					if existingName == "" {
 						existingName = filepath.Base(stateDestPath)
