@@ -11,6 +11,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/orchestrator"
 	"github.com/SurgeDM/Surge/internal/scheduler"
+	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
 )
@@ -35,6 +36,18 @@ func setupTestService(t *testing.T) (*LocalDownloadService, *httptest.Server, st
 	t.Setenv("XDG_STATE_HOME", tmpDir)
 
 	svc := NewLocalDownloadService(mgr)
+
+	// Mock event worker to handle EventRemoved
+	ch, cleanup := eb.Subscribe()
+	go func() {
+		for e := range ch {
+			if e.Type == types.EventRemoved {
+				_ = store.DeleteState(e.DownloadID)
+			}
+		}
+	}()
+	t.Cleanup(cleanup)
+
 	return svc, ts, tmpDir
 }
 
@@ -282,6 +295,8 @@ func TestLocalDownloadService_Delete(t *testing.T) {
 	if err != nil {
 		t.Errorf("Delete failed: %v", err)
 	}
+
+	time.Sleep(100 * time.Millisecond)
 
 	// Check if it's gone
 	_, err = svc.GetStatus(id)

@@ -33,6 +33,14 @@ func ensureDirs() error {
 	isConfigured := configured
 	dir := baseDir
 	masterMu.RUnlock()
+	return ensureDirsInternal(isConfigured, dir)
+}
+
+func ensureDirsLocked() error {
+	return ensureDirsInternal(configured, baseDir)
+}
+
+func ensureDirsInternal(isConfigured bool, dir string) error {
 	if !isConfigured || dir == "" {
 		return fmt.Errorf("state backend not configured")
 	}

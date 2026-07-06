@@ -329,7 +329,7 @@ func saveMasterListLocked(list *types.MasterList) error {
 	if baseDir == "" {
 		return fmt.Errorf("state backend not configured")
 	}
-	if err := ensureDirs(); err != nil {
+	if err := ensureDirsLocked(); err != nil {
 		return err
 	}
 	ms := MasterState{
