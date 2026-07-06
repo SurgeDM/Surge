@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 	"time"
 
@@ -156,6 +157,10 @@ func seedDownload(t *testing.T, id, url, dest, status string) {
 }
 
 func TestGetSettings_LoadError_PopulatesStartupWarnings(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("skipping permission test on windows")
+	}
+
 	tmpDir, err := os.MkdirTemp("", "surge-getsettings-test")
 	if err != nil {
 		t.Fatal(err)

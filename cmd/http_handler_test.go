@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -194,12 +195,17 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 					found = true
 					t.Logf("OutputPath for %s: %s", tt.name, cfg.OutputPath)
 
-					if !filepath.IsAbs(cfg.OutputPath) {
-						t.Errorf("Expected absolute path, got %s", cfg.OutputPath)
+					expectedAbs := tt.expectedOutputPath
+					if abs, err := filepath.Abs(expectedAbs); err == nil {
+						expectedAbs = abs
 					}
 
-					if cfg.OutputPath != tt.expectedOutputPath {
-						t.Errorf("Expected path %s, got %s", tt.expectedOutputPath, cfg.OutputPath)
+					if cfg.OutputPath != expectedAbs {
+						if runtime.GOOS == "windows" && strings.EqualFold(cfg.OutputPath, expectedAbs) {
+							// Windows paths are case-insensitive
+						} else {
+							t.Errorf("Expected path %s, got %s", expectedAbs, cfg.OutputPath)
+						}
 					}
 					break
 				}

@@ -450,10 +450,11 @@ func TestAddCmdRunE_ReturnsExpectedErrors(t *testing.T) {
 
 		err := addCmd.RunE(addCmd, []string{"https://example.com/file.zip"})
 		if err == nil {
-			t.Fatal("expected add command to return an error when no server is running")
+			t.Errorf("expected add command to return an error when no server is running")
+			return
 		}
 		if !strings.Contains(err.Error(), "surge is not running locally") {
-			t.Fatalf("unexpected error: %v", err)
+			t.Errorf("unexpected error: %v", err)
 		}
 	})
 
@@ -471,10 +472,11 @@ func TestAddCmdRunE_ReturnsExpectedErrors(t *testing.T) {
 
 		err := addCmd.RunE(addCmd, nil)
 		if err == nil {
-			t.Fatal("expected add command to return an error for a missing batch file")
+			t.Errorf("expected add command to return an error for a missing batch file")
+			return
 		}
 		if !strings.Contains(err.Error(), "error reading batch file") {
-			t.Fatalf("unexpected error: %v", err)
+			t.Errorf("unexpected error: %v", err)
 		}
 	})
 }
