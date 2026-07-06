@@ -33,7 +33,7 @@ foreground = "#1a1a1a"
 accent = "#d10074"
 
 [colors.light.normal]
-black = "#d0d0d0"
+black = "#c6c6c6"
 red = "#d32f2f"
 green = "#2e7d32"
 yellow = "#f57c00"
