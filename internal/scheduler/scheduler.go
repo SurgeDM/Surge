@@ -852,11 +852,13 @@ func (p *Scheduler) GracefulShutdown() {
 			<-ticker.C
 		}
 
+		// Signal that progressCh must no longer be sent to, so that
+		// safeSendProgress calls in workers can abort if the channel is full.
+		close(p.progressDone)
+
 		p.wg.Wait() // Blocks until all workers call Done()
 
-		// Signal that progressCh must no longer be sent to, then close taskChan
-		// so worker goroutines exit their range loop.
-		close(p.progressDone)
+		// close taskChan so worker goroutines exit their range loop.
 		close(p.taskChan)
 	})
 }

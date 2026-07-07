@@ -25,6 +25,11 @@ func safeSendProgress(ch chan<- types.DownloadEvent, msg types.DownloadEvent, do
 	if doneCh != nil {
 		select {
 		case ch <- msg:
+			return
+		default:
+		}
+		select {
+		case ch <- msg:
 		case <-doneCh:
 		}
 	} else {

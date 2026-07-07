@@ -773,9 +773,9 @@ func TestValidateIntegrity_MissingFile(t *testing.T) {
 		t.Error("Entry should have been removed after integrity check")
 	}
 
-	// Verify detail state is deleted
-	if _, err := os.Stat(getDetailPath(entry.ID)); !os.IsNotExist(err) {
-		t.Errorf("expected details state to be removed")
+	// Check if detail file was deleted
+	if _, err := os.Stat(getDetailPath(tmpDir, entry.ID)); !os.IsNotExist(err) {
+		t.Errorf("Expected detail file to be removed, got: %v", err)
 	}
 }
 
@@ -819,7 +819,7 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 		FileHash: expectedHash,
 	}
 	ds := DetailState{Version: 1, State: state}
-	_ = atomicWrite(getDetailPath("integrity-valid"), ds)
+	_ = atomicWrite(getDetailPath(tmpDir, "integrity-valid"), ds)
 
 	// Run integrity check - file exists with matching hash, should keep it
 	removed, err := ValidateIntegrity()
@@ -875,7 +875,7 @@ func TestValidateIntegrity_TamperedFile(t *testing.T) {
 		FileHash: "0000000000000000000000000000000000000000000000000000000000000000",
 	}
 	ds := DetailState{Version: 1, State: state}
-	_ = atomicWrite(getDetailPath("integrity-tampered"), ds)
+	_ = atomicWrite(getDetailPath(tmpDir, "integrity-tampered"), ds)
 
 	// Run integrity check - hash mismatch, entry AND file should be removed
 	removed, err := ValidateIntegrity()

@@ -49,8 +49,8 @@ func getMasterPath() string {
 	return filepath.Join(baseDir, "master.gob")
 }
 
-func getDetailPath(id string) string {
-	return filepath.Join(baseDir, "details", id+".gob")
+func getDetailPath(dir, id string) string {
+	return filepath.Join(dir, "details", id+".gob")
 }
 
 func SaveState(url string, destPath string, state *types.DownloadRecord) error {
@@ -103,7 +103,11 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadReco
 		return err
 	}
 
-	detailPath := getDetailPath(state.ID)
+	masterMu.RLock()
+	dir := baseDir
+	masterMu.RUnlock()
+
+	detailPath := getDetailPath(dir, state.ID)
 	if err := atomicWrite(detailPath, ds); err != nil {
 		return fmt.Errorf("failed to write detail state: %w", err)
 	}
@@ -239,8 +243,12 @@ func LoadState(url string, destPath string) (*types.DownloadRecord, error) {
 		return nil, fmt.Errorf("state not found: %w", os.ErrNotExist)
 	}
 
+	masterMu.RLock()
+	dir := baseDir
+	masterMu.RUnlock()
+
 	var ds DetailState
-	if err := loadGob(getDetailPath(foundID), &ds); err != nil {
+	if err := loadGob(getDetailPath(dir, foundID), &ds); err != nil {
 		return nil, fmt.Errorf("failed to load detail state: %w", err)
 	}
 
@@ -254,9 +262,14 @@ func LoadState(url string, destPath string) (*types.DownloadRecord, error) {
 func LoadStates(ids []string) (map[string]*types.DownloadRecord, error) {
 	states := make(map[string]*types.DownloadRecord)
 	var errs []error
+	
+	masterMu.RLock()
+	dir := baseDir
+	masterMu.RUnlock()
+
 	for _, id := range ids {
 		var ds DetailState
-		if err := loadGob(getDetailPath(id), &ds); err != nil {
+		if err := loadGob(getDetailPath(dir, id), &ds); err != nil {
 			if !os.IsNotExist(err) {
 				utils.Debug("LoadStates: failed to load state for %s: %v", id, err)
 				errs = append(errs, fmt.Errorf("id %s: %w", id, err))
@@ -278,7 +291,7 @@ func DeleteState(id string) error {
 	defer masterMu.Unlock()
 
 	// Remove detail file, propagating real errors (but not "file not found").
-	if err := utils.RemoveFile(getDetailPath(id)); err != nil && !os.IsNotExist(err) {
+	if err := utils.RemoveFile(getDetailPath(baseDir, id)); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("failed to remove detail state: %w", err)
 	}
 
@@ -301,7 +314,7 @@ func DeleteTasks(id string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
 	var ds DetailState
-	detailPath := getDetailPath(id)
+	detailPath := getDetailPath(baseDir, id)
 	if err := loadGob(detailPath, &ds); err != nil {
 		if os.IsNotExist(err) {
 			return nil // nothing to clear
@@ -568,7 +581,7 @@ func removeDownloadsByStatus(status string) (int64, error) {
 	for _, e := range list.Downloads {
 		if e.Status == status {
 			count++
-			_ = utils.RemoveFile(getDetailPath(e.ID))
+			_ = utils.RemoveFile(getDetailPath(baseDir, e.ID))
 		} else {
 			out = append(out, e)
 		}
@@ -716,7 +729,7 @@ func ValidateIntegrity() (int, error) {
 			if os.IsNotExist(statErr) {
 				// File missing - remove orphaned DB entry
 				utils.Debug("Integrity: .surge file missing for %s, removing entry %s", e.DestPath, e.ID)
-				_ = utils.RemoveFile(getDetailPath(e.ID))
+				_ = utils.RemoveFile(getDetailPath(baseDir, e.ID))
 				removed++
 				continue
 			}
@@ -726,7 +739,7 @@ func ValidateIntegrity() (int, error) {
 
 			// If we have a stored hash, verify it
 			var ds DetailState
-			if err := loadGob(getDetailPath(e.ID), &ds); err == nil && ds.State != nil && ds.State.FileHash != "" {
+			if err := loadGob(getDetailPath(baseDir, e.ID), &ds); err == nil && ds.State != nil && ds.State.FileHash != "" {
 				matches, err := compareAgainstStoredFileHash(surgePath, ds.State.FileHash)
 				if err != nil {
 					return removed, fmt.Errorf("failed to verify hash for %s: %w", surgePath, err)
@@ -735,7 +748,7 @@ func ValidateIntegrity() (int, error) {
 					// File has been tampered with - remove entry and corrupted file
 					utils.Debug("Integrity: hash mismatch for %s (expected %s), removing", surgePath, ds.State.FileHash)
 					_ = utils.RemoveFile(surgePath)
-					_ = utils.RemoveFile(getDetailPath(e.ID))
+					_ = utils.RemoveFile(getDetailPath(baseDir, e.ID))
 					removed++
 					continue
 				}
