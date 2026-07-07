@@ -20,9 +20,16 @@ import (
 
 // safeSendProgress sends msg on ch, recovering from panics caused by sending
 // on a closed channel (which can happen during shutdown).
-func safeSendProgress(ch chan<- types.DownloadEvent, msg types.DownloadEvent) {
+func safeSendProgress(ch chan<- types.DownloadEvent, msg types.DownloadEvent, doneCh <-chan struct{}) {
 	defer func() { _ = recover() }()
-	ch <- msg
+	if doneCh != nil {
+		select {
+		case ch <- msg:
+		case <-doneCh:
+		}
+	} else {
+		ch <- msg
+	}
 }
 
 // uniqueFilePath returns a unique file path by appending (1), (2), etc. if the file exists
@@ -148,7 +155,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 			RateLimitSet: rateLimitSet,
 			Workers:      cfg.Runtime.Workers,
 			MinChunkSize: cfg.Runtime.MinChunkSize,
-		})
+		}, ctx.Done())
 	}
 
 	// Update shared state if we have a valid size
@@ -279,7 +286,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 				AvgSpeed:     avgSpeed,
 				RateLimit:    rateLimit,
 				RateLimitSet: rateLimitSet,
-			})
+			}, ctx.Done())
 		}
 	} else if downloadErr != nil && !isPaused {
 		// Verify it's not a cancellation error
@@ -296,7 +303,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 				Filename:   finalFilename,
 				DestPath:   finalDestPath,
 				Err:        downloadErr,
-			})
+			}, ctx.Done())
 		}
 	}
 

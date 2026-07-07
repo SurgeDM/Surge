@@ -658,7 +658,7 @@ func (p *Scheduler) worker() {
 					RateLimitSet: rateLimitSet,
 					Workers:      workers,
 					MinChunkSize: minChunkSize,
-				})
+				}, p.progressDone)
 			}
 		} else if err != nil {
 			if localCfg.ProgressState != nil {
