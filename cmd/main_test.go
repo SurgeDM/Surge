@@ -34,6 +34,7 @@ func TestMain(m *testing.M) {
 		_ = os.Setenv("HOME", tmpDir)
 		_ = os.Setenv("APPDATA", tmpDir)
 		_ = os.Setenv("USERPROFILE", tmpDir)
+		_ = os.Setenv("SystemRoot", tmpDir)
 
 		if ensureErr := resetSharedStateDB(); ensureErr != nil {
 			fmt.Fprintf(os.Stderr, "TestMain: failed to create isolated Surge test directories: %v\n", ensureErr)

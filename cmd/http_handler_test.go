@@ -90,6 +90,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 		name               string
 		request            DownloadRequest
 		expectedOutputPath string
+		skipOnWindows      bool // simulation tests that don't apply when the daemon IS on Windows
 	}{
 		{
 			name: "Absolute Path (Explicit)",
@@ -134,20 +135,27 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			expectedOutputPath: defaultDownloadDir,
 		},
 		{
+			// On a non-Windows daemon, a Windows absolute path from the extension
+			// is remapped to the daemon's default download directory.
+			// On Windows, C:/ is a real local path — no remapping occurs.
 			name: "Windows Download Root Maps To Default Dir",
 			request: DownloadRequest{
 				URL:  "http://example.com/file6",
 				Path: "C:/Users/me/Downloads",
 			},
 			expectedOutputPath: defaultDownloadDir,
+			skipOnWindows:      true,
 		},
 		{
+			// Same as above: the "/surge-repro" suffix is preserved on non-Windows daemons.
+			// On Windows, this is just a literal local path.
 			name: "Windows Nested Path Maps Under Default Dir",
 			request: DownloadRequest{
 				URL:  "http://example.com/file7",
 				Path: "C:/Users/me/Downloads/surge-repro",
 			},
 			expectedOutputPath: filepath.Join(defaultDownloadDir, "surge-repro"),
+			skipOnWindows:      true,
 		},
 		{
 			name: "Windows Nested Path Relative Flag Maps Under Default Dir",
@@ -157,6 +165,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				RelativeToDefaultDir: true,
 			},
 			expectedOutputPath: filepath.Join(defaultDownloadDir, "surge-repro"),
+			skipOnWindows:      true,
 		},
 		{
 			name: "Unmatched Windows Path Falls Back To Default Dir",
@@ -166,11 +175,15 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 				RelativeToDefaultDir: true,
 			},
 			expectedOutputPath: defaultDownloadDir,
+			skipOnWindows:      true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			if tt.skipOnWindows && runtime.GOOS == "windows" {
+				t.Skip("path-remapping simulation does not apply on Windows daemons")
+			}
 			body, _ := json.Marshal(tt.request)
 			req := httptest.NewRequest("POST", "/download", bytes.NewBuffer(body))
 			w := httptest.NewRecorder()

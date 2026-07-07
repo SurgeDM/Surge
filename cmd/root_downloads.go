@@ -540,6 +540,14 @@ func mapClientWindowsPath(reqPath string, relativeToDefaultDir bool, defaultOutp
 		return ""
 	}
 
+	// On a Windows host, a Windows-absolute path is a real local path.
+	// filepath.IsAbs returns true for it, so the normal code path handles it
+	// correctly. Only remap when the daemon is running on a non-Windows OS
+	// (i.e. the path is from a Windows browser extension talking to a Linux/macOS daemon).
+	if runtime.GOOS == "windows" && filepath.IsAbs(reqPath) {
+		return ""
+	}
+
 	baseDir := "."
 	if relativeToDefaultDir {
 		if settings != nil && strings.TrimSpace(config.Resolve[string](settings.General.DefaultDownloadDir)) != "" {
