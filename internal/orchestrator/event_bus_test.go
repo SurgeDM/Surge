@@ -128,14 +128,6 @@ func TestEventBus_ShutdownCleanly(t *testing.T) {
 
 	eb.Shutdown()
 
-	// Fill InputCh so the only unblocked select case is ctx.Done()
-	for i := 0; i < 100; i++ {
-		select {
-		case eb.InputCh <- types.DownloadEvent{Message: "filler"}:
-		default:
-		}
-	}
-
 	// Should not be able to publish after shutdown
 	err := eb.Publish(types.DownloadEvent{})
 	if !errors.Is(err, context.Canceled) {

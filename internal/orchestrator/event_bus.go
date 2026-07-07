@@ -18,6 +18,7 @@ type EventBus struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
+	pubWg         sync.WaitGroup
 }
 
 func NewEventBus() *EventBus {
@@ -38,26 +39,6 @@ func (eb *EventBus) broadcastLoop() {
 	defer eb.wg.Done()
 	for {
 		select {
-		case <-eb.ctx.Done():
-			// Drain remaining events in InputCh before closing listeners
-		drainLoop:
-			for {
-				select {
-				case msg := <-eb.InputCh:
-					eb.broadcastMsg(msg)
-				default:
-					break drainLoop
-				}
-			}
-
-			// Clean up on shutdown
-			eb.listenerMu.Lock()
-			for _, ch := range eb.listeners {
-				close(ch)
-			}
-			eb.listeners = nil
-			eb.listenerMu.Unlock()
-			return
 		case msg, ok := <-eb.InputCh:
 			if !ok {
 				eb.listenerMu.Lock()
@@ -101,9 +82,16 @@ func (eb *EventBus) broadcastMsg(msg types.DownloadEvent) {
 				default:
 				}
 			} else {
+				timer := time.NewTimer(1 * time.Second)
 				select {
 				case ch <- msg:
-				case <-time.After(1 * time.Second):
+					if !timer.Stop() {
+						select {
+						case <-timer.C:
+						default:
+						}
+					}
+				case <-timer.C:
 					utils.Debug("Dropped critical event due to slow client")
 				}
 			}
@@ -113,6 +101,18 @@ func (eb *EventBus) broadcastMsg(msg types.DownloadEvent) {
 
 // Publish emits an event into the bus.
 func (eb *EventBus) Publish(msg types.DownloadEvent) error {
+	eb.pubWg.Add(1)
+	defer eb.pubWg.Done()
+
+	// Prevent sending on a closed channel by checking if shutdown has started.
+	// Because Shutdown() calls cancel() before pubWg.Wait(), if this check
+	// passes, we guarantee that close(InputCh) cannot happen until we Done().
+	select {
+	case <-eb.ctx.Done():
+		return context.Canceled
+	default:
+	}
+
 	select {
 	case <-eb.ctx.Done():
 		return context.Canceled
@@ -144,5 +144,7 @@ func (eb *EventBus) Subscribe() (<-chan types.DownloadEvent, func()) {
 
 func (eb *EventBus) Shutdown() {
 	eb.cancel()
+	eb.pubWg.Wait() // wait for all active Publish calls to return
+	close(eb.InputCh) // safely close to trigger drain
 	eb.wg.Wait()
 }
