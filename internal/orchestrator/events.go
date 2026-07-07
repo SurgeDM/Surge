@@ -363,22 +363,26 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 			}
 
 		case types.EventQueued:
-			// Queue persistence is what lets downloads survive shutdown before any worker
-			// has emitted a started event.
-			if err := store.AddToMasterList(types.DownloadRecord{
-				ID:           m.DownloadID,
-				URL:          m.URL,
-				URLHash:      store.URLHash(m.URL),
-				DestPath:     m.DestPath,
-				Filename:     m.Filename,
-				Mirrors:      append([]string(nil), m.Mirrors...),
-				Status:       "queued",
-				RateLimit:    m.RateLimit,
-				RateLimitSet: m.RateLimitSet,
-				Workers:      m.Workers,
-				MinChunkSize: m.MinChunkSize,
-			}); err != nil {
-				utils.Debug("Lifecycle: Failed to persist queued download: %v", err)
+			// enqueueResolved already persisted this record synchronously (status="queued")
+			// before pool.Add, so the entry normally exists by the time we arrive here.
+			// Only write if absent to avoid regressing an already-advanced status
+			// (e.g. "downloading") when EventStarted races ahead of this event.
+			if existing, _ := store.GetDownload(m.DownloadID); existing == nil {
+				if err := store.AddToMasterList(types.DownloadRecord{
+					ID:           m.DownloadID,
+					URL:          m.URL,
+					URLHash:      store.URLHash(m.URL),
+					DestPath:     m.DestPath,
+					Filename:     m.Filename,
+					Mirrors:      append([]string(nil), m.Mirrors...),
+					Status:       "queued",
+					RateLimit:    m.RateLimit,
+					RateLimitSet: m.RateLimitSet,
+					Workers:      m.Workers,
+					MinChunkSize: m.MinChunkSize,
+				}); err != nil {
+					utils.Debug("Lifecycle: Failed to persist queued download: %v", err)
+				}
 			}
 
 		case types.EventResumed, types.EventRequest, types.EventBatchRequest, types.EventSystem:
