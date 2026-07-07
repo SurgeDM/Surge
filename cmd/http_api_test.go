@@ -13,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
@@ -256,7 +257,7 @@ func TestEventsEndpoint_RequiresAuthAndStreamsSSE(t *testing.T) {
 	mux := http.NewServeMux()
 	registerHTTPRoutes(mux, 0, "", service)
 	handler := corsMiddleware(authMiddleware("test-token", mux))
-	server := httptest.NewServer(handler)
+	server := testutil.NewHTTPServerT(t, handler)
 	defer server.Close()
 
 	noAuthResp, err := server.Client().Get(server.URL + "/events")
@@ -616,7 +617,7 @@ func TestExecuteAPIAction_SendsIDAsQueryParam(t *testing.T) {
 	rec := &recordingActionService{httpAPITestService: &httpAPITestService{}, ids: map[string]string{}}
 	mux := http.NewServeMux()
 	registerHTTPRoutes(mux, 0, "", rec)
-	server := httptest.NewServer(mux)
+	server := testutil.NewHTTPServerT(t, mux)
 	defer server.Close()
 
 	prevHost, prevToken := globalHost, globalToken

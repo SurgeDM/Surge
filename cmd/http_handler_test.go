@@ -19,6 +19,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/scheduler"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
@@ -297,7 +298,7 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 		GlobalProgressCh = nil
 	})
 
-	probeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	probeServer := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.Header.Get("Range"); got != "bytes=0-0" {
 			t.Fatalf("Range header = %q, want bytes=0-0", got)
 		}
@@ -432,7 +433,7 @@ func TestHandleDownload_ForwardsPerTaskOverridesToLifecycle(t *testing.T) {
 		GlobalProgressCh = nil
 	})
 
-	probeServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	probeServer := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Range", "bytes 0-0/1024")
 		w.Header().Set("Content-Length", "1")
 		w.WriteHeader(http.StatusPartialContent)
