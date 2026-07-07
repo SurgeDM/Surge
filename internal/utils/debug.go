@@ -15,6 +15,7 @@ import (
 var (
 	debugFile *os.File
 	debugOnce sync.Once
+	debugMu   sync.Mutex
 	logsDir   atomic.Value // string
 )
 
@@ -34,6 +35,22 @@ func IsLoggingEnabled() bool {
 	return ok && dir != ""
 }
 
+// CloseDebug closes the debug log file and resets the logger state so that a
+// subsequent ConfigureDebug call (e.g. in a test that redirects the logs dir)
+// will open a fresh file. On Windows, an open file handle prevents the
+// temporary directory from being removed by t.TempDir() cleanup.
+func CloseDebug() {
+	debugMu.Lock()
+	defer debugMu.Unlock()
+	if debugFile != nil {
+		_ = debugFile.Close()
+		debugFile = nil
+	}
+	logsDir.Store("")
+	debugOnce = sync.Once{}
+}
+
+
 // Debug writes a message to debug.log file in the configured directory
 func Debug(format string, args ...any) {
 	// Internal fast path check without lock
@@ -49,6 +66,9 @@ func Debug(format string, args ...any) {
 	// Calculate timestamp only if we are actually logging
 	timestamp := time.Now().Format("2006-01-02 15:04:05")
 
+	debugMu.Lock()
+	defer debugMu.Unlock()
+
 	// Ensure file is open (still needs once, but fast after first time)
 	debugOnce.Do(func() {
 		_ = os.MkdirAll(dir, 0o755)
@@ -59,6 +79,7 @@ func Debug(format string, args ...any) {
 		_, _ = fmt.Fprintf(debugFile, "[%s] %s\n", timestamp, fmt.Sprintf(format, args...))
 	}
 }
+
 
 // CleanupLogs removes old log files, keeping only the most recent retentionCount files
 func CleanupLogs(retentionCount int) {

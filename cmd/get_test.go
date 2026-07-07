@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"testing"
@@ -14,6 +13,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/scheduler"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
@@ -24,7 +24,7 @@ func startAuthedTestServer(t *testing.T, service service.DownloadService, token 
 	registerHTTPRoutes(mux, 0, "", service)
 	handler := corsMiddleware(authMiddleware(token, mux))
 
-	server := httptest.NewServer(handler)
+	server := testutil.NewHTTPServerT(t, handler)
 	t.Cleanup(server.Close)
 	return server.URL
 }

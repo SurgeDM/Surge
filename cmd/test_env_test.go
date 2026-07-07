@@ -4,6 +4,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/adrg/xdg"
 )
 
@@ -28,6 +29,7 @@ func setupXDGEnvIsolation(t *testing.T) string {
 	xdg.RuntimeDir = tempDir
 
 	t.Cleanup(func() {
+		utils.CloseDebug()
 		xdg.ConfigHome = oldConfigHome
 		xdg.DataHome = oldDataHome
 		xdg.StateHome = oldStateHome
