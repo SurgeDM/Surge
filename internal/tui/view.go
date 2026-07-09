@@ -803,7 +803,7 @@ func getDownloadStatus(d *DownloadModel, spinnerView string) string {
 	if d.resuming {
 		return lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(spinnerView + " Resuming...")
 	}
-	status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.Speed, d.Downloaded)
+	status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming)
 	return status.RenderWithSpinner(spinnerView)
 }
 
