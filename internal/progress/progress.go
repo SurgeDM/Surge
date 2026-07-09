@@ -15,7 +15,8 @@ func CfgProgress(cfg *types.DownloadRecord) *DownloadProgress {
 	if cfg == nil || cfg.ProgressState == nil {
 		return nil
 	}
-	return cfg.ProgressState.(*DownloadProgress)
+	dp, _ := cfg.ProgressState.(*DownloadProgress)
+	return dp
 }
 
 // DownloadProgress is the facade that coordinates all trackers.
