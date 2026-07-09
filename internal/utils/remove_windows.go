@@ -4,6 +4,8 @@ package utils
 
 import (
 	"os"
+	"runtime"
+	"strings"
 	"time"
 )
 
@@ -19,6 +21,11 @@ const (
 // Callers should prefer this over os.Remove for any downloaded or in-progress
 // file so that Windows users do not see spurious "access denied" errors.
 func RemoveFile(path string) error {
+	if strings.HasSuffix(path, ".surge") {
+		buf := make([]byte, 4096)
+		n := runtime.Stack(buf, false)
+		Debug("INTERCEPTED DELETION OF %s\nStack:\n%s", path, string(buf[:n]))
+	}
 	wait := removeRetryBaseInterval
 	for i := 0; ; i++ {
 		err := os.Remove(path)
