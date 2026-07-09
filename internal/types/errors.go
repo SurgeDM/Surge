@@ -17,4 +17,5 @@ var (
 	ErrQueuedUpdate       = errors.New("cannot update URL for a queued download, please cancel or wait for it to start")
 	ErrActiveUpdate       = errors.New("download is currently active, please pause it before updating the URL")
 	ErrMaxRedirects       = errors.New("stopped after 10 redirects")
+	ErrAlreadyActive      = errors.New("download is already active or queued")
 )

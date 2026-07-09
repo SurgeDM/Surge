@@ -74,8 +74,13 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	}
 
 	// Guard: still transitioning to paused
-	if st := mgr.pool.GetStatus(id); st != nil && st.Status == "pausing" {
-		return types.ErrPausing
+	if st := mgr.pool.GetStatus(id); st != nil {
+		switch st.Status {
+		case "pausing":
+			return types.ErrPausing
+		case "downloading", "queued":
+			return types.ErrAlreadyActive
+		}
 	}
 
 	// Hot path: pool still holds the paused download in memory.
@@ -160,9 +165,15 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 	coldIdx := make(map[string]int)
 
 	for i, id := range ids {
-		if st := mgr.pool.GetStatus(id); st != nil && st.Status == "pausing" {
-			errs[i] = types.ErrPausing
-			continue
+		if st := mgr.pool.GetStatus(id); st != nil {
+			switch st.Status {
+			case "pausing":
+				errs[i] = types.ErrPausing
+				continue
+			case "downloading", "queued":
+				errs[i] = types.ErrAlreadyActive
+				continue
+			}
 		}
 
 		// Try hot path first
