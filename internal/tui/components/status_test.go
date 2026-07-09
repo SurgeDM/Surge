@@ -39,3 +39,89 @@ func TestStatusRenderWithSpinner(t *testing.T) {
 		t.Errorf("expected Downloading status to ignore spinner '%s', got: %s", spinnerFrame, downloadingStr)
 	}
 }
+
+func TestDetermineStatus(t *testing.T) {
+	tests := []struct {
+		name     string
+		done     bool
+		paused   bool
+		hasError bool
+		started  bool
+		resuming bool
+		expected DownloadStatus
+	}{
+		{
+			name:     "Error takes highest precedence",
+			done:     true,
+			paused:   true,
+			hasError: true,
+			started:  true,
+			resuming: true,
+			expected: StatusError,
+		},
+		{
+			name:     "Done takes precedence over paused",
+			done:     true,
+			paused:   true,
+			hasError: false,
+			started:  true,
+			resuming: false,
+			expected: StatusComplete,
+		},
+		{
+			name:     "Paused but resuming is queued",
+			done:     false,
+			paused:   true,
+			hasError: false,
+			started:  true,
+			resuming: true,
+			expected: StatusQueued,
+		},
+		{
+			name:     "Paused and not resuming is paused",
+			done:     false,
+			paused:   true,
+			hasError: false,
+			started:  true,
+			resuming: false,
+			expected: StatusPaused,
+		},
+		{
+			name:     "Not started is queued",
+			done:     false,
+			paused:   false,
+			hasError: false,
+			started:  false,
+			resuming: false,
+			expected: StatusQueued,
+		},
+		{
+			name:     "Started and not paused is downloading",
+			done:     false,
+			paused:   false,
+			hasError: false,
+			started:  true,
+			resuming: false,
+			expected: StatusDownloading,
+		},
+		{
+			name:     "Started but resuming is queued",
+			done:     false,
+			paused:   false,
+			hasError: false,
+			started:  true,
+			resuming: true,
+			expected: StatusQueued,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := DetermineStatus(tt.done, tt.paused, tt.hasError, tt.started, tt.resuming)
+			if got != tt.expected {
+				t.Errorf("DetermineStatus() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
