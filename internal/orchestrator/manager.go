@@ -39,7 +39,8 @@ type LifecycleManager struct {
 
 	// probeSem caps the number of simultaneous server probes so adding a
 	// large batch of downloads does not flood the network with HEAD requests.
-	probeSem chan struct{}
+	probeSem     chan struct{}
+	shutdownOnce sync.Once
 }
 
 const (
@@ -128,15 +129,17 @@ func (mgr *LifecycleManager) GetEventBus() *EventBus {
 }
 
 func (mgr *LifecycleManager) Shutdown() {
-	if mgr.aggregator != nil {
-		mgr.aggregator.Shutdown()
-	}
-	if mgr.pool != nil {
-		mgr.pool.GracefulShutdown()
-	}
-	if mgr.eventBus != nil {
-		mgr.eventBus.Shutdown()
-	}
+	mgr.shutdownOnce.Do(func() {
+		if mgr.aggregator != nil {
+			mgr.aggregator.Shutdown()
+		}
+		if mgr.pool != nil {
+			mgr.pool.GracefulShutdown()
+		}
+		if mgr.eventBus != nil {
+			mgr.eventBus.Shutdown()
+		}
+	})
 }
 
 // GetSettings reloads disk-backed routing rules opportunistically so a long-lived

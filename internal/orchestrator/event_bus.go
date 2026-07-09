@@ -19,6 +19,7 @@ type EventBus struct {
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
 	pubWg         sync.WaitGroup
+	shutdownOnce  sync.Once
 }
 
 func NewEventBus() *EventBus {
@@ -143,8 +144,10 @@ func (eb *EventBus) Subscribe() (<-chan types.DownloadEvent, func()) {
 }
 
 func (eb *EventBus) Shutdown() {
-	eb.cancel()
-	eb.pubWg.Wait() // wait for all active Publish calls to return
-	close(eb.InputCh) // safely close to trigger drain
+	eb.shutdownOnce.Do(func() {
+		eb.cancel()
+		eb.pubWg.Wait() // wait for all active Publish calls to return
+		close(eb.InputCh) // safely close to trigger drain
+	})
 	eb.wg.Wait()
 }
