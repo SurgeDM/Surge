@@ -103,9 +103,17 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadReco
 		return err
 	}
 
-	masterMu.RLock()
+	// Acquire the write lock for both the detail write and the master list update.
+	// Snapshot baseDir here so both operations use the same directory — eliminating
+	// the race window that existed when baseDir was re-read under a separate RLock
+	// after ensureDirs() had already released its own RLock.
+	masterMu.Lock()
+	defer masterMu.Unlock()
+
 	dir := baseDir
-	masterMu.RUnlock()
+	if dir == "" {
+		return fmt.Errorf("state backend not configured")
+	}
 
 	detailPath := getDetailPath(dir, state.ID)
 	if err := atomicWrite(detailPath, ds); err != nil {
@@ -113,8 +121,6 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadReco
 	}
 
 	// Update the lightweight index (MasterList)
-	masterMu.Lock()
-	defer masterMu.Unlock()
 	list, err := loadMasterListUnlocked()
 	if err != nil {
 		return fmt.Errorf("failed to load master list: %w", err)
