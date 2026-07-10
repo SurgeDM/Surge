@@ -2,6 +2,7 @@ package scheduler
 
 import (
 	"context"
+	"errors"
 	"path/filepath"
 	"sync"
 	"sync/atomic"
@@ -24,6 +25,13 @@ type activeDownload struct {
 	done chan struct{}
 }
 
+// queuedTask wraps a download config with SQS-style visibility and retry state
+type queuedTask struct {
+	cfg      types.DownloadRecord
+	retries  int
+	inFlight bool
+}
+
 // Scheduler manages the download workers and tasks.
 //
 // Lock Ordering:
@@ -32,14 +40,16 @@ type activeDownload struct {
 // Examples: Add, SetDownloadRateLimit, SetDefaultDownloadRateLimit.
 // Never acquire p.mu while holding a limiter's internal mutex to prevent deadlocks.
 type Scheduler struct {
-	taskChan     chan string
-	progressCh   chan<- types.DownloadEvent
-	progressDone chan struct{}                   // closed when progressCh must no longer be sent to
-	downloads    map[string]*activeDownload      // Track active downloads for pause/resume
-	queued       map[string]types.DownloadRecord // Track queued downloads
-	mu           sync.RWMutex
-	wg           sync.WaitGroup // We use this to wait for all active downloads to pause before exiting the program
-	maxDownloads int
+	taskCond       *sync.Cond
+	queueOrder     []string
+	progressCh     chan<- types.DownloadEvent
+	progressDone   chan struct{}              // closed when progressCh must no longer be sent to
+	downloads      map[string]*activeDownload // Track active downloads for pause/resume
+	queued         map[string]*queuedTask     // Track queued downloads
+	mu             sync.RWMutex
+	wg             sync.WaitGroup // We use this to wait for all active downloads to pause before exiting the program
+	maxDownloads   int
+	isShuttingDown bool
 
 	globalLimiter               *transport.RateLimiter
 	downloadLimiters            map[string]*transport.RateLimiter
@@ -66,19 +76,29 @@ func New(progressCh chan<- types.DownloadEvent, maxDownloads int) *Scheduler {
 		maxDownloads = 3 // Default to 3 if invalid
 	}
 	pool := &Scheduler{
-		taskChan:         make(chan string, 100), // We make it buffered to avoid blocking add
 		progressCh:       progressCh,
 		progressDone:     make(chan struct{}),
 		downloads:        make(map[string]*activeDownload),
-		queued:           make(map[string]types.DownloadRecord),
+		queued:           make(map[string]*queuedTask),
 		maxDownloads:     maxDownloads,
 		globalLimiter:    transport.NewRateLimiter(0, 0),
 		downloadLimiters: make(map[string]*transport.RateLimiter),
 	}
+	pool.taskCond = sync.NewCond(&pool.mu)
 	for i := 0; i < maxDownloads; i++ {
 		go pool.worker()
 	}
 	return pool
+}
+
+// removeQueueOrderLocked removes an ID from queueOrder preserving the order of other elements.
+func (p *Scheduler) removeQueueOrderLocked(id string) {
+	for i, qid := range p.queueOrder {
+		if qid == id {
+			p.queueOrder = append(p.queueOrder[:i], p.queueOrder[i+1:]...)
+			return
+		}
+	}
 }
 
 // syncConfigFromState syncs Filename, DestPath, and Mirrors from the associated state.
@@ -127,11 +147,12 @@ func (p *Scheduler) Add(cfg types.DownloadRecord) {
 	}
 	p.mu.Lock()
 	p.ensureLimiterForConfigLocked(&cfg)
-	p.queued[cfg.ID] = cfg
+	qt := &queuedTask{cfg: cfg}
+	p.queued[cfg.ID] = qt
+	p.queueOrder = append(p.queueOrder, cfg.ID)
 	p.wg.Add(1)
+	p.taskCond.Signal()
 	p.mu.Unlock()
-
-	p.taskChan <- cfg.ID
 }
 
 func (p *Scheduler) ensureLimiterForConfigLocked(cfg *types.DownloadRecord) {
@@ -193,7 +214,7 @@ func (p *Scheduler) HasDownload(url string) bool {
 		}
 	}
 	for _, qd := range p.queued {
-		if qd.URL == url {
+		if qd.cfg.URL == url {
 			p.mu.RUnlock()
 			return true
 		}
@@ -232,9 +253,12 @@ func (p *Scheduler) GetAll() []types.DownloadRecord {
 		syncConfigFromState(&cfg)
 		configs = append(configs, cfg)
 	}
-	for _, cfg := range p.queued {
-		cfg.Limiter = nil
-		configs = append(configs, cfg)
+	for _, id := range p.queueOrder {
+		if qd, ok := p.queued[id]; ok {
+			cfg := qd.cfg
+			cfg.Limiter = nil
+			configs = append(configs, cfg)
+		}
 	}
 	return configs
 }
@@ -298,22 +322,23 @@ func (p *Scheduler) SetDefaultDownloadRateLimit(rate int64) {
 		p.downloadLimiters = make(map[string]*transport.RateLimiter)
 	}
 
-	for id, cfg := range p.queued {
-		if cfg.RateLimitSet {
-			continue
-		}
-		cfg.RateLimit = rate
-		p.queued[id] = cfg
-		if cfg.ProgressState != nil {
-			progress.CfgProgress(&cfg).SetRateLimit(rate, false)
-		}
-		limiter := p.downloadLimiters[id]
-		if limiter == nil {
-			// Note: ensureLimiterForConfigLocked guarantees all active/queued downloads have a limiter.
-			// This nil branch is defensive and should be unreachable in practice.
-			p.downloadLimiters[id] = transport.NewRateLimiter(rate, rateLimiterBurst(rate))
-		} else {
-			limiter.SetRate(rate, rateLimiterBurst(rate))
+	for _, id := range p.queueOrder {
+		if qd, ok := p.queued[id]; ok {
+			cfg := qd.cfg
+			if cfg.RateLimitSet {
+				continue
+			}
+			cfg.RateLimit = rate
+			qd.cfg = cfg
+			if cfg.ProgressState != nil {
+				progress.CfgProgress(&cfg).SetRateLimit(rate, false)
+			}
+			limiter := p.downloadLimiters[id]
+			if limiter == nil {
+				p.downloadLimiters[id] = transport.NewRateLimiter(rate, rateLimiterBurst(rate))
+			} else {
+				limiter.SetRate(rate, rateLimiterBurst(rate))
+			}
 		}
 	}
 	for id, ad := range p.downloads {
@@ -353,13 +378,12 @@ func (p *Scheduler) SetDownloadRateLimit(downloadID string, rate int64) bool {
 		}
 		found = true
 	}
-	if cfg, ok := p.queued[downloadID]; ok {
-		cfg.RateLimit = rate
-		cfg.RateLimitSet = true
-		if cfg.ProgressState != nil {
-			progress.CfgProgress(&cfg).SetRateLimit(rate, true)
+	if qt, ok := p.queued[downloadID]; ok {
+		qt.cfg.RateLimit = rate
+		qt.cfg.RateLimitSet = true
+		if qt.cfg.ProgressState != nil {
+			progress.CfgProgress(&qt.cfg).SetRateLimit(rate, true)
 		}
-		p.queued[downloadID] = cfg
 		found = true
 	}
 
@@ -399,13 +423,12 @@ func (p *Scheduler) ClearDownloadRateLimit(downloadID string) bool {
 		}
 		found = true
 	}
-	if cfg, ok := p.queued[downloadID]; ok {
-		cfg.RateLimit = defaultRate
-		cfg.RateLimitSet = false
-		if cfg.ProgressState != nil {
-			progress.CfgProgress(&cfg).SetRateLimit(defaultRate, false)
+	if qt, ok := p.queued[downloadID]; ok {
+		qt.cfg.RateLimit = defaultRate
+		qt.cfg.RateLimitSet = false
+		if qt.cfg.ProgressState != nil {
+			progress.CfgProgress(&qt.cfg).SetRateLimit(defaultRate, false)
 		}
-		p.queued[downloadID] = cfg
 		found = true
 	}
 
@@ -452,13 +475,22 @@ func (p *Scheduler) Cancel(downloadID string) types.CancelResult {
 	if activeExists {
 		delete(p.downloads, downloadID)
 	}
+
+	var droppedQueued bool
 	if queuedExists {
 		delete(p.queued, downloadID)
+		if !qCfg.inFlight {
+			droppedQueued = true
+		}
 	}
 	if activeExists || queuedExists {
 		delete(p.downloadLimiters, downloadID)
 	}
 	p.mu.Unlock()
+
+	if droppedQueued {
+		p.wg.Done()
+	}
 
 	if !activeExists && !queuedExists {
 		return types.CancelResult{}
@@ -492,8 +524,8 @@ func (p *Scheduler) Cancel(downloadID string) types.CancelResult {
 			progress.CfgProgress(&ad.config).Done.Store(true)
 		}
 	} else if queuedExists {
-		result.Filename = qCfg.Filename
-		result.DestPath = resolveDestPath(&qCfg)
+		result.Filename = qCfg.cfg.Filename
+		result.DestPath = resolveDestPath(&qCfg.cfg)
 	}
 
 	return result
@@ -561,28 +593,44 @@ func (p *Scheduler) UpdateURL(downloadID string, newURL string) error {
 	return nil
 }
 
-func (p *Scheduler) worker() {
-	for id := range p.taskChan {
-		p.mu.RLock()
-		cfg, stillQueued := p.queued[id]
-		p.mu.RUnlock()
-		if !stillQueued {
-			// Canceled while waiting in queue.
-			p.wg.Done()
-			continue
+func (p *Scheduler) waitForTask() *queuedTask {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for {
+		if p.isShuttingDown {
+			return nil
 		}
+		for _, id := range p.queueOrder {
+			if qt, ok := p.queued[id]; ok && !qt.inFlight {
+				qt.inFlight = true
+				return qt
+			}
+		}
+		p.taskCond.Wait()
+	}
+}
+
+func (p *Scheduler) worker() {
+	for {
+		qt := p.waitForTask()
+		if qt == nil {
+			return
+		}
+
+		id := qt.cfg.ID
 
 		// Create cancellable context
 		ctx, cancel := context.WithCancel(context.Background())
 
 		// Ensure Runtime is initialized before exposing to GetAll
-		if cfg.Runtime == nil {
-			cfg.Runtime = types.DefaultRuntimeConfig()
+		if qt.cfg.Runtime == nil {
+			qt.cfg.Runtime = types.DefaultRuntimeConfig()
 		}
 
 		// Register active download
 		ad := &activeDownload{
-			config: cfg,
+			config: qt.cfg,
 			cancel: cancel,
 			done:   make(chan struct{}),
 		}
@@ -592,16 +640,16 @@ func (p *Scheduler) worker() {
 		ad.running.Store(true)
 
 		p.mu.Lock()
-		cfg, stillQueued = p.queued[id]
-		if !stillQueued {
+		if _, stillQueued := p.queued[id]; !stillQueued {
 			p.mu.Unlock()
 			cancel()
 			p.wg.Done()
 			continue
 		}
-		ad.config = cfg // Ensure ad.config has the latest state from queue
-		delete(p.queued, cfg.ID)
-		p.downloads[cfg.ID] = ad
+		ad.config = qt.cfg
+		delete(p.queued, id)
+		p.removeQueueOrderLocked(id)
+		p.downloads[id] = ad
 
 		// Make a local copy for RunDownload to mutate safely
 		localCfg := ad.config
@@ -661,13 +709,40 @@ func (p *Scheduler) worker() {
 				}, p.progressDone)
 			}
 		} else if err != nil {
+			p.mu.Lock()
+			delete(p.downloads, localCfg.ID)
+
+			if !p.isShuttingDown && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && qt.retries < 3 {
+				qt.retries++
+				qt.inFlight = false
+				qt.cfg = localCfg
+				p.queued[localCfg.ID] = qt
+
+				p.removeQueueOrderLocked(localCfg.ID)
+				p.queueOrder = append([]string{localCfg.ID}, p.queueOrder...)
+
+				if localCfg.ProgressCh != nil {
+					safeSendProgress(localCfg.ProgressCh, types.DownloadEvent{
+						Type:         types.EventQueued,
+						DownloadID:   localCfg.ID,
+						Filename:     localCfg.Filename,
+						URL:          localCfg.URL,
+						DestPath:     localCfg.DestPath,
+						Mirrors:      localCfg.Mirrors,
+						RateLimit:    localCfg.RateLimit,
+						RateLimitSet: localCfg.RateLimitSet,
+						Workers:      localCfg.Workers,
+						MinChunkSize: localCfg.MinChunkSize,
+					}, p.progressDone)
+				}
+				p.taskCond.Signal()
+				p.mu.Unlock()
+				continue
+			}
+
 			if localCfg.ProgressState != nil {
 				progress.CfgProgress(&localCfg).SetError(err)
 			}
-			// Note: DownloadErrorMsg is already emitted by RunDownload on the same progressCh.
-			// Clean up errored download from tracking (don't save to .surge)
-			p.mu.Lock()
-			delete(p.downloads, localCfg.ID)
 			delete(p.downloadLimiters, localCfg.ID)
 			p.mu.Unlock()
 		} else {
@@ -715,14 +790,14 @@ func (p *Scheduler) GetStatus(id string) *types.DownloadStatus {
 	if qExists {
 		return &types.DownloadStatus{
 			ID:           id,
-			URL:          qCfg.URL,
-			Filename:     qCfg.Filename,
-			DestPath:     resolveDestPath(&qCfg),
+			URL:          qCfg.cfg.URL,
+			Filename:     qCfg.cfg.Filename,
+			DestPath:     resolveDestPath(&qCfg.cfg),
 			Status:       "queued",
 			Downloaded:   0,
 			TotalSize:    0, // Metadata not yet fetched
-			RateLimit:    qCfg.RateLimit,
-			RateLimitSet: qCfg.RateLimitSet,
+			RateLimit:    qCfg.cfg.RateLimit,
+			RateLimitSet: qCfg.cfg.RateLimitSet,
 		}
 	}
 
@@ -796,22 +871,16 @@ func (p *Scheduler) GracefulShutdown() {
 		// Workers already guard against this with the p.queued check at loop entry,
 		// so clearing the map here is sufficient; draining taskChan is belt-and-suspenders.
 		p.mu.Lock()
-		for id := range p.queued {
+		for id, qt := range p.queued {
 			delete(p.queued, id)
-		}
-		p.mu.Unlock()
-
-		// Drain taskChan to discard any configs that were already written into the
-		// buffered channel but not yet consumed by a worker.
-	drainLoop:
-		for {
-			select {
-			case <-p.taskChan:
+			if !qt.inFlight {
 				p.wg.Done()
-			default:
-				break drainLoop
 			}
 		}
+		p.queueOrder = nil
+		p.isShuttingDown = true
+		p.taskCond.Broadcast()
+		p.mu.Unlock()
 
 		// Wait for any downloads in "Pausing" state to finish transitioning
 		// This ensures we don't exit while a database write is pending/active
@@ -857,8 +926,5 @@ func (p *Scheduler) GracefulShutdown() {
 		close(p.progressDone)
 
 		p.wg.Wait() // Blocks until all workers call Done()
-
-		// close taskChan so worker goroutines exit their range loop.
-		close(p.taskChan)
 	})
 }

@@ -50,7 +50,7 @@ func TestResume_RespectsOriginalPath_WhenDefaultChanges(t *testing.T) {
 	_ = testutil.SetupStateDB(t)
 
 	bus := orchestrator.NewEventBus()
-	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	mgr := orchestrator.NewLifecycleManager(nil, bus, nil)
 
 	// 2. Initialize Model with DefaultDir = DirA
 	settings := config.DefaultSettings()

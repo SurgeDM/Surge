@@ -92,5 +92,3 @@ func TestProgressAggregator_Settings(t *testing.T) {
 		t.Errorf("expected 0.5 alpha, got %v", agg.getSpeedEmaAlpha())
 	}
 }
-
-

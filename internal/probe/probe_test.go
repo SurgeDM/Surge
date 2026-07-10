@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/probe"
 	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/types"
 )
 
 func TestProbeServer_UsesConfiguredProxy(t *testing.T) {
@@ -33,13 +33,9 @@ func TestProbeServer_UsesConfiguredProxy(t *testing.T) {
 	}))
 	defer proxy.Close()
 
-	settings := config.DefaultSettings()
-	settings.Network.ProxyURL.Value = proxy.URL
-	if err := config.SaveSettings(settings); err != nil {
-		t.Fatalf("SaveSettings() error = %v", err)
-	}
+	runCfg := &types.RuntimeConfig{ProxyURL: proxy.URL}
 
-	result, err := probe.ProbeServer(context.Background(), target.URL, "", nil)
+	result, err := probe.ProbeServerWithProxy(context.Background(), target.URL, "", nil, runCfg)
 	if err != nil {
 		t.Fatalf("ProbeServer() error = %v", err)
 	}

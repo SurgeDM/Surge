@@ -157,8 +157,6 @@ func GetCategoryPath(filename, defaultDir string, settings *config.Settings) (st
 	return defaultDir, nil
 }
 
-// getBaseFilename keeps naming deterministic across retries by preferring the
-// most authoritative source available before uniqueness is applied.
 func getBaseFilename(url, candidate string, pr *probing.ProbeResult) string {
 	if candidate != "" {
 		return candidate
@@ -168,7 +166,11 @@ func getBaseFilename(url, candidate string, pr *probing.ProbeResult) string {
 			return pr.DetectedFilename
 		}
 	}
-	return InferFilenameFromURL(url)
+	inferred := InferFilenameFromURL(url)
+	if inferred != "" {
+		return inferred
+	}
+	return "download.bin"
 }
 
 // ResolveDestination centralizes routing and naming so CLI, TUI, and API

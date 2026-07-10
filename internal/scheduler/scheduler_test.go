@@ -22,8 +22,8 @@ func TestNew(t *testing.T) {
 		t.Fatal("Expected non-nil Scheduler")
 	}
 
-	if pool.taskChan == nil {
-		t.Error("Expected taskChan to be initialized")
+	if pool.taskCond == nil {
+		t.Error("Expected taskCond to be initialized")
 	}
 
 	if pool.progressCh != ch {
@@ -423,13 +423,17 @@ func TestScheduler_Cancel_QueuedDownload_RemovesFromQueueAndReturnsResult(t *tes
 	pool := &Scheduler{
 		progressCh: ch,
 		downloads:  make(map[string]*activeDownload),
-		queued: map[string]types.DownloadRecord{
+		queued: map[string]*queuedTask{
 			"queued-id": {
-				ID:       "queued-id",
-				Filename: "queued.bin",
+				cfg: types.DownloadRecord{
+					ID:       "queued-id",
+					Filename: "queued.bin",
+				},
 			},
 		},
 	}
+	pool.taskCond = sync.NewCond(&pool.mu)
+	pool.wg.Add(1) // match the queued task
 
 	result := pool.Cancel("queued-id")
 
@@ -927,7 +931,7 @@ func TestScheduler_UpdateURL(t *testing.T) {
 
 	// 3. Try updating a queued download - should fail
 	pool.mu.Lock()
-	pool.queued["queued-id"] = types.DownloadRecord{ID: "queued-id"}
+	pool.queued["queued-id"] = &queuedTask{cfg: types.DownloadRecord{ID: "queued-id"}}
 	pool.mu.Unlock()
 
 	err = pool.UpdateURL("queued-id", "http://example.com/new.zip")
@@ -950,17 +954,18 @@ func TestScheduler_GracefulShutdown_ClearsQueuedMap(t *testing.T) {
 	pool := &Scheduler{
 		progressCh:   ch,
 		progressDone: make(chan struct{}),
-		taskChan:     make(chan string, 10),
 		downloads:    make(map[string]*activeDownload),
-		queued:       make(map[string]types.DownloadRecord),
+		queued:       make(map[string]*queuedTask),
 		maxDownloads: 0,
 	}
+	pool.taskCond = sync.NewCond(&pool.mu)
 
 	// Seed the queued map directly (simulating Add() without a live worker).
 	pool.mu.Lock()
 	for i := 0; i < 5; i++ {
 		id := fmt.Sprintf("queued-%d", i)
-		pool.queued[id] = types.DownloadRecord{ID: id, URL: "http://example.com/file.zip"}
+		pool.queued[id] = &queuedTask{cfg: types.DownloadRecord{ID: id, URL: "http://example.com/file.zip"}}
+		pool.wg.Add(1)
 	}
 	pool.mu.Unlock()
 
@@ -982,49 +987,6 @@ func TestScheduler_GracefulShutdown_ClearsQueuedMap(t *testing.T) {
 
 	if remaining != 0 {
 		t.Errorf("expected queued map to be empty after GracefulShutdown, got %d entries", remaining)
-	}
-}
-
-// TestScheduler_GracefulShutdown_DrainsTaskChan verifies that GracefulShutdown
-// drains buffered items from taskChan so no items remain for workers to consume.
-func TestScheduler_GracefulShutdown_DrainsTaskChan(t *testing.T) {
-	ch := make(chan types.DownloadEvent, 20)
-	pool := &Scheduler{
-		progressCh:   ch,
-		progressDone: make(chan struct{}),
-		taskChan:     make(chan string, 10),
-		downloads:    make(map[string]*activeDownload),
-		queued:       make(map[string]types.DownloadRecord),
-		maxDownloads: 0,
-	}
-
-	// Use Add() to ensure WaitGroup accounting is correct.
-	for i := 0; i < 5; i++ {
-		pool.Add(types.DownloadRecord{ID: fmt.Sprintf("buffered-%d", i)})
-	}
-	if len(pool.taskChan) != 5 {
-		t.Fatalf("pre-condition: expected 5 items in taskChan, got %d", len(pool.taskChan))
-	}
-
-	done := make(chan struct{})
-	go func() {
-		pool.GracefulShutdown()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("GracefulShutdown hung with no active downloads")
-	}
-
-	// After shutdown, taskChan is closed. Drain it to count any leftovers.
-	extra := 0
-	for range pool.taskChan {
-		extra++
-	}
-	if extra != 0 {
-		t.Errorf("expected taskChan empty after GracefulShutdown, found %d leftover items", extra)
 	}
 }
 

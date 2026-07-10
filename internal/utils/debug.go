@@ -50,7 +50,6 @@ func CloseDebug() {
 	debugOnce = sync.Once{}
 }
 
-
 // Debug writes a message to debug.log file in the configured directory
 func Debug(format string, args ...any) {
 	// Internal fast path check without lock
@@ -79,7 +78,6 @@ func Debug(format string, args ...any) {
 		_, _ = fmt.Fprintf(debugFile, "[%s] %s\n", timestamp, fmt.Sprintf(format, args...))
 	}
 }
-
 
 // CleanupLogs removes old log files, keeping only the most recent retentionCount files
 func CleanupLogs(retentionCount int) {

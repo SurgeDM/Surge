@@ -14,7 +14,7 @@ import (
 func newCategoryTestModel(t *testing.T, settings *config.Settings) RootModel {
 	t.Helper()
 	bus := orchestrator.NewEventBus()
-	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	mgr := orchestrator.NewLifecycleManager(nil, bus, nil)
 	baseSvc := service.NewLocalDownloadService(mgr)
 	t.Cleanup(func() { _ = baseSvc.Shutdown() })
 

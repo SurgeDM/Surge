@@ -526,7 +526,7 @@ func TestGenerateUniqueFilename_IncompleteSuffixConstant(t *testing.T) {
 func TestUpdate_DownloadRequestMsg(t *testing.T) {
 	// Setup initial model
 	bus := orchestrator.NewEventBus()
-	svc := service.NewLocalDownloadService(orchestrator.NewLifecycleManager(nil, bus))
+	svc := service.NewLocalDownloadService(orchestrator.NewLifecycleManager(nil, bus, nil))
 	t.Cleanup(func() { _ = svc.Shutdown() })
 
 	m := RootModel{
@@ -739,7 +739,7 @@ func TestStartDownload_UsesModelEnqueueContext(t *testing.T) {
 	m := RootModel{
 		Settings:      config.DefaultSettings(),
 		Service:       svc,
-		Orchestrator:  orchestrator.NewLifecycleManager(scheduler.New(make(chan types.DownloadEvent, 16), 1), orchestrator.NewEventBus()),
+		Orchestrator:  orchestrator.NewLifecycleManager(scheduler.New(make(chan types.DownloadEvent, 16), 1), orchestrator.NewEventBus(), nil),
 		enqueueCtx:    ctx,
 		cancelEnqueue: func() {},
 		list:          NewDownloadList(80, 20),
@@ -776,7 +776,7 @@ func TestStartDownload_GuessesFilenameOptimisticallyWhenProvidedOrInferred(t *te
 	m := RootModel{
 		Settings:     config.DefaultSettings(),
 		Service:      svc,
-		Orchestrator: orchestrator.NewLifecycleManager(nil, orchestrator.NewEventBus()),
+		Orchestrator: orchestrator.NewLifecycleManager(nil, orchestrator.NewEventBus(), nil),
 		list:         NewDownloadList(80, 20),
 		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
@@ -807,7 +807,7 @@ func TestStartDownload_UsesGenericQueuedNameForExplicitFilenameUntilLifecycleCon
 	m := RootModel{
 		Settings:     config.DefaultSettings(),
 		Service:      svc,
-		Orchestrator: orchestrator.NewLifecycleManager(nil, orchestrator.NewEventBus()),
+		Orchestrator: orchestrator.NewLifecycleManager(nil, orchestrator.NewEventBus(), nil),
 		list:         NewDownloadList(80, 20),
 		logViewport:  viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
 	}
@@ -1081,7 +1081,7 @@ func TestWithEnqueueContext_OverridesStartDownloadContext(t *testing.T) {
 		},
 	}
 
-	m := InitialRootModel(1700, "test-version", svc, orchestrator.NewLifecycleManager(scheduler.New(make(chan types.DownloadEvent, 16), 1), orchestrator.NewEventBus()), false)
+	m := InitialRootModel(1700, "test-version", svc, orchestrator.NewLifecycleManager(scheduler.New(make(chan types.DownloadEvent, 16), 1), orchestrator.NewEventBus(), nil), nil, false)
 	m = m.WithEnqueueContext(ctx, func() {})
 
 	_, cmd := m.startDownload("https://example.com/file.bin", nil, nil, t.TempDir(), false, "file.bin", "", 0, 0)
@@ -1109,7 +1109,7 @@ func TestUpdate_RefreshShortcut(t *testing.T) {
 		state:          DashboardState,
 		keys:           config.DefaultKeyMap(),
 		urlUpdateInput: textinput.New(),
-		Service:        service.NewLocalDownloadService(orchestrator.NewLifecycleManager(nil, orchestrator.NewEventBus())),
+		Service:        service.NewLocalDownloadService(orchestrator.NewLifecycleManager(nil, orchestrator.NewEventBus(), nil)),
 	}
 	m.UpdateListItems()
 	m.list.Select(0) // Select the paused download

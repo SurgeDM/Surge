@@ -146,7 +146,7 @@ func (eb *EventBus) Subscribe() (<-chan types.DownloadEvent, func()) {
 func (eb *EventBus) Shutdown() {
 	eb.shutdownOnce.Do(func() {
 		eb.cancel()
-		eb.pubWg.Wait() // wait for all active Publish calls to return
+		eb.pubWg.Wait()   // wait for all active Publish calls to return
 		close(eb.InputCh) // safely close to trigger drain
 	})
 	eb.wg.Wait()

@@ -56,7 +56,7 @@ func TestHandleDownload_HeadlessMode_AutoApprovesNonDuplicate(t *testing.T) {
 
 	eventBus := orchestrator.NewEventBus()
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 
 	svc := service.NewLocalDownloadService(GlobalLifecycle)
 	GlobalService = svc
@@ -114,7 +114,7 @@ func TestHandleDownload_HeadlessMode_RejectsDuplicateWithWarn(t *testing.T) {
 
 	eventBus := orchestrator.NewEventBus()
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 	svc := service.NewLocalDownloadService(GlobalLifecycle)
 	GlobalService = svc
 
@@ -164,7 +164,7 @@ func TestHandleDownload_HeadlessMode_RejectsExtensionPromptDuplicate(t *testing.
 	GlobalPool = scheduler.New(progressCh, 1)
 	eventBus := orchestrator.NewEventBus()
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 	svc := service.NewLocalDownloadService(GlobalLifecycle)
 	GlobalService = svc
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,8 +11,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-
-	"net/url"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	probing "github.com/SurgeDM/Surge/internal/probe"
@@ -37,21 +34,12 @@ type LifecycleManager struct {
 	aggregator          *ProgressAggregator
 	isNameActive        IsNameActiveFunc
 
-	// probeSem caps the number of simultaneous server probes so adding a
-	// large batch of downloads does not flood the network with HEAD requests.
-	probeSem     chan struct{}
 	shutdownOnce sync.Once
 }
 
 const (
 	maxWorkingFileReservationAttempts = 100
-	// defaultMaxConcurrentProbes is the fallback probe concurrency cap used when
-	// no settings value is available. The live value comes from
-	// NetworkSettings.MaxConcurrentProbes.
-	defaultMaxConcurrentProbes = 3
 )
-
-var settingsRefreshTTL = time.Second
 
 var reserveWorkingFile = precreateWorkingFile
 
@@ -80,26 +68,14 @@ func (mgr *LifecycleManager) buildIsNameActive() func(string, string) bool {
 	return func(string, string) bool { return false }
 }
 
-func NewLifecycleManager(pool *scheduler.Scheduler, eventBus *EventBus, isNameActive ...IsNameActiveFunc) *LifecycleManager {
-	// Snapshot settings once so enqueue can still make routing decisions even if
-	// a later disk read fails or the caller never opens the settings UI.
-	settings, err := config.LoadSettings()
-	if err != nil {
+func NewLifecycleManager(pool *scheduler.Scheduler, eventBus *EventBus, settings *config.Settings, isNameActive ...IsNameActiveFunc) *LifecycleManager {
+	if settings == nil {
 		settings = config.DefaultSettings()
 	}
 
 	var activeCheck IsNameActiveFunc
 	if len(isNameActive) > 0 {
 		activeCheck = isNameActive[0]
-	}
-
-	probeCap := defaultMaxConcurrentProbes
-	if settings != nil && config.Resolve[int](settings.Network.MaxConcurrentProbes) > 0 {
-		probeCap = config.Resolve[int](settings.Network.MaxConcurrentProbes)
-	}
-	sem := make(chan struct{}, probeCap)
-	for i := 0; i < probeCap; i++ {
-		sem <- struct{}{}
 	}
 
 	var aggregator *ProgressAggregator
@@ -114,7 +90,6 @@ func NewLifecycleManager(pool *scheduler.Scheduler, eventBus *EventBus, isNameAc
 		eventBus:            eventBus,
 		aggregator:          aggregator,
 		isNameActive:        activeCheck,
-		probeSem:            sem,
 	}
 }
 
@@ -142,56 +117,26 @@ func (mgr *LifecycleManager) Shutdown() {
 	})
 }
 
-// GetSettings reloads disk-backed routing rules opportunistically so a long-lived
-// lifecycle manager picks up saved settings changes without a restart.
 func (m *LifecycleManager) GetSettings() *config.Settings {
 	m.settingsMu.RLock()
 	settings := m.settings
-	refreshedAt := m.settingsRefreshedAt
 	m.settingsMu.RUnlock()
 
-	if settings != nil && time.Since(refreshedAt) < settingsRefreshTTL {
+	if settings != nil {
 		return settings
 	}
-
-	m.settingsMu.Lock()
-	defer m.settingsMu.Unlock()
-
-	// Double-check condition to prevent redundant disk reads under concurrent load
-	if m.settings != nil && time.Since(m.settingsRefreshedAt) < settingsRefreshTTL {
-		return m.settings
-	}
-
-	if loaded, err := config.LoadSettings(); err == nil && loaded != nil {
-		m.settings = loaded
-		m.settingsRefreshedAt = time.Now()
-		return loaded
-	}
-
-	if m.settings == nil {
-		return config.DefaultSettings()
-	}
-	return m.settings
+	return config.DefaultSettings()
 }
 
 // ApplySettings swaps in a new routing snapshot for future enqueue calls.
 func (m *LifecycleManager) ApplySettings(s *config.Settings) {
 	if s == nil {
-		s = config.DefaultSettings()
+		return
 	}
 	m.settingsMu.Lock()
 	m.settings = s
 	m.settingsRefreshedAt = time.Now()
 	m.settingsMu.Unlock()
-}
-
-// SaveSettings persists and applies a new routing snapshot for future enqueue calls.
-func (m *LifecycleManager) SaveSettings(s *config.Settings) error {
-	if err := config.SaveSettings(s); err != nil {
-		return err
-	}
-	m.ApplySettings(s)
-	return nil
 }
 
 // DownloadRequest carries the already-approved inputs needed to probe and reserve a file path.
@@ -237,48 +182,15 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 
 	settings := mgr.GetSettings()
 
-	// Throttle concurrent probes - acquire a semaphore slot before probing.
-	// If the context is cancelled (e.g., shutdown) we abort immediately.
-	if mgr.probeSem != nil {
-		select {
-		case <-mgr.probeSem:
-			// acquired
-		case <-ctx.Done():
-			return "", "", fmt.Errorf("enqueue aborted before probe: %w", ctx.Err())
-		}
-		defer func() { mgr.probeSem <- struct{}{} }()
+	// Probing is now deferred to the scheduler worker to avoid exhausting
+	// network connections during mass-enqueue. We provide a fallback probeResult
+	// to allow ResolveDestination to use the URL for naming.
+	probeResult := &probing.ProbeResult{
+		SupportsRange: true,
 	}
-
-	probeResult, probeErr := probing.ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
-	if probeErr != nil {
-		// Distinguish between terminal client errors (invalid scheme, etc) and
-		// server-side rejections or timeouts that we can optimistically ignore.
-		var urlErr *url.Error
-		var isTerminal bool
-		if errors.As(probeErr, &urlErr) {
-			var opErr *net.OpError
-			isTerminal = !errors.As(probeErr, &opErr) && // not a network-layer error
-				strings.Contains(urlErr.Error(), "unsupported protocol scheme")
-		}
-		isTerminal = isTerminal || errors.Is(probeErr, probing.ErrProbeRequestCreation)
-
-		if isTerminal {
-			return "", "", probeErr
-		}
-
-		utils.Debug("Lifecycle: Probe failed: %v - enqueueing with optimistic fallback metadata\n", probeErr)
-		// Probe failures are non-fatal for known server-side issues (403/405/500) or
-		// network timeouts: some servers reject or intermittently fail
-		// lightweight probe requests but still accept the actual download flow.
-		// Mark range support as "unknown, try it" by keeping size at zero and
-		// setting SupportsRange so the download path can attempt a concurrent
-		// bootstrap before falling back to single-stream mode.
-		probeResult = &probing.ProbeResult{}
-		probeResult.SupportsRange = true
-		if req.Filename != "" {
-			probeResult.Filename = req.Filename
-			probeResult.DetectedFilename = req.Filename
-		}
+	if req.Filename != "" {
+		probeResult.Filename = req.Filename
+		probeResult.DetectedFilename = req.Filename
 	}
 
 	isNameActive := mgr.buildIsNameActive()

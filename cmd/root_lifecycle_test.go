@@ -118,7 +118,7 @@ func TestNewLocalLifecycleManager_WiresNameActivityCheck(t *testing.T) {
 		return []types.DownloadRecord{{Filename: "active.bin", OutputPath: "."}}
 	}
 
-	mgr := newLocalLifecycleManager(nil, nil, getAll)
+	mgr := newLocalLifecycleManager(nil, nil, nil, getAll)
 	if !mgr.IsNameActive(".", "active.bin") {
 		t.Fatal("expected wired IsNameActive callback to inspect active downloads")
 	}
@@ -132,7 +132,7 @@ func TestEnsureLocalLifecycle_StartsEventWorker(t *testing.T) {
 	GlobalPool = scheduler.New(GlobalProgressCh, 1)
 	eventBus := orchestrator.NewEventBus()
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 	GlobalService = service.NewLocalDownloadService(GlobalLifecycle)
 	t.Cleanup(func() {
 		if GlobalLifecycleCleanup != nil {
@@ -232,7 +232,7 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 	GlobalProgressCh = eventBus.InputCh
 	GlobalPool = scheduler.New(GlobalProgressCh, 1)
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 	GlobalService = service.NewLocalDownloadService(GlobalLifecycle)
 	t.Cleanup(func() {
 		if GlobalLifecycleCleanup != nil {
@@ -326,7 +326,7 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 	GlobalProgressCh = eventBus.InputCh
 	GlobalPool = scheduler.New(GlobalProgressCh, 1)
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 	GlobalService = service.NewLocalDownloadService(GlobalLifecycle)
 	t.Cleanup(func() {
 		if GlobalLifecycleCleanup != nil {
@@ -489,7 +489,7 @@ func TestProcessDownloads_UsesSharedEnqueueContext(t *testing.T) {
 
 	eventBus := orchestrator.NewEventBus()
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 
 	cancelGlobalEnqueue()
 	count := processDownloads([]string{server.URL + "/shared-context.bin"}, t.TempDir(), 0)

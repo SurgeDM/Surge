@@ -264,7 +264,7 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 	}
 }
 
-func InitialRootModel(serverPort int, currentVersion string, service service.DownloadService, orchestrator *orchestrator.LifecycleManager, noResume bool, currentCommit ...string) RootModel {
+func InitialRootModel(serverPort int, currentVersion string, service service.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, currentCommit ...string) RootModel {
 	initialDarkBackground := true
 	if !IsTestMode {
 		initialDarkBackground = lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
@@ -276,7 +276,10 @@ func InitialRootModel(serverPort int, currentVersion string, service service.Dow
 		}
 	}
 
-	// Initialize inputs
+	if settings == nil {
+		settings = config.DefaultSettings()
+	}
+
 	urlInput := textinput.New()
 	urlInput.Placeholder = "https://example.com/file.zip"
 	urlInput.Focus()
@@ -301,7 +304,6 @@ func InitialRootModel(serverPort int, currentVersion string, service service.Dow
 
 	pwd, _ := os.Getwd()
 
-	// Initialize file picker for directory selection - default to Downloads folder
 	homeDir, _ := os.UserHomeDir()
 	downloadsDir := filepath.Join(homeDir, "Downloads")
 	fp := filepicker.New()
@@ -313,15 +315,6 @@ func InitialRootModel(serverPort int, currentVersion string, service service.Dow
 	fp.ShowPermissions = true
 	fp.SetHeight(FilePickerHeight)
 	applyFilepickerTheme(&fp)
-
-	// Load settings for auto resume
-	settings, errSettings := config.LoadSettings()
-	if settings == nil {
-		settings = config.DefaultSettings()
-	}
-	if errSettings != nil {
-		settings.StartupWarnings = append(settings.StartupWarnings, fmt.Sprintf("Failed to load settings: %v", errSettings))
-	}
 
 	keys, errKeys := config.LoadKeyMap()
 	if keys == nil {

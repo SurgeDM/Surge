@@ -38,7 +38,7 @@ func TestServer_Startup_HandlesResume(t *testing.T) {
 	GlobalPool = scheduler.New(GlobalProgressCh, 3)
 	eventBus := orchestrator.NewEventBus()
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 	GlobalService = service.NewLocalDownloadService(GlobalLifecycle)
 	defer func() {
 		if GlobalService != nil {

@@ -437,8 +437,6 @@ func TestPrintDownloadDetail_TextAndJSON(t *testing.T) {
 	}
 }
 
-
-
 func TestAddCmdRunE_ReturnsExpectedErrors(t *testing.T) {
 	t.Run("no running server", func(t *testing.T) {
 		setupIsolatedCmdState(t)
@@ -1019,7 +1017,7 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 		GlobalPool = scheduler.New(GlobalProgressCh, 2)
 		eventBus := orchestrator.NewEventBus()
 		getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-		GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+		GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 		GlobalService = service.NewLocalDownloadService(GlobalLifecycle)
 
 		probeServer := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

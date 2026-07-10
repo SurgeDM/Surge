@@ -34,10 +34,10 @@ func TestTUI_Startup_HandlesResume(t *testing.T) {
 
 	// 3. Initialize TUI Model (Simulate StartTUI)
 	bus := orchestrator.NewEventBus()
-	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	mgr := orchestrator.NewLifecycleManager(nil, bus, nil)
 
 	// PASSING noResume=false (default)
-	m := InitialRootModel(1700, "test-version", service.NewLocalDownloadService(mgr), mgr, false)
+	m := InitialRootModel(1700, "test-version", service.NewLocalDownloadService(mgr), mgr, nil, false)
 
 	// 4. Verify Download is Active in Model
 	// InitialRootModel loads downloads and should set paused=false for "queued" items
@@ -98,8 +98,8 @@ func TestTUI_Startup_LoadsCompletedTiming(t *testing.T) {
 	}
 
 	bus := orchestrator.NewEventBus()
-	mgr := orchestrator.NewLifecycleManager(nil, bus)
-	m := InitialRootModel(1700, "test-version", service.NewLocalDownloadService(mgr), mgr, false)
+	mgr := orchestrator.NewLifecycleManager(nil, bus, nil)
+	m := InitialRootModel(1700, "test-version", service.NewLocalDownloadService(mgr), mgr, nil, false)
 
 	var found *DownloadModel
 	for _, d := range m.downloads {
@@ -147,8 +147,8 @@ func TestTUI_Startup_LoadsErroredDownloadsIntoDoneTab(t *testing.T) {
 	}
 
 	bus := orchestrator.NewEventBus()
-	mgr := orchestrator.NewLifecycleManager(nil, bus)
-	m := InitialRootModel(1700, "test-version", service.NewLocalDownloadService(mgr), mgr, false)
+	mgr := orchestrator.NewLifecycleManager(nil, bus, nil)
+	m := InitialRootModel(1700, "test-version", service.NewLocalDownloadService(mgr), mgr, nil, false)
 
 	var found *DownloadModel
 	for _, d := range m.downloads {

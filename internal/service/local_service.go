@@ -37,12 +37,8 @@ func NewLocalDownloadService(lifecycle *orchestrator.LifecycleManager) *LocalDow
 	return &LocalDownloadService{lifecycle: lifecycle}
 }
 
-func (s *LocalDownloadService) ReloadSettings() error {
+func (s *LocalDownloadService) ReloadSettings(settings *config.Settings) error {
 	if s.lifecycle != nil {
-		settings, err := config.LoadSettings()
-		if err != nil {
-			return err
-		}
 		s.lifecycle.ApplySettings(settings)
 	}
 	return nil

@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
@@ -190,7 +191,7 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			w := httptest.NewRecorder()
 			eventBus := orchestrator.NewEventBus()
 			getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-			GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+			GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 			svc := service.NewLocalDownloadService(GlobalLifecycle)
 
 			// We pass defaultDownloadDir as a fallback to handleDownload, but since we mocked settings,
@@ -314,7 +315,7 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 
 	eventBus := orchestrator.NewEventBus()
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 	svc := service.NewLocalDownloadService(GlobalLifecycle)
 	GlobalService = svc
 	t.Cleanup(func() {
@@ -352,12 +353,6 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 	if cfg.Filename != expectedFile {
 		t.Fatalf("filename = %q, want %q", cfg.Filename, expectedFile)
 	}
-	if cfg.TotalSize != 7 {
-		t.Fatalf("totalSize = %d, want 7", cfg.TotalSize)
-	}
-	if !cfg.SupportsRange {
-		t.Fatal("expected probe to preserve range support")
-	}
 	if cfg.Headers["Authorization"] != "Bearer test" {
 		t.Fatalf("headers were not forwarded to lifecycle addFunc")
 	}
@@ -381,7 +376,7 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 
 	eventBus := orchestrator.NewEventBus()
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 	svc := service.NewLocalDownloadService(GlobalLifecycle)
 	GlobalService = svc
 	t.Cleanup(func() {
@@ -393,27 +388,26 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
+	sub, cleanup := eventBus.Subscribe()
+	defer cleanup()
+
 	handleDownload(rec, req, "", svc)
 
-	if rec.Code != http.StatusInternalServerError {
-		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
 	}
 
-	// Verify that the error was persisted in the master list.
-	list, err := store.LoadMasterList()
-	if err != nil {
-		t.Fatalf("LoadMasterList failed: %v", err)
-	}
-
-	found := false
-	for _, entry := range list.Downloads {
-		if strings.Contains(entry.URL, "badscheme://example.com/file.bin") && entry.Status == "error" {
-			found = true
-			break
+	timeout := time.After(5 * time.Second)
+waitLoop:
+	for {
+		select {
+		case ev := <-sub:
+			if ev.Type == types.EventError {
+				break waitLoop
+			}
+		case <-timeout:
+			t.Fatal("timeout waiting for background worker to fail the download")
 		}
-	}
-	if !found {
-		t.Fatal("expected errored download entry in master list after probe failure via HTTP API")
 	}
 }
 
@@ -445,7 +439,7 @@ func TestHandleDownload_ForwardsPerTaskOverridesToLifecycle(t *testing.T) {
 
 	eventBus := orchestrator.NewEventBus()
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 	svc := service.NewLocalDownloadService(GlobalLifecycle)
 	GlobalService = svc
 	t.Cleanup(func() {

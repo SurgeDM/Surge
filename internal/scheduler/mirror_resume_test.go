@@ -61,7 +61,7 @@ func TestIntegration_MirrorResume(t *testing.T) {
 		MaxConnectionsPerDownload: 4,
 	}
 	// Wire event persistence worker because pause state is persisted in processing layer.
-	mgr := orchestrator.NewLifecycleManager(nil, nil)
+	mgr := orchestrator.NewLifecycleManager(nil, nil, nil)
 	var eventWG sync.WaitGroup
 	eventWG.Add(1)
 	go func() {

@@ -30,14 +30,14 @@ func TestWorkerPool_RateLimit_QueuedUpdateHonored(t *testing.T) {
 	pool.SetDefaultDownloadRateLimit(1000)
 	pool.mu.Lock()
 	pool.ensureLimiterForConfigLocked(&cfg)
-	pool.queued[id] = cfg
+	pool.queued[id] = &queuedTask{cfg: cfg}
 	pool.mu.Unlock()
 
 	pool.SetDownloadRateLimit(id, 5*1024*1024)
 
 	// Verify queued config reflects the override
 	pool.mu.RLock()
-	qCfg := pool.queued[id]
+	qCfg := pool.queued[id].cfg
 	pool.mu.RUnlock()
 
 	if !qCfg.RateLimitSet {
@@ -87,7 +87,11 @@ func TestWorkerPool_RateLimit_ExplicitUnlimitedSurvivesDefaultChange(t *testing.
 	pool.SetDefaultDownloadRateLimit(5 * 1024 * 1024)
 
 	pool.mu.RLock()
-	qCfg, stillQueued := pool.queued[id]
+	qTask, stillQueued := pool.queued[id]
+	var qCfg types.DownloadRecord
+	if stillQueued {
+		qCfg = qTask.cfg
+	}
 	pool.mu.RUnlock()
 
 	if stillQueued && qCfg.RateLimit != 0 {
@@ -312,7 +316,7 @@ func TestWorkerPool_RateLimit_SetDownloadHonorsWaiter(t *testing.T) {
 	}
 	pool.ensureLimiterForConfigLocked(&cfg)
 	pool.mu.Lock()
-	pool.queued[id] = cfg
+	pool.queued[id] = &queuedTask{cfg: cfg}
 	pool.mu.Unlock()
 
 	done := make(chan error, 1)

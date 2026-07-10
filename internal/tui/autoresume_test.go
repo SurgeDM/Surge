@@ -70,10 +70,10 @@ func TestAutoResume_Enabled(t *testing.T) {
 
 	// 5. Initialize Model
 	bus := orchestrator.NewEventBus()
-	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	mgr := orchestrator.NewLifecycleManager(nil, bus, nil)
 	svc := service.NewLocalDownloadService(mgr)
 
-	m := InitialRootModel(1700, "test-version", svc, mgr, false)
+	m := InitialRootModel(1700, "test-version", svc, mgr, settings, false)
 
 	// 6. Verify Download is Resumed
 	found := false
@@ -146,18 +146,18 @@ func TestAutoResume_Disabled(t *testing.T) {
 
 	// 5. Initialize Model
 	bus := orchestrator.NewEventBus()
-	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	mgr := orchestrator.NewLifecycleManager(nil, bus, nil)
 	svc := service.NewLocalDownloadService(mgr)
 
-	m := InitialRootModel(1700, "test-version", svc, mgr, false)
+	m := InitialRootModel(1700, "test-version", svc, mgr, settings, false)
 
 	// 6. Verify Download is Resumed
 	found := false
 	for _, d := range m.downloads {
 		if d.ID == testID {
 			found = true
-			if !d.paused {
-				t.Error("Download SHOULD be paused when AutoResume is disabled")
+			if d.resuming {
+				t.Error("Download should NOT have resuming=true when AutoResume is disabled")
 			}
 		}
 	}

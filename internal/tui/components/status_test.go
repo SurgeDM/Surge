@@ -124,4 +124,3 @@ func TestDetermineStatus(t *testing.T) {
 		})
 	}
 }
-

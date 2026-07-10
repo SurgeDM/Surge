@@ -130,7 +130,7 @@ func TestGetDownloadStatus(t *testing.T) {
 }
 
 func TestView_DashboardFitsViewportWithoutTopCutoff(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 
 	cases := []struct {
 		width  int
@@ -168,7 +168,7 @@ func TestView_DashboardFitsViewportWithoutTopCutoff(t *testing.T) {
 }
 
 func TestView_QuitConfirmContainsButtons(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = QuitConfirmState
 	m.width = 120
 	m.height = 35
@@ -186,7 +186,7 @@ func TestView_QuitConfirmContainsButtons(t *testing.T) {
 }
 
 func TestView_QuitConfirmShowsActiveDownloadDetail(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = QuitConfirmState
 	m.width = 120
 	m.height = 35
@@ -201,7 +201,7 @@ func TestView_QuitConfirmShowsActiveDownloadDetail(t *testing.T) {
 }
 
 func TestView_QuitConfirmNoFocusedRendersCorrectly(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = QuitConfirmState
 	m.quitConfirmFocused = 1
 	m.width = 120
@@ -214,7 +214,7 @@ func TestView_QuitConfirmNoFocusedRendersCorrectly(t *testing.T) {
 }
 
 func TestView_QuitConfirmTinyTerminalDoesNotPanic(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = QuitConfirmState
 	m.width = 10
 	m.height = 5
@@ -222,7 +222,7 @@ func TestView_QuitConfirmTinyTerminalDoesNotPanic(t *testing.T) {
 }
 
 func TestView_SettingsTinyTerminalDoesNotPanic(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = SettingsState
 	m.width = 20
 	m.height = 8
@@ -234,7 +234,7 @@ func TestView_SettingsTinyTerminalDoesNotPanic(t *testing.T) {
 }
 
 func TestView_SettingsNoLineExceedsTerminalWidth(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = SettingsState
 
 	sizes := []struct{ width, height int }{
@@ -266,7 +266,7 @@ func TestView_SettingsResizeSequenceKeepsSelectedVisible(t *testing.T) {
 	selectedRow := len(metadata) - 1
 	selectedLabel := metadata[selectedRow].Label
 
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = SettingsState
 	m.SettingsActiveTab = 0
 	m.SettingsSelectedRow = selectedRow
@@ -294,7 +294,7 @@ func TestView_SettingsResizeSequenceKeepsSelectedVisible(t *testing.T) {
 }
 
 func TestView_SettingsEditModeNarrowWidthNoOverflow(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = SettingsState
 	m.width = 55
 	m.height = 16
@@ -312,7 +312,7 @@ func TestView_SettingsEditModeNarrowWidthNoOverflow(t *testing.T) {
 }
 
 func TestView_CategoryManagerNoLineExceedsTerminalWidth(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = CategoryManagerState
 
 	sizes := []struct{ width, height int }{
@@ -344,7 +344,7 @@ func TestView_CategoryManagerResizeSequenceKeepsSelectedVisible(t *testing.T) {
 	selectedCursor := len(settings.Categories.Categories) - 1
 	selectedLabel := settings.Categories.Categories[selectedCursor].Name
 
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = CategoryManagerState
 	m.Settings = settings
 	m.catMgrCursor = selectedCursor
@@ -372,7 +372,7 @@ func TestView_CategoryManagerResizeSequenceKeepsSelectedVisible(t *testing.T) {
 }
 
 func TestView_CategoryManagerEditModeNarrowWidthNoOverflow(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = CategoryManagerState
 	m.width = 55
 	m.height = 16
@@ -393,7 +393,7 @@ func TestView_CategoryManagerEditModeNarrowWidthNoOverflow(t *testing.T) {
 }
 
 func TestView_NetworkActivityShowsFiveAxisLabelsWhenTall(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 140
 	m.height = 40
 
@@ -430,7 +430,7 @@ func BenchmarkCachedLogo(b *testing.B) {
 /____/\__,_/_/   \__, /\___/
                 /____/       `
 
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	// Pre-warm cache
 	gradientLogo := ApplyGradient(logoText, colors.Pink(), colors.Magenta())
 	m.logoCache = lipgloss.NewStyle().Render(gradientLogo)
@@ -448,7 +448,7 @@ func BenchmarkCachedLogo(b *testing.B) {
 // Tests for issue #252: TUI layout breakage on non-standard terminal sizes
 
 func TestView_NoLineExceedsTerminalWidth(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 
 	sizes := []struct{ width, height int }{
 		{160, 40}, // full layout
@@ -477,7 +477,7 @@ func TestView_NoBoxCorruptionAtNarrowWidths(t *testing.T) {
 		"╭╭", "╮╮", "╰╰", "╯╯", // doubled corners
 	}
 
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 
 	sizes := []struct{ width, height int }{
 		{160, 40},
@@ -501,7 +501,7 @@ func TestView_NoBoxCorruptionAtNarrowWidths(t *testing.T) {
 }
 
 func TestView_RightColumnHiddenAtNarrowWidth(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 60
 	m.height = 20
 
@@ -518,7 +518,7 @@ func TestView_RightColumnHiddenAtNarrowWidth(t *testing.T) {
 }
 
 func TestView_LogoHiddenAtNarrowWidth(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 60
 	m.height = 24
 
@@ -533,7 +533,7 @@ func TestView_LogoHiddenAtNarrowWidth(t *testing.T) {
 }
 
 func TestView_FooterHidesHelpTextAtNarrowWidth(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 40
 	m.height = 24
 
@@ -551,7 +551,7 @@ func TestView_FooterHidesHelpTextAtNarrowWidth(t *testing.T) {
 }
 
 func TestView_TerminalTooSmallMessage(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 
 	sizes := []struct{ width, height int }{
 		{40, 10},
@@ -571,7 +571,7 @@ func TestView_TerminalTooSmallMessage(t *testing.T) {
 }
 
 func TestHelpModal_RendersAndClosesOnEsc(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 120
 	m.height = 40
 	m.state = HelpModalState
@@ -592,7 +592,7 @@ func TestHelpModal_RendersAndClosesOnEsc(t *testing.T) {
 }
 
 func TestView_DoesNotPanicAtExtremeSizes(t *testing.T) {
-	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 
 	extremeSizes := []struct{ width, height int }{
 		{40, 12},  // very narrow and short
@@ -625,7 +625,7 @@ func footerLine(m RootModel) string {
 
 func TestFooter_GlyphsAlwaysPresent(t *testing.T) {
 	InitializeTUI()
-	m := InitialRootModel(1701, "1.2.3", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "1.2.3", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 120
 	m.height = 35
 
@@ -639,7 +639,7 @@ func TestFooter_GlyphsAlwaysPresent(t *testing.T) {
 
 func TestFooter_VersionShown(t *testing.T) {
 	InitializeTUI()
-	m := InitialRootModel(1701, "9.8.7", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "9.8.7", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 120
 	m.height = 35
 
@@ -652,7 +652,7 @@ func TestFooter_VersionShown(t *testing.T) {
 func TestFooter_IdleSpeedShowsZero(t *testing.T) {
 	InitializeTUI()
 	// No active downloads \u2192 speed should render as "0 B/s"
-	m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 120
 	m.height = 35
 
@@ -664,7 +664,7 @@ func TestFooter_IdleSpeedShowsZero(t *testing.T) {
 
 func TestFooter_ActiveSpeedShowsMBps(t *testing.T) {
 	InitializeTUI()
-	m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 120
 	m.height = 35
 	// Inject an active download at 2.5 MB/s (in bytes/s)
@@ -683,7 +683,7 @@ func TestFooter_ActiveSpeedShowsMBps(t *testing.T) {
 
 func TestFooter_ActiveSpeedShowsKBps(t *testing.T) {
 	InitializeTUI()
-	m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 120
 	m.height = 35
 	// 512 KB/s = 0.5 MB/s \u2192 should render as KB/s
@@ -699,7 +699,7 @@ func TestFooter_ActiveSpeedShowsKBps(t *testing.T) {
 
 func TestFooter_ZeroRateLimitShowsInfinity(t *testing.T) {
 	InitializeTUI()
-	m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 120
 	m.height = 35
 	// Default settings have no global rate limit \u2192 \u221E
@@ -713,7 +713,7 @@ func TestFooter_ZeroRateLimitShowsInfinity(t *testing.T) {
 
 func TestFooter_GlobalRateLimitShown(t *testing.T) {
 	InitializeTUI()
-	m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 120
 	m.height = 35
 
@@ -733,7 +733,7 @@ func TestFooter_HidesHelpAtNarrowWidth(t *testing.T) {
 	InitializeTUI()
 	// width=55: above MinTermWidth(45) so the real dashboard renders, but below
 	// the 60-char threshold where we drop help text from the footer.
-	m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+	m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.width = 55
 	m.height = 24
 
@@ -760,7 +760,7 @@ func TestFooter_NoLineOverflowAtVariousSizes(t *testing.T) {
 		{60, 20},
 	}
 	for _, tc := range sizes {
-		m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil), false)
+		m := InitialRootModel(1701, "1.0.0", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 		m.width = tc.width
 		m.height = tc.height
 		for i, line := range strings.Split(m.View().Content, "\n") {

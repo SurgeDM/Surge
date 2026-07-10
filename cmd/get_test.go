@@ -43,7 +43,7 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	// Start server
 	eventBus := orchestrator.NewEventBus()
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	lifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, buildActiveDownloadChecker(getAll))
+	lifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 	svc := service.NewLocalDownloadService(lifecycle)
 	t.Cleanup(func() { _ = svc.Shutdown() })
 	stream, streamCleanup, err := svc.StreamEvents(context.Background())

@@ -724,8 +724,10 @@ func (m *RootModel) persistSettings() error {
 	if err := config.SaveSettings(m.Settings); err != nil {
 		return err
 	}
-	if reloader, ok := m.Service.(interface{ ReloadSettings() error }); ok {
-		if err := reloader.ReloadSettings(); err != nil {
+	if reloader, ok := m.Service.(interface {
+		ReloadSettings(settings *config.Settings) error
+	}); ok {
+		if err := reloader.ReloadSettings(m.Settings); err != nil {
 			return err
 		}
 	}

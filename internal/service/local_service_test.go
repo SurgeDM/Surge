@@ -28,7 +28,7 @@ func setupTestService(t *testing.T) (*LocalDownloadService, *httptest.Server, st
 	progressCh := make(chan types.DownloadEvent, 10)
 	pool := scheduler.New(progressCh, 1)
 	eb := orchestrator.NewEventBus()
-	mgr := orchestrator.NewLifecycleManager(pool, eb)
+	mgr := orchestrator.NewLifecycleManager(pool, eb, nil)
 
 	// Ensure config directory exists for settings tests
 	tmpDir := t.TempDir()

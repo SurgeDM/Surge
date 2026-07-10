@@ -268,7 +268,7 @@ func LoadState(url string, destPath string) (*types.DownloadRecord, error) {
 func LoadStates(ids []string) (map[string]*types.DownloadRecord, error) {
 	states := make(map[string]*types.DownloadRecord)
 	var errs []error
-	
+
 	masterMu.RLock()
 	dir := baseDir
 	masterMu.RUnlock()

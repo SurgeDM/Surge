@@ -102,7 +102,7 @@ func (pa *ProgressAggregator) reportProgressLoop() {
 			var instantSpeed float64
 			prevDownloaded, hasPrev := lastDownloaded[cfg.ID]
 			prevUpdate := lastUpdateTime[cfg.ID]
-			
+
 			if hasPrev && !prevUpdate.IsZero() {
 				deltaDownloaded := sessionDownloaded - prevDownloaded
 				deltaElapsed := time.Since(prevUpdate).Seconds()

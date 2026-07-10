@@ -17,7 +17,7 @@ import (
 )
 
 func TestLifecycleManager_Settings(t *testing.T) {
-	mgr := NewLifecycleManager(nil, nil)
+	mgr := NewLifecycleManager(nil, nil, nil)
 	defer mgr.Shutdown()
 
 	s := mgr.GetSettings()
@@ -47,7 +47,7 @@ func TestLifecycleManager_EnqueueSuccess(t *testing.T) {
 	progressCh := make(chan types.DownloadEvent, 10)
 	pool := scheduler.New(progressCh, 1)
 	eb := NewEventBus()
-	mgr := NewLifecycleManager(pool, eb)
+	mgr := NewLifecycleManager(pool, eb, nil)
 	defer mgr.Shutdown()
 
 	destDir := t.TempDir()
@@ -104,7 +104,7 @@ func TestLifecycleManager_EnqueueWithID(t *testing.T) {
 	progressCh := make(chan types.DownloadEvent, 10)
 	pool := scheduler.New(progressCh, 1)
 	eb := NewEventBus()
-	mgr := NewLifecycleManager(pool, eb)
+	mgr := NewLifecycleManager(pool, eb, nil)
 	defer mgr.Shutdown()
 
 	destDir := t.TempDir()
@@ -131,7 +131,7 @@ func TestLifecycleManager_IsNameActive(t *testing.T) {
 		return name == "active.txt"
 	}
 
-	mgr := NewLifecycleManager(nil, nil, activeFunc)
+	mgr := NewLifecycleManager(nil, nil, nil, activeFunc)
 
 	if !mgr.IsNameActive("/tmp", "active.txt") {
 		t.Error("expected true for active.txt")
@@ -142,7 +142,7 @@ func TestLifecycleManager_IsNameActive(t *testing.T) {
 }
 
 func TestLifecycleManager_EnqueueInvalid(t *testing.T) {
-	mgr := NewLifecycleManager(nil, nil)
+	mgr := NewLifecycleManager(nil, nil, nil)
 
 	// Missing Pool
 	_, _, err := mgr.Enqueue(context.Background(), &DownloadRequest{URL: "http://example.com", Path: "/tmp"})
@@ -151,7 +151,7 @@ func TestLifecycleManager_EnqueueInvalid(t *testing.T) {
 	}
 
 	pool := scheduler.New(make(chan types.DownloadEvent, 1), 1)
-	mgr = NewLifecycleManager(pool, nil)
+	mgr = NewLifecycleManager(pool, nil, nil)
 
 	// Missing URL
 	_, _, err = mgr.Enqueue(context.Background(), &DownloadRequest{Path: "/tmp"})
@@ -206,7 +206,7 @@ func TestLifecycleManager_ResumeBatch_CorruptStateIgnored(t *testing.T) {
 	progressCh := make(chan types.DownloadEvent, 10)
 	pool := scheduler.New(progressCh, 2)
 	eb := NewEventBus()
-	mgr := NewLifecycleManager(pool, eb)
+	mgr := NewLifecycleManager(pool, eb, nil)
 	defer mgr.Shutdown()
 
 	errs := mgr.ResumeBatch([]string{"id-valid", "id-corrupt"})
@@ -221,7 +221,7 @@ func TestLifecycleManager_ResumeBatch_CorruptStateIgnored(t *testing.T) {
 		// Even for the corrupt one, it should fallback to the master list and successfully enqueue a fresh resume
 		t.Errorf("expected no error for id-corrupt, got %v", errs[1])
 	}
-	
+
 	// Check that pool has both downloads enqueued/started
 	if pool.GetStatus("id-valid") == nil {
 		t.Errorf("expected id-valid to be in pool")

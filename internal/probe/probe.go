@@ -12,7 +12,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/transport"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -41,22 +40,11 @@ type ProbeResult struct {
 // probeHeadersContextKey is used to pass custom headers to the HTTP client's CheckRedirect function
 type probeHeadersContextKey struct{}
 
-func resolveRuntimeConfig() *types.RuntimeConfig {
-	settings, err := config.LoadSettings()
-	if err != nil {
-		settings = config.DefaultSettings()
-	}
-	if settings != nil {
-		return settings.ToRuntimeConfig()
-	}
-	return nil
-}
-
-// ProbeServer is the convenience entry point for callers that do not already
-// hold a settings snapshot; it reloads persisted settings so probe traffic can
-// honor the saved proxy configuration.
+// ProbeServer is the convenience entry point for callers that already hold a
+// runtime config snapshot. For backwards compatibility, passing nil will use
+// a zero-value RuntimeConfig.
 func ProbeServer(ctx context.Context, rawurl string, filenameHint string, headers map[string]string) (*ProbeResult, error) {
-	return ProbeServerWithProxy(ctx, rawurl, filenameHint, headers, resolveRuntimeConfig())
+	return ProbeServerWithProxy(ctx, rawurl, filenameHint, headers, nil)
 }
 
 // getProbeHostLock returns a mutex for a specific host to sequentialize probes
@@ -309,9 +297,9 @@ func sameProbeRedirectOrigin(a, b *neturl.URL) bool {
 }
 
 // ProbeMirrors is the convenience wrapper for callers that need mirror probing
-// to honor the saved proxy setting but do not already hold a live settings snapshot.
+// with an explicit runtime config snapshot.
 func ProbeMirrors(ctx context.Context, mirrors []string) (valid []string, errs map[string]error) {
-	return ProbeMirrorsWithProxy(ctx, mirrors, resolveRuntimeConfig())
+	return ProbeMirrorsWithProxy(ctx, mirrors, nil)
 }
 
 // ProbeMirrorsWithProxy preserves caller order so mirror priority remains stable.

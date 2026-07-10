@@ -133,8 +133,8 @@ func buildActiveDownloadChecker(getAll func() []types.DownloadRecord) orchestrat
 	}
 }
 
-func newLocalLifecycleManager(pool *scheduler.Scheduler, eventBus *orchestrator.EventBus, getAll func() []types.DownloadRecord) *orchestrator.LifecycleManager {
-	return orchestrator.NewLifecycleManager(pool, eventBus, buildActiveDownloadChecker(getAll))
+func newLocalLifecycleManager(pool *scheduler.Scheduler, eventBus *orchestrator.EventBus, settings *config.Settings, getAll func() []types.DownloadRecord) *orchestrator.LifecycleManager {
+	return orchestrator.NewLifecycleManager(pool, eventBus, settings, buildActiveDownloadChecker(getAll))
 }
 
 func startLifecycleEventWorker(service service.DownloadService, mgr *orchestrator.LifecycleManager) (func(), error) {
@@ -226,7 +226,7 @@ func lifecycleForLocalService(service service.DownloadService) (*orchestrator.Li
 func ensureGlobalLocalServiceAndLifecycle() error {
 	if GlobalService == nil {
 		eventBus := orchestrator.NewEventBus()
-		lifecycle := newLocalLifecycleManager(GlobalPool, eventBus, currentPoolConfigs)
+		lifecycle := newLocalLifecycleManager(GlobalPool, eventBus, globalSettings, currentPoolConfigs)
 		GlobalLifecycle = lifecycle
 
 		localService := service.NewLocalDownloadService(lifecycle)
@@ -292,7 +292,7 @@ func ensureLocalLifecycle(service service.DownloadService, getAll func() []types
 
 	if GlobalLifecycle == nil {
 		eventBus := orchestrator.NewEventBus()
-		GlobalLifecycle = newLocalLifecycleManager(GlobalPool, eventBus, getAll)
+		GlobalLifecycle = newLocalLifecycleManager(GlobalPool, eventBus, globalSettings, getAll)
 	}
 	if GlobalLifecycleCleanup == nil {
 		cleanup, err := startLifecycleEventWorker(service, GlobalLifecycle)
@@ -511,7 +511,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) error {
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
-	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), noResume, Commit)
+	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), globalSettings, noResume, Commit)
 	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())
 
 	configureServiceUI(&m)

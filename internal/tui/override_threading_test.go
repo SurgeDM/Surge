@@ -35,7 +35,7 @@ func newOverrideTestModel(t *testing.T, addFunc func(url, path, filename string,
 	t.Helper()
 
 	bus := orchestrator.NewEventBus()
-	mgr := orchestrator.NewLifecycleManager(nil, bus)
+	mgr := orchestrator.NewLifecycleManager(nil, bus, nil)
 	baseSvc := service.NewLocalDownloadService(mgr)
 	t.Cleanup(func() { _ = baseSvc.Shutdown() })
 

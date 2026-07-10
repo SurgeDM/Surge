@@ -54,7 +54,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	progressCh := make(chan types.DownloadEvent, 100)
 	runtime := &types.RuntimeConfig{}
 	// DB/state persistence now lives in processing event worker.
-	mgr := orchestrator.NewLifecycleManager(nil, nil)
+	mgr := orchestrator.NewLifecycleManager(nil, nil, nil)
 	var eventWG sync.WaitGroup
 	eventWG.Add(1)
 	go func() {
