@@ -593,18 +593,18 @@ func (p *Scheduler) UpdateURL(downloadID string, newURL string) error {
 	return nil
 }
 
-func (p *Scheduler) waitForTask() *queuedTask {
+func (p *Scheduler) waitForTask() string {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	for {
 		if p.isShuttingDown {
-			return nil
+			return ""
 		}
 		for _, id := range p.queueOrder {
 			if qt, ok := p.queued[id]; ok && !qt.inFlight {
 				qt.inFlight = true
-				return qt
+				return id
 			}
 		}
 		p.taskCond.Wait()
@@ -613,15 +613,22 @@ func (p *Scheduler) waitForTask() *queuedTask {
 
 func (p *Scheduler) worker() {
 	for {
-		qt := p.waitForTask()
-		if qt == nil {
+		id := p.waitForTask()
+		if id == "" {
 			return
 		}
 
-		id := qt.cfg.ID
-
 		// Create cancellable context
 		ctx, cancel := context.WithCancel(context.Background())
+
+		p.mu.Lock()
+		qt, stillQueued := p.queued[id]
+		if !stillQueued {
+			p.mu.Unlock()
+			cancel()
+			p.wg.Done()
+			continue
+		}
 
 		// Ensure Runtime is initialized before exposing to GetAll
 		if qt.cfg.Runtime == nil {
@@ -639,13 +646,6 @@ func (p *Scheduler) worker() {
 		}
 		ad.running.Store(true)
 
-		p.mu.Lock()
-		if _, stillQueued := p.queued[id]; !stillQueued {
-			p.mu.Unlock()
-			cancel()
-			p.wg.Done()
-			continue
-		}
 		ad.config = qt.cfg
 		delete(p.queued, id)
 		p.removeQueueOrderLocked(id)
