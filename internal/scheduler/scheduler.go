@@ -663,6 +663,7 @@ func (p *Scheduler) worker() {
 		p.mu.Lock()
 		if _, exists := p.downloads[localCfg.ID]; exists {
 			ad.config.TotalSize = localCfg.TotalSize
+			ad.config.SupportsRange = localCfg.SupportsRange
 			ad.config.Runtime = localCfg.Runtime
 		}
 		p.mu.Unlock()

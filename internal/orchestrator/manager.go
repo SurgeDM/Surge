@@ -4,6 +4,8 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
+	neturl "net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,11 +36,18 @@ type LifecycleManager struct {
 	aggregator          *ProgressAggregator
 	isNameActive        IsNameActiveFunc
 
+	// probeSem caps the number of simultaneous server probes so adding a
+	// large batch of downloads does not flood the network with HEAD requests.
+	probeSem     chan struct{}
 	shutdownOnce sync.Once
 }
 
 const (
 	maxWorkingFileReservationAttempts = 100
+	// defaultMaxConcurrentProbes is the fallback probe concurrency cap used when
+	// no settings value is available. The live value comes from
+	// NetworkSettings.MaxConcurrentProbes.
+	defaultMaxConcurrentProbes = 3
 )
 
 var reserveWorkingFile = precreateWorkingFile
@@ -78,6 +87,15 @@ func NewLifecycleManager(pool *scheduler.Scheduler, eventBus *EventBus, settings
 		activeCheck = isNameActive[0]
 	}
 
+	probeCap := defaultMaxConcurrentProbes
+	if settings != nil && config.Resolve[int](settings.Network.MaxConcurrentProbes) > 0 {
+		probeCap = config.Resolve[int](settings.Network.MaxConcurrentProbes)
+	}
+	sem := make(chan struct{}, probeCap)
+	for i := 0; i < probeCap; i++ {
+		sem <- struct{}{}
+	}
+
 	var aggregator *ProgressAggregator
 	if pool != nil && eventBus != nil {
 		aggregator = NewProgressAggregator(pool, eventBus, settings)
@@ -90,6 +108,7 @@ func NewLifecycleManager(pool *scheduler.Scheduler, eventBus *EventBus, settings
 		eventBus:            eventBus,
 		aggregator:          aggregator,
 		isNameActive:        activeCheck,
+		probeSem:            sem,
 	}
 }
 
@@ -182,15 +201,44 @@ func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadR
 
 	settings := mgr.GetSettings()
 
-	// Probing is now deferred to the scheduler worker to avoid exhausting
-	// network connections during mass-enqueue. We provide a fallback probeResult
-	// to allow ResolveDestination to use the URL for naming.
-	probeResult := &probing.ProbeResult{
-		SupportsRange: true,
+	// Throttle concurrent probes — acquire a semaphore slot before probing.
+	// If the context is cancelled (e.g., shutdown) we abort immediately.
+	if mgr.probeSem != nil {
+		select {
+		case <-mgr.probeSem:
+			// acquired
+		case <-ctx.Done():
+			return "", "", fmt.Errorf("enqueue aborted before probe: %w", ctx.Err())
+		}
+		defer func() { mgr.probeSem <- struct{}{} }()
 	}
-	if req.Filename != "" {
-		probeResult.Filename = req.Filename
-		probeResult.DetectedFilename = req.Filename
+
+	probeResult, probeErr := probing.ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
+	if probeErr != nil {
+		// Distinguish between terminal client errors (invalid scheme, etc.) and
+		// server-side rejections or timeouts that we can optimistically ignore.
+		var urlErr *neturl.Error
+		var isTerminal bool
+		if errors.As(probeErr, &urlErr) {
+			var opErr *net.OpError
+			isTerminal = !errors.As(probeErr, &opErr) && // not a network-layer error
+				strings.Contains(urlErr.Error(), "unsupported protocol scheme")
+		}
+		isTerminal = isTerminal || errors.Is(probeErr, probing.ErrProbeRequestCreation)
+
+		if isTerminal {
+			return "", "", probeErr
+		}
+
+		utils.Debug("Lifecycle: Probe failed: %v - enqueueing with optimistic fallback metadata\n", probeErr)
+		// Probe failures are non-fatal for known server-side issues (403/405/500) or
+		// network timeouts: some servers reject lightweight probe requests but still
+		// serve the actual download correctly.
+		probeResult = &probing.ProbeResult{SupportsRange: true}
+		if req.Filename != "" {
+			probeResult.Filename = req.Filename
+			probeResult.DetectedFilename = req.Filename
+		}
 	}
 
 	isNameActive := mgr.buildIsNameActive()
