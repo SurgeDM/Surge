@@ -131,10 +131,6 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if m.SettingsSelectedRow > 0 {
 				m.SettingsSelectedRow--
 				m.settingsError = ""
-			} else {
-				// At the very top row, go up to focus the Tabs!
-				m.SettingsFocusedPane = 0
-				m.settingsError = ""
 			}
 			return m, nil
 		}
