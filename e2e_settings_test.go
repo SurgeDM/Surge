@@ -3,18 +3,29 @@ package main
 import (
 	"os"
 	"os/exec"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
 
 func TestSettingsPersistenceAfterRebuild(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skipf("Skipping test because 'go' executable is not found in PATH: %v", err)
+	}
+
+	binName := "surge_test_bin"
+	if runtime.GOOS == "windows" {
+		binName += ".exe"
+	}
+
 	// 1. Build surge
 	t.Log("Building Surge...")
-	buildCmd := exec.Command("go", "build", "-o", "surge_test_bin", "main.go")
+	buildCmd := exec.Command("go", "build", "-o", binName, "main.go")
 	if err := buildCmd.Run(); err != nil {
 		t.Fatalf("Failed to build surge: %v", err)
 	}
-	defer func() { _ = os.Remove("surge_test_bin") }()
+	defer func() { _ = os.Remove(binName) }()
 
 	// Ensure clean state and avoid nuking user settings by using a temporary home dir
 	tempDir := t.TempDir()
@@ -26,14 +37,14 @@ func TestSettingsPersistenceAfterRebuild(t *testing.T) {
 	// Using `surge_test_bin config General.Theme 2` accomplishes all of these,
 	// as it spins up the config manager, changes the setting, and exits.
 	t.Log("Changing General.Theme to 2...")
-	configCmd := exec.Command("./surge_test_bin", "config", "General.Theme", "2")
+	configCmd := exec.Command(filepath.Join(".", binName), "config", "General.Theme", "2")
 	configCmd.Env = customEnv
 	if err := configCmd.Run(); err != nil {
 		t.Fatalf("Failed to change setting: %v", err)
 	}
 
 	// Verify it was set
-	verifyCmd := exec.Command("./surge_test_bin", "config", "General.Theme")
+	verifyCmd := exec.Command(filepath.Join(".", binName), "config", "General.Theme")
 	verifyCmd.Env = customEnv
 	verifyOut, err := verifyCmd.CombinedOutput()
 	if err != nil {
@@ -65,14 +76,14 @@ func TestSettingsPersistenceAfterRebuild(t *testing.T) {
 
 	// 6. Builds it again
 	t.Log("Building Surge again after code change...")
-	rebuildCmd := exec.Command("go", "build", "-o", "surge_test_bin", "main.go")
+	rebuildCmd := exec.Command("go", "build", "-o", binName, "main.go")
 	if err := rebuildCmd.Run(); err != nil {
 		t.Fatalf("Failed to rebuild surge: %v", err)
 	}
 
 	// 7. Opens surge & 8. Checks if the setting it changed before is there or not
 	t.Log("Checking if setting persisted...")
-	checkCmd := exec.Command("./surge_test_bin", "config", "General.Theme")
+	checkCmd := exec.Command(filepath.Join(".", binName), "config", "General.Theme")
 	checkCmd.Env = customEnv
 	checkOut, err := checkCmd.CombinedOutput()
 	if err != nil {

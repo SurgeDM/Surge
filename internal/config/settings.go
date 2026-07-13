@@ -1078,9 +1078,14 @@ func ValidateDNSList(s string) error {
 	return nil
 }
 
+var jsonWriteMutex sync.Mutex
+
 // writeJSONAtomic marshals v as indented JSON and writes it to path atomically
 // using a temp-file-then-rename strategy.
 func writeJSONAtomic(path string, v any) error {
+	jsonWriteMutex.Lock()
+	defer jsonWriteMutex.Unlock()
+
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
