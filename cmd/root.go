@@ -238,7 +238,9 @@ func ensureGlobalLocalServiceAndLifecycle() error {
 		if err != nil {
 			return err
 		}
+		globalLifecycleMu.Lock()
 		GlobalLifecycleCleanup = cleanup
+		globalLifecycleMu.Unlock()
 	} else {
 		_, err := ensureLocalLifecycle(GlobalService, currentPoolConfigs)
 		return err
