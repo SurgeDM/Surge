@@ -95,6 +95,27 @@ func TestConfigLeakPrevention(t *testing.T) {
 			}
 		}
 
+		// 4. Check for unclosed temporary directories
+		if strings.Contains(contentStr, "os.MkdirTemp") && !strings.Contains(contentStr, "os.RemoveAll") {
+			if !strings.Contains(contentStr, "lint:ignore-leak-check") {
+				t.Errorf("%s: Leaky test detected! Uses os.MkdirTemp but does not seem to call os.RemoveAll for cleanup.", path)
+			}
+		}
+
+		// 5. Check for global state contamination with store
+		if strings.Contains(contentStr, "store.Configure") && !strings.Contains(contentStr, "store.CloseDB") {
+			if !strings.Contains(contentStr, "lint:ignore-leak-check") {
+				t.Errorf("%s: Leaky test detected! Uses store.Configure but does not call store.CloseDB.", path)
+			}
+		}
+
+		// 6. Check for dangling file handles
+		if (strings.Contains(contentStr, "os.Create(") || strings.Contains(contentStr, "os.Open(")) && !strings.Contains(contentStr, ".Close()") {
+			if !strings.Contains(contentStr, "lint:ignore-leak-check") {
+				t.Errorf("%s: Leaky test detected! Uses os.Create or os.Open but does not seem to call .Close().", path)
+			}
+		}
+
 		return nil
 	})
 
