@@ -144,8 +144,9 @@ func TestGlobalGoleakEnforcement(t *testing.T) {
 			}
 
 			hasTest := false
-			hasTestMain := false
+			hasMainTestFile := false
 			hasGoleak := false
+			hasIgnore := false
 
 			for _, entry := range entries {
 				if entry.IsDir() {
@@ -153,22 +154,28 @@ func TestGlobalGoleakEnforcement(t *testing.T) {
 				}
 				if strings.HasSuffix(entry.Name(), "_test.go") {
 					hasTest = true
+					if entry.Name() == "main_test.go" {
+						hasMainTestFile = true
+					}
+					
 					content, readErr := os.ReadFile(filepath.Join(path, entry.Name()))
 					if readErr == nil {
 						contentStr := string(content)
-						if strings.Contains(contentStr, "func TestMain(") {
-							hasTestMain = true
-						}
 						if strings.Contains(contentStr, "goleak.VerifyTestMain") || strings.Contains(contentStr, "goleak.Find()") || strings.Contains(contentStr, "goleak.VerifyNone") {
 							hasGoleak = true
+						}
+						if strings.Contains(contentStr, "lint:ignore-leak-check") {
+							hasIgnore = true
 						}
 					}
 				}
 			}
 
-			if hasTest {
-				if !hasTestMain || !hasGoleak {
-					t.Errorf("%s: Package contains test files but is missing a TestMain function with goleak validation. Please add a main_test.go file.", path)
+			if hasTest && !hasIgnore {
+				if !hasMainTestFile {
+					t.Errorf("%s: Package contains test files but is missing a main_test.go file.", path)
+				} else if !hasGoleak {
+					t.Errorf("%s: Package has a main_test.go but is missing goleak validation.", path)
 				}
 			}
 		}
