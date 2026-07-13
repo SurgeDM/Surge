@@ -197,6 +197,7 @@ func prepareTempLogsDir(t *testing.T) string {
 	} else {
 		t.Setenv("XDG_STATE_HOME", root)
 	}
+	t.Setenv("XDG_CONFIG_HOME", root)
 
 	logsDir := config.GetLogsDir()
 	if err := os.MkdirAll(logsDir, 0o755); err != nil {

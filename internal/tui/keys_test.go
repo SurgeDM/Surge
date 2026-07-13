@@ -3,7 +3,6 @@ package tui
 import (
 	"os"
 	"reflect"
-	"runtime"
 	"testing"
 	"time"
 
@@ -121,9 +120,6 @@ func TestSpeedLimitsKeyMap_AllKeysInHelp(t *testing.T) {
 }
 
 func TestDynamicKeyMapReloading(t *testing.T) {
-	if runtime.GOOS == "windows" {
-		t.Skip("Skipping on Windows: GetSurgeDir uses %APPDATA% and does not honor XDG_CONFIG_HOME")
-	}
 
 	tmpDir, err := os.MkdirTemp("", "surge-tui-keymap-test")
 	if err != nil {
@@ -135,6 +131,7 @@ func TestDynamicKeyMapReloading(t *testing.T) {
 
 	// Override configuration directory
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 
 	err = config.EnsureDirs()
 	if err != nil {

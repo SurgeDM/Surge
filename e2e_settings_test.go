@@ -20,7 +20,7 @@ func TestSettingsPersistenceAfterRebuild(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Prepare custom environment for child processes
-	customEnv := append(os.Environ(), "XDG_CONFIG_HOME="+tempDir, "XDG_DATA_HOME="+tempDir, "SURGE_HOME="+tempDir)
+	customEnv := append(os.Environ(), "XDG_CONFIG_HOME="+tempDir, "XDG_DATA_HOME="+tempDir, "SURGE_HOME="+tempDir, "APPDATA="+tempDir)
 
 	// 2. Starts it & 3. Changes a setting & 4. Closes it
 	// Using `surge_test_bin config General.Theme 2` accomplishes all of these,

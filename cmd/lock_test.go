@@ -24,6 +24,7 @@ func TestAcquireLock(t *testing.T) {
 	}()
 
 	t.Setenv("XDG_CONFIG_HOME", tempDir)
+	t.Setenv("APPDATA", tempDir)
 	t.Setenv("XDG_RUNTIME_DIR", tempDir) // Runtime dir for lock file
 
 	// Ensure dirs exist (mocking what root.go does)

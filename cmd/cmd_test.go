@@ -109,6 +109,7 @@ func TestSaveAndRemoveActivePort(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir) // For EnsureDirs to work happily
+	t.Setenv("APPDATA", tmpDir)
 	// Ensure config dirs exist
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("Failed to ensure dirs: %v", err)
@@ -208,6 +209,7 @@ func TestConnectCmd_AutoDetectsLocalServer(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("Failed to ensure dirs: %v", err)
 	}
@@ -237,6 +239,7 @@ func TestConnectCmd_NoServerRunning(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("Failed to ensure dirs: %v", err)
 	}
@@ -297,6 +300,7 @@ func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("Failed to ensure dirs: %v", err)
 	}
@@ -326,6 +330,7 @@ func TestResolveTokenForConnectTarget_UsesActiveTokenForMatchingLocalPort(t *tes
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 	t.Setenv("XDG_STATE_HOME", tmpDir)
 	t.Setenv("SURGE_TOKEN", "")
 
@@ -734,6 +739,7 @@ func TestMaybeStartRootHTTPServer_NoServerSkipsPortFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("failed to ensure dirs: %v", err)
 	}

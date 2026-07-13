@@ -90,7 +90,7 @@ func TestWriteJSONAtomicRace(t *testing.T) {
 		go func(id int) {
 			defer wg.Done()
 			localData := map[string]interface{}{
-				"id": id,
+				"id":   id,
 				"data": "some data to make the payload big enough to trigger interleaved writes into the same tmp file",
 			}
 			if err := writeJSONAtomic(targetFile, localData); err != nil {

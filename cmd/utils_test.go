@@ -144,6 +144,7 @@ func TestResolveAPIConnection_PairsLocalPortAndTokenFromSameState(t *testing.T) 
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 	t.Setenv("XDG_STATE_HOME", tmpDir)
 	t.Setenv("SURGE_TOKEN", "")
 

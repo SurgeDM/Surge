@@ -102,11 +102,18 @@ func TestStartupIntegrityCheck_RemovesMissingPausedEntry(t *testing.T) {
 func setupTestEnv(t *testing.T, tmpDir string) {
 	originalXDG := os.Getenv("XDG_CONFIG_HOME")
 	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	originalAppData := os.Getenv("APPDATA")
+	_ = os.Setenv("APPDATA", tmpDir)
 	t.Cleanup(func() {
 		if originalXDG == "" {
 			_ = os.Unsetenv("XDG_CONFIG_HOME")
 		} else {
 			_ = os.Setenv("XDG_CONFIG_HOME", originalXDG)
+		}
+		if originalAppData == "" {
+			_ = os.Unsetenv("APPDATA")
+		} else {
+			_ = os.Setenv("APPDATA", originalAppData)
 		}
 	})
 
@@ -169,11 +176,18 @@ func TestGetSettings_LoadError_PopulatesStartupWarnings(t *testing.T) {
 
 	originalXDG := os.Getenv("XDG_CONFIG_HOME")
 	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
+	originalAppData := os.Getenv("APPDATA")
+	_ = os.Setenv("APPDATA", tmpDir)
 	defer func() {
 		if originalXDG == "" {
 			_ = os.Unsetenv("XDG_CONFIG_HOME")
 		} else {
 			_ = os.Setenv("XDG_CONFIG_HOME", originalXDG)
+		}
+		if originalAppData == "" {
+			_ = os.Unsetenv("APPDATA")
+		} else {
+			_ = os.Setenv("APPDATA", originalAppData)
 		}
 	}()
 

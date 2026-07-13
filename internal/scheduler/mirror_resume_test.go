@@ -31,6 +31,7 @@ func TestIntegration_MirrorResume(t *testing.T) {
 	// The config package uses "surge" subdirectory
 	configDir := tmpDir // XDG_CONFIG_HOME usually contains the app dir
 	t.Setenv("XDG_CONFIG_HOME", configDir)
+	t.Setenv("APPDATA", configDir)
 
 	// Configure debug
 	utils.ConfigureDebug(tmpDir)

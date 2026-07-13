@@ -30,6 +30,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	// The config package uses "surge" subdirectory
 	configDir := tmpDir // XDG_CONFIG_HOME usually contains the app dir
 	t.Setenv("XDG_CONFIG_HOME", configDir)
+	t.Setenv("APPDATA", configDir)
 
 	// Ensure clean state
 	testutil.SetupStateDB(t)

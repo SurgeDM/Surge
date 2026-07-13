@@ -55,11 +55,18 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	// Mock XDG_CONFIG_HOME to affect GetSurgeDir() on Linux
 	originalConfigHome := os.Getenv("XDG_CONFIG_HOME")
 	_ = os.Setenv("XDG_CONFIG_HOME", tempDir)
+	originalAppData := os.Getenv("APPDATA")
+	_ = os.Setenv("APPDATA", tempDir)
 	defer func() {
 		if originalConfigHome == "" {
 			_ = os.Unsetenv("XDG_CONFIG_HOME")
 		} else {
 			_ = os.Setenv("XDG_CONFIG_HOME", originalConfigHome)
+		}
+		if originalAppData == "" {
+			_ = os.Unsetenv("APPDATA")
+		} else {
+			_ = os.Setenv("APPDATA", originalAppData)
 		}
 	}()
 

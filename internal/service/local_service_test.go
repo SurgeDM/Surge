@@ -33,6 +33,7 @@ func setupTestService(t *testing.T) (*LocalDownloadService, *httptest.Server, st
 	// Ensure config directory exists for settings tests
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 	t.Setenv("XDG_STATE_HOME", tmpDir)
 
 	svc := NewLocalDownloadService(mgr)

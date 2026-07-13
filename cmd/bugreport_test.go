@@ -127,6 +127,7 @@ func TestRunBugReportCommand_CoreFlowDefaultsToIncludingLatestLogPath(t *testing
 	} else {
 		t.Setenv("XDG_STATE_HOME", root)
 	}
+	t.Setenv("XDG_CONFIG_HOME", root)
 
 	openedURL := ""
 	origOpenBrowser := openBrowser
