@@ -3,7 +3,6 @@ package main
 import (
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 	"testing"
 )
