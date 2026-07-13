@@ -58,7 +58,9 @@ func TestSettingsPersistenceAfterRebuild(t *testing.T) {
 
 	// Revert the change at the end of the test
 	defer func() {
-		os.WriteFile("main.go", mainContent, 0644)
+		if err := os.WriteFile("main.go", mainContent, 0644); err != nil {
+			t.Errorf("failed to restore main.go: %v", err)
+		}
 	}()
 
 	// 6. Builds it again

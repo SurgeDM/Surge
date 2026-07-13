@@ -227,10 +227,12 @@ func ensureGlobalLocalServiceAndLifecycle() error {
 	if GlobalService == nil {
 		eventBus := orchestrator.NewEventBus()
 		lifecycle := newLocalLifecycleManager(GlobalPool, eventBus, globalSettings, currentPoolConfigs)
-		GlobalLifecycle = lifecycle
-
 		localService := service.NewLocalDownloadService(lifecycle)
+
+		globalLifecycleMu.Lock()
+		GlobalLifecycle = lifecycle
 		GlobalService = localService
+		globalLifecycleMu.Unlock()
 
 		cleanup, err := startLifecycleEventWorker(localService, lifecycle)
 		if err != nil {
