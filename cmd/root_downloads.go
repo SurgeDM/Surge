@@ -319,9 +319,11 @@ func normalizeDownloadTargets(url string, mirrors []string) (string, []string) {
 func resolveDuplicateState(urlForAdd string, settings *config.Settings) (bool, bool) {
 	activeDownloadsFunc := func() map[string]*types.DownloadRecord {
 		active := make(map[string]*types.DownloadRecord)
-		for _, cfg := range GlobalPool.GetAll() {
-			c := cfg
-			active[c.ID] = &c
+		if GlobalPool != nil {
+			for _, cfg := range GlobalPool.GetAll() {
+				c := cfg
+				active[c.ID] = &c
+			}
 		}
 		return active
 	}

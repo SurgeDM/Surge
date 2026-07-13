@@ -341,30 +341,32 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 			}
 			if cfg.ProgressState != nil {
 				cp := progress.CfgProgress(&cfg)
-				downloaded, totalSize, _, sessionElapsed, connections, sessionStart := cp.GetProgress()
-				status.TotalSize = totalSize
-				status.Downloaded = downloaded
-				if dp := cp.GetDestPath(); dp != "" {
-					status.DestPath = dp
-				}
-				if status.TotalSize > 0 {
-					status.Progress = float64(status.Downloaded) * 100 / float64(status.TotalSize)
-				}
-				status.Connections = int(connections)
-				if cp.IsPausing() {
-					status.Status = "pausing"
-				} else if cp.IsPaused() {
-					status.Status = "paused"
-				} else if cp.Done.Load() {
-					status.Status = "completed"
-				}
-				if status.Status == "downloading" {
-					sessionDownloaded := downloaded - sessionStart
-					if sessionElapsed.Seconds() > 0 && sessionDownloaded > 0 {
-						status.Speed = float64(sessionDownloaded) / sessionElapsed.Seconds()
-						remaining := status.TotalSize - status.Downloaded
-						if remaining > 0 && status.Speed > 0 {
-							status.ETA = int64(float64(remaining) / status.Speed)
+				if cp != nil {
+					downloaded, totalSize, _, sessionElapsed, connections, sessionStart := cp.GetProgress()
+					status.TotalSize = totalSize
+					status.Downloaded = downloaded
+					if dp := cp.GetDestPath(); dp != "" {
+						status.DestPath = dp
+					}
+					if status.TotalSize > 0 {
+						status.Progress = float64(status.Downloaded) * 100 / float64(status.TotalSize)
+					}
+					status.Connections = int(connections)
+					if cp.IsPausing() {
+						status.Status = "pausing"
+					} else if cp.IsPaused() {
+						status.Status = "paused"
+					} else if cp.Done.Load() {
+						status.Status = "completed"
+					}
+					if status.Status == "downloading" {
+						sessionDownloaded := downloaded - sessionStart
+						if sessionElapsed.Seconds() > 0 && sessionDownloaded > 0 {
+							status.Speed = float64(sessionDownloaded) / sessionElapsed.Seconds()
+							remaining := status.TotalSize - status.Downloaded
+							if remaining > 0 && status.Speed > 0 {
+								status.ETA = int64(float64(remaining) / status.Speed)
+							}
 						}
 					}
 				}

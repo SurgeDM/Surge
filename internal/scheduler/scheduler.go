@@ -922,10 +922,10 @@ func (p *Scheduler) GracefulShutdown() {
 			<-ticker.C
 		}
 
+		p.wg.Wait() // Blocks until all workers call Done()
+
 		// Signal that progressCh must no longer be sent to, so that
 		// safeSendProgress calls in workers can abort if the channel is full.
 		close(p.progressDone)
-
-		p.wg.Wait() // Blocks until all workers call Done()
 	})
 }
