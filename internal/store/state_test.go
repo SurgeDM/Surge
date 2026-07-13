@@ -1219,7 +1219,7 @@ func TestAddGetDownload_PreservesOverrideFields(t *testing.T) {
 // Versioning Tests
 // =============================================================================
 
-func TestLoadMasterList_UnsupportedVersion_ReturnsError(t *testing.T) {
+func TestLoadMasterList_UnsupportedVersion_StartsFresh(t *testing.T) {
 	tmpDir := setupTestDB(t)
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 	defer CloseDB()
@@ -1233,17 +1233,20 @@ func TestLoadMasterList_UnsupportedVersion_ReturnsError(t *testing.T) {
 		t.Fatalf("failed to write v1 state: %v", err)
 	}
 
-	// Verify LoadMasterList returns an error
+	// Verify LoadMasterList starts fresh
 	list, err := LoadMasterList()
-	if err == nil {
-		t.Error("expected error for unsupported version")
+	if err != nil {
+		t.Fatalf("expected no error for unsupported version, got %v", err)
 	}
-	if list != nil {
-		t.Error("expected nil list for unsupported version")
+	if list == nil {
+		t.Fatal("expected non-nil list for unsupported version")
+	}
+	if len(list.Downloads) != 0 {
+		t.Fatalf("expected empty list, got %d items", len(list.Downloads))
 	}
 }
 
-func TestLoadMasterListUnlocked_UnsupportedVersion_ReturnsError(t *testing.T) {
+func TestLoadMasterListUnlocked_UnsupportedVersion_StartsFresh(t *testing.T) {
 	tmpDir := setupTestDB(t)
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 	defer CloseDB()
@@ -1257,12 +1260,15 @@ func TestLoadMasterListUnlocked_UnsupportedVersion_ReturnsError(t *testing.T) {
 		t.Fatalf("failed to write v3 state: %v", err)
 	}
 
-	// Verify loadMasterListUnlocked returns an error
+	// Verify loadMasterListUnlocked starts fresh
 	list, err := loadMasterListUnlocked()
-	if err == nil {
-		t.Error("expected error for unsupported version")
+	if err != nil {
+		t.Fatalf("expected no error for unsupported version, got %v", err)
 	}
-	if list != nil {
-		t.Error("expected nil list for unsupported version")
+	if list == nil {
+		t.Fatal("expected non-nil list for unsupported version")
+	}
+	if len(list.Downloads) != 0 {
+		t.Fatalf("expected empty list, got %d items", len(list.Downloads))
 	}
 }

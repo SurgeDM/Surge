@@ -1,15 +1,17 @@
 package progress
 
 import (
+	"sync"
+	"sync/atomic"
+
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
-	"sync"
 )
 
 type BitmapTracker struct {
-	mu              sync.Mutex
-	bitmap          []byte
-	chunkProgress   []int64
+	mu              sync.RWMutex
+	chunkStatus     []atomic.Int32
+	chunkProgress   []atomic.Int64
 	actualChunkSize int64
 	width           int
 }
@@ -35,8 +37,8 @@ func (b *BitmapTracker) Reset() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 	if b.width > 0 {
-		b.bitmap = make([]byte, len(b.bitmap))
-		b.chunkProgress = make([]int64, b.width)
+		b.chunkStatus = make([]atomic.Int32, b.width)
+		b.chunkProgress = make([]atomic.Int64, b.width)
 	}
 }
 
@@ -45,7 +47,7 @@ func (b *BitmapTracker) InitBitmap(totalSize int64, chunkSize int64) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	if len(b.bitmap) > 0 && b.actualChunkSize == chunkSize {
+	if len(b.chunkStatus) > 0 && b.actualChunkSize == chunkSize {
 		// Already initialized and the chunk size is correct.
 		// NOTE: TotalSize check is left to the caller or implicitly valid.
 		return
@@ -56,15 +58,15 @@ func (b *BitmapTracker) InitBitmap(totalSize int64, chunkSize int64) {
 		return
 	}
 
-	numChunks, bytesNeeded, ok := bitmapLayout(totalSize, chunkSize)
+	numChunks, _, ok := bitmapLayout(totalSize, chunkSize)
 	if !ok {
 		return
 	}
 
 	b.actualChunkSize = chunkSize
 	b.width = numChunks
-	b.bitmap = make([]byte, bytesNeeded)
-	b.chunkProgress = make([]int64, numChunks)
+	b.chunkStatus = make([]atomic.Int32, numChunks)
+	b.chunkProgress = make([]atomic.Int64, numChunks)
 }
 
 // RestoreBitmap restores the chunk bitmap from saved state.
@@ -76,18 +78,27 @@ func (b *BitmapTracker) RestoreBitmap(totalSize int64, bitmap []byte, actualChun
 		return
 	}
 
-	numChunks, bytesNeeded, ok := bitmapLayout(totalSize, actualChunkSize)
+	numChunks, _, ok := bitmapLayout(totalSize, actualChunkSize)
 	if !ok {
 		return
 	}
 
-	b.bitmap = make([]byte, bytesNeeded)
-	copy(b.bitmap, bitmap)
 	b.actualChunkSize = actualChunkSize
 	b.width = numChunks
+	b.chunkStatus = make([]atomic.Int32, numChunks)
+
+	// Unpack from byte slice to chunkStatus array
+	for i := 0; i < numChunks; i++ {
+		byteIndex := i / 4
+		if byteIndex < len(bitmap) {
+			bitOffset := (i % 4) * 2
+			val := (bitmap[byteIndex] >> bitOffset) & 3
+			b.chunkStatus[i].Store(int32(val))
+		}
+	}
 
 	if len(b.chunkProgress) != numChunks {
-		b.chunkProgress = make([]int64, numChunks)
+		b.chunkProgress = make([]atomic.Int64, numChunks)
 	}
 }
 
@@ -100,41 +111,32 @@ func (b *BitmapTracker) SetChunkProgress(progress []int64) {
 		return
 	}
 	if len(b.chunkProgress) != len(progress) {
-		b.chunkProgress = make([]int64, len(progress))
+		b.chunkProgress = make([]atomic.Int64, len(progress))
 	}
-	copy(b.chunkProgress, progress)
+	for i, v := range progress {
+		b.chunkProgress[i].Store(v)
+	}
 }
 
-// SetChunkState sets the 2-bit state for a specific chunk index.
+// SetChunkState sets the state for a specific chunk index.
 func (b *BitmapTracker) SetChunkState(index int, status types.ChunkStatus) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	b.setChunkState(index, status)
 }
 
-// setChunkState sets the 2-bit state (internal, expects lock).
+// setChunkState sets the state (internal, lock-free on the atomic).
 func (b *BitmapTracker) setChunkState(index int, status types.ChunkStatus) {
 	if index < 0 || index >= b.width {
 		return
 	}
-
-	byteIndex := index / 4
-	if byteIndex >= len(b.bitmap) {
-		return
-	}
-	bitOffset := (index % 4) * 2
-
-	mask := byte(3 << bitOffset)
-	b.bitmap[byteIndex] &= ^mask
-
-	val := byte(status) << bitOffset
-	b.bitmap[byteIndex] |= val
+	b.chunkStatus[index].Store(int32(status))
 }
 
-// GetChunkState gets the 2-bit state for a specific chunk index.
+// GetChunkState gets the state for a specific chunk index.
 func (b *BitmapTracker) GetChunkState(index int) types.ChunkStatus {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 	return b.getChunkState(index)
 }
 
@@ -142,29 +144,16 @@ func (b *BitmapTracker) getChunkState(index int) types.ChunkStatus {
 	if index < 0 || index >= b.width {
 		return types.ChunkPending
 	}
-
-	byteIndex := index / 4
-	if byteIndex >= len(b.bitmap) {
-		return types.ChunkPending
-	}
-	bitOffset := (index % 4) * 2
-
-	val := (b.bitmap[byteIndex] >> bitOffset) & 3
-	return types.ChunkStatus(val)
+	return types.ChunkStatus(b.chunkStatus[index].Load())
 }
 
 // UpdateChunkStatus updates the bitmap based on byte range and returns the incremented progress.
 func (b *BitmapTracker) UpdateChunkStatus(totalSize, offset, length int64, status types.ChunkStatus) (increment int64) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 
-	if b.actualChunkSize == 0 || len(b.bitmap) == 0 {
+	if b.actualChunkSize == 0 || len(b.chunkStatus) == 0 {
 		return 0
-	}
-
-	if len(b.chunkProgress) != b.width {
-		utils.Debug("UpdateChunkStatus: Initializing ChunkProgress array (width=%d)", b.width)
-		b.chunkProgress = make([]int64, b.width)
 	}
 
 	startIdx := int(offset / b.actualChunkSize)
@@ -203,24 +192,32 @@ func (b *BitmapTracker) UpdateChunkStatus(totalSize, offset, length int64, statu
 
 		switch status {
 		case types.ChunkCompleted:
-			inc := overlap
-			remainingSpace := (chunkEnd - chunkStart) - b.chunkProgress[i]
+			// Lock-free CAS loop to avoid overcounting under concurrent updates
+			for {
+				currentProg := b.chunkProgress[i].Load()
+				remainingSpace := (chunkEnd - chunkStart) - currentProg
 
-			if inc > remainingSpace {
-				inc = remainingSpace
-			}
+				inc := overlap
+				if inc > remainingSpace {
+					inc = remainingSpace
+				}
 
-			if inc > 0 {
-				b.chunkProgress[i] += inc
-				totalIncrement += inc
-			}
+				if inc <= 0 {
+					// We might have already reached the end or overlap is zero.
+					if currentProg >= (chunkEnd - chunkStart) {
+						b.setChunkState(i, types.ChunkCompleted)
+					}
+					break
+				}
 
-			if b.chunkProgress[i] >= (chunkEnd - chunkStart) {
-				b.chunkProgress[i] = chunkEnd - chunkStart
-				b.setChunkState(i, types.ChunkCompleted)
-			} else {
-				if b.getChunkState(i) != types.ChunkCompleted {
-					b.setChunkState(i, types.ChunkDownloading)
+				if b.chunkProgress[i].CompareAndSwap(currentProg, currentProg+inc) {
+					totalIncrement += inc
+					if currentProg+inc >= (chunkEnd - chunkStart) {
+						b.setChunkState(i, types.ChunkCompleted)
+					} else if b.getChunkState(i) != types.ChunkCompleted {
+						b.setChunkState(i, types.ChunkDownloading)
+					}
+					break
 				}
 			}
 		case types.ChunkDownloading:
@@ -243,7 +240,7 @@ func (b *BitmapTracker) RecalculateProgress(totalSize int64, remainingTasks []ty
 		return 0
 	}
 
-	b.chunkProgress = make([]int64, b.width)
+	b.chunkProgress = make([]atomic.Int64, b.width)
 	var total int64
 	for i := 0; i < b.width; i++ {
 		chunkStart := int64(i) * b.actualChunkSize
@@ -251,8 +248,9 @@ func (b *BitmapTracker) RecalculateProgress(totalSize int64, remainingTasks []ty
 		if chunkEnd > totalSize {
 			chunkEnd = totalSize
 		}
-		b.chunkProgress[i] = chunkEnd - chunkStart
-		total += b.chunkProgress[i]
+		prog := chunkEnd - chunkStart
+		b.chunkProgress[i].Store(prog)
+		total += prog
 	}
 
 	for _, task := range remainingTasks {
@@ -288,8 +286,13 @@ func (b *BitmapTracker) RecalculateProgress(totalSize int64, remainingTasks []ty
 
 			overlap := taskEnd - taskStart
 			if overlap > 0 {
-				b.chunkProgress[i] -= overlap
+				newProg := b.chunkProgress[i].Add(-overlap)
 				total -= overlap
+				
+				if newProg < 0 {
+					total += -newProg
+					b.chunkProgress[i].Store(0)
+				}
 			}
 		}
 	}
@@ -302,14 +305,15 @@ func (b *BitmapTracker) RecalculateProgress(totalSize int64, remainingTasks []ty
 		}
 		chunkSize := chunkEnd - chunkStart
 
-		if b.chunkProgress[i] >= chunkSize {
-			b.chunkProgress[i] = chunkSize
-			b.setChunkState(i, types.ChunkCompleted)
-		} else if b.chunkProgress[i] > 0 {
-			b.setChunkState(i, types.ChunkDownloading)
+		prog := b.chunkProgress[i].Load()
+		if prog >= chunkSize {
+			b.chunkProgress[i].Store(chunkSize)
+			b.chunkStatus[i].Store(int32(types.ChunkCompleted))
+		} else if prog > 0 {
+			b.chunkStatus[i].Store(int32(types.ChunkDownloading))
 		} else {
-			b.chunkProgress[i] = 0
-			b.setChunkState(i, types.ChunkPending)
+			b.chunkProgress[i].Store(0)
+			b.chunkStatus[i].Store(int32(types.ChunkPending))
 		}
 	}
 	return total
@@ -317,20 +321,30 @@ func (b *BitmapTracker) RecalculateProgress(totalSize int64, remainingTasks []ty
 
 // GetBitmapSnapshot returns a copy of bitmap metadata and optionally chunk progress.
 func (b *BitmapTracker) GetBitmapSnapshot(totalSize int64, includeProgress bool) ([]byte, int, int64, int64, []int64) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.mu.RLock()
+	defer b.mu.RUnlock()
 
-	if len(b.bitmap) == 0 {
+	if len(b.chunkStatus) == 0 {
 		return nil, 0, 0, 0, nil
 	}
 
-	result := make([]byte, len(b.bitmap))
-	copy(result, b.bitmap)
+	_, bytesNeeded, _ := bitmapLayout(totalSize, b.actualChunkSize)
+	result := make([]byte, bytesNeeded)
+
+	for i := 0; i < b.width; i++ {
+		status := b.chunkStatus[i].Load()
+		byteIndex := i / 4
+		bitOffset := (i % 4) * 2
+		val := byte(status) << bitOffset
+		result[byteIndex] |= val
+	}
 
 	var progressResult []int64
 	if includeProgress {
 		progressResult = make([]int64, len(b.chunkProgress))
-		copy(progressResult, b.chunkProgress)
+		for i := 0; i < len(b.chunkProgress); i++ {
+			progressResult[i] = b.chunkProgress[i].Load()
+		}
 	}
 
 	return result, b.width, totalSize, b.actualChunkSize, progressResult
