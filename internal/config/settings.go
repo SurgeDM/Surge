@@ -1095,9 +1095,14 @@ func writeJSONAtomic(path string, v any) error {
 	return os.Rename(tempPath, path)
 }
 
+var settingsWriteMutex sync.Mutex
+
 // writeTOMLAtomic marshals v as TOML and writes it to path atomically
 // using a temp-file-then-rename strategy.
 func writeTOMLAtomic(path string, v any) error {
+	settingsWriteMutex.Lock()
+	defer settingsWriteMutex.Unlock()
+
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
@@ -1110,7 +1115,7 @@ func writeTOMLAtomic(path string, v any) error {
 		return err
 	}
 	tempPath := f.Name()
-	
+
 	if _, err := f.Write(data); err != nil {
 		f.Close()
 		os.Remove(tempPath)

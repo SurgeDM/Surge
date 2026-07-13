@@ -248,7 +248,7 @@ func BenchmarkBitmap_NewAtomic_GetSnapshot(b *testing.B) {
 	chunkSize := int64(1024 * 1024)
 	bt := &BitmapTracker{}
 	bt.InitBitmap(totalSize, chunkSize)
-	
+
 	// Simulate some downloaded state
 	bt.UpdateChunkStatus(totalSize, 0, totalSize/2, types.ChunkCompleted)
 

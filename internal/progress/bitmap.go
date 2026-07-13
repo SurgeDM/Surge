@@ -288,7 +288,7 @@ func (b *BitmapTracker) RecalculateProgress(totalSize int64, remainingTasks []ty
 			if overlap > 0 {
 				newProg := b.chunkProgress[i].Add(-overlap)
 				total -= overlap
-				
+
 				if newProg < 0 {
 					total += -newProg
 					b.chunkProgress[i].Store(0)

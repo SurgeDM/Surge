@@ -33,7 +33,7 @@ func TestSettingsNavigation_VimStylePaneTransitions(t *testing.T) {
 	if m.SettingsSelectedRow != expectedLastRow {
 		t.Errorf("Expected selected row to wrap to %d, got %d", expectedLastRow, m.SettingsSelectedRow)
 	}
-	
+
 	// 2b. Press "j" (Down) at last row -> should wrap around to row 0
 	downMsg := tea.KeyPressMsg{Code: 'j', Text: "j"}
 	updated, _ = m.Update(downMsg)
@@ -72,7 +72,6 @@ func TestSettingsNavigation_VimStylePaneTransitions(t *testing.T) {
 	if m.SettingsActiveTab != 0 {
 		t.Errorf("Expected tab to switch to 0, got %d", m.SettingsActiveTab)
 	}
-
 
 }
 

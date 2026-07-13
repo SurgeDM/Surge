@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"os/exec"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -18,12 +19,12 @@ func TestSettingsPersistenceAfterRebuild(t *testing.T) {
 
 	// Ensure clean state and avoid nuking user settings by using a temporary home dir
 	tempDir := t.TempDir()
-	
+
 	// Prepare custom environment for child processes
 	customEnv := append(os.Environ(), "XDG_CONFIG_HOME="+tempDir, "XDG_DATA_HOME="+tempDir, "SURGE_HOME="+tempDir)
 
 	// 2. Starts it & 3. Changes a setting & 4. Closes it
-	// Using `surge_test_bin config General.Theme 2` accomplishes all of these, 
+	// Using `surge_test_bin config General.Theme 2` accomplishes all of these,
 	// as it spins up the config manager, changes the setting, and exits.
 	t.Log("Changing General.Theme to 2...")
 	configCmd := exec.Command("./surge_test_bin", "config", "General.Theme", "2")
@@ -49,13 +50,13 @@ func TestSettingsPersistenceAfterRebuild(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to read main.go: %v", err)
 	}
-	
+
 	// Add a comment to the end of main.go
 	modifiedContent := append(mainContent, []byte("\n// Test modification for persistence check\n")...)
 	if err := os.WriteFile("main.go", modifiedContent, 0644); err != nil {
 		t.Fatalf("Failed to modify main.go: %v", err)
 	}
-	
+
 	// Revert the change at the end of the test
 	defer func() {
 		os.WriteFile("main.go", mainContent, 0644)
