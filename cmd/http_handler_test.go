@@ -12,7 +12,6 @@ import (
 	"runtime"
 	"strings"
 	"testing"
-	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
@@ -383,31 +382,17 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 		_ = svc.Shutdown()
 	})
 
-	// Use a URL with an invalid scheme so ProbeServer fails immediately.
+	// Use a URL with an invalid scheme so ProbeServer fails immediately with a
+	// terminal error. Since probing now runs at enqueue time, the request is
+	// synchronously rejected with 500 — no background worker is involved.
 	body := `{"url": "badscheme://example.com/file.bin", "path": "/tmp", "skip_approval": true}`
 	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
 	rec := httptest.NewRecorder()
 
-	sub, cleanup := eventBus.Subscribe()
-	defer cleanup()
-
 	handleDownload(rec, req, "", svc)
 
-	if rec.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
-	}
-
-	timeout := time.After(5 * time.Second)
-waitLoop:
-	for {
-		select {
-		case ev := <-sub:
-			if ev.Type == types.EventError {
-				break waitLoop
-			}
-		case <-timeout:
-			t.Fatal("timeout waiting for background worker to fail the download")
-		}
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500 for terminal probe error, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
 
