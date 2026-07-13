@@ -1088,8 +1088,24 @@ func writeJSONAtomic(path string, v any) error {
 	if err != nil {
 		return err
 	}
-	tempPath := path + ".tmp"
-	if err := os.WriteFile(tempPath, data, 0o644); err != nil {
+	f, err := os.CreateTemp(filepath.Dir(path), "json-*.tmp")
+	if err != nil {
+		return err
+	}
+	tempPath := f.Name()
+
+	if _, err := f.Write(data); err != nil {
+		f.Close()
+		os.Remove(tempPath)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tempPath)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tempPath)
 		return err
 	}
 	return os.Rename(tempPath, path)

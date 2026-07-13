@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"sync"
@@ -74,4 +75,44 @@ func TestSaveSettingsRace(t *testing.T) {
 	}
 
 	t.Log("Successfully verified that concurrent saves resulted in a valid TOML file.")
+}
+
+func TestWriteJSONAtomicRace(t *testing.T) {
+	tempDir := t.TempDir()
+	targetFile := filepath.Join(tempDir, "settings.json")
+
+	var wg sync.WaitGroup
+	numGoroutines := 50
+	errs := make(chan error, numGoroutines)
+
+	for i := 0; i < numGoroutines; i++ {
+		wg.Add(1)
+		go func(id int) {
+			defer wg.Done()
+			localData := map[string]interface{}{
+				"id": id,
+				"data": "some data to make the payload big enough to trigger interleaved writes into the same tmp file",
+			}
+			if err := writeJSONAtomic(targetFile, localData); err != nil {
+				errs <- err
+			}
+		}(i)
+	}
+
+	wg.Wait()
+	close(errs)
+
+	for err := range errs {
+		t.Errorf("writeJSONAtomic returned error: %v", err)
+	}
+
+	data, err := os.ReadFile(targetFile)
+	if err != nil {
+		t.Fatalf("Failed to read resulting file: %v", err)
+	}
+
+	var verify map[string]interface{}
+	if err := json.Unmarshal(data, &verify); err != nil {
+		t.Fatalf("RACE CONDITION DETECTED! Resulting JSON is corrupted: %v", err)
+	}
 }
