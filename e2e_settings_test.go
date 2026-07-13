@@ -14,7 +14,7 @@ func TestSettingsPersistenceAfterRebuild(t *testing.T) {
 	if err := buildCmd.Run(); err != nil {
 		t.Fatalf("Failed to build surge: %v", err)
 	}
-	defer os.Remove("surge_test_bin")
+	defer func() { _ = os.Remove("surge_test_bin") }()
 
 	// Ensure clean state and avoid nuking user settings by using a temporary home dir
 	tempDir := t.TempDir()

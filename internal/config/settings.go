@@ -1095,17 +1095,17 @@ func writeJSONAtomic(path string, v any) error {
 	tempPath := f.Name()
 
 	if _, err := f.Write(data); err != nil {
-		f.Close()
-		os.Remove(tempPath)
+		_ = f.Close()
+		_ = os.Remove(tempPath)
 		return err
 	}
 	if err := f.Sync(); err != nil {
-		f.Close()
-		os.Remove(tempPath)
+		_ = f.Close()
+		_ = os.Remove(tempPath)
 		return err
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(tempPath)
+		_ = os.Remove(tempPath)
 		return err
 	}
 	return os.Rename(tempPath, path)
@@ -1133,17 +1133,17 @@ func writeTOMLAtomic(path string, v any) error {
 	tempPath := f.Name()
 
 	if _, err := f.Write(data); err != nil {
-		f.Close()
-		os.Remove(tempPath)
+		_ = f.Close()
+		_ = os.Remove(tempPath)
 		return err
 	}
 	if err := f.Sync(); err != nil {
-		f.Close()
-		os.Remove(tempPath)
+		_ = f.Close()
+		_ = os.Remove(tempPath)
 		return err
 	}
 	if err := f.Close(); err != nil {
-		os.Remove(tempPath)
+		_ = os.Remove(tempPath)
 		return err
 	}
 	return os.Rename(tempPath, path)
