@@ -10,6 +10,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/utils"
+	"go.uber.org/goleak"
 )
 
 func resetSharedStateDB() error {
@@ -50,5 +51,13 @@ func TestMain(m *testing.M) {
 		store.CloseDB()
 		_ = os.RemoveAll(tmpDir)
 	}
+
+	if code == 0 {
+		if leakErr := goleak.Find(); leakErr != nil {
+			fmt.Fprintf(os.Stderr, "goleak: Errors on successful test run: %v\n", leakErr)
+			code = 1
+		}
+	}
+
 	os.Exit(code)
 }

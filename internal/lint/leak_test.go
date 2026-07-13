@@ -123,3 +123,60 @@ func TestConfigLeakPrevention(t *testing.T) {
 		t.Fatalf("Failed to walk directory: %v", err)
 	}
 }
+
+// TestGlobalGoleakEnforcement verifies that every package containing tests
+// also has a TestMain function that uses go.uber.org/goleak.
+func TestGlobalGoleakEnforcement(t *testing.T) {
+	err := filepath.WalkDir("../..", func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+
+		if d.IsDir() {
+			if d.Name() == "vendor" || d.Name() == ".git" || d.Name() == "node_modules" {
+				return filepath.SkipDir
+			}
+
+			// Check files in this directory
+			entries, readErr := os.ReadDir(path)
+			if readErr != nil {
+				return readErr
+			}
+
+			hasTest := false
+			hasTestMain := false
+			hasGoleak := false
+
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				if strings.HasSuffix(entry.Name(), "_test.go") {
+					hasTest = true
+					content, readErr := os.ReadFile(filepath.Join(path, entry.Name()))
+					if readErr == nil {
+						contentStr := string(content)
+						if strings.Contains(contentStr, "func TestMain(") {
+							hasTestMain = true
+						}
+						if strings.Contains(contentStr, "goleak.VerifyTestMain") || strings.Contains(contentStr, "goleak.Find()") || strings.Contains(contentStr, "goleak.VerifyNone") {
+							hasGoleak = true
+						}
+					}
+				}
+			}
+
+			if hasTest {
+				if !hasTestMain || !hasGoleak {
+					t.Errorf("%s: Package contains test files but is missing a TestMain function with goleak validation. Please add a main_test.go file.", path)
+				}
+			}
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		t.Fatalf("Failed to walk directory: %v", err)
+	}
+}
