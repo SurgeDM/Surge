@@ -67,6 +67,9 @@ func (s *LocalDownloadService) Shutdown() error {
 }
 
 func (s *LocalDownloadService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
+	if s.lifecycle == nil {
+		return "", types.ErrServiceUnavailable
+	}
 	req := &orchestrator.DownloadRequest{
 		URL:                url,
 		Path:               path,
@@ -82,6 +85,9 @@ func (s *LocalDownloadService) Add(url string, path string, filename string, mir
 }
 
 func (s *LocalDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error) {
+	if s.lifecycle == nil {
+		return "", types.ErrServiceUnavailable
+	}
 	req := &orchestrator.DownloadRequest{
 		URL:                url,
 		Path:               path,
@@ -97,22 +103,37 @@ func (s *LocalDownloadService) AddWithID(url string, path string, filename strin
 }
 
 func (s *LocalDownloadService) Pause(id string) error {
+	if s.lifecycle == nil {
+		return types.ErrServiceUnavailable
+	}
 	return s.lifecycle.Pause(id)
 }
 
 func (s *LocalDownloadService) Resume(id string) error {
+	if s.lifecycle == nil {
+		return types.ErrServiceUnavailable
+	}
 	return s.lifecycle.Resume(id)
 }
 
 func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
+	if s.lifecycle == nil {
+		return []error{types.ErrServiceUnavailable}
+	}
 	return s.lifecycle.ResumeBatch(ids)
 }
 
 func (s *LocalDownloadService) UpdateURL(id string, newURL string) error {
+	if s.lifecycle == nil {
+		return types.ErrServiceUnavailable
+	}
 	return s.lifecycle.UpdateURL(id, newURL)
 }
 
 func (s *LocalDownloadService) Delete(id string) error {
+	if s.lifecycle == nil {
+		return types.ErrServiceUnavailable
+	}
 	return s.lifecycle.Cancel(id)
 }
 

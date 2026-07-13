@@ -403,8 +403,10 @@ func enqueueDownloadRequest(r *http.Request, service service.DownloadService, re
 	}
 
 	req := resolved.request
+	reqID := r.URL.Query().Get("id")
+
 	if lifecycle != nil {
-		return lifecycle.Enqueue(r.Context(), &orchestrator.DownloadRequest{
+		dlReq := &orchestrator.DownloadRequest{
 			URL:                resolved.urlForAdd,
 			Filename:           req.Filename,
 			Path:               resolved.outPath,
@@ -414,9 +416,17 @@ func enqueueDownloadRequest(r *http.Request, service service.DownloadService, re
 			SkipApproval:       req.SkipApproval,
 			Workers:            req.Workers,
 			MinChunkSize:       req.MinChunkSize,
-		})
+		}
+		if reqID != "" {
+			return lifecycle.EnqueueWithID(r.Context(), dlReq, reqID)
+		}
+		return lifecycle.Enqueue(r.Context(), dlReq)
 	}
 
+	if reqID != "" {
+		id, err := service.AddWithID(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, reqID, req.Workers, req.MinChunkSize)
+		return id, req.Filename, err
+	}
 	id, err := service.Add(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, req.Workers, req.MinChunkSize)
 	return id, req.Filename, err
 }
