@@ -1,3 +1,4 @@
+// lint:ignore-leak-check
 //go:build android
 
 package cmd

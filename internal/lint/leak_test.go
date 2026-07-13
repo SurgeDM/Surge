@@ -78,6 +78,23 @@ func TestConfigLeakPrevention(t *testing.T) {
 			}
 		}
 
+		// 3. If a test uses os.Setenv or os.Chdir, it must not leak
+		if strings.Contains(contentStr, "os.Setenv") || strings.Contains(contentStr, "os.Unsetenv") {
+			if !isIsolatedViaWrapper {
+				if !strings.Contains(contentStr, "lint:ignore-leak-check") {
+					t.Errorf("%s: Leaky test detected! Uses os.Setenv or os.Unsetenv directly without an isolation wrapper. Use t.Setenv() instead, or add 'lint:ignore-leak-check' if you manually handle cleanup.", path)
+				}
+			}
+		}
+
+		if strings.Contains(contentStr, "os.Chdir") {
+			if !isIsolatedViaWrapper {
+				if !strings.Contains(contentStr, "lint:ignore-leak-check") {
+					t.Errorf("%s: Leaky test detected! Uses os.Chdir directly. This changes the working directory for all tests. Add 'lint:ignore-leak-check' if you manually handle cleanup.", path)
+				}
+			}
+		}
+
 		return nil
 	})
 

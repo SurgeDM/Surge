@@ -11,13 +11,9 @@ import (
 
 func TestResolveClientOutputPath(t *testing.T) {
 	// Save original env vars to restore later
-	originalHost := os.Getenv("SURGE_HOST")
 	originalGlobalHost := globalHost
 	originalInsecureHTTP := globalInsecureHTTP
 	defer func() {
-		if err := os.Setenv("SURGE_HOST", originalHost); err != nil {
-			t.Errorf("failed to restore environment variable: %v", err)
-		}
 		globalHost = originalGlobalHost
 		globalInsecureHTTP = originalInsecureHTTP
 	}()
@@ -29,17 +25,15 @@ func TestResolveClientOutputPath(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		setupHost  func()
+		setupHost  func(t *testing.T)
 		outputDir  string
 		wantPrefix string // Used for absolute paths where exact value depends on OS/CWD
 		wantExact  string
 	}{
 		{
 			name: "Remote Host Set via Env - Pass Through Empty",
-			setupHost: func() {
-				if err := os.Setenv("SURGE_HOST", "127.0.0.1:1234"); err != nil {
-					t.Fatalf("failed to set environment variable: %v", err)
-				}
+			setupHost: func(t *testing.T) {
+				t.Setenv("SURGE_HOST", "127.0.0.1:1234")
 				globalHost = ""
 			},
 			outputDir: "",
@@ -47,10 +41,8 @@ func TestResolveClientOutputPath(t *testing.T) {
 		},
 		{
 			name: "Remote Host Set via Global - Pass Through Exact",
-			setupHost: func() {
-				if err := os.Setenv("SURGE_HOST", ""); err != nil {
-					t.Fatalf("failed to set environment variable: %v", err)
-				}
+			setupHost: func(t *testing.T) {
+				t.Setenv("SURGE_HOST", "")
 				globalHost = "127.0.0.1:1234"
 			},
 			outputDir: ".",
@@ -58,10 +50,8 @@ func TestResolveClientOutputPath(t *testing.T) {
 		},
 		{
 			name: "Local Execution - Empty Dir returns CWD",
-			setupHost: func() {
-				if err := os.Setenv("SURGE_HOST", ""); err != nil {
-					t.Fatalf("failed to set environment variable: %v", err)
-				}
+			setupHost: func(t *testing.T) {
+				t.Setenv("SURGE_HOST", "")
 				globalHost = ""
 			},
 			outputDir: "",
@@ -69,10 +59,8 @@ func TestResolveClientOutputPath(t *testing.T) {
 		},
 		{
 			name: "Local Execution - Dot returns Absolute CWD",
-			setupHost: func() {
-				if err := os.Setenv("SURGE_HOST", ""); err != nil {
-					t.Fatalf("failed to set environment variable: %v", err)
-				}
+			setupHost: func(t *testing.T) {
+				t.Setenv("SURGE_HOST", "")
 				globalHost = ""
 			},
 			outputDir: ".",
@@ -80,10 +68,8 @@ func TestResolveClientOutputPath(t *testing.T) {
 		},
 		{
 			name: "Local Execution - Relative Subdir returns Absolute",
-			setupHost: func() {
-				if err := os.Setenv("SURGE_HOST", ""); err != nil {
-					t.Fatalf("failed to set environment variable: %v", err)
-				}
+			setupHost: func(t *testing.T) {
+				t.Setenv("SURGE_HOST", "")
 				globalHost = ""
 			},
 			outputDir: "downloads",
@@ -93,7 +79,7 @@ func TestResolveClientOutputPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tt.setupHost()
+			tt.setupHost(t)
 			got := resolveClientOutputPath(tt.outputDir)
 
 			if got != tt.wantExact {

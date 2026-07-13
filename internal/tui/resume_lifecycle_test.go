@@ -1,3 +1,4 @@
+// lint:ignore-leak-check
 package tui
 
 import (

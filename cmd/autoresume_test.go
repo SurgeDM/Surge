@@ -22,23 +22,8 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 	}
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
-	originalXDG := os.Getenv("XDG_CONFIG_HOME")
-	_ = os.Setenv("XDG_CONFIG_HOME", tmpDir)
-
-	originalAppData := os.Getenv("APPDATA")
-	_ = os.Setenv("APPDATA", tmpDir)
-	defer func() {
-		if originalXDG == "" {
-			_ = os.Unsetenv("XDG_CONFIG_HOME")
-		} else {
-			_ = os.Setenv("XDG_CONFIG_HOME", originalXDG)
-		}
-		if originalAppData == "" {
-			_ = os.Unsetenv("APPDATA")
-		} else {
-			_ = os.Setenv("APPDATA", originalAppData)
-		}
-	}()
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
 
 	surgeDir := config.GetSurgeDir()
 	if err := os.MkdirAll(surgeDir, 0o755); err != nil {
