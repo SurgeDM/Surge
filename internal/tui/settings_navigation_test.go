@@ -21,16 +21,26 @@ func TestSettingsNavigation_VimStylePaneTransitions(t *testing.T) {
 		SettingsFocusedPane: 1, // Start with List focused
 	}
 
-	// 2. Press "k" (Up) at row 0 -> should stay on list and row 0
+	// 2. Press "k" (Up) at row 0 -> should wrap around to the last row
 	upMsg := tea.KeyPressMsg{Code: 'k', Text: "k"}
 	updated, _ := m.Update(upMsg)
 	m = updated.(RootModel)
 
+	expectedLastRow := m.getSettingsCount() - 1
 	if m.SettingsFocusedPane != 1 {
 		t.Errorf("Expected focus to remain on List (1) when pressing Up on first row, got %d", m.SettingsFocusedPane)
 	}
+	if m.SettingsSelectedRow != expectedLastRow {
+		t.Errorf("Expected selected row to wrap to %d, got %d", expectedLastRow, m.SettingsSelectedRow)
+	}
+	
+	// 2b. Press "j" (Down) at last row -> should wrap around to row 0
+	downMsg := tea.KeyPressMsg{Code: 'j', Text: "j"}
+	updated, _ = m.Update(downMsg)
+	m = updated.(RootModel)
+
 	if m.SettingsSelectedRow != 0 {
-		t.Errorf("Expected selected row to remain 0, got %d", m.SettingsSelectedRow)
+		t.Errorf("Expected selected row to wrap to 0, got %d", m.SettingsSelectedRow)
 	}
 
 	// 3. Press "l" (NextTab/right) while focused on List -> should shift active tab to 1
@@ -43,7 +53,7 @@ func TestSettingsNavigation_VimStylePaneTransitions(t *testing.T) {
 	}
 
 	// 4. Press "j" (Down) while focused on List -> should move selection to row 1
-	downMsg := tea.KeyPressMsg{Code: 'j', Text: "j"}
+	downMsg = tea.KeyPressMsg{Code: 'j', Text: "j"}
 	updated, _ = m.Update(downMsg)
 	m = updated.(RootModel)
 
