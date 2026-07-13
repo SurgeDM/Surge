@@ -179,7 +179,8 @@ func TestLocalDownloadService_RateLimits(t *testing.T) {
 }
 
 func TestLocalDownloadService_Purge(t *testing.T) {
-	svc, _, tmpDir := setupTestService(t)
+	svc, ts, tmpDir := setupTestService(t)
+	defer ts.Close()
 	t.Cleanup(func() { _ = svc.Shutdown() })
 
 	blockCh := make(chan struct{})

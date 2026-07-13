@@ -78,11 +78,23 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 
 	// 5. Initialize GlobalPool + GlobalService
 	GlobalProgressCh = make(chan types.DownloadEvent, 10)
-	GlobalPool = scheduler.New(GlobalProgressCh, 4)
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(GlobalProgressCh, 4)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
 
 	eventBus := orchestrator.NewEventBus()
+	t.Cleanup(func() { eventBus.Shutdown() })
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	t.Cleanup(func() { tmpLifecycle.Shutdown() })
+	GlobalLifecycle = tmpLifecycle
 	GlobalService = service.NewLocalDownloadService(GlobalLifecycle)
 
 	defer func() {

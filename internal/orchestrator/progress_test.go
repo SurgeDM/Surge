@@ -26,6 +26,7 @@ func TestProgressAggregator_Loop(t *testing.T) {
 	// 2. Setup Pool and EventBus
 	progressCh := make(chan types.DownloadEvent, 10)
 	pool := scheduler.New(progressCh, 1)
+	defer pool.GracefulShutdown()
 	eb := NewEventBus()
 	defer eb.Shutdown()
 

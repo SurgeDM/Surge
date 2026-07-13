@@ -23,8 +23,18 @@ func defaultGlobalShutdown() error {
 	var err error
 	if GlobalService != nil {
 		err = GlobalService.Shutdown()
-	} else if GlobalPool != nil {
+		GlobalService = nil
+		GlobalLifecycle = nil
+	}
+	if GlobalPool != nil {
 		GlobalPool.GracefulShutdown()
+	}
+
+	globalHTTPServerMu.Lock()
+	srv := globalHTTPServer
+	globalHTTPServerMu.Unlock()
+	if srv != nil {
+		_ = srv.Close()
 	}
 
 	if cleanup := takeLifecycleCleanup(); cleanup != nil {

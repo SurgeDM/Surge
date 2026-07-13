@@ -453,6 +453,24 @@ var rootCmd = &cobra.Command{
 				fmt.Println("Settings and keybindings have been reset to defaults.")
 			}
 		}
+
+		if GlobalService != nil {
+			_ = GlobalService.Shutdown()
+			GlobalService = nil
+			GlobalLifecycle = nil
+		}
+		if GlobalPool != nil {
+			GlobalPool.GracefulShutdown()
+		}
+
+		if cleanup := takeLifecycleCleanup(); cleanup != nil {
+			cleanup()
+		}
+		if globalHTTPServer != nil {
+			_ = globalHTTPServer.Close()
+			globalHTTPServer = nil
+		}
+
 		GlobalProgressCh = make(chan types.DownloadEvent, 100)
 		globalSettings = getSettings()
 		GlobalPool = scheduler.New(GlobalProgressCh, config.Resolve[int](globalSettings.Network.MaxConcurrentDownloads))

@@ -490,13 +490,22 @@ func TestScheduler_GracefulShutdown_PausesAll(t *testing.T) {
 	// Then we clear it to unblock shutdown
 
 	done := make(chan bool)
+	stopCheck := make(chan struct{})
+	defer close(stopCheck)
 	go func() {
 		// Wait for PauseAll to be called (Pausing=true)
-		for !state.IsPausing() {
-			time.Sleep(10 * time.Millisecond)
+		for {
+			select {
+			case <-stopCheck:
+				return
+			default:
+				if state.IsPausing() {
+					state.SetPausing(false)
+					return
+				}
+				time.Sleep(10 * time.Millisecond)
+			}
 		}
-		// Simulate worker finishing pause transition
-		state.SetPausing(false)
 	}()
 
 	go func() {

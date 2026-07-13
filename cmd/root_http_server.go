@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
@@ -67,6 +68,11 @@ func removeActivePort() {
 	}
 }
 
+var (
+	globalHTTPServer   *http.Server
+	globalHTTPServerMu sync.Mutex
+)
+
 // startHTTPServer starts the HTTP server using an existing listener
 func startHTTPServer(ln net.Listener, port int, defaultOutputDir string, service service.DownloadService, tokenOverride string) {
 	authToken := strings.TrimSpace(tokenOverride)
@@ -83,6 +89,9 @@ func startHTTPServer(ln net.Listener, port int, defaultOutputDir string, service
 	handler := corsMiddleware(authMiddleware(authToken, mux))
 
 	server := &http.Server{Handler: handler}
+	globalHTTPServerMu.Lock()
+	globalHTTPServer = server
+	globalHTTPServerMu.Unlock()
 	if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
 		utils.Debug("HTTP server error: %v", err)
 	}

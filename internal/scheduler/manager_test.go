@@ -348,6 +348,7 @@ func TestRunDownload_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T)
 	}
 
 	// Drain progress channel
+	defer close(progressCh)
 	go func() {
 		for range progressCh {
 		}

@@ -663,6 +663,7 @@ func TestRootCmd_Use(t *testing.T) {
 }
 
 func TestRootCmd_InvalidURL(t *testing.T) {
+	setupIsolatedCmdState(t)
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
 	rootCmd.SetErr(buf)
@@ -929,6 +930,11 @@ func TestStartHTTPServer_HealthEndpoint(t *testing.T) {
 	// Start server in background
 	svc := service.NewLocalDownloadService(nil) // Mock service with nil pool/chan for health check
 	go startHTTPServer(ln, port, "", svc, "")
+	t.Cleanup(func() {
+		if globalHTTPServer != nil {
+			_ = globalHTTPServer.Close()
+		}
+	})
 
 	// Give server time to start
 	time.Sleep(50 * time.Millisecond)
@@ -967,6 +973,11 @@ func TestStartHTTPServer_HasCORSHeaders(t *testing.T) {
 
 	svc := service.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
+	t.Cleanup(func() {
+		if globalHTTPServer != nil {
+			_ = globalHTTPServer.Close()
+		}
+	})
 	time.Sleep(50 * time.Millisecond)
 
 	resp, err := http.Get(fmt.Sprintf("http://127.0.0.1:%d/health", port))
@@ -990,6 +1001,11 @@ func TestStartHTTPServer_OptionsRequest(t *testing.T) {
 
 	svc := service.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
+	t.Cleanup(func() {
+		if globalHTTPServer != nil {
+			_ = globalHTTPServer.Close()
+		}
+	})
 	time.Sleep(50 * time.Millisecond)
 
 	req, _ := http.NewRequest(http.MethodOptions, fmt.Sprintf("http://127.0.0.1:%d/download", port), nil)
@@ -1015,6 +1031,11 @@ func TestStartHTTPServer_DownloadEndpoint_MethodNotAllowed(t *testing.T) {
 
 	svc := service.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
+	t.Cleanup(func() {
+		if globalHTTPServer != nil {
+			_ = globalHTTPServer.Close()
+		}
+	})
 	time.Sleep(50 * time.Millisecond)
 
 	token := ensureAuthToken()
@@ -1043,6 +1064,11 @@ func TestStartHTTPServer_DownloadEndpoint_BadRequest(t *testing.T) {
 
 	svc := service.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
+	t.Cleanup(func() {
+		if globalHTTPServer != nil {
+			_ = globalHTTPServer.Close()
+		}
+	})
 	time.Sleep(50 * time.Millisecond)
 
 	// POST with invalid JSON
@@ -1071,6 +1097,11 @@ func TestStartHTTPServer_DownloadEndpoint_MissingURL(t *testing.T) {
 
 	svc := service.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
+	t.Cleanup(func() {
+		if globalHTTPServer != nil {
+			_ = globalHTTPServer.Close()
+		}
+	})
 	time.Sleep(50 * time.Millisecond)
 
 	// POST with missing URL
@@ -1099,6 +1130,11 @@ func TestStartHTTPServer_NotFoundEndpoint(t *testing.T) {
 
 	svc := service.NewLocalDownloadService(nil)
 	go startHTTPServer(ln, port, "", svc, "")
+	t.Cleanup(func() {
+		if globalHTTPServer != nil {
+			_ = globalHTTPServer.Close()
+		}
+	})
 	time.Sleep(50 * time.Millisecond)
 
 	req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("http://127.0.0.1:%d/nonexistent", port), nil)

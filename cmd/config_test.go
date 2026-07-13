@@ -12,8 +12,7 @@ import (
 )
 
 func TestConfigCmd_List(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("AppData", t.TempDir())
+	setupIsolatedCmdState(t)
 
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
@@ -34,8 +33,7 @@ func TestConfigCmd_List(t *testing.T) {
 }
 
 func TestConfigCmd_Get(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("AppData", t.TempDir())
+	setupIsolatedCmdState(t)
 
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
@@ -53,8 +51,7 @@ func TestConfigCmd_Get(t *testing.T) {
 }
 
 func TestConfigCmd_Search(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("AppData", t.TempDir())
+	setupIsolatedCmdState(t)
 
 	tests := []struct {
 		name            string
@@ -143,8 +140,7 @@ func TestConfigCmd_Search(t *testing.T) {
 }
 
 func TestConfigCmd_SetAndReset(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("AppData", t.TempDir())
+	setupIsolatedCmdState(t)
 
 	// Set value
 	buf := new(bytes.Buffer)
@@ -194,8 +190,7 @@ func TestConfigCmd_SetAndReset(t *testing.T) {
 }
 
 func TestConfigCmd_Open(t *testing.T) {
-	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
-	t.Setenv("AppData", t.TempDir())
+	setupIsolatedCmdState(t)
 
 	// Create a dummy script to act as the editor
 	var dummyEditor string

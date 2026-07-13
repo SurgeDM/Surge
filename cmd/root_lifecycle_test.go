@@ -129,10 +129,22 @@ func TestEnsureLocalLifecycle_StartsEventWorker(t *testing.T) {
 	GlobalLifecycle = nil
 	GlobalLifecycleCleanup = nil
 	GlobalProgressCh = make(chan types.DownloadEvent, 32)
-	GlobalPool = scheduler.New(GlobalProgressCh, 1)
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(GlobalProgressCh, 1)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
 	eventBus := orchestrator.NewEventBus()
+	t.Cleanup(func() { eventBus.Shutdown() })
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	t.Cleanup(func() { tmpLifecycle.Shutdown() })
+	GlobalLifecycle = tmpLifecycle
 	GlobalService = service.NewLocalDownloadService(GlobalLifecycle)
 	t.Cleanup(func() {
 		if GlobalLifecycleCleanup != nil {
@@ -194,6 +206,9 @@ func TestEnsureGlobalLocalServiceAndLifecycle_ReusesExistingService(t *testing.T
 	GlobalService = service
 	t.Cleanup(func() {
 		GlobalService = nil
+		if GlobalLifecycle != nil {
+			GlobalLifecycle.Shutdown()
+		}
 		GlobalLifecycle = nil
 		if cleanup := takeLifecycleCleanup(); cleanup != nil {
 			cleanup()
@@ -229,10 +244,22 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 	GlobalLifecycle = nil
 	GlobalLifecycleCleanup = nil
 	eventBus := orchestrator.NewEventBus()
+	t.Cleanup(func() { eventBus.Shutdown() })
 	GlobalProgressCh = eventBus.InputCh
-	GlobalPool = scheduler.New(GlobalProgressCh, 1)
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(GlobalProgressCh, 1)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	t.Cleanup(func() { tmpLifecycle.Shutdown() })
+	GlobalLifecycle = tmpLifecycle
 	GlobalService = service.NewLocalDownloadService(GlobalLifecycle)
 	t.Cleanup(func() {
 		if GlobalLifecycleCleanup != nil {
@@ -323,10 +350,22 @@ func TestProcessDownloads_UsesLatestSavedCategorySettings(t *testing.T) {
 	GlobalLifecycle = nil
 	GlobalLifecycleCleanup = nil
 	eventBus := orchestrator.NewEventBus()
+	t.Cleanup(func() { eventBus.Shutdown() })
 	GlobalProgressCh = eventBus.InputCh
-	GlobalPool = scheduler.New(GlobalProgressCh, 1)
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(GlobalProgressCh, 1)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	t.Cleanup(func() { tmpLifecycle.Shutdown() })
+	GlobalLifecycle = tmpLifecycle
 	GlobalService = service.NewLocalDownloadService(GlobalLifecycle)
 	t.Cleanup(func() {
 		if GlobalLifecycleCleanup != nil {
@@ -463,6 +502,9 @@ func TestEnsureLocalLifecycle_ConcurrentInitializationStartsOneStream(t *testing
 	if cleanup := takeLifecycleCleanup(); cleanup != nil {
 		cleanup()
 	}
+	if GlobalLifecycle != nil {
+		GlobalLifecycle.Shutdown()
+	}
 	GlobalLifecycle = nil
 }
 
@@ -470,7 +512,16 @@ func TestProcessDownloads_UsesSharedEnqueueContext(t *testing.T) {
 	setupIsolatedCmdState(t)
 	service := &countingLifecycleService{}
 	GlobalService = service
-	GlobalPool = scheduler.New(nil, 1)
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(nil, 1)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
 	GlobalLifecycleCleanup = nil
 	t.Cleanup(func() {
 		GlobalService = nil
@@ -488,8 +539,11 @@ func TestProcessDownloads_UsesSharedEnqueueContext(t *testing.T) {
 	defer server.Close()
 
 	eventBus := orchestrator.NewEventBus()
+	t.Cleanup(func() { eventBus.Shutdown() })
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	t.Cleanup(func() { tmpLifecycle.Shutdown() })
+	GlobalLifecycle = tmpLifecycle
 
 	cancelGlobalEnqueue()
 	count := processDownloads([]string{server.URL + "/shared-context.bin"}, t.TempDir(), 0)

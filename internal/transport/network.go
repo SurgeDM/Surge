@@ -116,6 +116,22 @@ func (p *NetworkPool) ReleaseTransport(t *http.Transport) {
 	}
 }
 
+// CloseAll evicts all transports and closes their idle connections immediately.
+func (p *NetworkPool) CloseAll() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for _, lease := range p.transportMap {
+		if lease.idleTimer != nil {
+			lease.idleTimer.Stop()
+		}
+		lease.transport.CloseIdleConnections()
+	}
+
+	p.configMap = make(map[poolKey]*transportLease)
+	p.transportMap = make(map[*http.Transport]*transportLease)
+}
+
 func (p *NetworkPool) createNewTransport(proxyURL, customDNS string, maxConns int) *http.Transport {
 	utils.Debug("NetworkPool: creating new shared transport (proxy=%s, limit=%d)", proxyURL, maxConns)
 

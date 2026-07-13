@@ -38,10 +38,20 @@ func TestCLI_DeleteEndpoint_CleansPausedStateAndPartialFile(t *testing.T) {
 	}
 
 	GlobalProgressCh = make(chan types.DownloadEvent, 100)
-	GlobalPool = scheduler.New(GlobalProgressCh, 2)
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(GlobalProgressCh, 2)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
 
 	// Start server
 	eventBus := orchestrator.NewEventBus()
+	t.Cleanup(func() { eventBus.Shutdown() })
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
 	lifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
 	svc := service.NewLocalDownloadService(lifecycle)

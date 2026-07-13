@@ -152,6 +152,7 @@ func TestLifecycleManager_EnqueueInvalid(t *testing.T) {
 
 	pool := scheduler.New(make(chan types.DownloadEvent, 1), 1)
 	mgr = NewLifecycleManager(pool, nil, nil)
+	defer mgr.Shutdown()
 
 	// Missing URL
 	_, _, err = mgr.Enqueue(context.Background(), &DownloadRequest{Path: "/tmp"})

@@ -63,7 +63,11 @@ func TestProgramLifecycle(t *testing.T) {
 
 	// Set args to something safe so rootCmd.ExecuteContext doesn't fail on test flags
 	rootCmd.SetArgs([]string{"--help"})
-	defer rootCmd.SetArgs(nil)
+	resetGlobalShutdownCoordinatorForTest(nil)
+	defer func() {
+		rootCmd.SetArgs(nil)
+		resetGlobalShutdownCoordinatorForTest(nil)
+	}()
 
 	// Test Start
 	err = p.Start(s)
@@ -111,7 +115,11 @@ func TestProgramContextCancellation(t *testing.T) {
 	s := &mockService{}
 
 	rootCmd.SetArgs([]string{"--help"})
-	defer rootCmd.SetArgs(nil)
+	resetGlobalShutdownCoordinatorForTest(nil)
+	defer func() {
+		rootCmd.SetArgs(nil)
+		resetGlobalShutdownCoordinatorForTest(nil)
+	}()
 
 	_ = p.Start(s)
 

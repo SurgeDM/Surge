@@ -3,12 +3,14 @@ package cmd
 
 import (
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/transport"
 	"github.com/SurgeDM/Surge/internal/utils"
 	"go.uber.org/goleak"
 )
@@ -48,11 +50,17 @@ func TestMain(m *testing.M) {
 	code := m.Run()
 
 	if err == nil {
+		resetGlobalShutdownCoordinatorForTest(nil)
+		_ = executeGlobalShutdown("TestMain cleanup")
 		store.CloseDB()
 		_ = os.RemoveAll(tmpDir)
 	}
 
 	if code == 0 {
+		if t, ok := http.DefaultTransport.(*http.Transport); ok {
+			t.CloseIdleConnections()
+		}
+		transport.DefaultNetworkPool.CloseAll()
 		if leakErr := goleak.Find(); leakErr != nil {
 			fmt.Fprintf(os.Stderr, "goleak: Errors on successful test run: %v\n", leakErr)
 			code = 1

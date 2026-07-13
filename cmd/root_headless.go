@@ -11,12 +11,12 @@ import (
 )
 
 // StartHeadlessConsumer starts a goroutine to consume progress messages and log to stdout
-func StartHeadlessConsumer(service service.DownloadService) {
+func StartHeadlessConsumer(ctx context.Context, service service.DownloadService) {
 	go func() {
 		if service == nil {
 			return
 		}
-		stream, cleanup, err := service.StreamEvents(context.Background())
+		stream, cleanup, err := service.StreamEvents(ctx)
 		if err != nil {
 			utils.Debug("Failed to start event stream: %v", err)
 			return

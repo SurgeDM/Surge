@@ -92,7 +92,16 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 	}
 
 	// Initialize GlobalPool (required by handleDownload)
-	GlobalPool = scheduler.New(nil, 1)
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(nil, 1)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
 
 	tests := []struct {
 		name               string
@@ -196,8 +205,11 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			req := httptest.NewRequest("POST", "/download", bytes.NewBuffer(body))
 			w := httptest.NewRecorder()
 			eventBus := orchestrator.NewEventBus()
+			t.Cleanup(func() { eventBus.Shutdown() })
 			getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-			GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+			tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+			t.Cleanup(func() { tmpLifecycle.Shutdown() })
+			GlobalLifecycle = tmpLifecycle
 			svc := service.NewLocalDownloadService(GlobalLifecycle)
 
 			// We pass defaultDownloadDir as a fallback to handleDownload, but since we mocked settings,
@@ -294,7 +306,16 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 
 	progressCh := make(chan types.DownloadEvent, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = scheduler.New(progressCh, 1)
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(progressCh, 1)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
 
 	origLifecycle := GlobalLifecycle
 	origService := GlobalService
@@ -320,8 +341,11 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 	expectedFile := "from-extension.bin"
 
 	eventBus := orchestrator.NewEventBus()
+	t.Cleanup(func() { eventBus.Shutdown() })
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	t.Cleanup(func() { tmpLifecycle.Shutdown() })
+	GlobalLifecycle = tmpLifecycle
 	svc := service.NewLocalDownloadService(GlobalLifecycle)
 	GlobalService = svc
 	t.Cleanup(func() {
@@ -369,7 +393,16 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 
 	progressCh := make(chan types.DownloadEvent, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = scheduler.New(progressCh, 1)
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(progressCh, 1)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
 
 	origLifecycle := GlobalLifecycle
 	origService := GlobalService
@@ -381,8 +414,11 @@ func TestHandleDownload_EnqueueError_RecordsPreflightError(t *testing.T) {
 	})
 
 	eventBus := orchestrator.NewEventBus()
+	t.Cleanup(func() { eventBus.Shutdown() })
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	t.Cleanup(func() { tmpLifecycle.Shutdown() })
+	GlobalLifecycle = tmpLifecycle
 	svc := service.NewLocalDownloadService(GlobalLifecycle)
 	GlobalService = svc
 	t.Cleanup(func() {
@@ -408,7 +444,16 @@ func TestHandleDownload_ForwardsPerTaskOverridesToLifecycle(t *testing.T) {
 
 	progressCh := make(chan types.DownloadEvent, 10)
 	GlobalProgressCh = progressCh
-	GlobalPool = scheduler.New(progressCh, 1)
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(progressCh, 1)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
 
 	origLifecycle := GlobalLifecycle
 	origService := GlobalService
@@ -430,8 +475,11 @@ func TestHandleDownload_ForwardsPerTaskOverridesToLifecycle(t *testing.T) {
 	tempDir := t.TempDir()
 
 	eventBus := orchestrator.NewEventBus()
+	t.Cleanup(func() { eventBus.Shutdown() })
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	t.Cleanup(func() { tmpLifecycle.Shutdown() })
+	GlobalLifecycle = tmpLifecycle
 	svc := service.NewLocalDownloadService(GlobalLifecycle)
 	GlobalService = svc
 	t.Cleanup(func() {
@@ -491,7 +539,16 @@ func TestHandleDownload_PublishError_RecordsPreflightError(t *testing.T) {
 		GlobalLifecycle = origLifecycle
 	})
 
-	GlobalPool = scheduler.New(nil, 1)
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(nil, 1)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
 
 	origServerProgram := serverProgram
 	serverProgram = &tea.Program{}

@@ -582,6 +582,7 @@ func TestConnectCmd_HostSourcesBypassLocalAutodetect(t *testing.T) {
 			origPool := GlobalPool
 			origProgressCh := GlobalProgressCh
 			t.Cleanup(func() {
+				_ = executeGlobalShutdown("test teardown")
 				globalSettings = origSettings
 				GlobalPool = origPool
 				GlobalProgressCh = origProgressCh
@@ -1014,10 +1015,22 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 		atomic.StoreInt32(&activeDownloads, 0)
 
 		GlobalProgressCh = make(chan types.DownloadEvent, 10)
-		GlobalPool = scheduler.New(GlobalProgressCh, 2)
+		if GlobalPool != nil {
+			GlobalPool.GracefulShutdown()
+		}
+		tmpPool := scheduler.New(GlobalProgressCh, 2)
+		t.Cleanup(func() {
+			if tmpPool != nil {
+				tmpPool.GracefulShutdown()
+			}
+		})
+		GlobalPool = tmpPool
 		eventBus := orchestrator.NewEventBus()
+		t.Cleanup(func() { eventBus.Shutdown() })
 		getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-		GlobalLifecycle = orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+		tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+		t.Cleanup(func() { tmpLifecycle.Shutdown() })
+		GlobalLifecycle = tmpLifecycle
 		GlobalService = service.NewLocalDownloadService(GlobalLifecycle)
 
 		probeServer := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -1047,10 +1060,13 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 func setupIsolatedCmdState(t *testing.T) {
 	t.Helper()
 	origSettings := globalSettings
-	globalSettings = nil
-	t.Cleanup(func() { globalSettings = origSettings })
+	t.Cleanup(func() {
+		globalSettings = origSettings
+		resetGlobalShutdownCoordinatorForTest(nil)
+	})
 
 	setupXDGEnvIsolation(t)
+	resetGlobalShutdownCoordinatorForTest(nil)
 	resetGlobalEnqueueContext()
 
 	if err := config.EnsureDirs(); err != nil {
