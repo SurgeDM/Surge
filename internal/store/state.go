@@ -399,9 +399,9 @@ func loadMasterListUnlocked() (*types.MasterList, error) {
 		return nil, err
 	}
 	if ms.Version != 2 {
-		return nil, fmt.Errorf("master list has unsupported version %d (expected 2); "+
-			"run 'surge --reset-settings' or remove %s to start fresh",
-			ms.Version, getMasterPath())
+		utils.Debug("Master list has unsupported version %d (expected 2), deleting to start fresh", ms.Version)
+		_ = os.Remove(getMasterPath())
+		return &types.MasterList{Downloads: []types.DownloadRecord{}}, nil
 	}
 	return &types.MasterList{Downloads: ms.Downloads}, nil
 }
