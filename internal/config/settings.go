@@ -1116,6 +1116,11 @@ func writeTOMLAtomic(path string, v any) error {
 		os.Remove(tempPath)
 		return err
 	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tempPath)
+		return err
+	}
 	if err := f.Close(); err != nil {
 		os.Remove(tempPath)
 		return err
