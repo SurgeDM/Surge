@@ -94,7 +94,7 @@ func (s *LocalDownloadService) AddWithID(url string, path string, filename strin
 		Filename:           filename,
 		Mirrors:            mirrors,
 		Headers:            headers,
-		IsExplicitCategory: false,
+		IsExplicitCategory: isExplicitCategory,
 		Workers:            workers,
 		MinChunkSize:       minChunkSize,
 	}
