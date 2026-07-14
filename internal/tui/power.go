@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
@@ -10,7 +11,10 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-const autoShutdownReason = "Surge is waiting for downloads to finish before shutting down."
+const (
+	autoShutdownReason     = "Surge is waiting for downloads to finish before shutting down."
+	autoShutdownRetryDelay = 30 * time.Second
+)
 
 func (m RootModel) isAutoShutdownEnabled() bool {
 	return m.Settings != nil && config.Resolve[bool](m.Settings.General.AutoShutdownAfterDownloads)
@@ -49,11 +53,12 @@ func (m RootModel) refreshAutoShutdown() (RootModel, tea.Cmd) {
 	if !m.isAutoShutdownEnabled() {
 		m.autoShutdownArmed = false
 		m.autoShutdownTriggered = false
+		m.autoShutdownRetrying = false
 		m.releasePowerInhibitor()
 		return m, nil
 	}
 
-	if m.autoShutdownTriggered {
+	if m.autoShutdownTriggered || m.autoShutdownRetrying {
 		return m, nil
 	}
 
@@ -96,11 +101,12 @@ func (m *RootModel) applyAutoShutdownSettingChange() {
 	if !m.isAutoShutdownEnabled() {
 		m.autoShutdownArmed = false
 		m.autoShutdownTriggered = false
+		m.autoShutdownRetrying = false
 		m.releasePowerInhibitor()
 		return
 	}
 
-	if m.autoShutdownTriggered || m.autoShutdownArmed || !m.hasPendingDownloads() {
+	if m.autoShutdownTriggered || m.autoShutdownRetrying || m.autoShutdownArmed || !m.hasPendingDownloads() {
 		return
 	}
 
@@ -118,10 +124,19 @@ func (m *RootModel) applyAutoShutdownSettingChange() {
 	m.addLogEntry(LogStyleStarted.Render("\u23fb Auto-shutdown armed"))
 }
 
-func (m RootModel) handleAutoShutdownResult(err error) RootModel {
+func (m RootModel) handleAutoShutdownResult(err error) (RootModel, tea.Cmd) {
 	if err != nil {
 		m.autoShutdownTriggered = false
+		m.autoShutdownRetrying = true
 		m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Auto-shutdown failed: %v", err)))
+		return m, tea.Tick(autoShutdownRetryDelay, func(time.Time) tea.Msg {
+			return autoShutdownRetryMsg{}
+		})
 	}
-	return m
+	return m, nil
+}
+
+func (m RootModel) handleAutoShutdownRetry() (RootModel, tea.Cmd) {
+	m.autoShutdownRetrying = false
+	return m.refreshAutoShutdown()
 }

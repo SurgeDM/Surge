@@ -19,6 +19,8 @@ type autoShutdownResultMsg struct {
 
 type autoShutdownCheckMsg struct{}
 
+type autoShutdownRetryMsg struct{}
+
 type enqueueSuccessMsg struct {
 	tempID   string
 	id       string

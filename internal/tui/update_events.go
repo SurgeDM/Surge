@@ -40,7 +40,10 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.refreshAutoShutdown()
 
 	case autoShutdownResultMsg:
-		return m.handleAutoShutdownResult(msg.err), nil
+		return m.handleAutoShutdownResult(msg.err)
+
+	case autoShutdownRetryMsg:
+		return m.handleAutoShutdownRetry()
 
 	case spinner.TickMsg:
 		var cmd tea.Cmd

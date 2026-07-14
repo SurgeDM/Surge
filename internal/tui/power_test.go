@@ -167,7 +167,31 @@ func TestAutoShutdown_DeleteLastPendingDownloadReconciles(t *testing.T) {
 	}
 }
 
-func TestAutoShutdown_ShutdownFailureClearsTriggeredLatch(t *testing.T) {
+func TestAutoShutdown_ShutdownFailureSchedulesRetryWithBackoff(t *testing.T) {
+	errShutdown := errors.New("shutdown failed")
+	power := &fakePowerController{shutdownErr: errShutdown}
+	m := newAutoShutdownTestModel(power)
+	m.autoShutdownArmed = true
+	m.autoShutdownTriggered = true
+
+	updated, cmd := m.Update(autoShutdownResultMsg{err: errShutdown})
+	m2 := updated.(RootModel)
+
+	if m2.autoShutdownTriggered {
+		t.Fatal("expected failed shutdown to clear triggered latch")
+	}
+	if !m2.autoShutdownRetrying {
+		t.Fatal("expected failed shutdown to schedule retry")
+	}
+	if !m2.autoShutdownArmed {
+		t.Fatal("expected failed shutdown to keep auto-shutdown armed")
+	}
+	if cmd == nil {
+		t.Fatal("expected retry timer command")
+	}
+}
+
+func TestAutoShutdown_ShutdownFailureDoesNotRetryBeforeScheduledMessage(t *testing.T) {
 	errShutdown := errors.New("shutdown failed")
 	power := &fakePowerController{shutdownErr: errShutdown}
 	m := newAutoShutdownTestModel(power)
@@ -177,10 +201,30 @@ func TestAutoShutdown_ShutdownFailureClearsTriggeredLatch(t *testing.T) {
 	updated, _ := m.Update(autoShutdownResultMsg{err: errShutdown})
 	m2 := updated.(RootModel)
 
-	if m2.autoShutdownTriggered {
-		t.Fatal("expected failed shutdown to clear triggered latch")
+	updated, cmd := m2.Update(types.DownloadEvent{
+		Type:       types.EventComplete,
+		DownloadID: "already-done",
+		Filename:   "done.bin",
+		Total:      1,
+	})
+	m3 := updated.(RootModel)
+	executeCmds(cmd)
+
+	if !m3.autoShutdownRetrying {
+		t.Fatal("expected retry to remain scheduled")
 	}
-	if !m2.autoShutdownArmed {
-		t.Fatal("expected failed shutdown to keep auto-shutdown armed")
+	if power.shutdowns != 0 {
+		t.Fatalf("shutdowns before retry message = %d, want 0", power.shutdowns)
+	}
+
+	power.shutdownErr = nil
+	updated, cmd = m3.Update(autoShutdownRetryMsg{})
+	m4 := updated.(RootModel)
+	if !m4.autoShutdownTriggered {
+		t.Fatal("expected retry message to trigger shutdown")
+	}
+	executeCmds(cmd)
+	if power.shutdowns != 1 {
+		t.Fatalf("shutdowns after retry message = %d, want 1", power.shutdowns)
 	}
 }

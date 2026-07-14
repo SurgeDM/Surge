@@ -242,6 +242,7 @@ type RootModel struct {
 
 	autoShutdownArmed     bool
 	autoShutdownTriggered bool
+	autoShutdownRetrying  bool
 	powerController       power.Controller
 	powerInhibitorRelease power.ReleaseFunc
 
