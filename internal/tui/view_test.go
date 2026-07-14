@@ -630,7 +630,7 @@ func TestFooter_GlyphsAlwaysPresent(t *testing.T) {
 	m.height = 35
 
 	last := footerLine(m)
-	for _, glyph := range []string{"\u2B07", "\u26A1"} {
+	for _, glyph := range []string{"\u2B07", "\u26A1", "\u23fb"} {
 		if !strings.Contains(last, glyph) {
 			t.Errorf("footer missing glyph %q, got: %q", glyph, last)
 		}
@@ -739,7 +739,7 @@ func TestFooter_HidesHelpAtNarrowWidth(t *testing.T) {
 
 	last := footerLine(m)
 	// Speed/limit/version glyphs must still appear
-	for _, glyph := range []string{"\u2B07", "\u26A1"} {
+	for _, glyph := range []string{"\u2B07", "\u26A1", "\u23fb"} {
 		if !strings.Contains(last, glyph) {
 			t.Errorf("narrow footer missing glyph %q, got: %q", glyph, last)
 		}

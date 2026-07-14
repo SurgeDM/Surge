@@ -408,7 +408,11 @@ func (m RootModel) View() tea.View {
 	if m.isAutoShutdownEnabled() {
 		powerColor = colors.Orange()
 	}
-	powerChunk := lipgloss.NewStyle().Foreground(powerColor).Render("\u23fb")
+	powerChunk := lipgloss.NewStyle().
+		Foreground(powerColor).
+		Width(3).
+		Align(lipgloss.Center).
+		Render("\u23fb")
 
 	// Version indicator
 	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
