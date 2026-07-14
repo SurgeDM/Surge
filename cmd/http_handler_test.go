@@ -377,8 +377,12 @@ func TestHandleDownload_SkipApprovalUsesLifecycleEnqueue(t *testing.T) {
 	if cfg.URL != probeServer.URL {
 		t.Fatalf("url = %q, want %q", cfg.URL, probeServer.URL)
 	}
-	if cfg.OutputPath != tempDir {
-		t.Fatalf("path = %q, want %q", cfg.OutputPath, tempDir)
+	expectedPath := tempDir
+	if abs, err := filepath.Abs(tempDir); err == nil {
+		expectedPath = abs
+	}
+	if cfg.OutputPath != expectedPath {
+		t.Fatalf("path = %q, want %q", cfg.OutputPath, expectedPath)
 	}
 	if cfg.Filename != expectedFile {
 		t.Fatalf("filename = %q, want %q", cfg.Filename, expectedFile)
