@@ -120,6 +120,7 @@ func (m *RootModel) applyAutoShutdownSettingChange() {
 
 func (m RootModel) handleAutoShutdownResult(err error) RootModel {
 	if err != nil {
+		m.autoShutdownTriggered = false
 		m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Auto-shutdown failed: %v", err)))
 	}
 	return m

@@ -164,7 +164,8 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.removeDownloadByID(targetID)
 			}
 			m.UpdateListItems()
-			return m, nil
+			m, autoCmd := m.refreshAutoShutdown()
+			return m, autoCmd
 		}
 	}
 

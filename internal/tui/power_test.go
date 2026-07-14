@@ -2,23 +2,26 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"charm.land/bubbles/v2/viewport"
+	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/power"
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
 type fakePowerController struct {
-	shutdowns int
-	inhibits  int
-	releases  int
+	shutdowns   int
+	inhibits    int
+	releases    int
+	shutdownErr error
 }
 
 func (f *fakePowerController) Shutdown(context.Context) error {
 	f.shutdowns++
-	return nil
+	return f.shutdownErr
 }
 
 func (f *fakePowerController) AcquireInhibitor(string) (power.ReleaseFunc, error) {
@@ -136,5 +139,48 @@ func TestAutoShutdown_DisablingSettingReleasesInhibitor(t *testing.T) {
 	}
 	if config.Resolve[bool](m.Settings.General.AutoShutdownAfterDownloads) {
 		t.Fatal("expected setting to be false")
+	}
+}
+
+func TestAutoShutdown_DeleteLastPendingDownloadReconciles(t *testing.T) {
+	power := &fakePowerController{}
+	dm := NewDownloadModel("id-1", "https://example.com/file.bin", "file.bin", 100)
+	m := newAutoShutdownTestModel(power, dm)
+	m.Service = &mockService{}
+	m.keys = config.DefaultKeyMap()
+	m.applyAutoShutdownSettingChange()
+	m.UpdateListItems()
+	m.list.Select(0)
+
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	m2 := updated.(RootModel)
+
+	if len(m2.downloads) != 0 {
+		t.Fatalf("expected delete to remove download, got %d", len(m2.downloads))
+	}
+	if !m2.autoShutdownTriggered {
+		t.Fatal("expected delete of last pending download to trigger auto-shutdown")
+	}
+	executeCmds(cmd)
+	if power.shutdowns != 1 {
+		t.Fatalf("shutdowns = %d, want 1", power.shutdowns)
+	}
+}
+
+func TestAutoShutdown_ShutdownFailureClearsTriggeredLatch(t *testing.T) {
+	errShutdown := errors.New("shutdown failed")
+	power := &fakePowerController{shutdownErr: errShutdown}
+	m := newAutoShutdownTestModel(power)
+	m.autoShutdownArmed = true
+	m.autoShutdownTriggered = true
+
+	updated, _ := m.Update(autoShutdownResultMsg{err: errShutdown})
+	m2 := updated.(RootModel)
+
+	if m2.autoShutdownTriggered {
+		t.Fatal("expected failed shutdown to clear triggered latch")
+	}
+	if !m2.autoShutdownArmed {
+		t.Fatal("expected failed shutdown to keep auto-shutdown armed")
 	}
 }

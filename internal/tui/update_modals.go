@@ -640,7 +640,8 @@ func (m RootModel) updatePurgeConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			m.addLogEntry(LogStyleStarted.Render("\u2714 Purged download"))
 		}
 
-		return m, nil
+		m, autoCmd := m.refreshAutoShutdown()
+		return m, autoCmd
 	}
 
 	cancelPurge := func() (tea.Model, tea.Cmd) {
