@@ -18,6 +18,7 @@ type EventBus struct {
 	ctx           context.Context
 	cancel        context.CancelFunc
 	wg            sync.WaitGroup
+	pubMu         sync.RWMutex
 	pubWg         sync.WaitGroup
 	shutdownOnce  sync.Once
 }
@@ -102,17 +103,15 @@ func (eb *EventBus) broadcastMsg(msg types.DownloadEvent) {
 
 // Publish emits an event into the bus.
 func (eb *EventBus) Publish(msg types.DownloadEvent) error {
-	eb.pubWg.Add(1)
-	defer eb.pubWg.Done()
-
-	// Prevent sending on a closed channel by checking if shutdown has started.
-	// Because Shutdown() calls cancel() before pubWg.Wait(), if this check
-	// passes, we guarantee that close(InputCh) cannot happen until we Done().
-	select {
-	case <-eb.ctx.Done():
+	eb.pubMu.RLock()
+	if eb.ctx.Err() != nil {
+		eb.pubMu.RUnlock()
 		return context.Canceled
-	default:
 	}
+	eb.pubWg.Add(1)
+	eb.pubMu.RUnlock()
+
+	defer eb.pubWg.Done()
 
 	select {
 	case <-eb.ctx.Done():
@@ -145,7 +144,10 @@ func (eb *EventBus) Subscribe() (<-chan types.DownloadEvent, func()) {
 
 func (eb *EventBus) Shutdown() {
 	eb.shutdownOnce.Do(func() {
+		eb.pubMu.Lock()
 		eb.cancel()
+		eb.pubMu.Unlock()
+
 		eb.pubWg.Wait()   // wait for all active Publish calls to return
 		close(eb.InputCh) // safely close to trigger drain
 	})
