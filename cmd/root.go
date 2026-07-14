@@ -458,8 +458,10 @@ var rootCmd = &cobra.Command{
 
 		if GlobalService != nil {
 			_ = GlobalService.Shutdown()
+			globalLifecycleMu.Lock()
 			GlobalService = nil
 			GlobalLifecycle = nil
+			globalLifecycleMu.Unlock()
 		}
 		if GlobalPool != nil {
 			GlobalPool.GracefulShutdown()
@@ -468,9 +470,12 @@ var rootCmd = &cobra.Command{
 		if cleanup := takeLifecycleCleanup(); cleanup != nil {
 			cleanup()
 		}
-		if globalHTTPServer != nil {
-			_ = globalHTTPServer.Close()
-			globalHTTPServer = nil
+		globalHTTPServerMu.Lock()
+		srv := globalHTTPServer
+		globalHTTPServer = nil
+		globalHTTPServerMu.Unlock()
+		if srv != nil {
+			_ = srv.Close()
 		}
 
 		GlobalProgressCh = make(chan types.DownloadEvent, 100)
