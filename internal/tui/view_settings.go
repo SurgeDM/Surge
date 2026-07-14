@@ -722,6 +722,9 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 		return err
 	}
 	setting.Value = parsedVal
+	if key == "auto_shutdown_after_downloads" {
+		m.applyAutoShutdownSettingChange()
+	}
 	return nil
 }
 
@@ -957,6 +960,9 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 	defaultSetting := defaults.FindSetting(category, key)
 	if setting != nil && defaultSetting != nil {
 		setting.Value = defaultSetting.Value
+	}
+	if key == "auto_shutdown_after_downloads" {
+		m.applyAutoShutdownSettingChange()
 	}
 	return nil
 }

@@ -193,6 +193,7 @@ func (m RootModel) updateQuitConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.cancelEnqueue != nil {
 			m.cancelEnqueue()
 		}
+		m.releasePowerInhibitor()
 		m.shuttingDown = true
 		return m, shutdownCmd(m.Service)
 	}
@@ -237,15 +238,15 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		added := 0
 		skipped := 0
 		var batchCmds []tea.Cmd
-		
+
 		pathChanged := path != m.batchFilePath
-		
+
 		for _, request := range m.pendingBatchRequests {
 			requestPath := path
 			if !pathChanged && request.Path != "" {
 				requestPath = request.Path
 			}
-			
+
 			isDefaultPath := m.isDefaultDownloadPath(requestPath)
 			if requestPath == "" {
 				isDefaultPath = true
@@ -531,6 +532,7 @@ func (m RootModel) updateRestartConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 		if m.cancelEnqueue != nil {
 			m.cancelEnqueue()
 		}
+		m.releasePowerInhibitor()
 		m.shuttingDown = true
 		m.RestartRequested = true
 		return m, shutdownCmd(m.Service)

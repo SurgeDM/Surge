@@ -38,6 +38,7 @@ type GeneralSettings struct {
 	DefaultDownloadDir           *Setting `json:"default_download_dir"`
 	WarnOnDuplicate              *Setting `json:"warn_on_duplicate"`
 	DownloadCompleteNotification *Setting `json:"download_complete_notification"`
+	AutoShutdownAfterDownloads   *Setting `json:"auto_shutdown_after_downloads"`
 	AllowRemoteOpenActions       *Setting `json:"allow_remote_open_actions"`
 	AutoResume                   *Setting `json:"auto_resume"`
 	AutoStart                    *Setting `json:"auto_start"`
@@ -254,6 +255,7 @@ func (s *Settings) initializeCategoriesList() {
 				s.General.DefaultDownloadDir,
 				s.General.WarnOnDuplicate,
 				s.General.DownloadCompleteNotification,
+				s.General.AutoShutdownAfterDownloads,
 				s.General.AllowRemoteOpenActions,
 				s.General.AutoResume,
 				s.General.AutoStart,
@@ -547,6 +549,14 @@ func DefaultSettings() *Settings {
 				Type:         TypeBool,
 				DefaultValue: true,
 				Value:        true,
+			},
+			AutoShutdownAfterDownloads: &Setting{
+				Key:          "auto_shutdown_after_downloads",
+				Label:        "Auto Shutdown",
+				Description:  "Shut down the computer after all downloads finish. Active, queued, and paused downloads block shutdown.",
+				Type:         TypeBool,
+				DefaultValue: false,
+				Value:        false,
 			},
 			AllowRemoteOpenActions: &Setting{
 				Key:          "allow_remote_open_actions",

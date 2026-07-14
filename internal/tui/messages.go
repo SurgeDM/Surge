@@ -13,6 +13,12 @@ type shutdownCompleteMsg struct {
 	err error
 }
 
+type autoShutdownResultMsg struct {
+	err error
+}
+
+type autoShutdownCheckMsg struct{}
+
 type enqueueSuccessMsg struct {
 	tempID   string
 	id       string

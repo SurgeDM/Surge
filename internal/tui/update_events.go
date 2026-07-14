@@ -26,10 +26,22 @@ func stateProgress(state interface{}) *engineprogress.DownloadProgress {
 
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if ev, ok := msg.(types.DownloadEvent); ok {
-		return m.handleDownloadEvent(ev)
+		model, cmd := m.handleDownloadEvent(ev)
+		root, ok := model.(RootModel)
+		if !ok {
+			return model, cmd
+		}
+		root, autoCmd := root.refreshAutoShutdown()
+		return root, tea.Batch(cmd, autoCmd)
 	}
 
 	switch msg := msg.(type) {
+	case autoShutdownCheckMsg:
+		return m.refreshAutoShutdown()
+
+	case autoShutdownResultMsg:
+		return m.handleAutoShutdownResult(msg.err), nil
+
 	case spinner.TickMsg:
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
@@ -90,7 +102,8 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		m.UpdateListItems()
-		return m, nil
+		m, autoCmd := m.refreshAutoShutdown()
+		return m, autoCmd
 
 	case enqueueErrorMsg:
 		if msg.tempID != "" {
@@ -114,7 +127,8 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.UpdateListItems()
 		}
 		m.addLogEntry(LogStyleError.Render("\u2716 Failed to enqueue download: " + msg.err.Error()))
-		return m, nil
+		m, autoCmd := m.refreshAutoShutdown()
+		return m, autoCmd
 
 	case startupConfigWarningMsg:
 		for _, w := range msg {

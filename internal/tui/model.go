@@ -23,6 +23,7 @@ import (
 	"charm.land/lipgloss/v2"
 
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/power"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
@@ -238,6 +239,11 @@ type RootModel struct {
 	cancelEnqueue    context.CancelFunc
 	shuttingDown     bool
 	RestartRequested bool // Flag to signal process re-exec after TUI shutdown
+
+	autoShutdownArmed     bool
+	autoShutdownTriggered bool
+	powerController       power.Controller
+	powerInhibitorRelease power.ReleaseFunc
 
 	ToggleServiceFunc func(bool) error
 
@@ -501,6 +507,7 @@ func InitialRootModel(serverPort int, currentVersion string, service service.Dow
 		InitialDarkBackground: initialDarkBackground,
 		enqueueCtx:            enqueueCtx,
 		cancelEnqueue:         cancelEnqueue,
+		powerController:       power.NewController(),
 		spinner:               s,
 	}
 
@@ -574,6 +581,12 @@ func (m RootModel) Init() tea.Cmd {
 		warnings := m.StartupConfigWarnings
 		cmds = append(cmds, func() tea.Msg {
 			return startupConfigWarningMsg(warnings)
+		})
+	}
+
+	if m.isAutoShutdownEnabled() {
+		cmds = append(cmds, func() tea.Msg {
+			return autoShutdownCheckMsg{}
 		})
 	}
 
