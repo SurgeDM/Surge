@@ -237,8 +237,15 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		added := 0
 		skipped := 0
 		var batchCmds []tea.Cmd
+		
+		pathChanged := path != m.batchFilePath
+		
 		for _, request := range m.pendingBatchRequests {
 			requestPath := path
+			if !pathChanged && request.Path != "" {
+				requestPath = request.Path
+			}
+			
 			isDefaultPath := m.isDefaultDownloadPath(requestPath)
 			if requestPath == "" {
 				isDefaultPath = true
