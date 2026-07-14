@@ -36,7 +36,7 @@ func (f *fakeRemoteDownloadService) Add(url, path, filename string, mirrors []st
 	return "remote-add-id", nil
 }
 
-func (f *fakeRemoteDownloadService) AddWithID(url, path, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error) {
+func (f *fakeRemoteDownloadService) AddWithID(url, path, filename string, mirrors []string, headers map[string]string, id string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
 	return id, nil
 }
 

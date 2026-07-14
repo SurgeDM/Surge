@@ -424,7 +424,7 @@ func enqueueDownloadRequest(r *http.Request, service service.DownloadService, re
 	}
 
 	if reqID != "" {
-		id, err := service.AddWithID(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, reqID, req.Workers, req.MinChunkSize)
+		id, err := service.AddWithID(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, reqID, req.IsExplicitCategory, req.Workers, req.MinChunkSize)
 		return id, req.Filename, err
 	}
 	id, err := service.Add(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, req.IsExplicitCategory, req.Workers, req.MinChunkSize)

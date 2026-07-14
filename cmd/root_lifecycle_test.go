@@ -37,7 +37,7 @@ func (s *countingLifecycleService) History() ([]types.DownloadRecord, error) { r
 func (s *countingLifecycleService) Add(string, string, string, []string, map[string]string, bool, int, int64) (string, error) {
 	return "", nil
 }
-func (s *countingLifecycleService) AddWithID(string, string, string, []string, map[string]string, string, int, int64) (string, error) {
+func (s *countingLifecycleService) AddWithID(string, string, string, []string, map[string]string, string, bool, int, int64) (string, error) {
 	return "", nil
 }
 func (s *countingLifecycleService) Pause(string) error             { return nil }

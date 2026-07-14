@@ -24,7 +24,7 @@ func (m *overrideMockService) Add(url, path, filename string, mirrors []string, 
 	return "mock-id", nil
 }
 
-func (m *overrideMockService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error) {
+func (m *overrideMockService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
 	if m.addFunc != nil {
 		return m.addFunc(url, path, filename, mirrors, headers, false, workers, minChunkSize)
 	}

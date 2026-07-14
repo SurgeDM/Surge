@@ -29,7 +29,7 @@ func (m *mockService) History() ([]types.DownloadRecord, error) { return nil, ni
 func (m *mockService) Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
 	return "", nil
 }
-func (m *mockService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error) {
+func (m *mockService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
 	return "", nil
 }
 func (m *mockService) ResumeBatch(ids []string) []error { return nil }

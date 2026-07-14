@@ -56,7 +56,7 @@ func (s *httpAPITestService) Add(string, string, string, []string, map[string]st
 	return "", errors.New("not implemented")
 }
 
-func (s *httpAPITestService) AddWithID(string, string, string, []string, map[string]string, string, int, int64) (string, error) {
+func (s *httpAPITestService) AddWithID(string, string, string, []string, map[string]string, string, bool, int, int64) (string, error) {
 	return "", errors.New("not implemented")
 }
 
@@ -846,7 +846,7 @@ func (r *rateLimitWrapper) History() ([]types.DownloadRecord, error) { return ni
 func (r *rateLimitWrapper) Add(string, string, string, []string, map[string]string, bool, int, int64) (string, error) {
 	return "", nil
 }
-func (r *rateLimitWrapper) AddWithID(string, string, string, []string, map[string]string, string, int, int64) (string, error) {
+func (r *rateLimitWrapper) AddWithID(string, string, string, []string, map[string]string, string, bool, int, int64) (string, error) {
 	return "", nil
 }
 func (r *rateLimitWrapper) Pause(string) error                              { return nil }

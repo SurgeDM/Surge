@@ -58,7 +58,7 @@ func TestLocalDownloadService_AddWithID_UsesProvidedID(t *testing.T) {
 	t.Cleanup(func() { _ = svc.Shutdown() })
 
 	customID := "test-id-123"
-	id, err := svc.AddWithID(ts.URL, tmpDir, "test.txt", nil, nil, customID, 1, 0)
+	id, err := svc.AddWithID(ts.URL, tmpDir, "test.txt", nil, nil, customID, false, 1, 0)
 
 	if err != nil {
 		t.Fatalf("AddWithID failed: %v", err)
@@ -200,7 +200,7 @@ func TestLocalDownloadService_Purge(t *testing.T) {
 	defer purgeTs.Close()
 	defer close(blockCh)
 
-	id, _ := svc.AddWithID(purgeTs.URL, tmpDir, "purge.txt", nil, nil, "purge-id", 1, 0)
+	id, _ := svc.AddWithID(purgeTs.URL, tmpDir, "purge.txt", nil, nil, "purge-id", false, 1, 0)
 
 	// Wait a tiny bit for the file to be created
 	time.Sleep(100 * time.Millisecond)

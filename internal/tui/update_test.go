@@ -34,7 +34,7 @@ func (m *updateMockService) Add(url string, path string, filename string, mirror
 	return "mock-id", nil
 }
 
-func (m *updateMockService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error) {
+func (m *updateMockService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
 	if m.addFunc != nil {
 		return m.addFunc(url, path, filename, mirrors, headers, false, workers, minChunkSize)
 	}

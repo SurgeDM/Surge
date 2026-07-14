@@ -84,7 +84,7 @@ func (s *LocalDownloadService) Add(url string, path string, filename string, mir
 	return id, err
 }
 
-func (s *LocalDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error) {
+func (s *LocalDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
 	if s.lifecycle == nil {
 		return "", types.ErrServiceUnavailable
 	}

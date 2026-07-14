@@ -20,7 +20,7 @@ type DownloadService interface {
 	Add(url string, path string, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error)
 
 	// AddWithID queues a new download with a caller-provided ID.
-	AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error)
+	AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error)
 
 	// Pause pauses an active download.
 	Pause(id string) error

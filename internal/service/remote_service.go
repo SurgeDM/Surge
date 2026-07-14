@@ -161,15 +161,16 @@ func (s *RemoteDownloadService) Add(url string, path string, filename string, mi
 }
 
 // AddWithID queues a new download with a caller-provided id.
-func (s *RemoteDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, workers int, minChunkSize int64) (string, error) {
+func (s *RemoteDownloadService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
 	req := map[string]interface{}{
-		"url":           url,
-		"path":          path,
-		"filename":      filename,
-		"mirrors":       mirrors,
-		"headers":       headers,
-		"skip_approval": true,
-		"id":            id,
+		"url":                  url,
+		"path":                 path,
+		"filename":             filename,
+		"mirrors":              mirrors,
+		"headers":              headers,
+		"skip_approval":        true,
+		"id":                   id,
+		"is_explicit_category": isExplicitCategory,
 	}
 	if workers > 0 {
 		req["workers"] = workers
