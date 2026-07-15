@@ -147,7 +147,7 @@ func init() {
 	serverCmd.PersistentFlags().String("token", "", "Auth token for API clients (or set SURGE_TOKEN)")
 
 	serverStartCmd.Flags().BoolVar(&isSystemServiceFlag, "is-system-service", false, "Internal flag for service manager")
-	serverStartCmd.Flags().MarkHidden("is-system-service")
+	_ = serverStartCmd.Flags().MarkHidden("is-system-service")
 }
 
 func savePID() {
