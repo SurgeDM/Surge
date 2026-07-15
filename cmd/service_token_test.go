@@ -43,6 +43,7 @@ func isolateTokenEnv(t *testing.T) tokenEnvDirs {
 	t.Setenv("SystemRoot", userDir)
 	// The key override: redirect GetSystemStateDir() to our temp dir.
 	t.Setenv("SURGE_SYSTEM_STATE_DIR", sysDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", sysDir)
 	// Suppress token overrides so file-path logic is exercised.
 	t.Setenv("SURGE_TOKEN", "")
 

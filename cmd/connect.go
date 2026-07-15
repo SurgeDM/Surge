@@ -128,21 +128,15 @@ func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 			return resolveLocalTokenForDetails(details), nil
 		}
 
-		// No matching port file. Probe token files prioritizing the privilege
-		// level of this client process, since it is most likely trying to talk
-		// to its corresponding daemon.
-		myTokenFile := resolveTokenPath()
-		if tok, err := readTokenFromFile(myTokenFile); err == nil && tok != "" {
+		// No matching port file. Prefer the system service token over a potentially
+		// stale user-level token to avoid 401s against the system daemon.
+		systemTokenFile := filepath.Join(config.GetSystemStateDir(), "token")
+		if tok, err := readTokenFromFile(systemTokenFile); err == nil && tok != "" {
 			return tok, nil
 		}
 
-		var fallbackTokenFile string
-		if isElevated() {
-			fallbackTokenFile = filepath.Join(config.GetStateDir(), "token")
-		} else {
-			fallbackTokenFile = filepath.Join(config.GetSystemStateDir(), "token")
-		}
-		if tok, err := readTokenFromFile(fallbackTokenFile); err == nil && tok != "" {
+		userTokenFile := filepath.Join(config.GetStateDir(), "token")
+		if tok, err := readTokenFromFile(userTokenFile); err == nil && tok != "" {
 			return tok, nil
 		}
 
