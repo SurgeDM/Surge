@@ -49,7 +49,14 @@ func isolateTokenEnv(t *testing.T) tokenEnvDirs {
 
 	origToken := globalToken
 	globalToken = ""
-	t.Cleanup(func() { globalToken = origToken })
+	
+	origCheck := checkSystemServiceRunning
+	checkSystemServiceRunning = func() bool { return false }
+
+	t.Cleanup(func() { 
+		globalToken = origToken 
+		checkSystemServiceRunning = origCheck
+	})
 
 	return tokenEnvDirs{userState: userDir, systemState: sysDir}
 }
@@ -401,6 +408,23 @@ func TestTokenCmd_IgnoresSURGE_TOKEN_Override(t *testing.T) {
 	})
 	assert.Equal(t, daemonToken, strings.TrimSpace(out),
 		"surge token must print the daemon's persisted token, not the SURGE_TOKEN override")
+}
+
+func TestTokenCmd_ErrorsIfSystemServiceRunningButUnreadable(t *testing.T) {
+	if isElevated() {
+		t.Skip("skipping: test process is running as root")
+	}
+
+	isolateTokenEnv(t)
+	require.NoError(t, config.EnsureDirs())
+
+	origCheck := checkSystemServiceRunning
+	checkSystemServiceRunning = func() bool { return true }
+	t.Cleanup(func() { checkSystemServiceRunning = origCheck })
+
+	err := tokenCmd.RunE(tokenCmd, nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "system service is running but its token could not be read")
 }
 
 // When no port file matches, surge connect must prefer the system service token

@@ -27,6 +27,10 @@ When the system service is running (started with 'surge service start'), use
 			return fmt.Errorf("no active local server found. To get the system service token, use 'surge service token'")
 		}
 
+		if checkSystemServiceRunning() {
+			return fmt.Errorf("system service is running but its token could not be read. Try running 'sudo surge token' or 'surge service token' with elevated privileges")
+		}
+
 		token := ensureAuthToken()
 		fmt.Println(token)
 		return nil
