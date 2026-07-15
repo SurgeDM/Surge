@@ -49,6 +49,20 @@ func (m *RootModel) releasePowerInhibitor() {
 	m.powerInhibitorRelease = nil
 }
 
+func (m *RootModel) acquirePowerInhibitor() {
+	m.ensurePowerController()
+	if m.powerInhibitorRelease != nil {
+		return
+	}
+	release, err := m.powerController.AcquireInhibitor(autoShutdownReason)
+	if err != nil {
+		m.addLogEntry(LogStyleError.Render("\u26a0 Auto-shutdown enabled, but sleep prevention failed: " + err.Error()))
+		utils.Debug("Auto-shutdown: acquire inhibitor failed: %v", err)
+		return
+	}
+	m.powerInhibitorRelease = release
+}
+
 func (m RootModel) refreshAutoShutdown() (RootModel, tea.Cmd) {
 	if !m.isAutoShutdownEnabled() {
 		m.autoShutdownArmed = false
@@ -68,16 +82,7 @@ func (m RootModel) refreshAutoShutdown() (RootModel, tea.Cmd) {
 			return m, nil
 		}
 		m.autoShutdownArmed = true
-		m.ensurePowerController()
-		if m.powerInhibitorRelease == nil {
-			release, err := m.powerController.AcquireInhibitor(autoShutdownReason)
-			if err != nil {
-				m.addLogEntry(LogStyleError.Render("\u26a0 Auto-shutdown enabled, but sleep prevention failed: " + err.Error()))
-				utils.Debug("Auto-shutdown: acquire inhibitor failed: %v", err)
-			} else {
-				m.powerInhibitorRelease = release
-			}
-		}
+		m.acquirePowerInhibitor()
 		m.addLogEntry(LogStyleStarted.Render("\u23fb Auto-shutdown armed"))
 		return m, nil
 	}
@@ -111,16 +116,7 @@ func (m *RootModel) applyAutoShutdownSettingChange() {
 	}
 
 	m.autoShutdownArmed = true
-	m.ensurePowerController()
-	if m.powerInhibitorRelease == nil {
-		release, err := m.powerController.AcquireInhibitor(autoShutdownReason)
-		if err != nil {
-			m.addLogEntry(LogStyleError.Render("\u26a0 Auto-shutdown enabled, but sleep prevention failed: " + err.Error()))
-			utils.Debug("Auto-shutdown: acquire inhibitor failed: %v", err)
-		} else {
-			m.powerInhibitorRelease = release
-		}
-	}
+	m.acquirePowerInhibitor()
 	m.addLogEntry(LogStyleStarted.Render("\u23fb Auto-shutdown armed"))
 }
 
@@ -128,6 +124,7 @@ func (m RootModel) handleAutoShutdownResult(err error) (RootModel, tea.Cmd) {
 	if err != nil {
 		m.autoShutdownTriggered = false
 		m.autoShutdownRetrying = true
+		m.acquirePowerInhibitor()
 		m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Auto-shutdown failed: %v", err)))
 		return m, tea.Tick(autoShutdownRetryDelay, func(time.Time) tea.Msg {
 			return autoShutdownRetryMsg{}

@@ -186,6 +186,12 @@ func TestAutoShutdown_ShutdownFailureSchedulesRetryWithBackoff(t *testing.T) {
 	if !m2.autoShutdownArmed {
 		t.Fatal("expected failed shutdown to keep auto-shutdown armed")
 	}
+	if power.inhibits != 1 {
+		t.Fatalf("inhibits during retry backoff = %d, want 1", power.inhibits)
+	}
+	if m2.powerInhibitorRelease == nil {
+		t.Fatal("expected failed shutdown to hold power inhibitor during retry backoff")
+	}
 	if cmd == nil {
 		t.Fatal("expected retry timer command")
 	}
