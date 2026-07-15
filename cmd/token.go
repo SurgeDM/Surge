@@ -18,6 +18,11 @@ When the system service is running (started with 'surge service start'), use
 		// Read the persisted token directly — intentionally bypasses --token /
 		// SURGE_TOKEN so that `surge token` always reports what the local daemon
 		// is actually using, not an override that could mislead scripts.
+		if details, ok := getActiveConnectionDetails(); ok && details.token != "" {
+			fmt.Println(details.token)
+			return
+		}
+
 		token := ensureAuthToken()
 		fmt.Println(token)
 	},

@@ -128,18 +128,24 @@ func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 			return resolveLocalTokenForDetails(details), nil
 		}
 
-		// No matching port file. Probe token files in order of specificity:
-		//   1. System state dir — for daemons running as root/SYSTEM (issue #530).
-		//      Tried first: a stale user-level token would cause 401 against the
-		//      system service, whereas the system token is the intentional deployment.
-		//   2. User state dir   — for user-level daemons without a port file
-		//   3. Generate         — last resort (creates a new user-level token)
-		if tok, err := readSystemServiceToken(); err == nil && tok != "" {
+		// No matching port file. Probe token files prioritizing the privilege
+		// level of this client process, since it is most likely trying to talk
+		// to its corresponding daemon.
+		myTokenFile := resolveTokenPath()
+		if tok, err := readTokenFromFile(myTokenFile); err == nil && tok != "" {
 			return tok, nil
 		}
-		if tok, err := readTokenFromFile(filepath.Join(config.GetStateDir(), "token")); err == nil && tok != "" {
+
+		var fallbackTokenFile string
+		if isElevated() {
+			fallbackTokenFile = filepath.Join(config.GetStateDir(), "token")
+		} else {
+			fallbackTokenFile = filepath.Join(config.GetSystemStateDir(), "token")
+		}
+		if tok, err := readTokenFromFile(fallbackTokenFile); err == nil && tok != "" {
 			return tok, nil
 		}
+
 		return ensureAuthToken(), nil
 	}
 	return "", fmt.Errorf("remote target %q requires authentication: use --token or set SURGE_TOKEN", target.BaseURL)

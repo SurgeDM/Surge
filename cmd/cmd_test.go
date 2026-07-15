@@ -108,6 +108,8 @@ func TestSaveAndRemoveActivePort(t *testing.T) {
 	// Setup temp dir
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir) // For EnsureDirs to work happily
 	t.Setenv("APPDATA", tmpDir)
 	// Ensure config dirs exist
@@ -208,6 +210,8 @@ func TestCorsMiddleware_PassesThrough(t *testing.T) {
 func TestConnectCmd_AutoDetectsLocalServer(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
@@ -238,6 +242,8 @@ func TestConnectCmd_AutoDetectsLocalServer(t *testing.T) {
 func TestConnectCmd_NoServerRunning(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
@@ -299,6 +305,8 @@ func TestParseConnectTarget_BaseURL(t *testing.T) {
 func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
@@ -329,6 +337,8 @@ func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 func TestResolveTokenForConnectTarget_UsesActiveTokenForMatchingLocalPort(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	t.Setenv("XDG_STATE_HOME", tmpDir)
@@ -739,6 +749,8 @@ func TestReadRootRunOptions_TracksExplicitPort(t *testing.T) {
 func TestMaybeStartRootHTTPServer_NoServerSkipsPortFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
@@ -1261,6 +1273,8 @@ func TestPortFileLifecycle(t *testing.T) {
 	// Setup temp dir
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 
 	if err := config.EnsureDirs(); err != nil {
