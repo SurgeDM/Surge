@@ -1060,8 +1060,16 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 func setupIsolatedCmdState(t *testing.T) {
 	t.Helper()
 	origSettings := globalSettings
+	origGetService := GetService
+
+	// Mock GetService to avoid interacting with real OS service manager
+	GetService = func() (service.Service, error) {
+		return &mockService{status: service.StatusStopped}, nil
+	}
+
 	t.Cleanup(func() {
 		globalSettings = origSettings
+		GetService = origGetService
 		resetGlobalShutdownCoordinatorForTest(nil)
 	})
 

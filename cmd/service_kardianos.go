@@ -41,7 +41,7 @@ func (p *program) Start(s service.Service) error {
 		// permanently overrides rootCmd's args for the rest of the process
 		// lifetime, which is fine: the process is owned by the service
 		// manager from here until shutdown.
-		rootCmd.SetArgs([]string{"server", "start"})
+		rootCmd.SetArgs([]string{"server", "start", "--is-system-service"})
 		if err := rootCmd.ExecuteContext(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Service error: %v\n", err)
 			p.errCh <- err
@@ -143,6 +143,16 @@ var serviceStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop the Surge system service",
 	RunE:  runAction(func(s service.Service) error { return s.Stop() }, "Service stopped successfully"),
+}
+
+// isSystemServiceRunning checks if the Kardianos service is currently running.
+func isSystemServiceRunning() bool {
+	s, err := GetService()
+	if err != nil {
+		return false
+	}
+	status, err := s.Status()
+	return err == nil && status == service.StatusRunning
 }
 
 var serviceStatusCmd = &cobra.Command{

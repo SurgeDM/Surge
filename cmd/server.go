@@ -26,10 +26,16 @@ var serverCmd = &cobra.Command{
 	},
 }
 
+var isSystemServiceFlag bool
+
 var serverStartCmd = &cobra.Command{
 	Use:   "start [url]...",
 	Short: "Start the Surge server in headless mode",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if isSystemServiceRunning() && !isSystemServiceFlag {
+			return fmt.Errorf("system service is already running. Use 'surge connect' to interact with it, or stop the service first")
+		}
+
 		// Attempt to acquire lock before any global state initialization
 		isMaster, err := AcquireLock()
 		if err != nil {
@@ -140,6 +146,9 @@ func init() {
 	serverCmd.PersistentFlags().Bool("exit-when-done", false, "Exit when all downloads complete")
 	serverCmd.PersistentFlags().Bool("no-resume", false, "Do not auto-resume paused downloads on startup")
 	serverCmd.PersistentFlags().String("token", "", "Auth token for API clients (or set SURGE_TOKEN)")
+
+	serverStartCmd.Flags().BoolVar(&isSystemServiceFlag, "is-system-service", false, "Internal flag for service manager")
+	serverStartCmd.Flags().MarkHidden("is-system-service")
 }
 
 func savePID() {
