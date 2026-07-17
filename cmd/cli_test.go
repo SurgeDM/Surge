@@ -57,6 +57,10 @@ func TestResolveDownloadID_Remote(t *testing.T) {
 	saveActivePort(port)
 	defer removeActivePort()
 
+	origToken := globalToken
+	globalToken = "test-token"
+	t.Cleanup(func() { globalToken = origToken })
+
 	// 3. Test resolveDownloadID
 	partial := "aabbcc"
 	full, err := resolveDownloadID(partial)
@@ -169,6 +173,10 @@ func TestResolveDownloadID_LocalModeFallsBackToDBWhenRemoteListFails(t *testing.
 	_, _ = fmt.Sscanf(portStr, "%d", &port)
 	saveActivePort(port)
 	t.Cleanup(removeActivePort)
+
+	origToken := globalToken
+	globalToken = "test-token"
+	t.Cleanup(func() { globalToken = origToken })
 
 	full, err := resolveDownloadID("99aabb")
 	if err != nil {
@@ -670,6 +678,10 @@ func TestActionCommandsRunE_ReturnAmbiguousIDErrors(t *testing.T) {
 			_, _ = fmt.Sscanf(portStr, "%d", &port)
 			saveActivePort(port)
 			t.Cleanup(removeActivePort)
+
+			origToken := globalToken
+			globalToken = "test-token"
+			t.Cleanup(func() { globalToken = origToken })
 
 			entries := []types.DownloadRecord{
 				{ID: "deadbeef-1234-5678-90ab-cdef12345678", Filename: "first.bin"},

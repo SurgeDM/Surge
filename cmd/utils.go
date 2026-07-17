@@ -158,20 +158,24 @@ func ValidateAndNormalizeURL(rawURL string) (string, error) {
 }
 
 func resolveLocalToken() string {
-	return resolveLocalTokenForDetails(activeConnectionDetails{})
+	token, _ := resolveLocalTokenForDetails(activeConnectionDetails{})
+	return token
 }
 
-func resolveLocalTokenForDetails(details activeConnectionDetails) string {
+func resolveLocalTokenForDetails(details activeConnectionDetails) (string, error) {
 	if token := strings.TrimSpace(globalToken); token != "" {
-		return token
+		return token, nil
 	}
 	if token := strings.TrimSpace(os.Getenv("SURGE_TOKEN")); token != "" {
-		return token
+		return token, nil
 	}
 	if token := strings.TrimSpace(details.token); token != "" {
-		return token
+		return token, nil
 	}
-	return ensureAuthToken()
+	if details.port != 0 {
+		return "", fmt.Errorf("local server is running on port %d but its token could not be read. Try connecting with elevated privileges", details.port)
+	}
+	return ensureAuthToken(), nil
 }
 
 // resolveHostTarget returns the target host, prioritizing the --host flag over the SURGE_HOST environment variable.
@@ -204,7 +208,11 @@ func resolveAPIConnection(requireServer bool) (string, string, error) {
 	if target == "" {
 		details, ok := getActiveConnectionDetails()
 		if ok {
-			return fmt.Sprintf("http://127.0.0.1:%d", details.port), resolveLocalTokenForDetails(details), nil
+			token, err := resolveLocalTokenForDetails(details)
+			if err != nil {
+				return "", "", err
+			}
+			return fmt.Sprintf("http://127.0.0.1:%d", details.port), token, nil
 		}
 		if !requireServer {
 			return "", "", nil

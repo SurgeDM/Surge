@@ -49,12 +49,12 @@ func isolateTokenEnv(t *testing.T) tokenEnvDirs {
 
 	origToken := globalToken
 	globalToken = ""
-	
+
 	origCheck := checkSystemServiceRunning
 	checkSystemServiceRunning = func() bool { return false }
 
-	t.Cleanup(func() { 
-		globalToken = origToken 
+	t.Cleanup(func() {
+		globalToken = origToken
 		checkSystemServiceRunning = origCheck
 	})
 
@@ -484,6 +484,30 @@ func TestResolveTokenForConnectTarget_SystemTokenUnreadable(t *testing.T) {
 	_, err = resolveTokenForConnectTarget(target)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "system service is running but its token could not be read")
+}
+
+func TestResolveTokenForConnectTarget_PortMatchesButTokenUnreadable(t *testing.T) {
+	if isElevated() {
+		t.Skip("skipping: elevated — system and user token paths are the same")
+	}
+
+	isolateTokenEnv(t)
+	require.NoError(t, config.EnsureDirs())
+
+	// Save active port
+	saveActivePort(1700)
+	t.Cleanup(removeActivePort)
+
+	// Ensure no token files exist
+	_ = os.Remove(filepath.Join(config.GetStateDir(), "token"))
+
+	target, err := parseConnectTarget("127.0.0.1:1700", false)
+	require.NoError(t, err)
+
+	_, err = resolveTokenForConnectTarget(target)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "local server is running on port 1700")
+	assert.Contains(t, err.Error(), "token could not be read")
 }
 
 // ---------------------------------------------------------------------------

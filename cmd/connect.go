@@ -125,7 +125,7 @@ func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 		if details, ok := getActiveConnectionDetails(); ok && details.port == serverPort {
 			// Port file matched — use the token associated with that runtime dir
 			// (already handles both user and system runtime dirs).
-			return resolveLocalTokenForDetails(details), nil
+			return resolveLocalTokenForDetails(details)
 		}
 
 		// No matching port file. Prioritize the privilege level of the daemon we are most likely talking to.
