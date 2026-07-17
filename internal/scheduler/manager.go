@@ -300,15 +300,22 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 			return nil
 		}
 
-		// Send error event
-		if cfg.ProgressCh != nil {
-			safeSendProgress(cfg.ProgressCh, types.DownloadEvent{
-				Type:       types.EventError,
-				DownloadID: cfg.ID,
-				Filename:   finalFilename,
-				DestPath:   finalDestPath,
-				Err:        downloadErr,
-			}, ctx.Done())
+		// If it's a network failure, the downloader already saved a paused state snapshot.
+		// Sending an EventError here would trigger the event worker to delete the .surge file.
+		// By skipping EventError, we let the scheduler re-queue the task cleanly.
+		if errors.Is(downloadErr, types.ErrNetworkFailure) {
+			utils.Debug("Download failed due to network error, deferring to scheduler")
+		} else {
+			// Send error event
+			if cfg.ProgressCh != nil {
+				safeSendProgress(cfg.ProgressCh, types.DownloadEvent{
+					Type:       types.EventError,
+					DownloadID: cfg.ID,
+					Filename:   finalFilename,
+					DestPath:   finalDestPath,
+					Err:        downloadErr,
+				}, ctx.Done())
+			}
 		}
 	}
 

@@ -27,9 +27,10 @@ type activeDownload struct {
 
 // queuedTask wraps a download config with SQS-style visibility and retry state
 type queuedTask struct {
-	cfg      types.DownloadRecord
-	retries  int
-	inFlight bool
+	cfg            types.DownloadRecord
+	retries        int
+	networkRetries int
+	inFlight       bool
 }
 
 // Scheduler manages the download workers and tasks.
@@ -713,9 +714,24 @@ func (p *Scheduler) worker() {
 			p.mu.Lock()
 			delete(p.downloads, localCfg.ID)
 
-			if !p.isShuttingDown && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && qt.retries < 3 {
-				qt.retries++
+			isNetworkErr := errors.Is(err, types.ErrNetworkFailure)
+			canRetryNetwork := isNetworkErr && qt.networkRetries < 10
+			canRetryGeneric := !isNetworkErr && qt.retries < 3
+			isCanceled := errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
+
+			if !p.isShuttingDown && !isCanceled && (canRetryNetwork || canRetryGeneric) {
+				if isNetworkErr {
+					qt.networkRetries++
+					utils.Debug("Scheduler: network failure for %s, re-queuing (attempt %d/10)", localCfg.ID, qt.networkRetries)
+				} else {
+					qt.retries++
+					utils.Debug("Scheduler: generic error for %s, re-queuing (attempt %d/3)", localCfg.ID, qt.retries)
+				}
+
 				qt.inFlight = false
+
+				// Ensure IsResume is true so it loads the saved state when RunDownload starts again
+				localCfg.IsResume = true
 				qt.cfg = localCfg
 				p.queued[localCfg.ID] = qt
 
@@ -736,8 +752,22 @@ func (p *Scheduler) worker() {
 						MinChunkSize: localCfg.MinChunkSize,
 					}, p.progressDone)
 				}
-				p.taskCond.Signal()
 				p.mu.Unlock()
+
+				// If it was a network error, give the network a moment to stabilize
+				// before signaling workers to pick it up again.
+				if isNetworkErr {
+					go func() {
+						time.Sleep(5 * time.Second)
+						p.mu.Lock()
+						p.taskCond.Signal()
+						p.mu.Unlock()
+					}()
+				} else {
+					p.mu.Lock()
+					p.taskCond.Signal()
+					p.mu.Unlock()
+				}
 				continue
 			}
 

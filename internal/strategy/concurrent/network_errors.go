@@ -77,11 +77,11 @@ func isTransientNetworkError(err error) bool {
 		"i/o timeout",
 		"TLS handshake timeout",
 		"use of closed network connection",
-		"server misbehaving",       // DNS
-		"no such host",             // DNS
-		"dial tcp",                 // dial failures
-		"write: broken pipe",      // write after disconnect
-		"read: connection reset",  // read after disconnect
+		"server misbehaving",     // DNS
+		"no such host",           // DNS
+		"dial tcp",               // dial failures
+		"write: broken pipe",     // write after disconnect
+		"read: connection reset", // read after disconnect
 		"http2: client connection lost",
 	}
 
