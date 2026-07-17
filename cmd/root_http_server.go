@@ -94,7 +94,7 @@ func removeActivePort() {
 var (
 	globalHTTPServer   *http.Server
 	globalHTTPServerMu sync.Mutex
-	activeServerMode   = "tui"
+	activeServerMode   = "local"
 )
 
 // startHTTPServer starts the HTTP server using an existing listener

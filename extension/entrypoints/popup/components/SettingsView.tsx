@@ -69,6 +69,8 @@ export default function SettingsView() {
       if (res?.ok) {
         setConnectionValid(true);
         showServerStatus('Connected');
+      } else if (res?.error === 'invalid_token_service') {
+        showServerStatus('Invalid System Service Token');
       } else if (res?.error === 'invalid_token') {
         showServerStatus('Invalid Token');
       } else {

@@ -691,26 +691,31 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
 
         const candidates = buildPortScanCandidates(DEFAULT_PORT, MAX_PORT_SCAN, [url], baseHost);
         let sawUnauthorized = false;
+        let sawService = false;
         for (let index = 0; index < candidates.length; index += PORT_SCAN_BATCH_SIZE) {
           const batch = candidates.slice(index, index + PORT_SCAN_BATCH_SIZE);
           const results = await Promise.all(batch.map(async (candidate) => {
             try {
               const r1 = await fetch(`${candidate}/health`, { signal: AbortSignal.timeout(300) });
-              if (!r1.ok) return { candidate, ok: false, status: 0 };
+              if (!r1.ok) return { candidate, ok: false, status: 0, mode: '' };
+              const hData = await r1.json().catch(() => ({}));
               const r2 = await fetch(`${candidate}/list`, {
                 headers: { Authorization: `Bearer ${token}` },
                 signal: AbortSignal.timeout(1000),
               });
-              return { candidate, ok: r2.ok, status: r2.status };
-            } catch { return { candidate, ok: false, status: 0 }; }
+              return { candidate, ok: r2.ok, status: r2.status, mode: hData.mode };
+            } catch { return { candidate, ok: false, status: 0, mode: '' }; }
           }));
 
           for (const result of results) {
-            if (result.status === 401) sawUnauthorized = true;
+            if (result.status === 401) {
+              sawUnauthorized = true;
+              if (result.mode === 'service') sawService = true;
+            }
             if (result.ok) return { ok: true, url: result.candidate };
           }
         }
-        return { ok: false, error: sawUnauthorized ? 'invalid_token' : 'no_server' };
+        return { ok: false, error: sawUnauthorized ? (sawService ? 'invalid_token_service' : 'invalid_token') : 'no_server' };
       })();
 
     case 'validateAuth':
