@@ -123,9 +123,12 @@ func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 	if isLocalHost(serverHost) {
 		_, serverPort := parseRemoteServerAddress(target.BaseURL)
 		if details, ok := getActiveConnectionDetails(); ok && details.port == serverPort {
-			// Port file matched — use the token associated with that runtime dir
-			// (already handles both user and system runtime dirs).
-			return resolveLocalTokenForDetails(details)
+			// Port file matched — use the token associated with that runtime dir,
+			// unless the system service is running and we matched a stale user
+			// port file (which would send the wrong token → 401).
+			if isElevated() || !checkSystemServiceRunning() || details.runtimeDir == config.GetSystemRuntimeDir() {
+				return resolveLocalTokenForDetails(details)
+			}
 		}
 
 		// No matching port file. Prioritize the privilege level of the daemon we are most likely talking to.
