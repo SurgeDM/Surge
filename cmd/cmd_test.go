@@ -1027,6 +1027,9 @@ func TestStartHTTPServer_HealthEndpoint(t *testing.T) {
 	if int(result["port"].(float64)) != port {
 		t.Errorf("Expected port %d, got %v", port, result["port"])
 	}
+	if result["mode"] != "local" && result["mode"] != "service" {
+		t.Errorf("Expected mode 'local' or 'service', got %v", result["mode"])
+	}
 }
 
 func TestStartHTTPServer_HasCORSHeaders(t *testing.T) {
