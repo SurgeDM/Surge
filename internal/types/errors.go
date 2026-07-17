@@ -18,4 +18,5 @@ var (
 	ErrActiveUpdate       = errors.New("download is currently active, please pause it before updating the URL")
 	ErrMaxRedirects       = errors.New("stopped after 10 redirects")
 	ErrAlreadyActive      = errors.New("download is already active or queued")
+	ErrNetworkFailure     = errors.New("download failed due to transient network error")
 )

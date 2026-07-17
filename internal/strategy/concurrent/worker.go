@@ -44,7 +44,9 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 		var lastErr error
 		maxRetries := d.Runtime.GetMaxTaskRetries()
 		genericAttempt := 0
+		networkAttempt := 0
 		rlRetries := 0
+		const maxNetworkRetries = 10
 
 		for {
 			idx, wait := d.hostLimiter.PickMirror(mirrorHosts, currentMirrorIdx, time.Now())
@@ -150,6 +152,45 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				continue
 			}
 
+			// Transient network errors get a separate, more generous retry budget
+			// with connection pool invalidation and connectivity waiting.
+			if isTransientNetworkError(lastErr) {
+				networkAttempt++
+				if networkAttempt >= maxNetworkRetries {
+					utils.Debug("Worker %d: exhausted network retries (%d) for task at offset %d: %v",
+						id, maxNetworkRetries, task.Offset, lastErr)
+					break
+				}
+
+				utils.Debug("Worker %d: transient network error (attempt %d/%d): %v",
+					id, networkAttempt, maxNetworkRetries, lastErr)
+
+				// Flush all stale connections so fresh dials go through the new network
+				transport.DefaultNetworkPool.InvalidateConnections()
+
+				// Mark this worker as waiting for network so health monitor skips it
+				activeTask.WaitingOnLimiter.Store(true)
+
+				// Wait for connectivity with exponential backoff
+				backoff := time.Duration(1<<networkAttempt) * 500 * time.Millisecond
+				if backoff > 30*time.Second {
+					backoff = 30 * time.Second
+				}
+
+				if !waitForConnectivity(ctx, client, currentURL, backoff+30*time.Second) {
+					activeTask.WaitingOnLimiter.Store(false)
+					utils.Debug("Worker %d: connectivity not restored, giving up task", id)
+					break
+				}
+				activeTask.WaitingOnLimiter.Store(false)
+
+				// Rotate mirror for variety and resume from last written offset
+				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
+				resumeOnRetryOffset(&task, activeTask)
+				continue
+			}
+
+			// Non-transient (server) errors: use the original retry budget
 			genericAttempt++
 			if genericAttempt >= maxRetries {
 				break

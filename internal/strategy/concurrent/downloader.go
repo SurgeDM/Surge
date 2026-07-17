@@ -322,6 +322,16 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	}
 
 	if downloadErr != nil {
+		// Save progress snapshot before returning fatal error so the download
+		// can be resumed later instead of losing all progress. This uses the
+		// same mechanism as handlePause but returns the original error.
+		d.saveProgressOnError(destPath, fileSize, queue, candidateMirrors)
+
+		// If the error is purely transient network issues, wrap it so the
+		// scheduler can distinguish it from permanent server errors.
+		if isTransientNetworkError(downloadErr) {
+			return fmt.Errorf("%w: %w", types.ErrNetworkFailure, downloadErr)
+		}
 		return downloadErr
 	}
 	if downloadCtx.Err() != nil {
@@ -636,6 +646,81 @@ func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queu
 	utils.Debug("Download paused, state saved (Downloaded=%d, RemainingTasks=%d, RemainingBytes=%d)",
 		computedDownloaded, len(remainingTasks), remainingBytes)
 	return types.ErrPaused
+}
+
+// saveProgressOnError saves a crash-recovery state snapshot when a download
+// fails fatally (e.g., network down for extended period). Unlike handlePause,
+// it does NOT emit a pause event or return ErrPaused — it just silently
+// persists enough state for a future resume to pick up where we left off.
+func (d *ConcurrentDownloader) saveProgressOnError(destPath string, fileSize int64, queue *TaskQueue, candidateMirrors []string) {
+	if d.State == nil {
+		return
+	}
+
+	// Collect remaining tasks from active workers
+	var activeRemaining []types.Task
+	d.activeMu.Lock()
+	for _, active := range d.activeTasks {
+		if remaining := active.RemainingTask(); remaining != nil {
+			activeRemaining = append(activeRemaining, *remaining)
+		}
+	}
+	d.activeMu.Unlock()
+
+	// Collect remaining tasks from queue
+	remainingTasks := queue.DrainRemaining()
+	remainingTasks = append(remainingTasks, activeRemaining...)
+
+	var remainingBytes int64
+	for _, task := range remainingTasks {
+		remainingBytes += task.Length
+	}
+	if remainingBytes == 0 {
+		// Nothing to save — download was actually complete
+		return
+	}
+	computedDownloaded := fileSize - remainingBytes
+
+	bitmap, _, _, chunkSize, _ := d.State.GetBitmapSnapshot(false)
+
+	var rateLimit int64
+	var rateLimitSet bool
+	rateLimit, rateLimitSet = d.State.GetRateLimit()
+
+	s := &types.DownloadRecord{
+		URL:             d.URL,
+		ID:              d.ID,
+		DestPath:        destPath,
+		TotalSize:       fileSize,
+		Downloaded:      computedDownloaded,
+		Tasks:           remainingTasks,
+		Filename:        filepath.Base(destPath),
+		Mirrors:         candidateMirrors,
+		ChunkBitmap:     bitmap,
+		ActualChunkSize: chunkSize,
+		RateLimit:       rateLimit,
+		RateLimitSet:    rateLimitSet,
+		Workers:         d.Runtime.Workers,
+		MinChunkSize:    d.Runtime.MinChunkSize,
+	}
+
+	// Persist via the progress channel so the event worker handles DB writes
+	if d.ProgressChan != nil {
+		d.ProgressChan <- types.DownloadEvent{
+			Type:         types.EventPaused,
+			DownloadID:   d.ID,
+			Filename:     filepath.Base(destPath),
+			Downloaded:   computedDownloaded,
+			State:        s,
+			RateLimit:    rateLimit,
+			RateLimitSet: rateLimitSet,
+			Workers:      d.Runtime.Workers,
+			MinChunkSize: d.Runtime.MinChunkSize,
+		}
+	}
+
+	utils.Debug("Saved progress snapshot on error (Downloaded=%d, RemainingTasks=%d, RemainingBytes=%d)",
+		computedDownloaded, len(remainingTasks), remainingBytes)
 }
 
 func (d *ConcurrentDownloader) syncFile(outFile *os.File) error {

@@ -116,6 +116,19 @@ func (p *NetworkPool) ReleaseTransport(t *http.Transport) {
 	}
 }
 
+// InvalidateConnections flushes stale connections on all managed transports
+// without destroying the pool. This forces fresh TCP dials on the next request,
+// which is essential after a network change (WiFi switch, VPN toggle, etc.).
+func (p *NetworkPool) InvalidateConnections() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	for _, lease := range p.transportMap {
+		lease.transport.CloseIdleConnections()
+	}
+	utils.Debug("NetworkPool: invalidated connections on %d transports", len(p.transportMap))
+}
+
 // CloseAll evicts all transports and closes their idle connections immediately.
 func (p *NetworkPool) CloseAll() {
 	p.mu.Lock()
