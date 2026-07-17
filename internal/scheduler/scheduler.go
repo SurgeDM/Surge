@@ -715,18 +715,12 @@ func (p *Scheduler) worker() {
 			delete(p.downloads, localCfg.ID)
 
 			isNetworkErr := errors.Is(err, types.ErrNetworkFailure)
-			canRetryNetwork := isNetworkErr && qt.networkRetries < 10
 			canRetryGeneric := !isNetworkErr && qt.retries < 3
 			isCanceled := errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)
 
-			if !p.isShuttingDown && !isCanceled && (canRetryNetwork || canRetryGeneric) {
-				if isNetworkErr {
-					qt.networkRetries++
-					utils.Debug("Scheduler: network failure for %s, re-queuing (attempt %d/10)", localCfg.ID, qt.networkRetries)
-				} else {
-					qt.retries++
-					utils.Debug("Scheduler: generic error for %s, re-queuing (attempt %d/3)", localCfg.ID, qt.retries)
-				}
+			if !p.isShuttingDown && !isCanceled && canRetryGeneric {
+				qt.retries++
+				utils.Debug("Scheduler: generic error for %s, re-queuing (attempt %d/3)", localCfg.ID, qt.retries)
 
 				qt.inFlight = false
 
@@ -754,24 +748,13 @@ func (p *Scheduler) worker() {
 				}
 				p.mu.Unlock()
 
-				// If it was a network error, give the network a moment to stabilize
-				// before signaling workers to pick it up again.
-				if isNetworkErr {
-					go func() {
-						time.Sleep(5 * time.Second)
-						p.mu.Lock()
-						p.taskCond.Signal()
-						p.mu.Unlock()
-					}()
-				} else {
-					p.mu.Lock()
-					p.taskCond.Signal()
-					p.mu.Unlock()
-				}
+				p.mu.Lock()
+				p.taskCond.Signal()
+				p.mu.Unlock()
 				continue
 			}
 
-			if localCfg.ProgressState != nil {
+			if localCfg.ProgressState != nil && !isNetworkErr {
 				progress.CfgProgress(&localCfg).SetError(err)
 			}
 			delete(p.downloadLimiters, localCfg.ID)
