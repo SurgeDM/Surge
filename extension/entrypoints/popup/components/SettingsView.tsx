@@ -65,9 +65,13 @@ export default function SettingsView() {
     showServerStatus('Connecting...', 0); // Keep showing until done
     
     try {
-      const res = await browser.runtime.sendMessage({ type: 'testConnection', url, token }).catch(() => null) as { ok?: boolean; url?: string; error?: string } | null;
+      const res = await browser.runtime.sendMessage({ type: 'testConnection', url, token }).catch(() => null) as { ok?: boolean; url?: string; error?: string; mode?: string } | null;
       if (res?.ok) {
         setConnectionValid(true);
+        if (!newProfileName().trim()) {
+          if (res.mode === 'service') setNewProfileName('Surge System Service');
+          else if (res.mode === 'local') setNewProfileName('Surge Local');
+        }
         showServerStatus('Connected');
       } else if (res?.error === 'invalid_token_service') {
         showServerStatus('Invalid System Service Token');

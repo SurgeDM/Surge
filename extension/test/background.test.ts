@@ -202,4 +202,24 @@ describe('testConnection message handler', () => {
 
     expect(result).toEqual({ ok: false, error: 'invalid_token_service' });
   });
+
+  it('returns mode on successful connection', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (url: string) => {
+      if (url === 'http://127.0.0.1:1700/health') {
+        return new Response(JSON.stringify({ mode: 'local' }), { status: 200 });
+      }
+      if (url === 'http://127.0.0.1:1700/list') {
+        return new Response('[]', { status: 200 });
+      }
+      throw new Error('connection refused');
+    }));
+
+    const result = await __test__.handleMessage({
+      type: 'testConnection',
+      url: 'http://127.0.0.1:1700',
+      token: 'good-token'
+    });
+
+    expect(result).toEqual({ ok: true, url: 'http://127.0.0.1:1700', mode: 'local' });
+  });
 });

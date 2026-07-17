@@ -712,7 +712,7 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
               sawUnauthorized = true;
               if (result.mode === 'service') sawService = true;
             }
-            if (result.ok) return { ok: true, url: result.candidate };
+            if (result.ok) return { ok: true, url: result.candidate, mode: result.mode };
           }
         }
         return { ok: false, error: sawUnauthorized ? (sawService ? 'invalid_token_service' : 'invalid_token') : 'no_server' };
