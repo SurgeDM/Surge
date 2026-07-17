@@ -1003,4 +1003,5 @@ export const __test__ = {
   },
   handleDownloadCreated,
   reresolveActiveServerUrl,
+  handleMessage,
 };
