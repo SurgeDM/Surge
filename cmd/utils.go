@@ -58,16 +58,18 @@ func readStateToken(stateDir string) string {
 }
 
 func activeConnectionCandidates() []activeConnectionDetails {
-	return []activeConnectionDetails{
-		{
-			runtimeDir: config.GetRuntimeDir(),
-			stateDir:   config.GetStateDir(),
-		},
-		{
-			runtimeDir: config.GetSystemRuntimeDir(),
-			stateDir:   config.GetSystemStateDir(),
-		},
+	userCand := activeConnectionDetails{
+		runtimeDir: config.GetRuntimeDir(),
+		stateDir:   config.GetStateDir(),
 	}
+	sysCand := activeConnectionDetails{
+		runtimeDir: config.GetSystemRuntimeDir(),
+		stateDir:   config.GetSystemStateDir(),
+	}
+	if checkSystemServiceRunning() {
+		return []activeConnectionDetails{sysCand, userCand}
+	}
+	return []activeConnectionDetails{userCand, sysCand}
 }
 
 func getActiveConnectionDetails() (activeConnectionDetails, bool) {

@@ -486,6 +486,42 @@ func TestResolveTokenForConnectTarget_SystemTokenUnreadable(t *testing.T) {
 	assert.Contains(t, err.Error(), "system service is running but its token could not be read")
 }
 
+func TestResolveTokenForConnectTarget_SystemTokenBeatsStaleUserPort(t *testing.T) {
+	if isElevated() {
+		t.Skip("skipping: elevated — system and user token paths are the same")
+	}
+
+	dirs := isolateTokenEnv(t)
+	require.NoError(t, config.EnsureDirs())
+
+	const sysToken = "system-service-token"
+	const staleUserToken = "stale-old-user-token"
+
+	// Both tokens exist on disk. The system token is written to the system dir, the user token to the user dir.
+	writeSystemTokenTo(t, dirs.systemState, sysToken)
+	writeUserToken(t, staleUserToken)
+
+	// Simulate an active system service on port 1700 and a stale user port file ALSO claiming 1700.
+	sysPortFile := filepath.Join(config.GetSystemRuntimeDir(), "port")
+	require.NoError(t, os.MkdirAll(config.GetSystemRuntimeDir(), 0755))
+	require.NoError(t, os.WriteFile(sysPortFile, []byte("1700"), 0644))
+
+	portFile := filepath.Join(config.GetRuntimeDir(), "port")
+	require.NoError(t, os.WriteFile(portFile, []byte("1700"), 0644))
+
+	origCheck := checkSystemServiceRunning
+	checkSystemServiceRunning = func() bool { return true }
+	t.Cleanup(func() { checkSystemServiceRunning = origCheck })
+
+	target, err := parseConnectTarget("127.0.0.1:1700", false)
+	require.NoError(t, err)
+
+	got, err := resolveTokenForConnectTarget(target)
+	require.NoError(t, err)
+	assert.Equal(t, sysToken, got,
+		"system token must win over stale user port when system service is running")
+}
+
 func TestResolveTokenForConnectTarget_PortMatchesButTokenUnreadable(t *testing.T) {
 	if isElevated() {
 		t.Skip("skipping: elevated — system and user token paths are the same")
