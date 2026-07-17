@@ -31,6 +31,7 @@ var serverStartCmd = &cobra.Command{
 	Use:   "start [url]...",
 	Short: "Start the Surge server in headless mode",
 	RunE: func(cmd *cobra.Command, args []string) error {
+		activeServerMode = "service"
 		if checkSystemServiceRunning() && !isSystemServiceFlag {
 			return fmt.Errorf("system service is already running. Use 'surge connect' to interact with it, or stop the service first")
 		}

@@ -33,6 +33,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 			"status": "ok",
 			"port":   port,
+			"mode":   activeServerMode,
 		})
 	})
 
