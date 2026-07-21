@@ -672,14 +672,20 @@ func (m RootModel) updateRemoveConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd)
 		m.removeTargetID = ""
 		m.quitConfirmFocused = 0
 		m.state = DashboardState
-		return m.deleteDownload(targetID)
+		model, deleteCmd := m.deleteDownload(targetID)
+		root, ok := model.(RootModel)
+		if !ok {
+			return model, deleteCmd
+		}
+		nextModel, nextCmd := root.showNextPendingRequest()
+		return nextModel, tea.Batch(deleteCmd, nextCmd)
 	}
 
 	cancelRemove := func() (tea.Model, tea.Cmd) {
 		m.removeTargetID = ""
 		m.quitConfirmFocused = 0
 		m.state = DashboardState
-		return m, nil
+		return m.showNextPendingRequest()
 	}
 
 	m, decision, handled := m.handleYesNoSelection(msg)
