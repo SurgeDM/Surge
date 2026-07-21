@@ -221,6 +221,28 @@ func TestView_QuitConfirmTinyTerminalDoesNotPanic(t *testing.T) {
 	_ = m.View()
 }
 
+func TestView_RemoveConfirmTruncatesUTF8FilenameSafely(t *testing.T) {
+	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
+	m.state = RemoveConfirmState
+	m.removeTargetID = "id-1"
+	m.width = 120
+	m.height = 35
+	m.downloads = []*DownloadModel{
+		{ID: "id-1", Filename: "日本語日本語日本語日本語日本語日本語.zip", paused: true},
+	}
+
+	plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
+	if strings.Contains(plain, "\uFFFD") {
+		t.Fatalf("expected UTF-8 filename truncation without replacement characters, got:\n%s", plain)
+	}
+	if !strings.Contains(plain, "File: 日本語") {
+		t.Fatalf("expected filename prefix in remove confirmation, got:\n%s", plain)
+	}
+	if !strings.Contains(plain, "\u2026") {
+		t.Fatalf("expected truncated filename ellipsis, got:\n%s", plain)
+	}
+}
+
 func TestView_SettingsTinyTerminalDoesNotPanic(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = SettingsState

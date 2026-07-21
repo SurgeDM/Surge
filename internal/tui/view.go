@@ -914,8 +914,8 @@ func (m RootModel) viewPurgeConfirm() string {
 
 	if filename == "" {
 		filename = "this download"
-	} else if len(filename) > 30 {
-		filename = filename[:27] + "..."
+	} else {
+		filename = utils.Truncate(filename, 30)
 	}
 
 	modal := components.ConfirmationModal{
@@ -949,8 +949,8 @@ func (m RootModel) viewRemoveConfirm() string {
 
 	if filename == "" {
 		filename = "this download"
-	} else if len(filename) > 30 {
-		filename = filename[:27] + "..."
+	} else {
+		filename = utils.Truncate(filename, 30)
 	}
 
 	modal := components.ConfirmationModal{

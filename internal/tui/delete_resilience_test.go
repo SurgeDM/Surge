@@ -187,6 +187,89 @@ func TestUpdateDashboard_DeleteActiveDownloadPromptsConfirmation(t *testing.T) {
 	}
 }
 
+func TestUpdateDashboard_DeleteErroredDownloadPromptsConfirmation(t *testing.T) {
+	dm := &DownloadModel{ID: "error-id", Filename: "partial.zip", done: true, err: errors.New("network failed")}
+	svc := &mockService{}
+
+	m := RootModel{
+		state:     DashboardState,
+		activeTab: TabDone,
+		downloads: []*DownloadModel{dm},
+		Service:   svc,
+		keys:      config.DefaultKeyMap(),
+		list:      NewDownloadList(80, 20),
+	}
+	m.UpdateListItems()
+	m.list.Select(0)
+
+	updated, _ := m.updateDashboard(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	m2 := updated.(RootModel)
+
+	if m2.state != RemoveConfirmState {
+		t.Fatalf("expected remove confirmation state, got %v", m2.state)
+	}
+	if m2.removeTargetID != "error-id" {
+		t.Fatalf("removeTargetID = %q, want error-id", m2.removeTargetID)
+	}
+	if svc.deletedID != "" {
+		t.Fatalf("expected delete not to run before confirmation, got %q", svc.deletedID)
+	}
+}
+
+func TestRemoveConfirm_QueuesIncomingSingleRequest(t *testing.T) {
+	m := RootModel{
+		state:          RemoveConfirmState,
+		removeTargetID: "paused-id",
+		Settings:       config.DefaultSettings(),
+		keys:           config.DefaultKeyMap(),
+		list:           NewDownloadList(80, 20),
+	}
+
+	updated, _ := m.handleDownloadEvent(types.DownloadEvent{
+		Type:     types.EventRequest,
+		URL:      "https://example.com/new.zip",
+		Filename: "new.zip",
+		Path:     "/tmp/downloads",
+	})
+	m2 := updated.(RootModel)
+
+	if m2.state != RemoveConfirmState {
+		t.Fatalf("expected remove confirmation state to remain, got %v", m2.state)
+	}
+	if m2.removeTargetID != "paused-id" {
+		t.Fatalf("removeTargetID = %q, want paused-id", m2.removeTargetID)
+	}
+	if len(m2.pendingRequestQueue) != 1 || m2.pendingRequestQueue[0].URL != "https://example.com/new.zip" {
+		t.Fatalf("expected incoming request queued, got %#v", m2.pendingRequestQueue)
+	}
+}
+
+func TestRemoveConfirm_QueuesIncomingBatchRequest(t *testing.T) {
+	m := RootModel{
+		state:          RemoveConfirmState,
+		removeTargetID: "paused-id",
+		Settings:       config.DefaultSettings(),
+		keys:           config.DefaultKeyMap(),
+		list:           NewDownloadList(80, 20),
+	}
+
+	updated, _ := m.handleDownloadEvent(types.DownloadEvent{
+		Type: types.EventBatchRequest,
+		Path: "/tmp/downloads",
+		BatchEvents: []types.DownloadEvent{
+			{Type: types.EventRequest, URL: "https://example.com/one.zip"},
+		},
+	})
+	m2 := updated.(RootModel)
+
+	if m2.state != RemoveConfirmState {
+		t.Fatalf("expected remove confirmation state to remain, got %v", m2.state)
+	}
+	if len(m2.pendingBatchRequestQueue) != 1 {
+		t.Fatalf("expected incoming batch request queued, got %d", len(m2.pendingBatchRequestQueue))
+	}
+}
+
 func TestRemoveConfirm_CancelKeepsDownload(t *testing.T) {
 	dm := &DownloadModel{ID: "paused-id", Filename: "paused.zip", paused: true}
 	svc := &mockService{}

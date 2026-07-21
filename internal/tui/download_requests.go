@@ -10,7 +10,7 @@ import (
 )
 
 func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy bool) (tea.Model, tea.Cmd) {
-	if queueIfBusy && (m.state == ExtensionConfirmationState || m.state == DuplicateWarningState || m.state == BatchConfirmState) {
+	if queueIfBusy && m.isRequestConfirmationBusy() {
 		m.pendingRequestQueue = append(m.pendingRequestQueue, msg)
 		return m, nil
 	}
@@ -63,7 +63,7 @@ func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy
 }
 
 func (m RootModel) handleBatchDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy bool) (tea.Model, tea.Cmd) {
-	if queueIfBusy && (m.state == ExtensionConfirmationState || m.state == DuplicateWarningState || m.state == BatchConfirmState) {
+	if queueIfBusy && m.isRequestConfirmationBusy() {
 		m.pendingBatchRequestQueue = append(m.pendingBatchRequestQueue, msg)
 		return m, nil
 	}
@@ -77,6 +77,13 @@ func (m RootModel) handleBatchDownloadRequestMsg(msg types.DownloadEvent, queueI
 	m.inputs[2].SetValue(m.batchFilePath)
 	m.state = BatchConfirmState
 	return m, nil
+}
+
+func (m RootModel) isRequestConfirmationBusy() bool {
+	return m.state == ExtensionConfirmationState ||
+		m.state == DuplicateWarningState ||
+		m.state == BatchConfirmState ||
+		m.state == RemoveConfirmState
 }
 
 func (m RootModel) showNextPendingRequest() (tea.Model, tea.Cmd) {

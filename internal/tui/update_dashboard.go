@@ -143,7 +143,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if m.list.FilterState() == list.Filtering {
 			// Fall through
 		} else if d := m.GetSelectedDownload(); d != nil {
-			if !d.done {
+			if !d.done || d.err != nil {
 				m.removeTargetID = d.ID
 				m.quitConfirmFocused = 1 // default focus on "Cancel"
 				m.state = RemoveConfirmState
