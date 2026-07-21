@@ -50,6 +50,8 @@ func setupXDGEnvIsolation(t *testing.T) string {
 	t.Setenv("XDG_CACHE_HOME", tempDir)
 	t.Setenv("XDG_RUNTIME_DIR", tempDir)
 	t.Setenv("HOME", tempDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tempDir)
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", tempDir)
 
 	return tempDir
 }

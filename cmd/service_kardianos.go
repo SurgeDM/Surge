@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/kardianos/service"
 	"github.com/spf13/cobra"
 )
@@ -40,7 +41,7 @@ func (p *program) Start(s service.Service) error {
 		// permanently overrides rootCmd's args for the rest of the process
 		// lifetime, which is fine: the process is owned by the service
 		// manager from here until shutdown.
-		rootCmd.SetArgs([]string{"server", "start"})
+		rootCmd.SetArgs([]string{"server", "start", "--is-system-service"})
 		if err := rootCmd.ExecuteContext(ctx); err != nil {
 			fmt.Fprintf(os.Stderr, "Service error: %v\n", err)
 			p.errCh <- err
@@ -71,7 +72,10 @@ func (p *program) Stop(s service.Service) error {
 	}
 }
 
-func GetService() (service.Service, error) {
+// GetService is a var so tests can swap in a mock without touching the OS
+// service manager.  Tests that reassign this must NOT use t.Parallel()
+// because the variable is package-scoped.
+var GetService = func() (service.Service, error) {
 	prg := &program{}
 	return service.New(prg, serviceConfig)
 }
@@ -95,7 +99,28 @@ func runAction(action func(service.Service) error, successMsg string) func(*cobr
 var serviceInstallCmd = &cobra.Command{
 	Use:   "install",
 	Short: "Install Surge as a system service",
-	RunE:  runAction(func(s service.Service) error { return s.Install() }, "Service installed successfully"),
+	RunE: func(cmd *cobra.Command, args []string) error {
+		s, err := GetService()
+		if err != nil {
+			return err
+		}
+		if err := s.Install(); err != nil {
+			return err
+		}
+		// Pre-generate the service token in the system state directory so
+		// that `surge token` / `surge connect` can discover it without users
+		// having to use --token manually.
+		token, tokenErr := ensureSystemToken()
+		fmt.Println("Service installed successfully")
+		if tokenErr == nil {
+			fmt.Printf("Service auth token: %s\n", token)
+			fmt.Println("Use 'surge service token' to print this token again.")
+		} else {
+			fmt.Printf("Warning: could not persist service token: %v\n", tokenErr)
+			fmt.Println("Run 'sudo surge service token' after starting the service to retrieve it.")
+		}
+		return nil
+	},
 }
 
 var serviceUninstallCmd = &cobra.Command{
@@ -120,6 +145,16 @@ var serviceStopCmd = &cobra.Command{
 	RunE:  runAction(func(s service.Service) error { return s.Stop() }, "Service stopped successfully"),
 }
 
+// isSystemServiceRunning checks if the Kardianos service is currently running.
+func isSystemServiceRunning() bool {
+	s, err := GetService()
+	if err != nil {
+		return false
+	}
+	status, err := s.Status()
+	return err == nil && status == service.StatusRunning
+}
+
 var serviceStatusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Check the status of the Surge system service",
@@ -130,7 +165,17 @@ var serviceStatusCmd = &cobra.Command{
 		}
 		switch status {
 		case service.StatusRunning:
-			fmt.Println("Service is running")
+			pid := readPIDFile(config.GetSystemRuntimeDir())
+			port := readPortFile(config.GetSystemRuntimeDir())
+			if pid > 0 && port > 0 {
+				fmt.Printf("Service is running (PID: %d, Port: %d)\n", pid, port)
+			} else if pid > 0 {
+				fmt.Printf("Service is running (PID: %d)\n", pid)
+			} else if port > 0 {
+				fmt.Printf("Service is running (Port: %d)\n", port)
+			} else {
+				fmt.Println("Service is running")
+			}
 		case service.StatusStopped:
 			fmt.Println("Service is stopped")
 		default:
@@ -143,6 +188,31 @@ var serviceStatusCmd = &cobra.Command{
 var serviceCmd = &cobra.Command{
 	Use:   "service",
 	Short: "Manage Surge as a system service",
+}
+
+// serviceTokenCmd prints the auth token used by the system service daemon.
+var serviceTokenCmd = &cobra.Command{
+	Use:   "token",
+	Short: "Print the auth token used by the system service daemon",
+	Long: `Print the auth token that the Surge system service uses.
+
+The system service (installed with 'surge service install') stores its token
+separately from the interactive-user token. Use this command to retrieve it
+when connecting via 'surge connect' or setting up the browser extension.
+
+Note: reading the system token file may require elevated privileges (sudo).`,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		token, err := readSystemServiceToken()
+		if err != nil {
+			var hint string
+			if !isElevated() {
+				hint = " (try running with sudo/administrator privileges)"
+			}
+			return fmt.Errorf("could not read system service token%s: %w", hint, err)
+		}
+		fmt.Println(token)
+		return nil
+	},
 }
 
 // __run is the entry point the installer writes into ExecStart
@@ -159,5 +229,6 @@ func init() {
 	serviceCmd.AddCommand(serviceStartCmd)
 	serviceCmd.AddCommand(serviceStopCmd)
 	serviceCmd.AddCommand(serviceStatusCmd)
+	serviceCmd.AddCommand(serviceTokenCmd)
 	serviceCmd.AddCommand(serviceRunCmd)
 }

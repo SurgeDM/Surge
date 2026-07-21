@@ -157,7 +157,7 @@ func TestGlobalGoleakEnforcement(t *testing.T) {
 					if entry.Name() == "main_test.go" {
 						hasMainTestFile = true
 					}
-					
+
 					content, readErr := os.ReadFile(filepath.Join(path, entry.Name()))
 					if readErr == nil {
 						contentStr := string(content)

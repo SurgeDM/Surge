@@ -124,6 +124,7 @@ surge service install
 surge service start
 surge service stop
 surge service status
+surge service token
 
 # Uninstall the service
 surge service uninstall
@@ -140,7 +141,11 @@ This means the server is accessible via `localhost` (127.0.0.1) as well as your 
 The API is token-protected. Generate/read your token by running:
 
 ```bash
+# Get the standard token
 surge token
+
+# Get the token if Surge is installed as a system service
+surge service token
 ```
 
 Alternatively, you can find it in the TUI under **Settings > Extension**.
@@ -238,7 +243,7 @@ We would love to see you benchmark Surge on your system!
 The Surge extension intercepts browser downloads and sends them straight to your terminal. It communicates with the Surge client on port **1700** by default.
 
 > [!IMPORTANT]
-> An **Auth Token** is required to connect the extension to your Surge server. This can be obtained from the TUI under **Settings > Extension** or by running `surge token`.
+> An **Auth Token** is required to connect the extension to your Surge server. This can be obtained from the TUI under **Settings > Extension**, or by running `surge token` (or `surge service token` if installed as a system service).
 
 ### Chrome / Edge / Brave
 

@@ -3,7 +3,9 @@
 package cmd
 
 import (
+	"fmt"
 	"net"
+	"runtime"
 	"testing"
 	"time"
 
@@ -47,11 +49,16 @@ func waitStop(t *testing.T, p *program, s service.Service) {
 	case err := <-stopErr:
 		assert.NoError(t, err)
 	case <-time.After(5 * time.Second):
+		buf := make([]byte, 1<<20)
+		n := runtime.Stack(buf, true)
+		fmt.Printf("GOROUTINE DUMP:\n%s\n", buf[:n])
 		t.Fatal("p.Stop timed out")
 	}
 }
 
 func TestProgramLifecycle(t *testing.T) {
+	setupIsolatedCmdState(t)
+
 	ln, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
 		t.Skipf("Skipping test because tcp listener cannot bind (e.g. Windows dual-stack provider issue): %v", err)
@@ -105,6 +112,8 @@ func TestToggleServiceFunc(t *testing.T) {
 }
 
 func TestProgramContextCancellation(t *testing.T) {
+	setupIsolatedCmdState(t)
+
 	ln, err := net.Listen("tcp", "0.0.0.0:0")
 	if err != nil {
 		t.Skipf("Skipping test because tcp listener cannot bind (e.g. Windows dual-stack provider issue): %v", err)

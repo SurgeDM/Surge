@@ -18,7 +18,7 @@ Surge provides a robust Command Line Interface for automation and scripting. For
 | `surge rm <id>`             | Removes a download by ID/prefix.                                                       | `--clean`, `--purge`                                                                                | Alias: `kill`.                                                          |
 | `surge config [path] [val]` | Get, set, or reset Surge configuration options via the CLI.                            | None                                                                                                | See [SETTINGS.md](SETTINGS.md) for available settings. Run without args to list all. |
 | `surge token`               | Prints current API auth token. (Also visible in TUI > Settings > Extension)            | None                                                                                                | Useful for remote clients.                                              |
-| `surge service <cmd>`       | Manages Surge as a system service (daemon).                                            | `install`, `uninstall`, `start`, `stop`, `status`                                                   | Cross-platform (Linux/Windows/macOS). See [Service Management](#service-management). |
+| `surge service <cmd>`       | Manages Surge as a system service (daemon).                                            | `install`, `uninstall`, `start`, `stop`, `status`, `token`                                      | Cross-platform (Linux/Windows/macOS). See [Service Management](#service-management). |
 | `surge bug-report`          | Opens a pre-filled GitHub bug report. Prompts for target (Core/Extension) and optional system/log details. | None                                                                                                | Prints a manual URL fallback if browser open fails.                     |
 
 ## Service Management
@@ -30,6 +30,7 @@ The `service` command allows you to manage Surge as a background daemon that sta
 - `surge service start`: Starts the background service.
 - `surge service stop`: Stops the background service.
 - `surge service status`: Checks if the service is installed and running.
+- `surge service token`: Prints the auth token used by the system service daemon.
 
 **Note**: On most systems, these commands require administrative privileges (e.g., `sudo surge service install`).
 
