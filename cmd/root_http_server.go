@@ -16,6 +16,28 @@ import (
 	"github.com/google/uuid"
 )
 
+// resolveTokenPath returns the path of the auth-token file that this
+// process should use.  When the process is running as root/SYSTEM the
+// token lives in the system state directory so that the daemon and the
+// interactive user look in the same place.
+func resolveTokenPath() string {
+	if isElevated() {
+		return filepath.Join(config.GetSystemStateDir(), "token")
+	}
+	return filepath.Join(config.GetStateDir(), "token")
+}
+
+// resolveRuntimeDir returns the runtime directory this process should use for
+// port/PID files.  Mirrors resolveTokenPath: elevated processes (system service
+// daemons) write to GetSystemRuntimeDir() so that non-elevated clients running
+// getActiveConnectionDetails() can discover them via the system candidate.
+func resolveRuntimeDir() string {
+	if isElevated() {
+		return config.GetSystemRuntimeDir()
+	}
+	return config.GetRuntimeDir()
+}
+
 const serverBindHost = "0.0.0.0"
 
 // findAvailablePort tries ports starting from 'start' until one is available
@@ -48,12 +70,13 @@ func bindServerListener(portFlag int) (int, net.Listener, error) {
 
 // saveActivePort writes the active port for local CLI and extension discovery.
 func saveActivePort(port int) {
-	if err := os.MkdirAll(config.GetRuntimeDir(), 0o755); err != nil {
+	runtimeDir := resolveRuntimeDir()
+	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
 		utils.Debug("Error creating runtime directory for port file: %v", err)
 		return
 	}
 
-	portFile := filepath.Join(config.GetRuntimeDir(), "port")
+	portFile := filepath.Join(runtimeDir, "port")
 	if err := os.WriteFile(portFile, []byte(fmt.Sprintf("%d", port)), 0o644); err != nil {
 		utils.Debug("Error writing port file: %v", err)
 	}
@@ -62,7 +85,7 @@ func saveActivePort(port int) {
 
 // removeActivePort cleans up the port file on exit
 func removeActivePort() {
-	portFile := filepath.Join(config.GetRuntimeDir(), "port")
+	portFile := filepath.Join(resolveRuntimeDir(), "port")
 	if err := os.Remove(portFile); err != nil && !os.IsNotExist(err) {
 		utils.Debug("Error removing port file: %v", err)
 	}
@@ -71,6 +94,7 @@ func removeActivePort() {
 var (
 	globalHTTPServer   *http.Server
 	globalHTTPServerMu sync.Mutex
+	activeServerMode   = "local"
 )
 
 // startHTTPServer starts the HTTP server using an existing listener
@@ -146,24 +170,51 @@ func authMiddleware(token string, next http.Handler) http.Handler {
 }
 
 func ensureAuthToken() string {
-	stateTokenFile := filepath.Join(config.GetStateDir(), "token")
-	if token, err := readTokenFromFile(stateTokenFile); err == nil {
+	tokenFile := resolveTokenPath()
+	if token, err := readTokenFromFile(tokenFile); err == nil {
+		mirrorTokenToRuntime(token)
 		return token
 	}
 
 	token := uuid.New().String()
-	if err := writeTokenToFile(stateTokenFile, token); err != nil {
-		utils.Debug("Failed to write token file in state dir: %v", err)
+	if err := writeTokenToFile(tokenFile, token); err != nil {
+		utils.Debug("Failed to write token file in %s: %v", tokenFile, err)
 	}
+	mirrorTokenToRuntime(token)
 	return token
 }
 
 func persistAuthToken(token string) {
-	stateTokenFile := filepath.Join(config.GetStateDir(), "token")
-
-	if err := writeTokenToFile(stateTokenFile, token); err != nil {
-		utils.Debug("Failed to write token file in state dir: %v", err)
+	tokenFile := resolveTokenPath()
+	if err := writeTokenToFile(tokenFile, token); err != nil {
+		utils.Debug("Failed to write token file in %s: %v", tokenFile, err)
 	}
+	mirrorTokenToRuntime(token)
+}
+
+// ensureSystemToken reads (or generates) the token used by the system service
+// and returns it.  This is always in GetSystemStateDir regardless of the
+// current user — callers that need the system token use this directly.
+func ensureSystemToken() (string, error) {
+	tokenFile := filepath.Join(config.GetSystemStateDir(), "token")
+	if token, err := readTokenFromFile(tokenFile); err == nil {
+		mirrorTokenToRuntime(token)
+		return token, nil
+	}
+	token := uuid.New().String()
+	if err := writeTokenToFile(tokenFile, token); err != nil {
+		return "", fmt.Errorf("failed to write system token to %s: %w", tokenFile, err)
+	}
+	mirrorTokenToRuntime(token)
+	return token, nil
+}
+
+// readSystemServiceToken reads the token from the system state directory
+// without generating one.  Returns an error if the file doesn't exist or
+// isn't readable (the caller may need elevated privileges).
+func readSystemServiceToken() (string, error) {
+	tokenFile := filepath.Join(config.GetSystemStateDir(), "token")
+	return readTokenFromFile(tokenFile)
 }
 
 func readTokenFromFile(path string) (string, error) {
@@ -183,4 +234,15 @@ func writeTokenToFile(path string, token string) error {
 		return err
 	}
 	return os.WriteFile(path, []byte(token), 0o600)
+}
+
+// mirrorTokenToRuntime writes a 0644 copy of the token to the runtime dir
+// so that local CLI clients can auto-discover and connect without needing sudo.
+func mirrorTokenToRuntime(token string) {
+	runtimeDir := resolveRuntimeDir()
+	if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
+		return
+	}
+	runtimeTokenFile := filepath.Join(runtimeDir, "token")
+	_ = os.WriteFile(runtimeTokenFile, []byte(token), 0o644)
 }

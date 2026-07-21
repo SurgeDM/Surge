@@ -6,10 +6,12 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui"
 	"github.com/spf13/cobra"
@@ -121,8 +123,40 @@ func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 	if isLocalHost(serverHost) {
 		_, serverPort := parseRemoteServerAddress(target.BaseURL)
 		if details, ok := getActiveConnectionDetails(); ok && details.port == serverPort {
-			return resolveLocalTokenForDetails(details), nil
+			// Port file matched — use the token associated with that runtime dir,
+			// unless the system service is running and we matched a stale user
+			// port file (which would send the wrong token → 401).
+			if isElevated() || !checkSystemServiceRunning() || details.runtimeDir == config.GetSystemRuntimeDir() {
+				return resolveLocalTokenForDetails(details)
+			}
 		}
+
+		// No matching port file. Prioritize the privilege level of the daemon we are most likely talking to.
+		var firstChoice, secondChoice string
+		if !isElevated() && checkSystemServiceRunning() {
+			firstChoice = filepath.Join(config.GetSystemStateDir(), "token")
+			secondChoice = filepath.Join(config.GetStateDir(), "token")
+		} else {
+			firstChoice = resolveTokenPath()
+			if isElevated() {
+				secondChoice = filepath.Join(config.GetStateDir(), "token")
+			} else {
+				secondChoice = filepath.Join(config.GetSystemStateDir(), "token")
+			}
+		}
+
+		if tok, err := readTokenFromFile(firstChoice); err == nil && tok != "" {
+			return tok, nil
+		}
+
+		if !isElevated() && checkSystemServiceRunning() {
+			return "", fmt.Errorf("system service is running but its token could not be read. Try connecting with elevated privileges")
+		}
+
+		if tok, err := readTokenFromFile(secondChoice); err == nil && tok != "" {
+			return tok, nil
+		}
+
 		return ensureAuthToken(), nil
 	}
 	return "", fmt.Errorf("remote target %q requires authentication: use --token or set SURGE_TOKEN", target.BaseURL)

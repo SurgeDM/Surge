@@ -248,6 +248,9 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			}
 		})
 	}
+	t.Cleanup(func() {
+		_ = os.RemoveAll(filepath.Join(mustGetwd(t), "relative"))
+	})
 }
 
 func TestShouldFallbackUnmappedWindowsPath(t *testing.T) {

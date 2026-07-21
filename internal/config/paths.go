@@ -60,6 +60,14 @@ func GetSystemSurgeDir() string {
 }
 
 func GetSystemStateDir() string {
+	// Allow tests (and advanced deployments) to override the system state dir
+	// without needing root access.  The env var must be an absolute path.
+	if override := strings.TrimSpace(os.Getenv("SURGE_SYSTEM_STATE_DIR")); override != "" {
+		if filepath.IsAbs(override) {
+			return override
+		}
+	}
+
 	if runtime.GOOS == "windows" {
 		return GetSystemSurgeDir()
 	}
@@ -72,6 +80,19 @@ func GetSystemStateDir() string {
 }
 
 func GetSystemRuntimeDir() string {
+	// Allow tests (and advanced deployments) to override without root access.
+	if override := strings.TrimSpace(os.Getenv("SURGE_SYSTEM_RUNTIME_DIR")); override != "" {
+		if filepath.IsAbs(override) {
+			return override
+		}
+	}
+	// On Linux, system services write runtime files (port, PID) to /run/<name>
+	// which is world-readable (0755) by convention — the FHS standard location
+	// used by nginx, postgresql, etc.  This allows non-root users to auto-detect
+	// a system-service Surge daemon without needing read access to /root.
+	if runtime.GOOS == "linux" {
+		return filepath.Join(string(filepath.Separator), "run", "surge")
+	}
 	return filepath.Join(GetSystemStateDir(), "runtime")
 }
 

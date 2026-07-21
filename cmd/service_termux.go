@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/spf13/cobra"
 )
 
@@ -50,7 +51,7 @@ func termuxServiceRunScript() string {
 	if exe == "" {
 		exe = "surge"
 	}
-	return "#!/" + defaultPrefix() + "/bin/sh\nexec " + exe + " server start\n"
+	return "#!/" + defaultPrefix() + "/bin/sh\nexec " + exe + " server start --is-system-service\n"
 }
 
 // sv runs an sv command and returns its output.
@@ -83,6 +84,22 @@ func isTermuxServicesAvailable() bool {
 		return false
 	}
 	return true
+}
+
+// isSystemServiceRunning checks if the Termux service is currently running.
+func isSystemServiceRunning() bool {
+	if !isTermuxServicesAvailable() {
+		return false
+	}
+	svcDir := termuxServiceDir()
+	if _, err := os.Stat(svcDir); os.IsNotExist(err) {
+		return false
+	}
+	out, err := sv("status", svServiceName())
+	if err != nil {
+		return false
+	}
+	return strings.HasPrefix(out, "run:")
 }
 
 // writeRunScript writes a service run script with executable permissions.
@@ -191,6 +208,13 @@ var serviceStatusCmd = &cobra.Command{
 
 		out, _ := sv("status", svServiceName())
 		fmt.Println(out)
+
+		if strings.HasPrefix(out, "run:") {
+			port := readPortFile(config.GetSystemRuntimeDir())
+			if port > 0 {
+				fmt.Printf("Service port: %d\n", port)
+			}
+		}
 		return nil
 	},
 }

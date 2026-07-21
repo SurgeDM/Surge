@@ -36,6 +36,19 @@ func readPortFile(runtimeDir string) int {
 	return port
 }
 
+var checkSystemServiceRunning = isSystemServiceRunning
+
+func readPIDFile(runtimeDir string) int {
+	pidFile := filepath.Join(runtimeDir, "pid")
+	data, err := os.ReadFile(pidFile)
+	if err != nil {
+		return 0
+	}
+	var pid int
+	_, _ = fmt.Sscanf(string(data), "%d", &pid)
+	return pid
+}
+
 func readStateToken(stateDir string) string {
 	token, err := readTokenFromFile(filepath.Join(stateDir, "token"))
 	if err != nil {
@@ -45,16 +58,18 @@ func readStateToken(stateDir string) string {
 }
 
 func activeConnectionCandidates() []activeConnectionDetails {
-	return []activeConnectionDetails{
-		{
-			runtimeDir: config.GetRuntimeDir(),
-			stateDir:   config.GetStateDir(),
-		},
-		{
-			runtimeDir: config.GetSystemRuntimeDir(),
-			stateDir:   config.GetSystemStateDir(),
-		},
+	userCand := activeConnectionDetails{
+		runtimeDir: config.GetRuntimeDir(),
+		stateDir:   config.GetStateDir(),
 	}
+	sysCand := activeConnectionDetails{
+		runtimeDir: config.GetSystemRuntimeDir(),
+		stateDir:   config.GetSystemStateDir(),
+	}
+	if checkSystemServiceRunning() {
+		return []activeConnectionDetails{sysCand, userCand}
+	}
+	return []activeConnectionDetails{userCand, sysCand}
 }
 
 func getActiveConnectionDetails() (activeConnectionDetails, bool) {
@@ -64,7 +79,10 @@ func getActiveConnectionDetails() (activeConnectionDetails, bool) {
 			continue
 		}
 		candidate.port = port
-		candidate.token = readStateToken(candidate.stateDir)
+		candidate.token = readStateToken(candidate.runtimeDir)
+		if candidate.token == "" {
+			candidate.token = readStateToken(candidate.stateDir)
+		}
 		return candidate, true
 	}
 	return activeConnectionDetails{}, false
@@ -142,20 +160,24 @@ func ValidateAndNormalizeURL(rawURL string) (string, error) {
 }
 
 func resolveLocalToken() string {
-	return resolveLocalTokenForDetails(activeConnectionDetails{})
+	token, _ := resolveLocalTokenForDetails(activeConnectionDetails{})
+	return token
 }
 
-func resolveLocalTokenForDetails(details activeConnectionDetails) string {
+func resolveLocalTokenForDetails(details activeConnectionDetails) (string, error) {
 	if token := strings.TrimSpace(globalToken); token != "" {
-		return token
+		return token, nil
 	}
 	if token := strings.TrimSpace(os.Getenv("SURGE_TOKEN")); token != "" {
-		return token
+		return token, nil
 	}
 	if token := strings.TrimSpace(details.token); token != "" {
-		return token
+		return token, nil
 	}
-	return ensureAuthToken()
+	if details.port != 0 {
+		return "", fmt.Errorf("local server is running on port %d but its token could not be read. Try connecting with elevated privileges", details.port)
+	}
+	return ensureAuthToken(), nil
 }
 
 // resolveHostTarget returns the target host, prioritizing the --host flag over the SURGE_HOST environment variable.
@@ -188,7 +210,11 @@ func resolveAPIConnection(requireServer bool) (string, string, error) {
 	if target == "" {
 		details, ok := getActiveConnectionDetails()
 		if ok {
-			return fmt.Sprintf("http://127.0.0.1:%d", details.port), resolveLocalTokenForDetails(details), nil
+			token, err := resolveLocalTokenForDetails(details)
+			if err != nil {
+				return "", "", err
+			}
+			return fmt.Sprintf("http://127.0.0.1:%d", details.port), token, nil
 		}
 		if !requireServer {
 			return "", "", nil

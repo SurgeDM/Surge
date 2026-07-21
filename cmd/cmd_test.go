@@ -105,15 +105,18 @@ func TestFindAvailablePort_AllPortsOccupied(t *testing.T) {
 // =============================================================================
 
 func TestSaveAndRemoveActivePort(t *testing.T) {
-	// Setup temp dir
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
-	t.Setenv("XDG_CONFIG_HOME", tmpDir) // For EnsureDirs to work happily
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
-	// Ensure config dirs exist
+	t.Setenv("XDG_STATE_HOME", tmpDir)
+
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("Failed to ensure dirs: %v", err)
 	}
+
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", config.GetRuntimeDir())
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", config.GetStateDir())
 
 	// Save port
 	testPort := 12345
@@ -208,6 +211,8 @@ func TestCorsMiddleware_PassesThrough(t *testing.T) {
 func TestConnectCmd_AutoDetectsLocalServer(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
@@ -238,6 +243,8 @@ func TestConnectCmd_AutoDetectsLocalServer(t *testing.T) {
 func TestConnectCmd_NoServerRunning(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
@@ -299,6 +306,8 @@ func TestParseConnectTarget_BaseURL(t *testing.T) {
 func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
@@ -307,9 +316,12 @@ func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 
 	origToken := globalToken
 	globalToken = ""
+	origCheck := checkSystemServiceRunning
+	checkSystemServiceRunning = func() bool { return false }
 	t.Setenv("SURGE_TOKEN", "")
 	t.Cleanup(func() {
 		globalToken = origToken
+		checkSystemServiceRunning = origCheck
 	})
 
 	target, err := parseConnectTarget("[::1]:1700", false)
@@ -334,15 +346,21 @@ func TestResolveTokenForConnectTarget_UsesActiveTokenForMatchingLocalPort(t *tes
 	t.Setenv("XDG_STATE_HOME", tmpDir)
 	t.Setenv("SURGE_TOKEN", "")
 
-	origToken := globalToken
-	globalToken = ""
-	t.Cleanup(func() {
-		globalToken = origToken
-	})
-
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("Failed to ensure dirs: %v", err)
 	}
+
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", config.GetRuntimeDir())
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", config.GetStateDir())
+
+	origToken := globalToken
+	globalToken = ""
+	origCheck := checkSystemServiceRunning
+	checkSystemServiceRunning = func() bool { return false }
+	t.Cleanup(func() {
+		globalToken = origToken
+		checkSystemServiceRunning = origCheck
+	})
 	if err := writeTokenToFile(filepath.Join(config.GetStateDir(), "token"), "connect-token"); err != nil {
 		t.Fatalf("write token failed: %v", err)
 	}
@@ -679,6 +697,52 @@ func TestRootCmd_InvalidURL(t *testing.T) {
 	}
 }
 
+func TestRootCmd_FailsIfSystemServiceRunning(t *testing.T) {
+	setupIsolatedCmdState(t)
+
+	// Simulate system service running
+	origCheck := checkSystemServiceRunning
+	checkSystemServiceRunning = func() bool { return true }
+	t.Cleanup(func() { checkSystemServiceRunning = origCheck })
+
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+	rootCmd.SetArgs([]string{"https://example.com/test"})
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when system service is running, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "system service is already running") {
+		t.Errorf("expected error to mention system service, got %v", err)
+	}
+}
+
+func TestServerStartCmd_FailsIfSystemServiceRunning(t *testing.T) {
+	setupIsolatedCmdState(t)
+
+	// Simulate system service running
+	origCheck := checkSystemServiceRunning
+	checkSystemServiceRunning = func() bool { return true }
+	t.Cleanup(func() { checkSystemServiceRunning = origCheck })
+
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+	rootCmd.SetArgs([]string{"server", "start"})
+
+	err := rootCmd.Execute()
+	if err == nil {
+		t.Fatal("expected error when system service is running, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "system service is already running") {
+		t.Errorf("expected error to mention system service, got %v", err)
+	}
+}
+
 func TestRootCmd_Version(t *testing.T) {
 	if rootCmd.Version == "" {
 		t.Error("rootCmd.Version should not be empty")
@@ -739,6 +803,8 @@ func TestReadRootRunOptions_TracksExplicitPort(t *testing.T) {
 func TestMaybeStartRootHTTPServer_NoServerSkipsPortFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
@@ -960,6 +1026,9 @@ func TestStartHTTPServer_HealthEndpoint(t *testing.T) {
 	}
 	if int(result["port"].(float64)) != port {
 		t.Errorf("Expected port %d, got %v", port, result["port"])
+	}
+	if result["mode"] != "local" && result["mode"] != "service" {
+		t.Errorf("Expected mode 'local' or 'service', got %v", result["mode"])
 	}
 }
 
@@ -1258,14 +1327,18 @@ func TestCorsMiddleware_AllMethods(t *testing.T) {
 // =============================================================================
 
 func TestPortFileLifecycle(t *testing.T) {
-	// Setup temp dir
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
+	t.Setenv("XDG_STATE_HOME", tmpDir)
 
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("Failed to ensure dirs: %v", err)
 	}
+
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", config.GetRuntimeDir())
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", config.GetStateDir())
 
 	// Clean up first
 	removeActivePort()

@@ -146,6 +146,9 @@ func TestResolveAPIConnection_PairsLocalPortAndTokenFromSameState(t *testing.T) 
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("config.EnsureDirs() failed: %v", err)
 	}
+
+	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", config.GetRuntimeDir())
+	t.Setenv("SURGE_SYSTEM_STATE_DIR", config.GetStateDir())
 	if err := writeTokenToFile(filepath.Join(config.GetStateDir(), "token"), "paired-token"); err != nil {
 		t.Fatalf("write token failed: %v", err)
 	}
