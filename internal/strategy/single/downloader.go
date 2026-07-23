@@ -158,6 +158,9 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 		_ = resp.Body.Close()
 		utils.Debug("Single downloader: unexpected status %d for %s", resp.StatusCode, rawurl)
+		if types.IsPermanentHTTPStatus(resp.StatusCode) {
+			return fmt.Errorf("unexpected status code: %d: %w", resp.StatusCode, types.ErrPermanentHTTP)
+		}
 		return fmt.Errorf("unexpected status code: %d", resp.StatusCode)
 	}
 

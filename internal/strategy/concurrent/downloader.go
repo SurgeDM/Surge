@@ -675,6 +675,9 @@ func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *ht
 	}()
 
 	if resp.StatusCode != http.StatusPartialContent {
+		if types.IsPermanentHTTPStatus(resp.StatusCode) {
+			return 0, fmt.Errorf("concurrent bootstrap requires 206 response, got %d: %w", resp.StatusCode, types.ErrPermanentHTTP)
+		}
 		return 0, fmt.Errorf("concurrent bootstrap requires 206 response, got %d", resp.StatusCode)
 	}
 

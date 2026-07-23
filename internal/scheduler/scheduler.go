@@ -713,7 +713,7 @@ func (p *Scheduler) worker() {
 			p.mu.Lock()
 			delete(p.downloads, localCfg.ID)
 
-			if !p.isShuttingDown && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && qt.retries < 3 {
+			if !p.isShuttingDown && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && !types.IsPermanentHTTPError(err) && qt.retries < 3 {
 				qt.retries++
 				qt.inFlight = false
 				qt.cfg = localCfg
@@ -739,6 +739,24 @@ func (p *Scheduler) worker() {
 				p.taskCond.Signal()
 				p.mu.Unlock()
 				continue
+			}
+
+			// All retries exhausted (or error is permanent/canceled): emit a single EventError.
+			if localCfg.ProgressCh != nil {
+				var finalDestPath string
+				if localCfg.ProgressState != nil {
+					finalDestPath = progress.CfgProgress(&localCfg).GetDestPath()
+				}
+				if finalDestPath == "" {
+					finalDestPath = resolveDestPath(&localCfg)
+				}
+				safeSendProgress(localCfg.ProgressCh, types.DownloadEvent{
+					Type:       types.EventError,
+					DownloadID: localCfg.ID,
+					Filename:   localCfg.Filename,
+					DestPath:   finalDestPath,
+					Err:        err,
+				}, p.progressDone)
 			}
 
 			if localCfg.ProgressState != nil {

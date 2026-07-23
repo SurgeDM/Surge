@@ -299,17 +299,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 			utils.Debug("Download canceled cleanly")
 			return nil
 		}
-
-		// Send error event
-		if cfg.ProgressCh != nil {
-			safeSendProgress(cfg.ProgressCh, types.DownloadEvent{
-				Type:       types.EventError,
-				DownloadID: cfg.ID,
-				Filename:   finalFilename,
-				DestPath:   finalDestPath,
-				Err:        downloadErr,
-			}, ctx.Done())
-		}
+		// EventError is emitted by the scheduler's worker() after all retries are exhausted.
 	}
 
 	return downloadErr
