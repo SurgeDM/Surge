@@ -715,14 +715,13 @@ func (p *Scheduler) worker() {
 
 			if !p.isShuttingDown && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && !types.IsPermanentHTTPError(err) && qt.retries < 10 {
 				qt.retries++
-				qt.inFlight = false
+				qt.inFlight = true // Keep in-flight while sending progress outside lock
 				qt.cfg = localCfg
 				p.queued[localCfg.ID] = qt
 
 				p.removeQueueOrderLocked(localCfg.ID)
 				p.queueOrder = append(p.queueOrder, localCfg.ID)
 
-				p.taskCond.Signal()
 				p.mu.Unlock()
 
 				if localCfg.ProgressCh != nil {
@@ -739,8 +738,24 @@ func (p *Scheduler) worker() {
 						MinChunkSize: localCfg.MinChunkSize,
 					}, p.progressDone)
 				}
+
+				p.mu.Lock()
+				if _, ok := p.queued[localCfg.ID]; ok {
+					qt.inFlight = false
+					p.queued[localCfg.ID] = qt
+				} else {
+					// GracefulShutdown or Cancel removed it while we were unlocked.
+					// Since we were in-flight, they didn't decrement wg, so we must.
+					p.wg.Done()
+				}
+				p.taskCond.Signal()
+				p.mu.Unlock()
 				// ponytail: naive backoff blocks worker thread, but naturally limits retry storms
-				time.Sleep(time.Second * time.Duration(qt.retries))
+				select {
+				case <-time.After(time.Second * time.Duration(qt.retries)):
+				case <-p.progressDone:
+					// Wake up early if shutting down
+				}
 				continue
 			}
 
