@@ -681,7 +681,6 @@ func (p *Scheduler) worker() {
 
 		if isPaused {
 			utils.Debug("Scheduler: Download %s paused cleanly", localCfg.ID)
-			p.wg.Done() // Signal worker completion before potentially blocking on progress channel
 			// The concurrent downloader sends DownloadPausedMsg itself via handlePause()
 			// (which causes RunDownload to return nil). When a single-threaded download is
 			// paused, RunDownload returns a non-nil error, and the pool must fill the gap.
@@ -776,7 +775,6 @@ func (p *Scheduler) worker() {
 			}
 			delete(p.downloadLimiters, localCfg.ID)
 			p.mu.Unlock()
-			p.wg.Done() // Signal worker completion before potentially blocking on progress channel
 
 			// Send outside the lock: safeSendProgress may block on a full
 			// channel and must not hold p.mu while doing so.
@@ -795,9 +793,9 @@ func (p *Scheduler) worker() {
 			delete(p.downloads, localCfg.ID)
 			delete(p.downloadLimiters, localCfg.ID)
 			p.mu.Unlock()
-			p.wg.Done()
 		}
 		// If paused, we keep it in downloads map for potential resume
+		p.wg.Done()
 	}
 }
 
@@ -959,10 +957,12 @@ func (p *Scheduler) GracefulShutdown() {
 			<-ticker.C
 		}
 
-		p.wg.Wait() // Blocks until all workers call Done()
-
 		// Signal that progressCh must no longer be sent to, so that
 		// safeSendProgress calls in workers can abort if the channel is full.
+		// This must happen before wg.Wait() to break deadlocks where a worker
+		// is blocked on a full channel and preventing wg from completing.
 		close(p.progressDone)
+
+		p.wg.Wait() // Blocks until all workers call Done()
 	})
 }
