@@ -43,12 +43,19 @@ func CopyRedirectHeaders(dst, src *http.Request) {
 		strings.EqualFold(dst.URL.Scheme, src.URL.Scheme) &&
 		SameSite(dst.URL.Host, src.URL.Host) {
 		// ponytail: We manually forward Cookie and Authorization on same-site redirects
-		// instead of using a strict http.CookieJar. Why? The Surge extension only provides
-		// a flattened Cookie string (e.g., "session=123"), stripping the original Domain and
-		// Path attributes. If we loaded this into a CookieJar, it would default to a host-only
-		// cookie for the exact starting URL, and the Jar would correctly (but fatally for us)
-		// refuse to send it to same-site CDN subdomains like iad-dl-08.easynews.com.
-		// We use SameSite as a safe heuristic to mimic domain-wide cookies.
+		// instead of using strict browser security boundaries (like http.CookieJar).
+		// Why?
+		// 1. Cookies: The Surge extension provides a flattened Cookie string (e.g., "session=123")
+		//    without original Domain/Path metadata. A strict CookieJar would treat this as a host-only
+		//    cookie and refuse to send it to same-site CDN subdomains (breaking downloads).
+		// 2. Authorization: Fetch natively drops Authorization on ALL cross-origin redirects. Real
+		//    browsers only send Basic Auth to sibling origins if challenged with a matching 401 Realm.
+		//    Surge lacks a 401 challenge-response engine, so we must proactively forward Auth to
+		//    siblings to support authenticated CDN redirects (e.g. members.easynews.com -> iad-dl-08.easynews.com).
+		// Known Ceiling: This explicitly leaks credentials to distinct sibling origins under the same
+		// eTLD+1 (e.g., tenant-a.saas.com -> tenant-b.saas.com). Fixing this requires an architectural
+		// rewrite to ingest full cookie metadata from the extension and build a 401 retry interceptor.
+		// We use SameSite as a safe, deliberate heuristic compromise.
 		for _, k := range []string{"Cookie", "Cookie2", "Authorization"} {
 			if v := src.Header.Values(k); len(v) > 0 {
 				dst.Header[k] = append([]string(nil), v...)
