@@ -642,3 +642,37 @@ func BenchmarkUniqueFilePath_WithConflict(b *testing.B) {
 		uniqueFilePath(path)
 	}
 }
+
+func TestRunDownload_DoesNotEmitEventErrorOnFailure(t *testing.T) {
+	tmpDir := t.TempDir()
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer server.Close()
+
+	progressCh := make(chan types.DownloadEvent, 16)
+	cfg := types.DownloadRecord{
+		URL:           server.URL,
+		OutputPath:    tmpDir,
+		Filename:      "fail.bin",
+		ID:            "no-event-error-test",
+		ProgressCh:    progressCh,
+		ProgressState: progress.New("no-event-error-test", 0),
+		Runtime:       &types.RuntimeConfig{},
+		TotalSize:     0,
+		SupportsRange: false,
+	}
+
+	err := RunDownload(context.Background(), &cfg)
+	if err == nil {
+		t.Fatal("Expected RunDownload to return an error, got nil")
+	}
+
+	// Drain the channel and check if EventError was emitted
+	close(progressCh)
+	for msg := range progressCh {
+		if msg.Type == types.EventError {
+			t.Fatalf("RunDownload should not emit EventError, but it did: %+v", msg)
+		}
+	}
+}

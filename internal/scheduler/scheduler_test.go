@@ -3,6 +3,7 @@ package scheduler
 import (
 	"context"
 	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"sync"
@@ -10,6 +11,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/progress"
+	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/transport"
 	"github.com/SurgeDM/Surge/internal/types"
 )
@@ -1030,5 +1032,56 @@ func TestScheduler_GracefulShutdown_WorkerSkipsQueuedAfterShutdown(t *testing.T)
 	pool.mu.RUnlock()
 	if stillQueued {
 		t.Error("expected queued map to be cleared after GracefulShutdown")
+	}
+}
+
+func TestWorker_SkipsRetriesOnPermanentError(t *testing.T) {
+	ch := make(chan types.DownloadEvent, 100)
+	pool := New(ch, 1)
+
+	// A server that returns a 403 Forbidden, which should trigger ErrPermanentHTTP
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	id := "test-permanent-error"
+	pool.Add(types.DownloadRecord{
+		ID:            id,
+		URL:           server.URL,
+		ProgressState: progress.New(id, 0),
+		Runtime:       &types.RuntimeConfig{},
+	})
+
+	// Since max retries is 3, if it were to retry, it would take multiple attempts.
+	// But because 403 is a permanent error, it should fail immediately and emit exactly ONE EventError.
+	timeout := time.After(3 * time.Second)
+	errorCount := 0
+
+	for {
+		select {
+		case msg := <-ch:
+			if msg.Type == types.EventError {
+				errorCount++
+				if !types.IsPermanentHTTPError(msg.Err) {
+					t.Errorf("expected error to be permanent HTTP error, got: %v", msg.Err)
+				}
+			}
+		case <-timeout:
+			t.Fatal("timed out waiting for worker to finish")
+		}
+
+		pool.mu.RLock()
+		_, inActive := pool.downloads[id]
+		_, inQueue := pool.queued[id]
+		pool.mu.RUnlock()
+
+		if !inActive && !inQueue && errorCount > 0 {
+			break // Worker finished processing the download
+		}
+	}
+
+	if errorCount != 1 {
+		t.Errorf("expected exactly 1 EventError for permanent failure, got %d", errorCount)
 	}
 }
