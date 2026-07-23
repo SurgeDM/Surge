@@ -741,22 +741,31 @@ func (p *Scheduler) worker() {
 				continue
 			}
 
-			// All retries exhausted (or error is permanent/canceled): emit a single EventError.
+			// All retries exhausted (or error is permanent/canceled): collect event
+			// metadata under the lock, then send outside it so a full progress
+			// channel cannot block the scheduler mutex.
+			var errEvent *types.DownloadEvent
 			if localCfg.ProgressCh != nil {
 				var finalDestPath string
+				var finalFilename string
 				if localCfg.ProgressState != nil {
-					finalDestPath = progress.CfgProgress(&localCfg).GetDestPath()
+					p := progress.CfgProgress(&localCfg)
+					finalDestPath = p.GetDestPath()
+					finalFilename = p.GetFilename()
 				}
 				if finalDestPath == "" {
 					finalDestPath = resolveDestPath(&localCfg)
 				}
-				safeSendProgress(localCfg.ProgressCh, types.DownloadEvent{
+				if finalFilename == "" {
+					finalFilename = localCfg.Filename
+				}
+				errEvent = &types.DownloadEvent{
 					Type:       types.EventError,
 					DownloadID: localCfg.ID,
-					Filename:   localCfg.Filename,
+					Filename:   finalFilename,
 					DestPath:   finalDestPath,
 					Err:        err,
-				}, p.progressDone)
+				}
 			}
 
 			if localCfg.ProgressState != nil {
@@ -764,6 +773,12 @@ func (p *Scheduler) worker() {
 			}
 			delete(p.downloadLimiters, localCfg.ID)
 			p.mu.Unlock()
+
+			// Send outside the lock: safeSendProgress may block on a full
+			// channel and must not hold p.mu while doing so.
+			if errEvent != nil {
+				safeSendProgress(localCfg.ProgressCh, *errEvent, p.progressDone)
+			}
 		} else {
 			// Only mark as done if not paused
 			if localCfg.ProgressState != nil {
