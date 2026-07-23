@@ -713,14 +713,14 @@ func (p *Scheduler) worker() {
 			p.mu.Lock()
 			delete(p.downloads, localCfg.ID)
 
-			if !p.isShuttingDown && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && !types.IsPermanentHTTPError(err) && qt.retries < 3 {
+			if !p.isShuttingDown && !errors.Is(err, context.Canceled) && !errors.Is(err, context.DeadlineExceeded) && !types.IsPermanentHTTPError(err) && qt.retries < 10 {
 				qt.retries++
 				qt.inFlight = false
 				qt.cfg = localCfg
 				p.queued[localCfg.ID] = qt
 
 				p.removeQueueOrderLocked(localCfg.ID)
-				p.queueOrder = append([]string{localCfg.ID}, p.queueOrder...)
+				p.queueOrder = append(p.queueOrder, localCfg.ID)
 
 				if localCfg.ProgressCh != nil {
 					safeSendProgress(localCfg.ProgressCh, types.DownloadEvent{
@@ -738,6 +738,8 @@ func (p *Scheduler) worker() {
 				}
 				p.taskCond.Signal()
 				p.mu.Unlock()
+				// ponytail: naive backoff blocks worker thread, but naturally limits retry storms
+				time.Sleep(time.Second * time.Duration(qt.retries))
 				continue
 			}
 

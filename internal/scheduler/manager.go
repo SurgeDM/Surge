@@ -221,9 +221,15 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 			effectiveTotalSize = d.TotalSize
 		}
 
+		var downloaded int64
+		if progState != nil {
+			downloaded = progState.Bytes.Downloaded.Load()
+		}
+
 		// Determine if we should attempt a fallback to single-threaded mode.
-		// We fallback if concurrent failed, but it wasn't a clean pause or external cancellation.
-		if downloadErr != nil && !errors.Is(downloadErr, types.ErrPaused) && !errors.Is(downloadErr, context.Canceled) && !errors.Is(downloadErr, context.DeadlineExceeded) {
+		// We fallback if concurrent failed, but it wasn't a clean pause or external cancellation,
+		// AND we haven't made any progress yet (to avoid discarding progress).
+		if downloadErr != nil && !errors.Is(downloadErr, types.ErrPaused) && !errors.Is(downloadErr, context.Canceled) && !errors.Is(downloadErr, context.DeadlineExceeded) && downloaded == 0 {
 			utils.Debug("Concurrent download failed: %v - falling back to single-threaded", downloadErr)
 			useConcurrent = false // Trigger sequential block below
 

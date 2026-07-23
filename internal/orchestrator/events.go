@@ -313,19 +313,10 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 
 		case types.EventError:
 			existing, _ := store.GetDownload(m.DownloadID)
-			destPath := m.DestPath
 			if existing != nil {
 				existing.Status = "error"
 				if err := store.AddToMasterList(*existing); err != nil {
 					utils.Debug("Lifecycle: Failed to persist error state: %v", err)
-				}
-				if existing.DestPath != "" {
-					destPath = existing.DestPath
-				}
-			}
-			if destPath != "" {
-				if err := RemoveIncompleteFile(destPath); err != nil {
-					utils.Debug("Lifecycle: Failed to remove incomplete file after error: %v", err)
 				}
 			}
 			if settings := mgr.GetSettings(); settings != nil && config.Resolve[bool](settings.General.DownloadCompleteNotification) {
