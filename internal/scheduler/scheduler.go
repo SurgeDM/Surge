@@ -722,6 +722,9 @@ func (p *Scheduler) worker() {
 				p.removeQueueOrderLocked(localCfg.ID)
 				p.queueOrder = append(p.queueOrder, localCfg.ID)
 
+				p.taskCond.Signal()
+				p.mu.Unlock()
+
 				if localCfg.ProgressCh != nil {
 					safeSendProgress(localCfg.ProgressCh, types.DownloadEvent{
 						Type:         types.EventQueued,
@@ -736,8 +739,6 @@ func (p *Scheduler) worker() {
 						MinChunkSize: localCfg.MinChunkSize,
 					}, p.progressDone)
 				}
-				p.taskCond.Signal()
-				p.mu.Unlock()
 				// ponytail: naive backoff blocks worker thread, but naturally limits retry storms
 				time.Sleep(time.Second * time.Duration(qt.retries))
 				continue
