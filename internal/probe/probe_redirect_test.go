@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/probe"
@@ -78,13 +79,12 @@ func TestProbeRedirect_SameOriginPreservesAuthHeaders(t *testing.T) {
 	}
 }
 
-func TestProbeRedirect_CrossOriginForwardsExplicitHeaders(t *testing.T) {
-	var gotAuth, gotCookie, gotAPIKey, gotRange string
+func TestProbeRedirect_CrossOriginStripsExplicitHeaders(t *testing.T) {
+	var gotAuth, gotCookie, gotRange string
 
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotAuth = r.Header.Get("Authorization")
 		gotCookie = r.Header.Get("Cookie")
-		gotAPIKey = r.Header.Get("X-API-Key")
 		gotRange = r.Header.Get("Range")
 		w.Header().Set("Content-Range", "bytes 0-0/1")
 		w.WriteHeader(http.StatusPartialContent)
@@ -92,27 +92,24 @@ func TestProbeRedirect_CrossOriginForwardsExplicitHeaders(t *testing.T) {
 	defer target.Close()
 
 	redirect := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, target.URL, http.StatusFound)
+		targetURL := strings.Replace(target.URL, "127.0.0.1", "localhost", 1)
+		http.Redirect(w, r, targetURL, http.StatusFound)
 	}))
 	defer redirect.Close()
 
 	_, err := probe.ProbeServer(context.Background(), redirect.URL, "", map[string]string{
 		"Authorization": "Bearer cross-origin",
 		"Cookie":        "session=cross-origin",
-		"X-API-Key":     "cross-origin-key",
 	})
 	if err != nil {
 		t.Fatalf("ProbeServer failed: %v", err)
 	}
 
-	if gotAuth != "Bearer cross-origin" {
-		t.Fatalf("authorization leaked/missing on cross-origin redirect: %q", gotAuth)
+	if gotAuth != "" {
+		t.Fatalf("authorization leaked on cross-origin redirect: %q", gotAuth)
 	}
-	if gotCookie != "session=cross-origin" {
-		t.Fatalf("cookie leaked/missing on cross-origin redirect: %q", gotCookie)
-	}
-	if gotAPIKey != "cross-origin-key" {
-		t.Fatalf("x-api-key leaked/missing on cross-origin redirect: %q", gotAPIKey)
+	if gotCookie != "" {
+		t.Fatalf("cookie leaked on cross-origin redirect: %q", gotCookie)
 	}
 	if gotRange != "bytes=0-0" {
 		t.Fatalf("range = %q, want bytes=0-0", gotRange)

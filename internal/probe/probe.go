@@ -89,16 +89,7 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 				return fmt.Errorf("stopped after 10 redirects")
 			}
 			if len(via) > 0 {
-				copyProbeRedirectHeaders(req, via[0])
-			}
-
-			// Re-apply custom explicitly provided headers on cross-origin redirects
-			if customHeaders, ok := req.Context().Value(probeHeadersContextKey{}).(map[string]string); ok {
-				for k, v := range customHeaders {
-					if !strings.EqualFold(k, "Range") {
-						req.Header.Set(k, v)
-					}
-				}
+				utils.CopyRedirectHeaders(req, via[0])
 			}
 			return nil
 		},
@@ -264,36 +255,6 @@ func applyProbeHeaders(req *http.Request, headers map[string]string, includeRang
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", ua)
 	}
-}
-
-func copyProbeRedirectHeaders(dst, src *http.Request) {
-	if dst == nil || src == nil {
-		return
-	}
-
-	if sameProbeRedirectOrigin(dst.URL, src.URL) {
-		for key, vals := range src.Header {
-			dst.Header[key] = append([]string(nil), vals...)
-		}
-		return
-	}
-
-	for key := range dst.Header {
-		delete(dst.Header, key)
-	}
-
-	for _, key := range []string{"Range", "User-Agent"} {
-		if vals := src.Header.Values(key); len(vals) > 0 {
-			dst.Header[key] = append([]string(nil), vals...)
-		}
-	}
-}
-
-func sameProbeRedirectOrigin(a, b *neturl.URL) bool {
-	if a == nil || b == nil {
-		return false
-	}
-	return strings.EqualFold(a.Scheme, b.Scheme) && strings.EqualFold(a.Host, b.Host)
 }
 
 // ProbeMirrors is the convenience wrapper for callers that need mirror probing

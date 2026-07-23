@@ -205,22 +205,12 @@ func createTasks(fileSize, chunkSize int64) []types.Task {
 }
 
 func (d *ConcurrentDownloader) applyClientSettings(client *http.Client) {
-	// Preserve headers on redirects for authenticated downloads
-	// By default, Go strips sensitive headers (Cookie, Authorization) on cross-domain redirects.
-	// Since these headers were explicitly provided by the browser for this download, we forward them.
 	client.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 10 {
 			return types.ErrMaxRedirects
 		}
-		// Copy headers from original request to redirect request
 		if len(via) > 0 {
 			utils.CopyRedirectHeaders(req, via[0])
-		}
-		// Re-apply explicit custom headers down the redirect chain
-		for key, val := range d.Headers {
-			if key != "Range" {
-				req.Header.Set(key, val)
-			}
 		}
 		return nil
 	}

@@ -240,23 +240,27 @@ func TestConcurrentDownloader_RangeHeaderNotOverridden(t *testing.T) {
 }
 
 // TestConcurrentDownloader_HeadersForwardedOnRedirect verifies that custom headers
-// are preserved when the server redirects to a different domain (e.g., load balancer).
-// This is the fix for authenticated downloads from sites like easynews.com that redirect
-// from members.easynews.com to iad-dl-08.easynews.com.
+// are preserved when the server redirects to the same domain.
 func TestConcurrentDownloader_HeadersForwardedOnRedirect(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
 	fileSize := int64(32 * utils.KiB)
 
-	// Track received headers on the final server
 	var mu sync.Mutex
 	var receivedCookie string
 	var receivedAuth string
 	redirectCount := 0
 
-	// Final server (simulates the actual file server after redirect)
-	finalServer := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/redirect" {
+			mu.Lock()
+			redirectCount++
+			mu.Unlock()
+			http.Redirect(w, r, "/file.bin", http.StatusFound)
+			return
+		}
+
 		mu.Lock()
 		receivedCookie = r.Header.Get("Cookie")
 		receivedAuth = r.Header.Get("Authorization")
@@ -270,18 +274,7 @@ func TestConcurrentDownloader_HeadersForwardedOnRedirect(t *testing.T) {
 		data := make([]byte, fileSize)
 		_, _ = w.Write(data)
 	}))
-	defer finalServer.Close()
-
-	// Redirect server (simulates members.easynews.com redirecting to iad-dl-08.easynews.com)
-	redirectServer := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		mu.Lock()
-		redirectCount++
-		mu.Unlock()
-
-		// Redirect to the final server
-		http.Redirect(w, r, finalServer.URL+"/file.bin", http.StatusFound)
-	}))
-	defer redirectServer.Close()
+	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "redirect_headers_test.bin")
 	progState := progress.New("redirect-headers-test", fileSize)
@@ -289,21 +282,19 @@ func TestConcurrentDownloader_HeadersForwardedOnRedirect(t *testing.T) {
 
 	downloader := NewConcurrentDownloader("redirect-headers-test", nil, progState, runtime)
 
-	// Set headers that should be forwarded through the redirect
 	downloader.Headers = map[string]string{
 		"Cookie":        "auth_session=secret123",
-		"Authorization": "Basic dXNlcjpwYXNz", // base64 of user:pass
+		"Authorization": "Basic dXNlcjpwYXNz",
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	// Pre-create incomplete file (simulating processing layer)
 	if f, err := os.Create(destPath + ".surge"); err == nil {
 		_ = f.Close()
 	}
 
-	err := downloader.Download(ctx, redirectServer.URL, nil, nil, destPath, fileSize)
+	err := downloader.Download(ctx, server.URL+"/redirect", nil, nil, destPath, fileSize)
 	if err != nil {
 		t.Fatalf("Download failed: %v", err)
 	}

@@ -58,14 +58,6 @@ func (d *SingleDownloader) applyClientSettings(client *http.Client) {
 		if len(via) > 0 {
 			utils.CopyRedirectHeaders(req, via[0])
 		}
-		if d.Headers != nil {
-			for key, val := range d.Headers {
-				if strings.EqualFold(key, "Range") {
-					continue
-				}
-				req.Header.Set(key, val)
-			}
-		}
 		return nil
 	}
 }
