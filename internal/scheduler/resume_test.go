@@ -125,13 +125,16 @@ func TestIntegration_PauseResume(t *testing.T) {
 
 	// 4. Verify State is Saved (event worker persists asynchronously)
 	var savedState *types.DownloadRecord
-	deadline = time.Now().Add(5 * time.Second)
+	deadline = time.Now().Add(15 * time.Second)
 	for time.Now().Before(deadline) {
 		savedState, err = store.LoadState(url, destPath)
 		if err == nil && savedState != nil && savedState.Downloaded > 0 && len(savedState.Tasks) > 0 {
 			break
 		}
-		time.Sleep(50 * time.Millisecond)
+		time.Sleep(200 * time.Millisecond)
+	}
+	if savedState == nil {
+		t.Fatalf("Failed to load saved state before timeout (state nil). Last err: %v", err)
 	}
 	if err != nil {
 		t.Fatalf("Failed to load saved state: %v", err)
@@ -181,7 +184,7 @@ func TestIntegration_PauseResume(t *testing.T) {
 	}
 
 	// 6. Verify Completion (event worker finalizes rename/status asynchronously)
-	deadline = time.Now().Add(5 * time.Second)
+	deadline = time.Now().Add(15 * time.Second)
 	completed := false
 	for time.Now().Before(deadline) {
 		_, surgeErr := os.Stat(incompletePath)

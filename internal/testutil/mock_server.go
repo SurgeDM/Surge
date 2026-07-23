@@ -302,8 +302,11 @@ func (m *MockServer) handleRequest(w http.ResponseWriter, r *http.Request) {
 		// This allows retry logic to work - new requests can succeed
 		if m.FailAfterBytes > 0 && bytesWritten >= m.FailAfterBytes {
 			m.FailedRequests.Add(1)
-			// Abruptly close connection by not writing more
-			panic(http.ErrAbortHandler)
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			time.Sleep(10 * time.Millisecond)
+			return
 		}
 
 		remaining := length - bytesWritten

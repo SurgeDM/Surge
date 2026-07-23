@@ -637,12 +637,12 @@ func TestView_DoesNotPanicAtExtremeSizes(t *testing.T) {
 // footerLine extracts the plain-text last line of the dashboard view.
 func footerLine(m RootModel) string {
 	plain := ansiEscapeRE.ReplaceAllString(m.View().Content, "")
-	trimmed := strings.TrimRight(plain, "\n")
+	trimmed := strings.TrimRight(plain, "\r\n")
 	lines := strings.Split(trimmed, "\n")
 	if len(lines) == 0 {
 		return ""
 	}
-	return lines[len(lines)-1]
+	return strings.TrimRight(lines[len(lines)-1], "\r")
 }
 
 func TestFooter_GlyphsAlwaysPresent(t *testing.T) {
