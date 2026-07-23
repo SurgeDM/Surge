@@ -53,9 +53,26 @@ func setupTestService(t *testing.T) (*LocalDownloadService, *httptest.Server, st
 }
 
 func TestLocalDownloadService_AddWithID_UsesProvidedID(t *testing.T) {
-	svc, ts, tmpDir := setupTestService(t)
-	defer ts.Close()
+	svc, globalTs, tmpDir := setupTestService(t)
+	defer globalTs.Close()
 	t.Cleanup(func() { _ = svc.Shutdown() })
+
+	blockCh := make(chan struct{})
+	defer close(blockCh)
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "1024")
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		if r.Header.Get("Range") != "bytes=0-0" {
+			select {
+			case <-blockCh:
+			case <-r.Context().Done():
+			}
+		}
+	}))
+	defer ts.Close()
 
 	customID := "test-id-123"
 	id, err := svc.AddWithID(ts.URL, tmpDir, "test.txt", nil, nil, customID, false, 1, 0)
