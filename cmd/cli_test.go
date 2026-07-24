@@ -48,6 +48,7 @@ func TestResolveDownloadID_Remote(t *testing.T) {
 
 	tempDir := t.TempDir()
 	t.Setenv("XDG_CONFIG_HOME", tempDir)
+	t.Setenv("APPDATA", tempDir)
 	t.Setenv("HOME", tempDir)
 
 	if err := config.EnsureDirs(); err != nil {
