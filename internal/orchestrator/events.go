@@ -313,8 +313,61 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 
 		case types.EventError:
 			existing, _ := store.GetDownload(m.DownloadID)
-			if existing != nil {
+			if m.State != nil {
+				// Pause-grade snapshot: persist detail state for breakpoint resume.
+				stateSnapshot := m.State
+				snapshot := *stateSnapshot
+				destPath := stateSnapshot.DestPath
+				url := stateSnapshot.URL
+				if existing != nil {
+					if destPath == "" {
+						destPath = existing.DestPath
+					}
+					if url == "" {
+						url = existing.URL
+					}
+					candidateElapsed := existing.TimeTaken * int64(time.Millisecond)
+					if candidateElapsed > snapshot.Elapsed {
+						snapshot.Elapsed = candidateElapsed
+					}
+				}
+				entry := types.DownloadRecord{
+					ID:           m.DownloadID,
+					URL:          url,
+					DestPath:     destPath,
+					Filename:     m.Filename,
+					Status:       "error",
+					TotalSize:    snapshot.TotalSize,
+					Downloaded:   snapshot.Downloaded,
+					Workers:      snapshot.Workers,
+					MinChunkSize: snapshot.MinChunkSize,
+					RateLimit:    snapshot.RateLimit,
+					RateLimitSet: snapshot.RateLimitSet,
+				}
+				if m.Err != nil {
+					entry.Error = m.Err.Error()
+				}
+				if existing != nil {
+					entry.URLHash = existing.URLHash
+					entry.Mirrors = append([]string(nil), existing.Mirrors...)
+				}
+				if err := store.AddToMasterList(entry); err != nil {
+					utils.Debug("Lifecycle: Failed to persist error state: %v", err)
+				}
+				if destPath != "" && url != "" {
+					if err := store.SaveStateWithOptions(url, destPath, &snapshot, store.SaveStateOptions{
+						SkipFileHash: true,
+					}); err != nil {
+						utils.Debug("Lifecycle: Failed to persist error detail state: %v", err)
+					}
+				} else {
+					utils.Debug("Lifecycle: Skipping SaveState on error for %s: destPath=%q url=%q", m.DownloadID, destPath, url)
+				}
+			} else if existing != nil {
 				existing.Status = "error"
+				if m.Err != nil {
+					existing.Error = m.Err.Error()
+				}
 				if err := store.AddToMasterList(*existing); err != nil {
 					utils.Debug("Lifecycle: Failed to persist error state: %v", err)
 				}
