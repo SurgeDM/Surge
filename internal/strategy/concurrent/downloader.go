@@ -12,7 +12,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/progress"
@@ -482,11 +481,6 @@ func (d *ConcurrentDownloader) runBalancer(ctx context.Context, queue *TaskQueue
 						didWork = true
 					}
 				}
-				if !didWork && queue.Len() == 0 {
-					if d.HedgeWork(queue) {
-						didWork = true
-					}
-				}
 				if !didWork {
 					break
 				}
@@ -597,16 +591,7 @@ func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64
 
 	var remainingTasks []types.Task
 	var remainingBytes int64
-	seenHedged := make(map[*atomic.Int64]bool)
-
 	for _, task := range allTasks {
-		if task.SharedMaxOffset != nil {
-			if seenHedged[task.SharedMaxOffset] {
-				continue
-			}
-			seenHedged[task.SharedMaxOffset] = true
-			task.SharedMaxOffset = nil // Clear it so hot resume doesn't pin ranges as hedged
-		}
 		remainingTasks = append(remainingTasks, task)
 		remainingBytes += task.Length
 	}
