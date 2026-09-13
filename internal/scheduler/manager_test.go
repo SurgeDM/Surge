@@ -733,3 +733,46 @@ func TestSendPausedFallbackWaitsForFullChannel(t *testing.T) {
 	default:
 	}
 }
+
+func TestSafeSendProgress_CompleteTerminalReliableAgainstCanceledContext(t *testing.T) {
+	ch := make(chan types.DownloadEvent, 1)
+	// Fill buffer with 1 item so channel is full
+	ch <- types.DownloadEvent{Type: types.EventStarted}
+
+	completeEvent := types.DownloadEvent{
+		Type:       types.EventComplete,
+		DownloadID: "test-id",
+	}
+
+	sent := make(chan struct{})
+	go func() {
+		// Terminal-reliable send passes nil for doneCh
+		safeSendProgress(ch, completeEvent, nil)
+		close(sent)
+	}()
+
+	// Verify safeSendProgress does not immediately discard the event
+	select {
+	case <-sent:
+		t.Fatal("expected safeSendProgress to wait for channel buffer, but returned immediately")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Drain initial event to free channel buffer
+	first := <-ch
+	if first.Type != types.EventStarted {
+		t.Fatalf("expected EventStarted, got %v", first.Type)
+	}
+
+	// Wait for safeSendProgress to finish delivering EventComplete
+	select {
+	case <-sent:
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for safeSendProgress to deliver event")
+	}
+
+	second := <-ch
+	if second.Type != types.EventComplete {
+		t.Fatalf("expected EventComplete, got %v", second.Type)
+	}
+}
