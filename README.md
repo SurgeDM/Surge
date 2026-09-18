@@ -11,7 +11,7 @@
 [![BuyMeACoffee](https://raw.githubusercontent.com/pachadotdev/buymeacoffee-badges/main/bmc-violet.svg)](https://www.buymeacoffee.com/surge.downloader)
 [![Stars](https://img.shields.io/github/stars/SurgeDM/Surge?style=social)](https://github.com/SurgeDM/Surge/stargazers)
 
-[Installation](#installation) • [Usage](#usage) • [Themes](docs/THEMES.md) • [Fonts](docs/FONTS.md) • [Benchmarks](#benchmarks) • [Extension](#browser-extension) • [Settings](docs/SETTINGS.md) • [CLI Reference](docs/USAGE.md)
+[Documentation](docs/README.md) • [Installation](#installation) • [Usage](#usage) • [Themes](docs/guides/customize-surge.md) • [Fonts](docs/guides/customize-surge.md) • [Benchmarks](#benchmarks) • [Extension](#browser-extension) • [Settings](docs/SETTINGS.md) • [CLI Reference](docs/reference/cli.md)
 
 </div>
 
@@ -62,10 +62,11 @@ Surge is available on multiple platforms. Choose the method that works best for 
 | Platform / Method                  | Command / Instructions                                                           | Notes                                        |
 | :--------------------------------- | :------------------------------------------------------------------------------- | :------------------------------------------- |
 | **Prebuilt Binary**          | [Download from Releases](https://github.com/SurgeDM/Surge/releases/latest) | Easiest method. Just download and run.       |
+| **Linux AppImage**           | [Download from Releases](https://github.com/SurgeDM/Surge/releases/latest) | Run `chmod +x Surge_..._linux_x86_64.AppImage`, then `./Surge_..._linux_x86_64.AppImage`. Supports delta updates. |
 | **Arch Linux (AUR)**         | `yay -S surge`                                                                 | Managed via AUR.                             |
 | **macOS / Linux (Homebrew)** | `brew install SurgeDM/tap/surge`                                      | Recommended for Mac/Linux users.             |
 | **Nix / NixOS**              | `nix run github:SurgeDM/Surge`                                        | Via Nix flake. NixOS config: `inputs.surge.packages.${pkgs.system}.default` |
-| **Windows**         | `winget install surge-downloader.surge`<br />or<br />`scoop install surge` | Recommended for Windows users.               |
+| **Windows**         | `winget install surge-downloader.surge`<br />or<br />`scoop install surge`<br />or<br />`choco install surge` | Recommended for Windows users.               |
 | **Dockerfile**               | [See instructions](#4-server-mode-with-docker-compose)                              | Run Surge in server mode with Docker Compose |
 | **Go Install**               | `go install github.com/SurgeDM/Surge@latest`                          | Requires Go 1.25+                           |
 
@@ -75,7 +76,7 @@ Surge is available on multiple platforms. Choose the method that works best for 
 
 Surge has two main modes: **TUI (Interactive)** and **Server (Headless)**.
 
-For a full reference, see the **[Themes Guide](docs/THEMES.md)**, **[Settings &amp; Configuration Guide](docs/SETTINGS.md)** and the **[CLI Usage Guide](docs/USAGE.md)**.
+For a full reference, see the **[customization guide](docs/guides/customize-surge.md)**, **[Settings &amp; Configuration Guide](docs/SETTINGS.md)** and the **[CLI reference](docs/reference/cli.md)**.
 
 ### 1. Interactive TUI Mode
 
@@ -216,7 +217,7 @@ docker compose logs -f surge
 ## Fonts
 
 Surge ships a bundled Nerd Font for the TUI, but your terminal controls the
-actual font selection. See [docs/FONTS.md](docs/FONTS.md) for install steps and
+actual font selection. See the [customization guide](docs/guides/customize-surge.md) for install steps and
 licensing details.
 
 ---
