@@ -935,7 +935,13 @@ func formatSettingValueForEdit(value interface{}, typ config.SettingType, unit c
 		}
 	case config.UnitMinutes:
 		if v, ok := asFloat64(value); ok {
-			return fmt.Sprintf("%.0f", time.Duration(v).Minutes())
+			var mins float64
+			if _, isDuration := value.(time.Duration); isDuration {
+				mins = time.Duration(v).Minutes()
+			} else {
+				mins = v
+			}
+			return fmt.Sprintf("%.0f", mins)
 		}
 	case config.UnitMegabytesPerSecond:
 		if vStr, ok := value.(string); ok && vStr != "" {
