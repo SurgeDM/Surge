@@ -852,3 +852,48 @@ func TestConcurrentDownloader_AllMirrorsRangeUnsupportedReturnsSentinel(t *testi
 		t.Fatalf("expected ErrRangeUnsupported when all mirrors ignore range, got: %v", err)
 	}
 }
+
+func TestSchedulerRecreationPreservesThrottleEpisodeStart(t *testing.T) {
+	hostLimiter := transport.NewHostRateLimiter()
+	cfg := &types.DownloadRecord{
+		ID:  "retry-persist-id",
+		URL: "http://example.com/file",
+	}
+
+	d1 := NewConcurrentDownloader("retry-persist-id", nil, nil, nil)
+	d1.hostLimiter = hostLimiter
+
+	now := time.Now().Add(-2 * time.Minute)
+	d1.soft403Mu.Lock()
+	d1.throttleEpisodeStart = now
+	d1.lastByteProgressTime = now
+	d1.consecutiveThrottles = 2
+	d1.soft403Mu.Unlock()
+
+	// Export state from d1 into cfg (as RunDownload/worker does)
+	d1.ExportThrottleState(cfg)
+
+	if cfg.ThrottleEpisodeStart != now {
+		t.Fatalf("expected cfg.ThrottleEpisodeStart=%v, got %v", now, cfg.ThrottleEpisodeStart)
+	}
+	if cfg.ConsecutiveThrottles != 2 {
+		t.Fatalf("expected cfg.ConsecutiveThrottles=2, got %d", cfg.ConsecutiveThrottles)
+	}
+
+	// Downloader 2 created on scheduler retry
+	d2 := NewConcurrentDownloader("retry-persist-id", nil, nil, nil)
+	d2.hostLimiter = hostLimiter
+	d2.ImportThrottleState(cfg)
+
+	d2.soft403Mu.Lock()
+	importedStart := d2.throttleEpisodeStart
+	importedThrottles := d2.consecutiveThrottles
+	d2.soft403Mu.Unlock()
+
+	if importedStart != now {
+		t.Fatalf("expected d2 imported throttleEpisodeStart=%v across recreation, got %v", now, importedStart)
+	}
+	if importedThrottles != 2 {
+		t.Fatalf("expected d2 imported consecutiveThrottles=2 across recreation, got %d", importedThrottles)
+	}
+}
