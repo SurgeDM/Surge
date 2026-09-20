@@ -13,10 +13,21 @@ import (
 
 var DefaultHostRateLimiter = NewHostRateLimiter()
 
+const (
+	UnknownHostInitialCap  = 4
+	RecoveryByteThreshold  = 512 * 1024 // 512 KB
+	RecoveryRangeThreshold = 2
+	RecoveryWindow         = 15 * time.Second
+)
+
 type hostPenalty struct {
-	until       time.Time
-	consecutive int
-	lastHit     time.Time
+	until            time.Time
+	consecutive      int
+	lastHit          time.Time
+	concurrencyCap   int
+	lastThrottle     time.Time
+	successfulBytes  int64
+	successfulRanges int
 }
 
 type HostRateLimiter struct {
@@ -30,14 +41,48 @@ func NewHostRateLimiter() *HostRateLimiter {
 	}
 }
 
+func (h *HostRateLimiter) ConcurrencyCap(host string, configuredMax int) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	p, known := h.hosts[host]
+	if !known || p.concurrencyCap <= 0 {
+		if configuredMax < UnknownHostInitialCap {
+			return configuredMax
+		}
+		return UnknownHostInitialCap
+	}
+	if p.concurrencyCap > configuredMax {
+		return configuredMax
+	}
+	return p.concurrencyCap
+}
+
 func (h *HostRateLimiter) Penalize(host string, retryAfter time.Duration, explicit bool, now time.Time) time.Time {
+	until, _ := h.ReportThrottle(host, retryAfter, explicit, now)
+	return until
+}
+
+func (h *HostRateLimiter) ReportThrottle(host string, retryAfter time.Duration, explicit bool, now time.Time) (time.Time, int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	p, ok := h.hosts[host]
 	if !ok {
-		p = &hostPenalty{}
+		p = &hostPenalty{concurrencyCap: UnknownHostInitialCap}
 		h.hosts[host] = p
+	}
+
+	if p.concurrencyCap <= 0 {
+		p.concurrencyCap = UnknownHostInitialCap
+	}
+
+	newEpisode := p.until.IsZero() || !now.Before(p.until)
+	if newEpisode {
+		p.concurrencyCap = max(1, p.concurrencyCap/2)
+		p.successfulBytes = 0
+		p.successfulRanges = 0
+		p.lastThrottle = now
 	}
 
 	if now.Sub(p.lastHit) > types.RateLimitPenaltyDecay {
@@ -78,7 +123,42 @@ func (h *HostRateLimiter) Penalize(host string, retryAfter time.Duration, explic
 	}
 
 	h.cleanupLocked()
-	return p.until
+	return p.until, p.concurrencyCap
+}
+
+func (h *HostRateLimiter) ReportProgress(host string, bytes int64, completedRanges int, configuredMax int, now time.Time) (int, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	p, ok := h.hosts[host]
+	if !ok {
+		p = &hostPenalty{concurrencyCap: UnknownHostInitialCap}
+		h.hosts[host] = p
+	}
+
+	if p.concurrencyCap <= 0 {
+		p.concurrencyCap = UnknownHostInitialCap
+	}
+
+	if bytes > 0 {
+		p.successfulBytes += bytes
+	}
+	if completedRanges > 0 {
+		p.successfulRanges += completedRanges
+	}
+
+	if p.successfulBytes >= RecoveryByteThreshold &&
+		p.successfulRanges >= RecoveryRangeThreshold &&
+		(p.lastThrottle.IsZero() || now.Sub(p.lastThrottle) >= RecoveryWindow) {
+		if p.concurrencyCap < configuredMax {
+			p.concurrencyCap++
+			p.successfulBytes = 0
+			p.successfulRanges = 0
+			return p.concurrencyCap, true
+		}
+	}
+
+	return p.concurrencyCap, false
 }
 
 func (h *HostRateLimiter) BlockedUntil(host string, now time.Time) time.Time {

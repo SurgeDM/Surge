@@ -34,16 +34,26 @@ type adaptiveConcurrencyGate struct {
 }
 
 func newAdaptiveConcurrencyGate(workers int, interval time.Duration) *adaptiveConcurrencyGate {
-	if workers < 1 {
-		workers = 1
+	return newAdaptiveConcurrencyGateWithInitialCap(workers, workers, interval)
+}
+
+func newAdaptiveConcurrencyGateWithInitialCap(maxWorkers, initialCap int, interval time.Duration) *adaptiveConcurrencyGate {
+	if maxWorkers < 1 {
+		maxWorkers = 1
+	}
+	if initialCap < 1 {
+		initialCap = 1
+	}
+	if initialCap > maxWorkers {
+		initialCap = maxWorkers
 	}
 	enabled := interval > 0
 	if interval <= 0 {
 		interval = types.DefaultAdaptiveConcurrencyInterval
 	}
 	return &adaptiveConcurrencyGate{
-		max:            workers,
-		cap:            workers,
+		max:            maxWorkers,
+		cap:            initialCap,
 		enabled:        enabled,
 		recoveryWindow: interval,
 		changed:        make(chan struct{}),
@@ -143,6 +153,30 @@ func (g *adaptiveConcurrencyGate) recover(now time.Time) (int, int, bool) {
 		return oldCap, g.cap, true
 	}
 	return oldCap, g.cap, false
+}
+
+func (g *adaptiveConcurrencyGate) setCap(newCap int, cooldownUntil time.Time) int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+
+	oldCap := g.cap
+	if newCap < 1 {
+		newCap = 1
+	}
+	if newCap > g.max {
+		newCap = g.max
+	}
+	g.cap = newCap
+	if !cooldownUntil.IsZero() {
+		g.cooldownUntil = cooldownUntil
+		g.throttled = true
+		g.hasThrottled = true
+	}
+	if g.cap != oldCap {
+		g.notifyLocked()
+	}
+	g.notifyPolicyLocked()
+	return oldCap
 }
 
 func (g *adaptiveConcurrencyGate) parkedWorkers() int64 {

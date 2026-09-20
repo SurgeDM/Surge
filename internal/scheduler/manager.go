@@ -333,6 +333,9 @@ func shouldFallbackToSingle(downloadErr error, downloaded int64) bool {
 	if types.IsInsufficientDiskSpace(downloadErr) {
 		return false
 	}
+	if strings.Contains(downloadErr.Error(), "ignored range request") {
+		return true
+	}
 	return downloaded == 0
 }
 

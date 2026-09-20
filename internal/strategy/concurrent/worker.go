@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/transport"
@@ -19,7 +20,41 @@ var writeAtFn = func(f *os.File, b []byte, off int64) (int, error) {
 	return f.WriteAt(b, off)
 }
 
-var errSoftForbidden = errors.New("unexpected status: 403")
+var (
+	errSoftForbidden    = errors.New("unexpected status: 403")
+	errRangeUnsupported = errors.New("server indicated success (200) but ignored range request (expected 206)")
+)
+
+type cfChallengeError struct {
+	retryAfter time.Duration
+}
+
+func (e *cfChallengeError) Error() string {
+	return "cloudflare challenge detected"
+}
+
+func looksLikeChallenge(resp *http.Response) bool {
+	if resp == nil {
+		return false
+	}
+	if strings.EqualFold(resp.Header.Get("cf-mitigated"), "challenge") {
+		return true
+	}
+	if resp.Body != nil {
+		buf := make([]byte, 8192)
+		n, _ := io.ReadFull(resp.Body, buf)
+		if n > 0 {
+			bodySnippet := string(buf[:n])
+			if strings.Contains(bodySnippet, "cf-browser-verification") ||
+				strings.Contains(bodySnippet, "<div id=\"cf-please-wait\">") ||
+				strings.Contains(bodySnippet, "Just a moment...") ||
+				strings.Contains(bodySnippet, "Attention Required!") {
+				return true
+			}
+		}
+	}
+	return false
+}
 
 const soft403RetryDelay = 500 * time.Millisecond
 
@@ -189,15 +224,41 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			}
 
 			var rlErr *rateLimitError
-			if errors.As(lastErr, &rlErr) {
+			var cfErr *cfChallengeError
+			if errors.As(lastErr, &rlErr) || errors.As(lastErr, &cfErr) {
+				var retryAfter time.Duration
+				var explicit bool
+				if rlErr != nil {
+					retryAfter = rlErr.retryAfter
+					explicit = rlErr.explicit
+				} else {
+					retryAfter = cfErr.retryAfter
+					explicit = false
+				}
+
 				host := mirrorHosts[currentMirrorIdx]
 				now := time.Now()
-				until := d.hostLimiter.Penalize(host, rlErr.retryAfter, rlErr.explicit, now)
+
+				d.soft403Mu.Lock()
+				if d.throttleEpisodeStart.IsZero() {
+					d.throttleEpisodeStart = now
+				}
+				d.consecutiveThrottles++
+				elapsedThrottle := now.Sub(d.throttleEpisodeStart)
+				remainingBudget := 10*time.Minute - elapsedThrottle
+				if explicit && retryAfter > remainingBudget {
+					d.soft403Mu.Unlock()
+					return fmt.Errorf("throttled with Retry-After %v exceeding remaining budget %v: %w", retryAfter, remainingBudget, types.ErrPermanentHTTP)
+				}
+				if elapsedThrottle > 10*time.Minute {
+					d.soft403Mu.Unlock()
+					return fmt.Errorf("no download progress for %v due to sustained rate limiting: %w", elapsedThrottle, types.ErrPermanentHTTP)
+				}
+				d.soft403Mu.Unlock()
+
+				until, newCap := d.hostLimiter.ReportThrottle(host, retryAfter, explicit, now)
 				if d.concurrencyGate != nil {
-					oldCap, newCap, _ := d.concurrencyGate.throttle(now, until)
-					if newCap < oldCap {
-						utils.Debug("Adaptive concurrency: reduced cap from %d to %d after throttle", oldCap, newCap)
-					}
+					d.concurrencyGate.setCap(newCap, until)
 				}
 				if d.State == nil || !d.State.RateLimited.Swap(true) {
 					wait := time.Until(until).Round(time.Second)
@@ -211,6 +272,26 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 					}
 				}
 				d.ReportMirrorError(currentURL)
+				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
+				if remaining := d.detachRemainingTask(id, activeTask); remaining != nil && remaining.Length > 0 {
+					throttledRequeue = remaining
+				}
+				lastErr = nil
+				break
+			}
+
+			if errors.Is(lastErr, errRangeUnsupported) {
+				d.markMirrorNonRange(currentURL)
+				allNonRange := true
+				for _, m := range mirrors {
+					if !d.isMirrorNonRange(m) {
+						allNonRange = false
+						break
+					}
+				}
+				if allNonRange {
+					return errRangeUnsupported
+				}
 				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
 				if remaining := d.detachRemainingTask(id, activeTask); remaining != nil && remaining.Length > 0 {
 					throttledRequeue = remaining
@@ -257,19 +338,27 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			remain := activeTask.RemainingTask()
 
 			if errors.Is(lastErr, errSoftForbidden) {
-				if !d.shouldEscalate403(time.Now()) {
-					if !interruptibleSleep(ctx, soft403RetryDelay) {
-						if remain != nil {
-							queue.Push(*remain)
-						}
-						return ctx.Err()
-					}
+				host := mirrorHosts[currentMirrorIdx]
+				now := time.Now()
+				until, newCap := d.hostLimiter.ReportThrottle(host, 2*time.Second, false, now)
+				if d.concurrencyGate != nil {
+					d.concurrencyGate.setCap(newCap, until)
+				}
+
+				d.soft403Mu.Lock()
+				d.soft403Exhaustions++
+				count := d.soft403Exhaustions
+				d.soft403Mu.Unlock()
+
+				if count >= 4 {
+					lastErr = fmt.Errorf("repeated 403 forbidden from host %s (%d attempts): %w", host, count, types.ErrPermanentHTTP)
+				} else {
 					if remain != nil {
 						queue.Push(*remain)
 					}
+					currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
 					continue
 				}
-				lastErr = fmt.Errorf("%v: %w", lastErr, types.ErrPermanentHTTP)
 			}
 			if remain != nil {
 				queue.Push(*remain)
@@ -335,7 +424,10 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 		// Valid only if we requested the full file
 		// If we wanted a partial range but got the whole file (200), that's an error because we can't handle the full stream at a non-zero offset
 		if task.Offset != 0 || task.Length != totalSize {
-			return fmt.Errorf("server indicated success (200) but ignored range request (expected 206)")
+			if looksLikeChallenge(resp) {
+				return &cfChallengeError{retryAfter: 5 * time.Second}
+			}
+			return errRangeUnsupported
 		}
 	} else if resp.StatusCode != http.StatusPartialContent {
 		if resp.StatusCode == http.StatusForbidden {
@@ -363,9 +455,22 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			// Update Downloaded Counter (Atomic)
 			d.State.Bytes.Downloaded.Add(pendingBytes)
 
+			now := time.Now()
+			d.soft403Mu.Lock()
+			d.lastByteProgressTime = now
+			d.throttleEpisodeStart = time.Time{}
+			d.consecutiveThrottles = 0
+			d.soft403Mu.Unlock()
+
+			host := transport.MirrorHost(rawurl)
+			newCap, recovered := d.hostLimiter.ReportProgress(host, pendingBytes, 1, d.Runtime.GetMaxConnectionsPerDownload(), now)
+			if recovered && d.concurrencyGate != nil {
+				d.concurrencyGate.setCap(newCap, time.Time{})
+			}
+
 			pendingBytes = 0
 			pendingStart = -1
-			lastUpdate = time.Now()
+			lastUpdate = now
 		}
 	}
 	// Ensure we flush whatever we have on exit

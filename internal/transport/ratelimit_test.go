@@ -291,3 +291,66 @@ func TestHostRateLimiter_PenaltyDecayResetsConsecutive(t *testing.T) {
 	}
 	_ = d1
 }
+
+func TestHostRateLimiter_ConcurrencyCapLookup(t *testing.T) {
+	h := NewHostRateLimiter()
+
+	// Unknown host: should default to UnknownHostInitialCap (4)
+	if cap := h.ConcurrencyCap("unknown.com", 8); cap != 4 {
+		t.Fatalf("expected unknown host cap=4, got %d", cap)
+	}
+
+	// Configured max less than 4
+	if cap := h.ConcurrencyCap("unknown.com", 2); cap != 2 {
+		t.Fatalf("expected unknown host cap=2 when configuredMax=2, got %d", cap)
+	}
+}
+
+func TestThrottleBurstCoalesced(t *testing.T) {
+	h := NewHostRateLimiter()
+	now := time.Now()
+
+	// Initial cap is 4. Ramp up to 8 via progress reports
+	for i := 0; i < 4; i++ {
+		h.ReportProgress("host.com", 1*1024*1024, 2, 8, now.Add(time.Duration(i)*20*time.Second))
+	}
+	if cap := h.ConcurrencyCap("host.com", 8); cap != 8 {
+		t.Fatalf("expected cap=8 after progress, got %d", cap)
+	}
+
+	// 4 workers report throttle in the same burst (same timestamp/active cooldown)
+	until1, cap1 := h.ReportThrottle("host.com", 5*time.Second, true, now.Add(100*time.Second))
+	_, cap2 := h.ReportThrottle("host.com", 5*time.Second, true, now.Add(100*time.Second+10*time.Millisecond))
+	_, cap3 := h.ReportThrottle("host.com", 5*time.Second, true, now.Add(100*time.Second+20*time.Millisecond))
+	_, cap4 := h.ReportThrottle("host.com", 5*time.Second, true, now.Add(100*time.Second+30*time.Millisecond))
+
+	if cap1 != 4 || cap2 != 4 || cap3 != 4 || cap4 != 4 {
+		t.Fatalf("expected burst throttles to coalesce to cap=4, got cap1=%d cap2=%d cap3=%d cap4=%d", cap1, cap2, cap3, cap4)
+	}
+
+	// After cooldown expires (new episode), another throttle halves cap from 4 to 2
+	_, capNext := h.ReportThrottle("host.com", 5*time.Second, true, until1.Add(time.Second))
+	if capNext != 2 {
+		t.Fatalf("expected next episode throttle cap=2, got %d", capNext)
+	}
+}
+
+func TestHostRateLimiter_ReportProgressRecovery(t *testing.T) {
+	h := NewHostRateLimiter()
+	now := time.Now()
+
+	// Throttle down to cap 2
+	h.ReportThrottle("recover.com", 2*time.Second, true, now)
+
+	// Partial progress (256 KB, 1 range) -> should not recover cap
+	cap, ok := h.ReportProgress("recover.com", 256*1024, 1, 8, now.Add(RecoveryWindow+time.Second))
+	if ok || cap != 2 {
+		t.Fatalf("expected cap=2 without full recovery threshold, got cap=%d ok=%v", cap, ok)
+	}
+
+	// Second range completing 256 KB (total 512 KB, 2 ranges) -> should recover to 3
+	cap, ok = h.ReportProgress("recover.com", 256*1024, 1, 8, now.Add(RecoveryWindow+time.Second))
+	if !ok || cap != 3 {
+		t.Fatalf("expected recovery to cap=3, got cap=%d ok=%v", cap, ok)
+	}
+}

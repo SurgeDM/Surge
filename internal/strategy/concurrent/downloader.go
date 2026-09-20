@@ -47,6 +47,12 @@ type ConcurrentDownloader struct {
 	soft403Progress    int64
 	soft403Since       time.Time
 	concurrencyGate    *adaptiveConcurrencyGate
+
+	nonRangeMu           sync.Mutex
+	nonRangeMirrors      map[string]bool
+	lastByteProgressTime time.Time
+	throttleEpisodeStart time.Time
+	consecutiveThrottles int
 }
 
 const (
@@ -63,12 +69,13 @@ func NewConcurrentDownloader(id string, progressCh chan<- types.DownloadEvent, p
 	}
 
 	return &ConcurrentDownloader{
-		ID:           id,
-		ProgressChan: progressCh,
-		State:        progState,
-		activeTasks:  make(map[int]*ActiveTask),
-		Runtime:      runtime,
-		hostLimiter:  transport.DefaultHostRateLimiter,
+		ID:              id,
+		ProgressChan:    progressCh,
+		State:           progState,
+		activeTasks:     make(map[int]*ActiveTask),
+		Runtime:         runtime,
+		hostLimiter:     transport.DefaultHostRateLimiter,
+		nonRangeMirrors: make(map[string]bool),
 		bufPool: sync.Pool{
 			New: func() any {
 				// Use configured buffer size
@@ -346,7 +353,9 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	effectiveSizeForWorkers := d.getEffectiveSizeForWorkers(fileSize, savedState, isResume)
 
 	numConns := d.getInitialConnections(effectiveSizeForWorkers)
-	d.concurrencyGate = newAdaptiveConcurrencyGate(numConns, d.Runtime.GetAdaptiveConcurrencyInterval())
+	host := transport.MirrorHost(rawurl)
+	initialCap := d.hostLimiter.ConcurrencyCap(host, numConns)
+	d.concurrencyGate = newAdaptiveConcurrencyGateWithInitialCap(numConns, initialCap, d.Runtime.GetAdaptiveConcurrencyInterval())
 	if d.State != nil {
 		d.State.RateLimited.Store(false)
 	}
@@ -409,6 +418,24 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
 	return d.syncFile(outFile)
+}
+
+func (d *ConcurrentDownloader) markMirrorNonRange(url string) {
+	d.nonRangeMu.Lock()
+	defer d.nonRangeMu.Unlock()
+	if d.nonRangeMirrors == nil {
+		d.nonRangeMirrors = make(map[string]bool)
+	}
+	d.nonRangeMirrors[url] = true
+}
+
+func (d *ConcurrentDownloader) isMirrorNonRange(url string) bool {
+	d.nonRangeMu.Lock()
+	defer d.nonRangeMu.Unlock()
+	if d.nonRangeMirrors == nil {
+		return false
+	}
+	return d.nonRangeMirrors[url]
 }
 
 func (d *ConcurrentDownloader) initMirrorStatus(rawurl string, candidateMirrors []string, activeMirrors []string, destPath string) {
