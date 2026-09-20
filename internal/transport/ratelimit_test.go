@@ -312,24 +312,26 @@ func TestThrottleBurstCoalesced(t *testing.T) {
 
 	// Initial cap is 4. Ramp up to 8 via progress reports
 	for i := 0; i < 4; i++ {
-		h.ReportProgress("host.com", 1*1024*1024, 2, 8, now.Add(time.Duration(i)*20*time.Second))
+		h.ReportProgressBytes("host.com", 512*1024)
+		h.ReportCompletedRange("host.com", 8, now.Add(time.Duration(i)*20*time.Second))
+		h.ReportCompletedRange("host.com", 8, now.Add(time.Duration(i)*20*time.Second))
 	}
 	if cap := h.ConcurrencyCap("host.com", 8); cap != 8 {
 		t.Fatalf("expected cap=8 after progress, got %d", cap)
 	}
 
 	// 4 workers report throttle in the same burst (same timestamp/active cooldown)
-	until1, cap1 := h.ReportThrottle("host.com", 5*time.Second, true, now.Add(100*time.Second))
-	_, cap2 := h.ReportThrottle("host.com", 5*time.Second, true, now.Add(100*time.Second+10*time.Millisecond))
-	_, cap3 := h.ReportThrottle("host.com", 5*time.Second, true, now.Add(100*time.Second+20*time.Millisecond))
-	_, cap4 := h.ReportThrottle("host.com", 5*time.Second, true, now.Add(100*time.Second+30*time.Millisecond))
+	_, cap1 := h.ReportThrottle("host.com", 8, 5*time.Second, true, now.Add(100*time.Second))
+	_, cap2 := h.ReportThrottle("host.com", 8, 5*time.Second, true, now.Add(100*time.Second+10*time.Millisecond))
+	_, cap3 := h.ReportThrottle("host.com", 8, 5*time.Second, true, now.Add(100*time.Second+20*time.Millisecond))
+	until4, cap4 := h.ReportThrottle("host.com", 8, 5*time.Second, true, now.Add(100*time.Second+30*time.Millisecond))
 
 	if cap1 != 4 || cap2 != 4 || cap3 != 4 || cap4 != 4 {
 		t.Fatalf("expected burst throttles to coalesce to cap=4, got cap1=%d cap2=%d cap3=%d cap4=%d", cap1, cap2, cap3, cap4)
 	}
 
 	// After cooldown expires (new episode), another throttle halves cap from 4 to 2
-	_, capNext := h.ReportThrottle("host.com", 5*time.Second, true, until1.Add(time.Second))
+	_, capNext := h.ReportThrottle("host.com", 4, 5*time.Second, true, until4.Add(time.Second))
 	if capNext != 2 {
 		t.Fatalf("expected next episode throttle cap=2, got %d", capNext)
 	}
@@ -340,17 +342,63 @@ func TestHostRateLimiter_ReportProgressRecovery(t *testing.T) {
 	now := time.Now()
 
 	// Throttle down to cap 2
-	h.ReportThrottle("recover.com", 2*time.Second, true, now)
+	h.ReportThrottle("recover.com", 4, 2*time.Second, true, now)
 
 	// Partial progress (256 KB, 1 range) -> should not recover cap
-	cap, ok := h.ReportProgress("recover.com", 256*1024, 1, 8, now.Add(RecoveryWindow+time.Second))
+	h.ReportProgressBytes("recover.com", 256*1024)
+	cap, ok := h.ReportCompletedRange("recover.com", 8, now.Add(RecoveryWindow+time.Second))
 	if ok || cap != 2 {
 		t.Fatalf("expected cap=2 without full recovery threshold, got cap=%d ok=%v", cap, ok)
 	}
 
 	// Second range completing 256 KB (total 512 KB, 2 ranges) -> should recover to 3
-	cap, ok = h.ReportProgress("recover.com", 256*1024, 1, 8, now.Add(RecoveryWindow+time.Second))
+	h.ReportProgressBytes("recover.com", 256*1024)
+	cap, ok = h.ReportCompletedRange("recover.com", 8, now.Add(RecoveryWindow+time.Second))
 	if !ok || cap != 3 {
 		t.Fatalf("expected recovery to cap=3, got cap=%d ok=%v", cap, ok)
 	}
 }
+
+func TestHostRateLimiter_SubEpisodeThrottleUpdatesLastThrottle(t *testing.T) {
+	h := NewHostRateLimiter()
+	now := time.Now()
+
+	// Initial throttle at t=0
+	h.ReportThrottle("subepisode.com", 4, 10*time.Second, true, now)
+
+	// Sub-episode throttle at t=4s (same episode cooldown until t=10s)
+	h.ReportThrottle("subepisode.com", 4, 2*time.Second, true, now.Add(4*time.Second))
+
+	// At t=16s (16s since t=0, but only 12s since t=4s throttle)
+	// RecoveryWindow is 15s. Recovery should NOT happen yet because lastThrottle was updated to t=4s.
+	h.ReportProgressBytes("subepisode.com", 512*1024)
+	h.ReportCompletedRange("subepisode.com", 4, now.Add(16*time.Second))
+	cap, ok := h.ReportCompletedRange("subepisode.com", 4, now.Add(16*time.Second))
+	if ok || cap != 2 {
+		t.Fatalf("expected no recovery at t=16s due to sub-episode throttle at t=4s, got cap=%d ok=%v", cap, ok)
+	}
+
+	// At t=20s (16s since t=4s throttle > 15s RecoveryWindow), recovery should succeed
+	cap, ok = h.ReportCompletedRange("subepisode.com", 4, now.Add(20*time.Second))
+	if !ok || cap != 3 {
+		t.Fatalf("expected recovery at t=20s (16s after sub-episode throttle), got cap=%d ok=%v", cap, ok)
+	}
+}
+
+func TestHostRateLimiter_LowConcurrencyCapReduction(t *testing.T) {
+	h := NewHostRateLimiter()
+	now := time.Now()
+
+	// Download configured for 2 max connections. Unknown host defaults to min(2, 4) = 2.
+	cap := h.ConcurrencyCap("lowconn.com", 2)
+	if cap != 2 {
+		t.Fatalf("expected initial cap 2 for low max connections, got %d", cap)
+	}
+
+	// First throttle passes observed currentCap = 2
+	_, newCap := h.ReportThrottle("lowconn.com", 2, 5*time.Second, true, now)
+	if newCap != 1 {
+		t.Fatalf("expected throttle on 2 connections to halve to cap=1, got %d", newCap)
+	}
+}
+

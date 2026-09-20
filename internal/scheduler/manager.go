@@ -216,6 +216,8 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		}
 
 		d := concurrent.NewConcurrentDownloader(cfg.ID, cfg.ProgressCh, progState, cfg.Runtime)
+		d.ImportThrottleState(cfg)
+		defer d.ExportThrottleState(cfg)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.Limiter = cfg.Limiter
 		d.RateLimitBps = cfg.RateLimit
@@ -333,7 +335,7 @@ func shouldFallbackToSingle(downloadErr error, downloaded int64) bool {
 	if types.IsInsufficientDiskSpace(downloadErr) {
 		return false
 	}
-	if strings.Contains(downloadErr.Error(), "ignored range request") {
+	if errors.Is(downloadErr, types.ErrRangeUnsupported) || strings.Contains(downloadErr.Error(), "ignored range request") {
 		return true
 	}
 	return downloaded == 0

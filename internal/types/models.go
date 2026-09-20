@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/binary"
 	"fmt"
+	"time"
 )
 
 // Task represents a byte range to download.
@@ -67,6 +68,11 @@ type DownloadRecord struct {
 	RateLimitSet bool     `json:"rate_limit_set,omitempty"`
 	Workers      int      `json:"workers,omitempty"`
 	MinChunkSize int64    `json:"min_chunk_size,omitempty"`
+
+	// Execution & Throttle State (Transient across retries)
+	ThrottleEpisodeStart time.Time `json:"-"`
+	LastByteProgressTime time.Time `json:"-"`
+	ConsecutiveThrottles int       `json:"-"`
 
 	// Runtime / Transient Configuration (Not persisted)
 	IsResume           bool                 `json:"-" gob:"-"`

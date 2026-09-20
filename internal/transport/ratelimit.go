@@ -59,11 +59,11 @@ func (h *HostRateLimiter) ConcurrencyCap(host string, configuredMax int) int {
 }
 
 func (h *HostRateLimiter) Penalize(host string, retryAfter time.Duration, explicit bool, now time.Time) time.Time {
-	until, _ := h.ReportThrottle(host, retryAfter, explicit, now)
+	until, _ := h.ReportThrottle(host, 0, retryAfter, explicit, now)
 	return until
 }
 
-func (h *HostRateLimiter) ReportThrottle(host string, retryAfter time.Duration, explicit bool, now time.Time) (time.Time, int) {
+func (h *HostRateLimiter) ReportThrottle(host string, currentCap int, retryAfter time.Duration, explicit bool, now time.Time) (time.Time, int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -79,11 +79,15 @@ func (h *HostRateLimiter) ReportThrottle(host string, retryAfter time.Duration, 
 
 	newEpisode := p.until.IsZero() || !now.Before(p.until)
 	if newEpisode {
-		p.concurrencyCap = max(1, p.concurrencyCap/2)
+		base := p.concurrencyCap
+		if currentCap > 0 && currentCap < base {
+			base = currentCap
+		}
+		p.concurrencyCap = max(1, base/2)
 		p.successfulBytes = 0
 		p.successfulRanges = 0
-		p.lastThrottle = now
 	}
+	p.lastThrottle = now
 
 	if now.Sub(p.lastHit) > types.RateLimitPenaltyDecay {
 		p.consecutive = 0
@@ -126,7 +130,22 @@ func (h *HostRateLimiter) ReportThrottle(host string, retryAfter time.Duration, 
 	return p.until, p.concurrencyCap
 }
 
-func (h *HostRateLimiter) ReportProgress(host string, bytes int64, completedRanges int, configuredMax int, now time.Time) (int, bool) {
+func (h *HostRateLimiter) ReportProgressBytes(host string, bytes int64) {
+	if bytes <= 0 {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	p, ok := h.hosts[host]
+	if !ok {
+		p = &hostPenalty{concurrencyCap: UnknownHostInitialCap}
+		h.hosts[host] = p
+	}
+	p.successfulBytes += bytes
+}
+
+func (h *HostRateLimiter) ReportCompletedRange(host string, configuredMax int, now time.Time) (int, bool) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
@@ -140,12 +159,7 @@ func (h *HostRateLimiter) ReportProgress(host string, bytes int64, completedRang
 		p.concurrencyCap = UnknownHostInitialCap
 	}
 
-	if bytes > 0 {
-		p.successfulBytes += bytes
-	}
-	if completedRanges > 0 {
-		p.successfulRanges += completedRanges
-	}
+	p.successfulRanges++
 
 	if p.successfulBytes >= RecoveryByteThreshold &&
 		p.successfulRanges >= RecoveryRangeThreshold &&

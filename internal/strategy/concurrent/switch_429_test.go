@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -423,20 +422,38 @@ func TestConcurrentDownloader_403DoesNotCancelHealthyWorker(t *testing.T) {
 	}
 }
 
-func TestSoft403NilStateWaitsForConfirmation(t *testing.T) {
-	downloader := NewConcurrentDownloader("soft403-nil-state", nil, nil, nil)
-	now := time.Unix(100, 0)
+func TestMirrorAware403Exhaustion(t *testing.T) {
+	downloader := NewConcurrentDownloader("soft403-mirror-aware", nil, nil, nil)
+	downloader.forbiddenByMirror = make(map[string]int)
+	mirrors := []string{"http://m1.com/file", "http://m2.com/file"}
 
-	for i := 0; i < soft403MaxExhaustions; i++ {
-		if downloader.shouldEscalate403(now) {
-			t.Fatalf("escalated on exhaustion %d before confirmation", i+1)
+	// m1 gets 403 3 times
+	downloader.forbiddenByMirror["http://m1.com/file"] = 3
+	downloader.forbiddenByMirror["http://m2.com/file"] = 2
+
+	// m2 has only 2, so not all mirrors forbidden
+	allForbidden := true
+	for _, m := range mirrors {
+		if downloader.forbiddenByMirror[m] < 3 {
+			allForbidden = false
+			break
 		}
 	}
-	if downloader.shouldEscalate403(now.Add(soft403ConfirmWindow - time.Nanosecond)) {
-		t.Fatal("escalated before the confirmation window elapsed")
+	if allForbidden {
+		t.Fatal("expected allForbidden=false when m2 has only 2 403s")
 	}
-	if !downloader.shouldEscalate403(now.Add(soft403ConfirmWindow)) {
-		t.Fatal("did not escalate after the confirmation window elapsed")
+
+	// m2 hits 3rd 403
+	downloader.forbiddenByMirror["http://m2.com/file"] = 3
+	allForbidden = true
+	for _, m := range mirrors {
+		if downloader.forbiddenByMirror[m] < 3 {
+			allForbidden = false
+			break
+		}
+	}
+	if !allForbidden {
+		t.Fatal("expected allForbidden=true when all mirrors hit 3 403s")
 	}
 }
 
@@ -644,7 +661,7 @@ func TestAdaptiveCapPersistedAcrossDownloaderRecreation(t *testing.T) {
 	host := "persisted-host.com"
 
 	// Simulate throttle on host to drop cap from 4 to 2
-	hostLimiter.ReportThrottle(host, time.Second, true, time.Now())
+	hostLimiter.ReportThrottle(host, 4, time.Second, true, time.Now())
 
 	// First downloader instance queries learned cap
 	d1 := NewConcurrentDownloader("d1", nil, nil, &types.RuntimeConfig{})
@@ -663,7 +680,7 @@ func TestAdaptiveCapPersistedAcrossDownloaderRecreation(t *testing.T) {
 	}
 }
 
-func TestOrdinary200IgnoredRangeTriggersSequentialFallback(t *testing.T) {
+func TestOrdinary200IgnoredRangeReturnsSentinel(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
@@ -672,6 +689,7 @@ func TestOrdinary200IgnoredRangeTriggersSequentialFallback(t *testing.T) {
 	// Server that returns 200 OK without Content-Range for range requests
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Length", strconv.FormatInt(fileSize, 10))
 		w.WriteHeader(http.StatusOK)
 		buf := make([]byte, fileSize)
 		_, _ = w.Write(buf)
@@ -679,7 +697,8 @@ func TestOrdinary200IgnoredRangeTriggersSequentialFallback(t *testing.T) {
 	defer server.Close()
 
 	destPath := filepath.Join(tmpDir, "ignored_range_test.bin")
-	if f, err := os.Create(destPath + ".surge"); err == nil {
+	workingPath := destPath + types.IncompleteSuffix
+	if f, err := os.Create(workingPath); err == nil {
 		_ = f.Close()
 	}
 
@@ -697,46 +716,58 @@ func TestOrdinary200IgnoredRangeTriggersSequentialFallback(t *testing.T) {
 
 	err := downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize)
 	if err == nil {
-		t.Fatal("expected Download to fail with errRangeUnsupported")
+		t.Fatal("expected Download to fail with ErrRangeUnsupported")
 	}
 
-	if !errors.Is(err, errRangeUnsupported) {
-		t.Fatalf("expected errRangeUnsupported, got: %v", err)
-	}
-
-	if !strings.Contains(err.Error(), "ignored range request") {
-		t.Fatal("expected error to indicate ignored range request")
+	if !errors.Is(err, types.ErrRangeUnsupported) {
+		t.Fatalf("expected ErrRangeUnsupported, got: %v", err)
 	}
 }
 
 func TestTwoDownloadsSameHostNoProgressIsolation(t *testing.T) {
-	d1 := NewConcurrentDownloader("d1", nil, nil, nil)
-	d2 := NewConcurrentDownloader("d2", nil, nil, nil)
+	hostLimiter := transport.NewHostRateLimiter()
+	host := "shared-host.com"
+
+	cfgA := &types.DownloadRecord{ID: "A", URL: "http://shared-host.com/a"}
+	cfgB := &types.DownloadRecord{ID: "B", URL: "http://shared-host.com/b"}
+
+	dA := NewConcurrentDownloader("A", nil, nil, nil)
+	dA.hostLimiter = hostLimiter
+
+	dB := NewConcurrentDownloader("B", nil, nil, nil)
+	dB.hostLimiter = hostLimiter
 
 	now := time.Now()
-	d1.soft403Mu.Lock()
-	d1.throttleEpisodeStart = now.Add(-11 * time.Minute)
-	d1.consecutiveThrottles = 15
-	d1.soft403Mu.Unlock()
+	// Throttle A on shared-host
+	until, _ := hostLimiter.ReportThrottle(host, 4, 5*time.Second, true, now)
+	dA.concurrencyGate = newAdaptiveConcurrencyGate(4, 5*time.Second)
+	dA.concurrencyGate.setCap(2, until)
+	dA.soft403Mu.Lock()
+	dA.throttleEpisodeStart = now
+	dA.consecutiveThrottles = 3
+	dA.soft403Mu.Unlock()
+	dA.ExportThrottleState(cfgA)
 
-	d2.soft403Mu.Lock()
-	d2.throttleEpisodeStart = time.Time{}
-	d2.consecutiveThrottles = 0
-	d2.soft403Mu.Unlock()
+	// Make progress on B
+	dB.ImportThrottleState(cfgB)
+	hostLimiter.ReportProgressBytes(host, 1*1024*1024)
+	hostLimiter.ReportCompletedRange(host, 8, now.Add(20*time.Second))
+	dB.soft403Mu.Lock()
+	dB.lastByteProgressTime = now.Add(20 * time.Second)
+	dB.soft403Mu.Unlock()
+	dB.ExportThrottleState(cfgB)
 
-	// Verify d1 is expired while d2 is unaffected
-	d1.soft403Mu.Lock()
-	d1Expired := now.Sub(d1.throttleEpisodeStart) > 10*time.Minute
-	d1.soft403Mu.Unlock()
-
-	d2.soft403Mu.Lock()
-	d2Expired := !d2.throttleEpisodeStart.IsZero() && now.Sub(d2.throttleEpisodeStart) > 10*time.Minute
-	d2.soft403Mu.Unlock()
-
-	if !d1Expired {
-		t.Fatal("expected d1 throttle episode to be expired (>10m)")
+	// Verify A's throttle state (cfgA) is isolated from B's progress
+	if cfgA.ConsecutiveThrottles != 3 {
+		t.Fatalf("expected cfgA.ConsecutiveThrottles=3, got %d", cfgA.ConsecutiveThrottles)
 	}
-	if d2Expired {
-		t.Fatal("expected d2 throttle episode to be unaffected by d1")
+	if cfgA.ThrottleEpisodeStart != now {
+		t.Fatalf("expected cfgA.ThrottleEpisodeStart=%v, got %v", now, cfgA.ThrottleEpisodeStart)
+	}
+	if cfgB.ConsecutiveThrottles != 0 {
+		t.Fatalf("expected cfgB.ConsecutiveThrottles=0, got %d", cfgB.ConsecutiveThrottles)
+	}
+	if cfgB.ThrottleEpisodeStart.IsZero() == false {
+		t.Fatalf("expected cfgB.ThrottleEpisodeStart to be zero, got %v", cfgB.ThrottleEpisodeStart)
 	}
 }

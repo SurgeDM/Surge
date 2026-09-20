@@ -43,7 +43,7 @@ type ConcurrentDownloader struct {
 	Headers            map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
 	hostLimiter        *transport.HostRateLimiter
 	soft403Mu          sync.Mutex
-	soft403Exhaustions int
+	forbiddenByMirror  map[string]int
 	soft403Progress    int64
 	soft403Since       time.Time
 	concurrencyGate    *adaptiveConcurrencyGate
@@ -172,47 +172,6 @@ func (d *ConcurrentDownloader) ReportMirrorError(url string) {
 	}
 }
 
-func (d *ConcurrentDownloader) shouldEscalate403(now time.Time) bool {
-	d.soft403Mu.Lock()
-	defer d.soft403Mu.Unlock()
-
-	progress := d.soft403Progress
-	if d.State != nil {
-		progress = d.State.Bytes.VerifiedProgress.Load()
-	}
-	if progress != d.soft403Progress {
-		d.soft403Progress = progress
-		d.soft403Exhaustions = 0
-		d.soft403Since = time.Time{}
-	}
-
-	if d.soft403Exhaustions < soft403MaxExhaustions {
-		d.soft403Exhaustions++
-	}
-	if d.soft403Exhaustions < soft403MaxExhaustions {
-		return false
-	}
-	if d.soft403Since.IsZero() {
-		d.soft403Since = now
-		return false
-	}
-	if now.Before(d.soft403Since.Add(soft403ConfirmWindow)) {
-		return false
-	}
-
-	// Progress can race the decision above; recheck before stopping healthy peers.
-	if d.State != nil {
-		progress = d.State.Bytes.VerifiedProgress.Load()
-	}
-	if progress != d.soft403Progress {
-		d.soft403Progress = progress
-		d.soft403Exhaustions = 1
-		d.soft403Since = time.Time{}
-		return false
-	}
-	return true
-}
-
 // calculateChunkSize determines optimal chunk size
 func (d *ConcurrentDownloader) calculateChunkSize(fileSize int64, numConns int) int64 {
 	// Safety check
@@ -308,7 +267,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	utils.Debug("ConcurrentDownloader.Download: %s -> %s (size: %d, mirrors: %d)", rawurl, destPath, fileSize, len(activeMirrors))
 
 	d.soft403Mu.Lock()
-	d.soft403Exhaustions = 0
+	d.forbiddenByMirror = make(map[string]int)
 	d.soft403Progress = 0
 	d.soft403Since = time.Time{}
 	d.soft403Mu.Unlock()
@@ -436,6 +395,28 @@ func (d *ConcurrentDownloader) isMirrorNonRange(url string) bool {
 		return false
 	}
 	return d.nonRangeMirrors[url]
+}
+
+func (d *ConcurrentDownloader) ExportThrottleState(cfg *types.DownloadRecord) {
+	if cfg == nil {
+		return
+	}
+	d.soft403Mu.Lock()
+	defer d.soft403Mu.Unlock()
+	cfg.ThrottleEpisodeStart = d.throttleEpisodeStart
+	cfg.LastByteProgressTime = d.lastByteProgressTime
+	cfg.ConsecutiveThrottles = d.consecutiveThrottles
+}
+
+func (d *ConcurrentDownloader) ImportThrottleState(cfg *types.DownloadRecord) {
+	if cfg == nil {
+		return
+	}
+	d.soft403Mu.Lock()
+	defer d.soft403Mu.Unlock()
+	d.throttleEpisodeStart = cfg.ThrottleEpisodeStart
+	d.lastByteProgressTime = cfg.LastByteProgressTime
+	d.consecutiveThrottles = cfg.ConsecutiveThrottles
 }
 
 func (d *ConcurrentDownloader) initMirrorStatus(rawurl string, candidateMirrors []string, activeMirrors []string, destPath string) {

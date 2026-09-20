@@ -27,13 +27,10 @@ type activeDownload struct {
 
 // queuedTask wraps a download config with SQS-style visibility and retry state
 type queuedTask struct {
-	cfg                  types.DownloadRecord
-	retries              int
-	inFlight             bool
-	retryAt              time.Time
-	lastPayloadProgress  time.Time
-	overallThrottles     int
-	throttleEpisodeStart time.Time
+	cfg      types.DownloadRecord
+	retries  int
+	inFlight bool
+	retryAt  time.Time
 }
 
 // Scheduler manages the download workers and tasks.
