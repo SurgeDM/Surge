@@ -122,6 +122,9 @@ jobs:
       - name: Submit to Chrome Web Store
         if: matrix.browser == 'chrome'
         run: |
+          # GitHub secrets may preserve the JSON-style `\n` escapes in a
+          # service-account private key. OpenSSL requires PEM line breaks.
+          export CHROME_SERVICE_ACCOUNT_PRIVATE_KEY="${CHROME_SERVICE_ACCOUNT_PRIVATE_KEY//\\n/$'\n'}"
           npx wxt submit \
             --chrome-api-version v2 \
             --chrome-zip output/*-chrome.zip
