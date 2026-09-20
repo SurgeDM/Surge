@@ -354,14 +354,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	workerMirrors := d.getWorkerMirrors(activeMirrors)
 
-	// Prewarming helps a fresh transfer discover usable connections. A resumed
-	// transfer may be recovering from a host cooldown, so extra probe requests
-	// only make the rate-limit situation worse.
-	hedgeCount := d.Runtime.GetDialHedgeCount()
-	if hedgeCount > 0 && !isResume {
-		d.prewarmConnections(downloadCtx, client, numConns, hedgeCount, workerMirrors)
-	}
-
 	// Open existing output file with .surge suffix (must be created by processing layer)
 	outFile, err := os.OpenFile(workingPath, os.O_RDWR, 0)
 	if err != nil {
@@ -839,75 +831,4 @@ func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *ht
 	}
 
 	return fileSize, nil
-}
-
-// prewarmConnections fires off concurrent pings to the mirrors to populate the connection pool
-func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *http.Client, numRequired, hedgeCount int, mirrors []string) {
-	totalToStart := numRequired + hedgeCount
-	if totalToStart > 128 { // Safety cap
-		totalToStart = 128
-	}
-
-	// Channel to signal when a connection is ready (handshake complete)
-	ready := make(chan struct{}, totalToStart)
-
-	// Create a sub-context for the pings so we can stop them once we have enough
-	pingCtx, cancelPings := context.WithCancel(ctx)
-	defer cancelPings()
-
-	for i := 0; i < totalToStart; i++ {
-		go func(idx int) {
-			// Round-robin mirrors
-			mirror := mirrors[idx%len(mirrors)]
-
-			// Use a fast Range request to ensure the handshake completes
-			req, err := http.NewRequestWithContext(pingCtx, http.MethodGet, mirror, nil)
-			if err != nil {
-				return
-			}
-
-			// Forward custom headers (essential for authenticated mirrors)
-			for key, val := range d.Headers {
-				if key != "Range" {
-					req.Header.Set(key, val)
-				}
-			}
-
-			// Ensure User-Agent and Range are set
-			if req.Header.Get("User-Agent") == "" {
-				req.Header.Set("User-Agent", d.Runtime.GetUserAgent())
-			}
-			req.Header.Set("Range", "bytes=0-0")
-
-			// Perform dial + request
-			resp, err := client.Do(req)
-			if err != nil {
-				return
-			}
-
-			// Drain body and close to return connection to idle pool, then signal readiness.
-			_, _ = io.Copy(io.Discard, resp.Body)
-			_ = resp.Body.Close()
-			ready <- struct{}{}
-		}(i)
-	}
-
-	// Wait until we have enough ready connections OR we hit a timeout
-	completed := 0
-	timeout := time.After(types.DialTimeout) // Use standard dial timeout for the whole batch
-
-	for completed < numRequired {
-		select {
-		case <-ready:
-			completed++
-		case <-timeout:
-			utils.Debug("Pre-warming timed out after %d/%d connections", completed, numRequired)
-			return
-		case <-ctx.Done():
-			return
-		}
-	}
-
-	utils.Debug("Pre-warming complete: %d connections hot", completed)
-	// Remaining pings will be cancelled by defer cancelPings()
 }
