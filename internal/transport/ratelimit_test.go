@@ -402,3 +402,22 @@ func TestHostRateLimiter_LowConcurrencyCapReduction(t *testing.T) {
 	}
 }
 
+func TestHostRateLimiter_MultipleFlushesOneRangeDoesNotRecover(t *testing.T) {
+	h := NewHostRateLimiter()
+	now := time.Now()
+
+	// Initial throttle to drop cap to 2
+	h.ReportThrottle("flushes.com", 4, 2*time.Second, true, now)
+
+	// Simulate 10 flushes on a single range (accumulating > 512 KB)
+	for i := 0; i < 10; i++ {
+		h.ReportProgressBytes("flushes.com", 100*1024)
+	}
+
+	// Only 1 range completed
+	cap, ok := h.ReportCompletedRange("flushes.com", 8, now.Add(RecoveryWindow+time.Second))
+	if ok || cap != 2 {
+		t.Fatalf("expected cap=2 with only 1 completed range despite 1MB flushes, got cap=%d ok=%v", cap, ok)
+	}
+}
+

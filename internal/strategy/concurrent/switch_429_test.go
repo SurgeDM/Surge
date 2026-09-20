@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -769,5 +770,85 @@ func TestTwoDownloadsSameHostNoProgressIsolation(t *testing.T) {
 	}
 	if cfgB.ThrottleEpisodeStart.IsZero() == false {
 		t.Fatalf("expected cfgB.ThrottleEpisodeStart to be zero, got %v", cfgB.ThrottleEpisodeStart)
+	}
+}
+
+func TestLooksLikeChallenge_BrotliNonCFNotClassifiedAsChallenge(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Content-Encoding": []string{"br"},
+			"Content-Type":     []string{"application/octet-stream"},
+			"Server":           []string{"nginx/1.18.0"},
+		},
+	}
+	if looksLikeChallenge(resp) {
+		t.Fatal("expected Brotli non-CF response to NOT be classified as a Cloudflare challenge")
+	}
+}
+
+func TestLooksLikeChallenge_CFMitigatedHeaderClassifiedAsChallenge(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Cf-Mitigated": []string{"challenge"},
+		},
+	}
+	if !looksLikeChallenge(resp) {
+		t.Fatal("expected cf-mitigated header to be classified as Cloudflare challenge")
+	}
+}
+
+func TestLooksLikeChallenge_CFServerBrotliClassifiedAsChallenge(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Server":           []string{"cloudflare"},
+			"Content-Encoding": []string{"br"},
+		},
+	}
+	if !looksLikeChallenge(resp) {
+		t.Fatal("expected Cloudflare server + Brotli response to be classified as Cloudflare challenge")
+	}
+}
+
+func TestConcurrentDownloader_AllMirrorsRangeUnsupportedReturnsSentinel(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(64 * utils.KiB)
+	makeServer := func() *httptest.Server {
+		return testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Length", strconv.FormatInt(fileSize, 10))
+			w.WriteHeader(http.StatusOK)
+			buf := make([]byte, fileSize)
+			_, _ = w.Write(buf)
+		}))
+	}
+
+	s1 := makeServer()
+	defer s1.Close()
+	s2 := makeServer()
+	defer s2.Close()
+
+	destPath := filepath.Join(tmpDir, "all_unsupported.bin")
+	if f, err := os.Create(destPath + types.IncompleteSuffix); err == nil {
+		_ = f.Close()
+	}
+
+	downloader := NewConcurrentDownloader("all-unsupported", nil, nil, &types.RuntimeConfig{
+		MaxConnectionsPerDownload: 2,
+		Workers:                   2,
+		MinChunkSize:              32 * utils.KiB,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	mirrors := []string{s1.URL, s2.URL}
+	err := downloader.Download(ctx, s1.URL, mirrors, mirrors, destPath, fileSize)
+	if !errors.Is(err, types.ErrRangeUnsupported) {
+		t.Fatalf("expected ErrRangeUnsupported when all mirrors ignore range, got: %v", err)
 	}
 }

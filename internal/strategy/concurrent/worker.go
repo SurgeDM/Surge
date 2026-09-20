@@ -35,6 +35,7 @@ func looksLikeChallenge(resp *http.Response) bool {
 	if resp == nil {
 		return false
 	}
+	// 1. Explicit Cloudflare mitigation header
 	if strings.EqualFold(resp.Header.Get("cf-mitigated"), "challenge") {
 		return true
 	}
@@ -44,12 +45,7 @@ func looksLikeChallenge(resp *http.Response) bool {
 	server := strings.ToLower(resp.Header.Get("Server"))
 	hasRangeHeader := resp.Header.Get("Content-Range") != ""
 
-	if !hasRangeHeader && (enc == "br" || enc == "gzip" || enc == "deflate" || strings.Contains(ct, "text/html")) {
-		if strings.Contains(server, "cloudflare") || enc == "br" || enc == "gzip" || enc == "deflate" || strings.Contains(ct, "text/html") {
-			return true
-		}
-	}
-
+	// 2. Body inspection for known Cloudflare challenge signatures
 	if resp.Body != nil {
 		var reader io.Reader = resp.Body
 		if enc == "gzip" {
@@ -65,12 +61,19 @@ func looksLikeChallenge(resp *http.Response) bool {
 			if strings.Contains(snippet, "cf-browser-verification") ||
 				strings.Contains(snippet, "<div id=\"cf-please-wait\">") ||
 				strings.Contains(snippet, "Just a moment...") ||
-				strings.Contains(snippet, "Attention Required!") ||
-				strings.Contains(snippet, "cloudflare") {
+				strings.Contains(snippet, "Attention Required!") {
 				return true
 			}
 		}
 	}
+
+	// 3. Narrow compound fingerprint: requires Cloudflare server header AND missing Content-Range AND HTML/compressed challenge response
+	if strings.Contains(server, "cloudflare") && !hasRangeHeader {
+		if strings.Contains(ct, "text/html") || enc == "br" || enc == "gzip" || enc == "deflate" {
+			return true
+		}
+	}
+
 	return false
 }
 
