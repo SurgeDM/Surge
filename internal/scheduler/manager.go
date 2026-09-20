@@ -176,9 +176,15 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		}
 	}
 
-	// Choose downloader based on probe results
+	// Choose downloader based on probe results. A transfer whose effective
+	// connection count is one should make one ordinary GET, not enter the range
+	// worker pipeline (which also performs pre-warming requests).
 	var downloadErr error
 	useConcurrent := cfg.SupportsRange
+	if useConcurrent && effectiveTotalSize > 0 && concurrent.InitialConnectionCount(cfg.Runtime, effectiveTotalSize) == 1 {
+		useConcurrent = false
+		utils.Debug("Using single-threaded downloader because effective connection count is 1")
+	}
 
 	if useConcurrent {
 		utils.Debug("Using concurrent downloader")

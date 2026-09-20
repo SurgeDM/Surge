@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -249,6 +250,53 @@ func TestRunDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
 	}
 	if !foundComplete {
 		t.Fatal("expected completion event")
+	}
+}
+
+func TestRunDownload_OneEffectiveConnectionUsesSingleDownloader(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := []byte("single connection must make one ordinary GET")
+	var requests atomic.Int32
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		if got := r.Header.Get("Range"); got != "" {
+			t.Fatalf("single-connection download sent Range header %q", got)
+		}
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
+		_, _ = w.Write(content)
+	}))
+	defer server.Close()
+
+	finalPath := filepath.Join(tmpDir, "single.bin")
+	if err := os.WriteFile(finalPath+types.IncompleteSuffix, nil, 0o644); err != nil {
+		t.Fatalf("failed to pre-create incomplete file: %v", err)
+	}
+
+	progressCh := make(chan types.DownloadEvent, 16)
+	cfg := types.DownloadRecord{
+		URL:           server.URL,
+		OutputPath:    tmpDir,
+		Filename:      "single.bin",
+		ID:            "single-effective-connection-test",
+		ProgressCh:    progressCh,
+		ProgressState: progress.New("single-effective-connection-test", int64(len(content))),
+		Runtime:       &types.RuntimeConfig{MaxConnectionsPerDownload: 1, DialHedgeCount: 4},
+		TotalSize:     int64(len(content)),
+		SupportsRange: true,
+	}
+
+	if err := RunDownload(context.Background(), &cfg); err != nil {
+		t.Fatalf("RunDownload failed: %v", err)
+	}
+	if got := requests.Load(); got != 1 {
+		t.Fatalf("request count = %d, want 1", got)
+	}
+	got, err := os.ReadFile(finalPath + types.IncompleteSuffix)
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+	if string(got) != string(content) {
+		t.Fatalf("downloaded content = %q, want %q", got, content)
 	}
 }
 

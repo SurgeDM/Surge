@@ -80,17 +80,23 @@ func NewConcurrentDownloader(id string, progressCh chan<- types.DownloadEvent, p
 	}
 }
 
-// getInitialConnections returns the starting number of connections based on file size
-func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
-	maxConns := d.Runtime.GetMaxConnectionsPerDownload()
-	minChunkSize := d.Runtime.GetMinChunkSize() // e.g., 1MB or 5MB
+// InitialConnectionCount returns the starting number of connections based on file size.
+// It is shared with the scheduler so a transfer that resolves to one connection can
+// use the single-stream downloader rather than entering the range-worker pipeline.
+func InitialConnectionCount(runtime *types.RuntimeConfig, fileSize int64) int {
+	if runtime == nil {
+		runtime = types.DefaultRuntimeConfig()
+	}
+
+	maxConns := runtime.GetMaxConnectionsPerDownload()
+	minChunkSize := runtime.GetMinChunkSize() // e.g., 1MB or 5MB
 
 	if fileSize <= 0 {
 		return 1
 	}
 
 	// If caller specified exact worker count, bypass √size heuristic.
-	if workers := d.Runtime.GetWorkers(); workers > 0 {
+	if workers := runtime.GetWorkers(); workers > 0 {
 		if workers > maxConns {
 			workers = maxConns
 		}
@@ -132,6 +138,10 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 	}
 
 	return calculatedWorkers
+}
+
+func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
+	return InitialConnectionCount(d.Runtime, fileSize)
 }
 
 // ReportMirrorError marks a mirror as having an error in the state
