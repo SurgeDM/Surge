@@ -68,17 +68,35 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
           pattern: extension-*
           merge-multiple: true
+      - name: Generate extension changelog
+        env:
+          CURRENT_TAG: ${{ github.ref_name }}
+        run: |
+          PREVIOUS_TAG="$(git describe --tags --abbrev=0 "${CURRENT_TAG}^" --match 'ext-v*')"
+          {
+            echo "## Extension changes"
+            echo
+            git log --no-merges \
+              --pretty=format:"- %s ([%h](https://github.com/${GITHUB_REPOSITORY}/commit/%H))" \
+              "${PREVIOUS_TAG}..${CURRENT_TAG}" -- \
+              extension/ \
+              .github/workflows/extension.yml \
+              .github/workflows/extension-checks.yml
+            echo
+          } > extension-changelog.md
       - name: Create Release
         uses: softprops/action-gh-release@v2
         with:
           files: artifacts/*.zip
-          generate_release_notes: true
+          body_path: extension-changelog.md
           draft: false
           prerelease: false
 
