@@ -424,7 +424,11 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 				Headers:      maps.Clone(cfg.Headers),
 			}
 			if err := store.SaveStateWithOptions(cfg.URL, queuedEvent.DestPath, snapshot, store.SaveStateOptions{SkipFileHash: true}); err != nil {
-				utils.Debug("Lifecycle: Failed to persist queued download headers: %v", err)
+				if rollbackErr := store.DeleteState(cfg.ID); rollbackErr != nil {
+					utils.Debug("Lifecycle: Failed to roll back queued download after header persistence failure: %v", rollbackErr)
+				}
+				_ = os.Remove(surgePath)
+				return "", "", fmt.Errorf("persist queued download headers: %w", err)
 			}
 		}
 		if mgr.eventBus != nil {

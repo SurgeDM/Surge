@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -172,6 +173,47 @@ func TestSaveState_PersistsHeadersOnlyInDetailState(t *testing.T) {
 	}
 	if master.Headers != nil || master.ProgressState != nil || master.Runtime != nil {
 		t.Error("credentials or runtime fields leaked into master state")
+	}
+}
+
+func TestLoadMasterList_MigratesLegacyRuntimeFields(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	if err := atomicWrite(getMasterPath(), MasterState{
+		Version: 2,
+		Downloads: []types.DownloadRecord{{
+			ID:                 "legacy-master-id",
+			URL:                "https://auth.example.com/file.zip",
+			Headers:            map[string]string{"Cookie": "session=secret", "Authorization": "Bearer token"},
+			Runtime:            types.DefaultRuntimeConfig(),
+			IsResume:           true,
+			IsExplicitCategory: true,
+			SupportsRange:      true,
+		}},
+	}); err != nil {
+		t.Fatalf("writing legacy master state failed: %v", err)
+	}
+
+	list, err := LoadMasterList()
+	if err != nil {
+		t.Fatalf("LoadMasterList failed: %v", err)
+	}
+	if len(list.Downloads) != 1 {
+		t.Fatalf("download count = %d, want 1", len(list.Downloads))
+	}
+	loaded := list.Downloads[0]
+	if loaded.Headers != nil || loaded.Runtime != nil || loaded.IsResume || loaded.IsExplicitCategory || loaded.SupportsRange {
+		t.Error("legacy master runtime fields were exposed after migration")
+	}
+
+	raw, err := os.ReadFile(getMasterPath())
+	if err != nil {
+		t.Fatalf("reading migrated master state failed: %v", err)
+	}
+	if bytes.Contains(raw, []byte("session=secret")) || bytes.Contains(raw, []byte("Bearer token")) {
+		t.Error("migrated master state still contains credentials")
 	}
 }
 

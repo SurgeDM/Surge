@@ -439,10 +439,35 @@ func DeleteTasks(id string) error {
 }
 
 func LoadMasterList() (*types.MasterList, error) {
-	masterMu.RLock()
-	defer masterMu.RUnlock()
+	masterMu.Lock()
+	defer masterMu.Unlock()
 
-	return loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return nil, err
+	}
+	if baseDir == "" {
+		return list, nil
+	}
+	if _, err := os.Stat(getMasterPath()); err == nil {
+		if err := saveMasterListLocked(list); err != nil {
+			return nil, err
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	return list, nil
+}
+
+func sanitizeMasterDownload(download *types.DownloadRecord) {
+	download.Headers = nil
+	download.ProgressCh = nil
+	download.ProgressState = nil
+	download.Runtime = nil
+	download.Limiter = nil
+	download.IsResume = false
+	download.IsExplicitCategory = false
+	download.SupportsRange = false
 }
 
 func saveMasterListLocked(list *types.MasterList) error {
@@ -454,14 +479,7 @@ func saveMasterListLocked(list *types.MasterList) error {
 	}
 	downloads := make([]types.DownloadRecord, len(list.Downloads))
 	for index, download := range list.Downloads {
-		download.Headers = nil
-		download.ProgressCh = nil
-		download.ProgressState = nil
-		download.Runtime = nil
-		download.Limiter = nil
-		download.IsResume = false
-		download.IsExplicitCategory = false
-		download.SupportsRange = false
+		sanitizeMasterDownload(&download)
 		downloads[index] = download
 	}
 	ms := MasterState{
@@ -515,6 +533,9 @@ func loadMasterListUnlocked() (*types.MasterList, error) {
 		utils.Debug("Master list has unsupported version %d (expected 2), deleting to start fresh", ms.Version)
 		_ = os.Remove(getMasterPath())
 		return &types.MasterList{Downloads: []types.DownloadRecord{}}, nil
+	}
+	for index := range ms.Downloads {
+		sanitizeMasterDownload(&ms.Downloads[index])
 	}
 	return &types.MasterList{Downloads: ms.Downloads}, nil
 }
