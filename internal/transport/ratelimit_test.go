@@ -146,8 +146,8 @@ func TestHostRateLimiter_RecordSuccess(t *testing.T) {
 	if !penalty.until.IsZero() || penalty.consecutive != 0 || !penalty.lastHit.IsZero() {
 		t.Fatalf("expected cooldown state to be cleared, got %+v", penalty)
 	}
-	if penalty.concurrencyCap != 2 {
-		t.Fatalf("expected learned concurrency cap to be retained, got %d", penalty.concurrencyCap)
+	if penalty.concurrencyCap != UnknownHostInitialCap {
+		t.Fatalf("expected host concurrency cap to be retained, got %d", penalty.concurrencyCap)
 	}
 }
 
@@ -405,6 +405,14 @@ func TestHostRateLimiter_LowConcurrencyCapReduction(t *testing.T) {
 	_, newCap := h.ReportThrottle("lowconn.com", 2, 5*time.Second, true, now)
 	if newCap != 1 {
 		t.Fatalf("expected throttle on 2 connections to halve to cap=1, got %d", newCap)
+	}
+}
+
+func TestHostRateLimiter_ZeroCurrentCapDoesNotAdapt(t *testing.T) {
+	h := NewHostRateLimiter()
+	h.ReportThrottle("disabled.com", 0, time.Second, true, time.Now())
+	if cap := h.ConcurrencyCap("disabled.com", 8); cap != UnknownHostInitialCap {
+		t.Fatalf("disabled adaptive concurrency changed learned cap to %d", cap)
 	}
 }
 

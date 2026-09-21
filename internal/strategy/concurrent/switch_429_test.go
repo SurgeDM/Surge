@@ -681,6 +681,38 @@ func TestAdaptiveCapPersistedAcrossDownloaderRecreation(t *testing.T) {
 	}
 }
 
+func TestAdaptiveConcurrencyDisabledUsesRequestedWorkers(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(256 * utils.KiB)
+	server := testutil.NewMockServerT(t,
+		testutil.WithFileSize(fileSize),
+		testutil.WithRangeSupport(true),
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "adaptive-disabled.bin")
+	if f, err := os.Create(destPath + types.IncompleteSuffix); err == nil {
+		_ = f.Close()
+	}
+
+	d := NewConcurrentDownloader("adaptive-disabled", nil, progress.New("adaptive-disabled", fileSize), &types.RuntimeConfig{
+		MaxConnectionsPerDownload:   8,
+		Workers:                     8,
+		MinChunkSize:                32 * utils.KiB,
+		AdaptiveConcurrencyInterval: 0,
+	})
+	d.hostLimiter = transport.NewHostRateLimiter()
+
+	if err := d.Download(context.Background(), server.URL(), nil, nil, destPath, fileSize); err != nil {
+		t.Fatalf("Download failed: %v", err)
+	}
+	if got := d.concurrencyGate.currentCap(); got != 8 {
+		t.Fatalf("disabled adaptive concurrency cap = %d, want 8", got)
+	}
+}
+
 func TestOrdinary200IgnoredRangeReturnsSentinel(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()

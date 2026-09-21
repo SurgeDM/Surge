@@ -78,9 +78,9 @@ func (h *HostRateLimiter) ReportThrottle(host string, currentCap int, retryAfter
 	}
 
 	newEpisode := p.until.IsZero() || !now.Before(p.until)
-	if newEpisode {
+	if newEpisode && currentCap > 0 {
 		base := p.concurrencyCap
-		if currentCap > 0 && currentCap < base {
+		if currentCap < base {
 			base = currentCap
 		}
 		p.concurrencyCap = max(1, base/2)

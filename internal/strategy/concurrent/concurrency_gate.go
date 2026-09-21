@@ -168,7 +168,13 @@ func (g *adaptiveConcurrencyGate) setCap(newCap int, cooldownUntil time.Time) in
 	}
 	g.cap = newCap
 	if !cooldownUntil.IsZero() {
+		now := time.Now()
 		g.cooldownUntil = cooldownUntil
+		g.lastThrottle = now
+		g.nextIncrease = now.Add(g.recoveryWindow)
+		if cooldownUntil.After(g.nextIncrease) {
+			g.nextIncrease = cooldownUntil
+		}
 		g.throttled = true
 		g.hasThrottled = true
 	}

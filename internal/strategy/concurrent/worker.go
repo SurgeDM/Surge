@@ -243,9 +243,16 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				}
 				d.soft403Mu.Unlock()
 
-				newCap, recovered := d.hostLimiter.ReportCompletedRange(host, d.Runtime.GetMaxConnectionsPerDownload(), time.Now())
-				if recovered && d.concurrencyGate != nil {
-					d.concurrencyGate.setCap(newCap, time.Time{})
+				if d.Runtime.IsAdaptiveConcurrencyEnabled() {
+					newCap, recovered := d.hostLimiter.ReportCompletedRange(host, d.Runtime.GetMaxConnectionsPerDownload(), time.Now())
+					if recovered {
+						if d.concurrencyGate != nil {
+							d.concurrencyGate.setCap(newCap, time.Time{})
+						}
+						if d.State != nil {
+							d.State.RateLimited.Store(false)
+						}
+					}
 				}
 
 				stopAt := activeTask.StopAt.Load()
@@ -293,8 +300,15 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				if d.concurrencyGate != nil {
 					gateCap = d.concurrencyGate.currentCap()
 				}
-				until, newCap := d.hostLimiter.ReportThrottle(host, gateCap, retryAfter, explicit, now)
+				reportedCap := gateCap
+				if !d.Runtime.IsAdaptiveConcurrencyEnabled() {
+					reportedCap = 0
+				}
+				until, newCap := d.hostLimiter.ReportThrottle(host, reportedCap, retryAfter, explicit, now)
 				if d.concurrencyGate != nil {
+					if !d.Runtime.IsAdaptiveConcurrencyEnabled() {
+						newCap = gateCap
+					}
 					d.concurrencyGate.setCap(newCap, until)
 				}
 				if d.State == nil || !d.State.RateLimited.Swap(true) {
@@ -381,8 +395,15 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				if d.concurrencyGate != nil {
 					gateCap = d.concurrencyGate.currentCap()
 				}
-				until, newCap := d.hostLimiter.ReportThrottle(host, gateCap, 2*time.Second, false, now)
+				reportedCap := gateCap
+				if !d.Runtime.IsAdaptiveConcurrencyEnabled() {
+					reportedCap = 0
+				}
+				until, newCap := d.hostLimiter.ReportThrottle(host, reportedCap, 2*time.Second, false, now)
 				if d.concurrencyGate != nil {
+					if !d.Runtime.IsAdaptiveConcurrencyEnabled() {
+						newCap = gateCap
+					}
 					d.concurrencyGate.setCap(newCap, until)
 				}
 
