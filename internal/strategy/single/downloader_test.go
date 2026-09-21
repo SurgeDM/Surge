@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -448,10 +449,12 @@ func TestSingleDownloader_Download_Cancellation(t *testing.T) {
 
 	// Large file with latency
 	fileSize := int64(5 * utils.MiB)
+	requestStarted := make(chan struct{}, 1)
 	server := testutil.NewMockServerT(t,
 		testutil.WithFileSize(fileSize),
 		testutil.WithRangeSupport(false),
 		testutil.WithByteLatency(500*time.Microsecond),
+		testutil.WithRequestStarted(requestStarted),
 	)
 	defer server.Close()
 
@@ -473,15 +476,17 @@ func TestSingleDownloader_Download_Cancellation(t *testing.T) {
 		done <- downloader.Download(ctx, server.URL(), destPath, fileSize, "cancel.bin")
 	}()
 
-	// Cancel after a short delay
-	time.Sleep(100 * time.Millisecond)
+	select {
+	case <-requestStarted:
+	case <-time.After(5 * time.Second):
+		t.Fatal("Request did not start in time")
+	}
 	cancel()
 
 	select {
 	case err := <-done:
-		// Accept context.Canceled or wrapped errors
-		if err != nil && err != context.Canceled && err.Error() != "context canceled" {
-			t.Logf("Expected context.Canceled, got: %v", err)
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("expected context cancellation error, got: %v", err)
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("Download didn't respond to cancellation")
@@ -849,5 +854,94 @@ func TestThrottledReader_UsesLimiterErrorForCleanRead(t *testing.T) {
 	}
 	if !errors.Is(err, waitErr) {
 		t.Fatalf("Read error = %v, want %v", err, waitErr)
+	}
+}
+
+func TestSingleDownloader_Download_UnknownLength(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     []byte
+		wantSize int64
+	}{
+		{
+			name:     "chunked stream with content",
+			body:     []byte("hello chunked world from surge single stream downloader test"),
+			wantSize: int64(len("hello chunked world from surge single stream downloader test")),
+		},
+		{
+			name:     "empty stream",
+			body:     nil,
+			wantSize: 0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir, cleanup, err := testutil.TempDir("surge-chunked-single")
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer cleanup()
+
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.WriteHeader(http.StatusOK)
+				if flusher, ok := w.(http.Flusher); ok {
+					flusher.Flush()
+					if len(tt.body) > 0 {
+						split := len(tt.body) / 2
+						_, _ = w.Write(tt.body[:split])
+						flusher.Flush()
+						_, _ = w.Write(tt.body[split:])
+						flusher.Flush()
+					}
+				}
+			}))
+			defer server.Close()
+
+			destPath := filepath.Join(tmpDir, "output.bin")
+			if f, err := os.Create(destPath + types.IncompleteSuffix); err == nil {
+				_ = f.Close()
+			} else {
+				t.Fatal(err)
+			}
+
+			state := progress.New("unknown-single-test", 0)
+			initialStartTime := state.Session.StartTime()
+			downloader := NewSingleDownloader("unknown-single-id", nil, state, &types.RuntimeConfig{})
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+
+			if err := downloader.Download(ctx, server.URL, destPath, 0, "output.bin"); err != nil {
+				t.Fatalf("Download failed: %v", err)
+			}
+
+			if downloader.TotalSize != tt.wantSize {
+				t.Errorf("downloader.TotalSize = %d, want %d", downloader.TotalSize, tt.wantSize)
+			}
+			if state.Bytes.TotalSize.Load() != tt.wantSize {
+				t.Errorf("state.Bytes.TotalSize = %d, want %d", state.Bytes.TotalSize.Load(), tt.wantSize)
+			}
+			if state.Bytes.Downloaded.Load() != tt.wantSize {
+				t.Errorf("state.Bytes.Downloaded = %d, want %d", state.Bytes.Downloaded.Load(), tt.wantSize)
+			}
+			if state.Bytes.VerifiedProgress.Load() != tt.wantSize {
+				t.Errorf("state.Bytes.VerifiedProgress = %d, want %d", state.Bytes.VerifiedProgress.Load(), tt.wantSize)
+			}
+			if !state.Session.StartTime().Equal(initialStartTime) {
+				t.Errorf("state.Session.StartTime() was reset")
+			}
+
+			if len(tt.body) > 0 {
+				workingPath := destPath + types.IncompleteSuffix
+				data, err := os.ReadFile(workingPath)
+				if err != nil {
+					t.Fatalf("ReadFile(%s) failed: %v", workingPath, err)
+				}
+				if string(data) != string(tt.body) {
+					t.Errorf("file content mismatch: got %q, want %q", string(data), string(tt.body))
+				}
+			}
+		})
 	}
 }

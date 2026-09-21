@@ -48,7 +48,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.0"
+          go-version: "1.26.0"
           check-latest: false
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
@@ -124,7 +124,7 @@ jobs:
 
   release:
     name: Release
-    runs-on: ubuntu-latest
+    runs-on: windows-latest
     needs: test
     # Extra guard: only core tags (v*), never extension tags (ext-v*)
     if: startsWith(github.ref, 'refs/tags/v') && !startsWith(github.ref, 'refs/tags/ext-v')
@@ -136,7 +136,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.0"
+          go-version: "1.26.0"
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:
@@ -147,3 +147,63 @@ jobs:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+          CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
+
+      - name: Upload GoReleaser artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: goreleaser-dist
+          path: dist
+
+  appimage:
+    name: Package AppImage
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - name: Download GoReleaser artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: goreleaser-dist
+          path: dist
+
+      - name: Package AppImage
+        shell: bash
+        run: |
+          set -euo pipefail
+          binary=$(find dist -type f -name surge -path '*linux*amd64*' -print -quit)
+          test -n "$binary"
+          chmod +x "$binary"
+          curl -L --fail --retry 3 --output appimagetool \
+            https://github.com/AppImage/appimagetool/releases/download/1.9.1/appimagetool-x86_64.AppImage
+          curl -L --fail --retry 3 --output runtime-x86_64 \
+            https://github.com/AppImage/type2-runtime/releases/download/20251108/runtime-x86_64
+          printf '%s\n' \
+            'ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0  appimagetool' \
+            '2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d  runtime-x86_64' \
+            | sha256sum --check --strict
+          chmod +x appimagetool
+          ./scripts/package-appimage.sh "$binary" AppDir
+          ARCH=x86_64 ./appimagetool --appimage-extract-and-run \
+            --runtime-file runtime-x86_64 \
+            -u 'gh-releases-zsync|SurgeDM|Surge|latest|Surge_*_linux_x86_64.AppImage.zsync' \
+            AppDir "Surge_${GITHUB_REF_NAME#v}_linux_x86_64.AppImage"
+
+      - name: Verify AppImage
+        shell: bash
+        run: |
+          set -euo pipefail
+          appimage="Surge_${GITHUB_REF_NAME#v}_linux_x86_64.AppImage"
+          test -s "$appimage" && test -s "$appimage.zsync"
+          "./$appimage" --appimage-extract >/dev/null
+          test -x squashfs-root/AppRun
+          test -f squashfs-root/surge.desktop
+          test -f squashfs-root/surge.png
+
+      - name: Upload AppImage
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          appimage="Surge_${GITHUB_REF_NAME#v}_linux_x86_64.AppImage"
+          gh release upload "$GITHUB_REF_NAME" "$appimage" "$appimage.zsync" --clobber

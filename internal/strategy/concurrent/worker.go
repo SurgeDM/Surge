@@ -291,7 +291,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 				gateCap := 0
 				if d.concurrencyGate != nil {
-					gateCap = d.concurrencyGate.cap
+					gateCap = d.concurrencyGate.currentCap()
 				}
 				until, newCap := d.hostLimiter.ReportThrottle(host, gateCap, retryAfter, explicit, now)
 				if d.concurrencyGate != nil {
@@ -379,7 +379,7 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				now := time.Now()
 				gateCap := 0
 				if d.concurrencyGate != nil {
-					gateCap = d.concurrencyGate.cap
+					gateCap = d.concurrencyGate.currentCap()
 				}
 				until, newCap := d.hostLimiter.ReportThrottle(host, gateCap, 2*time.Second, false, now)
 				if d.concurrencyGate != nil {
@@ -501,13 +501,14 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 
 	// Helper to flush pending updates to global state
 	flushUpdates := func() {
-		if pendingBytes > 0 && d.State != nil {
-			// Update Chunk Map (Global Lock)
-			d.State.UpdateChunkStatus(pendingStart, pendingBytes, types.ChunkCompleted)
+		if pendingBytes > 0 {
+			if d.State != nil {
+				// Update Chunk Map (Global Lock)
+				d.State.UpdateChunkStatus(pendingStart, pendingBytes, types.ChunkCompleted)
 
-			// Update Downloaded Counter (Atomic)
-			d.State.Bytes.Downloaded.Add(pendingBytes)
-
+				// Update Downloaded Counter (Atomic)
+				d.State.Bytes.Downloaded.Add(pendingBytes)
+			}
 			now := time.Now()
 			d.soft403Mu.Lock()
 			d.lastByteProgressTime = now

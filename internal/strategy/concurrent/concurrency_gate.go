@@ -183,6 +183,12 @@ func (g *adaptiveConcurrencyGate) parkedWorkers() int64 {
 	return g.parked.Load()
 }
 
+func (g *adaptiveConcurrencyGate) currentCap() int {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return g.cap
+}
+
 func (g *adaptiveConcurrencyGate) sawThrottle() bool {
 	g.mu.Lock()
 	defer g.mu.Unlock()

@@ -6,8 +6,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/progress"
@@ -528,61 +530,56 @@ func TestScheduler_GracefulShutdown_PausesAll(t *testing.T) {
 }
 
 func TestScheduler_GracefulShutdown_WaitsPastSoftTimeout(t *testing.T) {
-	ch := make(chan types.DownloadEvent, 10)
-	pool := New(ch, 1)
+	synctest.Test(t, func(t *testing.T) {
+		ch := make(chan types.DownloadEvent, 10)
+		pool := New(ch, 1)
 
-	ps := progress.New("wait-test-id", 1000)
-	pool.mu.Lock()
-	ad := &activeDownload{
-		config: types.DownloadRecord{
-			ID:            "wait-test-id",
-			ProgressState: ps,
-		},
-	}
-	ad.running.Store(true)
-	pool.downloads["wait-test-id"] = ad
-	pool.mu.Unlock()
+		ps := progress.New("wait-test-id", 1000)
+		pool.mu.Lock()
+		ad := &activeDownload{config: types.DownloadRecord{ID: "wait-test-id", ProgressState: ps}}
+		ad.running.Store(true)
+		pool.downloads["wait-test-id"] = ad
+		pool.mu.Unlock()
 
-	origSoftTimeout := gracefulShutdownPauseSoftTimeout
-	origPollInterval := gracefulShutdownPausePollInterval
-	origHardTimeout := gracefulShutdownPauseHardTimeout
-	gracefulShutdownPauseSoftTimeout = 30 * time.Millisecond
-	gracefulShutdownPausePollInterval = 5 * time.Millisecond
-	gracefulShutdownPauseHardTimeout = 5 * time.Second
-	defer func() {
-		gracefulShutdownPauseSoftTimeout = origSoftTimeout
-		gracefulShutdownPausePollInterval = origPollInterval
-		gracefulShutdownPauseHardTimeout = origHardTimeout
-	}()
+		origSoftTimeout := gracefulShutdownPauseSoftTimeout
+		origPollInterval := gracefulShutdownPausePollInterval
+		origHardTimeout := gracefulShutdownPauseHardTimeout
+		gracefulShutdownPauseSoftTimeout = 30 * time.Millisecond
+		gracefulShutdownPausePollInterval = 5 * time.Millisecond
+		gracefulShutdownPauseHardTimeout = 5 * time.Second
+		defer func() {
+			gracefulShutdownPauseSoftTimeout = origSoftTimeout
+			gracefulShutdownPausePollInterval = origPollInterval
+			gracefulShutdownPauseHardTimeout = origHardTimeout
+		}()
 
-	done := make(chan struct{})
-	go func() {
-		pool.GracefulShutdown()
-		close(done)
-	}()
+		done := make(chan struct{})
+		go func() {
+			pool.GracefulShutdown()
+			close(done)
+		}()
+		synctest.Wait()
+		if !ps.IsPausing() {
+			t.Fatal("expected graceful shutdown to set pausing=true")
+		}
 
-	deadline := time.Now().Add(250 * time.Millisecond)
-	for !ps.IsPausing() && time.Now().Before(deadline) {
-		time.Sleep(2 * time.Millisecond)
-	}
-	if !ps.IsPausing() {
-		t.Fatal("expected graceful shutdown to set pausing=true")
-	}
+		time.Sleep(gracefulShutdownPauseSoftTimeout + 20*time.Millisecond)
+		synctest.Wait()
+		select {
+		case <-done:
+			t.Fatal("GracefulShutdown returned before pausing was cleared")
+		default:
+		}
 
-	// Wait beyond the soft timeout. Shutdown should still be blocked.
-	time.Sleep(gracefulShutdownPauseSoftTimeout + 20*time.Millisecond)
-	select {
-	case <-done:
-		t.Fatal("GracefulShutdown returned before pausing was cleared")
-	default:
-	}
-
-	ps.SetPausing(false)
-	select {
-	case <-done:
-	case <-time.After(500 * time.Millisecond):
-		t.Fatal("GracefulShutdown did not return after pausing was cleared")
-	}
+		ps.SetPausing(false)
+		time.Sleep(gracefulShutdownPausePollInterval)
+		synctest.Wait()
+		select {
+		case <-done:
+		default:
+			t.Fatal("GracefulShutdown did not return after pausing was cleared")
+		}
+	})
 }
 
 func TestScheduler_GracefulShutdown_ClearsStalePausingWithoutWorker(t *testing.T) {
@@ -1146,4 +1143,252 @@ func TestSchedulerRetryNotRunnableBeforeRetryAt(t *testing.T) {
 		pool.wg.Done()
 	}
 	pool.mu.Unlock()
+}
+
+func TestScheduler_PauseAtVerified_EndgameMatrix(t *testing.T) {
+	tests := []struct {
+		name         string
+		done         bool
+		totalSize    int64
+		liveTotal    int64
+		vp           int64
+		wantReturn   bool
+		wantCanceled bool
+		wantPaused   bool
+		wantPausing  bool
+	}{
+		{
+			name:         "Done is true: no-op guard",
+			done:         true,
+			totalSize:    1000,
+			liveTotal:    1000,
+			vp:           500,
+			wantReturn:   true,
+			wantCanceled: false,
+			wantPaused:   false,
+			wantPausing:  false,
+		},
+		{
+			name:         "Live total known and VP >= total: no-op guard",
+			done:         false,
+			totalSize:    1000,
+			liveTotal:    1000,
+			vp:           1000,
+			wantReturn:   true,
+			wantCanceled: false,
+			wantPaused:   false,
+			wantPausing:  false,
+		},
+		{
+			name:         "VP < total: normal pause proceeds",
+			done:         false,
+			totalSize:    1000,
+			liveTotal:    1000,
+			vp:           900,
+			wantReturn:   true,
+			wantCanceled: true,
+			wantPaused:   true,
+			wantPausing:  true,
+		},
+		{
+			name:         "Total unknown: arbitrary VP must not be treated as complete",
+			done:         false,
+			totalSize:    0,
+			liveTotal:    0,
+			vp:           5000,
+			wantReturn:   true,
+			wantCanceled: true,
+			wantPaused:   true,
+			wantPausing:  true,
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			progState := progress.New("guard-test", tc.totalSize)
+			if tc.done {
+				progState.Done.Store(true)
+			}
+			if tc.liveTotal > 0 {
+				progState.Bytes.TotalSize.Store(tc.liveTotal)
+			}
+			if tc.vp > 0 {
+				progState.Bytes.VerifiedProgress.Store(tc.vp)
+			}
+
+			canceled := false
+			pool := New(make(chan types.DownloadEvent, 10), 1)
+			t.Cleanup(func() { pool.GracefulShutdown() })
+
+			pool.mu.Lock()
+			pool.downloads["guard-test"] = &activeDownload{
+				config: types.DownloadRecord{
+					ID:            "guard-test",
+					TotalSize:     tc.totalSize,
+					ProgressState: progState,
+				},
+				cancel: func() {
+					canceled = true
+				},
+			}
+			pool.mu.Unlock()
+
+			res := pool.Pause("guard-test")
+			if res != tc.wantReturn {
+				t.Errorf("Pause() = %v, want %v", res, tc.wantReturn)
+			}
+			if canceled != tc.wantCanceled {
+				t.Errorf("canceled = %v, want %v", canceled, tc.wantCanceled)
+			}
+			if progState.IsPaused() != tc.wantPaused {
+				t.Errorf("IsPaused() = %v, want %v", progState.IsPaused(), tc.wantPaused)
+			}
+			if progState.IsPausing() != tc.wantPausing {
+				t.Errorf("IsPausing() = %v, want %v", progState.IsPausing(), tc.wantPausing)
+			}
+		})
+	}
+}
+
+func TestScheduler_WorkerEndgameSuccessClearsPause(t *testing.T) {
+	ch := make(chan types.DownloadEvent, 16)
+	pool := New(ch, 1)
+	t.Cleanup(func() { pool.GracefulShutdown() })
+
+	body := []byte("worker endgame success")
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+
+	id := "test-endgame-success"
+	state := progress.New(id, int64(len(body)))
+	// Simulate late Pause arriving right as physical download completes
+	state.SetPausing(true)
+	state.Paused.Store(true)
+
+	tmpDir := t.TempDir()
+	destPath := filepath.Join(tmpDir, "endgame.bin")
+	if f, err := os.Create(destPath + types.IncompleteSuffix); err == nil {
+		_ = f.Close()
+	}
+
+	pool.Add(types.DownloadRecord{
+		ID:            id,
+		URL:           server.URL,
+		OutputPath:    tmpDir,
+		Filename:      "endgame.bin",
+		DestPath:      destPath,
+		ProgressState: state,
+		ProgressCh:    ch,
+		Runtime:       types.DefaultRuntimeConfig(),
+		TotalSize:     int64(len(body)),
+		SupportsRange: false,
+	})
+
+	// Deterministic wait for worker to complete via WaitGroup
+	done := make(chan struct{})
+	go func() {
+		pool.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for worker completion")
+	}
+
+	if !state.Done.Load() {
+		t.Error("expected state.Done to be true on successful endgame completion")
+	}
+	if state.IsPaused() {
+		t.Error("expected stale Paused flag to be cleared on successful endgame completion")
+	}
+	if state.IsPausing() {
+		t.Error("expected Pausing flag to be cleared on successful endgame completion")
+	}
+
+	// Verify EventComplete received and download removed from active pool
+	pool.mu.RLock()
+	_, inDownloads := pool.downloads[id]
+	pool.mu.RUnlock()
+	if inDownloads {
+		t.Error("completed download must be removed from pool.downloads")
+	}
+
+	var completeReceived bool
+	for len(ch) > 0 {
+		msg := <-ch
+		if msg.Type == types.EventError {
+			t.Fatalf("unexpected EventError: %+v", msg)
+		}
+		if msg.Type == types.EventPaused {
+			t.Fatalf("unexpected EventPaused when physical download completed: %+v", msg)
+		}
+		if msg.Type == types.EventComplete {
+			completeReceived = true
+		}
+	}
+	if !completeReceived {
+		t.Error("expected EventComplete to be emitted")
+	}
+}
+
+func TestScheduler_WorkerRealErrorWithPauseFlagDoesNotSwallowError(t *testing.T) {
+	ch := make(chan types.DownloadEvent, 16)
+	pool := New(ch, 1)
+	t.Cleanup(func() { pool.GracefulShutdown() })
+
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	id := "test-error-not-swallowed"
+	state := progress.New(id, 0)
+	// Simulate isPaused == true when worker finishes with a real error
+	state.Paused.Store(true)
+
+	pool.Add(types.DownloadRecord{
+		ID:            id,
+		URL:           server.URL,
+		ProgressState: state,
+		ProgressCh:    ch,
+		Runtime:       types.DefaultRuntimeConfig(),
+	})
+
+	// Deterministic wait for worker to complete via WaitGroup
+	done := make(chan struct{})
+	go func() {
+		pool.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(3 * time.Second):
+		t.Fatal("timed out waiting for worker completion")
+	}
+
+	// Drain events: must receive EventError, must NOT receive EventPaused
+	var errorReceived bool
+	for len(ch) > 0 {
+		msg := <-ch
+		if msg.Type == types.EventPaused {
+			t.Fatalf("real error must not be swallowed into EventPaused: %+v", msg)
+		}
+		if msg.Type == types.EventError {
+			errorReceived = true
+		}
+	}
+	if !errorReceived {
+		t.Error("expected EventError to be emitted for real error despite isPaused=true")
+	}
+
+	pool.mu.RLock()
+	_, inDownloads := pool.downloads[id]
+	pool.mu.RUnlock()
+	if inDownloads {
+		t.Error("failed download must not be retained in pool.downloads")
+	}
 }

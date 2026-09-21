@@ -138,10 +138,16 @@ func TestHostRateLimiter_RecordSuccess(t *testing.T) {
 
 	h.recordSuccess("example.com", now.Add(2*time.Second))
 	h.mu.Lock()
-	_, retained := h.hosts["example.com"]
+	penalty, retained := h.hosts["example.com"]
 	h.mu.Unlock()
-	if retained {
-		t.Fatal("expected success after cooldown to remove the host penalty")
+	if !retained {
+		t.Fatal("expected success after cooldown to retain the learned host state")
+	}
+	if !penalty.until.IsZero() || penalty.consecutive != 0 || !penalty.lastHit.IsZero() {
+		t.Fatalf("expected cooldown state to be cleared, got %+v", penalty)
+	}
+	if penalty.concurrencyCap != 2 {
+		t.Fatalf("expected learned concurrency cap to be retained, got %d", penalty.concurrencyCap)
 	}
 }
 
@@ -420,4 +426,3 @@ func TestHostRateLimiter_MultipleFlushesOneRangeDoesNotRecover(t *testing.T) {
 		t.Fatalf("expected cap=2 with only 1 completed range despite 1MB flushes, got cap=%d ok=%v", cap, ok)
 	}
 }
-

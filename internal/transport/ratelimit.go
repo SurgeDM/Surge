@@ -198,9 +198,12 @@ func (h *HostRateLimiter) recordSuccess(host string, now time.Time) {
 	defer h.mu.Unlock()
 
 	p, ok := h.hosts[host]
-	if !ok || !now.Before(p.until) {
-		delete(h.hosts, host)
+	if !ok || now.Before(p.until) {
+		return
 	}
+	p.until = time.Time{}
+	p.consecutive = 0
+	p.lastHit = time.Time{}
 }
 
 func (h *HostRateLimiter) PickMirror(hosts []string, startIdx int, now time.Time) (int, time.Duration) {

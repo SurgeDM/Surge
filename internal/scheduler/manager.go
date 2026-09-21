@@ -18,22 +18,24 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
+const terminalSendTimeout = 3 * time.Second
+
 // safeSendProgress sends msg on ch, recovering from panics caused by sending
 // on a closed channel (which can happen during shutdown).
 func safeSendProgress(ch chan<- types.DownloadEvent, msg types.DownloadEvent, doneCh <-chan struct{}) {
 	defer func() { _ = recover() }()
-	if doneCh != nil {
-		select {
-		case ch <- msg:
-			return
-		default:
-		}
-		select {
-		case ch <- msg:
-		case <-doneCh:
-		}
-	} else {
-		ch <- msg
+	select {
+	case ch <- msg:
+		return
+	default:
+	}
+	timer := time.NewTimer(terminalSendTimeout)
+	defer timer.Stop()
+	select {
+	case ch <- msg:
+	case <-doneCh:
+	case <-timer.C:
+		utils.Debug("safeSendProgress: timed out delivering event %v", msg.Type)
 	}
 }
 
@@ -271,14 +273,15 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		}
 	}
 
-	// Only send completion if NO error AND not paused.
+	// Return typed pause error rather than normalizing to nil so callers
+	// can distinguish a clean pause from successful completion or errors.
 	if errors.Is(downloadErr, types.ErrPaused) {
 		utils.Debug("Download paused cleanly")
-		return nil // Return nil so worker can remove it from active map
+		return downloadErr
 	}
 
-	isPaused := progState != nil && progState.IsPaused()
-	if downloadErr == nil && !isPaused {
+	// Physical download success takes precedence over late-arriving pause signals.
+	if downloadErr == nil {
 		var elapsed time.Duration
 		if progState != nil {
 			_, elapsed = progState.FinalizeSession(effectiveTotalSize)
@@ -295,6 +298,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 
 		if cfg.ProgressCh != nil {
 			rateLimit, rateLimitSet := currentRateLimit()
+			// EventComplete is terminal-reliable and must not be dropped due to canceled context.
 			safeSendProgress(cfg.ProgressCh, types.DownloadEvent{
 				Type:         types.EventComplete,
 				DownloadID:   cfg.ID,
@@ -304,15 +308,14 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 				AvgSpeed:     avgSpeed,
 				RateLimit:    rateLimit,
 				RateLimitSet: rateLimitSet,
-			}, ctx.Done())
+			}, nil)
 		}
-	} else if downloadErr != nil && !isPaused {
-		// Verify it's not a cancellation error
-		if errors.Is(downloadErr, context.Canceled) || errors.Is(downloadErr, context.DeadlineExceeded) {
-			utils.Debug("Download canceled cleanly")
-			return downloadErr
-		}
-		// EventError is emitted by the scheduler's worker() after all retries are exhausted.
+		return nil
+	}
+
+	if errors.Is(downloadErr, context.Canceled) || errors.Is(downloadErr, context.DeadlineExceeded) {
+		utils.Debug("Download canceled cleanly")
+		return downloadErr
 	}
 
 	return downloadErr
@@ -335,7 +338,7 @@ func shouldFallbackToSingle(downloadErr error, downloaded int64) bool {
 	if types.IsInsufficientDiskSpace(downloadErr) {
 		return false
 	}
-	if errors.Is(downloadErr, types.ErrRangeUnsupported) || strings.Contains(downloadErr.Error(), "ignored range request") {
+	if errors.Is(downloadErr, types.ErrRangeUnsupported) {
 		return true
 	}
 	return downloaded == 0

@@ -97,6 +97,15 @@ func TestUniqueFilePath(t *testing.T) {
 	}
 }
 
+func TestShouldFallbackToSingleRequiresRangeUnsupportedSentinel(t *testing.T) {
+	if shouldFallbackToSingle(errors.New("server ignored range request"), 1) {
+		t.Fatal("unwrapped ignored-range text must not trigger fallback")
+	}
+	if !shouldFallbackToSingle(fmt.Errorf("download failed: %w", types.ErrRangeUnsupported), 1) {
+		t.Fatal("wrapped ErrRangeUnsupported must trigger fallback")
+	}
+}
+
 func TestUniqueFilePath_NoExtension(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "surge-test-*")
 	if err != nil {
@@ -779,5 +788,145 @@ func TestSendPausedFallbackWaitsForFullChannel(t *testing.T) {
 	case duplicate := <-progressCh:
 		t.Fatalf("unexpected duplicate pause event: %+v", duplicate)
 	default:
+	}
+}
+
+func TestSafeSendProgress_CompleteTerminalReliableAgainstCanceledContext(t *testing.T) {
+	ch := make(chan types.DownloadEvent, 1)
+	// Fill buffer with 1 item so channel is full
+	ch <- types.DownloadEvent{Type: types.EventStarted}
+
+	completeEvent := types.DownloadEvent{
+		Type:       types.EventComplete,
+		DownloadID: "test-id",
+	}
+
+	sent := make(chan struct{})
+	go func() {
+		// Terminal-reliable send passes nil for doneCh
+		safeSendProgress(ch, completeEvent, nil)
+		close(sent)
+	}()
+
+	// Verify safeSendProgress does not immediately discard the event
+	select {
+	case <-sent:
+		t.Fatal("expected safeSendProgress to wait for channel buffer, but returned immediately")
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	// Drain initial event to free channel buffer
+	first := <-ch
+	if first.Type != types.EventStarted {
+		t.Fatalf("expected EventStarted, got %v", first.Type)
+	}
+
+	// Wait for safeSendProgress to finish delivering EventComplete
+	select {
+	case <-sent:
+	case <-time.After(1 * time.Second):
+		t.Fatal("timed out waiting for safeSendProgress to deliver event")
+	}
+
+	second := <-ch
+	if second.Type != types.EventComplete {
+		t.Fatalf("expected EventComplete, got %v", second.Type)
+	}
+}
+
+func TestRunDownload_ChunkedSingleEmitsFinalWrittenSize(t *testing.T) {
+	tmpDir := t.TempDir()
+	body := []byte("streamed chunked dynamic archive content for manager test")
+	split := len(body) / 2
+
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		flusher, ok := w.(http.Flusher)
+		if !ok {
+			t.Fatal("httptest writer does not implement http.Flusher")
+		}
+		flusher.Flush()
+		_, _ = w.Write(body[:split])
+		flusher.Flush()
+		_, _ = w.Write(body[split:])
+		flusher.Flush()
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "chunked.bin")
+	if f, err := os.Create(destPath + types.IncompleteSuffix); err == nil {
+		_ = f.Close()
+	} else {
+		t.Fatal(err)
+	}
+
+	progressCh := make(chan types.DownloadEvent, 16)
+	progState := progress.New("chunked-single-manager-test", 0)
+
+	cfg := types.DownloadRecord{
+		URL:           server.URL,
+		OutputPath:    tmpDir,
+		Filename:      "chunked.bin",
+		ID:            "chunked-single-manager-test",
+		ProgressCh:    progressCh,
+		ProgressState: progState,
+		Runtime:       &types.RuntimeConfig{},
+		TotalSize:     0,
+		SupportsRange: false,
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	err := RunDownload(ctx, &cfg)
+	if err != nil {
+		t.Fatalf("RunDownload failed: %v", err)
+	}
+
+	wantBytes := int64(len(body))
+
+	// Verify state
+	if progState.Bytes.TotalSize.Load() != wantBytes {
+		t.Errorf("progState.Bytes.TotalSize = %d, want %d", progState.Bytes.TotalSize.Load(), wantBytes)
+	}
+	if progState.Bytes.Downloaded.Load() != wantBytes {
+		t.Errorf("progState.Bytes.Downloaded = %d, want %d", progState.Bytes.Downloaded.Load(), wantBytes)
+	}
+	if progState.Bytes.VerifiedProgress.Load() != wantBytes {
+		t.Errorf("progState.Bytes.VerifiedProgress = %d, want %d", progState.Bytes.VerifiedProgress.Load(), wantBytes)
+	}
+
+	// Drain progress channel and check EventComplete
+	close(progressCh)
+	var completeEvents []*types.DownloadEvent
+	for msg := range progressCh {
+		if msg.Type == types.EventError {
+			t.Fatalf("unexpected EventError: %+v", msg)
+		}
+		if msg.Type == types.EventComplete {
+			copy := msg
+			completeEvents = append(completeEvents, &copy)
+		}
+	}
+
+	if len(completeEvents) != 1 {
+		t.Fatalf("expected exactly 1 EventComplete, got %d", len(completeEvents))
+	}
+	completeEvent := completeEvents[0]
+	if completeEvent.Total != wantBytes {
+		t.Errorf("EventComplete.Total = %d, want %d", completeEvent.Total, wantBytes)
+	}
+	if completeEvent.AvgSpeed <= 0 {
+		t.Errorf("EventComplete.AvgSpeed = %f, want > 0", completeEvent.AvgSpeed)
+	}
+
+	// Verify on-disk file content
+	workingPath := destPath + types.IncompleteSuffix
+	downloadedData, err := os.ReadFile(workingPath)
+	if err != nil {
+		t.Fatalf("ReadFile(%q) failed: %v", workingPath, err)
+	}
+	if string(downloadedData) != string(body) {
+		t.Errorf("downloaded file content mismatch: got %q, want %q", string(downloadedData), string(body))
 	}
 }
