@@ -49,8 +49,6 @@ type ConcurrentDownloader struct {
 	soft403Since       time.Time
 	concurrencyGate    *adaptiveConcurrencyGate
 
-	nonRangeMu           sync.Mutex
-	nonRangeMirrors      map[string]bool
 	lastByteProgressTime time.Time
 	throttleEpisodeStart time.Time
 	consecutiveThrottles int
@@ -70,13 +68,12 @@ func NewConcurrentDownloader(id string, progressCh chan<- types.DownloadEvent, p
 	}
 
 	return &ConcurrentDownloader{
-		ID:              id,
-		ProgressChan:    progressCh,
-		State:           progState,
-		activeTasks:     make(map[int]*ActiveTask),
-		Runtime:         runtime,
-		hostLimiter:     transport.DefaultHostRateLimiter,
-		nonRangeMirrors: make(map[string]bool),
+		ID:           id,
+		ProgressChan: progressCh,
+		State:        progState,
+		activeTasks:  make(map[int]*ActiveTask),
+		Runtime:      runtime,
+		hostLimiter:  transport.DefaultHostRateLimiter,
 		bufPool: sync.Pool{
 			New: func() any {
 				// Use configured buffer size
@@ -381,24 +378,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
 	return d.syncFile(outFile)
-}
-
-func (d *ConcurrentDownloader) markMirrorNonRange(url string) {
-	d.nonRangeMu.Lock()
-	defer d.nonRangeMu.Unlock()
-	if d.nonRangeMirrors == nil {
-		d.nonRangeMirrors = make(map[string]bool)
-	}
-	d.nonRangeMirrors[url] = true
-}
-
-func (d *ConcurrentDownloader) isMirrorNonRange(url string) bool {
-	d.nonRangeMu.Lock()
-	defer d.nonRangeMu.Unlock()
-	if d.nonRangeMirrors == nil {
-		return false
-	}
-	return d.nonRangeMirrors[url]
 }
 
 func (d *ConcurrentDownloader) ExportThrottleState(cfg *types.DownloadRecord) {
