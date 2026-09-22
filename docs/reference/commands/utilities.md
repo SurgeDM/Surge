@@ -11,14 +11,8 @@ surge token
 Use this token to connect a remote TUI or configure an API client. Do not paste
 it into issues, chat messages, shell history, or repositories.
 
-The system service has a separate token. Retrieve it with:
-
-```bash
-surge service token
-```
-
-On systems that protect service data, the latter command can require an elevated
-terminal.
+The user service reads the same token and settings as `surge token`. Run the
+command as the user that installed the service; do not use `sudo`.
 
 ## `surge completion`
 
