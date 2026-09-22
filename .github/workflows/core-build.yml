@@ -179,6 +179,13 @@ jobs:
           name: goreleaser-dist-unix
           path: dist
 
+      - name: Upload GoReleaser extra files
+        uses: actions/upload-artifact@v4
+        with:
+          name: goreleaser-extra
+          path: .goreleaser-extra/*.zip
+          include-hidden-files: true
+
   publish-windows-release:
     name: Publish Windows Release
     runs-on: windows-latest
@@ -210,6 +217,11 @@ jobs:
         with:
           name: goreleaser-dist-unix
           path: dist
+      - name: Download GoReleaser extra files
+        uses: actions/download-artifact@v4
+        with:
+          name: goreleaser-extra
+          path: .goreleaser-extra
       - name: Combine Windows release artifacts
         shell: bash
         run: mv "$RUNNER_TEMP/goreleaser-windows" dist/windows
