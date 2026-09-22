@@ -31,6 +31,13 @@ func TestParseAndNormalizeURLArg(t *testing.T) {
 			wantMirrors: []string{"https://example.com/file.zip", "https://mirror.example.com/file.zip"},
 		},
 		{name: "rejects unsupported scheme", arg: "ftp://example.com/file.zip", wantErr: true},
+		{name: "rejects unsupported mirror scheme", arg: "https://example.com/file.zip,FTP://mirror.example.com/file.zip", wantErr: true},
+		{
+			name:        "preserves commas in query values",
+			arg:         "https://archive.org/compress/item/formats=PNG,ITEM TILE,LOG,HTTPS://mirror.example.com/item.zip",
+			wantURL:     "https://archive.org/compress/item/formats=PNG,ITEM TILE,LOG",
+			wantMirrors: []string{"https://archive.org/compress/item/formats=PNG,ITEM TILE,LOG", "HTTPS://mirror.example.com/item.zip"},
+		},
 	}
 
 	for _, tt := range tests {

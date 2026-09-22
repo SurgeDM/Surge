@@ -125,14 +125,23 @@ func ParseURLArg(arg string) (string, []string) {
 }
 
 // startsNewMirror reports whether a comma-separated segment begins a new
-// mirror rather than continuing the previous URL. Only http(s) URLs are
-// downloadable, so a segment is a mirror boundary only when it starts with the
-// http:// or https:// prefix. Matching the literal prefix (rather than a
-// non-empty url.Parse scheme) keeps bare-scheme query values like "http:" glued
-// to the previous URL, and matches how the rest of the CLI recognizes URLs
-// (internal/clipboard/validator.go).
+// mirror rather than continuing the previous URL. A valid scheme:// prefix is
+// a boundary even for unsupported schemes, so validation can reject those
+// mirrors instead of treating them as part of the preceding URL. Bare-scheme
+// query values like "http:" remain attached to the preceding URL.
 func startsNewMirror(segment string) bool {
-	return strings.HasPrefix(segment, "http://") || strings.HasPrefix(segment, "https://")
+	schemeEnd := strings.Index(segment, "://")
+	if schemeEnd <= 0 {
+		return false
+	}
+
+	for i, r := range segment[:schemeEnd] {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
+			(i > 0 && ((r >= '0' && r <= '9') || r == '+' || r == '-' || r == '.'))) {
+			return false
+		}
+	}
+	return true
 }
 
 // ValidateAndNormalizeURL ensures a provided download string has a valid URL scheme

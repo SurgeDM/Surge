@@ -104,6 +104,12 @@ func TestParseURLArg_Unit(t *testing.T) {
 			expectedMirrors: []string{"http://a.com", "http://b.com"},
 		},
 		{
+			name:            "uppercase HTTP schemes start mirrors",
+			input:           "HTTPS://a.com,HTTP://b.com",
+			expectedURL:     "HTTPS://a.com",
+			expectedMirrors: []string{"HTTPS://a.com", "HTTP://b.com"},
+		},
+		{
 			name:            "URL with spaces",
 			input:           "http://a.com , http://b.com",
 			expectedURL:     "http://a.com",
