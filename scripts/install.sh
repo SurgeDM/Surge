@@ -3,7 +3,7 @@
 # verifies its checksum, and installs the binary (plus shell completion).
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/SurgeDM/Surge/main/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/SurgeDM/Surge/main/scripts/install.sh | sh
 #
 # Env overrides:
 #   SURGE_INSTALL_DIR   install location for the binary (default: ~/.local/bin, falls back to /usr/local/bin with sudo)
@@ -20,7 +20,9 @@ need() { command -v "$1" >/dev/null 2>&1 || die "missing required command: $1"; 
 
 need curl
 need tar
-need sha256sum || need shasum
+if ! command -v sha256sum >/dev/null 2>&1 && ! command -v shasum >/dev/null 2>&1; then
+  die "missing required command: sha256sum or shasum"
+fi
 
 detect_os() {
   case "$(uname -s)" in
@@ -44,7 +46,7 @@ ARCH="$(detect_arch)"
 
 VERSION="${SURGE_VERSION:-}"
 if [ -z "$VERSION" ]; then
-  VERSION="$(curl -sSL "https://api.github.com/repos/${REPO}/releases/latest" \
+  VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
     | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
   [ -n "$VERSION" ] || die "could not determine latest version"
 fi
@@ -57,11 +59,11 @@ WORKDIR="$(mktemp -d)"
 trap 'rm -rf "$WORKDIR"' EXIT
 
 log "Downloading ${ASSET} (${VERSION})..."
-curl -sSL -o "${WORKDIR}/${ASSET}" "${BASE_URL}/${ASSET}" \
+curl -fsSL -o "${WORKDIR}/${ASSET}" "${BASE_URL}/${ASSET}" \
   || die "failed to download ${BASE_URL}/${ASSET} (this OS/arch combination may not be published — see https://github.com/${REPO}/releases)"
 
 log "Verifying checksum..."
-curl -sSL -o "${WORKDIR}/checksums.txt" "${BASE_URL}/Surge_${VERSION_NUM}_checksums.txt"
+curl -fsSL -o "${WORKDIR}/checksums.txt" "${BASE_URL}/Surge_${VERSION_NUM}_checksums.txt"
 (
   cd "$WORKDIR"
   EXPECTED="$(grep " ${ASSET}\$" checksums.txt | awk '{print $1}')"
@@ -92,18 +94,21 @@ install_completion() {
   case "$shell" in
     zsh)
       dir="${ZDOTDIR:-$HOME}/.zsh/completions"
-      mkdir -p "$dir" 2>/dev/null && "${INSTALL_DIR}/surge" completion zsh > "${dir}/_surge" 2>/dev/null \
-        && log "Installed zsh completion to ${dir}/_surge (add \"fpath=(${dir} \$fpath)\" before compinit in your .zshrc if not already present)"
+      if mkdir -p "$dir" 2>/dev/null && "${INSTALL_DIR}/surge" completion zsh > "${dir}/_surge" 2>/dev/null; then
+        log "Installed zsh completion to ${dir}/_surge (add \"fpath=(${dir} \$fpath)\" before compinit in your .zshrc if not already present)"
+      fi
       ;;
     bash)
       dir="$HOME/.local/share/bash-completion/completions"
-      mkdir -p "$dir" 2>/dev/null && "${INSTALL_DIR}/surge" completion bash > "${dir}/surge" 2>/dev/null \
-        && log "Installed bash completion to ${dir}/surge"
+      if mkdir -p "$dir" 2>/dev/null && "${INSTALL_DIR}/surge" completion bash > "${dir}/surge" 2>/dev/null; then
+        log "Installed bash completion to ${dir}/surge"
+      fi
       ;;
     fish)
       dir="$HOME/.config/fish/completions"
-      mkdir -p "$dir" 2>/dev/null && "${INSTALL_DIR}/surge" completion fish > "${dir}/surge.fish" 2>/dev/null \
-        && log "Installed fish completion to ${dir}/surge.fish"
+      if mkdir -p "$dir" 2>/dev/null && "${INSTALL_DIR}/surge" completion fish > "${dir}/surge.fish" 2>/dev/null; then
+        log "Installed fish completion to ${dir}/surge.fish"
+      fi
       ;;
   esac
 }
