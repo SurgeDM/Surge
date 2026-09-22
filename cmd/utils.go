@@ -136,8 +136,10 @@ func startsNewMirror(segment string) bool {
 	}
 
 	for i, r := range segment[:schemeEnd] {
-		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') ||
-			(i > 0 && ((r >= '0' && r <= '9') || r == '+' || r == '-' || r == '.'))) {
+		isLetter := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+		isSchemeCharacter := isLetter ||
+			(i > 0 && ((r >= '0' && r <= '9') || r == '+' || r == '-' || r == '.'))
+		if !isSchemeCharacter {
 			return false
 		}
 	}
