@@ -51,8 +51,8 @@ func (m *LaunchdManager) target() string { return "gui/" + strconv.Itoa(m.uid) +
 func (m *LaunchdManager) domain() string { return "gui/" + strconv.Itoa(m.uid) }
 
 func (m *LaunchdManager) Install(ctx context.Context) error {
-	if m.uid == 0 {
-		return ErrRootInstall
+	if err := m.ensureUser(); err != nil {
+		return err
 	}
 	for _, legacy := range []string{"/Library/LaunchDaemons/com.surgedm.surge.plist", "/Library/LaunchDaemons/surge.plist"} {
 		if _, err := os.Stat(legacy); err == nil {
@@ -73,8 +73,8 @@ func (m *LaunchdManager) Install(ctx context.Context) error {
 }
 
 func (m *LaunchdManager) Uninstall(ctx context.Context) error {
-	if m.uid == 0 {
-		return ErrRootInstall
+	if err := m.ensureUser(); err != nil {
+		return err
 	}
 	_, _ = m.runner.Run(ctx, "launchctl", "bootout", m.target())
 	if err := os.Remove(m.plistPath); err != nil && !os.IsNotExist(err) {
@@ -83,13 +83,22 @@ func (m *LaunchdManager) Uninstall(ctx context.Context) error {
 	return nil
 }
 func (m *LaunchdManager) Start(ctx context.Context) error {
+	if err := m.ensureUser(); err != nil {
+		return err
+	}
 	return m.run(ctx, "kickstart", "-k", m.target())
 }
 func (m *LaunchdManager) Stop(ctx context.Context) error {
+	if err := m.ensureUser(); err != nil {
+		return err
+	}
 	return m.run(ctx, "kill", "SIGTERM", m.target())
 }
 func (m *LaunchdManager) Restart(ctx context.Context) error { return m.Start(ctx) }
 func (m *LaunchdManager) Status(ctx context.Context) (State, error) {
+	if err := m.ensureUser(); err != nil {
+		return NotInstalled, err
+	}
 	if _, err := os.Stat(m.plistPath); os.IsNotExist(err) {
 		return NotInstalled, nil
 	} else if err != nil {
@@ -99,6 +108,12 @@ func (m *LaunchdManager) Status(ctx context.Context) (State, error) {
 		return Stopped, nil
 	}
 	return Running, nil
+}
+func (m *LaunchdManager) ensureUser() error {
+	if m.uid == 0 {
+		return ErrRootInstall
+	}
+	return nil
 }
 func (m *LaunchdManager) run(ctx context.Context, args ...string) error {
 	out, err := m.runner.Run(ctx, "launchctl", args...)

@@ -43,6 +43,9 @@ func New(executable string) (Manager, error) {
 }
 
 func (m *RunitManager) Install(ctx context.Context) error {
+	if err := ensureRunitUser(); err != nil {
+		return err
+	}
 	if _, err := exec.LookPath("sv"); err != nil {
 		return fmt.Errorf("termux-services is unavailable; install it with 'pkg install termux-services'")
 	}
@@ -62,13 +65,34 @@ func (m *RunitManager) Install(ctx context.Context) error {
 	return m.run(ctx, "up")
 }
 func (m *RunitManager) Uninstall(ctx context.Context) error {
+	if err := ensureRunitUser(); err != nil {
+		return err
+	}
 	_, _ = m.command(ctx, "down")
 	return os.RemoveAll(m.serviceDir)
 }
-func (m *RunitManager) Start(ctx context.Context) error   { return m.run(ctx, "up") }
-func (m *RunitManager) Stop(ctx context.Context) error    { return m.run(ctx, "down") }
-func (m *RunitManager) Restart(ctx context.Context) error { return m.run(ctx, "restart") }
+func (m *RunitManager) Start(ctx context.Context) error {
+	if err := ensureRunitUser(); err != nil {
+		return err
+	}
+	return m.run(ctx, "up")
+}
+func (m *RunitManager) Stop(ctx context.Context) error {
+	if err := ensureRunitUser(); err != nil {
+		return err
+	}
+	return m.run(ctx, "down")
+}
+func (m *RunitManager) Restart(ctx context.Context) error {
+	if err := ensureRunitUser(); err != nil {
+		return err
+	}
+	return m.run(ctx, "restart")
+}
 func (m *RunitManager) Status(ctx context.Context) (State, error) {
+	if err := ensureRunitUser(); err != nil {
+		return NotInstalled, err
+	}
 	if _, err := os.Stat(m.serviceDir); os.IsNotExist(err) {
 		return NotInstalled, nil
 	} else if err != nil {
@@ -82,6 +106,12 @@ func (m *RunitManager) Status(ctx context.Context) (State, error) {
 		return Running, nil
 	}
 	return Stopped, nil
+}
+func ensureRunitUser() error {
+	if os.Geteuid() == 0 {
+		return ErrRootInstall
+	}
+	return nil
 }
 func (m *RunitManager) command(ctx context.Context, action string) ([]byte, error) {
 	env := os.Environ()

@@ -71,4 +71,10 @@ func TestSystemdInstallRejectsRoot(t *testing.T) {
 	if err := m.Install(context.Background()); !errors.Is(err, ErrRootInstall) {
 		t.Fatalf("Install error = %v, want ErrRootInstall", err)
 	}
+	if _, err := m.Status(context.Background()); !errors.Is(err, ErrRootInstall) {
+		t.Fatalf("Status error = %v, want ErrRootInstall", err)
+	}
+	if err := m.Start(context.Background()); !errors.Is(err, ErrRootInstall) {
+		t.Fatalf("Start error = %v, want ErrRootInstall", err)
+	}
 }

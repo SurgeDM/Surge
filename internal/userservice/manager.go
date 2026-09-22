@@ -5,7 +5,7 @@ import (
 	"errors"
 )
 
-var ErrRootInstall = errors.New("Surge user services cannot be managed as root; run this command again without sudo")
+var ErrRootInstall = errors.New("Surge user services cannot be managed from an elevated session; run this command again as your normal user")
 var ErrLegacySystemService = errors.New("a legacy system-wide Surge service is installed")
 
 type State int

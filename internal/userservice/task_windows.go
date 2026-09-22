@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+
+	"golang.org/x/sys/windows"
 )
 
 const windowsTaskName = `SurgeDM\Surge`
@@ -34,6 +36,9 @@ func New(executable string) (Manager, error) {
 }
 
 func (m *TaskManager) Install(ctx context.Context) error {
+	if err := ensureTaskUser(); err != nil {
+		return err
+	}
 	if _, err := m.runner.Run(ctx, "sc.exe", "query", "surge"); err == nil {
 		return fmt.Errorf("%w; remove the legacy Windows service from an elevated terminal before retrying", ErrLegacySystemService)
 	}
@@ -44,20 +49,35 @@ func (m *TaskManager) Install(ctx context.Context) error {
 	return m.Start(ctx)
 }
 func (m *TaskManager) Uninstall(ctx context.Context) error {
+	if err := ensureTaskUser(); err != nil {
+		return err
+	}
 	_, _ = m.runner.Run(ctx, "schtasks.exe", "/End", "/TN", windowsTaskName)
 	return m.run(ctx, "/Delete", "/F", "/TN", windowsTaskName)
 }
 func (m *TaskManager) Start(ctx context.Context) error {
+	if err := ensureTaskUser(); err != nil {
+		return err
+	}
 	return m.run(ctx, "/Run", "/TN", windowsTaskName)
 }
 func (m *TaskManager) Stop(ctx context.Context) error {
+	if err := ensureTaskUser(); err != nil {
+		return err
+	}
 	return m.run(ctx, "/End", "/TN", windowsTaskName)
 }
 func (m *TaskManager) Restart(ctx context.Context) error {
+	if err := ensureTaskUser(); err != nil {
+		return err
+	}
 	_, _ = m.runner.Run(ctx, "schtasks.exe", "/End", "/TN", windowsTaskName)
 	return m.Start(ctx)
 }
 func (m *TaskManager) Status(ctx context.Context) (State, error) {
+	if err := ensureTaskUser(); err != nil {
+		return NotInstalled, err
+	}
 	out, err := m.runner.Run(ctx, "schtasks.exe", "/Query", "/TN", windowsTaskName, "/FO", "CSV", "/NH")
 	if err != nil {
 		return NotInstalled, nil
@@ -66,6 +86,12 @@ func (m *TaskManager) Status(ctx context.Context) (State, error) {
 		return Running, nil
 	}
 	return Stopped, nil
+}
+func ensureTaskUser() error {
+	if windows.GetCurrentProcessToken().IsElevated() {
+		return ErrRootInstall
+	}
+	return nil
 }
 func (m *TaskManager) run(ctx context.Context, args ...string) error {
 	out, err := m.runner.Run(ctx, "schtasks.exe", args...)

@@ -49,8 +49,8 @@ func New(executable string) (Manager, error) {
 }
 
 func (m *SystemdManager) Install(ctx context.Context) error {
-	if m.uid == 0 {
-		return ErrRootInstall
+	if err := m.ensureUser(); err != nil {
+		return err
 	}
 	legacyCheck := m.legacyCheck
 	if legacyCheck == nil {
@@ -62,7 +62,7 @@ func (m *SystemdManager) Install(ctx context.Context) error {
 	if err := os.MkdirAll(filepath.Dir(m.unitPath), 0o755); err != nil {
 		return fmt.Errorf("create systemd user directory: %w", err)
 	}
-	if err := writeAtomic(m.unitPath, []byte(m.unitContents()), 0o644); err != nil {
+	if err := writeUserServiceFile(m.unitPath, []byte(m.unitContents()), 0o644); err != nil {
 		return fmt.Errorf("write systemd user unit: %w", err)
 	}
 	if err := m.run(ctx, "daemon-reload"); err != nil {
@@ -72,8 +72,8 @@ func (m *SystemdManager) Install(ctx context.Context) error {
 }
 
 func (m *SystemdManager) Uninstall(ctx context.Context) error {
-	if m.uid == 0 {
-		return ErrRootInstall
+	if err := m.ensureUser(); err != nil {
+		return err
 	}
 	_, _ = m.runner.Run(ctx, "systemctl", "--user", "disable", "--now", systemdUnitName)
 	if err := os.Remove(m.unitPath); err != nil && !os.IsNotExist(err) {
@@ -83,18 +83,30 @@ func (m *SystemdManager) Uninstall(ctx context.Context) error {
 }
 
 func (m *SystemdManager) Start(ctx context.Context) error {
+	if err := m.ensureUser(); err != nil {
+		return err
+	}
 	return m.run(ctx, "start", systemdUnitName)
 }
 
 func (m *SystemdManager) Stop(ctx context.Context) error {
+	if err := m.ensureUser(); err != nil {
+		return err
+	}
 	return m.run(ctx, "stop", systemdUnitName)
 }
 
 func (m *SystemdManager) Restart(ctx context.Context) error {
+	if err := m.ensureUser(); err != nil {
+		return err
+	}
 	return m.run(ctx, "restart", systemdUnitName)
 }
 
 func (m *SystemdManager) Status(ctx context.Context) (State, error) {
+	if err := m.ensureUser(); err != nil {
+		return NotInstalled, err
+	}
 	if _, err := os.Stat(m.unitPath); os.IsNotExist(err) {
 		return NotInstalled, nil
 	} else if err != nil {
@@ -108,6 +120,13 @@ func (m *SystemdManager) Status(ctx context.Context) (State, error) {
 		return Stopped, nil
 	}
 	return Stopped, nil
+}
+
+func (m *SystemdManager) ensureUser() error {
+	if m.uid == 0 {
+		return ErrRootInstall
+	}
+	return nil
 }
 
 func (m *SystemdManager) run(ctx context.Context, args ...string) error {
@@ -153,25 +172,4 @@ func legacySystemdUnitExists() bool {
 		}
 	}
 	return false
-}
-
-func writeAtomic(path string, data []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".surge-service-*")
-	if err != nil {
-		return err
-	}
-	tmpPath := tmp.Name()
-	defer func() { _ = os.Remove(tmpPath) }()
-	if _, err := tmp.Write(data); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	return os.Rename(tmpPath, path)
 }
