@@ -306,18 +306,20 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	effectiveSizeForWorkers := d.getEffectiveSizeForWorkers(fileSize, savedState, isResume)
 
 	numConns := d.getInitialConnections(effectiveSizeForWorkers)
+	workerMirrors := d.getWorkerMirrors(activeMirrors)
+	workerHosts := make([]string, len(workerMirrors))
+	for i, mirror := range workerMirrors {
+		workerHosts[i] = transport.MirrorHost(mirror)
+	}
 	initialCap := numConns
 	if d.Runtime.IsAdaptiveConcurrencyEnabled() {
-		host := transport.MirrorHost(rawurl)
-		initialCap = d.hostLimiter.ConcurrencyCap(host, numConns)
+		initialCap = d.hostLimiter.ConcurrencyCapForHosts(workerHosts, numConns)
 	}
 	d.concurrencyGate = newAdaptiveConcurrencyGateWithInitialCap(numConns, initialCap, d.Runtime.GetAdaptiveConcurrencyInterval())
 	if d.State != nil {
 		d.State.RateLimited.Store(false)
 	}
 	chunkSize := d.determineChunkSize(fileSize, numConns)
-
-	workerMirrors := d.getWorkerMirrors(activeMirrors)
 
 	// Open existing output file with .surge suffix (must be created by processing layer)
 	outFile, err := os.OpenFile(workingPath, os.O_RDWR, 0)
@@ -519,21 +521,6 @@ func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize i
 }
 
 func (d *ConcurrentDownloader) startHelpers(ctx context.Context, wg *sync.WaitGroup, queue *TaskQueue, fileSize int64, numConns int) {
-	if d.concurrencyGate != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			d.concurrencyGate.runRecovery(ctx, func(oldCap, newCap int, recovered bool) {
-				if newCap > oldCap {
-					utils.Debug("Adaptive concurrency: increased cap from %d to %d after healthy window", oldCap, newCap)
-				}
-				if recovered && d.State != nil {
-					d.State.RateLimited.Store(false)
-				}
-			})
-		}()
-	}
-
 	// Balancer for dynamic chunk splitting and work stealing
 	wg.Add(1)
 	go func() {

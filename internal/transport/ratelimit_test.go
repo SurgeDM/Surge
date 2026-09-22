@@ -312,6 +312,23 @@ func TestHostRateLimiter_ConcurrencyCapLookup(t *testing.T) {
 	}
 }
 
+func TestHostRateLimiter_ConcurrencyCapForHostsUsesLowestCap(t *testing.T) {
+	h := NewHostRateLimiter()
+	now := time.Now()
+
+	// A has learned a lower cap after throttling, while B remains healthy.
+	h.ReportThrottle("a.example", 4, time.Second, true, now)
+	if got := h.ConcurrencyCapForHosts([]string{"a.example", "b.example"}, 8); got != 2 {
+		t.Fatalf("shared cap = %d, want lowest host cap 2", got)
+	}
+
+	// A recovery must not let an unrelated host overwrite a lower cap.
+	h.ReportThrottle("a.example", 2, time.Second, true, now.Add(2*time.Second))
+	if got := h.ConcurrencyCapForHosts([]string{"b.example", "a.example"}, 8); got != 1 {
+		t.Fatalf("shared cap after A throttles again = %d, want 1", got)
+	}
+}
+
 func TestThrottleBurstCoalesced(t *testing.T) {
 	h := NewHostRateLimiter()
 	now := time.Now()

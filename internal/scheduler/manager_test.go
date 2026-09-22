@@ -262,16 +262,19 @@ func TestRunDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
 	}
 }
 
-func TestRunDownload_OneEffectiveConnectionUsesSingleDownloader(t *testing.T) {
+func TestRunDownload_OneEffectiveConnectionUsesRangeDownloader(t *testing.T) {
 	tmpDir := t.TempDir()
-	content := []byte("single connection must make one ordinary GET")
+	content := []byte("single connection must remain resumable")
 	var requests atomic.Int32
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		requests.Add(1)
-		if got := r.Header.Get("Range"); got != "" {
-			t.Fatalf("single-connection download sent Range header %q", got)
+		wantRange := fmt.Sprintf("bytes=0-%d", len(content)-1)
+		if got := r.Header.Get("Range"); got != wantRange {
+			t.Fatalf("single-connection download Range header = %q, want %s", got, wantRange)
 		}
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/%d", len(content)-1, len(content)))
+		w.WriteHeader(http.StatusPartialContent)
 		_, _ = w.Write(content)
 	}))
 	defer server.Close()
@@ -286,9 +289,9 @@ func TestRunDownload_OneEffectiveConnectionUsesSingleDownloader(t *testing.T) {
 		URL:           server.URL,
 		OutputPath:    tmpDir,
 		Filename:      "single.bin",
-		ID:            "single-effective-connection-test",
+		ID:            "one-effective-connection-range-test",
 		ProgressCh:    progressCh,
-		ProgressState: progress.New("single-effective-connection-test", int64(len(content))),
+		ProgressState: progress.New("one-effective-connection-range-test", int64(len(content))),
 		Runtime:       &types.RuntimeConfig{MaxConnectionsPerDownload: 1, DialHedgeCount: 4},
 		TotalSize:     int64(len(content)),
 		SupportsRange: true,

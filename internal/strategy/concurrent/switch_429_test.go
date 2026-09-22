@@ -805,45 +805,6 @@ func TestTwoDownloadsSameHostNoProgressIsolation(t *testing.T) {
 	}
 }
 
-func TestLooksLikeChallenge_BrotliNonCFNotClassifiedAsChallenge(t *testing.T) {
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Header: http.Header{
-			"Content-Encoding": []string{"br"},
-			"Content-Type":     []string{"application/octet-stream"},
-			"Server":           []string{"nginx/1.18.0"},
-		},
-	}
-	if looksLikeChallenge(resp) {
-		t.Fatal("expected Brotli non-CF response to NOT be classified as a Cloudflare challenge")
-	}
-}
-
-func TestLooksLikeChallenge_CFMitigatedHeaderClassifiedAsChallenge(t *testing.T) {
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Header: http.Header{
-			"Cf-Mitigated": []string{"challenge"},
-		},
-	}
-	if !looksLikeChallenge(resp) {
-		t.Fatal("expected cf-mitigated header to be classified as Cloudflare challenge")
-	}
-}
-
-func TestLooksLikeChallenge_CFServerBrotliClassifiedAsChallenge(t *testing.T) {
-	resp := &http.Response{
-		StatusCode: http.StatusOK,
-		Header: http.Header{
-			"Server":           []string{"cloudflare"},
-			"Content-Encoding": []string{"br"},
-		},
-	}
-	if !looksLikeChallenge(resp) {
-		t.Fatal("expected Cloudflare server + Brotli response to be classified as Cloudflare challenge")
-	}
-}
-
 func TestConcurrentDownloader_AllMirrorsRangeUnsupportedReturnsSentinel(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()

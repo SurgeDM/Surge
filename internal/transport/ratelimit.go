@@ -44,6 +44,31 @@ func NewHostRateLimiter() *HostRateLimiter {
 func (h *HostRateLimiter) ConcurrencyCap(host string, configuredMax int) int {
 	h.mu.Lock()
 	defer h.mu.Unlock()
+	return h.concurrencyCapLocked(host, configuredMax)
+}
+
+// ConcurrencyCapForHosts returns the conservative cap shared by a download
+// that may use any of hosts. A single download-wide gate must never be raised
+// above the lowest learned cap of its eligible hosts.
+func (h *HostRateLimiter) ConcurrencyCapForHosts(hosts []string, configuredMax int) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	cap := configuredMax
+	seen := make(map[string]struct{}, len(hosts))
+	for _, host := range hosts {
+		if _, ok := seen[host]; ok {
+			continue
+		}
+		seen[host] = struct{}{}
+		if hostCap := h.concurrencyCapLocked(host, configuredMax); hostCap < cap {
+			cap = hostCap
+		}
+	}
+	return cap
+}
+
+func (h *HostRateLimiter) concurrencyCapLocked(host string, configuredMax int) int {
 
 	p, known := h.hosts[host]
 	if !known || p.concurrencyCap <= 0 {
