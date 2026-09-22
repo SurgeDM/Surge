@@ -71,8 +71,6 @@ type DownloadRecord struct {
 
 	// Execution & Throttle State (Transient across retries)
 	ThrottleEpisodeStart time.Time `json:"-"`
-	LastByteProgressTime time.Time `json:"-"`
-	ConsecutiveThrottles int       `json:"-"`
 
 	// Runtime / Transient Configuration. The store controls persistence with
 	// explicit projections because encoding/gob ignores struct tags. Headers are

@@ -49,11 +49,7 @@ type ConcurrentDownloader struct {
 	soft403Since       time.Time
 	concurrencyGate    *adaptiveConcurrencyGate
 
-	nonRangeMu           sync.Mutex
-	nonRangeMirrors      map[string]bool
-	lastByteProgressTime time.Time
 	throttleEpisodeStart time.Time
-	consecutiveThrottles int
 }
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
@@ -63,13 +59,12 @@ func NewConcurrentDownloader(id string, progressCh chan<- types.DownloadEvent, p
 	}
 
 	return &ConcurrentDownloader{
-		ID:              id,
-		ProgressChan:    progressCh,
-		State:           progState,
-		activeTasks:     make(map[int]*ActiveTask),
-		Runtime:         runtime,
-		hostLimiter:     transport.DefaultHostRateLimiter,
-		nonRangeMirrors: make(map[string]bool),
+		ID:           id,
+		ProgressChan: progressCh,
+		State:        progState,
+		activeTasks:  make(map[int]*ActiveTask),
+		Runtime:      runtime,
+		hostLimiter:  transport.DefaultHostRateLimiter,
 		bufPool: sync.Pool{
 			New: func() any {
 				// Use configured buffer size
@@ -82,8 +77,6 @@ func NewConcurrentDownloader(id string, progressCh chan<- types.DownloadEvent, p
 }
 
 // InitialConnectionCount returns the starting number of connections based on file size.
-// It is shared with the scheduler so a transfer that resolves to one connection can
-// use the single-stream downloader rather than entering the range-worker pipeline.
 func InitialConnectionCount(runtime *types.RuntimeConfig, fileSize int64) int {
 	if runtime == nil {
 		runtime = types.DefaultRuntimeConfig()
@@ -378,24 +371,6 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	return d.syncFile(outFile)
 }
 
-func (d *ConcurrentDownloader) markMirrorNonRange(url string) {
-	d.nonRangeMu.Lock()
-	defer d.nonRangeMu.Unlock()
-	if d.nonRangeMirrors == nil {
-		d.nonRangeMirrors = make(map[string]bool)
-	}
-	d.nonRangeMirrors[url] = true
-}
-
-func (d *ConcurrentDownloader) isMirrorNonRange(url string) bool {
-	d.nonRangeMu.Lock()
-	defer d.nonRangeMu.Unlock()
-	if d.nonRangeMirrors == nil {
-		return false
-	}
-	return d.nonRangeMirrors[url]
-}
-
 func (d *ConcurrentDownloader) ExportThrottleState(cfg *types.DownloadRecord) {
 	if cfg == nil {
 		return
@@ -403,8 +378,6 @@ func (d *ConcurrentDownloader) ExportThrottleState(cfg *types.DownloadRecord) {
 	d.soft403Mu.Lock()
 	defer d.soft403Mu.Unlock()
 	cfg.ThrottleEpisodeStart = d.throttleEpisodeStart
-	cfg.LastByteProgressTime = d.lastByteProgressTime
-	cfg.ConsecutiveThrottles = d.consecutiveThrottles
 }
 
 func (d *ConcurrentDownloader) ImportThrottleState(cfg *types.DownloadRecord) {
@@ -414,8 +387,6 @@ func (d *ConcurrentDownloader) ImportThrottleState(cfg *types.DownloadRecord) {
 	d.soft403Mu.Lock()
 	defer d.soft403Mu.Unlock()
 	d.throttleEpisodeStart = cfg.ThrottleEpisodeStart
-	d.lastByteProgressTime = cfg.LastByteProgressTime
-	d.consecutiveThrottles = cfg.ConsecutiveThrottles
 }
 
 func (d *ConcurrentDownloader) initMirrorStatus(rawurl string, candidateMirrors []string, activeMirrors []string, destPath string) {

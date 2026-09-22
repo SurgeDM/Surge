@@ -69,7 +69,7 @@ flowchart TB
     end
 
     RunDownload -->|"ranges supported and >1 connection"| Concurrent
-    RunDownload -->|"no ranges or one connection"| Single
+    RunDownload -->|"no ranges"| Single
     Concurrent -->|"ErrRangeUnsupported"| Fallback
     Fallback --> Single
 
@@ -177,7 +177,7 @@ A failed transient download is requeued with `retryAt`. Waiting scheduler worker
 
 `RunDownload` selects the smallest suitable implementation:
 
-- `SingleDownloader` is used when the server does not support ranges or when the effective connection count is one.
+- `SingleDownloader` is used when the server does not support ranges.
 - `ConcurrentDownloader` is used when range requests are supported and multiple connections are useful.
 - If a supposedly range-capable server returns an ordinary `200 OK` for a partial request, the concurrent engine returns `ErrRangeUnsupported`. `RunDownload` resets the working file and falls back to `SingleDownloader`.
 

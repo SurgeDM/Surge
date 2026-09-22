@@ -68,6 +68,17 @@ func (h *HostRateLimiter) ConcurrencyCapForHosts(hosts []string, configuredMax i
 	return cap
 }
 
+func (h *HostRateLimiter) AnyBlocked(hosts []string, now time.Time) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, host := range hosts {
+		if p := h.hosts[host]; p != nil && now.Before(p.until) {
+			return true
+		}
+	}
+	return false
+}
+
 func (h *HostRateLimiter) concurrencyCapLocked(host string, configuredMax int) int {
 
 	p, known := h.hosts[host]

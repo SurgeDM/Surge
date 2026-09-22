@@ -362,7 +362,7 @@ func TestConcurrentDownloader_429DoesNotTearDownWithHealthyMirror(t *testing.T) 
 	}
 }
 
-func TestConcurrentDownloader_403DoesNotCancelHealthyWorker(t *testing.T) {
+func TestConcurrentDownloader_403IsPermanentForOnlyMirror(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
@@ -415,11 +415,11 @@ func TestConcurrentDownloader_403DoesNotCancelHealthyWorker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize); err != nil {
-		t.Fatalf("Download failed after transient 403: %v", err)
+	if err := downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize); !errors.Is(err, types.ErrPermanentHTTP) {
+		t.Fatalf("Download error = %v, want permanent HTTP error", err)
 	}
-	if forbiddenRequests.Load() < 2 {
-		t.Fatal("expected the forbidden range to be retried after its soft limit")
+	if forbiddenRequests.Load() != 1 {
+		t.Fatalf("403 requests = %d, want 1", forbiddenRequests.Load())
 	}
 }
 
@@ -458,7 +458,7 @@ func TestMirrorAware403Exhaustion(t *testing.T) {
 	}
 }
 
-func TestConcurrentDownloader_Soft403ZeroRetriesHasCooldown(t *testing.T) {
+func TestConcurrentDownloader_403DoesNotRetry(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
@@ -491,8 +491,8 @@ func TestConcurrentDownloader_Soft403ZeroRetriesHasCooldown(t *testing.T) {
 	defer cancel()
 
 	err = downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Download error = %v, want context deadline", err)
+	if !errors.Is(err, types.ErrPermanentHTTP) {
+		t.Fatalf("Download error = %v, want permanent HTTP error", err)
 	}
 	if got := requests.Load(); got > 1 {
 		t.Fatalf("soft 403 requests = %d in 150ms, want at most 1", got)
@@ -757,7 +757,7 @@ func TestOrdinary200IgnoredRangeReturnsSentinel(t *testing.T) {
 	}
 }
 
-func TestTwoDownloadsSameHostNoProgressIsolation(t *testing.T) {
+func TestTwoDownloadsSameHostThrottleStateIsolation(t *testing.T) {
 	hostLimiter := transport.NewHostRateLimiter()
 	host := "shared-host.com"
 
@@ -777,7 +777,6 @@ func TestTwoDownloadsSameHostNoProgressIsolation(t *testing.T) {
 	dA.concurrencyGate.setCap(2, until)
 	dA.soft403Mu.Lock()
 	dA.throttleEpisodeStart = now
-	dA.consecutiveThrottles = 3
 	dA.soft403Mu.Unlock()
 	dA.ExportThrottleState(cfgA)
 
@@ -786,19 +785,12 @@ func TestTwoDownloadsSameHostNoProgressIsolation(t *testing.T) {
 	hostLimiter.ReportProgressBytes(host, 1*1024*1024)
 	hostLimiter.ReportCompletedRange(host, 8, now.Add(20*time.Second))
 	dB.soft403Mu.Lock()
-	dB.lastByteProgressTime = now.Add(20 * time.Second)
 	dB.soft403Mu.Unlock()
 	dB.ExportThrottleState(cfgB)
 
 	// Verify A's throttle state (cfgA) is isolated from B's progress
-	if cfgA.ConsecutiveThrottles != 3 {
-		t.Fatalf("expected cfgA.ConsecutiveThrottles=3, got %d", cfgA.ConsecutiveThrottles)
-	}
 	if cfgA.ThrottleEpisodeStart != now {
 		t.Fatalf("expected cfgA.ThrottleEpisodeStart=%v, got %v", now, cfgA.ThrottleEpisodeStart)
-	}
-	if cfgB.ConsecutiveThrottles != 0 {
-		t.Fatalf("expected cfgB.ConsecutiveThrottles=0, got %d", cfgB.ConsecutiveThrottles)
 	}
 	if cfgB.ThrottleEpisodeStart.IsZero() == false {
 		t.Fatalf("expected cfgB.ThrottleEpisodeStart to be zero, got %v", cfgB.ThrottleEpisodeStart)
@@ -859,8 +851,6 @@ func TestSchedulerRecreationPreservesThrottleEpisodeStart(t *testing.T) {
 	now := time.Now().Add(-2 * time.Minute)
 	d1.soft403Mu.Lock()
 	d1.throttleEpisodeStart = now
-	d1.lastByteProgressTime = now
-	d1.consecutiveThrottles = 2
 	d1.soft403Mu.Unlock()
 
 	// Export state from d1 into cfg (as RunDownload/worker does)
@@ -868,9 +858,6 @@ func TestSchedulerRecreationPreservesThrottleEpisodeStart(t *testing.T) {
 
 	if cfg.ThrottleEpisodeStart != now {
 		t.Fatalf("expected cfg.ThrottleEpisodeStart=%v, got %v", now, cfg.ThrottleEpisodeStart)
-	}
-	if cfg.ConsecutiveThrottles != 2 {
-		t.Fatalf("expected cfg.ConsecutiveThrottles=2, got %d", cfg.ConsecutiveThrottles)
 	}
 
 	// Downloader 2 created on scheduler retry
@@ -880,13 +867,9 @@ func TestSchedulerRecreationPreservesThrottleEpisodeStart(t *testing.T) {
 
 	d2.soft403Mu.Lock()
 	importedStart := d2.throttleEpisodeStart
-	importedThrottles := d2.consecutiveThrottles
 	d2.soft403Mu.Unlock()
 
 	if importedStart != now {
 		t.Fatalf("expected d2 imported throttleEpisodeStart=%v across recreation, got %v", now, importedStart)
-	}
-	if importedThrottles != 2 {
-		t.Fatalf("expected d2 imported consecutiveThrottles=2 across recreation, got %d", importedThrottles)
 	}
 }
