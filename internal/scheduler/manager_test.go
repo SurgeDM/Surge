@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -93,6 +94,15 @@ func TestUniqueFilePath(t *testing.T) {
 				t.Errorf("uniqueFilePath() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestShouldFallbackToSingleRequiresRangeUnsupportedSentinel(t *testing.T) {
+	if shouldFallbackToSingle(errors.New("server ignored range request"), 1) {
+		t.Fatal("unwrapped ignored-range text must not trigger fallback")
+	}
+	if !shouldFallbackToSingle(fmt.Errorf("download failed: %w", types.ErrRangeUnsupported), 1) {
+		t.Fatal("wrapped ErrRangeUnsupported must trigger fallback")
 	}
 }
 
@@ -249,6 +259,56 @@ func TestRunDownload_ConcurrentBootstrapWithoutProbeMetadata(t *testing.T) {
 	}
 	if !foundComplete {
 		t.Fatal("expected completion event")
+	}
+}
+
+func TestRunDownload_OneEffectiveConnectionUsesRangeDownloader(t *testing.T) {
+	tmpDir := t.TempDir()
+	content := []byte("single connection must remain resumable")
+	var requests atomic.Int32
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests.Add(1)
+		wantRange := fmt.Sprintf("bytes=0-%d", len(content)-1)
+		if got := r.Header.Get("Range"); got != wantRange {
+			t.Fatalf("single-connection download Range header = %q, want %s", got, wantRange)
+		}
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/%d", len(content)-1, len(content)))
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write(content)
+	}))
+	defer server.Close()
+
+	finalPath := filepath.Join(tmpDir, "single.bin")
+	if err := os.WriteFile(finalPath+types.IncompleteSuffix, nil, 0o644); err != nil {
+		t.Fatalf("failed to pre-create incomplete file: %v", err)
+	}
+
+	progressCh := make(chan types.DownloadEvent, 16)
+	cfg := types.DownloadRecord{
+		URL:           server.URL,
+		OutputPath:    tmpDir,
+		Filename:      "single.bin",
+		ID:            "one-effective-connection-range-test",
+		ProgressCh:    progressCh,
+		ProgressState: progress.New("one-effective-connection-range-test", int64(len(content))),
+		Runtime:       &types.RuntimeConfig{MaxConnectionsPerDownload: 1, DialHedgeCount: 4},
+		TotalSize:     int64(len(content)),
+		SupportsRange: true,
+	}
+
+	if err := RunDownload(context.Background(), &cfg); err != nil {
+		t.Fatalf("RunDownload failed: %v", err)
+	}
+	if got := requests.Load(); got != 1 {
+		t.Fatalf("request count = %d, want 1", got)
+	}
+	got, err := os.ReadFile(finalPath + types.IncompleteSuffix)
+	if err != nil {
+		t.Fatalf("failed to read output: %v", err)
+	}
+	if string(got) != string(content) {
+		t.Fatalf("downloaded content = %q, want %q", got, content)
 	}
 }
 

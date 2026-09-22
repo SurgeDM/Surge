@@ -13,10 +13,21 @@ import (
 
 var DefaultHostRateLimiter = NewHostRateLimiter()
 
+const (
+	UnknownHostInitialCap  = 4
+	RecoveryByteThreshold  = 512 * 1024 // 512 KB
+	RecoveryRangeThreshold = 2
+	RecoveryWindow         = 15 * time.Second
+)
+
 type hostPenalty struct {
-	until       time.Time
-	consecutive int
-	lastHit     time.Time
+	until            time.Time
+	consecutive      int
+	lastHit          time.Time
+	concurrencyCap   int
+	lastThrottle     time.Time
+	successfulBytes  int64
+	successfulRanges int
 }
 
 type HostRateLimiter struct {
@@ -30,15 +41,89 @@ func NewHostRateLimiter() *HostRateLimiter {
 	}
 }
 
+func (h *HostRateLimiter) ConcurrencyCap(host string, configuredMax int) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.concurrencyCapLocked(host, configuredMax)
+}
+
+// ConcurrencyCapForHosts returns the conservative cap shared by a download
+// that may use any of hosts. A single download-wide gate must never be raised
+// above the lowest learned cap of its eligible hosts.
+func (h *HostRateLimiter) ConcurrencyCapForHosts(hosts []string, configuredMax int) int {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	cap := configuredMax
+	seen := make(map[string]struct{}, len(hosts))
+	for _, host := range hosts {
+		if _, ok := seen[host]; ok {
+			continue
+		}
+		seen[host] = struct{}{}
+		if hostCap := h.concurrencyCapLocked(host, configuredMax); hostCap < cap {
+			cap = hostCap
+		}
+	}
+	return cap
+}
+
+func (h *HostRateLimiter) AnyBlocked(hosts []string, now time.Time) bool {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for _, host := range hosts {
+		if p := h.hosts[host]; p != nil && now.Before(p.until) {
+			return true
+		}
+	}
+	return false
+}
+
+func (h *HostRateLimiter) concurrencyCapLocked(host string, configuredMax int) int {
+
+	p, known := h.hosts[host]
+	if !known || p.concurrencyCap <= 0 {
+		if configuredMax < UnknownHostInitialCap {
+			return configuredMax
+		}
+		return UnknownHostInitialCap
+	}
+	if p.concurrencyCap > configuredMax {
+		return configuredMax
+	}
+	return p.concurrencyCap
+}
+
 func (h *HostRateLimiter) Penalize(host string, retryAfter time.Duration, explicit bool, now time.Time) time.Time {
+	until, _ := h.ReportThrottle(host, 0, retryAfter, explicit, now)
+	return until
+}
+
+func (h *HostRateLimiter) ReportThrottle(host string, currentCap int, retryAfter time.Duration, explicit bool, now time.Time) (time.Time, int) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 
 	p, ok := h.hosts[host]
 	if !ok {
-		p = &hostPenalty{}
+		p = &hostPenalty{concurrencyCap: UnknownHostInitialCap}
 		h.hosts[host] = p
 	}
+
+	if p.concurrencyCap <= 0 {
+		p.concurrencyCap = UnknownHostInitialCap
+	}
+
+	newEpisode := p.until.IsZero() || !now.Before(p.until)
+	if newEpisode && currentCap > 0 {
+		base := p.concurrencyCap
+		if currentCap < base {
+			base = currentCap
+		}
+		p.concurrencyCap = max(1, base/2)
+		p.successfulBytes = 0
+		p.successfulRanges = 0
+	}
+	p.lastThrottle = now
 
 	if now.Sub(p.lastHit) > types.RateLimitPenaltyDecay {
 		p.consecutive = 0
@@ -78,7 +163,52 @@ func (h *HostRateLimiter) Penalize(host string, retryAfter time.Duration, explic
 	}
 
 	h.cleanupLocked()
-	return p.until
+	return p.until, p.concurrencyCap
+}
+
+func (h *HostRateLimiter) ReportProgressBytes(host string, bytes int64) {
+	if bytes <= 0 {
+		return
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	p, ok := h.hosts[host]
+	if !ok {
+		p = &hostPenalty{concurrencyCap: UnknownHostInitialCap}
+		h.hosts[host] = p
+	}
+	p.successfulBytes += bytes
+}
+
+func (h *HostRateLimiter) ReportCompletedRange(host string, configuredMax int, now time.Time) (int, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	p, ok := h.hosts[host]
+	if !ok {
+		p = &hostPenalty{concurrencyCap: UnknownHostInitialCap}
+		h.hosts[host] = p
+	}
+
+	if p.concurrencyCap <= 0 {
+		p.concurrencyCap = UnknownHostInitialCap
+	}
+
+	p.successfulRanges++
+
+	if p.successfulBytes >= RecoveryByteThreshold &&
+		p.successfulRanges >= RecoveryRangeThreshold &&
+		(p.lastThrottle.IsZero() || now.Sub(p.lastThrottle) >= RecoveryWindow) {
+		if p.concurrencyCap < configuredMax {
+			p.concurrencyCap++
+			p.successfulBytes = 0
+			p.successfulRanges = 0
+			return p.concurrencyCap, true
+		}
+	}
+
+	return p.concurrencyCap, false
 }
 
 func (h *HostRateLimiter) BlockedUntil(host string, now time.Time) time.Time {
@@ -104,9 +234,12 @@ func (h *HostRateLimiter) recordSuccess(host string, now time.Time) {
 	defer h.mu.Unlock()
 
 	p, ok := h.hosts[host]
-	if !ok || !now.Before(p.until) {
-		delete(h.hosts, host)
+	if !ok || now.Before(p.until) {
+		return
 	}
+	p.until = time.Time{}
+	p.consecutive = 0
+	p.lastHit = time.Time{}
 }
 
 func (h *HostRateLimiter) PickMirror(hosts []string, startIdx int, now time.Time) (int, time.Duration) {

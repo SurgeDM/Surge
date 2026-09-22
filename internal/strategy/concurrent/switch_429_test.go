@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -361,7 +362,7 @@ func TestConcurrentDownloader_429DoesNotTearDownWithHealthyMirror(t *testing.T) 
 	}
 }
 
-func TestConcurrentDownloader_403DoesNotCancelHealthyWorker(t *testing.T) {
+func TestConcurrentDownloader_403IsPermanentForOnlyMirror(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
@@ -414,32 +415,50 @@ func TestConcurrentDownloader_403DoesNotCancelHealthyWorker(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize); err != nil {
-		t.Fatalf("Download failed after transient 403: %v", err)
+	if err := downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize); !errors.Is(err, types.ErrPermanentHTTP) {
+		t.Fatalf("Download error = %v, want permanent HTTP error", err)
 	}
-	if forbiddenRequests.Load() < 2 {
-		t.Fatal("expected the forbidden range to be retried after its soft limit")
+	if forbiddenRequests.Load() != 1 {
+		t.Fatalf("403 requests = %d, want 1", forbiddenRequests.Load())
 	}
 }
 
-func TestSoft403NilStateWaitsForConfirmation(t *testing.T) {
-	downloader := NewConcurrentDownloader("soft403-nil-state", nil, nil, nil)
-	now := time.Unix(100, 0)
+func TestMirrorAware403Exhaustion(t *testing.T) {
+	downloader := NewConcurrentDownloader("soft403-mirror-aware", nil, nil, nil)
+	downloader.forbiddenByMirror = make(map[string]int)
+	mirrors := []string{"http://m1.com/file", "http://m2.com/file"}
 
-	for i := 0; i < soft403MaxExhaustions; i++ {
-		if downloader.shouldEscalate403(now) {
-			t.Fatalf("escalated on exhaustion %d before confirmation", i+1)
+	// m1 gets 403 3 times
+	downloader.forbiddenByMirror["http://m1.com/file"] = 3
+	downloader.forbiddenByMirror["http://m2.com/file"] = 2
+
+	// m2 has only 2, so not all mirrors forbidden
+	allForbidden := true
+	for _, m := range mirrors {
+		if downloader.forbiddenByMirror[m] < 3 {
+			allForbidden = false
+			break
 		}
 	}
-	if downloader.shouldEscalate403(now.Add(soft403ConfirmWindow - time.Nanosecond)) {
-		t.Fatal("escalated before the confirmation window elapsed")
+	if allForbidden {
+		t.Fatal("expected allForbidden=false when m2 has only 2 403s")
 	}
-	if !downloader.shouldEscalate403(now.Add(soft403ConfirmWindow)) {
-		t.Fatal("did not escalate after the confirmation window elapsed")
+
+	// m2 hits 3rd 403
+	downloader.forbiddenByMirror["http://m2.com/file"] = 3
+	allForbidden = true
+	for _, m := range mirrors {
+		if downloader.forbiddenByMirror[m] < 3 {
+			allForbidden = false
+			break
+		}
+	}
+	if !allForbidden {
+		t.Fatal("expected allForbidden=true when all mirrors hit 3 403s")
 	}
 }
 
-func TestConcurrentDownloader_Soft403ZeroRetriesHasCooldown(t *testing.T) {
+func TestConcurrentDownloader_403DoesNotRetry(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
@@ -472,8 +491,8 @@ func TestConcurrentDownloader_Soft403ZeroRetriesHasCooldown(t *testing.T) {
 	defer cancel()
 
 	err = downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize)
-	if !errors.Is(err, context.DeadlineExceeded) {
-		t.Fatalf("Download error = %v, want context deadline", err)
+	if !errors.Is(err, types.ErrPermanentHTTP) {
+		t.Fatalf("Download error = %v, want permanent HTTP error", err)
 	}
 	if got := requests.Load(); got > 1 {
 		t.Fatalf("soft 403 requests = %d in 150ms, want at most 1", got)
@@ -635,5 +654,222 @@ func TestConcurrentDownloader_Bare503IsGeneric(t *testing.T) {
 	err := downloader.Download(ctx, server.URL(), mirrors, nil, destPath, fileSize)
 	if err != nil {
 		t.Fatalf("Download failed: %v", err)
+	}
+}
+
+func TestAdaptiveCapPersistedAcrossDownloaderRecreation(t *testing.T) {
+	hostLimiter := transport.NewHostRateLimiter()
+	host := "persisted-host.com"
+
+	// Simulate throttle on host to drop cap from 4 to 2
+	hostLimiter.ReportThrottle(host, 4, time.Second, true, time.Now())
+
+	// First downloader instance queries learned cap
+	d1 := NewConcurrentDownloader("d1", nil, nil, &types.RuntimeConfig{})
+	d1.hostLimiter = hostLimiter
+	cap1 := d1.hostLimiter.ConcurrencyCap(host, 8)
+	if cap1 != 2 {
+		t.Fatalf("expected d1 learned cap=2, got %d", cap1)
+	}
+
+	// Second downloader instance (simulating scheduler retry for same host)
+	d2 := NewConcurrentDownloader("d2", nil, nil, &types.RuntimeConfig{})
+	d2.hostLimiter = hostLimiter
+	cap2 := d2.hostLimiter.ConcurrencyCap(host, 8)
+	if cap2 != 2 {
+		t.Fatalf("expected d2 learned cap=2 across recreate, got %d", cap2)
+	}
+}
+
+func TestAdaptiveConcurrencyDisabledUsesRequestedWorkers(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(256 * utils.KiB)
+	server := testutil.NewMockServerT(t,
+		testutil.WithFileSize(fileSize),
+		testutil.WithRangeSupport(true),
+	)
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "adaptive-disabled.bin")
+	if f, err := os.Create(destPath + types.IncompleteSuffix); err == nil {
+		_ = f.Close()
+	}
+
+	d := NewConcurrentDownloader("adaptive-disabled", nil, progress.New("adaptive-disabled", fileSize), &types.RuntimeConfig{
+		MaxConnectionsPerDownload:   8,
+		Workers:                     8,
+		MinChunkSize:                32 * utils.KiB,
+		AdaptiveConcurrencyInterval: 0,
+	})
+	d.hostLimiter = transport.NewHostRateLimiter()
+
+	if err := d.Download(context.Background(), server.URL(), nil, nil, destPath, fileSize); err != nil {
+		t.Fatalf("Download failed: %v", err)
+	}
+	if got := d.concurrencyGate.currentCap(); got != 8 {
+		t.Fatalf("disabled adaptive concurrency cap = %d, want 8", got)
+	}
+}
+
+func TestOrdinary200IgnoredRangeReturnsSentinel(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(128 * utils.KiB)
+
+	// Server that returns 200 OK without Content-Range for range requests
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/octet-stream")
+		w.Header().Set("Content-Length", strconv.FormatInt(fileSize, 10))
+		w.WriteHeader(http.StatusOK)
+		buf := make([]byte, fileSize)
+		_, _ = w.Write(buf)
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "ignored_range_test.bin")
+	workingPath := destPath + types.IncompleteSuffix
+	if f, err := os.Create(workingPath); err == nil {
+		_ = f.Close()
+	}
+
+	state := progress.New("ignored-range-id", fileSize)
+	runtime := &types.RuntimeConfig{
+		MaxConnectionsPerDownload: 2,
+		Workers:                   2,
+		MinChunkSize:              32 * utils.KiB,
+	}
+
+	downloader := NewConcurrentDownloader("ignored-range-id", nil, state, runtime)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize)
+	if err == nil {
+		t.Fatal("expected Download to fail with ErrRangeUnsupported")
+	}
+
+	if !errors.Is(err, types.ErrRangeUnsupported) {
+		t.Fatalf("expected ErrRangeUnsupported, got: %v", err)
+	}
+}
+
+func TestTwoDownloadsSameHostThrottleStateIsolation(t *testing.T) {
+	hostLimiter := transport.NewHostRateLimiter()
+	host := "shared-host.com"
+
+	cfgA := &types.DownloadRecord{ID: "A", URL: "http://shared-host.com/a"}
+	cfgB := &types.DownloadRecord{ID: "B", URL: "http://shared-host.com/b"}
+
+	dA := NewConcurrentDownloader("A", nil, nil, nil)
+	dA.hostLimiter = hostLimiter
+
+	dB := NewConcurrentDownloader("B", nil, nil, nil)
+	dB.hostLimiter = hostLimiter
+
+	now := time.Now()
+	// Throttle A on shared-host
+	until, _ := hostLimiter.ReportThrottle(host, 4, 5*time.Second, true, now)
+	dA.concurrencyGate = newAdaptiveConcurrencyGate(4, 5*time.Second)
+	dA.concurrencyGate.setCap(2, until)
+	dA.soft403Mu.Lock()
+	dA.throttleEpisodeStart = now
+	dA.soft403Mu.Unlock()
+	dA.ExportThrottleState(cfgA)
+
+	// Make progress on B
+	dB.ImportThrottleState(cfgB)
+	hostLimiter.ReportProgressBytes(host, 1*1024*1024)
+	hostLimiter.ReportCompletedRange(host, 8, now.Add(20*time.Second))
+	dB.soft403Mu.Lock()
+	dB.soft403Mu.Unlock()
+	dB.ExportThrottleState(cfgB)
+
+	// Verify A's throttle state (cfgA) is isolated from B's progress
+	if cfgA.ThrottleEpisodeStart != now {
+		t.Fatalf("expected cfgA.ThrottleEpisodeStart=%v, got %v", now, cfgA.ThrottleEpisodeStart)
+	}
+	if cfgB.ThrottleEpisodeStart.IsZero() == false {
+		t.Fatalf("expected cfgB.ThrottleEpisodeStart to be zero, got %v", cfgB.ThrottleEpisodeStart)
+	}
+}
+
+func TestConcurrentDownloader_AllMirrorsRangeUnsupportedReturnsSentinel(t *testing.T) {
+	tmpDir, cleanup := initTestState(t)
+	defer cleanup()
+
+	fileSize := int64(64 * utils.KiB)
+	makeServer := func() *httptest.Server {
+		return testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "application/octet-stream")
+			w.Header().Set("Content-Length", strconv.FormatInt(fileSize, 10))
+			w.WriteHeader(http.StatusOK)
+			buf := make([]byte, fileSize)
+			_, _ = w.Write(buf)
+		}))
+	}
+
+	s1 := makeServer()
+	defer s1.Close()
+	s2 := makeServer()
+	defer s2.Close()
+
+	destPath := filepath.Join(tmpDir, "all_unsupported.bin")
+	if f, err := os.Create(destPath + types.IncompleteSuffix); err == nil {
+		_ = f.Close()
+	}
+
+	downloader := NewConcurrentDownloader("all-unsupported", nil, nil, &types.RuntimeConfig{
+		MaxConnectionsPerDownload: 2,
+		Workers:                   2,
+		MinChunkSize:              32 * utils.KiB,
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	mirrors := []string{s1.URL, s2.URL}
+	err := downloader.Download(ctx, s1.URL, mirrors, mirrors, destPath, fileSize)
+	if !errors.Is(err, types.ErrRangeUnsupported) {
+		t.Fatalf("expected ErrRangeUnsupported when all mirrors ignore range, got: %v", err)
+	}
+}
+
+func TestSchedulerRecreationPreservesThrottleEpisodeStart(t *testing.T) {
+	hostLimiter := transport.NewHostRateLimiter()
+	cfg := &types.DownloadRecord{
+		ID:  "retry-persist-id",
+		URL: "http://example.com/file",
+	}
+
+	d1 := NewConcurrentDownloader("retry-persist-id", nil, nil, nil)
+	d1.hostLimiter = hostLimiter
+
+	now := time.Now().Add(-2 * time.Minute)
+	d1.soft403Mu.Lock()
+	d1.throttleEpisodeStart = now
+	d1.soft403Mu.Unlock()
+
+	// Export state from d1 into cfg (as RunDownload/worker does)
+	d1.ExportThrottleState(cfg)
+
+	if cfg.ThrottleEpisodeStart != now {
+		t.Fatalf("expected cfg.ThrottleEpisodeStart=%v, got %v", now, cfg.ThrottleEpisodeStart)
+	}
+
+	// Downloader 2 created on scheduler retry
+	d2 := NewConcurrentDownloader("retry-persist-id", nil, nil, nil)
+	d2.hostLimiter = hostLimiter
+	d2.ImportThrottleState(cfg)
+
+	d2.soft403Mu.Lock()
+	importedStart := d2.throttleEpisodeStart
+	d2.soft403Mu.Unlock()
+
+	if importedStart != now {
+		t.Fatalf("expected d2 imported throttleEpisodeStart=%v across recreation, got %v", now, importedStart)
 	}
 }

@@ -178,7 +178,8 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		}
 	}
 
-	// Choose downloader based on probe results
+	// Choose downloader based on probe results. Range-capable transfers stay in
+	// the range pipeline even with one worker so fresh downloads remain resumable.
 	var downloadErr error
 	useConcurrent := cfg.SupportsRange
 
@@ -212,6 +213,8 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		}
 
 		d := concurrent.NewConcurrentDownloader(cfg.ID, cfg.ProgressCh, progState, cfg.Runtime)
+		d.ImportThrottleState(cfg)
+		defer d.ExportThrottleState(cfg)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.Limiter = cfg.Limiter
 		d.RateLimitBps = cfg.RateLimit
@@ -329,6 +332,9 @@ func shouldFallbackToSingle(downloadErr error, downloaded int64) bool {
 	}
 	if types.IsInsufficientDiskSpace(downloadErr) {
 		return false
+	}
+	if errors.Is(downloadErr, types.ErrRangeUnsupported) {
+		return true
 	}
 	return downloaded == 0
 }

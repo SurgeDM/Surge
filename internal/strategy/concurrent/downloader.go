@@ -44,18 +44,13 @@ type ConcurrentDownloader struct {
 	Headers            map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
 	hostLimiter        *transport.HostRateLimiter
 	soft403Mu          sync.Mutex
-	soft403Exhaustions int
+	forbiddenByMirror  map[string]int
 	soft403Progress    int64
 	soft403Since       time.Time
 	concurrencyGate    *adaptiveConcurrencyGate
-}
 
-const (
-	// Each exhaustion already includes the normal per-task retry burn. The
-	// confirmation window gives in-flight workers one final chance to advance.
-	soft403MaxExhaustions = 16
-	soft403ConfirmWindow  = 5 * time.Second
-)
+	throttleEpisodeStart time.Time
+}
 
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
 func NewConcurrentDownloader(id string, progressCh chan<- types.DownloadEvent, progState *progress.DownloadProgress, runtime *types.RuntimeConfig) *ConcurrentDownloader {
@@ -81,17 +76,21 @@ func NewConcurrentDownloader(id string, progressCh chan<- types.DownloadEvent, p
 	}
 }
 
-// getInitialConnections returns the starting number of connections based on file size
-func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
-	maxConns := d.Runtime.GetMaxConnectionsPerDownload()
-	minChunkSize := d.Runtime.GetMinChunkSize() // e.g., 1MB or 5MB
+// InitialConnectionCount returns the starting number of connections based on file size.
+func InitialConnectionCount(runtime *types.RuntimeConfig, fileSize int64) int {
+	if runtime == nil {
+		runtime = types.DefaultRuntimeConfig()
+	}
+
+	maxConns := runtime.GetMaxConnectionsPerDownload()
+	minChunkSize := runtime.GetMinChunkSize() // e.g., 1MB or 5MB
 
 	if fileSize <= 0 {
 		return 1
 	}
 
 	// If caller specified exact worker count, bypass √size heuristic.
-	if workers := d.Runtime.GetWorkers(); workers > 0 {
+	if workers := runtime.GetWorkers(); workers > 0 {
 		if workers > maxConns {
 			workers = maxConns
 		}
@@ -135,6 +134,10 @@ func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
 	return calculatedWorkers
 }
 
+func (d *ConcurrentDownloader) getInitialConnections(fileSize int64) int {
+	return InitialConnectionCount(d.Runtime, fileSize)
+}
+
 // ReportMirrorError marks a mirror as having an error in the state
 func (d *ConcurrentDownloader) ReportMirrorError(url string) {
 	if d.State == nil {
@@ -154,47 +157,6 @@ func (d *ConcurrentDownloader) ReportMirrorError(url string) {
 	if changed {
 		d.State.SetMirrors(mirrors)
 	}
-}
-
-func (d *ConcurrentDownloader) shouldEscalate403(now time.Time) bool {
-	d.soft403Mu.Lock()
-	defer d.soft403Mu.Unlock()
-
-	progress := d.soft403Progress
-	if d.State != nil {
-		progress = d.State.Bytes.VerifiedProgress.Load()
-	}
-	if progress != d.soft403Progress {
-		d.soft403Progress = progress
-		d.soft403Exhaustions = 0
-		d.soft403Since = time.Time{}
-	}
-
-	if d.soft403Exhaustions < soft403MaxExhaustions {
-		d.soft403Exhaustions++
-	}
-	if d.soft403Exhaustions < soft403MaxExhaustions {
-		return false
-	}
-	if d.soft403Since.IsZero() {
-		d.soft403Since = now
-		return false
-	}
-	if now.Before(d.soft403Since.Add(soft403ConfirmWindow)) {
-		return false
-	}
-
-	// Progress can race the decision above; recheck before stopping healthy peers.
-	if d.State != nil {
-		progress = d.State.Bytes.VerifiedProgress.Load()
-	}
-	if progress != d.soft403Progress {
-		d.soft403Progress = progress
-		d.soft403Exhaustions = 1
-		d.soft403Since = time.Time{}
-		return false
-	}
-	return true
 }
 
 // calculateChunkSize determines optimal chunk size
@@ -292,7 +254,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	utils.Debug("ConcurrentDownloader.Download: %s -> %s (size: %d, mirrors: %d)", rawurl, destPath, fileSize, len(activeMirrors))
 
 	d.soft403Mu.Lock()
-	d.soft403Exhaustions = 0
+	d.forbiddenByMirror = make(map[string]int)
 	d.soft403Progress = 0
 	d.soft403Since = time.Time{}
 	d.soft403Mu.Unlock()
@@ -337,21 +299,20 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	effectiveSizeForWorkers := d.getEffectiveSizeForWorkers(fileSize, savedState, isResume)
 
 	numConns := d.getInitialConnections(effectiveSizeForWorkers)
-	d.concurrencyGate = newAdaptiveConcurrencyGate(numConns, d.Runtime.GetAdaptiveConcurrencyInterval())
+	workerMirrors := d.getWorkerMirrors(activeMirrors)
+	workerHosts := make([]string, len(workerMirrors))
+	for i, mirror := range workerMirrors {
+		workerHosts[i] = transport.MirrorHost(mirror)
+	}
+	initialCap := numConns
+	if d.Runtime.IsAdaptiveConcurrencyEnabled() {
+		initialCap = d.hostLimiter.ConcurrencyCapForHosts(workerHosts, numConns)
+	}
+	d.concurrencyGate = newAdaptiveConcurrencyGateWithInitialCap(numConns, initialCap, d.Runtime.GetAdaptiveConcurrencyInterval())
 	if d.State != nil {
 		d.State.RateLimited.Store(false)
 	}
 	chunkSize := d.determineChunkSize(fileSize, numConns)
-
-	workerMirrors := d.getWorkerMirrors(activeMirrors)
-
-	// Prewarming helps a fresh transfer discover usable connections. A resumed
-	// transfer may be recovering from a host cooldown, so extra probe requests
-	// only make the rate-limit situation worse.
-	hedgeCount := d.Runtime.GetDialHedgeCount()
-	if hedgeCount > 0 && !isResume {
-		d.prewarmConnections(downloadCtx, client, numConns, hedgeCount, workerMirrors)
-	}
 
 	// Open existing output file with .surge suffix (must be created by processing layer)
 	outFile, err := os.OpenFile(workingPath, os.O_RDWR, 0)
@@ -408,6 +369,24 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Note: Download completion notifications are handled by the TUI via DownloadCompleteMsg
 	return d.syncFile(outFile)
+}
+
+func (d *ConcurrentDownloader) ExportThrottleState(cfg *types.DownloadRecord) {
+	if cfg == nil {
+		return
+	}
+	d.soft403Mu.Lock()
+	defer d.soft403Mu.Unlock()
+	cfg.ThrottleEpisodeStart = d.throttleEpisodeStart
+}
+
+func (d *ConcurrentDownloader) ImportThrottleState(cfg *types.DownloadRecord) {
+	if cfg == nil {
+		return
+	}
+	d.soft403Mu.Lock()
+	defer d.soft403Mu.Unlock()
+	d.throttleEpisodeStart = cfg.ThrottleEpisodeStart
 }
 
 func (d *ConcurrentDownloader) initMirrorStatus(rawurl string, candidateMirrors []string, activeMirrors []string, destPath string) {
@@ -513,21 +492,6 @@ func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize i
 }
 
 func (d *ConcurrentDownloader) startHelpers(ctx context.Context, wg *sync.WaitGroup, queue *TaskQueue, fileSize int64, numConns int) {
-	if d.concurrencyGate != nil {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
-			d.concurrencyGate.runRecovery(ctx, func(oldCap, newCap int, recovered bool) {
-				if newCap > oldCap {
-					utils.Debug("Adaptive concurrency: increased cap from %d to %d after healthy window", oldCap, newCap)
-				}
-				if recovered && d.State != nil {
-					d.State.RateLimited.Store(false)
-				}
-			})
-		}()
-	}
-
 	// Balancer for dynamic chunk splitting and work stealing
 	wg.Add(1)
 	go func() {
@@ -831,75 +795,4 @@ func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *ht
 	}
 
 	return fileSize, nil
-}
-
-// prewarmConnections fires off concurrent pings to the mirrors to populate the connection pool
-func (d *ConcurrentDownloader) prewarmConnections(ctx context.Context, client *http.Client, numRequired, hedgeCount int, mirrors []string) {
-	totalToStart := numRequired + hedgeCount
-	if totalToStart > 128 { // Safety cap
-		totalToStart = 128
-	}
-
-	// Channel to signal when a connection is ready (handshake complete)
-	ready := make(chan struct{}, totalToStart)
-
-	// Create a sub-context for the pings so we can stop them once we have enough
-	pingCtx, cancelPings := context.WithCancel(ctx)
-	defer cancelPings()
-
-	for i := 0; i < totalToStart; i++ {
-		go func(idx int) {
-			// Round-robin mirrors
-			mirror := mirrors[idx%len(mirrors)]
-
-			// Use a fast Range request to ensure the handshake completes
-			req, err := http.NewRequestWithContext(pingCtx, http.MethodGet, mirror, nil)
-			if err != nil {
-				return
-			}
-
-			// Forward custom headers (essential for authenticated mirrors)
-			for key, val := range d.Headers {
-				if key != "Range" {
-					req.Header.Set(key, val)
-				}
-			}
-
-			// Ensure User-Agent and Range are set
-			if req.Header.Get("User-Agent") == "" {
-				req.Header.Set("User-Agent", d.Runtime.GetUserAgent())
-			}
-			req.Header.Set("Range", "bytes=0-0")
-
-			// Perform dial + request
-			resp, err := client.Do(req)
-			if err != nil {
-				return
-			}
-
-			// Drain body and close to return connection to idle pool, then signal readiness.
-			_, _ = io.Copy(io.Discard, resp.Body)
-			_ = resp.Body.Close()
-			ready <- struct{}{}
-		}(i)
-	}
-
-	// Wait until we have enough ready connections OR we hit a timeout
-	completed := 0
-	timeout := time.After(types.DialTimeout) // Use standard dial timeout for the whole batch
-
-	for completed < numRequired {
-		select {
-		case <-ready:
-			completed++
-		case <-timeout:
-			utils.Debug("Pre-warming timed out after %d/%d connections", completed, numRequired)
-			return
-		case <-ctx.Done():
-			return
-		}
-	}
-
-	utils.Debug("Pre-warming complete: %d connections hot", completed)
-	// Remaining pings will be cancelled by defer cancelPings()
 }

@@ -1083,6 +1083,68 @@ func TestWorker_SkipsRetriesOnPermanentError(t *testing.T) {
 	}
 }
 
+func TestSchedulerRetryNotRunnableBeforeRetryAt(t *testing.T) {
+	ch := make(chan types.DownloadEvent, 100)
+	pool := &Scheduler{
+		progressCh:       ch,
+		progressDone:     make(chan struct{}),
+		downloads:        make(map[string]*activeDownload),
+		queued:           make(map[string]*queuedTask),
+		maxDownloads:     1,
+		globalLimiter:    transport.NewRateLimiter(0, 0),
+		downloadLimiters: make(map[string]*transport.RateLimiter),
+	}
+	pool.taskCond = sync.NewCond(&pool.mu)
+
+	pool.mu.Lock()
+	id := "delayed-task"
+	retryDelay := 150 * time.Millisecond
+	qt := &queuedTask{
+		cfg: types.DownloadRecord{
+			ID:  id,
+			URL: "http://example.com/delayed.bin",
+		},
+		retries:  1,
+		inFlight: false,
+		retryAt:  time.Now().Add(retryDelay),
+	}
+	pool.queued[id] = qt
+	pool.queueOrder = append(pool.queueOrder, id)
+	pool.wg.Add(1)
+	pool.mu.Unlock()
+
+	gotID := make(chan string, 1)
+	go func() {
+		gotID <- pool.waitForTask()
+	}()
+
+	// At 40ms (before retryAt), task should NOT be popped yet
+	select {
+	case res := <-gotID:
+		t.Fatalf("task %s was popped before retryAt elapsed", res)
+	case <-time.After(40 * time.Millisecond):
+		// Expected: still waiting
+	}
+
+	// Wait for retryAt to pass (after 250ms total)
+	select {
+	case res := <-gotID:
+		if res != id {
+			t.Fatalf("got task ID %s, want %s", res, id)
+		}
+	case <-time.After(500 * time.Millisecond):
+		t.Fatal("timed out waiting for delayed task to become runnable after retryAt")
+	}
+
+	pool.mu.Lock()
+	if q, ok := pool.queued[id]; ok {
+		q.inFlight = false
+		delete(pool.queued, id)
+		pool.wg.Done()
+	}
+	pool.mu.Unlock()
+}
+
 func TestScheduler_PauseAtVerified_EndgameMatrix(t *testing.T) {
 	tests := []struct {
 		name         string
