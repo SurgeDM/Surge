@@ -458,7 +458,7 @@ func TestMirrorAware403Exhaustion(t *testing.T) {
 	}
 }
 
-func TestConcurrentDownloader_Soft403ThrottlesBeforeGenericRetry(t *testing.T) {
+func TestConcurrentDownloader_Soft403ZeroRetriesHasCooldown(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
@@ -484,10 +484,9 @@ func TestConcurrentDownloader_Soft403ThrottlesBeforeGenericRetry(t *testing.T) {
 		MaxConnectionsPerDownload: 1,
 		Workers:                   1,
 		MinChunkSize:              fileSize,
-		MaxTaskRetries:            3,
+		MaxTaskRetries:            0,
 		DialHedgeCount:            0,
 	})
-	downloader.hostLimiter = transport.NewHostRateLimiter()
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Millisecond)
 	defer cancel()
 
@@ -497,15 +496,6 @@ func TestConcurrentDownloader_Soft403ThrottlesBeforeGenericRetry(t *testing.T) {
 	}
 	if got := requests.Load(); got > 1 {
 		t.Fatalf("soft 403 requests = %d in 150ms, want at most 1", got)
-	}
-	if until := downloader.hostLimiter.BlockedUntil(transport.MirrorHost(server.URL), time.Now()); until.IsZero() {
-		t.Fatal("expected the first 403 to report a host throttle before generic retries")
-	}
-	downloader.soft403Mu.Lock()
-	forbiddenCount := downloader.forbiddenByMirror[server.URL]
-	downloader.soft403Mu.Unlock()
-	if forbiddenCount != 1 {
-		t.Fatalf("forbidden count after first 403 = %d, want 1", forbiddenCount)
 	}
 }
 

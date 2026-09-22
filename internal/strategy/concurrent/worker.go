@@ -270,53 +270,6 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				return types.ErrRangeUnsupported
 			}
 
-			if errors.Is(lastErr, errSoftForbidden) {
-				host := mirrorHosts[currentMirrorIdx]
-				now := time.Now()
-				gateCap := 0
-				if d.concurrencyGate != nil {
-					gateCap = d.concurrencyGate.currentCap()
-				}
-				reportedCap := gateCap
-				if !d.Runtime.IsAdaptiveConcurrencyEnabled() {
-					reportedCap = 0
-				}
-				until, newCap := d.hostLimiter.ReportThrottle(host, reportedCap, 2*time.Second, false, now)
-				if d.concurrencyGate != nil {
-					if !d.Runtime.IsAdaptiveConcurrencyEnabled() {
-						newCap = gateCap
-					}
-					d.concurrencyGate.setCap(newCap, until)
-				}
-
-				d.soft403Mu.Lock()
-				if d.forbiddenByMirror == nil {
-					d.forbiddenByMirror = make(map[string]int)
-				}
-				d.forbiddenByMirror[currentURL]++
-				count := d.forbiddenByMirror[currentURL]
-
-				allMirrorsForbidden := len(mirrors) > 0
-				for _, mirror := range mirrors {
-					if d.forbiddenByMirror[mirror] < 3 {
-						allMirrorsForbidden = false
-						break
-					}
-				}
-				d.soft403Mu.Unlock()
-
-				if allMirrorsForbidden {
-					lastErr = fmt.Errorf("repeated 403 forbidden across all mirrors (%d attempts on %s): %w", count, currentURL, types.ErrPermanentHTTP)
-					break
-				}
-				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
-				if remaining := d.detachRemainingTask(id, activeTask); remaining != nil && remaining.Length > 0 {
-					throttledRequeue = remaining
-				}
-				lastErr = nil
-				break
-			}
-
 			genericAttempt++
 			if genericAttempt >= maxRetries {
 				break
@@ -354,6 +307,52 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 			remain := activeTask.RemainingTask()
 
+			if errors.Is(lastErr, errSoftForbidden) {
+				host := mirrorHosts[currentMirrorIdx]
+				now := time.Now()
+				gateCap := 0
+				if d.concurrencyGate != nil {
+					gateCap = d.concurrencyGate.currentCap()
+				}
+				reportedCap := gateCap
+				if !d.Runtime.IsAdaptiveConcurrencyEnabled() {
+					reportedCap = 0
+				}
+				until, newCap := d.hostLimiter.ReportThrottle(host, reportedCap, 2*time.Second, false, now)
+				if d.concurrencyGate != nil {
+					if !d.Runtime.IsAdaptiveConcurrencyEnabled() {
+						newCap = gateCap
+					}
+					d.concurrencyGate.setCap(newCap, until)
+				}
+
+				d.soft403Mu.Lock()
+				if d.forbiddenByMirror == nil {
+					d.forbiddenByMirror = make(map[string]int)
+				}
+				curMirror := mirrors[currentMirrorIdx]
+				d.forbiddenByMirror[curMirror]++
+				count := d.forbiddenByMirror[curMirror]
+
+				allMirrorsForbidden := len(mirrors) > 0
+				for _, m := range mirrors {
+					if d.forbiddenByMirror[m] < 3 {
+						allMirrorsForbidden = false
+						break
+					}
+				}
+				d.soft403Mu.Unlock()
+
+				if allMirrorsForbidden {
+					lastErr = fmt.Errorf("repeated 403 forbidden across all mirrors (%d attempts on %s): %w", count, curMirror, types.ErrPermanentHTTP)
+				} else {
+					if remain != nil {
+						queue.Push(*remain)
+					}
+					currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
+					continue
+				}
+			}
 			if remain != nil {
 				queue.Push(*remain)
 			}
