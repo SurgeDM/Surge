@@ -3,7 +3,7 @@
 # verifies its checksum, and installs the binary (plus shell completion).
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/SurgeDM/Surge/d41f5bc7818f887b0cb85b1aefab60f1101bfe4d/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/SurgeDM/Surge/22f23af257dfcb676bd2df7304b4a8409d5dfa91/scripts/install.sh | sh
 #
 # Env overrides:
 #   SURGE_INSTALL_DIR   install location for the binary (default: ~/.local/bin, falls back to /usr/local/bin with sudo)
