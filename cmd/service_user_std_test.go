@@ -35,13 +35,13 @@ func TestLinuxServiceInstallUsesUserManager(t *testing.T) {
 	}
 }
 
-func TestLinuxServiceRunningUsesUserManagerState(t *testing.T) {
+func TestServiceRunningUsesUserManagerState(t *testing.T) {
 	original := getUserServiceManager
 	manager := &fakeUserServiceManager{state: userservice.Running}
 	getUserServiceManager = func() (userservice.Manager, error) { return manager, nil }
 	t.Cleanup(func() { getUserServiceManager = original })
 
-	if !isSystemServiceRunning() {
+	if !isUserServiceRunning() {
 		t.Fatal("running user service was not detected")
 	}
 }

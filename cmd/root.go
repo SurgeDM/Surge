@@ -489,8 +489,8 @@ var rootCmd = &cobra.Command{
 			return nil
 		}
 
-		if checkSystemServiceRunning() {
-			return fmt.Errorf("system service is already running. Use 'surge connect' to interact with it, or stop the service first")
+		if checkUserServiceRunning() {
+			return fmt.Errorf("the Surge user service is already running; use 'surge connect' or stop the service first")
 		}
 
 		if len(args) > 0 {

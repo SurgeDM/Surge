@@ -78,7 +78,7 @@ var serviceStatusCmd = &cobra.Command{
 	}, ""),
 }
 
-func isSystemServiceRunning() bool {
+func isUserServiceRunning() bool {
 	manager, err := getUserServiceManager()
 	if err != nil {
 		return false
