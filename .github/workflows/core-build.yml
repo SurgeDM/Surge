@@ -151,7 +151,7 @@ jobs:
 
       - name: Save Linux release artifacts
         shell: bash
-        run: mv dist "$RUNNER_TEMP/goreleaser-linux"
+        run: mv dist/linux "$RUNNER_TEMP/goreleaser-linux"
 
       - name: Prepare macOS release artifacts
         uses: goreleaser/goreleaser-action@v6
@@ -168,8 +168,8 @@ jobs:
       - name: Combine Unix release artifacts
         shell: bash
         run: |
-          mv dist "$RUNNER_TEMP/goreleaser-darwin"
-          mkdir dist
+          mv dist/darwin "$RUNNER_TEMP/goreleaser-darwin"
+          mkdir -p dist
           mv "$RUNNER_TEMP/goreleaser-linux" dist/linux
           mv "$RUNNER_TEMP/goreleaser-darwin" dist/darwin
 
@@ -204,7 +204,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Save Windows release artifacts
         shell: bash
-        run: mv dist "$RUNNER_TEMP/goreleaser-windows"
+        run: mv dist/windows "$RUNNER_TEMP/goreleaser-windows"
       - name: Download Unix release artifacts
         uses: actions/download-artifact@v4
         with:
