@@ -805,7 +805,46 @@ func TestTwoDownloadsSameHostNoProgressIsolation(t *testing.T) {
 	}
 }
 
-func TestConcurrentDownloader_RangeUnsupportedReturnsSentinel(t *testing.T) {
+func TestLooksLikeChallenge_BrotliNonCFNotClassifiedAsChallenge(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Content-Encoding": []string{"br"},
+			"Content-Type":     []string{"application/octet-stream"},
+			"Server":           []string{"nginx/1.18.0"},
+		},
+	}
+	if looksLikeChallenge(resp) {
+		t.Fatal("expected Brotli non-CF response to NOT be classified as a Cloudflare challenge")
+	}
+}
+
+func TestLooksLikeChallenge_CFMitigatedHeaderClassifiedAsChallenge(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Cf-Mitigated": []string{"challenge"},
+		},
+	}
+	if !looksLikeChallenge(resp) {
+		t.Fatal("expected cf-mitigated header to be classified as Cloudflare challenge")
+	}
+}
+
+func TestLooksLikeChallenge_CFServerBrotliClassifiedAsChallenge(t *testing.T) {
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Header: http.Header{
+			"Server":           []string{"cloudflare"},
+			"Content-Encoding": []string{"br"},
+		},
+	}
+	if !looksLikeChallenge(resp) {
+		t.Fatal("expected Cloudflare server + Brotli response to be classified as Cloudflare challenge")
+	}
+}
+
+func TestConcurrentDownloader_AllMirrorsRangeUnsupportedReturnsSentinel(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
@@ -825,7 +864,7 @@ func TestConcurrentDownloader_RangeUnsupportedReturnsSentinel(t *testing.T) {
 	s2 := makeServer()
 	defer s2.Close()
 
-	destPath := filepath.Join(tmpDir, "range_unsupported.bin")
+	destPath := filepath.Join(tmpDir, "all_unsupported.bin")
 	if f, err := os.Create(destPath + types.IncompleteSuffix); err == nil {
 		_ = f.Close()
 	}
@@ -839,9 +878,10 @@ func TestConcurrentDownloader_RangeUnsupportedReturnsSentinel(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	err := downloader.Download(ctx, s1.URL, []string{s1.URL, s2.URL}, []string{s1.URL, s2.URL}, destPath, fileSize)
+	mirrors := []string{s1.URL, s2.URL}
+	err := downloader.Download(ctx, s1.URL, mirrors, mirrors, destPath, fileSize)
 	if !errors.Is(err, types.ErrRangeUnsupported) {
-		t.Fatalf("expected ErrRangeUnsupported, got: %v", err)
+		t.Fatalf("expected ErrRangeUnsupported when all mirrors ignore range, got: %v", err)
 	}
 }
 

@@ -1,12 +1,14 @@
 package concurrent
 
 import (
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/transport"
@@ -20,6 +22,60 @@ var writeAtFn = func(f *os.File, b []byte, off int64) (int, error) {
 }
 
 var errSoftForbidden = errors.New("unexpected status: 403")
+
+type cfChallengeError struct {
+	retryAfter time.Duration
+}
+
+func (e *cfChallengeError) Error() string {
+	return "cloudflare challenge detected"
+}
+
+func looksLikeChallenge(resp *http.Response) bool {
+	if resp == nil {
+		return false
+	}
+	// 1. Explicit Cloudflare mitigation header
+	if strings.EqualFold(resp.Header.Get("cf-mitigated"), "challenge") {
+		return true
+	}
+
+	enc := strings.ToLower(resp.Header.Get("Content-Encoding"))
+	ct := strings.ToLower(resp.Header.Get("Content-Type"))
+	server := strings.ToLower(resp.Header.Get("Server"))
+	hasRangeHeader := resp.Header.Get("Content-Range") != ""
+
+	// 2. Body inspection for known Cloudflare challenge signatures
+	if resp.Body != nil {
+		var reader io.Reader = resp.Body
+		if enc == "gzip" {
+			if gz, err := gzip.NewReader(resp.Body); err == nil {
+				defer gz.Close()
+				reader = gz
+			}
+		}
+		buf := make([]byte, 8192)
+		n, _ := io.ReadFull(reader, buf)
+		if n > 0 {
+			snippet := string(buf[:n])
+			if strings.Contains(snippet, "cf-browser-verification") ||
+				strings.Contains(snippet, "<div id=\"cf-please-wait\">") ||
+				strings.Contains(snippet, "Just a moment...") ||
+				strings.Contains(snippet, "Attention Required!") {
+				return true
+			}
+		}
+	}
+
+	// 3. Narrow compound fingerprint: requires Cloudflare server header AND missing Content-Range AND HTML/compressed challenge response
+	if strings.Contains(server, "cloudflare") && !hasRangeHeader {
+		if strings.Contains(ct, "text/html") || enc == "br" || enc == "gzip" || enc == "deflate" {
+			return true
+		}
+	}
+
+	return false
+}
 
 const soft403RetryDelay = 500 * time.Millisecond
 
@@ -208,9 +264,18 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			}
 
 			var rlErr *rateLimitError
-			if errors.As(lastErr, &rlErr) {
-				retryAfter := rlErr.retryAfter
-				explicit := rlErr.explicit
+			var cfErr *cfChallengeError
+			if errors.As(lastErr, &rlErr) || errors.As(lastErr, &cfErr) {
+				var retryAfter time.Duration
+				var explicit bool
+				if rlErr != nil {
+					retryAfter = rlErr.retryAfter
+					explicit = rlErr.explicit
+				} else {
+					retryAfter = cfErr.retryAfter
+					explicit = false
+				}
+
 				host := mirrorHosts[currentMirrorIdx]
 				now := time.Now()
 
@@ -267,7 +332,23 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			}
 
 			if errors.Is(lastErr, types.ErrRangeUnsupported) {
-				return types.ErrRangeUnsupported
+				d.markMirrorNonRange(currentURL)
+				allNonRange := true
+				for _, m := range mirrors {
+					if !d.isMirrorNonRange(m) {
+						allNonRange = false
+						break
+					}
+				}
+				if allNonRange {
+					return types.ErrRangeUnsupported
+				}
+				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
+				if remaining := d.detachRemainingTask(id, activeTask); remaining != nil && remaining.Length > 0 {
+					throttledRequeue = remaining
+				}
+				lastErr = nil
+				break
 			}
 
 			genericAttempt++
@@ -417,6 +498,9 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 		// Valid only if we requested the full file
 		// If we wanted a partial range but got the whole file (200), that's an error because we can't handle the full stream at a non-zero offset
 		if task.Offset != 0 || task.Length != totalSize {
+			if looksLikeChallenge(resp) {
+				return &cfChallengeError{retryAfter: 5 * time.Second}
+			}
 			return types.ErrRangeUnsupported
 		}
 	} else if resp.StatusCode != http.StatusPartialContent {

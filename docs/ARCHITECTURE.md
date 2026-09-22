@@ -203,7 +203,7 @@ Three independent controls are involved:
 2. The per-download byte limiter restricts one download's bandwidth.
 3. `HostRateLimiter` coordinates server-directed cooldowns and, when adaptive concurrency is enabled, stores a learned concurrency cap per host.
 
-`MultiLimiter` combines the first two controls for every read. The host policy handles `429`, retryable `503`, and repeated soft `403` responses.
+`MultiLimiter` combines the first two controls for every read. The host policy handles `429`, retryable `503`, Cloudflare challenge responses, and repeated soft `403` responses.
 
 Adaptive concurrency is opt-in through a positive `AdaptiveConcurrencyInterval`:
 
