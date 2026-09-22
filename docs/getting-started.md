@@ -13,7 +13,7 @@ Use the package manager or release artifact that suits your platform:
 | macOS / Linux | `brew install SurgeDM/tap/surge` |
 | Arch Linux | `yay -S surge` |
 | Nix / NixOS | `nix run github:SurgeDM/Surge` |
-| Linux / macOS (no package manager) | `curl -fsSL https://raw.githubusercontent.com/SurgeDM/Surge/main/scripts/install.sh \| sh` |
+| Linux / macOS (no package manager) | `curl -fsSL https://raw.githubusercontent.com/SurgeDM/Surge/d41f5bc7818f887b0cb85b1aefab60f1101bfe4d/scripts/install.sh \| sh` |
 | Any supported platform | [Download a release](https://github.com/SurgeDM/Surge/releases/latest) |
 
 The install script detects your OS and architecture (including Linux ARM64,
