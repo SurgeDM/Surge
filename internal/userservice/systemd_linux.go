@@ -17,9 +17,6 @@ import (
 
 const systemdUnitName = "surge.service"
 
-var ErrRootInstall = errors.New("Surge user services cannot be managed as root; run this command again without sudo")
-var ErrLegacySystemService = errors.New("a legacy system-wide Surge service is installed")
-
 type commandRunner interface {
 	Run(context.Context, string, ...string) ([]byte, error)
 }
@@ -60,7 +57,7 @@ func (m *SystemdManager) Install(ctx context.Context) error {
 		legacyCheck = legacySystemdUnitExists
 	}
 	if legacyCheck() {
-		return fmt.Errorf("%w; stop and remove it before installing the user service", ErrLegacySystemService)
+		return fmt.Errorf("%w; run 'sudo systemctl disable --now surge', remove the legacy unit, then retry without sudo", ErrLegacySystemService)
 	}
 	if err := os.MkdirAll(filepath.Dir(m.unitPath), 0o755); err != nil {
 		return fmt.Errorf("create systemd user directory: %w", err)

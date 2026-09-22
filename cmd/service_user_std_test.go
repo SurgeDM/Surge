@@ -1,5 +1,3 @@
-//go:build linux && !android
-
 package cmd
 
 import (

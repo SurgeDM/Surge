@@ -1,6 +1,12 @@
 package userservice
 
-import "context"
+import (
+	"context"
+	"errors"
+)
+
+var ErrRootInstall = errors.New("Surge user services cannot be managed as root; run this command again without sudo")
+var ErrLegacySystemService = errors.New("a legacy system-wide Surge service is installed")
 
 type State int
 

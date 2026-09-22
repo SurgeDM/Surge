@@ -1,10 +1,7 @@
-//go:build linux && !android
-
 package cmd
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 
@@ -28,9 +25,6 @@ func runUserServiceAction(action func(context.Context, userservice.Manager) erro
 			return err
 		}
 		if err := action(cmd.Context(), manager); err != nil {
-			if errors.Is(err, userservice.ErrLegacySystemService) {
-				return fmt.Errorf("%w; run 'sudo systemctl disable --now surge' and remove the legacy unit, then retry without sudo", err)
-			}
 			return err
 		}
 		if message != "" {

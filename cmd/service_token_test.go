@@ -1,4 +1,4 @@
-//go:build !android && !linux
+//go:build legacy_system_service
 
 // Tests in this file mutate package-level variables (globalToken, GetService)
 // and redirect os.Stdout via captureStdout.  They must NOT use t.Parallel().
