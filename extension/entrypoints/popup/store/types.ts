@@ -1,6 +1,6 @@
 /**
  * Type definitions matching the Surge Go backend structs.
- * All byte values are in bytes; speed in the API is MB/s per DownloadStatus.
+ * API speed is bytes/s; popup DownloadStatus speed is normalized to MB/s.
  */
 
 export interface DownloadStatus {

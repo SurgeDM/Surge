@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"math"
 	"net/http"
 	"os"
@@ -724,6 +725,7 @@ func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64
 		RateLimitSet:    rateLimitSet,
 		Workers:         d.Runtime.GetWorkers(),
 		MinChunkSize:    d.Runtime.GetMinChunkSize(),
+		Headers:         maps.Clone(d.Headers),
 	}
 
 	d.State.SetPendingResumeState(s)

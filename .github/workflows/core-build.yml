@@ -48,7 +48,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.0"
+          go-version: "1.26.0"
           check-latest: false
       - name: Install gotestsum
         run: go install gotest.tools/gotestsum@latest
@@ -136,7 +136,7 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version: "1.25.0"
+          go-version: "1.26.0"
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v6
         with:

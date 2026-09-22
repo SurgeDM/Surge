@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"strings"
@@ -35,9 +36,108 @@ type MasterState struct {
 	Downloads []types.DownloadRecord
 }
 
+// persistedDetailRecord is the explicit gob wire format for per-download
+// resume state. It retains only fields needed to reconstruct a paused download,
+// including request headers, while excluding runtime handles and output paths.
+type persistedDetailRecord struct {
+	ID              string
+	URLHash         string
+	URL             string
+	Filename        string
+	DestPath        string
+	TotalSize       int64
+	Downloaded      int64
+	Status          string
+	Error           string
+	CreatedAt       int64
+	PausedAt        int64
+	CompletedAt     int64
+	TimeTaken       int64
+	Elapsed         int64
+	AvgSpeed        float64
+	Tasks           []types.Task
+	ChunkBitmap     []byte
+	ActualChunkSize int64
+	FileHash        string
+	Mirrors         []string
+	RateLimit       int64
+	RateLimitSet    bool
+	Workers         int
+	MinChunkSize    int64
+	Headers         map[string]string
+}
+
+func toPersistedDetail(state *types.DownloadRecord) *persistedDetailRecord {
+	if state == nil {
+		return nil
+	}
+
+	return &persistedDetailRecord{
+		ID:              state.ID,
+		URLHash:         state.URLHash,
+		URL:             state.URL,
+		Filename:        state.Filename,
+		DestPath:        state.DestPath,
+		TotalSize:       state.TotalSize,
+		Downloaded:      state.Downloaded,
+		Status:          state.Status,
+		Error:           state.Error,
+		CreatedAt:       state.CreatedAt,
+		PausedAt:        state.PausedAt,
+		CompletedAt:     state.CompletedAt,
+		TimeTaken:       state.TimeTaken,
+		Elapsed:         state.Elapsed,
+		AvgSpeed:        state.AvgSpeed,
+		Tasks:           append([]types.Task(nil), state.Tasks...),
+		ChunkBitmap:     append([]byte(nil), state.ChunkBitmap...),
+		ActualChunkSize: state.ActualChunkSize,
+		FileHash:        state.FileHash,
+		Mirrors:         append([]string(nil), state.Mirrors...),
+		RateLimit:       state.RateLimit,
+		RateLimitSet:    state.RateLimitSet,
+		Workers:         state.Workers,
+		MinChunkSize:    state.MinChunkSize,
+		Headers:         maps.Clone(state.Headers),
+	}
+}
+
+func fromPersistedDetail(state *persistedDetailRecord) *types.DownloadRecord {
+	if state == nil {
+		return nil
+	}
+
+	return &types.DownloadRecord{
+		ID:              state.ID,
+		URLHash:         state.URLHash,
+		URL:             state.URL,
+		Filename:        state.Filename,
+		DestPath:        state.DestPath,
+		TotalSize:       state.TotalSize,
+		Downloaded:      state.Downloaded,
+		Status:          state.Status,
+		Error:           state.Error,
+		CreatedAt:       state.CreatedAt,
+		PausedAt:        state.PausedAt,
+		CompletedAt:     state.CompletedAt,
+		TimeTaken:       state.TimeTaken,
+		Elapsed:         state.Elapsed,
+		AvgSpeed:        state.AvgSpeed,
+		Tasks:           append([]types.Task(nil), state.Tasks...),
+		ChunkBitmap:     append([]byte(nil), state.ChunkBitmap...),
+		ActualChunkSize: state.ActualChunkSize,
+		FileHash:        state.FileHash,
+		Mirrors:         append([]string(nil), state.Mirrors...),
+		RateLimit:       state.RateLimit,
+		RateLimitSet:    state.RateLimitSet,
+		Workers:         state.Workers,
+		MinChunkSize:    state.MinChunkSize,
+		Headers:         maps.Clone(state.Headers),
+	}
+}
+
 type DetailState struct {
 	Version int
-	State   *types.DownloadRecord
+	State   *persistedDetailRecord
 }
 
 func URLHash(url string) string {
@@ -96,7 +196,7 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadReco
 
 	ds := DetailState{
 		Version: 2,
-		State:   state,
+		State:   toPersistedDetail(state),
 	}
 
 	if err := ensureDirs(); err != nil {
@@ -258,11 +358,12 @@ func LoadState(url string, destPath string) (*types.DownloadRecord, error) {
 		return nil, fmt.Errorf("failed to load detail state: %w", err)
 	}
 
-	if ds.State != nil && ds.State.ChunkBitmap == nil {
-		ds.State.ChunkBitmap = []byte{}
+	state := fromPersistedDetail(ds.State)
+	if state != nil && state.ChunkBitmap == nil {
+		state.ChunkBitmap = []byte{}
 	}
 
-	return ds.State, nil
+	return state, nil
 }
 
 func LoadStates(ids []string) (map[string]*types.DownloadRecord, error) {
@@ -282,11 +383,11 @@ func LoadStates(ids []string) (map[string]*types.DownloadRecord, error) {
 			}
 			continue
 		}
-		if ds.State != nil {
-			if ds.State.ChunkBitmap == nil {
-				ds.State.ChunkBitmap = []byte{}
+		if state := fromPersistedDetail(ds.State); state != nil {
+			if state.ChunkBitmap == nil {
+				state.ChunkBitmap = []byte{}
 			}
-			states[id] = ds.State
+			states[id] = state
 		}
 	}
 	return states, errors.Join(errs...)
@@ -338,10 +439,35 @@ func DeleteTasks(id string) error {
 }
 
 func LoadMasterList() (*types.MasterList, error) {
-	masterMu.RLock()
-	defer masterMu.RUnlock()
+	masterMu.Lock()
+	defer masterMu.Unlock()
 
-	return loadMasterListUnlocked()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return nil, err
+	}
+	if baseDir == "" {
+		return list, nil
+	}
+	if _, err := os.Stat(getMasterPath()); err == nil {
+		if err := saveMasterListLocked(list); err != nil {
+			return nil, err
+		}
+	} else if !os.IsNotExist(err) {
+		return nil, err
+	}
+	return list, nil
+}
+
+func sanitizeMasterDownload(download *types.DownloadRecord) {
+	download.Headers = nil
+	download.ProgressCh = nil
+	download.ProgressState = nil
+	download.Runtime = nil
+	download.Limiter = nil
+	download.IsResume = false
+	download.IsExplicitCategory = false
+	download.SupportsRange = false
 }
 
 func saveMasterListLocked(list *types.MasterList) error {
@@ -351,9 +477,14 @@ func saveMasterListLocked(list *types.MasterList) error {
 	if err := ensureDirsLocked(); err != nil {
 		return err
 	}
+	downloads := make([]types.DownloadRecord, len(list.Downloads))
+	for index, download := range list.Downloads {
+		sanitizeMasterDownload(&download)
+		downloads[index] = download
+	}
 	ms := MasterState{
 		Version:   2,
-		Downloads: list.Downloads,
+		Downloads: downloads,
 	}
 	return atomicWrite(getMasterPath(), ms)
 }
@@ -402,6 +533,9 @@ func loadMasterListUnlocked() (*types.MasterList, error) {
 		utils.Debug("Master list has unsupported version %d (expected 2), deleting to start fresh", ms.Version)
 		_ = os.Remove(getMasterPath())
 		return &types.MasterList{Downloads: []types.DownloadRecord{}}, nil
+	}
+	for index := range ms.Downloads {
+		sanitizeMasterDownload(&ms.Downloads[index])
 	}
 	return &types.MasterList{Downloads: ms.Downloads}, nil
 }

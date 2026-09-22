@@ -268,6 +268,10 @@ func (p *Scheduler) GetAll() []types.DownloadRecord {
 func (p *Scheduler) Pause(downloadID string) bool {
 	p.mu.RLock()
 	ad, exists := p.downloads[downloadID]
+	var configTotal int64
+	if exists && ad != nil {
+		configTotal = ad.config.TotalSize
+	}
 	p.mu.RUnlock()
 
 	if !exists || ad == nil {
@@ -276,19 +280,33 @@ func (p *Scheduler) Pause(downloadID string) bool {
 
 	// Set paused flag and cancel context
 	if ad.config.ProgressState != nil {
+		prog := progress.CfgProgress(&ad.config)
+
+		// Completion boundary guard: if done or verified progress reached positive total, no-op return true.
+		if prog.Done.Load() {
+			return true
+		}
+		total := prog.Bytes.TotalSize.Load()
+		if total <= 0 {
+			total = configTotal
+		}
+		if total > 0 && prog.Bytes.VerifiedProgress.Load() >= total {
+			return true
+		}
+
 		// Idempotency: If already paused, do nothing.
-		if progress.CfgProgress(&ad.config).IsPaused() {
+		if prog.IsPaused() {
 			return true
 		}
 		// If transition is already in progress, still ensure worker context is canceled.
-		if progress.CfgProgress(&ad.config).IsPausing() {
+		if prog.IsPausing() {
 			if ad.cancel != nil {
 				ad.cancel()
 			}
 			return true
 		}
-		progress.CfgProgress(&ad.config).SetPausing(true) // Mark as transitioning to pause
-		progress.CfgProgress(&ad.config).Pause()
+		prog.SetPausing(true) // Mark as transitioning to pause
+		prog.Pause()
 	}
 	// Always cancel worker context as a safety net (single downloader does not set state cancel itself).
 	if ad.cancel != nil {
@@ -672,9 +690,10 @@ func (p *Scheduler) worker() {
 		}
 		p.mu.Unlock()
 
-		// Logic:
-		// 1. If Pause() was called: State.IsPaused() is true. We keep the task in p.downloads (so it can be resumed).
-		// 2. If finished/error: We remove from p.downloads.
+		// Outcome priority:
+		// 1. If err == nil (successful download): Clear stale pause, mark Done, remove from downloads.
+		// 2. If paused (ErrPaused or pause requested with cancel): Keep in downloads for potential resume.
+		// 3. If other error: Retry or emit EventError.
 
 		isPaused := localCfg.ProgressState != nil && progress.CfgProgress(&localCfg).IsPaused()
 
@@ -683,10 +702,26 @@ func (p *Scheduler) worker() {
 			progress.CfgProgress(&localCfg).SetPausing(false)
 		}
 
-		if isPaused {
+		// A clean pause outcome only occurs on typed ErrPaused or when a pause was requested
+		// and the download terminated due to context cancellation.
+		isPauseResult := errors.Is(err, types.ErrPaused) || (isPaused && (errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)))
+
+		if err == nil {
+			// Physical success takes precedence over late-arriving pause signals.
+			// Clear any stale paused flag, mark Done, and remove from tracking maps.
+			if localCfg.ProgressState != nil {
+				prog := progress.CfgProgress(&localCfg)
+				prog.Paused.Store(false)
+				prog.Done.Store(true)
+			}
+			p.mu.Lock()
+			delete(p.downloads, localCfg.ID)
+			delete(p.downloadLimiters, localCfg.ID)
+			p.mu.Unlock()
+		} else if isPauseResult {
 			utils.Debug("Scheduler: Download %s paused cleanly", localCfg.ID)
 			sendPausedFallback(localCfg.ProgressCh, &localCfg, err, p.progressDone)
-		} else if err != nil {
+		} else {
 			p.mu.Lock()
 			delete(p.downloads, localCfg.ID)
 
@@ -784,18 +819,6 @@ func (p *Scheduler) worker() {
 			if errEvent != nil {
 				safeSendProgress(localCfg.ProgressCh, *errEvent, p.progressDone)
 			}
-		} else {
-			// Only mark as done if not paused
-			if localCfg.ProgressState != nil {
-				progress.CfgProgress(&localCfg).Done.Store(true)
-			}
-			// Note: DownloadCompleteMsg is sent by the progress reporter when it detects Done=true
-
-			// Clean up from tracking
-			p.mu.Lock()
-			delete(p.downloads, localCfg.ID)
-			delete(p.downloadLimiters, localCfg.ID)
-			p.mu.Unlock()
 		}
 		// If paused, we keep it in downloads map for potential resume
 		p.wg.Done()
@@ -816,9 +839,9 @@ func sendPausedFallback(ch chan<- types.DownloadEvent, cfg *types.DownloadRecord
 		downloaded = state.Bytes.Downloaded.Load()
 		rateLimit, rateLimitSet = state.GetRateLimit()
 	}
-	// A nil error and no pending snapshot means the concurrent downloader
-	// already queued EventPaused and consumed the delivery handshake.
-	if runErr == nil && pending == nil {
+	// A nil error (or typed ErrPaused) and no pending snapshot means the
+	// concurrent downloader already queued EventPaused and consumed the delivery handshake.
+	if (runErr == nil || errors.Is(runErr, types.ErrPaused)) && pending == nil {
 		return
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"maps"
 	"net"
 	neturl "net/url"
 	"os"
@@ -406,6 +407,29 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 			MinChunkSize: queuedEvent.MinChunkSize,
 		}); err != nil {
 			utils.Debug("Lifecycle: Failed to persist queued download synchronously: %v", err)
+		}
+		if len(cfg.Headers) > 0 {
+			snapshot := &types.DownloadRecord{
+				ID:           cfg.ID,
+				URL:          cfg.URL,
+				DestPath:     queuedEvent.DestPath,
+				Filename:     cfg.Filename,
+				TotalSize:    cfg.TotalSize,
+				Status:       "queued",
+				Mirrors:      append([]string(nil), cfg.Mirrors...),
+				RateLimit:    cfg.RateLimit,
+				RateLimitSet: cfg.RateLimitSet,
+				Workers:      cfg.Workers,
+				MinChunkSize: cfg.MinChunkSize,
+				Headers:      maps.Clone(cfg.Headers),
+			}
+			if err := store.SaveStateWithOptions(cfg.URL, queuedEvent.DestPath, snapshot, store.SaveStateOptions{SkipFileHash: true}); err != nil {
+				if rollbackErr := store.DeleteState(cfg.ID); rollbackErr != nil {
+					utils.Debug("Lifecycle: Failed to roll back queued download after header persistence failure: %v", rollbackErr)
+				}
+				_ = os.Remove(surgePath)
+				return "", "", fmt.Errorf("persist queued download headers: %w", err)
+			}
 		}
 		if mgr.eventBus != nil {
 			_ = mgr.eventBus.Publish(queuedEvent)

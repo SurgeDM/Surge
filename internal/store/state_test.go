@@ -1,6 +1,7 @@
 package store
 
 import (
+	"bytes"
 	"errors"
 	"os"
 	"path/filepath"
@@ -120,6 +121,141 @@ func TestSaveLoadState(t *testing.T) {
 	// Verify hashes were set
 	if loadedState.URLHash == "" {
 		t.Error("URLHash was not set")
+	}
+}
+
+func TestSaveState_PersistsHeadersOnlyInDetailState(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	url := "https://auth.example.com/file.zip"
+	destPath := filepath.Join(tmpDir, "file.zip")
+	state := &types.DownloadRecord{
+		ID:            "headers-detail-id",
+		URL:           url,
+		DestPath:      destPath,
+		Filename:      "file.zip",
+		Status:        "paused",
+		TotalSize:     1024,
+		Downloaded:    512,
+		Tasks:         []types.Task{{Offset: 512, Length: 512}},
+		Headers:       map[string]string{"Cookie": "session=secret", "Authorization": "Bearer token"},
+		ProgressState: &struct{ Value int }{Value: 1},
+		Runtime:       types.DefaultRuntimeConfig(),
+	}
+
+	if err := AddToMasterList(*state); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+	if err := SaveStateWithOptions(url, destPath, state, SaveStateOptions{SkipFileHash: true}); err != nil {
+		t.Fatalf("SaveStateWithOptions failed: %v", err)
+	}
+	state.Headers["Cookie"] = "session=mutated"
+
+	loaded, err := LoadState(url, destPath)
+	if err != nil {
+		t.Fatalf("LoadState failed: %v", err)
+	}
+	if got := loaded.Headers["Cookie"]; got != "session=secret" {
+		t.Errorf("persisted Cookie = %q, want original value", got)
+	}
+	if got := loaded.Headers["Authorization"]; got != "Bearer token" {
+		t.Errorf("persisted Authorization = %q, want Bearer token", got)
+	}
+	if loaded.ProgressState != nil || loaded.Runtime != nil || loaded.OutputPath != "" {
+		t.Error("runtime-only fields leaked into detail state")
+	}
+
+	master, err := GetDownload(state.ID)
+	if err != nil || master == nil {
+		t.Fatalf("GetDownload failed: %v", err)
+	}
+	if master.Headers != nil || master.ProgressState != nil || master.Runtime != nil {
+		t.Error("credentials or runtime fields leaked into master state")
+	}
+}
+
+func TestLoadMasterList_MigratesLegacyRuntimeFields(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	if err := atomicWrite(getMasterPath(), MasterState{
+		Version: 2,
+		Downloads: []types.DownloadRecord{{
+			ID:                 "legacy-master-id",
+			URL:                "https://auth.example.com/file.zip",
+			Headers:            map[string]string{"Cookie": "session=secret", "Authorization": "Bearer token"},
+			Runtime:            types.DefaultRuntimeConfig(),
+			IsResume:           true,
+			IsExplicitCategory: true,
+			SupportsRange:      true,
+		}},
+	}); err != nil {
+		t.Fatalf("writing legacy master state failed: %v", err)
+	}
+
+	list, err := LoadMasterList()
+	if err != nil {
+		t.Fatalf("LoadMasterList failed: %v", err)
+	}
+	if len(list.Downloads) != 1 {
+		t.Fatalf("download count = %d, want 1", len(list.Downloads))
+	}
+	loaded := list.Downloads[0]
+	if loaded.Headers != nil || loaded.Runtime != nil || loaded.IsResume || loaded.IsExplicitCategory || loaded.SupportsRange {
+		t.Error("legacy master runtime fields were exposed after migration")
+	}
+
+	raw, err := os.ReadFile(getMasterPath())
+	if err != nil {
+		t.Fatalf("reading migrated master state failed: %v", err)
+	}
+	if bytes.Contains(raw, []byte("session=secret")) || bytes.Contains(raw, []byte("Bearer token")) {
+		t.Error("migrated master state still contains credentials")
+	}
+}
+
+func TestLoadState_LoadsLegacyDetailState(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	url := "https://legacy.example.com/file.zip"
+	destPath := filepath.Join(tmpDir, "file.zip")
+	state := &types.DownloadRecord{
+		ID:         "legacy-detail-id",
+		URL:        url,
+		DestPath:   destPath,
+		Filename:   "file.zip",
+		TotalSize:  1024,
+		Downloaded: 512,
+		Tasks:      []types.Task{{Offset: 512, Length: 512}},
+	}
+	if err := AddToMasterList(types.DownloadRecord{
+		ID: state.ID, URL: url, DestPath: destPath, Filename: state.Filename, Status: "paused",
+	}); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	legacy := struct {
+		Version int
+		State   *types.DownloadRecord
+	}{Version: 1, State: state}
+	if err := atomicWrite(getDetailPath(tmpDir, state.ID), legacy); err != nil {
+		t.Fatalf("writing legacy detail state failed: %v", err)
+	}
+
+	loaded, err := LoadState(url, destPath)
+	if err != nil {
+		t.Fatalf("LoadState failed for legacy detail: %v", err)
+	}
+	if loaded.Downloaded != state.Downloaded || len(loaded.Tasks) != 1 {
+		t.Fatalf("loaded legacy state = %+v, want saved progress", loaded)
+	}
+	if loaded.Headers != nil || loaded.OutputPath != "" || loaded.ProgressState != nil {
+		t.Error("legacy runtime fields should not survive the detail projection")
 	}
 }
 
@@ -818,7 +954,7 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 		Filename: "valid.zip",
 		FileHash: expectedHash,
 	}
-	ds := DetailState{Version: 1, State: state}
+	ds := DetailState{Version: 1, State: toPersistedDetail(state)}
 	_ = atomicWrite(getDetailPath(tmpDir, "integrity-valid"), ds)
 
 	// Run integrity check - file exists with matching hash, should keep it
@@ -874,7 +1010,7 @@ func TestValidateIntegrity_TamperedFile(t *testing.T) {
 		Filename: "tampered.zip",
 		FileHash: "0000000000000000000000000000000000000000000000000000000000000000",
 	}
-	ds := DetailState{Version: 1, State: state}
+	ds := DetailState{Version: 1, State: toPersistedDetail(state)}
 	_ = atomicWrite(getDetailPath(tmpDir, "integrity-tampered"), ds)
 
 	// Run integrity check - hash mismatch, entry AND file should be removed
