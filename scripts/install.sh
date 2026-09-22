@@ -47,8 +47,11 @@ INSTALL_DIR="${SURGE_INSTALL_DIR:-$HOME/.local/bin}"
 
 VERSION="${SURGE_VERSION:-}"
 if [ -z "$VERSION" ]; then
-  VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" \
-    | grep '"tag_name":' | head -1 | sed -E 's/.*"([^"]+)".*/\1/')"
+  # /releases/latest can select a browser-extension release (ext-v*), which
+  # does not contain the platform binary. Select the newest stable core tag.
+  VERSION="$(curl -fsSL "https://api.github.com/repos/${REPO}/releases?per_page=100" \
+    | sed -nE 's/^[[:space:]]*"tag_name":[[:space:]]*"(v[0-9]+\.[0-9]+\.[0-9]+)".*/\1/p' \
+    | head -1)"
   [ -n "$VERSION" ] || die "could not determine latest version"
 fi
 VERSION_NUM="${VERSION#v}"
