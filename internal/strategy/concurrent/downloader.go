@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/progress"
@@ -48,6 +49,9 @@ type ConcurrentDownloader struct {
 	soft403Progress    int64
 	soft403Since       time.Time
 	concurrencyGate    *adaptiveConcurrencyGate
+	// completing is set when the completion monitor has decided the download
+	// is done. Worker taskCtx cancel is then a completion signal, not a stall.
+	completing atomic.Bool
 }
 
 const (
@@ -296,6 +300,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	d.soft403Progress = 0
 	d.soft403Since = time.Time{}
 	d.soft403Mu.Unlock()
+	d.completing.Store(false)
 
 	if d.hostLimiter == nil {
 		d.hostLimiter = transport.DefaultHostRateLimiter
@@ -482,18 +487,22 @@ func (d *ConcurrentDownloader) getEffectiveSizeForWorkers(fileSize int64, savedS
 func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize int64, numConns int, outFile *os.File, savedState *types.DownloadRecord, isResume bool) ([]types.Task, error) {
 	if isResume {
 		if d.State != nil {
-			d.State.Bytes.Downloaded.Store(savedState.Downloaded)
-			d.State.Bytes.VerifiedProgress.Store(savedState.Downloaded)
 			d.State.SetSavedElapsed(time.Duration(savedState.Elapsed))
-			d.State.SyncSessionStart()
 
 			if len(savedState.ChunkBitmap) > 0 && savedState.ActualChunkSize > 0 {
 				d.State.RestoreBitmap(savedState.ChunkBitmap, savedState.ActualChunkSize)
 				d.State.RecalculateProgress(savedState.Tasks)
-				d.State.Bytes.Downloaded.Store(d.State.Bytes.VerifiedProgress.Load())
-				d.State.SyncSessionStart()
+				downloaded := savedState.Downloaded
+				if vp := d.State.Bytes.VerifiedProgress.Load(); downloaded < vp {
+					downloaded = vp
+				}
+				d.State.Bytes.Downloaded.Store(downloaded)
 				utils.Debug("Restored chunk map: size %d", savedState.ActualChunkSize)
+			} else {
+				d.State.Bytes.Downloaded.Store(savedState.Downloaded)
+				d.State.Bytes.VerifiedProgress.Store(savedState.Downloaded)
 			}
+			d.State.SyncSessionStart()
 		}
 		utils.Debug("Resuming from saved state: %d tasks, %d bytes downloaded", len(savedState.Tasks), savedState.Downloaded)
 		return savedState.Tasks, nil
@@ -585,18 +594,40 @@ func (d *ConcurrentDownloader) runCompletionMonitor(ctx context.Context, queue *
 			queue.Close()
 			return
 		case <-ticker.C:
-			// Completion condition:
-			// 1. Queue is empty (no pending retries)
-			// AND
-			// 2. All workers are idle OR we've accounted for all bytes
-			// Ensure queue is empty (no pending retries) before considering byte count.
-			// This protects against cutting off active retries even if byte count seems high (due to overlaps etc).
+			if d.State != nil && d.State.Bytes.VerifiedProgress.Load() >= fileSize {
+				// Mark first so a cancelled worker does not treat this as a
+				// health stall and Push after Close.
+				d.completing.Store(true)
+				d.activeMu.Lock()
+				for _, at := range d.activeTasks {
+					if at != nil && at.Cancel != nil {
+						at.Cancel()
+					}
+				}
+				d.activeMu.Unlock()
+				queue.Close()
+				// Close only unblocks Pop waiters; already-queued leftovers
+				// would otherwise restick workers after 100%.
+				queue.DrainRemaining()
+				return
+			}
 			parked := int64(0)
 			if d.concurrencyGate != nil {
 				parked = d.concurrencyGate.parkedWorkers()
 			}
-			isDone := queue.Len() == 0 && (int(queue.IdleWorkers()+parked) == numConns || (d.State != nil && d.State.Bytes.Downloaded.Load() >= fileSize))
+			isDone := queue.Len() == 0 && int(queue.IdleWorkers()+parked) == numConns
+			if isDone && d.State != nil && d.State.Bytes.VerifiedProgress.Load() < fileSize {
+				isDone = false
+			}
 			if isDone {
+				d.completing.Store(true)
+				d.activeMu.Lock()
+				for _, at := range d.activeTasks {
+					if at != nil && at.Cancel != nil {
+						at.Cancel()
+					}
+				}
+				d.activeMu.Unlock()
 				queue.Close()
 				return
 			}
@@ -661,6 +692,37 @@ func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queu
 	return d.saveStateSnapshot(destPath, fileSize, queue, candidateMirrors, true)
 }
 
+// unverifiedTasksFromBitmap rebuilds resumable work from the persisted bitmap.
+func unverifiedTasksFromBitmap(bitmap []byte, fileSize, chunkSize int64) []types.Task {
+	if fileSize <= 0 || chunkSize <= 0 {
+		return nil
+	}
+
+	numChunks := (fileSize + chunkSize - 1) / chunkSize
+	tasks := make([]types.Task, 0)
+	var start int64 = -1
+	for i := int64(0); i < numChunks; i++ {
+		status := types.ChunkPending
+		if byteIndex := i / 4; byteIndex < int64(len(bitmap)) {
+			status = types.ChunkStatus((bitmap[byteIndex] >> ((i % 4) * 2)) & 3)
+		}
+		if status != types.ChunkCompleted {
+			if start < 0 {
+				start = i * chunkSize
+			}
+			continue
+		}
+		if start >= 0 {
+			tasks = append(tasks, types.Task{Offset: start, Length: i*chunkSize - start})
+			start = -1
+		}
+	}
+	if start >= 0 {
+		tasks = append(tasks, types.Task{Offset: start, Length: fileSize - start})
+	}
+	return tasks
+}
+
 func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64, queue *TaskQueue, candidateMirrors []string, emitPauseEvent bool) error {
 	// 1. Collect active tasks as remaining work FIRST, then drain abandoned
 	// residuals (off-queue stashes from terminal-error workers), then drain
@@ -679,26 +741,68 @@ func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64
 	// 2. Collect remaining tasks from queue
 	allTasks := append(append(append([]types.Task(nil), activeRemaining...), abandoned...), queue.DrainRemaining()...)
 
-	remainingTasks := make([]types.Task, 0, len(allTasks))
+	if d.State == nil {
+		if len(allTasks) == 0 {
+			return nil
+		}
+		if emitPauseEvent {
+			return types.ErrPaused
+		}
+		return nil
+	}
+
+	// Snapshot bitmap for state persistence and possible gap task reconstruction
+	bitmap, _, _, chunkSize, _ := d.State.GetBitmapSnapshot(false)
+	remainingTasks := allTasks
+
 	var remainingBytes int64
-	for _, task := range allTasks {
-		remainingTasks = append(remainingTasks, task)
+	for _, task := range remainingTasks {
 		remainingBytes += task.Length
 	}
 
 	if remainingBytes == 0 {
-		utils.Debug("Download state save requested at completion boundary; finalizing as completed")
-		d.State.Resume()
-		_, _ = d.State.FinalizeSession(fileSize)
-		return nil
-	}
-	computedDownloaded := fileSize - remainingBytes
+		vp := d.State.Bytes.VerifiedProgress.Load()
+		if vp >= fileSize {
+			utils.Debug("Download state save requested at completion boundary; finalizing as completed")
+			d.State.Resume()
+			_, _ = d.State.FinalizeSession(fileSize)
+			return nil
+		}
 
+		// If tasks drained before chunks were verified, rebuild remaining tasks from bitmap
+		// so the record stays resumable.
+		if len(bitmap) > 0 && chunkSize > 0 {
+			if unverified := unverifiedTasksFromBitmap(bitmap, fileSize, chunkSize); len(unverified) > 0 {
+				remainingTasks = unverified
+				for _, task := range remainingTasks {
+					remainingBytes += task.Length
+				}
+			} else {
+				// All chunks are completed in the bitmap; finalize directly.
+				utils.Debug("Download pause at remainingBytes=0 with complete bitmap; finalizing as completed")
+				d.State.Resume()
+				_, _ = d.State.FinalizeSession(fileSize)
+				return nil
+			}
+		}
+
+		if remainingBytes == 0 {
+			// Skip saving if no resumable ranges exist to avoid persisting an unresumable record.
+			utils.Debug("Download pause with VP=%d < fileSize=%d and no resumable ranges; skipping state save", vp, fileSize)
+			if emitPauseEvent {
+				return types.ErrPaused
+			}
+			return nil
+		}
+	}
+
+	computedDownloaded := fileSize - remainingBytes
+	// Never report less progress than physically verified on disk.
+	if vp := d.State.Bytes.VerifiedProgress.Load(); vp > computedDownloaded {
+		computedDownloaded = vp
+	}
 	// Calculate total elapsed time
 	totalElapsed := d.State.FinalizePauseSession(computedDownloaded)
-
-	// Get persisted bitmap data
-	bitmap, _, _, chunkSize, _ := d.State.GetBitmapSnapshot(false)
 
 	var rateLimit int64
 	var rateLimitSet bool
