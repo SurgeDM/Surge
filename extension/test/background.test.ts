@@ -5,6 +5,7 @@ vi.mock('wxt/utils/define-background', () => ({
 }));
 
 import { __test__ } from '../entrypoints/background';
+import type { DownloadStatus } from '../entrypoints/popup/store/types';
 
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
@@ -16,12 +17,20 @@ function createDeferred<T>() {
 
 describe('background auth persistence', () => {
   const storageGet = vi.fn();
+  const setBadgeText = vi.fn();
+  const setBadgeBackgroundColor = vi.fn();
 
   beforeEach(() => {
     __test__.resetState();
     storageGet.mockReset();
+    setBadgeText.mockReset();
+    setBadgeBackgroundColor.mockReset();
 
     (globalThis as typeof globalThis & { browser: unknown }).browser = {
+      action: {
+        setBadgeText,
+        setBadgeBackgroundColor,
+      },
       storage: {
         local: {
           get: storageGet,
@@ -29,6 +38,22 @@ describe('background auth persistence', () => {
         },
       },
     } as unknown;
+  });
+
+  it('shows the number of queued, paused, and downloading items on the toolbar badge', () => {
+    __test__.syncActiveDownloadBadge([
+      { id: 'queued', status: 'queued' },
+      { id: 'paused', status: 'paused' },
+      { id: 'downloading', status: 'downloading' },
+      { id: 'completed', status: 'completed' },
+      { id: 'error', status: 'error' },
+    ] as DownloadStatus[]);
+
+    expect(setBadgeText).toHaveBeenLastCalledWith({ text: '3' });
+    expect(setBadgeBackgroundColor).toHaveBeenLastCalledWith({ color: '#2563EB' });
+
+    __test__.updateActiveDownloadBadge('complete', { DownloadID: 'queued' });
+    expect(setBadgeText).toHaveBeenLastCalledWith({ text: '2' });
   });
 
   afterEach(() => {

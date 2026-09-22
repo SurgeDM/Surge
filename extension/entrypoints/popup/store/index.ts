@@ -45,9 +45,10 @@ export function reconcileActiveDownloads(nextDownloads: DownloadStatus[]): void 
   setActiveDownloads((prevDownloads) => {
     const prevById = new Map(prevDownloads.map((download) => [download.id, download]));
     const merged = nextDownloads.map((download) => {
+      const normalized = { ...download, speed: download.speed / MB };
       const prev = prevById.get(download.id);
-      if (!prev) return download;
-      const next = { ...prev, ...download };
+      if (!prev) return normalized;
+      const next = { ...prev, ...normalized };
       return sameDownloadStatus(prev, next) ? prev : next;
     });
 

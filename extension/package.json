@@ -18,19 +18,19 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "solid-js": "^1.9.7"
+    "solid-js": "^1.9.15"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@types/node": "^26.2.0",
-    "@typescript-eslint/eslint-plugin": "^8.66.0",
-    "@typescript-eslint/parser": "^8.66.0",
+    "@types/node": "^26.6.1",
+    "@typescript-eslint/eslint-plugin": "^8.70.0",
+    "@typescript-eslint/parser": "^8.70.0",
     "eslint": "^10.10.0",
-    "eslint-plugin-solid": "^0.15.0",
+    "eslint-plugin-solid": "^0.18.0",
     "typescript": "^5.8.3",
-    "typescript-eslint": "^8.67.0",
+    "typescript-eslint": "^8.70.0",
     "vite-plugin-solid": "^2.11.14",
-    "vitest": "^4.1.11",
+    "vitest": "^5.0.0",
     "wxt": "^0.21.4"
   },
   "overrides": {
