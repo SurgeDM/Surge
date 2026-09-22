@@ -122,8 +122,8 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
 
-  prepare-release:
-    name: Prepare Release
+  prepare-unix-release:
+    name: Prepare Unix Release
     runs-on: ubuntu-latest
     needs: test
     # Extra guard: only core tags (v*), never extension tags (ext-v*)
@@ -137,43 +137,88 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version: "1.26.0"
-      - name: Prepare GoReleaser release
+      - name: Prepare Linux release artifacts
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser-pro
           version: latest
-          args: release --clean --prepare
+          args: release --clean --split
         env:
+          GGOOS: linux
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
+      - name: Save Linux release artifacts
+        shell: bash
+        run: mv dist "$RUNNER_TEMP/goreleaser-linux"
+
+      - name: Prepare macOS release artifacts
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          args: release --clean --split
+        env:
+          GGOOS: darwin
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
+      - name: Combine Unix release artifacts
+        shell: bash
+        run: |
+          mv dist "$RUNNER_TEMP/goreleaser-darwin"
+          mkdir dist
+          mv "$RUNNER_TEMP/goreleaser-linux" dist/linux
+          mv "$RUNNER_TEMP/goreleaser-darwin" dist/darwin
+
       - name: Upload GoReleaser artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: goreleaser-dist
+          name: goreleaser-dist-unix
           path: dist
 
-  publish-release:
-    name: Publish Release
+  publish-windows-release:
+    name: Publish Windows Release
     runs-on: windows-latest
-    needs: prepare-release
+    needs: prepare-unix-release
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Download prepared GoReleaser artifacts
-        uses: actions/download-artifact@v4
+      - name: Set up Go
+        uses: actions/setup-go@v5
         with:
-          name: goreleaser-dist
-          path: dist
-      - name: Publish GoReleaser release
+          go-version: "1.26.0"
+      - name: Prepare Windows and Chocolatey artifacts
         uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser-pro
           version: latest
-          args: publish --dist dist
+          args: release --clean --split --skip=before
+        env:
+          GGOOS: windows
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Save Windows release artifacts
+        shell: bash
+        run: mv dist "$RUNNER_TEMP/goreleaser-windows"
+      - name: Download Unix release artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: goreleaser-dist-unix
+          path: dist
+      - name: Combine Windows release artifacts
+        shell: bash
+        run: mv "$RUNNER_TEMP/goreleaser-windows" dist/windows
+      - name: Merge and publish GoReleaser release
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          args: continue --merge
         env:
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -183,12 +228,12 @@ jobs:
   appimage:
     name: Package AppImage
     runs-on: ubuntu-latest
-    needs: publish-release
+    needs: publish-windows-release
     steps:
       - name: Download GoReleaser artifacts
         uses: actions/download-artifact@v4
         with:
-          name: goreleaser-dist
+          name: goreleaser-dist-unix
           path: dist
 
       - name: Package AppImage
