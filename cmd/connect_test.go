@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -73,6 +74,13 @@ func (f *fakeRemoteDownloadService) SetRateLimit(id string, rate int64) error { 
 func (f *fakeRemoteDownloadService) ClearRateLimit(id string) error { return nil }
 
 func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
+	setupIsolatedCmdState(t)
+	settings := config.DefaultSettings()
+	settings.General.AutoResume.Value = true
+	if err := config.SaveSettings(settings); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
 	m := newRemoteRootModel("https://example.com:1700", nil)
 
 	if m.Orchestrator != nil {
@@ -87,9 +95,16 @@ func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
 	if m.ServerPort != 1700 {
 		t.Fatalf("server port = %d, want 1700", m.ServerPort)
 	}
+	if !config.Resolve[bool](m.Settings.General.AutoResume) {
+		t.Fatal("remote model did not load the existing client settings")
+	}
+	if !m.SettingsReadOnly || m.SaveSettingsFunc != nil {
+		t.Fatal("remote model must not persist settings without a daemon-backed store")
+	}
 }
 
 func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
+	setupIsolatedCmdState(t)
 	service := &fakeRemoteDownloadService{}
 	m := newRemoteRootModel("https://example.com:1700", service)
 	m.Settings.Extension.ExtensionPrompt.Value = false

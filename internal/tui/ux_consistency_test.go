@@ -104,3 +104,14 @@ func TestSettingsStayOpenWhenSaveFails(t *testing.T) {
 		t.Fatalf("save failure is not shown to the user: %q", got.settingsError)
 	}
 }
+
+func TestReadOnlySettingsNeverPersistDefaults(t *testing.T) {
+	m := InitialRootModel(1701, "test", nil, nil, config.DefaultSettings(), false)
+	m.SaveSettingsFunc = nil
+	m.SettingsReadOnly = true
+	m.Settings.General.AutoResume.Value = true
+
+	if err := m.persistSettings(); err != nil {
+		t.Fatalf("read-only persist returned error: %v", err)
+	}
+}

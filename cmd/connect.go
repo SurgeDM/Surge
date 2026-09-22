@@ -103,7 +103,15 @@ func connectAndRunTUI(_ *cobra.Command, target string) error {
 
 func newRemoteRootModel(baseURL string, service service.DownloadService) tui.RootModel {
 	serverHost, serverPort := parseRemoteServerAddress(baseURL)
-	m := tui.InitialRootModel(serverPort, Version, service, nil, nil, false, Commit)
+	settings, err := config.LoadSettings()
+	if err != nil {
+		settings = config.DefaultSettings()
+	}
+	m := tui.InitialRootModel(serverPort, Version, service, nil, settings, false, Commit)
+	// Remote persistence must be supplied by the daemon. Never let a remote TUI
+	// write a synthesized/default snapshot into the client's local config.
+	m.SaveSettingsFunc = nil
+	m.SettingsReadOnly = true
 	m.ServerHost = serverHost
 	m.ServerPort = serverPort
 	m.IsRemote = true

@@ -787,7 +787,10 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 }
 
 func (m *RootModel) persistSettings() error {
-	if err := config.SaveSettings(m.Settings); err != nil {
+	if m.SaveSettingsFunc == nil {
+		return nil
+	}
+	if err := m.SaveSettingsFunc(m.Settings); err != nil {
 		return err
 	}
 	if reloader, ok := m.Service.(interface {
