@@ -299,6 +299,7 @@ func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_STATE_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("Failed to ensure dirs: %v", err)
@@ -319,12 +320,37 @@ func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 		t.Fatalf("parseConnectTarget returned error: %v", err)
 	}
 
-	token, err := resolveTokenForConnectTarget(target)
-	if err != nil {
-		t.Fatalf("resolveTokenForConnectTarget returned error: %v", err)
+	if _, err := resolveTokenForConnectTarget(target); err == nil {
+		t.Fatal("expected unmatched local target to require an explicit token")
 	}
-	if token == "" {
-		t.Fatal("expected non-empty local token for IPv6 loopback target")
+}
+
+func TestResolveTokenForConnectTarget_DoesNotExposeTokenToUnmatchedLocalPort(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_STATE_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
+	t.Setenv("SURGE_TOKEN", "")
+	if err := config.EnsureDirs(); err != nil {
+		t.Fatalf("Failed to ensure dirs: %v", err)
+	}
+
+	origToken := globalToken
+	globalToken = ""
+	t.Cleanup(func() { globalToken = origToken })
+	if err := writeTokenToFile(filepath.Join(config.GetStateDir(), "token"), "secret-token"); err != nil {
+		t.Fatalf("write token failed: %v", err)
+	}
+	saveActivePort(1888)
+	defer removeActivePort()
+
+	target, err := parseConnectTarget("127.0.0.1:1889", false)
+	if err != nil {
+		t.Fatalf("parseConnectTarget returned error: %v", err)
+	}
+	if _, err := resolveTokenForConnectTarget(target); err == nil {
+		t.Fatal("expected unmatched local port to require an explicit token")
 	}
 }
 

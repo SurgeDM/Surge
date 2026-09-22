@@ -78,3 +78,28 @@ func TestSystemdInstallRejectsRoot(t *testing.T) {
 		t.Fatalf("Start error = %v, want ErrRootInstall", err)
 	}
 }
+
+func TestSystemdUninstallKeepsUnitWhenDisableFails(t *testing.T) {
+	unitPath := filepath.Join(t.TempDir(), "surge.service")
+	if err := os.WriteFile(unitPath, []byte("unit"), 0o644); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+	runner := &fakeRunner{err: errors.New("systemctl failed")}
+	m := &SystemdManager{unitPath: unitPath, runner: runner, uid: 1000}
+
+	if err := m.Uninstall(context.Background()); err == nil {
+		t.Fatal("expected disable failure")
+	}
+	if _, err := os.Stat(unitPath); err != nil {
+		t.Fatalf("unit was removed after disable failure: %v", err)
+	}
+}
+
+func TestSystemdUnitAbsentRecognizesExplicitManagerErrors(t *testing.T) {
+	if !systemdUnitAbsent("Failed to disable unit: Unit surge.service does not exist") {
+		t.Fatal("expected missing-unit error to be recognized")
+	}
+	if systemdUnitAbsent("Failed to connect to bus: permission denied") {
+		t.Fatal("unexpected manager error treated as a missing unit")
+	}
+}

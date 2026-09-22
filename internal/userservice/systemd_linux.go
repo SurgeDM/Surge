@@ -75,11 +75,24 @@ func (m *SystemdManager) Uninstall(ctx context.Context) error {
 	if err := m.ensureUser(); err != nil {
 		return err
 	}
-	_, _ = m.runner.Run(ctx, "systemctl", "--user", "disable", "--now", systemdUnitName)
+	if _, err := os.Stat(m.unitPath); err == nil {
+		if err := m.run(ctx, "disable", "--now", systemdUnitName); err != nil && !systemdUnitAbsent(err.Error()) {
+			return err
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect systemd user unit: %w", err)
+	}
 	if err := os.Remove(m.unitPath); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("remove systemd user unit: %w", err)
 	}
 	return m.run(ctx, "daemon-reload")
+}
+
+func systemdUnitAbsent(message string) bool {
+	message = strings.ToLower(message)
+	return strings.Contains(message, "unit surge.service does not exist") ||
+		strings.Contains(message, "unit surge.service not loaded") ||
+		strings.Contains(message, "unit surge.service could not be found")
 }
 
 func (m *SystemdManager) Start(ctx context.Context) error {

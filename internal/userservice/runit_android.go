@@ -68,7 +68,14 @@ func (m *RunitManager) Uninstall(ctx context.Context) error {
 	if err := ensureRunitUser(); err != nil {
 		return err
 	}
-	_, _ = m.command(ctx, "down")
+	if _, err := os.Stat(m.serviceDir); os.IsNotExist(err) {
+		return nil
+	} else if err != nil {
+		return fmt.Errorf("inspect runit service directory: %w", err)
+	}
+	if err := m.run(ctx, "down"); err != nil {
+		return err
+	}
 	return os.RemoveAll(m.serviceDir)
 }
 func (m *RunitManager) Start(ctx context.Context) error {

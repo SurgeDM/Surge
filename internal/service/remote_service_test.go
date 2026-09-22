@@ -55,6 +55,22 @@ func TestRemoteDownloadService_SettingsRoundTrip(t *testing.T) {
 	}
 }
 
+func TestRemoteDownloadService_RejectsNullSetting(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"general":{"auto_resume":null}}`))
+	}))
+	defer ts.Close()
+
+	svc, err := NewRemoteDownloadService(ts.URL, "token", HTTPClientOptions{})
+	if err != nil {
+		t.Fatalf("NewRemoteDownloadService: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Shutdown() })
+	if _, err := svc.GetSettings(); err == nil {
+		t.Fatal("expected null remote setting to be rejected")
+	}
+}
+
 func TestRemoteDownloadService_SetRateLimit_ProxiesRequest(t *testing.T) {
 	called := false
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

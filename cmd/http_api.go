@@ -74,7 +74,10 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 				http.Error(w, "Invalid settings: "+err.Error(), http.StatusBadRequest)
 				return
 			}
-			updated.NormalizeValues()
+			if err := updated.NormalizeValues(); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
 			if updated.Extension.AuthToken != nil && current.Extension.AuthToken != nil {
 				updated.Extension.AuthToken.Value = current.Extension.AuthToken.Value
 			}
@@ -87,7 +90,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 				http.Error(w, "Failed to update settings: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			globalSettings = updated
+			setGlobalSettings(updated)
 			writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 				"status":           "updated",
 				"restart_required": restartRequired,

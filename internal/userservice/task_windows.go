@@ -6,7 +6,6 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
-	"strconv"
 	"strings"
 
 	"golang.org/x/sys/windows"
@@ -42,7 +41,7 @@ func (m *TaskManager) Install(ctx context.Context) error {
 	if _, err := m.runner.Run(ctx, "sc.exe", "query", "surge"); err == nil {
 		return fmt.Errorf("%w; remove the legacy Windows service from an elevated terminal before retrying", ErrLegacySystemService)
 	}
-	command := strconv.Quote(m.executable) + " server start --managed-service"
+	command := `\"` + m.executable + `\" server start --managed-service`
 	if err := m.run(ctx, "/Create", "/F", "/SC", "ONLOGON", "/RL", "LIMITED", "/TN", windowsTaskName, "/TR", command); err != nil {
 		return err
 	}

@@ -76,11 +76,25 @@ func (m *LaunchdManager) Uninstall(ctx context.Context) error {
 	if err := m.ensureUser(); err != nil {
 		return err
 	}
-	_, _ = m.runner.Run(ctx, "launchctl", "bootout", m.target())
+	if _, err := os.Stat(m.plistPath); err == nil {
+		out, bootoutErr := m.runner.Run(ctx, "launchctl", "bootout", m.target())
+		if bootoutErr != nil && !launchdServiceAbsent(out) {
+			return fmt.Errorf("launchctl bootout %s failed: %s", m.target(), strings.TrimSpace(string(out)))
+		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("inspect launchd user agent: %w", err)
+	}
 	if err := os.Remove(m.plistPath); err != nil && !os.IsNotExist(err) {
 		return err
 	}
 	return nil
+}
+
+func launchdServiceAbsent(output []byte) bool {
+	message := strings.ToLower(string(output))
+	return strings.Contains(message, "could not find service") ||
+		strings.Contains(message, "no such process") ||
+		strings.Contains(message, "service not found")
 }
 func (m *LaunchdManager) Start(ctx context.Context) error {
 	if err := m.ensureUser(); err != nil {

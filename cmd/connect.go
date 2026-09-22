@@ -144,11 +144,7 @@ func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 		if details, ok := getActiveConnectionDetails(); ok && details.port == serverPort {
 			return resolveLocalTokenForDetails(details)
 		}
-
-		if tok, err := readTokenFromFile(resolveTokenPath()); err == nil && tok != "" {
-			return tok, nil
-		}
-		return ensureAuthToken(), nil
+		return "", fmt.Errorf("local target %q does not match the active Surge server; use --token or set SURGE_TOKEN", target.BaseURL)
 	}
 	return "", fmt.Errorf("remote target %q requires authentication: use --token or set SURGE_TOKEN", target.BaseURL)
 }

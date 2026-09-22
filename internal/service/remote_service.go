@@ -126,7 +126,9 @@ func (s *RemoteDownloadService) GetSettings() (*config.Settings, error) {
 	if err := json.NewDecoder(resp.Body).Decode(settings); err != nil {
 		return nil, err
 	}
-	settings.NormalizeValues()
+	if err := settings.NormalizeValues(); err != nil {
+		return nil, fmt.Errorf("server returned invalid settings: %w", err)
+	}
 	if err := settings.ValidateStrict(); err != nil {
 		return nil, fmt.Errorf("server returned invalid settings: %w", err)
 	}

@@ -28,7 +28,9 @@ func runUserServiceAction(action func(context.Context, userservice.Manager) erro
 			return err
 		}
 		if message != "" {
-			fmt.Fprintln(cmd.OutOrStdout(), message)
+			if _, err := fmt.Fprintln(cmd.OutOrStdout(), message); err != nil {
+				return err
+			}
 		}
 		return nil
 	}

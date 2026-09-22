@@ -3,6 +3,7 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
@@ -37,7 +38,7 @@ func TestEnsureAuthTokenStaysInUserState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("stat state token: %v", err)
 	}
-	if info.Mode().Perm() != 0o600 {
+	if runtime.GOOS != "windows" && info.Mode().Perm() != 0o600 {
 		t.Fatalf("state token permissions = %o, want 600", info.Mode().Perm())
 	}
 	if _, err := os.Stat(filepath.Join(config.GetRuntimeDir(), "token")); !os.IsNotExist(err) {

@@ -277,6 +277,33 @@ func TestSettingsEndpoint_RejectsInvalidUpdate(t *testing.T) {
 	}
 }
 
+func TestSettingsEndpoint_RejectsNullAndWrongTypeSettings(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		body string
+	}{
+		{name: "null setting", body: `{"general":{"auto_resume":null}}`},
+		{name: "wrong boolean type", body: `{"general":{"warn_on_duplicate":"false"}}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			settings := config.DefaultSettings()
+			settings.Categories.Categories = nil
+			service := &settingsHTTPTestService{httpAPITestService: &httpAPITestService{}, settings: settings}
+			mux := http.NewServeMux()
+			registerHTTPRoutes(mux, 0, "", service)
+
+			recorder := httptest.NewRecorder()
+			mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPut, "/settings", strings.NewReader(test.body)))
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("PUT invalid settings status = %d, want 400: %s", recorder.Code, recorder.Body.String())
+			}
+			if service.updateCalls != 0 {
+				t.Fatal("invalid settings update reached the service")
+			}
+		})
+	}
+}
+
 func TestHistoryEndpoint_SortsMostRecentFirst(t *testing.T) {
 	service := &httpAPITestService{
 		history: []types.DownloadRecord{

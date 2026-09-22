@@ -3,6 +3,7 @@ package userservice
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 func writeUserServiceFile(path string, data []byte, mode os.FileMode) error {
@@ -20,8 +21,23 @@ func writeUserServiceFile(path string, data []byte, mode os.FileMode) error {
 		_ = tmp.Close()
 		return err
 	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
+		return err
+	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpPath, path)
+	if err := os.Rename(tmpPath, path); err != nil {
+		return err
+	}
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	dir, err := os.Open(filepath.Dir(path))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = dir.Close() }()
+	return dir.Sync()
 }
