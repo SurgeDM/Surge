@@ -43,6 +43,7 @@ detect_arch() {
 
 OS="$(detect_os)"
 ARCH="$(detect_arch)"
+INSTALL_DIR="${SURGE_INSTALL_DIR:-$HOME/.local/bin}"
 
 VERSION="${SURGE_VERSION:-}"
 if [ -z "$VERSION" ]; then
@@ -78,10 +79,21 @@ curl -fsSL -o "${WORKDIR}/checksums.txt" "${BASE_URL}/Surge_${VERSION_NUM}_check
 
 tar -xzf "${WORKDIR}/${ASSET}" -C "$WORKDIR"
 
-INSTALL_DIR="${SURGE_INSTALL_DIR:-$HOME/.local/bin}"
+CURRENT_VERSION=""
+if [ -x "${INSTALL_DIR}/surge" ]; then
+  CURRENT_VERSION="$("${INSTALL_DIR}/surge" --version 2>/dev/null || true)"
+  CURRENT_VERSION="${CURRENT_VERSION#Surge }"
+fi
+
+if [ -n "$CURRENT_VERSION" ]; then
+  log "Updating Surge from ${CURRENT_VERSION} to ${VERSION}..."
+else
+  log "Installing Surge ${VERSION}..."
+fi
+
 mkdir -p "$INSTALL_DIR"
 install -m 755 "${WORKDIR}/surge" "${INSTALL_DIR}/surge"
-log "Installed surge to ${INSTALL_DIR}/surge"
+log "Surge ${VERSION} is installed at ${INSTALL_DIR}/surge"
 
 case ":$PATH:" in
   *":${INSTALL_DIR}:"*) ;;
