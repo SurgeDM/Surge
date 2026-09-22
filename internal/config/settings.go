@@ -583,8 +583,8 @@ func DefaultSettings() *Settings {
 			},
 			AutoStart: &Setting{
 				Key:          "auto_start",
-				Label:        "Automatic Startup",
-				Description:  "Start Surge automatically when the system boots (requires service installation).",
+				Label:        "Start at Login",
+				Description:  "Install the Surge user service and start it automatically when you log in.",
 				Type:         TypeBool,
 				DefaultValue: false,
 				Value:        false,
