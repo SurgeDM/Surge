@@ -26,15 +26,16 @@ var serverCmd = &cobra.Command{
 }
 
 var isSystemServiceFlag bool
+var managedServiceFlag bool
 
 var serverStartCmd = &cobra.Command{
 	Use:   "start [url]...",
 	Short: "Start the Surge server in headless mode",
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if isSystemServiceFlag {
+		if isSystemServiceFlag || managedServiceFlag {
 			activeServerMode = "service"
 		}
-		if checkSystemServiceRunning() && !isSystemServiceFlag {
+		if checkSystemServiceRunning() && !isSystemServiceFlag && !managedServiceFlag {
 			return fmt.Errorf("system service is already running. Use 'surge connect' to interact with it, or stop the service first")
 		}
 
@@ -151,6 +152,8 @@ func init() {
 
 	serverStartCmd.Flags().BoolVar(&isSystemServiceFlag, "is-system-service", false, "Internal flag for service manager")
 	_ = serverStartCmd.Flags().MarkHidden("is-system-service")
+	serverStartCmd.Flags().BoolVar(&managedServiceFlag, "managed-service", false, "Internal flag for a user-managed service")
+	_ = serverStartCmd.Flags().MarkHidden("managed-service")
 }
 
 func savePID() {
