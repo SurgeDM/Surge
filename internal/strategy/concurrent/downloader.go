@@ -56,13 +56,6 @@ type ConcurrentDownloader struct {
 	consecutiveThrottles int
 }
 
-const (
-	// Each exhaustion already includes the normal per-task retry burn. The
-	// confirmation window gives in-flight workers one final chance to advance.
-	soft403MaxExhaustions = 16
-	soft403ConfirmWindow  = 5 * time.Second
-)
-
 // NewConcurrentDownloader creates a new concurrent downloader with all required parameters
 func NewConcurrentDownloader(id string, progressCh chan<- types.DownloadEvent, progState *progress.DownloadProgress, runtime *types.RuntimeConfig) *ConcurrentDownloader {
 	if runtime == nil {

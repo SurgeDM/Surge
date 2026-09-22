@@ -50,7 +50,7 @@ func looksLikeChallenge(resp *http.Response) bool {
 		var reader io.Reader = resp.Body
 		if enc == "gzip" {
 			if gz, err := gzip.NewReader(resp.Body); err == nil {
-				defer gz.Close()
+				defer func() { _ = gz.Close() }()
 				reader = gz
 			}
 		}
@@ -76,8 +76,6 @@ func looksLikeChallenge(resp *http.Response) bool {
 
 	return false
 }
-
-const soft403RetryDelay = 500 * time.Millisecond
 
 // worker downloads tasks from the queue
 func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []string, file *os.File, queue *TaskQueue, totalSize int64, client *http.Client) error {
