@@ -142,7 +142,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: release --clean --split
+          args: release --clean --split --skip=chocolatey
         env:
           GGOOS: linux
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
@@ -158,7 +158,7 @@ jobs:
         with:
           distribution: goreleaser-pro
           version: latest
-          args: release --clean --split
+          args: release --clean --split --skip=chocolatey
         env:
           GGOOS: darwin
           GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
