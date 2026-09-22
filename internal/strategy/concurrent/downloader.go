@@ -751,14 +751,9 @@ func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64
 		return nil
 	}
 
-	// The bitmap is authoritative: task queues can be empty during cancellation
-	// even while chunks remain unverified.
+	// Snapshot bitmap for state persistence and possible gap task reconstruction
 	bitmap, _, _, chunkSize, _ := d.State.GetBitmapSnapshot(false)
-	rebuiltFromBitmap := len(bitmap) > 0 && chunkSize > 0
 	remainingTasks := allTasks
-	if rebuiltFromBitmap {
-		remainingTasks = unverifiedTasksFromBitmap(bitmap, fileSize, chunkSize)
-	}
 
 	var remainingBytes int64
 	for _, task := range remainingTasks {
@@ -766,22 +761,45 @@ func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64
 	}
 
 	if remainingBytes == 0 {
-		if rebuiltFromBitmap || d.State.Bytes.VerifiedProgress.Load() >= fileSize {
+		vp := d.State.Bytes.VerifiedProgress.Load()
+		if vp >= fileSize {
 			utils.Debug("Download state save requested at completion boundary; finalizing as completed")
-			if rebuiltFromBitmap {
-				d.State.RecalculateProgress(nil)
-			}
 			d.State.Resume()
 			_, _ = d.State.FinalizeSession(fileSize)
 			return nil
 		}
-		utils.Debug("Download pause at remainingBytes=0 but VP=%d < fileSize=%d; saving state for resume",
-			d.State.Bytes.VerifiedProgress.Load(), fileSize)
+
+		// If tasks drained before chunks were verified, rebuild remaining tasks from bitmap
+		// so the record stays resumable.
+		if len(bitmap) > 0 && chunkSize > 0 {
+			if unverified := unverifiedTasksFromBitmap(bitmap, fileSize, chunkSize); len(unverified) > 0 {
+				remainingTasks = unverified
+				for _, task := range remainingTasks {
+					remainingBytes += task.Length
+				}
+			} else {
+				// All chunks are completed in the bitmap; finalize directly.
+				utils.Debug("Download pause at remainingBytes=0 with complete bitmap; finalizing as completed")
+				d.State.Resume()
+				_, _ = d.State.FinalizeSession(fileSize)
+				return nil
+			}
+		}
+
+		if remainingBytes == 0 {
+			// Skip saving if no resumable ranges exist to avoid persisting an unresumable record.
+			utils.Debug("Download pause with VP=%d < fileSize=%d and no resumable ranges; skipping state save", vp, fileSize)
+			if emitPauseEvent {
+				return types.ErrPaused
+			}
+			return nil
+		}
 	}
 
 	computedDownloaded := fileSize - remainingBytes
-	if remainingBytes == 0 {
-		computedDownloaded = d.State.Bytes.VerifiedProgress.Load()
+	// Never report less progress than physically verified on disk.
+	if vp := d.State.Bytes.VerifiedProgress.Load(); vp > computedDownloaded {
+		computedDownloaded = vp
 	}
 	// Calculate total elapsed time
 	totalElapsed := d.State.FinalizePauseSession(computedDownloaded)
