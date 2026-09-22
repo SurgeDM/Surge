@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"strings"
 	"sync"
@@ -1097,6 +1098,66 @@ func (s *Settings) Validate() []string {
 	s.Categories.Categories = validCats
 
 	return s.StartupWarnings
+}
+
+// NormalizeValues converts decoded JSON/TOML primitives back to the types
+// declared by the settings schema.
+func (s *Settings) NormalizeValues() {
+	if s == nil {
+		return
+	}
+	for _, cat := range s.CategoriesList {
+		for _, set := range cat.Settings {
+			set.Value = set.Resolve()
+		}
+	}
+}
+
+// ValidateStrict validates an externally supplied settings snapshot without
+// silently replacing invalid values. It is used by the authenticated settings
+// API so malformed updates are rejected instead of partially applied.
+func (s *Settings) ValidateStrict() error {
+	if s == nil {
+		return fmt.Errorf("settings cannot be nil")
+	}
+	for _, cat := range s.CategoriesList {
+		for _, set := range cat.Settings {
+			if err := set.Validate(set.Value); err != nil {
+				return fmt.Errorf("invalid setting %s.%s: %w", cat.Name, set.Key, err)
+			}
+		}
+	}
+	for i := range s.Categories.Categories {
+		cat := &s.Categories.Categories[i]
+		if err := cat.Validate(); err != nil {
+			return fmt.Errorf("invalid category %q: %w", cat.Name, err)
+		}
+		info, err := os.Stat(strings.TrimSpace(cat.Path))
+		if err != nil || !info.IsDir() {
+			return fmt.Errorf("invalid category %q path %q: directory is not accessible", cat.Name, cat.Path)
+		}
+	}
+	return nil
+}
+
+// RequiresRestartComparedTo reports whether a setting marked as restart-only
+// changed between snapshots.
+func (s *Settings) RequiresRestartComparedTo(previous *Settings) bool {
+	if s == nil || previous == nil {
+		return false
+	}
+	for _, cat := range s.CategoriesList {
+		for _, set := range cat.Settings {
+			if !set.NeedsRestart {
+				continue
+			}
+			old := previous.FindSetting(cat.Name, set.Key)
+			if old != nil && !reflect.DeepEqual(old.Value, set.Value) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ValidateDNSList checks if a comma-separated list of DNS servers (IP or IP:port) is valid.

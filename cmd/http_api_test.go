@@ -34,6 +34,22 @@ type httpAPITestService struct {
 	clearFailedErr        error
 }
 
+type settingsHTTPTestService struct {
+	*httpAPITestService
+	settings    *config.Settings
+	updateCalls int
+}
+
+func (s *settingsHTTPTestService) GetSettings() (*config.Settings, error) {
+	return s.settings.Clone(), nil
+}
+
+func (s *settingsHTTPTestService) UpdateSettings(settings *config.Settings) error {
+	s.settings = settings.Clone()
+	s.updateCalls++
+	return nil
+}
+
 func newRateLimitTestService() *httpAPITestService {
 	return &httpAPITestService{
 		rateLimitCalls:  make([]string, 0),
@@ -204,6 +220,60 @@ func TestEnsureOpenActionRequestAllowed_RemoteToggle(t *testing.T) {
 	globalSettings.General.AllowRemoteOpenActions.Value = true
 	if err := ensureOpenActionRequestAllowed(request); err != nil {
 		t.Fatalf("expected remote open action to be allowed when enabled, got: %v", err)
+	}
+}
+
+func TestSettingsEndpoint_ReadsAndUpdatesDaemonSettings(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	settings.General.AutoResume.Value = false
+	service := &settingsHTTPTestService{httpAPITestService: &httpAPITestService{}, settings: settings}
+
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", service)
+
+	getRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(getRecorder, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	if getRecorder.Code != http.StatusOK {
+		t.Fatalf("GET /settings status = %d: %s", getRecorder.Code, getRecorder.Body.String())
+	}
+
+	updated := settings.Clone()
+	updated.General.AutoResume.Value = true
+	body, err := json.Marshal(updated)
+	if err != nil {
+		t.Fatalf("Marshal settings: %v", err)
+	}
+	putRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(putRecorder, httptest.NewRequest(http.MethodPut, "/settings", strings.NewReader(string(body))))
+	if putRecorder.Code != http.StatusOK {
+		t.Fatalf("PUT /settings status = %d: %s", putRecorder.Code, putRecorder.Body.String())
+	}
+	if service.updateCalls != 1 || !config.Resolve[bool](service.settings.General.AutoResume) {
+		t.Fatal("daemon settings were not updated")
+	}
+}
+
+func TestSettingsEndpoint_RejectsInvalidUpdate(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	service := &settingsHTTPTestService{httpAPITestService: &httpAPITestService{}, settings: settings}
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", service)
+
+	updated := settings.Clone()
+	updated.Network.MaxConnectionsPerDownload.Value = 0
+	body, err := json.Marshal(updated)
+	if err != nil {
+		t.Fatalf("Marshal settings: %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPut, "/settings", strings.NewReader(string(body))))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("PUT invalid settings status = %d, want 400: %s", recorder.Code, recorder.Body.String())
+	}
+	if service.updateCalls != 0 {
+		t.Fatal("invalid settings update reached the service")
 	}
 }
 

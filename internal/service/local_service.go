@@ -44,6 +44,27 @@ func (s *LocalDownloadService) ReloadSettings(settings *config.Settings) error {
 	return nil
 }
 
+func (s *LocalDownloadService) GetSettings() (*config.Settings, error) {
+	if s.lifecycle == nil || s.lifecycle.GetSettings() == nil {
+		return nil, types.ErrServiceUnavailable
+	}
+	return s.lifecycle.GetSettings().Clone(), nil
+}
+
+func (s *LocalDownloadService) UpdateSettings(settings *config.Settings) error {
+	if s.lifecycle == nil {
+		return types.ErrServiceUnavailable
+	}
+	if err := settings.ValidateStrict(); err != nil {
+		return err
+	}
+	if err := config.SaveSettings(settings); err != nil {
+		return err
+	}
+	s.lifecycle.ApplySettings(settings)
+	return nil
+}
+
 func (s *LocalDownloadService) StreamEvents(ctx context.Context) (<-chan types.DownloadEvent, func(), error) {
 	if s.lifecycle == nil || s.lifecycle.GetEventBus() == nil {
 		return nil, nil, fmt.Errorf("event bus not initialized")

@@ -107,11 +107,23 @@ func newRemoteRootModel(baseURL string, service service.DownloadService) tui.Roo
 	if err != nil {
 		settings = config.DefaultSettings()
 	}
+	var remoteSettings daemonSettingsService
+	if provider, ok := service.(daemonSettingsService); ok {
+		if serverSettings, getErr := provider.GetSettings(); getErr == nil {
+			settings = serverSettings
+			remoteSettings = provider
+		}
+	}
 	m := tui.InitialRootModel(serverPort, Version, service, nil, settings, false, Commit)
-	// Remote persistence must be supplied by the daemon. Never let a remote TUI
-	// write a synthesized/default snapshot into the client's local config.
-	m.SaveSettingsFunc = nil
-	m.SettingsReadOnly = true
+	if remoteSettings == nil {
+		// Older servers do not expose settings. Never let their remote TUI write
+		// a synthesized/default snapshot into the client's local config.
+		m.SaveSettingsFunc = nil
+		m.SettingsReadOnly = true
+	} else {
+		m.SaveSettingsFunc = remoteSettings.UpdateSettings
+		m.SettingsReadOnly = false
+	}
 	m.ServerHost = serverHost
 	m.ServerPort = serverPort
 	m.IsRemote = true

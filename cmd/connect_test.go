@@ -18,6 +18,22 @@ type fakeRemoteDownloadService struct {
 	lastExplicit bool
 }
 
+type settingsCapableRemoteService struct {
+	*fakeRemoteDownloadService
+	settings    *config.Settings
+	updateCalls int
+}
+
+func (s *settingsCapableRemoteService) GetSettings() (*config.Settings, error) {
+	return s.settings.Clone(), nil
+}
+
+func (s *settingsCapableRemoteService) UpdateSettings(settings *config.Settings) error {
+	s.settings = settings.Clone()
+	s.updateCalls++
+	return nil
+}
+
 var _ service.DownloadService = (*fakeRemoteDownloadService)(nil)
 
 func (f *fakeRemoteDownloadService) List() ([]types.DownloadStatus, error) {
@@ -140,6 +156,29 @@ func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
 	}
 	if selected.ID != "remote-add-id" {
 		t.Fatalf("queued download ID = %q, want remote-add-id", selected.ID)
+	}
+}
+
+func TestNewRemoteRootModel_UsesDaemonSettingsStore(t *testing.T) {
+	setupIsolatedCmdState(t)
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	settings.General.AutoResume.Value = true
+	remote := &settingsCapableRemoteService{
+		fakeRemoteDownloadService: &fakeRemoteDownloadService{},
+		settings:                  settings,
+	}
+
+	m := newRemoteRootModel("https://example.com:1700", remote)
+	if m.SettingsReadOnly || m.SaveSettingsFunc == nil {
+		t.Fatal("daemon-backed settings should be writable")
+	}
+	m.Settings.General.AutoResume.Value = false
+	if err := m.SaveSettingsFunc(m.Settings); err != nil {
+		t.Fatalf("SaveSettingsFunc: %v", err)
+	}
+	if remote.updateCalls != 1 || config.Resolve[bool](remote.settings.General.AutoResume) {
+		t.Fatal("remote settings store did not receive update")
 	}
 }
 

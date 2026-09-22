@@ -28,6 +28,11 @@ type rateLimitSettingsService interface {
 	SetDefaultRateLimit(rate int64) error
 }
 
+type daemonSettingsService interface {
+	GetSettings() (*config.Settings, error)
+	UpdateSettings(*config.Settings) error
+}
+
 func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service service.DownloadService) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
@@ -38,6 +43,59 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	})
 
 	mux.HandleFunc("/events", eventsHandler(service))
+
+	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
+		settingsService, ok := service.(daemonSettingsService)
+		if !ok {
+			http.Error(w, "Settings service unavailable", http.StatusNotImplemented)
+			return
+		}
+
+		switch r.Method {
+		case http.MethodGet:
+			settings, err := settingsService.GetSettings()
+			if err != nil {
+				http.Error(w, "Failed to retrieve settings: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			if settings.Extension.AuthToken != nil {
+				settings.Extension.AuthToken.Value = ""
+			}
+			writeJSONResponse(w, http.StatusOK, settings)
+		case http.MethodPut:
+			current, err := settingsService.GetSettings()
+			if err != nil {
+				http.Error(w, "Failed to retrieve settings: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			updated := current.Clone()
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+			if err := decodeJSONBody(r, updated); err != nil {
+				http.Error(w, "Invalid settings: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			updated.NormalizeValues()
+			if updated.Extension.AuthToken != nil && current.Extension.AuthToken != nil {
+				updated.Extension.AuthToken.Value = current.Extension.AuthToken.Value
+			}
+			if err := updated.ValidateStrict(); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			restartRequired := updated.RequiresRestartComparedTo(current)
+			if err := settingsService.UpdateSettings(updated); err != nil {
+				http.Error(w, "Failed to update settings: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			globalSettings = updated
+			writeJSONResponse(w, http.StatusOK, map[string]interface{}{
+				"status":           "updated",
+				"restart_required": restartRequired,
+			})
+		default:
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		}
+	})
 
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
 		handleDownload(w, r, defaultOutputDir, service)
