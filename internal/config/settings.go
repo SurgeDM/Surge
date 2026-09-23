@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/url"
 	"os"
@@ -1144,9 +1145,13 @@ func (s *Setting) normalizedValue() (any, error) {
 			return Resolve[bool](s), nil
 		}
 	case TypeInt:
-		switch s.Value.(type) {
-		case int, int64, float64:
+		switch value := s.Value.(type) {
+		case int, int64:
 			return Resolve[int](s), nil
+		case float64:
+			if math.Trunc(value) == value {
+				return Resolve[int](s), nil
+			}
 		}
 	case TypeInt64:
 		switch s.Value.(type) {
@@ -1195,6 +1200,10 @@ func (s *Settings) ValidateStrict() error {
 		cat := &s.Categories.Categories[i]
 		if err := cat.Validate(); err != nil {
 			return fmt.Errorf("invalid category %q: %w", cat.Name, err)
+		}
+		info, err := os.Stat(strings.TrimSpace(cat.Path))
+		if err != nil || !info.IsDir() {
+			return fmt.Errorf("invalid category %q path %q: directory is not accessible", cat.Name, cat.Path)
 		}
 	}
 	return nil
