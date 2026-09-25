@@ -50,6 +50,10 @@ func NewRemoteDownloadService(baseURL string, token string, opts HTTPClientOptio
 }
 
 func (s *RemoteDownloadService) doRequest(method, path string, body interface{}) (*http.Response, error) {
+	return s.doRequestWithContext(s.ctx, method, path, body)
+}
+
+func (s *RemoteDownloadService) doRequestWithContext(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
 	var bodyReader io.Reader
 	if body != nil {
 		jsonBody, err := json.Marshal(body)
@@ -59,7 +63,7 @@ func (s *RemoteDownloadService) doRequest(method, path string, body interface{})
 		bodyReader = bytes.NewBuffer(jsonBody)
 	}
 
-	req, err := http.NewRequestWithContext(s.ctx, method, s.BaseURL+path, bodyReader)
+	req, err := http.NewRequestWithContext(ctx, method, s.BaseURL+path, bodyReader)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +90,15 @@ func (s *RemoteDownloadService) doRequest(method, path string, body interface{})
 
 // List returns the status of all active and completed downloads.
 func (s *RemoteDownloadService) List() ([]types.DownloadStatus, error) {
-	resp, err := s.doRequest("GET", "/list", nil)
+	return s.ListContext(context.Background())
+}
+
+// ListContext returns download statuses while honoring the caller's deadline.
+func (s *RemoteDownloadService) ListContext(ctx context.Context) ([]types.DownloadStatus, error) {
+	requestCtx, cancel := mergeContexts(s.ctx, ctx)
+	defer cancel()
+
+	resp, err := s.doRequestWithContext(requestCtx, "GET", "/list", nil)
 	if err != nil {
 		return nil, err
 	}

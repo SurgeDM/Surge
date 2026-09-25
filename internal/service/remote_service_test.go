@@ -113,6 +113,25 @@ func TestRemoteDownloadService_NegativeRates_Rejected(t *testing.T) {
 	}
 }
 
+func TestRemoteDownloadService_ListContextHonorsDeadline(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer ts.Close()
+
+	svc, err := NewRemoteDownloadService(ts.URL, "token", HTTPClientOptions{})
+	if err != nil {
+		t.Fatalf("NewRemoteDownloadService failed: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Shutdown() })
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := svc.ListContext(ctx); err == nil {
+		t.Fatal("expected ListContext to fail when its deadline expires")
+	}
+}
+
 func TestRemoteDownloadService_StreamEvents_ShutdownClosesChannel(t *testing.T) {
 	blockCh := make(chan struct{})
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

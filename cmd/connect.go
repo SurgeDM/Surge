@@ -10,8 +10,10 @@ import (
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/spf13/cobra"
 )
 
@@ -37,7 +39,7 @@ var connectCmd = &cobra.Command{
 				return fmt.Errorf("no local Surge server detected. Start one with 'surge' or 'surge server', or specify a target: surge connect <host:port>")
 			}
 			target = fmt.Sprintf("127.0.0.1:%d", port)
-			fmt.Fprintf(os.Stderr, "Auto-detected local server on port %d\n", port)
+			fmt.Fprintf(cmd.ErrOrStderr(), "Auto-detected local server on port %d\n", port)
 		}
 		return connectAndRunTUI(cmd, target)
 	},
@@ -47,7 +49,7 @@ func init() {
 	rootCmd.AddCommand(connectCmd)
 }
 
-func connectAndRunTUI(_ *cobra.Command, target string) error {
+func connectAndRunTUI(cmd *cobra.Command, target string) error {
 	clientCfg := currentRemoteClientConfig()
 	parsed, err := parseConnectTarget(target, clientCfg.AllowInsecureHTTP)
 	if err != nil {
@@ -59,7 +61,7 @@ func connectAndRunTUI(_ *cobra.Command, target string) error {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Connecting to %s...\n", parsed.BaseURL)
+	fmt.Fprintf(cmd.ErrOrStderr(), "Connecting to %s...\n", parsed.BaseURL)
 
 	service, err := newRemoteDownloadService(parsed.BaseURL, token)
 	if err != nil {
@@ -67,41 +69,50 @@ func connectAndRunTUI(_ *cobra.Command, target string) error {
 	}
 	defer func() { _ = service.Shutdown() }()
 
-	requestTimeout := service.Client.Timeout
-	service.Client.Timeout = clientCfg.ConnectTimeout
-	_, err = service.List()
-	service.Client.Timeout = requestTimeout
+	connectCtx, cancelConnect := context.WithTimeout(cmd.Context(), clientCfg.ConnectTimeout)
+	statuses, err := service.ListContext(connectCtx)
+	cancelConnect()
 	if err != nil {
 		return fmt.Errorf("failed to connect: %w", err)
 	}
 
-	streamCtx, cancelStream := context.WithCancel(context.Background())
-	defer cancelStream()
+	streamCtx, cancelStream := context.WithCancel(cmd.Context())
 
 	stream, cleanup, err := service.StreamEvents(streamCtx)
 	if err != nil {
+		cancelStream()
 		return fmt.Errorf("failed to start event stream: %w", err)
 	}
-	defer cleanup()
 
-	m := newRemoteRootModel(parsed.BaseURL, service)
+	tui.InitializeTUI()
+	settings := globalSettings
+	if settings == nil {
+		settings = getSettings()
+	}
+	m := newRemoteRootModel(parsed.BaseURL, service, statuses, settings)
 
 	p := tea.NewProgram(m)
+	forwardDone := make(chan struct{})
 	go func() {
+		defer close(forwardDone)
 		for msg := range stream {
 			p.Send(msg)
 		}
 	}()
 
-	if _, err := p.Run(); err != nil {
-		return fmt.Errorf("error running TUI: %w", err)
+	_, runErr := p.Run()
+	cancelStream()
+	cleanup()
+	<-forwardDone
+	if runErr != nil {
+		return fmt.Errorf("error running TUI: %w", runErr)
 	}
 	return nil
 }
 
-func newRemoteRootModel(baseURL string, service service.DownloadService) tui.RootModel {
+func newRemoteRootModel(baseURL string, service service.DownloadService, statuses []types.DownloadStatus, settings *config.Settings) tui.RootModel {
 	serverHost, serverPort := parseRemoteServerAddress(baseURL)
-	m := tui.InitialRootModel(serverPort, Version, service, nil, nil, false, Commit)
+	m := tui.InitialRootModelWithStatuses(serverPort, Version, service, nil, settings, false, statuses, Commit)
 	m.ServerHost = serverHost
 	m.ServerPort = serverPort
 	m.IsRemote = true
