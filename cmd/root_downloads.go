@@ -447,11 +447,15 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 		token := resolveLocalToken()
 		for _, arg := range urls {
-			url, mirrors := ParseURLArg(arg)
+			url, mirrors, err := parseAndNormalizeURLArg(arg)
+			if err != nil {
+				fmt.Printf("Error adding %s: %v\n", arg, err)
+				continue
+			}
 			if url == "" {
 				continue
 			}
-			err := sendToServer(url, mirrors, outputDir, baseURL, token)
+			err = sendToServer(url, mirrors, outputDir, baseURL, token)
 			if err != nil {
 				fmt.Printf("Error adding %s: %v\n", url, err)
 			} else {
@@ -481,15 +485,12 @@ func processDownloads(urls []string, outputDir string, port int) int {
 			continue
 		}
 
-		urlArg, mirrors := ParseURLArg(arg)
-		if urlArg == "" {
+		url, mirrors, err := parseAndNormalizeURLArg(arg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error adding %s: %v\n", arg, err)
 			continue
 		}
-
-		// Ensure the URL is valid and normalized
-		url, err := ValidateAndNormalizeURL(urlArg)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error adding %s: %v\n", urlArg, err)
+		if url == "" {
 			continue
 		}
 

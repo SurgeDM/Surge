@@ -1079,6 +1079,7 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 		port := ln.Addr().(*net.TCPAddr).Port
 		count := processDownloads([]string{
 			"https://example.com/a.zip,https://mirror.example.com/a.zip",
+			"ftp://example.com/unsupported.zip",
 			"",
 			"https://example.com/b.zip",
 		}, "", port)
@@ -1126,6 +1127,7 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 
 		count := processDownloads([]string{
 			probeServer.URL + "/local.zip",
+			"ftp://example.com/unsupported.zip",
 			"",
 		}, t.TempDir(), 0)
 
