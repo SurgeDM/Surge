@@ -30,7 +30,7 @@ var connectCmd = &cobra.Command{
 				return fmt.Errorf("no local Surge server detected. Start one with 'surge' or 'surge server', or specify a target: surge connect <host:port>")
 			}
 			target = fmt.Sprintf("127.0.0.1:%d", port)
-			fmt.Fprintf(cmd.ErrOrStderr(), "Auto-detected local server on port %d\n", port)
+			cmd.PrintErrf("Auto-detected local server on port %d\n", port)
 		}
 		return connectAndRunTUI(cmd, target)
 	},
@@ -52,7 +52,7 @@ func connectAndRunTUI(cmd *cobra.Command, target string) error {
 		return err
 	}
 
-	fmt.Fprintf(cmd.ErrOrStderr(), "Connecting to %s...\n", parsed.BaseURL)
+	cmd.PrintErrf("Connecting to %s...\n", parsed.BaseURL)
 
 	service, err := newRemoteDownloadService(parsed.BaseURL, token)
 	if err != nil {

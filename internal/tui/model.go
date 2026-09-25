@@ -404,7 +404,7 @@ func initialRootModel(serverPort int, currentVersion string, service service.Dow
 
 	applyColorModeForTheme(config.Resolve[int](settings.General.Theme), config.Resolve[string](settings.General.ThemePath), initialDarkBackground)
 
-	var downloads []*DownloadModel
+	downloads := make([]*DownloadModel, 0, len(statuses))
 	for _, s := range statuses {
 		dm := NewDownloadModel(s.ID, s.URL, s.Filename, s.TotalSize)
 		dm.Downloaded = s.Downloaded
