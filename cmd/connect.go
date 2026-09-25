@@ -60,19 +60,22 @@ func connectAndRunTUI(cmd *cobra.Command, target string) error {
 	}
 	defer func() { _ = service.Shutdown() }()
 
-	connectCtx, cancelConnect := context.WithTimeout(cmd.Context(), clientCfg.ConnectTimeout)
-	statuses, err := service.ListContext(connectCtx)
-	cancelConnect()
-	if err != nil {
-		return fmt.Errorf("failed to connect: %w", err)
-	}
-
 	streamCtx, cancelStream := context.WithCancel(cmd.Context())
-
 	stream, cleanup, err := service.StreamEvents(streamCtx)
 	if err != nil {
 		cancelStream()
 		return fmt.Errorf("failed to start event stream: %w", err)
+	}
+
+	connectCtx, cancelConnect := context.WithTimeout(cmd.Context(), clientCfg.ConnectTimeout)
+	statuses, err := service.ListContext(connectCtx)
+	cancelConnect()
+	if err != nil {
+		cancelStream()
+		cleanup()
+		for range stream {
+		}
+		return fmt.Errorf("failed to connect: %w", err)
 	}
 
 	tui.InitializeTUI()
