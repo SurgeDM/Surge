@@ -352,7 +352,7 @@ func (s *RemoteDownloadService) Publish(msg types.DownloadEvent) error {
 func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan types.DownloadEvent, resp *http.Response) {
 	defer close(ch)
 	for {
-		err := s.consumeSSE(ch, resp)
+		err := s.consumeSSE(ctx, ch, resp)
 		if ctx.Err() != nil {
 			return
 		}
@@ -373,6 +373,7 @@ func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan
 				sendStreamStatus(ch, "Remote event stream reconnected")
 				break
 			}
+			sendStreamStatus(ch, fmt.Sprintf("Remote event stream reconnect failed: %v; retrying in %s", err, backoff))
 			if backoff < 30*time.Second {
 				backoff *= 2
 			}
@@ -431,7 +432,7 @@ func (s *RemoteDownloadService) openSSE(ctx context.Context) (*http.Response, er
 	return resp, nil
 }
 
-func (s *RemoteDownloadService) consumeSSE(ch chan types.DownloadEvent, resp *http.Response) error {
+func (s *RemoteDownloadService) consumeSSE(ctx context.Context, ch chan types.DownloadEvent, resp *http.Response) error {
 	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
 	reader := bufio.NewReader(resp.Body)
@@ -475,11 +476,10 @@ func (s *RemoteDownloadService) consumeSSE(ch chan types.DownloadEvent, resp *ht
 			continue
 		}
 
-		// Non-blocking send
 		select {
 		case ch <- msg:
-		default:
-			// Drop message if channel is full to prevent blocking the reader
+		case <-ctx.Done():
+			return ctx.Err()
 		}
 	}
 }

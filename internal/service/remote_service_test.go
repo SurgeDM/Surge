@@ -2,6 +2,9 @@ package service
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -177,11 +180,97 @@ func TestRemoteDownloadService_StreamEventsRejectsNonEventStreamResponse(t *test
 	}
 }
 
+func TestRemoteDownloadService_StreamEventsBackpressuresWithoutDroppingEvents(t *testing.T) {
+	const eventCount = 150
+	written := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		for i := 0; i < eventCount; i++ {
+			_, _ = fmt.Fprintf(w, "event: started\ndata: {\"download_id\":\"event-%d\"}\n\n", i)
+		}
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		close(written)
+		<-r.Context().Done()
+	}))
+	defer ts.Close()
+
+	svc, err := NewRemoteDownloadService(ts.URL, "token", HTTPClientOptions{})
+	if err != nil {
+		t.Fatalf("NewRemoteDownloadService failed: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Shutdown() })
+
+	stream, cleanup, err := svc.StreamEvents(context.Background())
+	if err != nil {
+		t.Fatalf("StreamEvents failed: %v", err)
+	}
+	defer cleanup()
+
+	select {
+	case <-written:
+	case <-time.After(time.Second):
+		t.Fatal("SSE server did not send the test events")
+	}
+
+	received := make(map[string]struct{}, eventCount)
+	deadline := time.After(2 * time.Second)
+	for len(received) < eventCount {
+		select {
+		case msg, ok := <-stream:
+			if !ok {
+				t.Fatalf("event stream closed after receiving %d of %d events", len(received), eventCount)
+			}
+			received[msg.DownloadID] = struct{}{}
+		case <-deadline:
+			t.Fatalf("timed out after receiving %d of %d events", len(received), eventCount)
+		}
+	}
+}
+
+func TestRemoteDownloadService_ConsumeSSECancellationUnblocksBackpressure(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	ch := make(chan types.DownloadEvent, 1)
+	ch <- types.DownloadEvent{Type: types.EventStarted}
+	resp := &http.Response{Body: io.NopCloser(strings.NewReader("event: started\ndata: {\"download_id\":\"blocked\"}\n\n"))}
+	done := make(chan error, 1)
+	go func() {
+		done <- (&RemoteDownloadService{}).consumeSSE(ctx, ch, resp)
+	}()
+
+	select {
+	case err := <-done:
+		t.Fatalf("consumeSSE returned before cancellation: %v", err)
+	case <-time.After(50 * time.Millisecond):
+	}
+
+	cancel()
+	select {
+	case err := <-done:
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("consumeSSE returned %v after cancellation, want context.Canceled", err)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("consumeSSE did not stop after cancellation")
+	}
+}
+
 func TestRemoteDownloadService_StreamEventsReportsReconnect(t *testing.T) {
 	var requests atomic.Int32
 	secondConnected := make(chan struct{})
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		request := requests.Add(1)
+		if request == 2 {
+			http.Error(w, "temporarily unavailable", http.StatusServiceUnavailable)
+			return
+		}
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
 		if f, ok := w.(http.Flusher); ok {
@@ -211,9 +300,9 @@ func TestRemoteDownloadService_StreamEventsReportsReconnect(t *testing.T) {
 	}
 	defer cleanup()
 
-	var sawDisconnect, sawReconnect bool
-	deadline := time.After(4 * time.Second)
-	for !sawDisconnect || !sawReconnect {
+	var sawDisconnect, sawReconnect, sawReconnectFailure bool
+	deadline := time.After(6 * time.Second)
+	for !sawDisconnect || !sawReconnect || !sawReconnectFailure {
 		select {
 		case msg := <-stream:
 			if msg.Type != types.EventSystem {
@@ -221,8 +310,9 @@ func TestRemoteDownloadService_StreamEventsReportsReconnect(t *testing.T) {
 			}
 			sawDisconnect = sawDisconnect || strings.Contains(msg.Message, "disconnected")
 			sawReconnect = sawReconnect || strings.Contains(msg.Message, "reconnected")
+			sawReconnectFailure = sawReconnectFailure || strings.Contains(msg.Message, "reconnect failed")
 		case <-deadline:
-			t.Fatalf("timed out waiting for reconnect status; disconnect=%v reconnect=%v", sawDisconnect, sawReconnect)
+			t.Fatalf("timed out waiting for reconnect status; disconnect=%v reconnect failure=%v reconnect=%v", sawDisconnect, sawReconnectFailure, sawReconnect)
 		}
 	}
 	select {
