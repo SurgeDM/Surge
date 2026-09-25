@@ -175,7 +175,12 @@ type RootModel struct {
 	logFocused  bool           // Whether the log viewport is focused
 
 	// Settings
-	Settings              *config.Settings // Application settings
+	Settings *config.Settings // Application settings
+	// SaveSettingsFunc owns persistence for this model. Local TUIs write the
+	// user config; remote TUIs replace this with a daemon-backed implementation.
+	// A nil function makes settings read-only and must never write defaults.
+	SaveSettingsFunc      func(*config.Settings) error
+	SettingsReadOnly      bool
 	SettingsBaseline      *config.Settings // Snapshot of settings when entering the settings view
 	StartupConfigWarnings []string         // Config validation warnings to emit on first render
 	SettingsActiveTab     int              // Active category tab (0-3)
@@ -530,6 +535,7 @@ func InitialRootModel(serverPort int, currentVersion string, service service.Dow
 		Orchestrator:          orchestrator,
 		PWD:                   pwd,
 		Settings:              settings,
+		SaveSettingsFunc:      config.SaveSettings,
 		StartupConfigWarnings: startupConfigWarnings,
 		SettingsActiveTab:     0,
 		SettingsSelectedRow:   0,

@@ -5,10 +5,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 
 	"strings"
 	"sync"
@@ -582,8 +584,8 @@ func DefaultSettings() *Settings {
 			},
 			AutoStart: &Setting{
 				Key:          "auto_start",
-				Label:        "Automatic Startup",
-				Description:  "Start Surge automatically when the system boots (requires service installation).",
+				Label:        "Start at Login",
+				Description:  "Install the Surge user service and start it automatically when you log in.",
 				Type:         TypeBool,
 				DefaultValue: false,
 				Value:        false,
@@ -1097,6 +1099,134 @@ func (s *Settings) Validate() []string {
 	s.Categories.Categories = validCats
 
 	return s.StartupWarnings
+}
+
+// NormalizeValues converts decoded JSON/TOML primitives back to the types
+// declared by the settings schema.
+func (s *Settings) NormalizeValues() error {
+	if err := s.validateRequiredSettings(); err != nil {
+		return err
+	}
+	for _, cat := range s.CategoriesList {
+		for _, set := range cat.Settings {
+			value, err := set.normalizedValue()
+			if err != nil {
+				return fmt.Errorf("invalid setting %s.%s: %w", cat.Name, set.Key, err)
+			}
+			set.Value = value
+		}
+	}
+	return nil
+}
+
+func (s *Settings) validateRequiredSettings() error {
+	if s == nil {
+		return errors.New("settings cannot be nil")
+	}
+	s.initializeCategoriesList()
+	for _, cat := range s.CategoriesList {
+		for index, set := range cat.Settings {
+			if set == nil {
+				return fmt.Errorf("settings category %s contains null setting at index %d", cat.Name, index)
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Setting) normalizedValue() (any, error) {
+	if s.Value == nil {
+		return nil, errors.New("value cannot be null")
+	}
+	switch s.Type {
+	case TypeBool:
+		switch s.Value.(type) {
+		case bool, int, int64, float64:
+			return Resolve[bool](s), nil
+		}
+	case TypeInt:
+		switch value := s.Value.(type) {
+		case int, int64:
+			return Resolve[int](s), nil
+		case float64:
+			if math.Trunc(value) == value {
+				return Resolve[int](s), nil
+			}
+		}
+	case TypeInt64:
+		switch s.Value.(type) {
+		case int, int64, float64:
+			return Resolve[int64](s), nil
+		}
+	case TypeFloat64:
+		switch s.Value.(type) {
+		case int, int64, float32, float64:
+			return Resolve[float64](s), nil
+		}
+	case TypeString, TypeAuthToken, TypeLink:
+		if _, ok := s.Value.(string); ok {
+			return Resolve[string](s), nil
+		}
+	case TypeDuration:
+		switch value := s.Value.(type) {
+		case time.Duration, int, int64, float64:
+			return Resolve[time.Duration](s), nil
+		case string:
+			if _, err := time.ParseDuration(value); err == nil {
+				return Resolve[time.Duration](s), nil
+			}
+		}
+	default:
+		return s.Value, nil
+	}
+	return nil, fmt.Errorf("expected %s value, got %T", s.Type, s.Value)
+}
+
+// ValidateStrict validates an externally supplied settings snapshot without
+// silently replacing invalid values. It is used by the authenticated settings
+// API so malformed updates are rejected instead of partially applied.
+func (s *Settings) ValidateStrict() error {
+	if err := s.validateRequiredSettings(); err != nil {
+		return err
+	}
+	for _, cat := range s.CategoriesList {
+		for _, set := range cat.Settings {
+			if err := set.Validate(set.Value); err != nil {
+				return fmt.Errorf("invalid setting %s.%s: %w", cat.Name, set.Key, err)
+			}
+		}
+	}
+	for i := range s.Categories.Categories {
+		cat := &s.Categories.Categories[i]
+		if err := cat.Validate(); err != nil {
+			return fmt.Errorf("invalid category %q: %w", cat.Name, err)
+		}
+		info, err := os.Stat(strings.TrimSpace(cat.Path))
+		if err != nil || !info.IsDir() {
+			return fmt.Errorf("invalid category %q path %q: directory is not accessible", cat.Name, cat.Path)
+		}
+	}
+	return nil
+}
+
+// RequiresRestartComparedTo reports whether a setting marked as restart-only
+// changed between snapshots.
+func (s *Settings) RequiresRestartComparedTo(previous *Settings) bool {
+	if s == nil || previous == nil {
+		return false
+	}
+	for _, cat := range s.CategoriesList {
+		for _, set := range cat.Settings {
+			if !set.NeedsRestart {
+				continue
+			}
+			old := previous.FindSetting(cat.Name, set.Key)
+			if old != nil && !reflect.DeepEqual(old.Value, set.Value) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ValidateDNSList checks if a comma-separated list of DNS servers (IP or IP:port) is valid.

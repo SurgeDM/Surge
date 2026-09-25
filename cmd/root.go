@@ -80,6 +80,7 @@ var (
 	serverProgram           *tea.Program
 	startupIntegrityMessage string
 	globalSettings          *config.Settings
+	globalSettingsMu        sync.RWMutex
 	GlobalLifecycle         *orchestrator.LifecycleManager
 	globalLifecycleMu       sync.Mutex
 	globalEnqueueCtx        context.Context
@@ -226,7 +227,7 @@ func lifecycleForLocalService(service service.DownloadService) (*orchestrator.Li
 func ensureGlobalLocalServiceAndLifecycle() error {
 	if GlobalService == nil {
 		eventBus := orchestrator.NewEventBus()
-		lifecycle := newLocalLifecycleManager(GlobalPool, eventBus, globalSettings, currentPoolConfigs)
+		lifecycle := newLocalLifecycleManager(GlobalPool, eventBus, getGlobalSettings(), currentPoolConfigs)
 		localService := service.NewLocalDownloadService(lifecycle)
 
 		globalLifecycleMu.Lock()
@@ -296,7 +297,7 @@ func ensureLocalLifecycle(service service.DownloadService, getAll func() []types
 
 	if GlobalLifecycle == nil {
 		eventBus := orchestrator.NewEventBus()
-		GlobalLifecycle = newLocalLifecycleManager(GlobalPool, eventBus, globalSettings, getAll)
+		GlobalLifecycle = newLocalLifecycleManager(GlobalPool, eventBus, getGlobalSettings(), getAll)
 	}
 	if GlobalLifecycleCleanup == nil {
 		cleanup, err := startLifecycleEventWorker(service, GlobalLifecycle)
@@ -479,8 +480,9 @@ var rootCmd = &cobra.Command{
 		}
 
 		GlobalProgressCh = make(chan types.DownloadEvent, 100)
-		globalSettings = getSettings()
-		GlobalPool = scheduler.New(GlobalProgressCh, config.Resolve[int](globalSettings.Network.MaxConcurrentDownloads))
+		settings := getSettings()
+		setGlobalSettings(settings)
+		GlobalPool = scheduler.New(GlobalProgressCh, config.Resolve[int](settings.Network.MaxConcurrentDownloads))
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if ranRemote, err := maybeRunRemoteTUI(cmd, args); err != nil {
@@ -489,8 +491,8 @@ var rootCmd = &cobra.Command{
 			return nil
 		}
 
-		if checkSystemServiceRunning() {
-			return fmt.Errorf("system service is already running. Use 'surge connect' to interact with it, or stop the service first")
+		if checkUserServiceRunning() {
+			return fmt.Errorf("the Surge user service is already running; use 'surge connect' or stop the service first")
 		}
 
 		if len(args) > 0 {
@@ -542,7 +544,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool) error {
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
-	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), globalSettings, noResume, Commit)
+	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), getGlobalSettings(), noResume, Commit)
 	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())
 
 	configureServiceUI(&m)

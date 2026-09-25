@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -103,7 +102,27 @@ func connectAndRunTUI(_ *cobra.Command, target string) error {
 
 func newRemoteRootModel(baseURL string, service service.DownloadService) tui.RootModel {
 	serverHost, serverPort := parseRemoteServerAddress(baseURL)
-	m := tui.InitialRootModel(serverPort, Version, service, nil, nil, false, Commit)
+	settings, err := config.LoadSettings()
+	if err != nil {
+		settings = config.DefaultSettings()
+	}
+	var remoteSettings daemonSettingsService
+	if provider, ok := service.(daemonSettingsService); ok {
+		if serverSettings, getErr := provider.GetSettings(); getErr == nil {
+			settings = serverSettings
+			remoteSettings = provider
+		}
+	}
+	m := tui.InitialRootModel(serverPort, Version, service, nil, settings, false, Commit)
+	if remoteSettings == nil {
+		// Older servers do not expose settings. Never let their remote TUI write
+		// a synthesized/default snapshot into the client's local config.
+		m.SaveSettingsFunc = nil
+		m.SettingsReadOnly = true
+	} else {
+		m.SaveSettingsFunc = remoteSettings.UpdateSettings
+		m.SettingsReadOnly = false
+	}
 	m.ServerHost = serverHost
 	m.ServerPort = serverPort
 	m.IsRemote = true
@@ -123,41 +142,9 @@ func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 	if isLocalHost(serverHost) {
 		_, serverPort := parseRemoteServerAddress(target.BaseURL)
 		if details, ok := getActiveConnectionDetails(); ok && details.port == serverPort {
-			// Port file matched — use the token associated with that runtime dir,
-			// unless the system service is running and we matched a stale user
-			// port file (which would send the wrong token → 401).
-			if isElevated() || !checkSystemServiceRunning() || details.runtimeDir == config.GetSystemRuntimeDir() {
-				return resolveLocalTokenForDetails(details)
-			}
+			return resolveLocalTokenForDetails(details)
 		}
-
-		// No matching port file. Prioritize the privilege level of the daemon we are most likely talking to.
-		var firstChoice, secondChoice string
-		if !isElevated() && checkSystemServiceRunning() {
-			firstChoice = filepath.Join(config.GetSystemStateDir(), "token")
-			secondChoice = filepath.Join(config.GetStateDir(), "token")
-		} else {
-			firstChoice = resolveTokenPath()
-			if isElevated() {
-				secondChoice = filepath.Join(config.GetStateDir(), "token")
-			} else {
-				secondChoice = filepath.Join(config.GetSystemStateDir(), "token")
-			}
-		}
-
-		if tok, err := readTokenFromFile(firstChoice); err == nil && tok != "" {
-			return tok, nil
-		}
-
-		if !isElevated() && checkSystemServiceRunning() {
-			return "", fmt.Errorf("system service is running but its token could not be read. Try connecting with elevated privileges")
-		}
-
-		if tok, err := readTokenFromFile(secondChoice); err == nil && tok != "" {
-			return tok, nil
-		}
-
-		return ensureAuthToken(), nil
+		return "", fmt.Errorf("local target %q does not match the active Surge server; use --token or set SURGE_TOKEN", target.BaseURL)
 	}
 	return "", fmt.Errorf("remote target %q requires authentication: use --token or set SURGE_TOKEN", target.BaseURL)
 }

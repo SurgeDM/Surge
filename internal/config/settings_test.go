@@ -111,6 +111,46 @@ func TestDefaultSettings(t *testing.T) {
 	})
 }
 
+func TestNormalizeValuesRejectsFractionalTypeInt(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Network.MaxConnectionsPerDownload.Value = 3.5
+
+	if err := settings.NormalizeValues(); err == nil {
+		t.Fatal("expected fractional TypeInt value to be rejected")
+	}
+
+	settings.Network.MaxConnectionsPerDownload.Value = 3.0
+	if err := settings.NormalizeValues(); err != nil {
+		t.Fatalf("integral float TypeInt value was rejected: %v", err)
+	}
+	if got := settings.Network.MaxConnectionsPerDownload.Value; got != 3 {
+		t.Fatalf("normalized TypeInt value = %#v, want 3", got)
+	}
+}
+
+func TestValidateStrictRejectsInvalidCategoryPaths(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(filePath, []byte("file"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	for _, test := range []struct {
+		name string
+		path string
+	}{
+		{name: "missing", path: filepath.Join(t.TempDir(), "missing")},
+		{name: "file", path: filePath},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			settings := DefaultSettings()
+			settings.Categories.Categories = []Category{{Name: "Test", Pattern: ".*", Path: test.path}}
+			if err := settings.ValidateStrict(); err == nil || !strings.Contains(err.Error(), `invalid category "Test" path`) {
+				t.Fatalf("ValidateStrict() error = %v, want invalid category path error", err)
+			}
+		})
+	}
+}
+
 func TestDefaultSettings_Consistency(t *testing.T) {
 	s1 := DefaultSettings()
 	s2 := DefaultSettings()

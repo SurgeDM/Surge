@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -112,6 +113,35 @@ func (s *RemoteDownloadService) History() ([]types.DownloadRecord, error) {
 		return nil, err
 	}
 	return history, nil
+}
+
+func (s *RemoteDownloadService) GetSettings() (*config.Settings, error) {
+	resp, err := s.doRequest("GET", "/settings", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+
+	settings := config.DefaultSettings()
+	if err := json.NewDecoder(resp.Body).Decode(settings); err != nil {
+		return nil, err
+	}
+	if err := settings.NormalizeValues(); err != nil {
+		return nil, fmt.Errorf("server returned invalid settings: %w", err)
+	}
+	if err := settings.ValidateStrict(); err != nil {
+		return nil, fmt.Errorf("server returned invalid settings: %w", err)
+	}
+	return settings, nil
+}
+
+func (s *RemoteDownloadService) UpdateSettings(settings *config.Settings) error {
+	resp, err := s.doRequest("PUT", "/settings", settings)
+	if err != nil {
+		return err
+	}
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+	return nil
 }
 
 // GetStatus returns a status for a single download by id.

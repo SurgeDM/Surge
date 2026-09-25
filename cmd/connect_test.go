@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -15,6 +16,22 @@ type fakeRemoteDownloadService struct {
 	lastPath     string
 	lastFile     string
 	lastExplicit bool
+}
+
+type settingsCapableRemoteService struct {
+	*fakeRemoteDownloadService
+	settings    *config.Settings
+	updateCalls int
+}
+
+func (s *settingsCapableRemoteService) GetSettings() (*config.Settings, error) {
+	return s.settings.Clone(), nil
+}
+
+func (s *settingsCapableRemoteService) UpdateSettings(settings *config.Settings) error {
+	s.settings = settings.Clone()
+	s.updateCalls++
+	return nil
 }
 
 var _ service.DownloadService = (*fakeRemoteDownloadService)(nil)
@@ -73,6 +90,13 @@ func (f *fakeRemoteDownloadService) SetRateLimit(id string, rate int64) error { 
 func (f *fakeRemoteDownloadService) ClearRateLimit(id string) error { return nil }
 
 func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
+	setupIsolatedCmdState(t)
+	settings := config.DefaultSettings()
+	settings.General.AutoResume.Value = true
+	if err := config.SaveSettings(settings); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
 	m := newRemoteRootModel("https://example.com:1700", nil)
 
 	if m.Orchestrator != nil {
@@ -87,9 +111,16 @@ func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
 	if m.ServerPort != 1700 {
 		t.Fatalf("server port = %d, want 1700", m.ServerPort)
 	}
+	if !config.Resolve[bool](m.Settings.General.AutoResume) {
+		t.Fatal("remote model did not load the existing client settings")
+	}
+	if !m.SettingsReadOnly || m.SaveSettingsFunc != nil {
+		t.Fatal("remote model must not persist settings without a daemon-backed store")
+	}
 }
 
 func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
+	setupIsolatedCmdState(t)
 	service := &fakeRemoteDownloadService{}
 	m := newRemoteRootModel("https://example.com:1700", service)
 	m.Settings.Extension.ExtensionPrompt.Value = false
@@ -125,6 +156,29 @@ func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
 	}
 	if selected.ID != "remote-add-id" {
 		t.Fatalf("queued download ID = %q, want remote-add-id", selected.ID)
+	}
+}
+
+func TestNewRemoteRootModel_UsesDaemonSettingsStore(t *testing.T) {
+	setupIsolatedCmdState(t)
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	settings.General.AutoResume.Value = true
+	remote := &settingsCapableRemoteService{
+		fakeRemoteDownloadService: &fakeRemoteDownloadService{},
+		settings:                  settings,
+	}
+
+	m := newRemoteRootModel("https://example.com:1700", remote)
+	if m.SettingsReadOnly || m.SaveSettingsFunc == nil {
+		t.Fatal("daemon-backed settings should be writable")
+	}
+	m.Settings.General.AutoResume.Value = false
+	if err := m.SaveSettingsFunc(m.Settings); err != nil {
+		t.Fatalf("SaveSettingsFunc: %v", err)
+	}
+	if remote.updateCalls != 1 || config.Resolve[bool](remote.settings.General.AutoResume) {
+		t.Fatal("remote settings store did not receive update")
 	}
 }
 

@@ -1143,12 +1143,12 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 func setupIsolatedCmdState(t *testing.T) {
 	t.Helper()
 	origSettings := globalSettings
-	origCheck := checkSystemServiceRunning
-	checkSystemServiceRunning = func() bool { return false }
+	origCheck := checkUserServiceRunning
+	checkUserServiceRunning = func() bool { return false }
 
 	t.Cleanup(func() {
 		globalSettings = origSettings
-		checkSystemServiceRunning = origCheck
+		checkUserServiceRunning = origCheck
 		resetGlobalShutdownCoordinatorForTest(nil)
 	})
 

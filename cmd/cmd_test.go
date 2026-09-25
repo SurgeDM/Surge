@@ -114,9 +114,6 @@ func TestSaveAndRemoveActivePort(t *testing.T) {
 		t.Fatalf("Failed to ensure dirs: %v", err)
 	}
 
-	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", config.GetRuntimeDir())
-	t.Setenv("SURGE_SYSTEM_STATE_DIR", config.GetStateDir())
-
 	// Save port
 	testPort := 12345
 	saveActivePort(testPort)
@@ -210,8 +207,6 @@ func TestCorsMiddleware_PassesThrough(t *testing.T) {
 func TestConnectCmd_AutoDetectsLocalServer(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
-	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
-	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
@@ -242,8 +237,6 @@ func TestConnectCmd_AutoDetectsLocalServer(t *testing.T) {
 func TestConnectCmd_NoServerRunning(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
-	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
-	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
@@ -305,9 +298,8 @@ func TestParseConnectTarget_BaseURL(t *testing.T) {
 func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
-	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
-	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_STATE_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("Failed to ensure dirs: %v", err)
@@ -315,12 +307,12 @@ func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 
 	origToken := globalToken
 	globalToken = ""
-	origCheck := checkSystemServiceRunning
-	checkSystemServiceRunning = func() bool { return false }
+	origCheck := checkUserServiceRunning
+	checkUserServiceRunning = func() bool { return false }
 	t.Setenv("SURGE_TOKEN", "")
 	t.Cleanup(func() {
 		globalToken = origToken
-		checkSystemServiceRunning = origCheck
+		checkUserServiceRunning = origCheck
 	})
 
 	target, err := parseConnectTarget("[::1]:1700", false)
@@ -328,12 +320,37 @@ func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 		t.Fatalf("parseConnectTarget returned error: %v", err)
 	}
 
-	token, err := resolveTokenForConnectTarget(target)
-	if err != nil {
-		t.Fatalf("resolveTokenForConnectTarget returned error: %v", err)
+	if _, err := resolveTokenForConnectTarget(target); err == nil {
+		t.Fatal("expected unmatched local target to require an explicit token")
 	}
-	if token == "" {
-		t.Fatal("expected non-empty local token for IPv6 loopback target")
+}
+
+func TestResolveTokenForConnectTarget_DoesNotExposeTokenToUnmatchedLocalPort(t *testing.T) {
+	tmpDir := t.TempDir()
+	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
+	t.Setenv("XDG_CONFIG_HOME", tmpDir)
+	t.Setenv("XDG_STATE_HOME", tmpDir)
+	t.Setenv("APPDATA", tmpDir)
+	t.Setenv("SURGE_TOKEN", "")
+	if err := config.EnsureDirs(); err != nil {
+		t.Fatalf("Failed to ensure dirs: %v", err)
+	}
+
+	origToken := globalToken
+	globalToken = ""
+	t.Cleanup(func() { globalToken = origToken })
+	if err := writeTokenToFile(filepath.Join(config.GetStateDir(), "token"), "secret-token"); err != nil {
+		t.Fatalf("write token failed: %v", err)
+	}
+	saveActivePort(1888)
+	defer removeActivePort()
+
+	target, err := parseConnectTarget("127.0.0.1:1889", false)
+	if err != nil {
+		t.Fatalf("parseConnectTarget returned error: %v", err)
+	}
+	if _, err := resolveTokenForConnectTarget(target); err == nil {
+		t.Fatal("expected unmatched local port to require an explicit token")
 	}
 }
 
@@ -349,16 +366,13 @@ func TestResolveTokenForConnectTarget_UsesActiveTokenForMatchingLocalPort(t *tes
 		t.Fatalf("Failed to ensure dirs: %v", err)
 	}
 
-	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", config.GetRuntimeDir())
-	t.Setenv("SURGE_SYSTEM_STATE_DIR", config.GetStateDir())
-
 	origToken := globalToken
 	globalToken = ""
-	origCheck := checkSystemServiceRunning
-	checkSystemServiceRunning = func() bool { return false }
+	origCheck := checkUserServiceRunning
+	checkUserServiceRunning = func() bool { return false }
 	t.Cleanup(func() {
 		globalToken = origToken
-		checkSystemServiceRunning = origCheck
+		checkUserServiceRunning = origCheck
 	})
 	if err := writeTokenToFile(filepath.Join(config.GetStateDir(), "token"), "connect-token"); err != nil {
 		t.Fatalf("write token failed: %v", err)
@@ -696,13 +710,13 @@ func TestRootCmd_InvalidURL(t *testing.T) {
 	}
 }
 
-func TestRootCmd_FailsIfSystemServiceRunning(t *testing.T) {
+func TestRootCmd_FailsIfUserServiceRunning(t *testing.T) {
 	setupIsolatedCmdState(t)
 
-	// Simulate system service running
-	origCheck := checkSystemServiceRunning
-	checkSystemServiceRunning = func() bool { return true }
-	t.Cleanup(func() { checkSystemServiceRunning = origCheck })
+	// Simulate user service running
+	origCheck := checkUserServiceRunning
+	checkUserServiceRunning = func() bool { return true }
+	t.Cleanup(func() { checkUserServiceRunning = origCheck })
 
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
@@ -711,21 +725,21 @@ func TestRootCmd_FailsIfSystemServiceRunning(t *testing.T) {
 
 	err := rootCmd.Execute()
 	if err == nil {
-		t.Fatal("expected error when system service is running, got nil")
+		t.Fatal("expected error when user service is running, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "system service is already running") {
-		t.Errorf("expected error to mention system service, got %v", err)
+	if !strings.Contains(err.Error(), "user service is already running") {
+		t.Errorf("expected error to mention user service, got %v", err)
 	}
 }
 
-func TestServerStartCmd_FailsIfSystemServiceRunning(t *testing.T) {
+func TestServerStartCmd_FailsIfUserServiceRunning(t *testing.T) {
 	setupIsolatedCmdState(t)
 
-	// Simulate system service running
-	origCheck := checkSystemServiceRunning
-	checkSystemServiceRunning = func() bool { return true }
-	t.Cleanup(func() { checkSystemServiceRunning = origCheck })
+	// Simulate user service running
+	origCheck := checkUserServiceRunning
+	checkUserServiceRunning = func() bool { return true }
+	t.Cleanup(func() { checkUserServiceRunning = origCheck })
 
 	buf := new(bytes.Buffer)
 	rootCmd.SetOut(buf)
@@ -734,11 +748,11 @@ func TestServerStartCmd_FailsIfSystemServiceRunning(t *testing.T) {
 
 	err := rootCmd.Execute()
 	if err == nil {
-		t.Fatal("expected error when system service is running, got nil")
+		t.Fatal("expected error when user service is running, got nil")
 	}
 
-	if !strings.Contains(err.Error(), "system service is already running") {
-		t.Errorf("expected error to mention system service, got %v", err)
+	if !strings.Contains(err.Error(), "user service is already running") {
+		t.Errorf("expected error to mention user service, got %v", err)
 	}
 }
 
@@ -802,8 +816,6 @@ func TestReadRootRunOptions_TracksExplicitPort(t *testing.T) {
 func TestMaybeStartRootHTTPServer_NoServerSkipsPortFile(t *testing.T) {
 	tmpDir := t.TempDir()
 	t.Setenv("XDG_RUNTIME_DIR", tmpDir)
-	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", tmpDir)
-	t.Setenv("SURGE_SYSTEM_STATE_DIR", tmpDir)
 	t.Setenv("XDG_CONFIG_HOME", tmpDir)
 	t.Setenv("APPDATA", tmpDir)
 	if err := config.EnsureDirs(); err != nil {
@@ -1320,9 +1332,6 @@ func TestPortFileLifecycle(t *testing.T) {
 	if err := config.EnsureDirs(); err != nil {
 		t.Fatalf("Failed to ensure dirs: %v", err)
 	}
-
-	t.Setenv("SURGE_SYSTEM_RUNTIME_DIR", config.GetRuntimeDir())
-	t.Setenv("SURGE_SYSTEM_STATE_DIR", config.GetStateDir())
 
 	// Clean up first
 	removeActivePort()

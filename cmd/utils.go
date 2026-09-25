@@ -36,7 +36,7 @@ func readPortFile(runtimeDir string) int {
 	return port
 }
 
-var checkSystemServiceRunning = isSystemServiceRunning
+var checkUserServiceRunning = isUserServiceRunning
 
 func readPIDFile(runtimeDir string) int {
 	pidFile := filepath.Join(runtimeDir, "pid")
@@ -58,18 +58,10 @@ func readStateToken(stateDir string) string {
 }
 
 func activeConnectionCandidates() []activeConnectionDetails {
-	userCand := activeConnectionDetails{
+	return []activeConnectionDetails{{
 		runtimeDir: config.GetRuntimeDir(),
 		stateDir:   config.GetStateDir(),
-	}
-	sysCand := activeConnectionDetails{
-		runtimeDir: config.GetSystemRuntimeDir(),
-		stateDir:   config.GetSystemStateDir(),
-	}
-	if checkSystemServiceRunning() {
-		return []activeConnectionDetails{sysCand, userCand}
-	}
-	return []activeConnectionDetails{userCand, sysCand}
+	}}
 }
 
 func getActiveConnectionDetails() (activeConnectionDetails, bool) {
@@ -79,17 +71,12 @@ func getActiveConnectionDetails() (activeConnectionDetails, bool) {
 			continue
 		}
 		candidate.port = port
-		candidate.token = readStateToken(candidate.runtimeDir)
-		if candidate.token == "" {
-			candidate.token = readStateToken(candidate.stateDir)
-		}
+		candidate.token = readStateToken(candidate.stateDir)
 		return candidate, true
 	}
 	return activeConnectionDetails{}, false
 }
 
-// readActivePort reads the active port and keeps legacy callers on the same
-// user-first/system-fallback resolution path as token resolution.
 func readActivePort() int {
 	details, ok := getActiveConnectionDetails()
 	if !ok {
@@ -211,7 +198,7 @@ func resolveLocalTokenForDetails(details activeConnectionDetails) (string, error
 		return token, nil
 	}
 	if details.port != 0 {
-		return "", fmt.Errorf("local server is running on port %d but its token could not be read. Try connecting with elevated privileges", details.port)
+		return "", fmt.Errorf("local server is running on port %d but its token could not be read from %s", details.port, config.GetStateDir())
 	}
 	return ensureAuthToken(), nil
 }
