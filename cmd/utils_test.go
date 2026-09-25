@@ -3,11 +3,64 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
 )
+
+func TestParseAndNormalizeURLArg(t *testing.T) {
+	tests := []struct {
+		name        string
+		arg         string
+		wantURL     string
+		wantMirrors []string
+		wantErr     bool
+	}{
+		{
+			name:        "normalizes bare primary URL",
+			arg:         "example.com/file.zip",
+			wantURL:     "https://example.com/file.zip",
+			wantMirrors: []string{"https://example.com/file.zip"},
+		},
+		{
+			name:        "normalizes primary URL with mirrors",
+			arg:         "example.com/file.zip,https://mirror.example.com/file.zip",
+			wantURL:     "https://example.com/file.zip",
+			wantMirrors: []string{"https://example.com/file.zip", "https://mirror.example.com/file.zip"},
+		},
+		{name: "rejects unsupported scheme", arg: "ftp://example.com/file.zip", wantErr: true},
+		{name: "rejects unsupported mirror scheme", arg: "https://example.com/file.zip,FTP://mirror.example.com/file.zip", wantErr: true},
+		{
+			name:        "preserves commas in query values",
+			arg:         "https://archive.org/compress/item/formats=PNG,ITEM TILE,LOG,HTTPS://mirror.example.com/item.zip",
+			wantURL:     "https://archive.org/compress/item/formats=PNG,ITEM TILE,LOG",
+			wantMirrors: []string{"https://archive.org/compress/item/formats=PNG,ITEM TILE,LOG", "HTTPS://mirror.example.com/item.zip"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			url, mirrors, err := parseAndNormalizeURLArg(tt.arg)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatal("expected an error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("parseAndNormalizeURLArg() error = %v", err)
+			}
+			if url != tt.wantURL {
+				t.Fatalf("URL = %q, want %q", url, tt.wantURL)
+			}
+			if !reflect.DeepEqual(mirrors, tt.wantMirrors) {
+				t.Fatalf("mirrors = %v, want %v", mirrors, tt.wantMirrors)
+			}
+		})
+	}
+}
 
 func TestResolveClientOutputPath(t *testing.T) {
 	// Save original env vars to restore later

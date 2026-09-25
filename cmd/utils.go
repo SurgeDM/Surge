@@ -125,14 +125,25 @@ func ParseURLArg(arg string) (string, []string) {
 }
 
 // startsNewMirror reports whether a comma-separated segment begins a new
-// mirror rather than continuing the previous URL. Only http(s) URLs are
-// downloadable, so a segment is a mirror boundary only when it starts with the
-// http:// or https:// prefix. Matching the literal prefix (rather than a
-// non-empty url.Parse scheme) keeps bare-scheme query values like "http:" glued
-// to the previous URL, and matches how the rest of the CLI recognizes URLs
-// (internal/clipboard/validator.go).
+// mirror rather than continuing the previous URL. A valid scheme:// prefix is
+// a boundary even for unsupported schemes, so validation can reject those
+// mirrors instead of treating them as part of the preceding URL. Bare-scheme
+// query values like "http:" remain attached to the preceding URL.
 func startsNewMirror(segment string) bool {
-	return strings.HasPrefix(segment, "http://") || strings.HasPrefix(segment, "https://")
+	schemeEnd := strings.Index(segment, "://")
+	if schemeEnd <= 0 {
+		return false
+	}
+
+	for i, r := range segment[:schemeEnd] {
+		isLetter := (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z')
+		isSchemeCharacter := isLetter ||
+			(i > 0 && ((r >= '0' && r <= '9') || r == '+' || r == '-' || r == '.'))
+		if !isSchemeCharacter {
+			return false
+		}
+	}
+	return true
 }
 
 // ValidateAndNormalizeURL ensures a provided download string has a valid URL scheme
@@ -157,6 +168,31 @@ func ValidateAndNormalizeURL(rawURL string) (string, error) {
 	}
 
 	return rawURL, nil
+}
+
+// parseAndNormalizeURLArg parses a URL argument and normalizes its primary URL
+// and mirrors before they are sent to the server.
+func parseAndNormalizeURLArg(arg string) (string, []string, error) {
+	primary, mirrors := ParseURLArg(arg)
+	if primary == "" {
+		return "", nil, nil
+	}
+
+	normalizedPrimary, err := ValidateAndNormalizeURL(primary)
+	if err != nil {
+		return "", nil, fmt.Errorf("invalid URL %q: %w", primary, err)
+	}
+
+	normalizedMirrors := make([]string, len(mirrors))
+	for i, mirror := range mirrors {
+		normalizedMirror, err := ValidateAndNormalizeURL(mirror)
+		if err != nil {
+			return "", nil, fmt.Errorf("invalid mirror %q: %w", mirror, err)
+		}
+		normalizedMirrors[i] = normalizedMirror
+	}
+
+	return normalizedPrimary, normalizedMirrors, nil
 }
 
 func resolveLocalToken() string {
@@ -256,10 +292,12 @@ func doAPIRequest(method string, baseURL string, token string, path string, body
 }
 
 func sendToServer(url string, mirrors []string, outPath string, baseURL string, token string) error {
-	return sendToServerWithApproval(url, mirrors, outPath, baseURL, token, true)
+	_, err := sendToServerWithApproval(url, mirrors, outPath, baseURL, token, true)
+	return err
 }
 
-func sendToServerWithApproval(url string, mirrors []string, outPath string, baseURL string, token string, skipApproval bool) error {
+// sendToServerWithApproval reports whether the request is awaiting TUI approval.
+func sendToServerWithApproval(url string, mirrors []string, outPath string, baseURL string, token string, skipApproval bool) (pendingApproval bool, err error) {
 	reqBody := DownloadRequest{
 		URL:          url,
 		Mirrors:      mirrors,
@@ -268,12 +306,12 @@ func sendToServerWithApproval(url string, mirrors []string, outPath string, base
 	}
 	jsonData, err := json.Marshal(reqBody)
 	if err != nil {
-		return fmt.Errorf("failed to marshal request: %w", err)
+		return false, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
 	resp, err := doAPIRequest(http.MethodPost, baseURL, token, "/download", bytes.NewBuffer(jsonData))
 	if err != nil {
-		return fmt.Errorf("failed to connect to server: %w", err)
+		return false, fmt.Errorf("failed to connect to server: %w", err)
 	}
 	defer func() {
 		if err := resp.Body.Close(); err != nil {
@@ -283,10 +321,10 @@ func sendToServerWithApproval(url string, mirrors []string, outPath string, base
 
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("server error: %s - %s", resp.Status, string(body))
+		return false, fmt.Errorf("server error: %s - %s", resp.Status, string(body))
 	}
 
-	return nil
+	return resp.StatusCode == http.StatusAccepted, nil
 }
 
 func sendBatchToServer(urls []string, outPath string, baseURL string, token string, skipApproval bool) error {
@@ -295,7 +333,10 @@ func sendBatchToServer(urls []string, outPath string, baseURL string, token stri
 		SkipApproval: skipApproval,
 	}
 	for _, arg := range urls {
-		url, mirrors := ParseURLArg(arg)
+		url, mirrors, err := parseAndNormalizeURLArg(arg)
+		if err != nil {
+			return err
+		}
 		if url == "" {
 			continue
 		}

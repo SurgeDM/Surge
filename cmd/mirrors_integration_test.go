@@ -47,7 +47,8 @@ func TestMirrors_CLI_Integration(t *testing.T) {
 	_, _ = fmt.Sscanf(portStr, "%d", &port)
 
 	// 2. Call processDownloads with a URL containing mirrors
-	primaryURL := "http://example.com/file.zip"
+	primaryURL := "example.com/file.zip"
+	normalizedPrimaryURL := "https://example.com/file.zip"
 	mirror1 := "http://mirror1.com/file.zip"
 	mirror2 := "http://mirror2.com/file.zip"
 
@@ -60,8 +61,8 @@ func TestMirrors_CLI_Integration(t *testing.T) {
 	// 3. Verify the server received the correct request
 	select {
 	case req := <-receivedRequest:
-		if req.URL != primaryURL {
-			t.Errorf("Expected URL %q, got %q", primaryURL, req.URL)
+		if req.URL != normalizedPrimaryURL {
+			t.Errorf("Expected URL %q, got %q", normalizedPrimaryURL, req.URL)
 		}
 
 		if len(req.Mirrors) != 3 {
@@ -69,7 +70,7 @@ func TestMirrors_CLI_Integration(t *testing.T) {
 		}
 
 		// Verify mirror contents
-		expectedMirrors := []string{primaryURL, mirror1, mirror2}
+		expectedMirrors := []string{normalizedPrimaryURL, mirror1, mirror2}
 		for i, m := range req.Mirrors {
 			if m != expectedMirrors[i] {
 				t.Errorf("Mirror[%d] mismatch: expected %q, got %q", i, expectedMirrors[i], m)
@@ -102,6 +103,12 @@ func TestParseURLArg_Unit(t *testing.T) {
 			input:           "http://a.com,http://b.com",
 			expectedURL:     "http://a.com",
 			expectedMirrors: []string{"http://a.com", "http://b.com"},
+		},
+		{
+			name:            "uppercase HTTP schemes start mirrors",
+			input:           "HTTPS://a.com,HTTP://b.com",
+			expectedURL:     "HTTPS://a.com",
+			expectedMirrors: []string{"HTTPS://a.com", "HTTP://b.com"},
 		},
 		{
 			name:            "URL with spaces",
