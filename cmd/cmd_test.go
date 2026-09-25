@@ -326,7 +326,7 @@ func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 		globalToken = origToken
 		checkSystemServiceRunning = origCheck
 	})
-	if err := writeTokenToFile(filepath.Join(config.GetStateDir(), "token"), "ipv6-loopback-token"); err != nil {
+	if err := writeTokenToFile(filepath.Join(resolveRuntimeDir(), "token"), "ipv6-loopback-token"); err != nil {
 		t.Fatalf("write token failed: %v", err)
 	}
 	saveActivePort(1700)
