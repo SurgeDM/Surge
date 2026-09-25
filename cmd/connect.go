@@ -6,12 +6,10 @@ import (
 	"net"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui"
 	"github.com/spf13/cobra"
@@ -119,45 +117,13 @@ func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 		return token, nil
 	}
 
-	serverHost, _ := parseRemoteServerAddress(target.BaseURL)
-	if isLocalHost(serverHost) {
-		_, serverPort := parseRemoteServerAddress(target.BaseURL)
-		if details, ok := getActiveConnectionDetails(); ok && details.port == serverPort {
-			// Port file matched — use the token associated with that runtime dir,
-			// unless the system service is running and we matched a stale user
-			// port file (which would send the wrong token → 401).
-			if isElevated() || !checkSystemServiceRunning() || details.runtimeDir == config.GetSystemRuntimeDir() {
-				return resolveLocalTokenForDetails(details)
-			}
+	serverHost, serverPort := parseRemoteServerAddress(target.BaseURL)
+	if isLoopbackHost(serverHost) {
+		details, ok := getActiveConnectionDetails()
+		if !ok || details.port != serverPort {
+			return "", fmt.Errorf("local target %q does not match the discovered Surge daemon: use --token or set SURGE_TOKEN", target.BaseURL)
 		}
-
-		// No matching port file. Prioritize the privilege level of the daemon we are most likely talking to.
-		var firstChoice, secondChoice string
-		if !isElevated() && checkSystemServiceRunning() {
-			firstChoice = filepath.Join(config.GetSystemStateDir(), "token")
-			secondChoice = filepath.Join(config.GetStateDir(), "token")
-		} else {
-			firstChoice = resolveTokenPath()
-			if isElevated() {
-				secondChoice = filepath.Join(config.GetStateDir(), "token")
-			} else {
-				secondChoice = filepath.Join(config.GetSystemStateDir(), "token")
-			}
-		}
-
-		if tok, err := readTokenFromFile(firstChoice); err == nil && tok != "" {
-			return tok, nil
-		}
-
-		if !isElevated() && checkSystemServiceRunning() {
-			return "", fmt.Errorf("system service is running but its token could not be read. Try connecting with elevated privileges")
-		}
-
-		if tok, err := readTokenFromFile(secondChoice); err == nil && tok != "" {
-			return tok, nil
-		}
-
-		return ensureAuthToken(), nil
+		return resolveLocalTokenForDetails(details)
 	}
 	return "", fmt.Errorf("remote target %q requires authentication: use --token or set SURGE_TOKEN", target.BaseURL)
 }
@@ -169,9 +135,10 @@ func parseConnectTarget(target string, allowInsecureHTTP bool) (connectTarget, e
 	}
 
 	var (
-		scheme string
-		host   string
-		port   string
+		scheme  string
+		host    string
+		port    string
+		baseURL string
 	)
 
 	if strings.Contains(target, "://") {
@@ -188,10 +155,16 @@ func parseConnectTarget(target string, allowInsecureHTTP bool) (connectTarget, e
 		if u.User != nil {
 			return connectTarget{}, fmt.Errorf("invalid target %q: user info is not supported", target)
 		}
+		if u.RawQuery != "" || u.ForceQuery || u.Fragment != "" {
+			return connectTarget{}, fmt.Errorf("invalid target %q: query strings and fragments are not supported", target)
+		}
 
 		scheme = u.Scheme
 		host = u.Hostname()
 		port = u.Port()
+		u.Path = strings.TrimRight(u.Path, "/")
+		u.RawPath = strings.TrimRight(u.RawPath, "/")
+		baseURL = u.String()
 	} else {
 		var err error
 		host, port, err = net.SplitHostPort(target)
@@ -213,17 +186,18 @@ func parseConnectTarget(target string, allowInsecureHTTP bool) (connectTarget, e
 
 	if scheme == "" {
 		scheme = "https"
-		if isLoopbackHost(host) || isPrivateIPHost(host) {
+		if isLoopbackHost(host) {
 			scheme = "http"
 		}
+		baseURL = fmt.Sprintf("%s://%s", scheme, formatConnectURLHost(host, port))
 	}
 
-	if scheme == "http" && !allowInsecureHTTP && !isLoopbackHost(host) && !isPrivateIPHost(host) {
+	if scheme == "http" && !allowInsecureHTTP && !isLoopbackHost(host) {
 		return connectTarget{}, fmt.Errorf("refusing insecure HTTP for non-loopback target. Use https:// or --insecure-http")
 	}
 
 	return connectTarget{
-		BaseURL: fmt.Sprintf("%s://%s", scheme, formatConnectURLHost(host, port)),
+		BaseURL: baseURL,
 	}, nil
 }
 
@@ -286,42 +260,4 @@ func isLoopbackHost(host string) bool {
 		return false
 	}
 	return ip.IsLoopback()
-}
-
-func isPrivateIPHost(host string) bool {
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsPrivate()
-}
-
-func isLocalHost(host string) bool {
-	if isLoopbackHost(host) {
-		return true
-	}
-	target := net.ParseIP(host)
-	if target == nil {
-		return false
-	}
-	ifaces, err := net.Interfaces()
-	if err != nil {
-		return false
-	}
-	for _, iface := range ifaces {
-		addrs, err := iface.Addrs()
-		if err != nil {
-			continue
-		}
-		for _, addr := range addrs {
-			switch v := addr.(type) {
-			case *net.IPNet:
-				if v.IP.Equal(target) {
-					return true
-				}
-			case *net.IPAddr:
-				if v.IP.Equal(target) {
-					return true
-				}
-			}
-		}
-	}
-	return false
 }

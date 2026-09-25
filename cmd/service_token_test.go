@@ -194,12 +194,12 @@ func TestReadSystemServiceToken_ErrorWhenMissing(t *testing.T) {
 }
 
 // ---------------------------------------------------------------------------
-// resolveTokenForConnectTarget — system-token fallback (issue #530)
+// resolveTokenForConnectTarget — trusted local daemon discovery
 // ---------------------------------------------------------------------------
 
-// When no user token / active port match exists but a system token file does,
-// resolveTokenForConnectTarget should return the system token for localhost.
-func TestResolveTokenForConnectTarget_FallsBackToSystemToken(t *testing.T) {
+// A token file alone is not enough to trust a local target. The target port
+// must match the active daemon before connect sends its credential.
+func TestResolveTokenForConnectTarget_RejectsUnmatchedSystemToken(t *testing.T) {
 	if isElevated() {
 		t.Skip("skipping: elevated — system and user token paths are the same")
 	}
@@ -215,10 +215,9 @@ func TestResolveTokenForConnectTarget_FallsBackToSystemToken(t *testing.T) {
 	target, err := parseConnectTarget("127.0.0.1:1700", false)
 	require.NoError(t, err)
 
-	got, err := resolveTokenForConnectTarget(target)
-	require.NoError(t, err)
-	assert.Equal(t, sysToken, got,
-		"resolveTokenForConnectTarget should fall back to the system token for localhost when no user token matches")
+	_, err = resolveTokenForConnectTarget(target)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not match the discovered Surge daemon")
 }
 
 // User token in active connection details beats system token.
@@ -432,9 +431,9 @@ func TestTokenCmd_ErrorsIfSystemServiceRunningButUnreadable(t *testing.T) {
 	assert.Contains(t, err.Error(), "system service is running but its token could not be read")
 }
 
-// When no port file matches, surge connect must prefer the system service token
-// over a stale user-level token to avoid 401s against the system daemon.
-func TestResolveTokenForConnectTarget_SystemTokenBeatsStaleUserToken(t *testing.T) {
+// When no port file matches, connect must not send either persisted token to an
+// unrelated process listening on the requested loopback port.
+func TestResolveTokenForConnectTarget_RejectsPersistedTokensWithoutPortMatch(t *testing.T) {
 	if isElevated() {
 		t.Skip("skipping: elevated — system and user token paths are the same")
 	}
@@ -456,10 +455,9 @@ func TestResolveTokenForConnectTarget_SystemTokenBeatsStaleUserToken(t *testing.
 	target, err := parseConnectTarget("127.0.0.1:1700", false)
 	require.NoError(t, err)
 
-	got, err := resolveTokenForConnectTarget(target)
-	require.NoError(t, err)
-	assert.Equal(t, sysToken, got,
-		"system token must win over stale user token in the no-port-file fallback path")
+	_, err = resolveTokenForConnectTarget(target)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "does not match the discovered Surge daemon")
 }
 
 func TestResolveTokenForConnectTarget_SystemTokenUnreadable(t *testing.T) {
@@ -483,7 +481,7 @@ func TestResolveTokenForConnectTarget_SystemTokenUnreadable(t *testing.T) {
 
 	_, err = resolveTokenForConnectTarget(target)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "system service is running but its token could not be read")
+	assert.Contains(t, err.Error(), "does not match the discovered Surge daemon")
 }
 
 func TestResolveTokenForConnectTarget_SystemTokenBeatsStaleUserPort(t *testing.T) {
