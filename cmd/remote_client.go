@@ -30,9 +30,10 @@ func currentRemoteClientConfig() remoteClientConfig {
 		AllowInsecureHTTP: globalInsecureHTTP,
 		ConnectTimeout:    defaultRemoteConnectTimeout,
 		HTTPOptions: service.HTTPClientOptions{
-			Timeout:            defaultRemoteAPIRequestTimeout,
-			InsecureSkipVerify: globalInsecureTLS,
-			CAFile:             strings.TrimSpace(globalTLSCAFile),
+			Timeout:               defaultRemoteAPIRequestTimeout,
+			ResponseHeaderTimeout: defaultRemoteConnectTimeout,
+			InsecureSkipVerify:    globalInsecureTLS,
+			CAFile:                strings.TrimSpace(globalTLSCAFile),
 		},
 	}
 }

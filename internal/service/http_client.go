@@ -12,9 +12,10 @@ import (
 )
 
 type HTTPClientOptions struct {
-	Timeout            time.Duration
-	InsecureSkipVerify bool
-	CAFile             string
+	Timeout               time.Duration
+	ResponseHeaderTimeout time.Duration
+	InsecureSkipVerify    bool
+	CAFile                string
 }
 
 func NewHTTPClient(opts HTTPClientOptions) (*http.Client, error) {
@@ -54,6 +55,7 @@ func NewHTTPTransport(opts HTTPClientOptions) (*http.Transport, error) {
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: opts.ResponseHeaderTimeout,
 		ExpectContinueTimeout: 1 * time.Second,
 		TLSClientConfig:       tlsConfig,
 	}, nil

@@ -1,13 +1,15 @@
 package service
 
 import (
-	_ "github.com/SurgeDM/Surge/internal/types"
-
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/SurgeDM/Surge/internal/types"
 )
 
 func TestRemoteDownloadService_SetRateLimit_ProxiesRequest(t *testing.T) {
@@ -129,6 +131,104 @@ func TestRemoteDownloadService_ListContextHonorsDeadline(t *testing.T) {
 	defer cancel()
 	if _, err := svc.ListContext(ctx); err == nil {
 		t.Fatal("expected ListContext to fail when its deadline expires")
+	}
+}
+
+func TestRemoteDownloadService_StreamEventsRejectsFailedHandshake(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "invalid token", http.StatusUnauthorized)
+	}))
+	defer ts.Close()
+
+	svc, err := NewRemoteDownloadService(ts.URL, "token", HTTPClientOptions{})
+	if err != nil {
+		t.Fatalf("NewRemoteDownloadService failed: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Shutdown() })
+
+	stream, cleanup, err := svc.StreamEvents(context.Background())
+	if err == nil {
+		t.Fatal("expected failed SSE handshake to be returned")
+	}
+	if !strings.Contains(err.Error(), "401") || !strings.Contains(err.Error(), "invalid token") {
+		t.Fatalf("unexpected handshake error: %v", err)
+	}
+	if stream != nil || cleanup != nil {
+		t.Fatal("failed handshake returned live stream resources")
+	}
+}
+
+func TestRemoteDownloadService_StreamEventsRejectsNonEventStreamResponse(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"status":"ok"}`))
+	}))
+	defer ts.Close()
+
+	svc, err := NewRemoteDownloadService(ts.URL, "token", HTTPClientOptions{})
+	if err != nil {
+		t.Fatalf("NewRemoteDownloadService failed: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Shutdown() })
+
+	_, _, err = svc.StreamEvents(context.Background())
+	if err == nil || !strings.Contains(err.Error(), "unexpected content type") {
+		t.Fatalf("expected content-type handshake error, got %v", err)
+	}
+}
+
+func TestRemoteDownloadService_StreamEventsReportsReconnect(t *testing.T) {
+	var requests atomic.Int32
+	secondConnected := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		request := requests.Add(1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		_, _ = w.Write([]byte("event: started\ndata: {\"download_id\":\"stream-event\"}\n\n"))
+		if f, ok := w.(http.Flusher); ok {
+			f.Flush()
+		}
+		if request == 1 {
+			return
+		}
+		close(secondConnected)
+		<-r.Context().Done()
+	}))
+	defer ts.Close()
+
+	svc, err := NewRemoteDownloadService(ts.URL, "token", HTTPClientOptions{})
+	if err != nil {
+		t.Fatalf("NewRemoteDownloadService failed: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Shutdown() })
+
+	stream, cleanup, err := svc.StreamEvents(context.Background())
+	if err != nil {
+		t.Fatalf("StreamEvents failed: %v", err)
+	}
+	defer cleanup()
+
+	var sawDisconnect, sawReconnect bool
+	deadline := time.After(4 * time.Second)
+	for !sawDisconnect || !sawReconnect {
+		select {
+		case msg := <-stream:
+			if msg.Type != types.EventSystem {
+				continue
+			}
+			sawDisconnect = sawDisconnect || strings.Contains(msg.Message, "disconnected")
+			sawReconnect = sawReconnect || strings.Contains(msg.Message, "reconnected")
+		case <-deadline:
+			t.Fatalf("timed out waiting for reconnect status; disconnect=%v reconnect=%v", sawDisconnect, sawReconnect)
+		}
+	}
+	select {
+	case <-secondConnected:
+	case <-time.After(time.Second):
+		t.Fatal("second SSE connection was not established")
 	}
 }
 

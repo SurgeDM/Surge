@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
@@ -329,10 +330,15 @@ func (s *RemoteDownloadService) StreamEvents(ctx context.Context) (<-chan types.
 		ctx = context.Background()
 	}
 	streamCtx, cancel := mergeContexts(s.ctx, ctx)
+	resp, err := s.openSSE(streamCtx)
+	if err != nil {
+		cancel()
+		return nil, nil, err
+	}
 	ch := make(chan types.DownloadEvent, 100)
 	go func() {
 		defer cancel()
-		s.streamWithReconnect(streamCtx, ch)
+		s.streamWithReconnect(streamCtx, ch, resp)
 	}()
 	return ch, cancel, nil
 }
@@ -343,30 +349,33 @@ func (s *RemoteDownloadService) Publish(msg types.DownloadEvent) error {
 	return fmt.Errorf("publish not supported for remote service")
 }
 
-func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan types.DownloadEvent) {
+func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan types.DownloadEvent, resp *http.Response) {
 	defer close(ch)
-	backoff := 1 * time.Second
 	for {
-		select {
-		case <-ctx.Done():
+		err := s.consumeSSE(ch, resp)
+		if ctx.Err() != nil {
 			return
-		default:
 		}
 
-		err := s.connectSSE(ctx, ch)
-		if err == nil {
-			return // Clean shutdown (e.g. server closed stream cleanly or context canceled during request)
-		}
-		// Check context again before sleeping
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(backoff):
-			// Continue
-		}
+		sendStreamStatus(ch, fmt.Sprintf("Remote event stream disconnected: %v; reconnecting", err))
+		backoff := time.Second
+		for {
+			timer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
 
-		if backoff < 30*time.Second {
-			backoff *= 2
+			resp, err = s.openSSE(ctx)
+			if err == nil {
+				sendStreamStatus(ch, "Remote event stream reconnected")
+				break
+			}
+			if backoff < 30*time.Second {
+				backoff *= 2
+			}
 		}
 	}
 }
@@ -388,10 +397,10 @@ func mergeContexts(contexts ...context.Context) (context.Context, context.Cancel
 	}
 }
 
-func (s *RemoteDownloadService) connectSSE(ctx context.Context, ch chan types.DownloadEvent) error {
+func (s *RemoteDownloadService) openSSE(ctx context.Context) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", s.BaseURL+"/events", nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+s.Token)
@@ -401,13 +410,29 @@ func (s *RemoteDownloadService) connectSSE(ctx context.Context, ch chan types.Do
 
 	resp, err := s.SSEClient.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to connect to event stream: %s", resp.Status)
+	if resp.StatusCode != http.StatusOK {
+		defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, utils.KiB))
+		message := strings.TrimSpace(string(body))
+		detail := resp.Status
+		if message != "" {
+			detail += ": " + message
+		}
+		return nil, fmt.Errorf("failed to connect to event stream: %s", detail)
 	}
+	contentType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil || contentType != "text/event-stream" {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("failed to connect to event stream: unexpected content type %q", resp.Header.Get("Content-Type"))
+	}
+	return resp, nil
+}
+
+func (s *RemoteDownloadService) consumeSSE(ch chan types.DownloadEvent, resp *http.Response) error {
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
 	reader := bufio.NewReader(resp.Body)
 	for {
@@ -456,6 +481,13 @@ func (s *RemoteDownloadService) connectSSE(ctx context.Context, ch chan types.Do
 		default:
 			// Drop message if channel is full to prevent blocking the reader
 		}
+	}
+}
+
+func sendStreamStatus(ch chan types.DownloadEvent, message string) {
+	select {
+	case ch <- types.DownloadEvent{Type: types.EventSystem, Message: message}:
+	default:
 	}
 }
 
