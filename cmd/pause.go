@@ -11,7 +11,7 @@ import (
 )
 
 var pauseCmd = &cobra.Command{
-	Use:   "pause <ID>",
+	Use:   "pause <ID> | --all",
 	Short: "Pause a download",
 	Long:  `Pause a download by its ID. Use --all to pause all downloads.`,
 	Args:  cobra.MaximumNArgs(1),
