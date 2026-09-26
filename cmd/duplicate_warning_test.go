@@ -28,6 +28,8 @@ func TestDuplicateCheckIncludesPersistedDownloads(t *testing.T) {
 		exists bool
 	}{
 		{duplicateURL, true},
+		{duplicateURL + ",https://mirror.example.com/finished.zip", true},
+		{"https://example.com/new.zip," + duplicateURL, false},
 		{"https://example.com/new.zip", false},
 	} {
 		body, _ := json.Marshal(map[string]string{"url": tc.url})

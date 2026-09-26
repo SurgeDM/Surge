@@ -129,7 +129,8 @@ func handleDuplicateCheck(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "url is required", http.StatusBadRequest)
 		return
 	}
-	exists, _ := resolveDuplicateState(url)
+	primaryURL, _ := normalizeDownloadTargets(url, nil)
+	exists, _ := resolveDuplicateState(primaryURL)
 	writeJSONResponse(w, http.StatusOK, map[string]bool{"exists": exists})
 }
 
