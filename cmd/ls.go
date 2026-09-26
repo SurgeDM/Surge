@@ -242,18 +242,21 @@ func statusFromRecord(record types.DownloadRecord) types.DownloadStatus {
 	}
 
 	return types.DownloadStatus{
-		ID:         record.ID,
-		URL:        record.URL,
-		Filename:   record.Filename,
-		DestPath:   record.DestPath,
-		Status:     record.Status,
-		Error:      record.Error,
-		TotalSize:  record.TotalSize,
-		Downloaded: record.Downloaded,
-		Progress:   progress,
-		Speed:      record.AvgSpeed,
-		TimeTaken:  record.TimeTaken,
-		AvgSpeed:   record.AvgSpeed,
+		ID:           record.ID,
+		URL:          record.URL,
+		Filename:     record.Filename,
+		DestPath:     record.DestPath,
+		Status:       record.Status,
+		Error:        record.Error,
+		TotalSize:    record.TotalSize,
+		Downloaded:   record.Downloaded,
+		Progress:     progress,
+		Speed:        record.AvgSpeed,
+		AddedAt:      record.CreatedAt,
+		TimeTaken:    record.TimeTaken,
+		AvgSpeed:     record.AvgSpeed,
+		RateLimit:    record.RateLimit,
+		RateLimitSet: record.RateLimitSet,
 	}
 }
 

@@ -752,6 +752,32 @@ func TestListAllDownloadsDoesNotRewriteMasterState(t *testing.T) {
 	}
 }
 
+func TestListAllDownloadsUnsupportedVersionPreservesMasterState(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	if err := atomicWrite(getMasterPath(), MasterState{Version: 1}); err != nil {
+		t.Fatalf("writing unsupported master state failed: %v", err)
+	}
+
+	downloads, err := ListAllDownloads()
+	if err != nil {
+		t.Fatalf("ListAllDownloads failed: %v", err)
+	}
+	if len(downloads) != 0 {
+		t.Fatalf("ListAllDownloads returned %d items, want 0", len(downloads))
+	}
+
+	var persisted MasterState
+	if err := loadGob(getMasterPath(), &persisted); err != nil {
+		t.Fatalf("listing removed or changed unsupported master state: %v", err)
+	}
+	if persisted.Version != 1 {
+		t.Errorf("persisted master version = %d, want 1", persisted.Version)
+	}
+}
+
 func TestListAllDownloads_Empty(t *testing.T) {
 	tmpDir := setupTestDB(t)
 	defer func() { _ = os.RemoveAll(tmpDir) }()

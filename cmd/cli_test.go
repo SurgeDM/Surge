@@ -771,22 +771,25 @@ func TestPrintDownloads_JSONEmpty(t *testing.T) {
 
 func TestStatusFromRecordPreservesOfflineDetails(t *testing.T) {
 	record := types.DownloadRecord{
-		ID:         "completed-without-size",
-		URL:        "https://example.com/archive.zip",
-		Filename:   "archive.zip",
-		DestPath:   "/downloads/archive.zip",
-		Status:     "completed",
-		Downloaded: 1024,
-		Error:      "previous failure",
-		TimeTaken:  12,
-		AvgSpeed:   85.5,
+		ID:           "completed-without-size",
+		URL:          "https://example.com/archive.zip",
+		Filename:     "archive.zip",
+		DestPath:     "/downloads/archive.zip",
+		Status:       "completed",
+		Downloaded:   1024,
+		Error:        "previous failure",
+		CreatedAt:    1234567890,
+		TimeTaken:    12,
+		AvgSpeed:     85.5,
+		RateLimit:    1024,
+		RateLimitSet: true,
 	}
 
 	status := statusFromRecord(record)
 	if status.Progress != 100 {
 		t.Errorf("completed download without a known size has progress %v, want 100", status.Progress)
 	}
-	if status.URL != record.URL || status.DestPath != record.DestPath || status.Error != record.Error || status.TimeTaken != record.TimeTaken || status.AvgSpeed != record.AvgSpeed {
+	if status.URL != record.URL || status.DestPath != record.DestPath || status.Error != record.Error || status.AddedAt != record.CreatedAt || status.TimeTaken != record.TimeTaken || status.AvgSpeed != record.AvgSpeed || status.RateLimit != record.RateLimit || status.RateLimitSet != record.RateLimitSet {
 		t.Errorf("statusFromRecord lost offline details: %+v", status)
 	}
 

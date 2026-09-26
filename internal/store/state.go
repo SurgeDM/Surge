@@ -519,6 +519,14 @@ func AddToMasterList(entry types.DownloadRecord) error {
 }
 
 func loadMasterListUnlocked() (*types.MasterList, error) {
+	return loadMasterListWithUnsupportedVersionCleanupUnlocked(true)
+}
+
+func loadMasterListReadOnlyUnlocked() (*types.MasterList, error) {
+	return loadMasterListWithUnsupportedVersionCleanupUnlocked(false)
+}
+
+func loadMasterListWithUnsupportedVersionCleanupUnlocked(cleanupUnsupported bool) (*types.MasterList, error) {
 	if baseDir == "" {
 		return &types.MasterList{Downloads: []types.DownloadRecord{}}, nil
 	}
@@ -530,8 +538,12 @@ func loadMasterListUnlocked() (*types.MasterList, error) {
 		return nil, err
 	}
 	if ms.Version != 2 {
-		utils.Debug("Master list has unsupported version %d (expected 2), deleting to start fresh", ms.Version)
-		_ = os.Remove(getMasterPath())
+		if cleanupUnsupported {
+			utils.Debug("Master list has unsupported version %d (expected 2), deleting to start fresh", ms.Version)
+			_ = os.Remove(getMasterPath())
+		} else {
+			utils.Debug("Master list has unsupported version %d (expected 2), leaving it untouched during read-only access", ms.Version)
+		}
 		return &types.MasterList{Downloads: []types.DownloadRecord{}}, nil
 	}
 	for index := range ms.Downloads {
@@ -696,7 +708,7 @@ func ListAllDownloads() ([]types.DownloadRecord, error) {
 	masterMu.RLock()
 	defer masterMu.RUnlock()
 
-	list, err := loadMasterListUnlocked()
+	list, err := loadMasterListReadOnlyUnlocked()
 	if err != nil {
 		return nil, err
 	}
