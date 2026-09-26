@@ -559,6 +559,53 @@ func TestActionCommandsRunE_ReturnNoServerErrors(t *testing.T) {
 	}
 }
 
+func TestPauseAllDownloads(t *testing.T) {
+	setupIsolatedCmdState(t)
+	resetCommandConnectionState(t)
+
+	statuses := []types.DownloadStatus{
+		{ID: "queued-id", Status: "queued"},
+		{ID: "active-id", Status: "downloading"},
+		{ID: "complete-id", Status: "completed"},
+	}
+	pausedIDs := make(map[string]bool)
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/list":
+			if r.Method != http.MethodGet {
+				t.Fatalf("list method = %s, want GET", r.Method)
+			}
+			_ = json.NewEncoder(w).Encode(statuses)
+		case "/pause":
+			if r.Method != http.MethodPost {
+				t.Fatalf("pause method = %s, want POST", r.Method)
+			}
+			pausedIDs[r.URL.Query().Get("id")] = true
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	_, portStr, _ := net.SplitHostPort(server.Listener.Addr().String())
+	var port int
+	_, _ = fmt.Sscanf(portStr, "%d", &port)
+	saveActivePort(port)
+	t.Cleanup(removeActivePort)
+
+	origToken := globalToken
+	globalToken = "test-token"
+	t.Cleanup(func() { globalToken = origToken })
+
+	if err := pauseAllDownloads(); err != nil {
+		t.Fatalf("pauseAllDownloads() error = %v", err)
+	}
+	if !pausedIDs["active-id"] || !pausedIDs["queued-id"] || pausedIDs["complete-id"] {
+		t.Fatalf("paused IDs = %#v, want only active-id and queued-id", pausedIDs)
+	}
+}
+
 func TestConnectCmd_HostSourcesBypassLocalAutodetect(t *testing.T) {
 	tests := []struct {
 		name  string
