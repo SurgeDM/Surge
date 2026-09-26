@@ -45,5 +45,10 @@ func newRemoteDownloadService(baseURL, token string) (*service.RemoteDownloadSer
 
 func newRemoteAPIHTTPClient() (*http.Client, error) {
 	cfg := currentRemoteClientConfig()
-	return service.NewHTTPClient(cfg.HTTPOptions)
+	client, err := service.NewHTTPClient(cfg.HTTPOptions)
+	if err != nil {
+		return nil, err
+	}
+	client.CheckRedirect = service.SameOriginRedirectPolicy
+	return client, nil
 }

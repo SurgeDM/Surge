@@ -37,6 +37,21 @@ func TestRemoteDownloadService_SetRateLimit_ProxiesRequest(t *testing.T) {
 	}
 }
 
+func TestNewRemoteDownloadServiceRestrictsRedirectsToSameOrigin(t *testing.T) {
+	svc, err := NewRemoteDownloadService("https://example.com", "token", HTTPClientOptions{})
+	if err != nil {
+		t.Fatalf("NewRemoteDownloadService failed: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Shutdown() })
+
+	if svc.Client.CheckRedirect == nil {
+		t.Fatal("remote API client has no redirect policy")
+	}
+	if svc.SSEClient.CheckRedirect == nil {
+		t.Fatal("remote SSE client has no redirect policy")
+	}
+}
+
 func TestRemoteDownloadService_ClearRateLimit_ProxiesRequest(t *testing.T) {
 	called := false
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

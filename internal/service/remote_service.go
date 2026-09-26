@@ -35,11 +35,13 @@ func NewRemoteDownloadService(baseURL string, token string, opts HTTPClientOptio
 		cancel()
 		return nil, err
 	}
+	client.CheckRedirect = SameOriginRedirectPolicy
 	sseClient, err := NewStreamingHTTPClient(opts)
 	if err != nil {
 		cancel()
 		return nil, err
 	}
+	sseClient.CheckRedirect = SameOriginRedirectPolicy
 	return &RemoteDownloadService{
 		BaseURL:   baseURL,
 		Token:     token,
