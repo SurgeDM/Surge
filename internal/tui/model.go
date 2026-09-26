@@ -309,6 +309,20 @@ func (d *DownloadModel) UpdateETA() {
 }
 
 func InitialRootModel(serverPort int, currentVersion string, service service.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, currentCommit ...string) RootModel {
+	var statuses []types.DownloadStatus
+	if service != nil {
+		statuses, _ = service.List()
+	}
+	return initialRootModel(serverPort, currentVersion, service, orchestrator, settings, noResume, statuses, currentCommit...)
+}
+
+// InitialRootModelWithStatuses builds a model from statuses already fetched by
+// the caller. It avoids a second network request during remote TUI startup.
+func InitialRootModelWithStatuses(serverPort int, currentVersion string, service service.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, statuses []types.DownloadStatus, currentCommit ...string) RootModel {
+	return initialRootModel(serverPort, currentVersion, service, orchestrator, settings, noResume, statuses, currentCommit...)
+}
+
+func initialRootModel(serverPort int, currentVersion string, service service.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, statuses []types.DownloadStatus, currentCommit ...string) RootModel {
 	initialDarkBackground := true
 	if !IsTestMode {
 		initialDarkBackground = lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
@@ -390,76 +404,64 @@ func InitialRootModel(serverPort int, currentVersion string, service service.Dow
 
 	applyColorModeForTheme(config.Resolve[int](settings.General.Theme), config.Resolve[string](settings.General.ThemePath), initialDarkBackground)
 
-	// Load paused downloads from master list (now uses global config directory)
-	var downloads []*DownloadModel
-	// Note: With Service abstraction, we might want to let the Service handle loading.
-	// But LocalDownloadService's List() calls store.ListAllDownloads().
-	// For TUI initialization, we should probably call Service.List() to populate the model.
-	// However, Service.List() returns []DownloadStatus, which we need to convert to []*DownloadModel.
-
-	// Let's use service.List() if available
-	if service != nil {
-		statuses, err := service.List()
-		if err == nil {
-			for _, s := range statuses {
-				dm := NewDownloadModel(s.ID, s.URL, s.Filename, s.TotalSize)
-				dm.Downloaded = s.Downloaded
-				if s.DestPath != "" {
-					dm.Destination = s.DestPath
-				} else {
-					dm.Destination = s.Filename // Fallback
-				}
-				// Status mapping
-				switch s.Status {
-				case "completed":
-					dm.done = true
-					dm.started = true
-					dm.progress.SetPercent(1.0)
-				case "error":
-					dm.done = true
-					dm.started = true
-					if s.Error != "" {
-						dm.err = errors.New(s.Error)
-					} else {
-						dm.err = errors.New("download failed")
-					}
-				case "pausing":
-					dm.pausing = true
-					dm.started = true
-				case "paused":
-					if config.Resolve[bool](settings.General.AutoResume) {
-						dm.resuming = true
-						dm.paused = true // Will update when resume event received
-					} else {
-						dm.paused = true
-					}
-					dm.started = true
-				case "queued":
-					// Always resume queued items
-					dm.resuming = true
-					dm.paused = true // Will update when resume event received
-					dm.started = false
-				case "downloading":
-					dm.started = true
-				}
-
-				if s.TotalSize > 0 {
-					dm.progress.SetPercent(s.Progress / 100.0)
-				}
-				if s.AvgSpeed > 0 {
-					dm.Speed = s.AvgSpeed
-				} else if s.Speed > 0 {
-					dm.Speed = s.Speed
-				}
-				if s.Status == "completed" && s.TimeTaken > 0 {
-					dm.Elapsed = time.Duration(s.TimeTaken) * time.Millisecond
-				}
-				dm.RateLimit = s.RateLimit
-				dm.RateLimitSet = s.RateLimitSet
-
-				downloads = append(downloads, dm)
-			}
+	downloads := make([]*DownloadModel, 0, len(statuses))
+	for _, s := range statuses {
+		dm := NewDownloadModel(s.ID, s.URL, s.Filename, s.TotalSize)
+		dm.Downloaded = s.Downloaded
+		if s.DestPath != "" {
+			dm.Destination = s.DestPath
+		} else {
+			dm.Destination = s.Filename // Fallback
 		}
+		// Status mapping
+		switch s.Status {
+		case "completed":
+			dm.done = true
+			dm.started = true
+			dm.progress.SetPercent(1.0)
+		case "error":
+			dm.done = true
+			dm.started = true
+			if s.Error != "" {
+				dm.err = errors.New(s.Error)
+			} else {
+				dm.err = errors.New("download failed")
+			}
+		case "pausing":
+			dm.pausing = true
+			dm.started = true
+		case "paused":
+			if config.Resolve[bool](settings.General.AutoResume) {
+				dm.resuming = true
+				dm.paused = true // Will update when resume event received
+			} else {
+				dm.paused = true
+			}
+			dm.started = true
+		case "queued":
+			// Always resume queued items
+			dm.resuming = true
+			dm.paused = true // Will update when resume event received
+			dm.started = false
+		case "downloading":
+			dm.started = true
+		}
+
+		if s.TotalSize > 0 {
+			dm.progress.SetPercent(s.Progress / 100.0)
+		}
+		if s.AvgSpeed > 0 {
+			dm.Speed = s.AvgSpeed
+		} else if s.Speed > 0 {
+			dm.Speed = s.Speed
+		}
+		if s.Status == "completed" && s.TimeTaken > 0 {
+			dm.Elapsed = time.Duration(s.TimeTaken) * time.Millisecond
+		}
+		dm.RateLimit = s.RateLimit
+		dm.RateLimitSet = s.RateLimitSet
+
+		downloads = append(downloads, dm)
 	}
 
 	// Initialize the download list
