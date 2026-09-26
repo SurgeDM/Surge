@@ -152,15 +152,16 @@ type RootModel struct {
 	PWD string
 
 	// Duplicate detection
-	pendingURL           string // URL pending confirmation
-	pendingPath          string // Path pending confirmation
-	pendingIsDefaultPath bool
-	pendingFilename      string   // Filename pending confirmation
-	pendingMirrors       []string // Mirrors pending confirmation
-	pendingHeaders       map[string]string
-	pendingWorkers       int    // Per-task worker override pending confirmation
-	pendingMinChunkSize  int64  // Per-task min chunk size override pending confirmation
-	duplicateInfo        string // Info about the duplicate
+	pendingURL                  string // URL pending confirmation
+	pendingPath                 string // Path pending confirmation
+	pendingIsDefaultPath        bool
+	pendingFilename             string   // Filename pending confirmation
+	pendingMirrors              []string // Mirrors pending confirmation
+	pendingHeaders              map[string]string
+	pendingWorkers              int    // Per-task worker override pending confirmation
+	pendingMinChunkSize         int64  // Per-task min chunk size override pending confirmation
+	pendingSkipDuplicateWarning bool   // Request-specific duplicate warning override
+	duplicateInfo               string // Info about the duplicate
 
 	// Graph Data
 	SpeedHistory           []float64 // Stores the last ~60 ticks of speed data

@@ -119,6 +119,38 @@ func TestOverride_ExtensionConfirmPreservesWorkersAndMinChunkSize(t *testing.T) 
 	}
 }
 
+func TestExtensionConfirmSkipsDuplicateWarningWhenRequested(t *testing.T) {
+	added := false
+	m := newOverrideTestModel(t, func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64) (string, error) {
+		added = true
+		return "new-id", nil
+	})
+	m.Settings.Extension.ExtensionPrompt.Value = true
+	m.Settings.General.WarnOnDuplicate.Value = true
+	url := "https://example.com/finished.zip"
+	m.downloads = append(m.downloads, &DownloadModel{URL: url, Filename: "finished.zip"})
+	msg := types.DownloadEvent{
+		Type: types.EventRequest, URL: url, Filename: "finished.zip", Path: t.TempDir(),
+		SkipDuplicateWarning: true,
+	}
+	updated, _ := m.Update(msg)
+	root := updated.(RootModel)
+	if root.state != ExtensionConfirmationState {
+		t.Fatalf("expected general extension confirmation, got %v", root.state)
+	}
+	root.inputs[2].SetValue(msg.Path)
+	root.inputs[3].SetValue(msg.Filename)
+	updated, cmd := root.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	root = updated.(RootModel)
+	if root.state == DuplicateWarningState {
+		t.Fatal("duplicate warning appeared after general confirmation")
+	}
+	executeCmds(cmd)
+	if !added {
+		t.Fatal("confirmed download was not added")
+	}
+}
+
 func TestOverride_DuplicateContinuePreservesWorkersAndMinChunkSize(t *testing.T) {
 	var capturedWorkers int
 	var capturedMinChunkSize int64
