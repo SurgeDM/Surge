@@ -111,7 +111,11 @@ func ParseRateLimit(input string) (int64, error) {
 		return 0, fmt.Errorf("rate limit too large")
 	}
 
-	return int64(math.Round(bytes)), nil
+	rounded := math.Round(bytes)
+	if rounded == 0 {
+		return 0, fmt.Errorf("rate limit is too small (minimum is 1 B/s)")
+	}
+	return int64(rounded), nil
 }
 
 func ParseRateLimitValue(val any) (int64, error) {
