@@ -59,8 +59,8 @@ type Scheduler struct {
 
 // PauseResult describes the download state that Pause changed.
 type PauseResult struct {
-	Found  bool
-	Queued bool
+	Found        bool
+	QueuedConfig *types.DownloadRecord
 }
 
 var (
@@ -275,6 +275,14 @@ func (p *Scheduler) GetAll() []types.DownloadRecord {
 func (p *Scheduler) Pause(downloadID string) PauseResult {
 	p.mu.Lock()
 	if queued, exists := p.queued[downloadID]; exists {
+		queuedConfig := queued.cfg
+		if queuedConfig.ProgressState != nil {
+			state := progress.CfgProgress(&queuedConfig)
+			queuedConfig.Downloaded, _, _, _, _, _ = state.GetProgress()
+			queuedConfig.RateLimit, queuedConfig.RateLimitSet = state.GetRateLimit()
+		}
+		queuedConfig.Limiter = nil
+
 		delete(p.queued, downloadID)
 		p.removeQueueOrderLocked(downloadID)
 		delete(p.downloadLimiters, downloadID)
@@ -284,7 +292,7 @@ func (p *Scheduler) Pause(downloadID string) PauseResult {
 		if !inFlight {
 			p.wg.Done()
 		}
-		return PauseResult{Found: true, Queued: true}
+		return PauseResult{Found: true, QueuedConfig: &queuedConfig}
 	}
 
 	ad, exists := p.downloads[downloadID]

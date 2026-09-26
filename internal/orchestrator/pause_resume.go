@@ -20,10 +20,13 @@ func (mgr *LifecycleManager) Pause(id string) error {
 	}
 
 	if result := mgr.pool.Pause(id); result.Found {
-		if result.Queued && mgr.eventBus != nil {
+		if result.QueuedConfig != nil && mgr.eventBus != nil {
 			_ = mgr.eventBus.Publish(types.DownloadEvent{
-				Type:       types.EventPaused,
-				DownloadID: id,
+				Type:         types.EventPaused,
+				DownloadID:   id,
+				Downloaded:   result.QueuedConfig.Downloaded,
+				RateLimit:    result.QueuedConfig.RateLimit,
+				RateLimitSet: result.QueuedConfig.RateLimitSet,
 			})
 		}
 		return nil

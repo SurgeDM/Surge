@@ -181,19 +181,28 @@ func TestScheduler_Pause_NilState(t *testing.T) {
 }
 
 func TestScheduler_Pause_QueuedDownload_RemovesItBeforeStart(t *testing.T) {
+	state := progress.New("queued-id", 1000)
+	state.Bytes.VerifiedProgress.Store(321)
+	state.SetRateLimit(2048, true)
 	pool := &Scheduler{
 		downloads:        make(map[string]*activeDownload),
 		queued:           make(map[string]*queuedTask),
 		downloadLimiters: make(map[string]*transport.RateLimiter),
 	}
 	pool.taskCond = sync.NewCond(&pool.mu)
-	pool.queued["queued-id"] = &queuedTask{cfg: types.DownloadRecord{ID: "queued-id"}}
+	pool.queued["queued-id"] = &queuedTask{cfg: types.DownloadRecord{
+		ID:            "queued-id",
+		ProgressState: state,
+	}}
 	pool.queueOrder = []string{"queued-id"}
 	pool.wg.Add(1)
 
 	result := pool.Pause("queued-id")
-	if !result.Found || !result.Queued {
+	if !result.Found || result.QueuedConfig == nil {
 		t.Fatalf("Pause() = %+v, want queued download to be paused", result)
+	}
+	if result.QueuedConfig.Downloaded != 321 || result.QueuedConfig.RateLimit != 2048 || !result.QueuedConfig.RateLimitSet {
+		t.Fatalf("queued metadata = %+v, want downloaded=321 rate=2048 explicit=true", result.QueuedConfig)
 	}
 
 	pool.mu.RLock()
