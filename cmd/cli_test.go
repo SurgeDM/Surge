@@ -836,12 +836,14 @@ func TestShowDownloadDetails_UsesDatabaseFallback(t *testing.T) {
 
 func TestSendToServer_SuccessAndServerError(t *testing.T) {
 	tests := []struct {
-		name       string
-		statusCode int
-		body       string
-		wantErr    bool
+		name        string
+		statusCode  int
+		body        string
+		wantPending bool
+		wantErr     bool
 	}{
-		{name: "success accepted", statusCode: http.StatusAccepted, body: `{"id":"abc"}`},
+		{name: "success queued", statusCode: http.StatusOK, body: `{"id":"abc"}`},
+		{name: "success pending approval", statusCode: http.StatusAccepted, body: `{"id":"abc"}`, wantPending: true},
 		{name: "server error", statusCode: http.StatusInternalServerError, body: "boom", wantErr: true},
 	}
 
@@ -873,14 +875,87 @@ func TestSendToServer_SuccessAndServerError(t *testing.T) {
 			})
 
 			port := ln.Addr().(*net.TCPAddr).Port
-			err = sendToServer("https://example.com/file.zip", nil, "", fmt.Sprintf("http://127.0.0.1:%d", port), "")
+			pending, err := sendToServerWithApproval("https://example.com/file.zip", nil, "", fmt.Sprintf("http://127.0.0.1:%d", port), "", false)
 			if tt.wantErr && err == nil {
 				t.Fatal("expected error, got nil")
 			}
 			if !tt.wantErr && err != nil {
 				t.Fatalf("unexpected error: %v", err)
 			}
+			if pending != tt.wantPending {
+				t.Fatalf("pending approval = %v, want %v", pending, tt.wantPending)
+			}
 		})
+	}
+}
+
+func TestSubmitDownloads_SummarizesOutcomes(t *testing.T) {
+	var requests int32
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		var req DownloadRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Errorf("decode request: %v", err)
+			http.Error(w, "invalid request", http.StatusBadRequest)
+			return
+		}
+
+		switch req.URL {
+		case "https://example.com/queued.zip":
+			w.WriteHeader(http.StatusOK)
+		case "https://example.com/pending.zip":
+			w.WriteHeader(http.StatusAccepted)
+		default:
+			http.Error(w, "failed", http.StatusInternalServerError)
+		}
+	}))
+	defer server.Close()
+
+	var summary addSummary
+	_ = captureStdout(t, func() {
+		summary = submitDownloads([]string{
+			"example.com/queued.zip",
+			"https://example.com/pending.zip",
+			"https://example.com/failed.zip",
+			"ftp://example.com/unsupported.zip",
+			"",
+		}, "", server.URL, "", true)
+	})
+
+	if summary.queued != 1 || summary.awaitingApproval != 1 || summary.failed != 2 {
+		t.Fatalf("summary = %+v, want one queued, one awaiting approval, and two failed", summary)
+	}
+	if summary.succeeded() != 2 {
+		t.Fatalf("succeeded = %d, want 2", summary.succeeded())
+	}
+	if got := atomic.LoadInt32(&requests); got != 3 {
+		t.Fatalf("requests = %d, want 3; the unsupported URL must not reach the server", got)
+	}
+}
+
+func TestSendBatchToServer_NormalizesURLs(t *testing.T) {
+	var requests int32
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requests, 1)
+		var req BatchDownloadRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatalf("decode batch request: %v", err)
+		}
+		if len(req.Downloads) != 1 || req.Downloads[0].URL != "https://example.com/file.zip" {
+			t.Fatalf("downloads = %#v, want normalized URL", req.Downloads)
+		}
+		w.WriteHeader(http.StatusAccepted)
+	}))
+	defer server.Close()
+
+	if err := sendBatchToServer([]string{"example.com/file.zip"}, "", server.URL, "", false); err != nil {
+		t.Fatalf("sendBatchToServer() error = %v", err)
+	}
+	if err := sendBatchToServer([]string{"ftp://example.com/file.zip"}, "", server.URL, "", false); err == nil {
+		t.Fatal("expected unsupported URL scheme to be rejected")
+	}
+	if got := atomic.LoadInt32(&requests); got != 1 {
+		t.Fatalf("requests = %d, want 1; the invalid batch must not reach the server", got)
 	}
 }
 
@@ -1004,6 +1079,7 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 		port := ln.Addr().(*net.TCPAddr).Port
 		count := processDownloads([]string{
 			"https://example.com/a.zip,https://mirror.example.com/a.zip",
+			"ftp://example.com/unsupported.zip",
 			"",
 			"https://example.com/b.zip",
 		}, "", port)
@@ -1051,6 +1127,7 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 
 		count := processDownloads([]string{
 			probeServer.URL + "/local.zip",
+			"ftp://example.com/unsupported.zip",
 			"",
 		}, t.TempDir(), 0)
 

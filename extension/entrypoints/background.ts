@@ -514,7 +514,7 @@ async function sendToSurge(
   filename: string,
   directory: string,
   headers: Record<string, string>,
-  options?: { skipApproval?: boolean },
+  options?: { skipApproval?: boolean; skipDuplicateWarning?: boolean },
 ): Promise<HandoffResult> {
   const base = await getBaseUrl();
   if (!base) {
@@ -533,6 +533,7 @@ async function sendToSurge(
         directory,
         headers,
         skipApproval: options?.skipApproval,
+        skipDuplicateWarning: options?.skipDuplicateWarning,
       })),
       signal: AbortSignal.timeout(5000),
     });
@@ -681,6 +682,18 @@ async function tryOpenPopup(): Promise<void> {
 }
 
 async function isDuplicateDownload(url: string): Promise<boolean> {
+  const resp = await apiFetch('/download/duplicate', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  });
+  if (resp?.ok) {
+    try {
+      const result: unknown = await resp.json();
+      if (typeof result === 'object' && result !== null && typeof (result as { exists?: unknown }).exists === 'boolean') {
+        return (result as { exists: boolean }).exists;
+      }
+    } catch { /* Fall back to the list check for older servers. */ }
+  }
   const { data: list } = await fetchDownloadsList();
   const normalized = url.replace(/\/$/, '');
   return list.some(dl => (dl.url || '').replace(/\/$/, '') === normalized);
@@ -754,7 +767,8 @@ async function handleDownloadCreated(downloadItem: {
 
   // Check for duplicates in the extension BEFORE sending to server.
   // This way the TUI never sees a duplicate prompt.
-  if (await isDuplicateDownload(downloadItem.url)) {
+  const warnOnDuplicate = (await storageGetBoolean(STORAGE_KEYS.WARN_ON_DUPLICATE)) !== false;
+  if (warnOnDuplicate && await isDuplicateDownload(downloadItem.url)) {
     logDownload('queued duplicate confirmation', { id: downloadItem.id, url: downloadItem.url });
     pendingDuplicateCounter = await queueDuplicateDownload({
       pendingDuplicates,
@@ -772,7 +786,9 @@ async function handleDownloadCreated(downloadItem: {
   }
 
   // Force empty filename hint for backend - rely on backend prober.
-  const result = await sendToSurge(downloadItem.url, '', directory, headers);
+  const result = await sendToSurge(downloadItem.url, '', directory, headers, {
+    skipDuplicateWarning: !warnOnDuplicate,
+  });
   logDownload('handoff complete', { id: downloadItem.id, url: downloadItem.url, outcome: result.outcome });
 
   if (result.outcome === 'surge') {

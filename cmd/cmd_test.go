@@ -276,8 +276,12 @@ func TestParseConnectTarget_BaseURL(t *testing.T) {
 		{name: "https URL allowed", target: "https://example.com:1700", want: "https://example.com:1700"},
 		{name: "https URL loopback stays https", target: "https://127.0.0.1:1700", want: "https://127.0.0.1:1700"},
 		{name: "http URL loopback allowed", target: "http://127.0.0.1:1700", want: "http://127.0.0.1:1700"},
-		{name: "private ip host:port defaults http", target: "192.168.1.10:1700", want: "http://192.168.1.10:1700"},
-		{name: "http URL private IP allowed", target: "http://10.0.0.15:1700", want: "http://10.0.0.15:1700"},
+		{name: "private ip host:port defaults https", target: "192.168.1.10:1700", want: "https://192.168.1.10:1700"},
+		{name: "http URL private IP rejected", target: "http://10.0.0.15:1700", wantErr: true},
+		{name: "http URL private IP allowed with flag", target: "http://10.0.0.15:1700", insecureHTTP: true, want: "http://10.0.0.15:1700"},
+		{name: "base path preserved", target: "https://example.com:1700/surge/", want: "https://example.com:1700/surge"},
+		{name: "query rejected", target: "https://example.com:1700?debug=1", wantErr: true},
+		{name: "fragment rejected", target: "https://example.com:1700#status", wantErr: true},
 		{name: "http URL remote rejected", target: "http://example.com:1700", wantErr: true},
 		{name: "http URL remote allowed with flag", target: "http://example.com:1700", insecureHTTP: true, want: "http://example.com:1700"},
 		{name: "invalid scheme rejected", target: "ftp://example.com:1700", wantErr: true},
@@ -322,6 +326,11 @@ func TestResolveTokenForConnectTarget_IPv6LoopbackUsesLocalToken(t *testing.T) {
 		globalToken = origToken
 		checkSystemServiceRunning = origCheck
 	})
+	if err := writeTokenToFile(filepath.Join(resolveRuntimeDir(), "token"), "ipv6-loopback-token"); err != nil {
+		t.Fatalf("write token failed: %v", err)
+	}
+	saveActivePort(1700)
+	t.Cleanup(removeActivePort)
 
 	target, err := parseConnectTarget("[::1]:1700", false)
 	if err != nil {
@@ -380,28 +389,7 @@ func TestResolveTokenForConnectTarget_UsesActiveTokenForMatchingLocalPort(t *tes
 	}
 }
 
-func TestIsPrivateIPHost(t *testing.T) {
-	tests := []struct {
-		host string
-		want bool
-	}{
-		{host: "10.1.2.3", want: true},
-		{host: "172.16.5.9", want: true},
-		{host: "192.168.50.7", want: true},
-		{host: "8.8.8.8", want: false},
-		{host: "localhost", want: false},
-		{host: "example.com", want: false},
-		{host: "", want: false},
-	}
-
-	for _, tt := range tests {
-		if got := isPrivateIPHost(tt.host); got != tt.want {
-			t.Fatalf("isPrivateIPHost(%q) = %v, want %v", tt.host, got, tt.want)
-		}
-	}
-}
-
-func TestIsLocalHost(t *testing.T) {
+func TestIsLoopbackHost(t *testing.T) {
 	tests := []struct {
 		host string
 		want bool
@@ -415,8 +403,8 @@ func TestIsLocalHost(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		if got := isLocalHost(tt.host); got != tt.want {
-			t.Fatalf("isLocalHost(%q) = %v, want %v", tt.host, got, tt.want)
+		if got := isLoopbackHost(tt.host); got != tt.want {
+			t.Fatalf("isLoopbackHost(%q) = %v, want %v", tt.host, got, tt.want)
 		}
 	}
 }

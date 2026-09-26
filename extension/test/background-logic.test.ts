@@ -53,6 +53,7 @@ describe('background logic', () => {
       path: '/downloads',
       headers: { Cookie: 'a=b' },
       skip_approval: true,
+      skip_duplicate_warning: undefined,
     });
 
     expect(buildDownloadRequestBody({
@@ -65,7 +66,16 @@ describe('background logic', () => {
       filename: 'file.zip',
       headers: undefined,
       skip_approval: undefined,
+      skip_duplicate_warning: undefined,
     });
+
+    expect(buildDownloadRequestBody({
+      url: 'https://example.com/file.zip',
+      filename: '',
+      directory: '',
+      headers: {},
+      skipDuplicateWarning: true,
+    })).toMatchObject({ skip_duplicate_warning: true, skip_approval: undefined });
   });
 
   it('prioritizes preferred URLs when building port scan candidates', () => {

@@ -42,6 +42,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
 		handleDownload(w, r, defaultOutputDir, service)
 	})
+	mux.HandleFunc("/download/duplicate", requireMethod(http.MethodPost, handleDuplicateCheck))
 
 	mux.HandleFunc("/download/batch", func(w http.ResponseWriter, r *http.Request) {
 		handleBatchDownload(w, r, defaultOutputDir, service)

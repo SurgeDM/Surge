@@ -2,66 +2,63 @@ package cmd
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
-	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/adrg/xdg"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestAcquireLock(t *testing.T) {
-	// Setup isolation
-	tempDir := t.TempDir()
+func TestTryAcquireInstanceLock(t *testing.T) {
+	runtimeDir := t.TempDir()
 
-	// xdg package variables are initialized on load, so setting env vars
-	// won't change the path in tests. Directly override it instead.
-	oldRuntimeDir := xdg.RuntimeDir
-	xdg.RuntimeDir = tempDir
-	defer func() {
-		xdg.RuntimeDir = oldRuntimeDir
-	}()
-
-	t.Setenv("XDG_CONFIG_HOME", tempDir)
-	t.Setenv("APPDATA", tempDir)
-	t.Setenv("XDG_RUNTIME_DIR", tempDir) // Runtime dir for lock file
-
-	// Ensure dirs exist (mocking what root.go does)
-	err := config.EnsureDirs()
+	first, acquired, err := TryAcquireInstanceLock(runtimeDir)
 	require.NoError(t, err)
+	require.True(t, acquired, "first acquisition should succeed")
 
-	// Test 1: First acquisition should succeed
-	t.Run("FirstAcquisition", func(t *testing.T) {
-		locked, err := AcquireLock()
-		require.NoError(t, err)
-		assert.True(t, locked, "Should acquire lock on first try")
-	})
+	second, acquired, err := TryAcquireInstanceLock(runtimeDir)
+	require.NoError(t, err)
+	assert.False(t, acquired, "a second handle must not acquire the held lock")
+	assert.Nil(t, second)
 
-	// Test 2: Second acquisition should fail (locked by us in this process context)
+	require.NoError(t, first.Release())
 
-	t.Run("SecondAcquisition", func(t *testing.T) {
-		// Attempt to acquire again with a fresh call (re simulates a second instance)
+	third, acquired, err := TryAcquireInstanceLock(runtimeDir)
+	require.NoError(t, err)
+	require.True(t, acquired, "lock should be acquirable after release")
+	require.NotNil(t, third)
+	t.Cleanup(func() { require.NoError(t, third.Release()) })
 
-		locked, err := AcquireLock()
-		require.NoError(t, err)
-		// If it succeeded, it means we can re-lock.
-		// If it failed, it means strict locking.
-		if locked {
-			// Clean up this second lock if it succeeded
-			_ = instanceLock.flock.Unlock()
-			t.Log("Warning: Same-process re-locking succeeded. Subprocess test needed for strict verification.")
-		} else {
-			assert.False(t, locked, "Should not acquire lock if already held")
-		}
-	})
-
-	// Cleanup
-	err = ReleaseLock()
-	assert.NoError(t, err)
-
-	// Verify file exists
-	lockPath := filepath.Join(config.GetRuntimeDir(), "surge.lock")
+	lockPath := filepath.Join(runtimeDir, "surge.lock")
 	_, err = os.Stat(lockPath)
 	assert.NoError(t, err, "Lock file should exist")
+}
+
+func TestTryAcquireInstanceLock_BlocksAnotherProcess(t *testing.T) {
+	runtimeDir := t.TempDir()
+	lock, acquired, err := TryAcquireInstanceLock(runtimeDir)
+	require.NoError(t, err)
+	require.True(t, acquired)
+	t.Cleanup(func() { require.NoError(t, lock.Release()) })
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestInstanceLockHelperProcess$")
+	cmd.Env = append(os.Environ(),
+		"SURGE_LOCK_HELPER_PROCESS=1",
+		"SURGE_LOCK_RUNTIME_DIR="+runtimeDir,
+	)
+	output, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "lock helper failed: %s", output)
+}
+
+func TestInstanceLockHelperProcess(t *testing.T) {
+	if os.Getenv("SURGE_LOCK_HELPER_PROCESS") != "1" {
+		return
+	}
+
+	_, acquired, err := TryAcquireInstanceLock(os.Getenv("SURGE_LOCK_RUNTIME_DIR"))
+	require.NoError(t, err)
+	if acquired {
+		t.Fatal("helper process acquired a lock held by its parent")
+	}
 }

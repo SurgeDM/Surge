@@ -5,11 +5,14 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/spf13/cobra"
 )
+
+const maxLimitErrorResponseBytes = 1024
 
 var limitCmd = &cobra.Command{
 	Use:   "limit [--global|--default] <speed> | limit <id> <speed>",
@@ -59,7 +62,24 @@ func runLimitCommand(cmd *cobra.Command, args []string) error {
 	globalLimit, _ := cmd.Flags().GetBool("global")
 	defaultLimit, _ := cmd.Flags().GetBool("default")
 
-	speedArg := args[len(args)-1]
+	speedArg := strings.TrimSpace(args[len(args)-1])
+	if speedArg == "" {
+		return fmt.Errorf("speed value cannot be empty")
+	}
+
+	inherit := utils.IsRateLimitInherit(speedArg)
+	if inherit && (globalLimit || defaultLimit) {
+		return fmt.Errorf("inherit is only valid for a specific download")
+	}
+
+	var rate int64
+	var err error
+	if !inherit {
+		rate, err = utils.ParseRateLimit(speedArg)
+		if err != nil {
+			return err
+		}
+	}
 
 	baseURL, token, err := resolveAPIConnection(true)
 	if err != nil {
@@ -68,46 +88,32 @@ func runLimitCommand(cmd *cobra.Command, args []string) error {
 
 	path := ""
 	success := ""
-	rate := int64(0)
 	switch {
 	case globalLimit:
-		rate, err = utils.ParseRateLimit(speedArg)
-		if err != nil {
-			return err
-		}
 		if rate == 0 {
 			success = "Set global speed limit to \u221E"
 		} else {
 			success = fmt.Sprintf("Set global speed limit to %s", utils.FormatRateLimit(rate))
 		}
-		path = fmt.Sprintf("/rate-limit/global?rate=%d", rate)
+		path = rateLimitPath("/rate-limit/global", url.Values{"rate": {strconv.FormatInt(rate, 10)}})
 	case defaultLimit:
-		rate, err = utils.ParseRateLimit(speedArg)
-		if err != nil {
-			return err
-		}
 		if rate == 0 {
 			success = "Set default download speed limit to \u221E"
 		} else {
 			success = fmt.Sprintf("Set default download speed limit to %s", utils.FormatRateLimit(rate))
 		}
-		path = fmt.Sprintf("/rate-limit/default?rate=%d", rate)
+		path = rateLimitPath("/rate-limit/default", url.Values{"rate": {strconv.FormatInt(rate, 10)}})
 	default:
 		id, err := resolveDownloadID(args[0])
 		if err != nil {
 			return fmt.Errorf("failed to resolve download ID: %w", err)
 		}
-		speedStr := strings.TrimSpace(speedArg)
 		// -1 is used as a numeric alias for "inherit" so users don't have to type a string
-		if utils.IsRateLimitInherit(speedStr) {
-			path = fmt.Sprintf("/rate-limit?id=%s&inherit=true", url.QueryEscape(id))
+		if inherit {
+			path = rateLimitPath("/rate-limit", url.Values{"id": {id}, "inherit": {"true"}})
 			success = fmt.Sprintf("Set speed limit for %s to inherit the default", id)
 		} else {
-			rate, err = utils.ParseRateLimit(speedArg)
-			if err != nil {
-				return err
-			}
-			path = fmt.Sprintf("/rate-limit?id=%s&rate=%d", url.QueryEscape(id), rate)
+			path = rateLimitPath("/rate-limit", url.Values{"id": {id}, "rate": {strconv.FormatInt(rate, 10)}})
 			if rate == 0 {
 				success = fmt.Sprintf("Set speed limit for %s to \u221E", id)
 			} else {
@@ -120,8 +126,12 @@ func runLimitCommand(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Println(success)
+	cmd.Println(success)
 	return nil
+}
+
+func rateLimitPath(endpoint string, query url.Values) string {
+	return endpoint + "?" + query.Encode()
 }
 
 func executeLimitRequest(baseURL, token, path string) error {
@@ -136,8 +146,20 @@ func executeLimitRequest(baseURL, token, path string) error {
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return fmt.Errorf("server error: %s - %s", resp.Status, string(body))
+		body, err := io.ReadAll(io.LimitReader(resp.Body, maxLimitErrorResponseBytes+1))
+		if err != nil {
+			return fmt.Errorf("server error: %s (failed to read response body: %w)", resp.Status, err)
+		}
+		truncated := len(body) > maxLimitErrorResponseBytes
+		body = body[:min(len(body), maxLimitErrorResponseBytes)]
+		message := strings.TrimSpace(string(body))
+		if truncated {
+			message += "..."
+		}
+		if message == "" {
+			return fmt.Errorf("server error: %s", resp.Status)
+		}
+		return fmt.Errorf("server error: %s - %s", resp.Status, message)
 	}
 	return nil
 }
