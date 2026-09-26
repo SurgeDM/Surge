@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/orchestrator"
@@ -765,6 +766,66 @@ func TestPrintDownloads_JSONEmpty(t *testing.T) {
 	}
 	if len(infos) != 0 {
 		t.Fatalf("expected empty json array, got %d entries: %+v", len(infos), infos)
+	}
+}
+
+func TestStatusFromRecordPreservesOfflineDetails(t *testing.T) {
+	record := types.DownloadRecord{
+		ID:         "completed-without-size",
+		URL:        "https://example.com/archive.zip",
+		Filename:   "archive.zip",
+		DestPath:   "/downloads/archive.zip",
+		Status:     "completed",
+		Downloaded: 1024,
+		Error:      "previous failure",
+		TimeTaken:  12,
+		AvgSpeed:   85.5,
+	}
+
+	status := statusFromRecord(record)
+	if status.Progress != 100 {
+		t.Errorf("completed download without a known size has progress %v, want 100", status.Progress)
+	}
+	if status.URL != record.URL || status.DestPath != record.DestPath || status.Error != record.Error || status.TimeTaken != record.TimeTaken || status.AvgSpeed != record.AvgSpeed {
+		t.Errorf("statusFromRecord lost offline details: %+v", status)
+	}
+
+	info := downloadInfoFromStatus(status)
+	if info.URL != record.URL {
+		t.Errorf("downloadInfo URL = %q, want %q", info.URL, record.URL)
+	}
+}
+
+func TestTruncateFilenameForDisplayPreservesUTF8(t *testing.T) {
+	filename := strings.Repeat("文", 26)
+	got := truncateFilenameForDisplay(filename, 25)
+	if !utf8.ValidString(got) {
+		t.Errorf("truncated filename is invalid UTF-8: %q", got)
+	}
+	if utf8.RuneCountInString(got) != 25 || !strings.HasSuffix(got, "...") {
+		t.Errorf("truncated filename = %q, want 25 runes ending in ellipsis", got)
+	}
+}
+
+func TestValidateLSFlags(t *testing.T) {
+	for _, test := range []struct {
+		name       string
+		argCount   int
+		jsonOutput bool
+		watch      bool
+		wantErr    bool
+	}{
+		{name: "normal list"},
+		{name: "watch list", watch: true},
+		{name: "watch JSON", jsonOutput: true, watch: true, wantErr: true},
+		{name: "watch detail", argCount: 1, watch: true, wantErr: true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			err := validateLSFlags(test.argCount, test.jsonOutput, test.watch)
+			if (err != nil) != test.wantErr {
+				t.Fatalf("validateLSFlags() error = %v, want error=%v", err, test.wantErr)
+			}
+		})
 	}
 }
 

@@ -693,7 +693,10 @@ func ResumeAllDownloads() error {
 }
 
 func ListAllDownloads() ([]types.DownloadRecord, error) {
-	list, err := LoadMasterList()
+	masterMu.RLock()
+	defer masterMu.RUnlock()
+
+	list, err := loadMasterListUnlocked()
 	if err != nil {
 		return nil, err
 	}

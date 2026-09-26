@@ -725,6 +725,33 @@ func TestListAllDownloads(t *testing.T) {
 	}
 }
 
+func TestListAllDownloadsDoesNotRewriteMasterState(t *testing.T) {
+	tmpDir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
+	defer CloseDB()
+
+	if err := AddToMasterList(types.DownloadRecord{ID: "read-only-list"}); err != nil {
+		t.Fatalf("AddToMasterList failed: %v", err)
+	}
+
+	masterPath := getMasterPath()
+	wantModTime := time.Now().Add(-time.Hour).Truncate(time.Second)
+	if err := os.Chtimes(masterPath, wantModTime, wantModTime); err != nil {
+		t.Fatalf("setting master state timestamp failed: %v", err)
+	}
+
+	if _, err := ListAllDownloads(); err != nil {
+		t.Fatalf("ListAllDownloads failed: %v", err)
+	}
+	info, err := os.Stat(masterPath)
+	if err != nil {
+		t.Fatalf("stating master state failed: %v", err)
+	}
+	if !info.ModTime().Equal(wantModTime) {
+		t.Errorf("ListAllDownloads rewrote master state: mod time = %s, want %s", info.ModTime(), wantModTime)
+	}
+}
+
 func TestListAllDownloads_Empty(t *testing.T) {
 	tmpDir := setupTestDB(t)
 	defer func() { _ = os.RemoveAll(tmpDir) }()
