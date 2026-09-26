@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -32,4 +33,32 @@ func TestTryAcquireInstanceLock(t *testing.T) {
 	lockPath := filepath.Join(runtimeDir, "surge.lock")
 	_, err = os.Stat(lockPath)
 	assert.NoError(t, err, "Lock file should exist")
+}
+
+func TestTryAcquireInstanceLock_BlocksAnotherProcess(t *testing.T) {
+	runtimeDir := t.TempDir()
+	lock, acquired, err := TryAcquireInstanceLock(runtimeDir)
+	require.NoError(t, err)
+	require.True(t, acquired)
+	t.Cleanup(func() { require.NoError(t, lock.Release()) })
+
+	cmd := exec.Command(os.Args[0], "-test.run=^TestInstanceLockHelperProcess$")
+	cmd.Env = append(os.Environ(),
+		"SURGE_LOCK_HELPER_PROCESS=1",
+		"SURGE_LOCK_RUNTIME_DIR="+runtimeDir,
+	)
+	output, err := cmd.CombinedOutput()
+	require.NoErrorf(t, err, "lock helper failed: %s", output)
+}
+
+func TestInstanceLockHelperProcess(t *testing.T) {
+	if os.Getenv("SURGE_LOCK_HELPER_PROCESS") != "1" {
+		return
+	}
+
+	_, acquired, err := TryAcquireInstanceLock(os.Getenv("SURGE_LOCK_RUNTIME_DIR"))
+	require.NoError(t, err)
+	if acquired {
+		t.Fatal("helper process acquired a lock held by its parent")
+	}
 }
