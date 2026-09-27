@@ -684,6 +684,55 @@ func TestPauseAllDownloads(t *testing.T) {
 	}
 }
 
+func TestResumeAllDownloads(t *testing.T) {
+	setupIsolatedCmdState(t)
+	resetCommandConnectionState(t)
+
+	statuses := []types.DownloadStatus{
+		{ID: "paused-z", Status: "paused"},
+		{ID: "active-id", Status: "downloading"},
+		{ID: "paused-a", Status: "paused"},
+		{ID: "complete-id", Status: "completed"},
+		{ID: "failed-id", Status: "error"},
+	}
+	var resumedIDs []string
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/list":
+			if r.Method != http.MethodGet {
+				t.Fatalf("list method = %s, want GET", r.Method)
+			}
+			_ = json.NewEncoder(w).Encode(statuses)
+		case "/resume":
+			if r.Method != http.MethodPost {
+				t.Fatalf("resume method = %s, want POST", r.Method)
+			}
+			resumedIDs = append(resumedIDs, r.URL.Query().Get("id"))
+			w.WriteHeader(http.StatusOK)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	_, portStr, _ := net.SplitHostPort(server.Listener.Addr().String())
+	var port int
+	_, _ = fmt.Sscanf(portStr, "%d", &port)
+	saveActivePort(port)
+	t.Cleanup(removeActivePort)
+
+	origToken := globalToken
+	globalToken = "test-token"
+	t.Cleanup(func() { globalToken = origToken })
+
+	if err := resumeAllDownloads(); err != nil {
+		t.Fatalf("resumeAllDownloads() error = %v", err)
+	}
+	if got, want := strings.Join(resumedIDs, ","), "paused-a,paused-z"; got != want {
+		t.Fatalf("resumed IDs = %q, want %q", got, want)
+	}
+}
+
 func TestConnectCmd_HostSourcesBypassLocalAutodetect(t *testing.T) {
 	tests := []struct {
 		name  string

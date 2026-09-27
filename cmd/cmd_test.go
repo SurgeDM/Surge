@@ -1426,8 +1426,8 @@ func TestPauseCmdRejectsAllWithID(t *testing.T) {
 // =============================================================================
 
 func TestResumeCmd_Use(t *testing.T) {
-	if resumeCmd.Use != "resume <ID>" {
-		t.Errorf("Expected Use='resume <ID>', got %q", resumeCmd.Use)
+	if resumeCmd.Use != "resume <ID> | --all" {
+		t.Errorf("Expected Use='resume <ID> | --all', got %q", resumeCmd.Use)
 	}
 }
 
@@ -1435,6 +1435,18 @@ func TestResumeCmd_Flags(t *testing.T) {
 	allFlag := resumeCmd.Flags().Lookup("all")
 	if allFlag == nil {
 		t.Error("Missing 'all' flag")
+	}
+}
+
+func TestResumeCmdRejectsAllWithID(t *testing.T) {
+	if err := resumeCmd.Flags().Set("all", "true"); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = resumeCmd.Flags().Set("all", "false") })
+
+	err := resumeCmd.RunE(resumeCmd, []string{"download-id"})
+	if err == nil || err.Error() != "--all cannot be used with a download ID" {
+		t.Fatalf("resume --all download-id error = %v", err)
 	}
 }
 
