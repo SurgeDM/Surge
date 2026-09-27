@@ -559,6 +559,68 @@ func TestActionCommandsRunE_ReturnNoServerErrors(t *testing.T) {
 	}
 }
 
+func TestRefreshCommand_ValidatesURLBeforeConnecting(t *testing.T) {
+	setupIsolatedCmdState(t)
+	resetCommandConnectionState(t)
+
+	err := refreshCmd.RunE(refreshCmd, []string{"deadbeef", "https://"})
+	if err == nil {
+		t.Fatal("expected invalid URL error")
+	}
+	if !strings.Contains(err.Error(), "invalid replacement URL: missing host") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRefreshCommand_NormalizesURLAndReportsServerErrors(t *testing.T) {
+	setupIsolatedCmdState(t)
+	resetCommandConnectionState(t)
+
+	const downloadID = "aabbccdd-1234-5678-90ab-cdef12345678"
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/list":
+			_ = json.NewEncoder(w).Encode([]types.DownloadStatus{{ID: downloadID}})
+		case "/update-url":
+			if r.Method != http.MethodPut {
+				t.Fatalf("update method = %s, want PUT", r.Method)
+			}
+			if got := r.URL.Query().Get("id"); got != downloadID {
+				t.Fatalf("update id = %q, want %q", got, downloadID)
+			}
+			var body map[string]string
+			if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+				t.Fatalf("decode request: %v", err)
+			}
+			if got := body["url"]; got != "https://example.com/replacement.zip" {
+				t.Fatalf("update URL = %q", got)
+			}
+			http.Error(w, "download is active", http.StatusConflict)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer server.Close()
+
+	_, portString, _ := net.SplitHostPort(server.Listener.Addr().String())
+	var port int
+	_, _ = fmt.Sscanf(portString, "%d", &port)
+	saveActivePort(port)
+	t.Cleanup(removeActivePort)
+
+	originalToken := globalToken
+	globalToken = "test-token"
+	t.Cleanup(func() { globalToken = originalToken })
+
+	err := refreshCmd.RunE(refreshCmd, []string{"aabbccdd", "example.com/replacement.zip"})
+	if err == nil {
+		t.Fatal("expected server error")
+	}
+	if !strings.Contains(err.Error(), "409 Conflict - download is active") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
 func TestPauseAllDownloads(t *testing.T) {
 	setupIsolatedCmdState(t)
 	resetCommandConnectionState(t)
