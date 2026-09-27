@@ -2,12 +2,14 @@ package cmd
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
 	"os"
 	"text/tabwriter"
 	"time"
+	"unicode/utf8"
 
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -28,6 +30,9 @@ var lsCmd = &cobra.Command{
 
 		jsonOutput, _ := cmd.Flags().GetBool("json")
 		watch, _ := cmd.Flags().GetBool("watch")
+		if err := validateLSFlags(len(args), jsonOutput, watch); err != nil {
+			return err
+		}
 
 		baseURL, token, err := resolveAPIConnection(false)
 		if err != nil {
@@ -55,6 +60,16 @@ var lsCmd = &cobra.Command{
 	},
 }
 
+func validateLSFlags(argCount int, jsonOutput, watch bool) error {
+	if watch && jsonOutput {
+		return errors.New("--watch cannot be used with --json because watch output is not a single JSON document")
+	}
+	if watch && argCount == 1 {
+		return errors.New("--watch cannot be used with a download ID")
+	}
+	return nil
+}
+
 // downloadInfo is a unified structure for display
 type downloadInfo struct {
 	ID         string  `json:"id"`
@@ -78,16 +93,8 @@ func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote 
 				return fmt.Errorf("error listing remote downloads: %w", err)
 			}
 		} else {
-			for _, s := range serverDownloads {
-				downloads = append(downloads, downloadInfo{
-					ID:         s.ID,
-					Filename:   s.Filename,
-					Status:     s.Status,
-					Progress:   s.Progress,
-					TotalSize:  s.TotalSize,
-					Downloaded: s.Downloaded,
-					Speed:      s.Speed,
-				})
+			for _, status := range serverDownloads {
+				downloads = append(downloads, downloadInfoFromStatus(status))
 			}
 		}
 	}
@@ -99,19 +106,8 @@ func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote 
 			return fmt.Errorf("error listing downloads: %w", err)
 		}
 
-		for _, d := range dbDownloads {
-			var progress float64
-			if d.TotalSize > 0 {
-				progress = float64(d.Downloaded) * 100 / float64(d.TotalSize)
-			}
-			downloads = append(downloads, downloadInfo{
-				ID:         d.ID,
-				Filename:   d.Filename,
-				Status:     d.Status,
-				Progress:   progress,
-				TotalSize:  d.TotalSize,
-				Downloaded: d.Downloaded,
-			})
+		for _, download := range dbDownloads {
+			downloads = append(downloads, downloadInfoFromStatus(statusFromRecord(download)))
 		}
 	}
 
@@ -154,10 +150,7 @@ func printDownloads(jsonOutput bool, baseURL string, token string, strictRemote 
 		}
 
 		// Truncate filename
-		filename := d.Filename
-		if len(filename) > 25 {
-			filename = filename[:22] + "..."
-		}
+		filename := truncateFilenameForDisplay(d.Filename, 25)
 
 		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", id, filename, d.Status, progress, speed, size)
 	}
@@ -223,22 +216,55 @@ func showDownloadDetails(partialID string, jsonOutput bool, baseURL string, toke
 		return fmt.Errorf("download not found: %s", partialID)
 	}
 
-	var progress float64
-	if found.TotalSize > 0 {
-		progress = float64(found.Downloaded) * 100 / float64(found.TotalSize)
+	printDownloadDetail(statusFromRecord(*found), jsonOutput)
+	return nil
+}
+
+func downloadInfoFromStatus(status types.DownloadStatus) downloadInfo {
+	return downloadInfo{
+		ID:         status.ID,
+		URL:        status.URL,
+		Filename:   status.Filename,
+		Status:     status.Status,
+		Progress:   status.Progress,
+		TotalSize:  status.TotalSize,
+		Downloaded: status.Downloaded,
+		Speed:      status.Speed,
+	}
+}
+
+func statusFromRecord(record types.DownloadRecord) types.DownloadStatus {
+	progress := 0.0
+	if record.TotalSize > 0 {
+		progress = float64(record.Downloaded) * 100 / float64(record.TotalSize)
+	} else if record.Status == "completed" {
+		progress = 100
 	}
 
-	status := types.DownloadStatus{
-		ID:         found.ID,
-		URL:        found.URL,
-		Filename:   found.Filename,
-		Status:     found.Status,
-		TotalSize:  found.TotalSize,
-		Downloaded: found.Downloaded,
-		Progress:   progress,
+	return types.DownloadStatus{
+		ID:           record.ID,
+		URL:          record.URL,
+		Filename:     record.Filename,
+		DestPath:     record.DestPath,
+		Status:       record.Status,
+		Error:        record.Error,
+		TotalSize:    record.TotalSize,
+		Downloaded:   record.Downloaded,
+		Progress:     progress,
+		Speed:        record.AvgSpeed,
+		AddedAt:      record.CreatedAt,
+		TimeTaken:    record.TimeTaken,
+		AvgSpeed:     record.AvgSpeed,
+		RateLimit:    record.RateLimit,
+		RateLimitSet: record.RateLimitSet,
 	}
-	printDownloadDetail(status, jsonOutput)
-	return nil
+}
+
+func truncateFilenameForDisplay(filename string, maxRunes int) string {
+	if utf8.RuneCountInString(filename) <= maxRunes {
+		return filename
+	}
+	return string([]rune(filename)[:maxRunes-3]) + "..."
 }
 
 func printDownloadDetail(d types.DownloadStatus, jsonOutput bool) {

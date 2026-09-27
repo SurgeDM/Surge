@@ -19,7 +19,16 @@ func (mgr *LifecycleManager) Pause(id string) error {
 		return types.ErrEngineNotInit
 	}
 
-	if mgr.pool.Pause(id) {
+	if result := mgr.pool.Pause(id); result.Found {
+		if result.QueuedConfig != nil && mgr.eventBus != nil {
+			_ = mgr.eventBus.Publish(types.DownloadEvent{
+				Type:         types.EventPaused,
+				DownloadID:   id,
+				Downloaded:   result.QueuedConfig.Downloaded,
+				RateLimit:    result.QueuedConfig.RateLimit,
+				RateLimitSet: result.QueuedConfig.RateLimitSet,
+			})
+		}
 		return nil
 	}
 

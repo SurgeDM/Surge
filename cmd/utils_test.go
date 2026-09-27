@@ -31,6 +31,7 @@ func TestParseAndNormalizeURLArg(t *testing.T) {
 			wantMirrors: []string{"https://example.com/file.zip", "https://mirror.example.com/file.zip"},
 		},
 		{name: "rejects unsupported scheme", arg: "ftp://example.com/file.zip", wantErr: true},
+		{name: "rejects HTTP(S) URL without host", arg: "https://", wantErr: true},
 		{name: "rejects unsupported mirror scheme", arg: "https://example.com/file.zip,FTP://mirror.example.com/file.zip", wantErr: true},
 		{
 			name:        "preserves commas in query values",

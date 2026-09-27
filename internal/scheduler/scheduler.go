@@ -57,6 +57,12 @@ type Scheduler struct {
 	shutdownOnce                sync.Once
 }
 
+// PauseResult describes the download state that Pause changed.
+type PauseResult struct {
+	Found        bool
+	QueuedConfig *types.DownloadRecord
+}
+
 var (
 	// gracefulShutdownPauseSoftTimeout controls when we emit a warning that
 	// pausing is taking longer than expected. It is intentionally soft; shutdown
@@ -263,19 +269,41 @@ func (p *Scheduler) GetAll() []types.DownloadRecord {
 	return configs
 }
 
-// Pause pauses a specific download by ID. Returns true if found and pause initiated
-// (or already paused), false otherwise. Pure mechanical operation - no events emitted.
-func (p *Scheduler) Pause(downloadID string) bool {
-	p.mu.RLock()
+// Pause pauses a specific download by ID. A queued download is removed before a
+// worker can start it; an in-flight worker will observe its removal and balance
+// the wait group itself. No lifecycle events are emitted by the scheduler.
+func (p *Scheduler) Pause(downloadID string) PauseResult {
+	p.mu.Lock()
+	if queued, exists := p.queued[downloadID]; exists {
+		queuedConfig := queued.cfg
+		if queuedConfig.ProgressState != nil {
+			state := progress.CfgProgress(&queuedConfig)
+			queuedConfig.Downloaded, _, _, _, _, _ = state.GetProgress()
+			queuedConfig.RateLimit, queuedConfig.RateLimitSet = state.GetRateLimit()
+		}
+		queuedConfig.Limiter = nil
+
+		delete(p.queued, downloadID)
+		p.removeQueueOrderLocked(downloadID)
+		delete(p.downloadLimiters, downloadID)
+		inFlight := queued.inFlight
+		p.mu.Unlock()
+
+		if !inFlight {
+			p.wg.Done()
+		}
+		return PauseResult{Found: true, QueuedConfig: &queuedConfig}
+	}
+
 	ad, exists := p.downloads[downloadID]
 	var configTotal int64
 	if exists && ad != nil {
 		configTotal = ad.config.TotalSize
 	}
-	p.mu.RUnlock()
+	p.mu.Unlock()
 
 	if !exists || ad == nil {
-		return false
+		return PauseResult{}
 	}
 
 	// Set paused flag and cancel context
@@ -284,26 +312,26 @@ func (p *Scheduler) Pause(downloadID string) bool {
 
 		// Completion boundary guard: if done or verified progress reached positive total, no-op return true.
 		if prog.Done.Load() {
-			return true
+			return PauseResult{Found: true}
 		}
 		total := prog.Bytes.TotalSize.Load()
 		if total <= 0 {
 			total = configTotal
 		}
 		if total > 0 && prog.Bytes.VerifiedProgress.Load() >= total {
-			return true
+			return PauseResult{Found: true}
 		}
 
 		// Idempotency: If already paused, do nothing.
 		if prog.IsPaused() {
-			return true
+			return PauseResult{Found: true}
 		}
 		// If transition is already in progress, still ensure worker context is canceled.
 		if prog.IsPausing() {
 			if ad.cancel != nil {
 				ad.cancel()
 			}
-			return true
+			return PauseResult{Found: true}
 		}
 		prog.SetPausing(true) // Mark as transitioning to pause
 		prog.Pause()
@@ -315,7 +343,7 @@ func (p *Scheduler) Pause(downloadID string) bool {
 
 	// Send pause message is now exclusively handled by worker return paths
 	// to ensure fully synchronized byte counts.
-	return true
+	return PauseResult{Found: true}
 }
 
 // SetGlobalRateLimit updates the global rate limiter (bytes/sec). Use 0 to disable.

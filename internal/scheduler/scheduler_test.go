@@ -180,6 +180,51 @@ func TestScheduler_Pause_NilState(t *testing.T) {
 	}
 }
 
+func TestScheduler_Pause_QueuedDownload_RemovesItBeforeStart(t *testing.T) {
+	state := progress.New("queued-id", 1000)
+	state.Bytes.VerifiedProgress.Store(321)
+	state.SetRateLimit(2048, true)
+	pool := &Scheduler{
+		downloads:        make(map[string]*activeDownload),
+		queued:           make(map[string]*queuedTask),
+		downloadLimiters: make(map[string]*transport.RateLimiter),
+	}
+	pool.taskCond = sync.NewCond(&pool.mu)
+	pool.queued["queued-id"] = &queuedTask{cfg: types.DownloadRecord{
+		ID:            "queued-id",
+		ProgressState: state,
+	}}
+	pool.queueOrder = []string{"queued-id"}
+	pool.wg.Add(1)
+
+	result := pool.Pause("queued-id")
+	if !result.Found || result.QueuedConfig == nil {
+		t.Fatalf("Pause() = %+v, want queued download to be paused", result)
+	}
+	if result.QueuedConfig.Downloaded != 321 || result.QueuedConfig.RateLimit != 2048 || !result.QueuedConfig.RateLimitSet {
+		t.Fatalf("queued metadata = %+v, want downloaded=321 rate=2048 explicit=true", result.QueuedConfig)
+	}
+
+	pool.mu.RLock()
+	_, queued := pool.queued["queued-id"]
+	queueOrder := append([]string(nil), pool.queueOrder...)
+	pool.mu.RUnlock()
+	if queued || len(queueOrder) != 0 {
+		t.Fatalf("queued state remains after pause: queued=%v queueOrder=%v", queued, queueOrder)
+	}
+
+	done := make(chan struct{})
+	go func() {
+		pool.wg.Wait()
+		close(done)
+	}()
+	select {
+	case <-done:
+	case <-time.After(100 * time.Millisecond):
+		t.Fatal("Pause did not balance the queued task wait group")
+	}
+}
+
 func TestScheduler_PauseAll_NoDownloads(t *testing.T) {
 	ch := make(chan types.DownloadEvent, 10)
 	pool := New(ch, 3)
@@ -1172,7 +1217,7 @@ func TestScheduler_PauseAtVerified_EndgameMatrix(t *testing.T) {
 			pool.mu.Unlock()
 
 			res := pool.Pause("guard-test")
-			if res != tc.wantReturn {
+			if res.Found != tc.wantReturn {
 				t.Errorf("Pause() = %v, want %v", res, tc.wantReturn)
 			}
 			if canceled != tc.wantCanceled {
