@@ -563,12 +563,28 @@ func TestRefreshCommand_ValidatesURLBeforeConnecting(t *testing.T) {
 	setupIsolatedCmdState(t)
 	resetCommandConnectionState(t)
 
-	err := refreshCmd.RunE(refreshCmd, []string{"deadbeef", "https://"})
+	var requestCount int32
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&requestCount, 1)
+		http.NotFound(w, r)
+	}))
+	defer server.Close()
+
+	_, portString, _ := net.SplitHostPort(server.Listener.Addr().String())
+	var port int
+	_, _ = fmt.Sscanf(portString, "%d", &port)
+	saveActivePort(port)
+	t.Cleanup(removeActivePort)
+
+	err := refreshCmd.RunE(refreshCmd, []string{"deadbeef", "https://:443/file.zip"})
 	if err == nil {
 		t.Fatal("expected invalid URL error")
 	}
 	if !strings.Contains(err.Error(), "invalid replacement URL: missing host") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if got := atomic.LoadInt32(&requestCount); got != 0 {
+		t.Fatalf("server received %d requests for invalid URL", got)
 	}
 }
 

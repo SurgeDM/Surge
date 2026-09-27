@@ -166,7 +166,7 @@ func ValidateAndNormalizeURL(rawURL string) (string, error) {
 	if scheme != "http" && scheme != "https" {
 		return "", fmt.Errorf("unsupported URL scheme: %s (must be http:// or https://)", u.Scheme)
 	}
-	if u.Host == "" {
+	if u.Hostname() == "" {
 		return "", fmt.Errorf("missing host")
 	}
 
