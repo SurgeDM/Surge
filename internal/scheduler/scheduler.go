@@ -788,8 +788,8 @@ func (p *Scheduler) worker() {
 						Mirrors:      localCfg.Mirrors,
 						RateLimit:    localCfg.RateLimit,
 						RateLimitSet: localCfg.RateLimitSet,
-						Workers:      localCfg.Workers,
-						MinChunkSize: localCfg.MinChunkSize,
+						Workers:      localCfg.Runtime.GetWorkers(),
+						MinChunkSize: localCfg.Runtime.GetMinChunkSize(),
 					}, p.progressDone)
 				}
 
