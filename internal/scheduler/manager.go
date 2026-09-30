@@ -12,6 +12,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/probe"
 	"github.com/SurgeDM/Surge/internal/progress"
+	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/strategy/concurrent"
 	"github.com/SurgeDM/Surge/internal/strategy/single"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -247,6 +248,26 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 			surgePath := finalDestPath + types.IncompleteSuffix
 			if err := os.Truncate(surgePath, 0); err != nil {
 				return fmt.Errorf("reset working file for range fallback: %w", err)
+			}
+			// The range checkpoint describes bytes discarded by the restart.
+			// Retain metadata and headers, but invalidate its offsets and bitmap.
+			if checkpoint, err := store.LoadState(cfg.URL, finalDestPath); err == nil && checkpoint != nil {
+				checkpoint.Tasks = nil
+				checkpoint.ChunkBitmap = nil
+				checkpoint.ActualChunkSize = 0
+				checkpoint.Downloaded = 0
+				checkpoint.Elapsed = 0
+				checkpoint.FileHash = ""
+				if err := store.SaveStateWithOptions(cfg.URL, finalDestPath, checkpoint, store.SaveStateOptions{SkipFileHash: true}); err != nil {
+					return fmt.Errorf("invalidate range checkpoint for fallback: %w", err)
+				}
+			}
+			cfg.IsResume = false
+			cfg.Tasks = nil
+			cfg.ChunkBitmap = nil
+			cfg.Downloaded = 0
+			if progState != nil {
+				progState.TakePendingResumeState()
 			}
 		}
 	}
