@@ -362,7 +362,7 @@ func TestConcurrentDownloader_429DoesNotTearDownWithHealthyMirror(t *testing.T) 
 	}
 }
 
-func TestConcurrentDownloader_403IsPermanentForOnlyMirror(t *testing.T) {
+func TestConcurrentDownloader_403DoesNotCancelHealthyWorker(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
@@ -415,11 +415,11 @@ func TestConcurrentDownloader_403IsPermanentForOnlyMirror(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize); !errors.Is(err, types.ErrPermanentHTTP) {
-		t.Fatalf("Download error = %v, want permanent HTTP error", err)
+	if err := downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize); err != nil {
+		t.Fatalf("Download failed after transient 403: %v", err)
 	}
-	if forbiddenRequests.Load() != 1 {
-		t.Fatalf("403 requests = %d, want 1", forbiddenRequests.Load())
+	if forbiddenRequests.Load() < 2 {
+		t.Fatal("expected forbidden range to retry without canceling healthy stream")
 	}
 }
 
@@ -458,7 +458,7 @@ func TestMirrorAware403Exhaustion(t *testing.T) {
 	}
 }
 
-func TestConcurrentDownloader_403DoesNotRetry(t *testing.T) {
+func TestConcurrentDownloader_403RetriesWithCooldown(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
@@ -491,8 +491,8 @@ func TestConcurrentDownloader_403DoesNotRetry(t *testing.T) {
 	defer cancel()
 
 	err = downloader.Download(ctx, server.URL, nil, nil, destPath, fileSize)
-	if !errors.Is(err, types.ErrPermanentHTTP) {
-		t.Fatalf("Download error = %v, want permanent HTTP error", err)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Download error = %v, want context deadline during confirmation", err)
 	}
 	if got := requests.Load(); got > 1 {
 		t.Fatalf("soft 403 requests = %d in 150ms, want at most 1", got)
@@ -604,7 +604,7 @@ func TestConcurrentDownloader_Persistent429WaitsForCancellation(t *testing.T) {
 	}
 }
 
-func TestConcurrentDownloader_Bare503IsGeneric(t *testing.T) {
+func TestConcurrentDownloader_Bare503UsesSharedBackoff(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 

@@ -12,8 +12,8 @@ import (
 // adaptiveConcurrencyGate keeps worker goroutines alive while limiting how many
 // may enter the task queue at once.
 //
-// ponytail: This cap is deliberately per-download. Promote it to host-wide
-// coordination only if benchmarks show multiple same-host downloads fighting.
+// HostRateLimiter additionally enforces the learned request budget across
+// downloads; this gate parks surplus goroutines within one download.
 type adaptiveConcurrencyGate struct {
 	mu sync.Mutex
 

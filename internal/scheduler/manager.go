@@ -231,12 +231,11 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 			downloaded = progState.Bytes.Downloaded.Load()
 		}
 
-		// Determine if we should attempt a fallback to single-threaded mode.
-		// We fallback if concurrent failed, but it wasn't a clean pause or external cancellation,
-		// AND we haven't made any progress yet (to avoid discarding progress).
+		// Only confirmed lack of range support warrants restarting from byte zero.
 		if shouldFallbackToSingle(downloadErr, downloaded) {
 			utils.Debug("Concurrent download failed: %v - falling back to single-threaded", downloadErr)
 			useConcurrent = false // Trigger sequential block below
+			cfg.SupportsRange = false
 
 			// Reset progress state cleanly for single-stream restart from byte 0
 			if progState != nil {
@@ -246,7 +245,9 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 			// Truncate the working file to zero to prevent stale tail bytes
 			// from the failed concurrent session.
 			surgePath := finalDestPath + types.IncompleteSuffix
-			_ = os.Truncate(surgePath, 0)
+			if err := os.Truncate(surgePath, 0); err != nil {
+				return fmt.Errorf("reset working file for range fallback: %w", err)
+			}
 		}
 	}
 
@@ -316,10 +317,8 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 	return downloadErr
 }
 
-// shouldFallbackToSingle reports whether a failed concurrent download
-// should fall back to single-threaded mode. Pause, cancel, deadline, and
-// disk-full errors are excluded — Truncate cannot create free space and
-// single-threaded would hit the same disk-full condition.
+// shouldFallbackToSingle permits a restart only for confirmed range rejection.
+// Pause, cancellation and disk-full errors take precedence in joined errors.
 func shouldFallbackToSingle(downloadErr error, downloaded int64) bool {
 	if downloadErr == nil {
 		return false
@@ -336,7 +335,7 @@ func shouldFallbackToSingle(downloadErr error, downloaded int64) bool {
 	if errors.Is(downloadErr, types.ErrRangeUnsupported) {
 		return true
 	}
-	return downloaded == 0
+	return false
 }
 
 // Download is the CLI entry point (non-TUI) - convenience wrapper

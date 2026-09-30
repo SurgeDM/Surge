@@ -103,8 +103,23 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 	var resp *http.Response
 	const maxRlRetries = types.RateLimitMaxRetries
 	rlRetries := 0
+	host := transport.MirrorHost(rawurl)
+	if d.State != nil {
+		defer d.State.RateLimited.Store(false)
+	}
 
 	for {
+		if until := transport.DefaultHostRateLimiter.BlockedUntil(host, time.Now()); !until.IsZero() {
+			if d.State != nil {
+				d.State.RateLimited.Store(true)
+			}
+			select {
+			case <-dlCtx.Done():
+				return dlCtx.Err()
+			case <-time.After(time.Until(until)):
+			}
+			continue
+		}
 		req, err := buildRequest()
 		if err != nil {
 			return err
@@ -116,12 +131,17 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 			return err
 		}
 
-		if resp.StatusCode == http.StatusOK {
+		challenge, err := transport.IsServerChallenge(resp)
+		if err != nil {
+			_ = resp.Body.Close()
+			return err
+		}
+		if resp.StatusCode == http.StatusOK && !challenge {
 			break
 		}
 
-		if resp.StatusCode == http.StatusTooManyRequests ||
-			(resp.StatusCode == http.StatusServiceUnavailable && resp.Header.Get("Retry-After") != "") {
+		if challenge || resp.StatusCode == http.StatusTooManyRequests ||
+			resp.StatusCode == http.StatusServiceUnavailable {
 			_ = resp.Body.Close()
 			rlRetries++
 			if rlRetries > maxRlRetries {
@@ -129,10 +149,10 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 				return fmt.Errorf("rate limited after %d retries: %d", maxRlRetries, resp.StatusCode)
 			}
 
-			ra, _ := transport.ParseRetryAfter(resp.Header.Get("Retry-After"), time.Now())
-			if ra <= 0 {
-				ra = 5 * time.Second
-			}
+			now := time.Now()
+			ra, explicit := transport.ParseRetryAfter(resp.Header.Get("Retry-After"), now)
+			until := transport.DefaultHostRateLimiter.Penalize(host, ra, explicit, now)
+			ra = time.Until(until)
 			utils.Debug("Single downloader: rate limited (%d), waiting %v (retry %d/%d)", resp.StatusCode, ra, rlRetries, maxRlRetries)
 			if d.State != nil {
 				d.State.RateLimited.Store(true)

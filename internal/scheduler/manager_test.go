@@ -316,10 +316,6 @@ func TestRunDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
 	tmpDir := t.TempDir()
 	content := []byte("fallback download content")
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Header.Get("Range") != "" {
-			w.WriteHeader(http.StatusForbidden)
-			return
-		}
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(content)))
 		w.WriteHeader(http.StatusOK)
 		_, _ = w.Write(content)
@@ -378,13 +374,12 @@ func TestRunDownload_OptimisticConcurrentFallsBackToSingle(t *testing.T) {
 	}
 }
 
-func TestRunDownload_MidTransferConcurrentFailureFallsBackToSingle(t *testing.T) {
+func TestRunDownload_IgnoredRangeFallsBackToSingle(t *testing.T) {
 	tmpDir := t.TempDir()
 	fileSize := 10 * 1024
 	server := testutil.NewMockServerT(t,
 		testutil.WithFileSize(int64(fileSize)),
-		testutil.WithRangeSupport(true),
-		testutil.WithFailOnNthRequest(2), // Fail first worker GET
+		testutil.WithRangeSupport(false),
 	)
 	defer server.Close()
 

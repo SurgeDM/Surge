@@ -1,11 +1,44 @@
 package transport
 
 import (
+	"context"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/types"
 )
+
+func TestHostRequestBudgetCancellationReleasesCapacity(t *testing.T) {
+	h := NewHostRateLimiter()
+	release, err := h.AcquireRequest(context.Background(), "one", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	if _, err := h.AcquireRequest(ctx, "one", 1); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("parked request error=%v", err)
+	}
+	release()
+	release, err = h.AcquireRequest(context.Background(), "one", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	release()
+}
+
+func TestHugeRetryAfterDoesNotOverflow(t *testing.T) {
+	d, explicit := ParseRetryAfter("9223372036854775807", time.Now())
+	if !explicit || d <= 0 {
+		t.Fatalf("Retry-After overflow: duration=%v explicit=%v", d, explicit)
+	}
+	now := time.Now()
+	until := NewHostRateLimiter().Penalize("huge", d, explicit, now)
+	if !until.After(now.Add(time.Hour)) {
+		t.Fatalf("huge Retry-After scheduled an early retry: %v", until)
+	}
+}
 
 func TestParseRetryAfter_Seconds(t *testing.T) {
 	now := time.Now()
@@ -449,5 +482,20 @@ func TestHostRateLimiter_MultipleFlushesOneRangeDoesNotRecover(t *testing.T) {
 	cap, ok := h.ReportCompletedRange("flushes.com", 8, now.Add(RecoveryWindow+time.Second))
 	if ok || cap != 2 {
 		t.Fatalf("expected cap=2 with only 1 completed range despite 1MB flushes, got cap=%d ok=%v", cap, ok)
+	}
+}
+
+func TestHostRateLimiter_HealthyUnfinishedRangeRecoversOncePerWindow(t *testing.T) {
+	h := NewHostRateLimiter()
+	now := time.Now()
+	h.ReportThrottle("large-range", 4, time.Second, true, now)
+	h.ReportHealthyProgress("large-range", RecoveryByteThreshold, 8, RecoveryWindow, now.Add(2*time.Second))
+	cap, recovered := h.ReportHealthyProgress("large-range", RecoveryByteThreshold, 8, RecoveryWindow, now.Add(20*time.Second))
+	if cap != 3 || !recovered {
+		t.Fatalf("healthy unfinished range: cap=%d recovered=%v", cap, recovered)
+	}
+	cap, recovered = h.ReportHealthyProgress("large-range", RecoveryByteThreshold, 8, RecoveryWindow, now.Add(21*time.Second))
+	if cap != 3 || recovered {
+		t.Fatalf("multiple flushes raised cap in same window: cap=%d recovered=%v", cap, recovered)
 	}
 }

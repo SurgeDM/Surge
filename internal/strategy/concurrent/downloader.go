@@ -44,8 +44,10 @@ type ConcurrentDownloader struct {
 	bufPool            sync.Pool
 	Headers            map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
 	hostLimiter        *transport.HostRateLimiter
+	workerHosts        []string
 	soft403Mu          sync.Mutex
 	forbiddenByMirror  map[string]int
+	nonRangeMirrors    map[string]bool
 	soft403Progress    int64
 	soft403Since       time.Time
 	concurrencyGate    *adaptiveConcurrencyGate
@@ -259,6 +261,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	d.soft403Mu.Lock()
 	d.forbiddenByMirror = make(map[string]int)
+	d.nonRangeMirrors = make(map[string]bool)
 	d.soft403Progress = 0
 	d.soft403Since = time.Time{}
 	d.soft403Mu.Unlock()
@@ -309,6 +312,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	for i, mirror := range workerMirrors {
 		workerHosts[i] = transport.MirrorHost(mirror)
 	}
+	d.workerHosts = workerHosts
 	initialCap := numConns
 	if d.Runtime.IsAdaptiveConcurrencyEnabled() {
 		initialCap = d.hostLimiter.ConcurrencyCapForHosts(workerHosts, numConns)
@@ -843,6 +847,18 @@ func (d *ConcurrentDownloader) syncFile(outFile *os.File) error {
 }
 
 func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *http.Client, rawurl string) (int64, error) {
+	host := transport.MirrorHost(rawurl)
+	for {
+		until := d.hostLimiter.BlockedUntil(host, time.Now())
+		if until.IsZero() {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return 0, ctx.Err()
+		case <-time.After(time.Until(until)):
+		}
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)
 	if err != nil {
 		return 0, fmt.Errorf("failed to create concurrent bootstrap request: %w", err)
@@ -851,13 +867,14 @@ func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *ht
 	// Preserve auth/session cookies from the browser across the bootstrap request;
 	// the server may reject unauthenticated probes with 401/403.
 	for key, val := range d.Headers {
-		if key != "Range" {
+		if !strings.EqualFold(key, "Range") && !strings.EqualFold(key, "Accept-Encoding") {
 			req.Header.Set(key, val)
 		}
 	}
 	// Range must come after custom headers so a caller-supplied Range can't override the probe byte
 	req.Header.Set("User-Agent", d.Runtime.GetUserAgent())
 	req.Header.Set("Range", "bytes=0-0")
+	req.Header.Set("Accept-Encoding", "identity")
 
 	resp, err := client.Do(req)
 	if err != nil {
@@ -869,6 +886,28 @@ func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *ht
 	}()
 
 	if resp.StatusCode != http.StatusPartialContent {
+		challenge, err := transport.IsServerChallenge(resp)
+		if err != nil {
+			return 0, err
+		}
+		if challenge || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
+			now := time.Now()
+			ra, explicit := transport.ParseRetryAfter(resp.Header.Get("Retry-After"), now)
+			d.soft403Mu.Lock()
+			if d.throttleEpisodeStart.IsZero() {
+				d.throttleEpisodeStart = now
+			}
+			remainingBudget := 10*time.Minute - now.Sub(d.throttleEpisodeStart)
+			d.soft403Mu.Unlock()
+			if remainingBudget <= 0 || (explicit && ra > remainingBudget) {
+				return 0, types.ErrRetryBudgetExceeded
+			}
+			d.hostLimiter.Penalize(host, ra, explicit, now)
+			return 0, &rateLimitError{retryAfter: ra, explicit: explicit}
+		}
+		if resp.StatusCode == http.StatusOK {
+			return 0, types.ErrRangeUnsupported
+		}
 		if types.IsPermanentHTTPStatus(resp.StatusCode) {
 			return 0, fmt.Errorf("concurrent bootstrap requires 206 response, got %d: %w", resp.StatusCode, types.ErrPermanentHTTP)
 		}

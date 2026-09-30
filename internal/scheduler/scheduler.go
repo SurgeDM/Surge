@@ -973,6 +973,9 @@ func shouldRetryFailedDownload(isShuttingDown bool, err error, retries int) bool
 	if types.IsPermanentHTTPError(err) {
 		return false
 	}
+	if errors.Is(err, types.ErrRetryBudgetExceeded) {
+		return false
+	}
 	if types.IsInsufficientDiskSpace(err) {
 		return false
 	}
