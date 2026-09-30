@@ -77,15 +77,15 @@ func TestHostRateLimiter_PenalizeExpBackoff(t *testing.T) {
 	}
 }
 
-func TestHostRateLimiter_PenalizeRetryAfterClamp(t *testing.T) {
+func TestHostRateLimiter_PenalizeRespectsRetryAfter(t *testing.T) {
 	h := NewHostRateLimiter()
 	now := time.Now()
 
 	deadline := h.Penalize("example.com", 3600*time.Second, true, now)
 	backoff := deadline.Sub(now)
 
-	if backoff > types.RateLimitMaxBackoff+time.Second {
-		t.Fatalf("expected backoff clamped to max %v, got %v", types.RateLimitMaxBackoff, backoff)
+	if backoff < time.Hour || backoff > time.Hour+types.RateLimitMaxBackoff {
+		t.Fatalf("expected full Retry-After plus bounded positive jitter, got %v", backoff)
 	}
 }
 
@@ -288,9 +288,9 @@ func TestHostRateLimiter_PenaltyDecayResetsConsecutive(t *testing.T) {
 	}
 
 	d1 := penalizeAt(now)
-	d2 := penalizeAt(now)
+	d2 := penalizeAt(now.Add(d1 + time.Second))
 
-	d3 := penalizeAt(now.Add(types.RateLimitPenaltyDecay + time.Second))
+	d3 := penalizeAt(now.Add(d1 + types.RateLimitPenaltyDecay + 2*time.Second))
 
 	if d3 >= d2 {
 		t.Fatalf("expected decay-reset backoff (d3=%v) to be less than exponential (d2=%v)", d3, d2)

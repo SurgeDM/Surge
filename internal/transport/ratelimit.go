@@ -128,32 +128,37 @@ func (h *HostRateLimiter) ReportThrottle(host string, currentCap int, retryAfter
 	if now.Sub(p.lastHit) > types.RateLimitPenaltyDecay {
 		p.consecutive = 0
 	}
-	p.consecutive++
+	if newEpisode {
+		p.consecutive++
+	}
 	p.lastHit = now
 
 	var d time.Duration
 	if explicit {
 		d = retryAfter
 	} else {
-		d = types.RateLimitBaseBackoff * time.Duration(int64(1)<<(p.consecutive-1))
+		d = types.RateLimitBaseBackoff * time.Duration(int64(1)<<min(max(p.consecutive-1, 0), 5))
 	}
 
 	if d < types.RateLimitMinBackoff {
 		d = types.RateLimitMinBackoff
 	}
-	if d > types.RateLimitMaxBackoff {
+	if !explicit && d > types.RateLimitMaxBackoff {
 		d = types.RateLimitMaxBackoff
 	}
 
-	jitterRange := int64(float64(d) * types.RateLimitJitterFraction)
+	jitterRange := int64(float64(min(d, types.RateLimitMaxBackoff)) * types.RateLimitJitterFraction)
 	if jitterRange > 0 {
-		delta := rand.Int64N(2*jitterRange) - jitterRange
+		delta := rand.Int64N(jitterRange)
+		if !explicit {
+			delta = rand.Int64N(2*jitterRange) - jitterRange
+		}
 		d += time.Duration(delta)
 	}
 	if d < types.RateLimitMinBackoff {
 		d = types.RateLimitMinBackoff
 	}
-	if d > types.RateLimitMaxBackoff {
+	if !explicit && d > types.RateLimitMaxBackoff {
 		d = types.RateLimitMaxBackoff
 	}
 
