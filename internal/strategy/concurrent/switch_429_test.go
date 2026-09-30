@@ -784,8 +784,6 @@ func TestTwoDownloadsSameHostThrottleStateIsolation(t *testing.T) {
 	dB.ImportThrottleState(cfgB)
 	hostLimiter.ReportProgressBytes(host, 1*1024*1024)
 	hostLimiter.ReportCompletedRange(host, 8, now.Add(20*time.Second))
-	dB.soft403Mu.Lock()
-	dB.soft403Mu.Unlock()
 	dB.ExportThrottleState(cfgB)
 
 	// Verify A's throttle state (cfgA) is isolated from B's progress
