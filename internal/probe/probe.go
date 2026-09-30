@@ -192,14 +192,6 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 	}()
 
 	utils.Debug("Probe response status: %d", resp.StatusCode)
-	challenge, challengeErr := transport.IsServerChallenge(resp)
-	if challengeErr != nil {
-		return nil, fmt.Errorf("inspect probe response: %w", challengeErr)
-	}
-	if challenge {
-		return nil, fmt.Errorf("server returned a browser verification challenge instead of file metadata")
-	}
-
 	result := &ProbeResult{}
 
 	// Only a 206 response proves resume-safe range support; a 200 means the

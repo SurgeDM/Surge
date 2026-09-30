@@ -203,7 +203,7 @@ Three independent controls are involved:
 2. The per-download byte limiter restricts one download's bandwidth.
 3. `HostRateLimiter` coordinates server-directed cooldowns and, when adaptive concurrency is enabled, stores a learned concurrency cap per host.
 
-`MultiLimiter` combines the first two controls for every read. The host policy handles `429`, all `503` responses, explicit browser challenges, and repeated soft `403` responses. Healthy streams continue while failed ranges are requeued behind shared cooldowns. Server-provided `Retry-After` deadlines are never shortened or capped; local exponential backoff is capped at 30 seconds, with concurrent throttle responses coalesced into one episode.
+`MultiLimiter` combines the first two controls for every read. The host policy handles `429`, all `503` responses, and repeated soft `403` responses. Healthy streams continue while failed ranges are requeued behind shared cooldowns. Server-provided `Retry-After` deadlines are never shortened or capped; local exponential backoff is capped at 30 seconds, with concurrent throttle responses coalesced into one episode.
 
 Adaptive concurrency is opt-in through a positive `AdaptiveConcurrencyInterval`:
 
@@ -213,7 +213,7 @@ Adaptive concurrency is opt-in through a positive `AdaptiveConcurrencyInterval`:
 
 Throttle episode timestamps are copied into `DownloadRecord` across scheduler retries, preventing a recreated downloader from receiving a fresh no-progress budget.
 
-Bare `403` responses use a bounded confirmation window before all range-capable mirrors are declared forbidden. Browser challenges require an explicit mitigation header or HTML challenge signatures; CDN identity and content compression alone do not qualify. Probe responses claiming tiny text files under binary/archive filenames generate a warning without rejecting legitimate downloads solely on MIME type.
+Bare `403` responses use a bounded confirmation window before all range-capable mirrors are declared forbidden. HTTP response handling is provider-neutral: server names, vendor headers, and body signatures do not drive retry or fallback decisions. Probe responses claiming tiny text files under binary/archive filenames generate a warning without rejecting legitimate downloads solely on MIME type.
 
 ## Transport layer
 

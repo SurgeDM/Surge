@@ -886,11 +886,7 @@ func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *ht
 	}()
 
 	if resp.StatusCode != http.StatusPartialContent {
-		challenge, err := transport.IsServerChallenge(resp)
-		if err != nil {
-			return 0, err
-		}
-		if challenge || resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
+		if resp.StatusCode == http.StatusTooManyRequests || resp.StatusCode == http.StatusServiceUnavailable {
 			now := time.Now()
 			ra, explicit := transport.ParseRetryAfter(resp.Header.Get("Retry-After"), now)
 			d.soft403Mu.Lock()

@@ -442,14 +442,6 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			utils.Debug("Error closing response body: %v", err)
 		}
 	}()
-	challenge, err := transport.IsServerChallenge(resp)
-	if err != nil {
-		return err
-	}
-	if challenge {
-		return &rateLimitError{}
-	}
-
 	// Both explicit rate limits and bare 503s require shared host backoff.
 	if resp.StatusCode == http.StatusTooManyRequests ||
 		resp.StatusCode == http.StatusServiceUnavailable {

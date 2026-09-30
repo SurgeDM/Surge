@@ -131,16 +131,11 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 			return err
 		}
 
-		challenge, err := transport.IsServerChallenge(resp)
-		if err != nil {
-			_ = resp.Body.Close()
-			return err
-		}
-		if resp.StatusCode == http.StatusOK && !challenge {
+		if resp.StatusCode == http.StatusOK {
 			break
 		}
 
-		if challenge || resp.StatusCode == http.StatusTooManyRequests ||
+		if resp.StatusCode == http.StatusTooManyRequests ||
 			resp.StatusCode == http.StatusServiceUnavailable {
 			_ = resp.Body.Close()
 			rlRetries++
