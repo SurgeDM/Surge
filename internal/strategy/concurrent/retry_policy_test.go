@@ -106,6 +106,47 @@ func TestIgnoredRangeMirrorDoesNotDiscardHealthyMirror(t *testing.T) {
 	}
 }
 
+func TestWorkerNoEligibleMirrorsCleansUpActiveTask(t *testing.T) {
+	for _, withState := range []bool{false, true} {
+		for _, withGate := range []bool{false, true} {
+			t.Run(fmt.Sprintf("state-%v/gate-%v", withState, withGate), func(t *testing.T) {
+				var state *progress.DownloadProgress
+				if withState {
+					state = progress.New("unsupported", 100)
+				}
+				d := NewConcurrentDownloader("unsupported", nil, state, nil)
+				mirror := "https://example.invalid/file"
+				d.nonRangeMirrors = map[string]bool{mirror: true}
+				if withGate {
+					d.concurrencyGate = newAdaptiveConcurrencyGate(1, time.Second)
+				}
+				queue := NewTaskQueue()
+				task := types.Task{Offset: 10, Length: 20}
+				queue.Push(task)
+				ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+				defer cancel()
+				// No HTTP request or file access is needed when every mirror is excluded.
+				if err := d.worker(ctx, 0, []string{mirror}, nil, queue, 100, nil); !errors.Is(err, types.ErrRangeUnsupported) {
+					t.Fatalf("error=%v, want range unsupported", err)
+				}
+				if len(d.activeTasks) != 0 {
+					t.Fatal("active task was not detached")
+				}
+				remaining := queue.DrainRemaining()
+				if len(remaining) != 1 || remaining[0] != task {
+					t.Fatalf("remaining=%v, want original range exactly once", remaining)
+				}
+				if state != nil && state.ActiveWorkers.Load() != 0 {
+					t.Fatalf("active workers=%d, want zero", state.ActiveWorkers.Load())
+				}
+				if withGate && d.concurrencyGate.admitted != 0 {
+					t.Fatalf("admitted=%d, want released gate slot", d.concurrencyGate.admitted)
+				}
+			})
+		}
+	}
+}
+
 func TestPersistent503CannotResetThrottleBudget(t *testing.T) {
 	dir, cleanup := initTestState(t)
 	defer cleanup()

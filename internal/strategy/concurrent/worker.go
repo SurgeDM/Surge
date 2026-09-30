@@ -101,6 +101,15 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			}
 			d.soft403Mu.Unlock()
 			if len(eligibleHosts) == 0 {
+				if remaining := d.detachRemainingTask(id, activeTask); remaining != nil && remaining.Length > 0 {
+					queue.Push(*remaining)
+				}
+				if d.State != nil {
+					d.State.ActiveWorkers.Add(-1)
+				}
+				if d.concurrencyGate != nil {
+					d.concurrencyGate.release()
+				}
 				return types.ErrRangeUnsupported
 			}
 			idx, wait := d.hostLimiter.PickMirror(eligibleHosts, 0, time.Now())
