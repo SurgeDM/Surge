@@ -433,6 +433,9 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 		}
 		if mgr.eventBus != nil {
 			_ = mgr.eventBus.Publish(queuedEvent)
+			if probeResult.Warning != "" {
+				_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: cfg.ID, Message: probeResult.Warning})
+			}
 		}
 
 		mgr.pool.Add(*cfg)

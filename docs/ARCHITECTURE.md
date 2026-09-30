@@ -178,8 +178,8 @@ A failed transient download is requeued with `retryAt`. Waiting scheduler worker
 `RunDownload` selects the smallest suitable implementation:
 
 - `SingleDownloader` is used when the server does not support ranges.
-- `ConcurrentDownloader` is used when range requests are supported and multiple connections are useful.
-- If a supposedly range-capable server returns an ordinary `200 OK` for a partial request, the concurrent engine returns `ErrRangeUnsupported`. `RunDownload` resets the working file and falls back to `SingleDownloader`.
+- `ConcurrentDownloader` is used whenever ranges are supported, including one-worker transfers, to preserve resume support.
+- If a mirror ignores a partial range request, the concurrent engine tries other range-capable mirrors. Only when all mirrors ignore ranges does it return `ErrRangeUnsupported`. `RunDownload` checks the working-file reset and falls back to `SingleDownloader`; unrelated errors never trigger a restart from zero.
 
 The single downloader performs one ordinary GET. It cannot resume because it is specifically used for servers where byte ranges cannot be trusted.
 
@@ -203,15 +203,17 @@ Three independent controls are involved:
 2. The per-download byte limiter restricts one download's bandwidth.
 3. `HostRateLimiter` coordinates server-directed cooldowns and, when adaptive concurrency is enabled, stores a learned concurrency cap per host.
 
-`MultiLimiter` combines the first two controls for every read. The host policy handles `429`, retryable `503`, and repeated soft `403` responses.
+`MultiLimiter` combines the first two controls for every read. The host policy handles `429`, all `503` responses, explicit browser challenges, and repeated soft `403` responses. Healthy streams continue while failed ranges are requeued behind shared cooldowns. Server-provided `Retry-After` deadlines are never shortened or capped; local exponential backoff is capped at 30 seconds, with concurrent throttle responses coalesced into one episode.
 
 Adaptive concurrency is opt-in through a positive `AdaptiveConcurrencyInterval`:
 
 - When disabled, the requested worker count is preserved. Host cooldowns still prevent immediate retries, but they do not change the current or learned concurrency cap.
-- When enabled, a new download starts from the host's learned cap. A new throttle episode reduces it, and healthy byte/range progress gradually raises it.
-- Each cooldown schedules gate recovery. Recovery clears the shared `RateLimited` progress flag so UI and API clients stop reporting a stale throttled state.
+- When enabled, downloads share the host's learned request budget. A new throttle episode reduces it; existing streams keep running. Sustained byte progress raises it by at most one connection per configured interval, without waiting for large ranges to finish.
+- Successful requests clear `RateLimited` once eligible hosts leave cooldown. Learning is retained across downloader recreation and expires after 30 minutes of host inactivity.
 
 Throttle episode timestamps are copied into `DownloadRecord` across scheduler retries, preventing a recreated downloader from receiving a fresh no-progress budget.
+
+Bare `403` responses use a bounded confirmation window before all range-capable mirrors are declared forbidden. Browser challenges require an explicit mitigation header or HTML challenge signatures; CDN identity and content compression alone do not qualify. Probe responses claiming tiny text files under binary/archive filenames generate a warning without rejecting legitimate downloads solely on MIME type.
 
 ## Transport layer
 
