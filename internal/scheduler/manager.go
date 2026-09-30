@@ -215,7 +215,6 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 
 		d := concurrent.NewConcurrentDownloader(cfg.ID, cfg.ProgressCh, progState, cfg.Runtime)
 		d.ImportThrottleState(cfg)
-		defer d.ExportThrottleState(cfg)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.Limiter = cfg.Limiter
 		d.RateLimitBps = cfg.RateLimit
@@ -223,6 +222,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		utils.Debug("Calling Download with mirrors: %v", mirrors)
 		// Pass effectiveTotalSize to avoid unnecessary bootstrap if state already knows the size
 		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, effectiveTotalSize)
+		d.ExportThrottleState(cfg)
 		if d.TotalSize > 0 {
 			effectiveTotalSize = d.TotalSize
 		}
@@ -276,6 +276,8 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		// Fallback to single-threaded downloader
 		utils.Debug("Using single-threaded downloader")
 		d := single.NewSingleDownloader(cfg.ID, cfg.ProgressCh, progState, cfg.Runtime)
+		d.ImportThrottleState(cfg)
+		defer d.ExportThrottleState(cfg)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.Limiter = cfg.Limiter
 		// Pass effectiveTotalSize here as well

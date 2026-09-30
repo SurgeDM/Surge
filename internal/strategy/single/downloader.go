@@ -20,13 +20,37 @@ import (
 // NOTE: Pause/resume is NOT supported because this downloader is only used when
 // the server doesn't support Range headers. If interrupted, the download must restart.
 type SingleDownloader struct {
-	ProgressChan chan<- types.DownloadEvent // Channel for events (start/complete/error)
-	ID           string                     // Download ID
-	State        *progress.DownloadProgress // Shared state for TUI polling
-	Runtime      *types.RuntimeConfig
-	Limiter      types.ByteLimiter
-	TotalSize    int64
-	Headers      map[string]string // Custom HTTP headers (cookies, auth, etc.)
+	ProgressChan         chan<- types.DownloadEvent // Channel for events (start/complete/error)
+	ID                   string                     // Download ID
+	State                *progress.DownloadProgress // Shared state for TUI polling
+	Runtime              *types.RuntimeConfig
+	Limiter              types.ByteLimiter
+	TotalSize            int64
+	Headers              map[string]string // Custom HTTP headers (cookies, auth, etc.)
+	throttleEpisodeStart time.Time
+}
+
+func (d *SingleDownloader) ImportThrottleState(cfg *types.DownloadRecord) {
+	if cfg != nil {
+		d.throttleEpisodeStart = cfg.ThrottleEpisodeStart
+	}
+}
+
+func (d *SingleDownloader) ExportThrottleState(cfg *types.DownloadRecord) {
+	if cfg != nil {
+		cfg.ThrottleEpisodeStart = d.throttleEpisodeStart
+	}
+}
+
+func (d *SingleDownloader) checkThrottleBudget(now time.Time, wait time.Duration) error {
+	if d.throttleEpisodeStart.IsZero() {
+		d.throttleEpisodeStart = now
+	}
+	remaining := 10*time.Minute - now.Sub(d.throttleEpisodeStart)
+	if remaining <= 0 || wait > remaining {
+		return fmt.Errorf("host cooldown %v exceeds remaining throttle budget %v: %w", wait, remaining, types.ErrRetryBudgetExceeded)
+	}
+	return nil
 }
 
 var bufPool = sync.Pool{
@@ -110,6 +134,9 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 	for {
 		if until := transport.DefaultHostRateLimiter.BlockedUntil(host, time.Now()); !until.IsZero() {
+			if err := d.checkThrottleBudget(time.Now(), time.Until(until)); err != nil {
+				return err
+			}
 			if d.State != nil {
 				d.State.RateLimited.Store(true)
 			}
@@ -138,16 +165,19 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		if resp.StatusCode == http.StatusTooManyRequests ||
 			resp.StatusCode == http.StatusServiceUnavailable {
 			_ = resp.Body.Close()
+			now := time.Now()
+			ra, explicit := transport.ParseRetryAfter(resp.Header.Get("Retry-After"), now)
+			until := transport.DefaultHostRateLimiter.Penalize(host, ra, explicit, now)
+			ra = time.Until(until)
+			if err := d.checkThrottleBudget(now, ra); err != nil {
+				return err
+			}
 			rlRetries++
 			if rlRetries > maxRlRetries {
 				utils.Debug("Single downloader: rate limited after %d retries for %s", maxRlRetries, rawurl)
 				return fmt.Errorf("rate limited after %d retries: %d", maxRlRetries, resp.StatusCode)
 			}
 
-			now := time.Now()
-			ra, explicit := transport.ParseRetryAfter(resp.Header.Get("Retry-After"), now)
-			until := transport.DefaultHostRateLimiter.Penalize(host, ra, explicit, now)
-			ra = time.Until(until)
 			utils.Debug("Single downloader: rate limited (%d), waiting %v (retry %d/%d)", resp.StatusCode, ra, rlRetries, maxRlRetries)
 			if d.State != nil {
 				d.State.RateLimited.Store(true)
@@ -223,6 +253,9 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		progressReader := newProgressReader(reader, d.State, types.WorkerBatchSize, types.WorkerBatchInterval)
 		written, err = io.CopyBuffer(outFile, progressReader, buf)
 		progressReader.Flush()
+	}
+	if written > 0 {
+		d.throttleEpisodeStart = time.Time{}
 	}
 	if err != nil {
 		if ctxErr := ctx.Err(); ctxErr != nil {
