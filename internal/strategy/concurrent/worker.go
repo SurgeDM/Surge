@@ -258,6 +258,12 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				explicit := rlErr.explicit
 				host := mirrorHosts[currentMirrorIdx]
 				now := time.Now()
+				reportedCap := 0
+				if d.concurrencyGate != nil && d.Runtime.IsAdaptiveConcurrencyEnabled() {
+					reportedCap = d.concurrencyGate.currentCap()
+				}
+				// Preserve the host deadline even when this download cannot wait.
+				until, _ := d.hostLimiter.ReportThrottle(host, reportedCap, retryAfter, explicit, now)
 
 				d.soft403Mu.Lock()
 				if d.throttleEpisodeStart.IsZero() {
@@ -279,11 +285,6 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				if d.concurrencyGate != nil {
 					gateCap = d.concurrencyGate.currentCap()
 				}
-				reportedCap := gateCap
-				if !d.Runtime.IsAdaptiveConcurrencyEnabled() {
-					reportedCap = 0
-				}
-				until, _ := d.hostLimiter.ReportThrottle(host, reportedCap, retryAfter, explicit, now)
 				if d.concurrencyGate != nil {
 					if !d.Runtime.IsAdaptiveConcurrencyEnabled() {
 						d.concurrencyGate.setCap(gateCap, until)

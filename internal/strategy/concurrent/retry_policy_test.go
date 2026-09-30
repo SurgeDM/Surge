@@ -127,6 +127,49 @@ func TestPersistent503CannotResetThrottleBudget(t *testing.T) {
 	}
 }
 
+func TestLongRetryAfterPreservesHostCooldown(t *testing.T) {
+	for _, size := range []int64{0, 65536} {
+		t.Run(fmt.Sprintf("size-%d", size), func(t *testing.T) {
+			dir, cleanup := initTestState(t)
+			defer cleanup()
+			var requests atomic.Int32
+			server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				requests.Add(1)
+				w.Header().Set("Retry-After", "3600")
+				w.WriteHeader(http.StatusServiceUnavailable)
+			}))
+			defer server.Close()
+			path := filepath.Join(dir, "long-cooldown.bin")
+			if err := os.WriteFile(path+types.IncompleteSuffix, nil, 0600); err != nil {
+				t.Fatal(err)
+			}
+			limiter := transport.NewHostRateLimiter()
+			newDownloader := func() *ConcurrentDownloader {
+				d := NewConcurrentDownloader("cooldown", nil, progress.New("cooldown", size), &types.RuntimeConfig{Workers: 1})
+				d.hostLimiter = limiter
+				return d
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			started := time.Now()
+			if err := newDownloader().Download(ctx, server.URL, nil, nil, path, size); !errors.Is(err, types.ErrRetryBudgetExceeded) {
+				t.Fatalf("error=%v, want exhausted throttle budget", err)
+			}
+			if until := limiter.BlockedUntil(transport.MirrorHost(server.URL), time.Now()); until.Before(started.Add(time.Hour)) {
+				t.Fatalf("host deadline=%v, want at least one hour", until)
+			}
+			retryCtx, retryCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+			defer retryCancel()
+			if err := newDownloader().Download(retryCtx, server.URL, nil, nil, path, size); !errors.Is(err, context.DeadlineExceeded) {
+				t.Fatalf("retry error=%v, want deadline while cooling down", err)
+			}
+			if requests.Load() != 1 {
+				t.Fatalf("requests=%d, retry bypassed cooldown", requests.Load())
+			}
+		})
+	}
+}
+
 func TestTwoDownloadsShareLearnedHostConnectionBudget(t *testing.T) {
 	dir, cleanup := initTestState(t)
 	defer cleanup()

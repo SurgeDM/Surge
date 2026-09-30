@@ -895,10 +895,10 @@ func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *ht
 			}
 			remainingBudget := 10*time.Minute - now.Sub(d.throttleEpisodeStart)
 			d.soft403Mu.Unlock()
+			d.hostLimiter.Penalize(host, ra, explicit, now)
 			if remainingBudget <= 0 || (explicit && ra > remainingBudget) {
 				return 0, types.ErrRetryBudgetExceeded
 			}
-			d.hostLimiter.Penalize(host, ra, explicit, now)
 			return 0, &rateLimitError{retryAfter: ra, explicit: explicit}
 		}
 		if resp.StatusCode == http.StatusOK {
