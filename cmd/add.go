@@ -53,33 +53,62 @@ var addCmd = &cobra.Command{
 			return nil
 		}
 
-		// Send downloads to server
-		count := 0
-		attempted := 0
-		for _, arg := range urls {
-			url, mirrors := ParseURLArg(arg)
-			if url == "" {
-				continue
-			}
-			attempted++
-			if err := sendToServerWithApproval(url, mirrors, resolvedOutput, baseURL, token, !confirm); err != nil {
-				fmt.Printf("Error adding %s: %v\n", url, err)
-				continue
-			}
-			count++
-		}
+		summary := submitDownloads(urls, resolvedOutput, baseURL, token, confirm)
 
-		if count > 0 {
-			fmt.Printf("Successfully added %d downloads.\n", count)
+		if summary.queued > 0 {
+			fmt.Printf("Successfully added %d downloads.\n", summary.queued)
+		}
+		if summary.awaitingApproval > 0 {
+			fmt.Printf("Confirmation requested for %d downloads.\n", summary.awaitingApproval)
+		}
+		if summary.succeeded() > 0 {
 			return nil
 		}
 
-		if attempted > 0 {
+		if summary.failed > 0 {
 			return fmt.Errorf("failed to add any downloads")
 		}
 
 		return fmt.Errorf("no valid URLs to add")
 	},
+}
+
+type addSummary struct {
+	queued           int
+	awaitingApproval int
+	failed           int
+}
+
+func (s addSummary) succeeded() int {
+	return s.queued + s.awaitingApproval
+}
+
+func submitDownloads(urls []string, output, baseURL, token string, confirm bool) addSummary {
+	var summary addSummary
+	for _, arg := range urls {
+		url, mirrors, err := parseAndNormalizeURLArg(arg)
+		if err != nil {
+			fmt.Printf("Error adding %s: %v\n", arg, err)
+			summary.failed++
+			continue
+		}
+		if url == "" {
+			continue
+		}
+
+		pendingApproval, err := sendToServerWithApproval(url, mirrors, output, baseURL, token, !confirm)
+		if err != nil {
+			fmt.Printf("Error adding %s: %v\n", url, err)
+			summary.failed++
+			continue
+		}
+		if pendingApproval {
+			summary.awaitingApproval++
+		} else {
+			summary.queued++
+		}
+	}
+	return summary
 }
 
 func init() {

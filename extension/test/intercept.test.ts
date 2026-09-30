@@ -60,7 +60,7 @@ describe('download interception naming', () => {
     mockFetch.mockImplementation(async (url: string) => {
       if (url.includes('/health')) return { ok: true };
       if (url.includes('/list')) return { ok: true, json: async () => [] };
-      if (url.includes('/download')) return {
+      if (url.endsWith('/download')) return {
         ok: true,
         json: async () => ({ status: 'queued', id: '123', filename: 'resolved-by-backend.zip' })
       };
@@ -76,7 +76,7 @@ describe('download interception naming', () => {
     await __test__.handleDownloadCreated(downloadItem);
 
     // 2. Verify sendToSurge was called with EMPTY filename
-    const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+    const downloadCall = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
     expect(downloadCall).toBeDefined();
 
     const body = JSON.parse(downloadCall?.[1].body);
@@ -93,7 +93,7 @@ describe('download interception naming', () => {
     mockFetch.mockImplementation(async (url: string) => {
       if (url.includes('/health')) return { ok: true };
       if (url.includes('/list')) return { ok: true, json: async () => [] };
-      if (url.includes('/download')) return {
+      if (url.endsWith('/download')) return {
         ok: true,
         json: async () => ({ status: 'queued', id: '456', filename: 'authoritative.zip' })
       };
@@ -109,9 +109,52 @@ describe('download interception naming', () => {
 
     await __test__.handleDownloadCreated(downloadItem);
 
-    const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+    const downloadCall = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
     const body = JSON.parse(downloadCall?.[1].body);
     expect(body.filename).toBe('');
+  });
+
+  it('uses the server duplicate check and prompts when the warning is enabled', async () => {
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url.endsWith('/download/duplicate')) {
+        return { ok: true, json: async () => ({ exists: true }) };
+      }
+      if (url.endsWith('/download')) {
+        return { ok: true, json: async () => ({ filename: 'file.zip' }) };
+      }
+      return { ok: true };
+    });
+
+    const url = 'https://example.com/finished.zip';
+    await __test__.handleDownloadCreated({ id: 457, url, startTime: new Date().toISOString() });
+
+    const check = mockFetch.mock.calls.find(call => call[0].endsWith('/download/duplicate'));
+    expect(JSON.parse(check?.[1].body)).toEqual({ url });
+    expect(mockFetch.mock.calls.some(call => call[0].endsWith('/download'))).toBe(false);
+    expect(browser.runtime.sendMessage).toHaveBeenCalledWith(expect.objectContaining({ type: 'promptDuplicate' }));
+  });
+
+  it('sends the narrow duplicate override without a popup when the warning is disabled', async () => {
+    (browser.storage.local.get as import('vitest').Mock).mockImplementation((key: string) => {
+      if (key === 'serverUrl') return Promise.resolve({ serverUrl: 'http://127.0.0.1:1700' });
+      if (key === 'warnOnDuplicate') return Promise.resolve({ warnOnDuplicate: false });
+      return Promise.resolve({});
+    });
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url.endsWith('/download')) {
+        return { ok: true, json: async () => ({ filename: 'file.zip' }) };
+      }
+      return { ok: true };
+    });
+
+    await __test__.handleDownloadCreated({
+      id: 458, url: 'https://example.com/finished.zip', startTime: new Date().toISOString(),
+    });
+
+    expect(mockFetch.mock.calls.some(call => call[0].endsWith('/download/duplicate'))).toBe(false);
+    const download = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
+    expect(JSON.parse(download?.[1].body)).toMatchObject({ skip_duplicate_warning: true });
+    expect(browser.runtime.sendMessage).not.toHaveBeenCalledWith(expect.objectContaining({ type: 'promptDuplicate' }));
   });
 
   it('does not cancel the browser download when Surge is offline', async () => {
@@ -131,7 +174,7 @@ describe('download interception naming', () => {
     expect(browser.downloads.cancel).not.toHaveBeenCalled();
     expect(browser.downloads.erase).not.toHaveBeenCalled();
 
-    const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+    const downloadCall = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
     expect(downloadCall).toBeUndefined();
   });
 
@@ -146,7 +189,7 @@ describe('download interception naming', () => {
     });
 
     expect(browser.downloads.download).not.toHaveBeenCalled();
-    expect(mockFetch.mock.calls.some(call => call[0].includes('/download'))).toBe(false);
+    expect(mockFetch.mock.calls.some(call => call[0].endsWith('/download'))).toBe(false);
   });
 
   it('coalesces concurrent interception attempts for the same URL', async () => {
@@ -159,7 +202,7 @@ describe('download interception naming', () => {
     mockFetch.mockImplementation((url: string) => {
       if (url.includes('/health')) return Promise.resolve({ ok: true });
       if (url.includes('/list')) return Promise.resolve({ ok: true, json: async () => [] });
-      if (url.includes('/download')) return Promise.resolve({ ok: true, json: async () => ({ filename: 'once.zip' }) });
+      if (url.endsWith('/download')) return Promise.resolve({ ok: true, json: async () => ({ filename: 'once.zip' }) });
       return Promise.resolve({ ok: false });
     });
 
@@ -181,7 +224,7 @@ describe('download interception naming', () => {
 
     expect(browser.downloads.cancel).toHaveBeenCalledTimes(2);
     expect(browser.downloads.cancel).toHaveBeenCalledWith(792);
-    expect(mockFetch.mock.calls.filter(call => call[0].includes('/download'))).toHaveLength(1);
+    expect(mockFetch.mock.calls.filter(call => call[0].endsWith('/download'))).toHaveLength(1);
   });
 
   describe('browser fallback', () => {
@@ -196,7 +239,7 @@ describe('download interception naming', () => {
       mockFetch.mockImplementation(async (url: string) => {
         if (url.includes('/health')) return { ok: true };
         if (url.includes('/list')) return { ok: true, json: async () => [] };
-        if (url.includes('/download')) return {
+        if (url.endsWith('/download')) return {
           ok: false,
           status: 503,
           text: async () => 'Surge unavailable',
@@ -277,7 +320,7 @@ describe('download interception naming', () => {
       mockFetch.mockImplementation(async (url: string) => {
         if (url.includes('/health')) return { ok: true };
         if (url.includes('/list')) return { ok: true, json: async () => [] };
-        if (url.includes('/download')) return {
+        if (url.endsWith('/download')) return {
           ok: true,
           json: async () => ({ filename: 'fallback.zip' }),
         };
@@ -295,7 +338,7 @@ describe('download interception naming', () => {
       mockFetch.mockImplementation(async (url: string) => {
         if (url.includes('/health')) return { ok: true };
         if (url.includes('/list')) return { ok: true, json: async () => [] };
-        if (url.includes('/download')) return {
+        if (url.endsWith('/download')) return {
           ok: true,
           json: async () => ({ status: 'queued', id: '101', filename: 'test.zip' })
         };
@@ -314,7 +357,7 @@ describe('download interception naming', () => {
       await __test__.handleDownloadCreated(downloadItem);
 
       expect(browser.downloads.cancel).not.toHaveBeenCalled();
-      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
       expect(downloadCall).toBeUndefined();
     });
 
@@ -329,7 +372,7 @@ describe('download interception naming', () => {
       await __test__.handleDownloadCreated(downloadItem);
 
       expect(browser.downloads.cancel).toHaveBeenCalledWith(1002);
-      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
       expect(downloadCall).toBeDefined();
     });
 
@@ -344,7 +387,7 @@ describe('download interception naming', () => {
       await __test__.handleDownloadCreated(downloadItem);
 
       expect(browser.downloads.cancel).toHaveBeenCalledWith(1003);
-      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
       expect(downloadCall).toBeDefined();
     });
 
@@ -358,7 +401,7 @@ describe('download interception naming', () => {
       await __test__.handleDownloadCreated(downloadItem);
 
       expect(browser.downloads.cancel).toHaveBeenCalledWith(1005);
-      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
       expect(downloadCall).toBeDefined();
     });
 
@@ -373,7 +416,7 @@ describe('download interception naming', () => {
       await __test__.handleDownloadCreated(downloadItem);
 
       expect(browser.downloads.cancel).toHaveBeenCalledWith(1006);
-      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
       expect(downloadCall).toBeDefined();
     });
 
@@ -388,7 +431,7 @@ describe('download interception naming', () => {
       await __test__.handleDownloadCreated(downloadItem);
 
       expect(browser.downloads.cancel).toHaveBeenCalledWith(1007);
-      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
       expect(downloadCall).toBeDefined();
     });
 
@@ -410,7 +453,7 @@ describe('download interception naming', () => {
       await __test__.handleDownloadCreated(downloadItem);
 
       expect(browser.downloads.cancel).toHaveBeenCalledWith(1004);
-      const downloadCall = mockFetch.mock.calls.find(call => call[0].includes('/download'));
+      const downloadCall = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
       expect(downloadCall).toBeDefined();
     });
   });

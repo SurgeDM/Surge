@@ -13,6 +13,7 @@ import {
   notificationsEnabled, setNotificationsEnabled,
   fallbackToBrowser, setFallbackToBrowser,
   minFileSize, setMinFileSize,
+  warnOnDuplicate, setWarnOnDuplicate,
 } from '../store';
 import {
   handleAddProfile as _handleAddProfile,
@@ -127,6 +128,10 @@ export default function SettingsView() {
     setNotificationsEnabled(checked);
     await browser.storage.local.set({ [STORAGE_KEYS.NOTIFICATIONS]: checked });
   };
+  const handleWarnOnDuplicateToggle = async (checked: boolean) => {
+    setWarnOnDuplicate(checked);
+    await browser.storage.local.set({ [STORAGE_KEYS.WARN_ON_DUPLICATE]: checked });
+  };
   const handleFallbackToggle = async (checked: boolean) => {
     setFallbackToBrowser(checked);
     await browser.storage.local.set({ [STORAGE_KEYS.FALLBACK_TO_BROWSER]: checked });
@@ -163,6 +168,17 @@ export default function SettingsView() {
               type="checkbox"
               checked={notificationsEnabled()}
               onChange={(e) => { void handleNotificationsToggle((e.target as HTMLInputElement).checked); }}
+            />
+            <span class="toggle-slider" />
+          </div>
+        </label>
+        <label class="toggle-row">
+          <span>Warn on duplicate</span>
+          <div class="toggle">
+            <input
+              type="checkbox"
+              checked={warnOnDuplicate()}
+              onChange={(e) => { void handleWarnOnDuplicateToggle((e.target as HTMLInputElement).checked); }}
             />
             <span class="toggle-slider" />
           </div>

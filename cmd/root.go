@@ -358,7 +358,7 @@ func maybeRunRemoteTUI(cmd *cobra.Command, args []string) (bool, error) {
 }
 
 func acquireRootInstanceLock() (func(), error) {
-	isMaster, err := AcquireLock()
+	lock, isMaster, err := TryAcquireInstanceLock(resolveRuntimeDir())
 	if err != nil {
 		return nil, fmt.Errorf("error acquiring lock: %w", err)
 	}
@@ -368,7 +368,7 @@ func acquireRootInstanceLock() (func(), error) {
 	}
 
 	return func() {
-		if err := ReleaseLock(); err != nil {
+		if err := lock.Release(); err != nil {
 			utils.Debug("Error releasing lock: %v", err)
 		}
 	}, nil
@@ -532,12 +532,12 @@ var rootCmd = &cobra.Command{
 		defer cleanup()
 
 		queueInitialRootDownloads(args, opts)
-		return startTUI(port, opts.exitWhenDone, opts.noResume)
+		return startTUI(port, opts.exitWhenDone, opts.noResume, releaseLock)
 	},
 }
 
 // startTUI initializes and runs the TUI program
-func startTUI(port int, exitWhenDone bool, noResume bool) error {
+func startTUI(port int, exitWhenDone bool, noResume bool, releaseLock func()) error {
 	tui.InitializeTUI()
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
@@ -623,20 +623,22 @@ func startTUI(port int, exitWhenDone bool, noResume bool) error {
 
 	// Check if restart was requested (e.g. from settings changed)
 	if m, ok := finalModel.(tui.RootModel); ok && m.RestartRequested {
-		return performRestart()
+		return performRestart(releaseLock)
 	}
 
 	return nil
 }
 
-func performRestart() error {
+func performRestart(releaseLock func()) error {
 	executable, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("could not get executable path: %w", err)
 	}
 
 	if runtime.GOOS == "windows" {
-		_ = ReleaseLock()
+		if releaseLock != nil {
+			releaseLock()
+		}
 	}
 
 	return utils.Run(executable, os.Args, os.Environ())

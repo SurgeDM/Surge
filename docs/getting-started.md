@@ -13,7 +13,15 @@ Use the package manager or release artifact that suits your platform:
 | macOS / Linux | `brew install SurgeDM/tap/surge` |
 | Arch Linux | `yay -S surge` |
 | Nix / NixOS | `nix run github:SurgeDM/Surge` |
+| Linux / macOS (no package manager) | `curl -fsSL https://surgedm.github.io/install \| sh` |
 | Any supported platform | [Download a release](https://github.com/SurgeDM/Surge/releases/latest) |
+
+The install script detects your OS and architecture (including Linux ARM64,
+e.g. Alpine/postmarketOS), downloads the matching release asset, verifies its
+checksum, installs the binary to `~/.local/bin` (override with
+`SURGE_INSTALL_DIR`), and sets up shell completion for zsh/bash/fish.
+Run the same command again to update an existing installation; it reports the
+installed and target versions before replacing the binary.
 
 Run `surge --version` after installing to confirm that your shell can find the
 binary.

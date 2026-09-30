@@ -3,18 +3,53 @@ package service
 import (
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
 )
 
 type HTTPClientOptions struct {
-	Timeout            time.Duration
-	InsecureSkipVerify bool
-	CAFile             string
+	Timeout               time.Duration
+	ResponseHeaderTimeout time.Duration
+	InsecureSkipVerify    bool
+	CAFile                string
+}
+
+// SameOriginRedirectPolicy permits redirects only when they retain the scheme,
+// hostname, and effective port of the original request.
+func SameOriginRedirectPolicy(req *http.Request, via []*http.Request) error {
+	if len(via) >= 10 {
+		return errors.New("stopped after 10 redirects")
+	}
+	if len(via) == 0 || sameOrigin(via[0].URL, req.URL) {
+		return nil
+	}
+	return errors.New("refusing redirect to a different origin")
+}
+
+func sameOrigin(first, next *url.URL) bool {
+	return strings.EqualFold(first.Scheme, next.Scheme) &&
+		strings.EqualFold(first.Hostname(), next.Hostname()) &&
+		effectivePort(first) == effectivePort(next)
+}
+
+func effectivePort(target *url.URL) string {
+	if port := target.Port(); port != "" {
+		return port
+	}
+	switch strings.ToLower(target.Scheme) {
+	case "http":
+		return "80"
+	case "https":
+		return "443"
+	default:
+		return ""
+	}
 }
 
 func NewHTTPClient(opts HTTPClientOptions) (*http.Client, error) {
@@ -54,6 +89,7 @@ func NewHTTPTransport(opts HTTPClientOptions) (*http.Transport, error) {
 		MaxIdleConns:          100,
 		IdleConnTimeout:       90 * time.Second,
 		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: opts.ResponseHeaderTimeout,
 		ExpectContinueTimeout: 1 * time.Second,
 		TLSClientConfig:       tlsConfig,
 	}, nil

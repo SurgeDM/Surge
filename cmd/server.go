@@ -39,7 +39,7 @@ var serverStartCmd = &cobra.Command{
 		}
 
 		// Attempt to acquire lock before any global state initialization
-		isMaster, err := AcquireLock()
+		lock, isMaster, err := TryAcquireInstanceLock(resolveRuntimeDir())
 		if err != nil {
 			return fmt.Errorf("error acquiring lock: %w", err)
 		}
@@ -48,7 +48,7 @@ var serverStartCmd = &cobra.Command{
 			return fmt.Errorf("surge server is already running")
 		}
 		defer func() {
-			if err := ReleaseLock(); err != nil {
+			if err := lock.Release(); err != nil {
 				utils.Debug("Error releasing lock: %v", err)
 			}
 		}()

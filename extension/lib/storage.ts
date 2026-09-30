@@ -7,6 +7,7 @@ export const STORAGE_KEYS = {
   NOTIFICATIONS: 'notificationsEnabled',
   FALLBACK_TO_BROWSER: 'fallbackToBrowser',
   MIN_FILE_SIZE: 'minFileSize',
+  WARN_ON_DUPLICATE: 'warnOnDuplicate',
   PROFILES: 'serverProfiles',
   ACTIVE_PROFILE_ID: 'activeServerProfileId',
 } as const;

@@ -19,6 +19,7 @@ import {
   setNotificationsEnabled,
   setFallbackToBrowser,
   setMinFileSize,
+  setWarnOnDuplicate,
   handleSseEvent,
   setServerUrl,
   setServerUrlLocked,
@@ -77,6 +78,7 @@ export default function App() {
         STORAGE_KEYS.NOTIFICATIONS,
         STORAGE_KEYS.FALLBACK_TO_BROWSER,
         STORAGE_KEYS.MIN_FILE_SIZE,
+        STORAGE_KEYS.WARN_ON_DUPLICATE,
       ]);
 
       // Migrate the legacy single SERVER_URL into a default profile when needed.
@@ -104,6 +106,7 @@ export default function App() {
       setNotificationsEnabled(readStoredBoolean(storedValues, STORAGE_KEYS.NOTIFICATIONS, true));
       setFallbackToBrowser(readStoredBoolean(storedValues, STORAGE_KEYS.FALLBACK_TO_BROWSER, true));
       setMinFileSize(readStoredNumber(storedValues, STORAGE_KEYS.MIN_FILE_SIZE, 10));
+      setWarnOnDuplicate(readStoredBoolean(storedValues, STORAGE_KEYS.WARN_ON_DUPLICATE, true));
     } catch { /* ignore */ }
   }
 
