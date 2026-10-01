@@ -985,6 +985,15 @@ func formatSettingValueForEdit(value interface{}, typ config.SettingType, unit c
 		}
 	}
 
+	if key == "file_exists_action" {
+		switch value {
+		case config.FileExistsRename:
+			return "< Rename >"
+		case config.FileExistsOverwrite:
+			return "< Overwrite >"
+		}
+	}
+
 	// Default: use standard format
 	return formatSettingValue(value, typ, truncate)
 }
