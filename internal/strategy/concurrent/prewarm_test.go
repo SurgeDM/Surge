@@ -18,7 +18,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-func TestConcurrentDownloader_PrewarmConnections(t *testing.T) {
+func TestConcurrentDownloader_DoesNotPrewarmConnections(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
@@ -73,8 +73,8 @@ func TestConcurrentDownloader_PrewarmConnections(t *testing.T) {
 	mu.Lock()
 	defer mu.Unlock()
 
-	if !prewarmSeen {
-		t.Error("Expected to see pre-warm request (bytes=0-0), but none were recorded")
+	if prewarmSeen {
+		t.Error("Unexpected pre-warm request (bytes=0-0)")
 	}
 	if !downloadSeen {
 		t.Error("Expected to see download requests, but none were recorded")
