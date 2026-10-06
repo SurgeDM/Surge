@@ -28,6 +28,15 @@ type rateLimitSettingsService interface {
 	SetDefaultRateLimit(rate int64) error
 }
 
+type ResumeBatchRequest struct {
+	IDs []string `json:"ids"`
+}
+
+type ResumeBatchResult struct {
+	ID    string `json:"id"`
+	Error string `json:"error,omitempty"`
+}
+
 func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service service.DownloadService) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
@@ -63,6 +72,8 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		}
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "resumed", "id": id})
 	})))
+
+	mux.HandleFunc("/resume/batch", requireMethod(http.MethodPost, handleBatchResume(service)))
 
 	mux.HandleFunc("/delete", requireMethods(withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
 		if err := service.Delete(id); err != nil {
@@ -253,6 +264,36 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		}
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": status, "rate": rateStr})
 	}))
+}
+
+func handleBatchResume(service service.DownloadService) http.HandlerFunc {
+
+	return func(w http.ResponseWriter, r *http.Request) {
+		var req ResumeBatchRequest
+		if err := decodeJSONBody(r, &req); err != nil {
+			http.Error(w, fmt.Sprintf("Invalid JSON body :%v", err), http.StatusBadRequest)
+			return
+		}
+
+		if len(req.IDs) == 0 {
+			http.Error(w, "Download IDs are required.", http.StatusBadRequest)
+			return
+		}
+
+		errs := service.ResumeBatch(req.IDs)
+		res := make([]ResumeBatchResult, len(req.IDs))
+		for i, id := range req.IDs {
+			res[i].ID = id
+			if errs[i]!= nil{
+				res[i].Error = errs[i].Error()
+			}
+
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
+			"status":  "done",
+			"results": res,
+		})
+	}
 }
 
 func statusCodeForRateLimitError(err error) int {
