@@ -546,30 +546,56 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 	return nil
 }
 
-// StealWork tries to split an active task from a busy worker
+// StealWork tries to split an active task from a busy worker.
 // It greedily targets the worker with the MOST remaining work.
 func (d *ConcurrentDownloader) StealWork(queue *TaskQueue) bool {
+	if queue == nil || queue.Len() > 0 {
+		return false
+	}
+
 	d.activeMu.Lock()
 	defer d.activeMu.Unlock()
 
-	splitFloor := d.Runtime.GetMinChunkSize()
+	defaultMinChunk := d.Runtime.GetMinChunkSize()
+	if defaultMinChunk <= 0 {
+		defaultMinChunk = types.MinChunk
+	}
+
+	splitFloor := defaultMinChunk
 	if d.Runtime.IsAdaptiveConcurrencyEnabled() &&
 		(d.concurrencyGate == nil || !d.concurrencyGate.sawThrottle()) {
 		splitFloor = types.AlignSize
 	}
 
+	var activeWorkers int
+	var totalRemaining int64
 	bestID := -1
-	var maxRemaining int64 = 0
+	var maxRemaining int64
 	var bestActive *ActiveTask
 
-	// Find the worker with the MOST remaining work
+	// Find the worker with the MOST remaining work and collect tail metrics.
 	for id, active := range d.activeTasks {
+		if active == nil {
+			continue
+		}
 		remaining := active.RemainingBytes()
+		if remaining > 0 {
+			activeWorkers++
+			totalRemaining += remaining
+		}
 		if remaining > splitFloor && remaining > maxRemaining {
 			maxRemaining = remaining
 			bestID = id
 			bestActive = active
 		}
+	}
+
+	// Tail guard: prevent early task stealing while workers remain in their primary
+	// download phase. Under 403 rate limiting or worker backoff, early stealing preempts
+	// active workers and degrades throughput. Stealing only activates when total
+	// remaining work falls below the tail threshold across active workers.
+	if activeWorkers == 0 || totalRemaining >= int64(activeWorkers)*defaultMinChunk {
+		return false
 	}
 
 	if bestID == -1 {
