@@ -140,6 +140,15 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		}
 	})
 
+	mux.HandleFunc("/settings", requireMethod(http.MethodGet,func(w http.ResponseWriter, r *http.Request) {
+		settings := getSettings()
+		if settings == nil {
+			http.Error(w,"Error getting settings.",http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK,settings)
+	}))
+
 	mux.HandleFunc("/open-file", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, r *http.Request, id string) {
 		if err := ensureOpenActionRequestAllowed(r); err != nil {
 			http.Error(w, err.Error(), http.StatusForbidden)
