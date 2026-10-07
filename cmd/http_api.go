@@ -109,20 +109,36 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		writeJSONResponse(w, http.StatusOK, statuses)
 	}))
 
-	mux.HandleFunc("/history", requireMethod(http.MethodGet, func(w http.ResponseWriter, _ *http.Request) {
-		history, err := service.History()
-		if err != nil {
-			http.Error(w, "Failed to retrieve history: "+err.Error(), http.StatusInternalServerError)
+	mux.HandleFunc("/history", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet{
+			history, err := service.History()
+			if err != nil {
+				http.Error(w, "Failed to retrieve history: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			sort.Slice(history, func(left, right int) bool {
+				if history[left].CompletedAt == history[right].CompletedAt {
+					return history[left].ID > history[right].ID
+				}
+				return history[left].CompletedAt > history[right].CompletedAt
+			})
+			writeJSONResponse(w, http.StatusOK, history)
+		}else if r.Method == http.MethodDelete {
+			clearCount, err := service.ClearCompleted()
+			if err!=nil {
+				http.Error(w,err.Error(),http.StatusInternalServerError)
+			}
+			writeJSONResponse(w, http.StatusOK,map[string]interface{}{
+				"cleared":clearCount,
+				"status":"done",
+			})
+
+			return 
+		}else{
+			http.Error(w,"Method not allowed!",http.StatusBadRequest)
 			return
 		}
-		sort.Slice(history, func(left, right int) bool {
-			if history[left].CompletedAt == history[right].CompletedAt {
-				return history[left].ID > history[right].ID
-			}
-			return history[left].CompletedAt > history[right].CompletedAt
-		})
-		writeJSONResponse(w, http.StatusOK, history)
-	}))
+	})
 
 	mux.HandleFunc("/open-file", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, r *http.Request, id string) {
 		if err := ensureOpenActionRequestAllowed(r); err != nil {
