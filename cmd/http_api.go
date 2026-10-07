@@ -37,6 +37,11 @@ type ResumeBatchResult struct {
 	Error string `json:"error,omitempty"`
 }
 
+type PauseResult struct {
+    ID    string `json:"id"`
+    Error string `json:"error,omitempty"`
+}
+
 func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service service.DownloadService) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
@@ -64,6 +69,8 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		}
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "paused", "id": id})
 	})))
+
+	mux.HandleFunc("/pause-all",requireMethod(http.MethodPost,handlePauseAll(service)))
 
 	mux.HandleFunc("/resume", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
 		if err := service.Resume(id); err != nil {
@@ -292,6 +299,37 @@ func handleBatchResume(service service.DownloadService) http.HandlerFunc {
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 			"status":  "done",
 			"results": res,
+		})
+	}
+}
+
+func handlePauseAll(service service.DownloadService) http.HandlerFunc {
+	return func (w http.ResponseWriter, r *http.Request){
+		downloadList ,err := service.List()
+		if err!=nil{
+			http.Error(w,fmt.Sprintf("Error getting downloads :%v",err),http.StatusInternalServerError)
+			return
+		}
+
+		results := make([]PauseResult,0)
+		pauseCount := 0
+
+		for _ ,download := range downloadList{
+			if download.Status != "completed" && download.Status != "paused" && download.Status != "error" {
+				result := PauseResult{
+					ID: download.ID,
+				}
+				if err := service.Pause(download.ID);err!=nil{
+					result.Error = err.Error()
+				}
+				pauseCount++
+				results = append(results, result)
+			}
+		}
+		writeJSONResponse(w, http.StatusOK,map[string]interface{}{
+			"results":results,
+			"status":"done",
+			"paused":pauseCount,
 		})
 	}
 }
