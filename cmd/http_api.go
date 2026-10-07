@@ -82,6 +82,8 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 	mux.HandleFunc("/resume/batch", requireMethod(http.MethodPost, handleBatchResume(service)))
 
+	mux.HandleFunc("/resume-all", requireMethod(http.MethodPost, handleResumeAll(service)))
+
 	mux.HandleFunc("/delete", requireMethods(withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
 		if err := service.Delete(id); err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -330,6 +332,37 @@ func handlePauseAll(service service.DownloadService) http.HandlerFunc {
 			"results":results,
 			"status":"done",
 			"paused":pauseCount,
+		})
+	}
+}
+
+func handleResumeAll(service service.DownloadService) http.HandlerFunc {
+	return func (w http.ResponseWriter, r *http.Request) {
+		downloadList ,err := service.List()
+		if err!=nil{
+			http.Error(w,fmt.Sprintf("Error getting downloads :%v",err),http.StatusInternalServerError)
+			return
+		}
+		results := make([]ResumeBatchResult,0)
+		resumeCount := 0
+
+		for _ ,download := range downloadList{
+			if download.Status == "paused"{
+				result := ResumeBatchResult{
+					ID: download.ID,
+				}
+				if err := service.Resume(download.ID);err!=nil{
+					result.Error = err.Error()
+				}
+				resumeCount++
+				results = append(results, result)
+			}
+		}
+
+		writeJSONResponse(w, http.StatusOK,map[string]interface{}{
+			"results":results,
+			"status":"done",
+			"resumed":resumeCount,
 		})
 	}
 }
