@@ -148,7 +148,8 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	}))
 
 	mux.HandleFunc("/history", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet{
+		switch r.Method {
+		case http.MethodGet:
 			history, err := service.History()
 			if err != nil {
 				http.Error(w, "Failed to retrieve history: "+err.Error(), http.StatusInternalServerError)
@@ -161,7 +162,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 				return history[left].CompletedAt > history[right].CompletedAt
 			})
 			writeJSONResponse(w, http.StatusOK, history)
-		}else if r.Method == http.MethodDelete {
+		case http.MethodDelete:
 			clearCount, err := service.ClearCompleted()
 			if err!=nil {
 				http.Error(w,err.Error(),http.StatusInternalServerError)
@@ -171,24 +172,21 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 				"cleared":clearCount,
 				"status":"done",
 			})
-
-			return 
-		}else{
+		default:
 			http.Error(w,"Method not allowed!",http.StatusBadRequest)
-			return
 		}
 	})
 
 	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodGet {
+		switch r.Method {
+		case http.MethodGet:
 			settings := getSettings()
 			if settings == nil {
 				http.Error(w,"Error getting settings.",http.StatusInternalServerError)
 				return
 			}
 			writeJSONResponse(w, http.StatusOK,settings)
-			return
-		}else if r.Method == http.MethodPost {
+		case http.MethodPost:
 			newSettings := getSettings().Clone() 
 			err := decodeJSONBody(r, &newSettings)
 			if err!=nil{
@@ -204,9 +202,9 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			writeJSONResponse(w,http.StatusOK,map[string]interface{}{
 				"status":"updated",
 			})
-			return
+		default:
+			http.Error(w, "Method not Allowed",http.StatusBadRequest)
 		}
-		http.Error(w, "Method not Allowed",http.StatusBadRequest)
 	})
 
 	mux.HandleFunc("/settings/reload",requireMethod(http.MethodPost,func(w http.ResponseWriter, r *http.Request) {
