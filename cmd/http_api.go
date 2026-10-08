@@ -140,14 +140,35 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		}
 	})
 
-	mux.HandleFunc("/settings", requireMethod(http.MethodGet,func(w http.ResponseWriter, r *http.Request) {
-		settings := getSettings()
-		if settings == nil {
-			http.Error(w,"Error getting settings.",http.StatusInternalServerError)
+	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			settings := getSettings()
+			if settings == nil {
+				http.Error(w,"Error getting settings.",http.StatusInternalServerError)
+				return
+			}
+			writeJSONResponse(w, http.StatusOK,settings)
+			return
+		}else if r.Method == http.MethodPost {
+			var newSettings config.Settings
+			err := decodeJSONBody(r, &newSettings)
+			if err!=nil{
+				http.Error(w, "Error Decoding JSON:"+err.Error(),http.StatusInternalServerError)
+				return
+			}
+
+			if err := config.SaveSettings(&newSettings); err!=nil {
+				http.Error(w, "Error Updating Settings:"+err.Error(),http.StatusInternalServerError)
+				return
+			}
+			globalSettings = &newSettings
+			writeJSONResponse(w,http.StatusOK,map[string]interface{}{
+				"status":"updated",
+			})
 			return
 		}
-		writeJSONResponse(w, http.StatusOK,settings)
-	}))
+		http.Error(w, "Method not Allowed",http.StatusBadRequest)
+	})
 
 	mux.HandleFunc("/settings/reload",requireMethod(http.MethodPost,func(w http.ResponseWriter, r *http.Request) {
 		currentSettings, err := config.LoadSettings()
