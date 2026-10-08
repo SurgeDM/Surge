@@ -10,7 +10,6 @@ import (
 	"sort"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
@@ -115,9 +114,25 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			"status":"done",
 		})
 		go func(){
-			time.Sleep(1*time.Second)
 			executeGlobalShutdown("API Shutdown")
 		}()
+	}))
+
+	mux.HandleFunc("/publish",requireMethod(http.MethodPost,func(w http.ResponseWriter, r *http.Request) {
+		var event types.DownloadEvent
+		if err := decodeJSONBody(r, &event); err!=nil {
+			http.Error(w,"Error Decoding body :"+ err.Error(),http.StatusBadRequest)
+			return
+		}
+
+		if err := service.Publish(event); err!=nil {
+			http.Error(w,"Error publishing to Event stream:"+err.Error(),http.StatusInternalServerError)
+			return
+		}
+
+		writeJSONResponse(w, http.StatusOK,map[string]interface{}{
+			"status":"event_published",
+		})		
 	}))
 
 	mux.HandleFunc("/history", func(w http.ResponseWriter, r *http.Request) {
