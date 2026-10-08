@@ -390,12 +390,26 @@ func handleBatchResume(service service.DownloadService) http.HandlerFunc {
 
 		errs := service.ResumeBatch(req.IDs)
 		res := make([]ResumeBatchResult, len(req.IDs))
-		for i, id := range req.IDs {
-			res[i].ID = id
-			if errs[i]!= nil{
-				res[i].Error = errs[i].Error()
-			}
 
+		if len(errs)< len(req.IDs) {
+			var serviceError error
+			if len(errs)>0 {
+				serviceError = errs[0]
+			}
+			for i,id := range req.IDs{
+				res[i].ID = id
+				if serviceError != nil{
+					res[i].Error = serviceError.Error()
+				}
+			}
+		}else{
+			for i, id := range req.IDs {
+				res[i].ID = id
+				if errs[i]!= nil{
+					res[i].Error = errs[i].Error()
+				}
+	
+			}
 		}
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 			"status":  "done",
