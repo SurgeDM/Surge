@@ -402,6 +402,15 @@ func handleBatchResume(service service.DownloadService) http.HandlerFunc {
 					res[i].Error = serviceError.Error()
 				}
 			}
+
+			if serviceError !=nil{
+				writeJSONResponse(w, http.StatusServiceUnavailable, map[string]interface{}{
+					"status":  "error",
+					"error":   serviceError.Error(),
+					"results": res,
+				})
+				return
+			}
 		}else{
 			for i, id := range req.IDs {
 				res[i].ID = id
