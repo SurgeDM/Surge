@@ -10,6 +10,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
@@ -107,6 +108,16 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			return
 		}
 		writeJSONResponse(w, http.StatusOK, statuses)
+	}))
+
+	mux.HandleFunc("/shutdown", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {	
+		writeJSONResponse(w, http.StatusOK,map[string]interface{}{
+			"status":"done",
+		})
+		go func(){
+			time.Sleep(1*time.Second)
+			executeGlobalShutdown("API Shutdown")
+		}()
 	}))
 
 	mux.HandleFunc("/history", func(w http.ResponseWriter, r *http.Request) {
