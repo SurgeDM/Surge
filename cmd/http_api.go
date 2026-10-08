@@ -121,12 +121,22 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	}))
 
 	mux.HandleFunc("/publish",requireMethod(http.MethodPost,func(w http.ResponseWriter, r *http.Request) {
-		var event types.DownloadEvent
-		if err := decodeJSONBody(r, &event); err!=nil {
+		var request struct {
+			Message string `json:"message"`
+		}
+		if err := decodeJSONBody(r, &request); err!=nil {
 			http.Error(w,"Error Decoding body :"+ err.Error(),http.StatusBadRequest)
 			return
 		}
+		if request.Message == "" {
+			http.Error(w, "Empty message field", http.StatusBadRequest)
+			return
+		}
 
+		event := types.DownloadEvent{
+			Type:    types.EventSystem,
+			Message: request.Message,
+		}
 		if err := service.Publish(event); err!=nil {
 			http.Error(w,"Error publishing to Event stream:"+err.Error(),http.StatusInternalServerError)
 			return
