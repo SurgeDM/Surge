@@ -189,18 +189,18 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			writeJSONResponse(w, http.StatusOK,settings)
 			return
 		}else if r.Method == http.MethodPost {
-			var newSettings config.Settings
+			newSettings := getSettings().Clone() 
 			err := decodeJSONBody(r, &newSettings)
 			if err!=nil{
 				http.Error(w, "Error Decoding JSON:"+err.Error(),http.StatusBadRequest)
 				return
 			}
 
-			if err := config.SaveSettings(&newSettings); err!=nil {
+			if err := config.SaveSettings(newSettings); err!=nil {
 				http.Error(w, "Error Updating Settings:"+err.Error(),http.StatusInternalServerError)
 				return
 			}
-			globalSettings = &newSettings
+			globalSettings = newSettings
 			writeJSONResponse(w,http.StatusOK,map[string]interface{}{
 				"status":"updated",
 			})
