@@ -192,7 +192,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			var newSettings config.Settings
 			err := decodeJSONBody(r, &newSettings)
 			if err!=nil{
-				http.Error(w, "Error Decoding JSON:"+err.Error(),http.StatusInternalServerError)
+				http.Error(w, "Error Decoding JSON:"+err.Error(),http.StatusBadRequest)
 				return
 			}
 
