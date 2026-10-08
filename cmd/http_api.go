@@ -149,6 +149,20 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		writeJSONResponse(w, http.StatusOK,settings)
 	}))
 
+	mux.HandleFunc("/settings/reload",requireMethod(http.MethodPost,func(w http.ResponseWriter, r *http.Request) {
+		currentSettings, err := config.LoadSettings()
+		if err !=nil{
+			http.Error(w,err.Error(),http.StatusInternalServerError)
+			return
+		}
+
+		globalSettings = currentSettings
+
+		writeJSONResponse(w,http.StatusOK,map[string]interface{}{
+			"status":"reloaded",
+		})
+	}))
+
 	mux.HandleFunc("/open-file", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, r *http.Request, id string) {
 		if err := ensureOpenActionRequestAllowed(r); err != nil {
 			http.Error(w, err.Error(), http.StatusForbidden)
