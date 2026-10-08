@@ -165,6 +165,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			clearCount, err := service.ClearCompleted()
 			if err!=nil {
 				http.Error(w,err.Error(),http.StatusInternalServerError)
+				return
 			}
 			writeJSONResponse(w, http.StatusOK,map[string]interface{}{
 				"cleared":clearCount,
