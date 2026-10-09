@@ -347,7 +347,8 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	meta := settingsMeta[selectedRow]
 	value := settingsValues[meta.Key]
-	unit := m.getSettingUnit()
+  
+	unit := settingUnitSuffix(meta.Unit)
 	unitStyle := lipgloss.NewStyle().Foreground(colors.LightGray())
 
 	valueLabel := "Value: "
@@ -401,7 +402,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 			)
 			valueLabel = ""
 		default:
-			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Key, true)
+			valueStr = formatSettingValueForEdit(value, meta.Type, meta.Unit, meta.Key, true)
 			if valueStr != "\u221E" {
 				valueStr += unitStyle.Render(unit)
 			}
@@ -719,7 +720,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			parsedVal = b
 		}
 	case config.TypeString, config.TypeAuthToken, config.TypeLink:
-		if key == "global_rate_limit" || key == "default_download_rate_limit" {
+		if setting.Unit == config.UnitMegabytesPerSecond {
 			if _, err := strconv.ParseFloat(value, 64); err == nil {
 				value += " MB/s"
 			}
@@ -729,7 +730,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 		}
 		parsedVal = value
 	case "int":
-		if key == "worker_buffer_size" {
+		if setting.Unit == config.UnitKilobytes {
 			v, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				return fmt.Errorf("invalid number")
@@ -744,7 +745,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 		}
 	case "int64":
 		// Handle KB/MB scaling gracefully if specified
-		if key == "min_chunk_size" {
+		if setting.Unit == config.UnitMegabytes {
 			v, err := strconv.ParseFloat(value, 64)
 			if err != nil {
 				return fmt.Errorf("invalid number")
@@ -758,8 +759,14 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 			parsedVal = v
 		}
 	case config.TypeDuration:
-		if _, err := strconv.ParseFloat(value, 64); err == nil {
-			value += "s"
+		if setting.Unit == config.UnitSeconds || setting.Unit == config.UnitMinutes {
+			if _, err := strconv.ParseFloat(value, 64); err == nil {
+				if setting.Unit == config.UnitMinutes {
+					value += "m"
+				} else {
+					value += "s"
+				}
+			}
 		}
 		v, err := time.ParseDuration(value)
 		if err != nil {
@@ -877,23 +884,23 @@ func (m RootModel) getSettingsCount() int {
 	return 0
 }
 
-// getSettingUnit returns the unit suffix for the currently selected setting
-func (m RootModel) getSettingUnit() string {
-	key := m.getCurrentSettingKey()
-	switch key {
-	case "min_chunk_size":
+func settingUnitSuffix(unit config.SettingUnit) string {
+	switch unit {
+	case config.UnitMegabytes:
 		return " MB"
-	case "worker_buffer_size":
+	case config.UnitKilobytes:
 		return " KB"
-	case "dial_hedge_count":
+	case config.UnitConnections:
 		return " conns"
-	case "max_task_retries":
+	case config.UnitRetries:
 		return " retries"
-	case "slow_worker_grace_period", "stall_timeout":
+	case config.UnitSeconds:
 		return " seconds"
-	case "slow_worker_threshold", "speed_ema_alpha":
+	case config.UnitMinutes:
+		return " minutes"
+	case config.UnitRatio:
 		return " (0.0-1.0)"
-	case "global_rate_limit", "default_download_rate_limit":
+	case config.UnitMegabytesPerSecond:
 		return " MB/s"
 	default:
 		return ""
@@ -901,19 +908,20 @@ func (m RootModel) getSettingUnit() string {
 }
 
 // formatSettingValueForEdit returns a plain value without units for editing
-func formatSettingValueForEdit(value interface{}, typ config.SettingType, key string, truncate bool) string {
-	switch key {
-	case "min_chunk_size":
+func formatSettingValueForEdit(value interface{}, typ config.SettingType, unit config.SettingUnit, key string, truncate bool) string {
+	switch unit {
+	case config.UnitMegabytes:
 		if v, ok := asFloat64(value); ok {
 			mb := v / float64(utils.MiB)
 			return fmt.Sprintf("%.1f", mb)
 		}
-	case "worker_buffer_size":
+	case config.UnitKilobytes:
 		if v, ok := asFloat64(value); ok {
 			kb := v / float64(utils.KiB)
 			return fmt.Sprintf("%.0f", kb)
 		}
-	case "slow_worker_grace_period", "stall_timeout":
+
+	case config.UnitSeconds:
 		if v, ok := asFloat64(value); ok {
 			// Values might be duration or pure float64 depending on decode/init paths.
 			// The settings parse logic handles both, but for UI string we want raw seconds.
@@ -925,7 +933,17 @@ func formatSettingValueForEdit(value interface{}, typ config.SettingType, key st
 			}
 			return fmt.Sprintf("%.0f", secs)
 		}
-	case "global_rate_limit", "default_download_rate_limit":
+	case config.UnitMinutes:
+		if v, ok := asFloat64(value); ok {
+			var mins float64
+			if _, isDuration := value.(time.Duration); isDuration {
+				mins = time.Duration(v).Minutes()
+			} else {
+				mins = v
+			}
+			return fmt.Sprintf("%.0f", mins)
+		}
+	case config.UnitMegabytesPerSecond:
 		if vStr, ok := value.(string); ok && vStr != "" {
 			if parsed, err := utils.ParseRateLimitValue(vStr); err == nil {
 				if parsed == 0 {
