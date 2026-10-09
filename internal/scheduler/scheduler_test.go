@@ -1158,24 +1158,24 @@ func TestSchedulerRetryNotRunnableBeforeRetryAt(t *testing.T) {
 	pool.wg.Add(1)
 	pool.mu.Unlock()
 
-	gotID := make(chan string, 1)
+	gotTask := make(chan *queuedTask, 1)
 	go func() {
-		gotID <- pool.waitForTask()
+		gotTask <- pool.waitForTask()
 	}()
 
 	// At 40ms (before retryAt), task should NOT be popped yet
 	select {
-	case res := <-gotID:
-		t.Fatalf("task %s was popped before retryAt elapsed", res)
+	case res := <-gotTask:
+		t.Fatalf("task %s was popped before retryAt elapsed", res.cfg.ID)
 	case <-time.After(40 * time.Millisecond):
 		// Expected: still waiting
 	}
 
 	// Wait for retryAt to pass (after 250ms total)
 	select {
-	case res := <-gotID:
-		if res != id {
-			t.Fatalf("got task ID %s, want %s", res, id)
+	case res := <-gotTask:
+		if res != qt {
+			t.Fatalf("got task %p, want %p", res, qt)
 		}
 	case <-time.After(500 * time.Millisecond):
 		t.Fatal("timed out waiting for delayed task to become runnable after retryAt")
