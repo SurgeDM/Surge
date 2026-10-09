@@ -529,6 +529,7 @@ func (p *Scheduler) Cancel(downloadID string) types.CancelResult {
 	var droppedQueued bool
 	if queuedExists {
 		delete(p.queued, downloadID)
+		p.removeQueueOrderLocked(downloadID)
 		if !qCfg.inFlight {
 			droppedQueued = true
 		}
@@ -643,18 +644,21 @@ func (p *Scheduler) UpdateURL(downloadID string, newURL string) error {
 	return nil
 }
 
-func (p *Scheduler) waitForTask() string {
+// waitForTask claims the next eligible queued task with inFlight set. The
+// caller must re-verify p.queued still holds this exact task: a removal
+// plus same-ID re-add is indistinguishable by ID.
+func (p *Scheduler) waitForTask() *queuedTask {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
 	for {
 		if p.isShuttingDown {
-			return ""
+			return nil
 		}
 		for _, id := range p.queueOrder {
 			if qt, ok := p.queued[id]; ok && !qt.inFlight {
 				qt.inFlight = true
-				return id
+				return qt
 			}
 		}
 		p.taskCond.Wait()
@@ -663,8 +667,8 @@ func (p *Scheduler) waitForTask() string {
 
 func (p *Scheduler) worker() {
 	for {
-		id := p.waitForTask()
-		if id == "" {
+		qt := p.waitForTask()
+		if qt == nil {
 			return
 		}
 
@@ -672,8 +676,10 @@ func (p *Scheduler) worker() {
 		ctx, cancel := context.WithCancel(context.Background())
 
 		p.mu.Lock()
-		qt, stillQueued := p.queued[id]
-		if !stillQueued {
+		// qt.cfg is rewritten wholesale under p.mu elsewhere; read the ID in the lock.
+		id := qt.cfg.ID
+		// A same-ID entry is a replacement this claim must not adopt.
+		if qtNow, stillQueued := p.queued[id]; !stillQueued || qtNow != qt {
 			p.mu.Unlock()
 			cancel()
 			p.wg.Done()
@@ -754,6 +760,13 @@ func (p *Scheduler) worker() {
 			delete(p.downloads, localCfg.ID)
 
 			if shouldRetryFailedDownload(p.isShuttingDown, err, qt.retries) {
+				if _, taken := p.queued[localCfg.ID]; taken {
+					// A same-ID task owns the slot now; drop this one.
+					// In-flight claims settle their own wg count.
+					p.mu.Unlock()
+					p.wg.Done()
+					continue
+				}
 				qt.retries++
 				retryDelay := time.Second * time.Duration(qt.retries)
 				qt.inFlight = true // Keep in-flight while sending progress outside lock
@@ -775,15 +788,15 @@ func (p *Scheduler) worker() {
 						Mirrors:      localCfg.Mirrors,
 						RateLimit:    localCfg.RateLimit,
 						RateLimitSet: localCfg.RateLimitSet,
-						Workers:      localCfg.Workers,
-						MinChunkSize: localCfg.MinChunkSize,
+						Workers:      localCfg.Runtime.GetWorkers(),
+						MinChunkSize: localCfg.Runtime.GetMinChunkSize(),
 					}, p.progressDone)
 				}
 
 				p.mu.Lock()
-				if _, ok := p.queued[localCfg.ID]; ok {
+				// The entry must still be this task, not a same-ID replacement.
+				if current, ok := p.queued[localCfg.ID]; ok && current == qt {
 					qt.inFlight = false
-					p.queued[localCfg.ID] = qt
 				} else {
 					// GracefulShutdown or Cancel removed it while we were unlocked.
 					// Since we were in-flight, they didn't decrement wg, so we must.
