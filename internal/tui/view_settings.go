@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/utils"
@@ -213,6 +214,9 @@ func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxW
 }
 
 func (m RootModel) renderSettingsHelp(width int) string {
+	if m.SettingsReadOnly {
+		return utils.WrapText("Read-only settings \u00B7 "+m.keys.Settings.Close.Help().Key+" close", width)
+	}
 	if width < 1 {
 		width = 1
 	}
@@ -776,8 +780,10 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 		parsedVal = value
 	}
 
-	if err := setting.Validate(parsedVal); err != nil {
-		return err
+	if !m.IsRemote || key != "default_download_dir" {
+		if err := setting.Validate(parsedVal); err != nil {
+			return err
+		}
 	}
 	setting.Value = parsedVal
 	if key == "auto_shutdown_after_downloads" {
@@ -787,8 +793,14 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 }
 
 func (m *RootModel) persistSettings() error {
-	if err := config.SaveSettings(m.Settings); err != nil {
+	if m.SaveSettingsFunc == nil {
+		return nil
+	}
+	if err := m.SaveSettingsFunc(m.Settings); err != nil {
 		return err
+	}
+	if _, ok := m.Service.(service.SettingsService); ok {
+		return nil // The settings owner already persisted and applied the snapshot.
 	}
 	if reloader, ok := m.Service.(interface {
 		ReloadSettings(settings *config.Settings) error

@@ -63,8 +63,8 @@ func initializeGlobalState() error {
 }
 
 func getSettings() *config.Settings {
-	if globalSettings != nil {
-		return globalSettings
+	if settings := getGlobalSettings(); settings != nil {
+		return settings
 	}
 	settings, err := config.LoadSettings()
 	if err != nil {
@@ -75,6 +75,18 @@ func getSettings() *config.Settings {
 		return defaults
 	}
 	return settings
+}
+
+func getGlobalSettings() *config.Settings {
+	globalSettingsMu.RLock()
+	defer globalSettingsMu.RUnlock()
+	return globalSettings
+}
+
+func setGlobalSettings(settings *config.Settings) {
+	globalSettingsMu.Lock()
+	globalSettings = settings
+	globalSettingsMu.Unlock()
 }
 
 func resumePausedDownloads() {

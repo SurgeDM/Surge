@@ -104,3 +104,55 @@ func TestSettingsStayOpenWhenSaveFails(t *testing.T) {
 		t.Fatalf("save failure is not shown to the user: %q", got.settingsError)
 	}
 }
+
+func TestReadOnlySettingsNeverPersistDefaults(t *testing.T) {
+	m := InitialRootModel(1701, "test", nil, nil, config.DefaultSettings(), false)
+	m.SaveSettingsFunc = nil
+	m.SettingsReadOnly = true
+	m.Settings.General.AutoResume.Value = true
+
+	if err := m.persistSettings(); err != nil {
+		t.Fatalf("read-only persist returned error: %v", err)
+	}
+}
+
+func TestReadOnlySettingsRejectEdits(t *testing.T) {
+	m := InitialRootModel(1701, "test", nil, nil, config.DefaultSettings(), false)
+	m.SettingsReadOnly = true
+	m.SaveSettingsFunc = nil
+	m.state = SettingsState
+	m.SettingsFocusedPane = 1
+	for i, meta := range m.buildSettingsMetaForCategory("General") {
+		if meta.Key == "warn_on_duplicate" {
+			m.SettingsSelectedRow = i
+			break
+		}
+	}
+	old := config.Resolve[bool](m.Settings.General.WarnOnDuplicate)
+	updated, _ := m.updateSettings(tea.KeyPressMsg{Code: tea.KeyEnter})
+	got := updated.(RootModel)
+	if config.Resolve[bool](got.Settings.General.WarnOnDuplicate) != old {
+		t.Fatal("read-only setting was toggled")
+	}
+}
+
+func TestRemoteSettingsAcceptServerDirectoryAndDoNotOfferLocalRestart(t *testing.T) {
+	m := InitialRootModel(1701, "test", nil, nil, config.DefaultSettings(), false)
+	m.IsRemote = true
+	m.state = SettingsState
+	m.snapshotSettings()
+	m.SaveSettingsFunc = func(*config.Settings) error { return nil }
+	path := filepath.Join(t.TempDir(), "server-only")
+	if err := m.setSettingValue("General", "default_download_dir", path); err != nil {
+		t.Fatal(err)
+	}
+	m.Settings.Network.MaxConcurrentDownloads.Value = 5
+	updated, _ := m.updateSettings(tea.KeyPressMsg{Code: tea.KeyEscape})
+	got := updated.(RootModel)
+	if got.state != DashboardState || got.RestartRequested {
+		t.Fatalf("remote restart state = %v", got.state)
+	}
+	if !strings.Contains(strings.Join(got.logEntries, "\n"), "Restart Surge on the server") {
+		t.Fatal("server restart requirement was not shown")
+	}
+}

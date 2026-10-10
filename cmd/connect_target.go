@@ -139,3 +139,36 @@ func isLoopbackHost(host string) bool {
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
 }
+
+func isLocalHost(host string) bool {
+	if isLoopbackHost(host) {
+		return true
+	}
+	target := net.ParseIP(host)
+	if target == nil {
+		return false
+	}
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return false
+	}
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			switch v := addr.(type) {
+			case *net.IPNet:
+				if v.IP.Equal(target) {
+					return true
+				}
+			case *net.IPAddr:
+				if v.IP.Equal(target) {
+					return true
+				}
+			}
+		}
+	}
+	return false
+}

@@ -65,8 +65,9 @@ surge server status
 surge server stop
 ```
 
-For a server that should survive logout and boot with the machine, use
-[`surge service`](service.md) instead.
+For a server that should run independently of its terminal and start with your
+login session, use [`surge service`](service.md). Logout and pre-login startup
+behavior depend on the platform; see the [service guide](../../guides/run-as-a-service.md).
 
 ## Exit after work completes
 
