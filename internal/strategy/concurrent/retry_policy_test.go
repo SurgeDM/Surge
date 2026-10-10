@@ -201,8 +201,9 @@ func TestLongRetryAfterPreservesHostCooldown(t *testing.T) {
 			}
 			retryCtx, retryCancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 			defer retryCancel()
-			if err := newDownloader().Download(retryCtx, server.URL, nil, nil, path, size); !errors.Is(err, context.DeadlineExceeded) {
-				t.Fatalf("retry error=%v, want deadline while cooling down", err)
+			err := newDownloader().Download(retryCtx, server.URL, nil, nil, path, size)
+			if !errors.Is(err, context.DeadlineExceeded) && !errors.Is(err, types.ErrRetryBudgetExceeded) {
+				t.Fatalf("retry error=%v, want deadline or budget exhaustion while cooling down", err)
 			}
 			if requests.Load() != 1 {
 				t.Fatalf("requests=%d, retry bypassed cooldown", requests.Load())

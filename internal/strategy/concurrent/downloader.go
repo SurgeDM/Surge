@@ -398,6 +398,19 @@ func (d *ConcurrentDownloader) ImportThrottleState(cfg *types.DownloadRecord) {
 	d.throttleEpisodeStart = cfg.ThrottleEpisodeStart
 }
 
+func (d *ConcurrentDownloader) checkThrottleBudget(now time.Time, wait time.Duration) error {
+	d.soft403Mu.Lock()
+	defer d.soft403Mu.Unlock()
+	if d.throttleEpisodeStart.IsZero() {
+		d.throttleEpisodeStart = now
+	}
+	remaining := 10*time.Minute - now.Sub(d.throttleEpisodeStart)
+	if remaining <= 0 || wait > remaining {
+		return fmt.Errorf("host cooldown %v exceeds remaining throttle budget %v: %w", wait, remaining, types.ErrRetryBudgetExceeded)
+	}
+	return nil
+}
+
 func (d *ConcurrentDownloader) initMirrorStatus(rawurl string, candidateMirrors []string, activeMirrors []string, destPath string) {
 	d.URL = rawurl
 	d.DestPath = destPath
@@ -853,10 +866,14 @@ func (d *ConcurrentDownloader) bootstrapMetadata(ctx context.Context, client *ht
 		if until.IsZero() {
 			break
 		}
+		wait := time.Until(until)
+		if err := d.checkThrottleBudget(time.Now(), wait); err != nil {
+			return 0, err
+		}
 		select {
 		case <-ctx.Done():
 			return 0, ctx.Err()
-		case <-time.After(time.Until(until)):
+		case <-time.After(wait):
 		}
 	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawurl, nil)

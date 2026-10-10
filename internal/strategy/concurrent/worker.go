@@ -115,6 +115,10 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			idx, wait := d.hostLimiter.PickMirror(eligibleHosts, 0, time.Now())
 			currentMirrorIdx = eligibleIndexes[idx]
 			if wait > 0 {
+				if err := d.checkThrottleBudget(time.Now(), wait); err != nil {
+					lastErr = err
+					break
+				}
 				activeTask.WaitingOnLimiter.Store(true)
 				if !interruptibleSleep(ctx, wait) {
 					activeTask.WaitingOnLimiter.Store(false)
