@@ -545,6 +545,18 @@ func startTUI(port int, exitWhenDone bool, noResume bool, releaseLock func()) er
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
 	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), getGlobalSettings(), noResume, Commit)
+	// ponytail: the settings cache lock also serializes disk writes and live
+	// application; use per-owner transactions if multiple profiles are added.
+	saveSettings := m.SaveSettingsFunc
+	m.SaveSettingsFunc = func(settings *config.Settings) error {
+		globalSettingsMu.Lock()
+		defer globalSettingsMu.Unlock()
+		if err := saveSettings(settings); err != nil {
+			return err
+		}
+		globalSettings = settings.Clone()
+		return nil
+	}
 	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())
 
 	configureServiceUI(&m)

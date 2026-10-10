@@ -118,10 +118,18 @@ func (m *LaunchdManager) Status(ctx context.Context) (State, error) {
 	} else if err != nil {
 		return NotInstalled, err
 	}
-	if _, err := m.runner.Run(ctx, "launchctl", "print", m.target()); err != nil {
+	out, err := m.runner.Run(ctx, "launchctl", "print", m.target())
+	if err != nil {
 		return Stopped, nil
 	}
-	return Running, nil
+	// ponytail: launchctl exposes status as text; use its structured API if
+	// Apple changes this top-level state field.
+	for _, line := range strings.Split(string(out), "\n") {
+		if strings.TrimSpace(line) == "state = running" {
+			return Running, nil
+		}
+	}
+	return Stopped, nil
 }
 func (m *LaunchdManager) ensureUser() error {
 	if m.uid == 0 {

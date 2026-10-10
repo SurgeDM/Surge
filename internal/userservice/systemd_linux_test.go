@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -101,5 +102,29 @@ func TestSystemdUnitAbsentRecognizesExplicitManagerErrors(t *testing.T) {
 	}
 	if systemdUnitAbsent("Failed to connect to bus: permission denied") {
 		t.Fatal("unexpected manager error treated as a missing unit")
+	}
+}
+
+func TestSystemdUnitEscapesPercentPaths(t *testing.T) {
+	analyzer, err := exec.LookPath("systemd-analyze")
+	if err != nil {
+		t.Skip("systemd-analyze is unavailable")
+	}
+	dir := t.TempDir()
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "surge%Z")
+	if err := os.Symlink(executable, path); err != nil {
+		t.Fatal(err)
+	}
+	m := &SystemdManager{executable: path}
+	unitPath := filepath.Join(dir, "review.service")
+	if err := os.WriteFile(unitPath, []byte(m.unitContents()), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if out, err := exec.Command(analyzer, "verify", unitPath).CombinedOutput(); err != nil {
+		t.Fatalf("unit rejected: %v: %s", err, out)
 	}
 }

@@ -203,8 +203,8 @@ func TestNewRemoteRootModel_UsesPrefetchedStatusesAndSettings(t *testing.T) {
 	if service.listCalls != 0 {
 		t.Fatalf("service.List calls = %d, want 0", service.listCalls)
 	}
-	if m.Settings != settings {
-		t.Fatal("expected remote model to use the loaded client settings")
+	if m.Settings == settings || config.Resolve[bool](m.Settings.General.AutoResume) != config.Resolve[bool](settings.General.AutoResume) {
+		t.Fatal("expected remote model to copy the loaded client settings")
 	}
 	m.UpdateListItems()
 	selected := m.GetSelectedDownload()

@@ -70,13 +70,13 @@ func parseConnectTarget(target string, allowInsecureHTTP bool) (connectTarget, e
 
 	if scheme == "" {
 		scheme = "https"
-		if isLoopbackHost(host) || isPrivateIPHost(host) {
+		if isLoopbackHost(host) {
 			scheme = "http"
 		}
 		baseURL = fmt.Sprintf("%s://%s", scheme, formatConnectURLHost(host, port))
 	}
 
-	if scheme == "http" && !allowInsecureHTTP && !(isLoopbackHost(host) || isPrivateIPHost(host)) {
+	if scheme == "http" && !allowInsecureHTTP && !isLoopbackHost(host) {
 		return connectTarget{}, fmt.Errorf("refusing insecure HTTP for non-loopback target. Use https:// or --insecure-http")
 	}
 
@@ -138,11 +138,6 @@ func isLoopbackHost(host string) bool {
 	}
 	ip := net.ParseIP(host)
 	return ip != nil && ip.IsLoopback()
-}
-
-func isPrivateIPHost(host string) bool {
-	ip := net.ParseIP(host)
-	return ip != nil && ip.IsPrivate()
 }
 
 func isLocalHost(host string) bool {

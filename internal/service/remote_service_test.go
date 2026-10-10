@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -523,5 +524,31 @@ func TestRemoteDownloadService_StreamEvents_ReceivesMessages(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Errorf("timed out waiting for message")
+	}
+}
+
+func TestRemoteSettingsKeepServerPaths(t *testing.T) {
+	for _, category := range []bool{false, true} {
+		t.Run(map[bool]string{false: "default_directory", true: "category_directory"}[category], func(t *testing.T) {
+			s := config.DefaultSettings()
+			s.General.DefaultDownloadDir.Value = ""
+			s.Categories.Categories = nil
+			serverPath := filepath.Join(t.TempDir(), "exists-only-on-server")
+			if category {
+				s.Categories.Categories = []config.Category{{Name: "Remote", Pattern: ".*", Path: serverPath}}
+			} else {
+				s.General.DefaultDownloadDir.Value = serverPath
+			}
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _ = json.NewEncoder(w).Encode(s) }))
+			defer ts.Close()
+			svc, err := NewRemoteDownloadService(ts.URL, "token", HTTPClientOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer svc.Shutdown()
+			if _, err := svc.GetSettings(); err != nil {
+				t.Fatalf("client rejected server path: %v", err)
+			}
+		})
 	}
 }

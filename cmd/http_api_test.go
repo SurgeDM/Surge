@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -1106,5 +1107,31 @@ func TestClearFailedEndpoint(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSettingsEndpointConcurrentPartialUpdates(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	settings.General.AutoResume.Value = false
+	settings.General.WarnOnDuplicate.Value = false
+	service := &settingsHTTPTestService{httpAPITestService: &httpAPITestService{}, settings: settings}
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", service)
+	var wg sync.WaitGroup
+	for _, body := range []string{`{"general":{"auto_resume":true}}`, `{"general":{"warn_on_duplicate":true}}`} {
+		wg.Add(1)
+		go func(body string) {
+			defer wg.Done()
+			recorder := httptest.NewRecorder()
+			mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPut, "/settings", strings.NewReader(body)))
+			if recorder.Code != http.StatusOK {
+				t.Errorf("PUT status = %d: %s", recorder.Code, recorder.Body.String())
+			}
+		}(body)
+	}
+	wg.Wait()
+	if !config.Resolve[bool](service.settings.General.AutoResume) || !config.Resolve[bool](service.settings.General.WarnOnDuplicate) {
+		t.Fatal("concurrent partial update lost a setting")
 	}
 }

@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -144,7 +145,7 @@ func TestValidateStrictRejectsInvalidCategoryPaths(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			settings := DefaultSettings()
 			settings.Categories.Categories = []Category{{Name: "Test", Pattern: ".*", Path: test.path}}
-			if err := settings.ValidateStrict(); err == nil || !strings.Contains(err.Error(), `invalid category "Test" path`) {
+			if err := settings.ValidateStrict(true); err == nil || !strings.Contains(err.Error(), `invalid category "Test" path`) {
 				t.Fatalf("ValidateStrict() error = %v, want invalid category path error", err)
 			}
 		})
@@ -697,5 +698,27 @@ func TestCategorySettings_UnmarshalJSON_BackwardCompatibility(t *testing.T) {
 	// CategoryEnabled should remain default (false)
 	if Resolve[bool](s2.Categories.CategoryEnabled) {
 		t.Errorf("Expected category_enabled to remain false")
+	}
+}
+
+func TestClonePreservesEmptyCategories(t *testing.T) {
+	for _, categories := range [][]Category{nil, {}} {
+		settings := DefaultSettings()
+		settings.Categories.Categories = categories
+		if got := settings.Clone().Categories.Categories; !reflect.DeepEqual(got, categories) {
+			t.Fatalf("Clone categories = %#v, want %#v", got, categories)
+		}
+	}
+}
+
+func TestNormalizeValuesRejectsInvalidIntegers(t *testing.T) {
+	for _, setting := range []string{"max_connections_per_host", "min_chunk_size"} {
+		for _, value := range []float64{1048576.5, math.NaN(), math.Inf(1), math.Ldexp(1, 63)} {
+			settings := DefaultSettings()
+			settings.FindSetting("Network", setting).Value = value
+			if err := settings.NormalizeValues(); err == nil {
+				t.Fatalf("%s accepted %v", setting, value)
+			}
+		}
 	}
 }

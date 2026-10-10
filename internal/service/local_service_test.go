@@ -6,9 +6,11 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/orchestrator"
 	"github.com/SurgeDM/Surge/internal/scheduler"
 	"github.com/SurgeDM/Surge/internal/store"
@@ -162,8 +164,8 @@ func TestLocalDownloadService_RateLimits(t *testing.T) {
 	}
 
 	settings := svc.lifecycle.GetSettings()
-	if settings.Network.GlobalRateLimit.Value != "4.9 KiB/s" && settings.Network.GlobalRateLimit.Value != "5000" {
-		t.Errorf("expected GlobalRateLimit to be set to 4.9 KiB/s, got %s", settings.Network.GlobalRateLimit.Value)
+	if settings.Network.GlobalRateLimit.Value != "5000 B/s" {
+		t.Errorf("expected GlobalRateLimit to be set to 5000 B/s, got %s", settings.Network.GlobalRateLimit.Value)
 	}
 
 	// Test Default Rate Limit
@@ -378,5 +380,83 @@ func TestLocalDownloadService_Delete(t *testing.T) {
 	_, err = svc.GetStatus(id)
 	if err == nil {
 		t.Error("expected error getting status of deleted download")
+	}
+}
+
+func TestSettingsReadDuringRateUpdates(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("APPDATA", dir)
+	pool := scheduler.New(make(chan types.DownloadEvent, 100), 1)
+	mgr := orchestrator.NewLifecycleManager(pool, nil, config.DefaultSettings())
+	defer mgr.Shutdown()
+	svc := NewLocalDownloadService(mgr)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			if err := svc.SetGlobalRateLimit(int64(i)); err != nil {
+				t.Error(err)
+				return
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 1000; i++ {
+			if _, err := svc.GetSettings(); err != nil {
+				t.Error(err)
+				return
+			}
+		}
+	}()
+	wg.Wait()
+}
+
+func TestUpdateSettingsAppliesInheritedRateLimit(t *testing.T) {
+	testutil.SetupStateDB(t)
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("APPDATA", dir)
+	pool := scheduler.New(make(chan types.DownloadEvent, 100), 1)
+	settings := config.DefaultSettings()
+	settings.General.DefaultDownloadDir.Value = dir
+	settings.Categories.Categories = nil
+	mgr := orchestrator.NewLifecycleManager(pool, nil, settings)
+	defer mgr.Shutdown()
+	svc := NewLocalDownloadService(mgr)
+	block := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-block:
+		case <-r.Context().Done():
+		}
+	}))
+	defer ts.Close()
+	defer close(block)
+	cfg := types.DownloadRecord{ID: "queued-limit", URL: ts.URL, Filename: "file", DestPath: filepath.Join(dir, "file"), Status: "queued"}
+	if err := store.AddToMasterList(cfg); err != nil {
+		t.Fatal(err)
+	}
+	pool.Add(cfg)
+	settings.Network.DefaultDownloadRateLimit.Value = "1 KiB/s"
+	if err := svc.UpdateSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	queued := pool.GetAll()
+	if len(queued) != 1 || queued[0].RateLimit != 1024 {
+		t.Fatalf("queued rate = %#v", queued)
+	}
+	loaded, err := config.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Network.DefaultDownloadRateLimit.Value != "1 KiB/s" {
+		t.Fatalf("persisted rate = %v", loaded.Network.DefaultDownloadRateLimit.Value)
+	}
+	settings.Network.DefaultDownloadRateLimit.Value = "2 KiB/s"
+	if snapshot, _ := svc.GetSettings(); snapshot.Network.DefaultDownloadRateLimit.Value != "1 KiB/s" {
+		t.Fatal("caller mutation changed live settings")
 	}
 }

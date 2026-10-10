@@ -25,7 +25,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/power"
-	"github.com/SurgeDM/Surge/internal/service"
+	downloadservice "github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -135,7 +135,7 @@ type RootModel struct {
 	removeTargetID string
 	// Service Interface
 	// Core
-	Service      service.DownloadService
+	Service      downloadservice.DownloadService
 	Orchestrator *orchestrator.LifecycleManager
 
 	// File picker for directory selection
@@ -314,7 +314,7 @@ func (d *DownloadModel) UpdateETA() {
 	d.lastETA = time.Duration(etaSeconds * float64(time.Second))
 }
 
-func InitialRootModel(serverPort int, currentVersion string, service service.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, currentCommit ...string) RootModel {
+func InitialRootModel(serverPort int, currentVersion string, service downloadservice.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, currentCommit ...string) RootModel {
 	var statuses []types.DownloadStatus
 	if service != nil {
 		statuses, _ = service.List()
@@ -324,11 +324,11 @@ func InitialRootModel(serverPort int, currentVersion string, service service.Dow
 
 // InitialRootModelWithStatuses builds a model from statuses already fetched by
 // the caller. It avoids a second network request during remote TUI startup.
-func InitialRootModelWithStatuses(serverPort int, currentVersion string, service service.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, statuses []types.DownloadStatus, currentCommit ...string) RootModel {
+func InitialRootModelWithStatuses(serverPort int, currentVersion string, service downloadservice.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, statuses []types.DownloadStatus, currentCommit ...string) RootModel {
 	return initialRootModel(serverPort, currentVersion, service, orchestrator, settings, noResume, statuses, currentCommit...)
 }
 
-func initialRootModel(serverPort int, currentVersion string, service service.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, statuses []types.DownloadStatus, currentCommit ...string) RootModel {
+func initialRootModel(serverPort int, currentVersion string, service downloadservice.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, statuses []types.DownloadStatus, currentCommit ...string) RootModel {
 	initialDarkBackground := true
 	if !IsTestMode {
 		initialDarkBackground = lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
@@ -342,6 +342,8 @@ func initialRootModel(serverPort int, currentVersion string, service service.Dow
 
 	if settings == nil {
 		settings = config.DefaultSettings()
+	} else {
+		settings = settings.Clone()
 	}
 
 	urlInput := textinput.New()
@@ -562,6 +564,10 @@ func initialRootModel(serverPort int, currentVersion string, service service.Dow
 		cancelEnqueue:         cancelEnqueue,
 		powerController:       power.NewController(),
 		spinner:               s,
+	}
+
+	if store, ok := service.(downloadservice.SettingsService); ok {
+		m.SaveSettingsFunc = store.UpdateSettings
 	}
 
 	InitAuthToken() // Cache auth token for TUI to avoid per-frame disk I/O

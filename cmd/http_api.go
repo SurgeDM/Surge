@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/service"
+	downloadservice "github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -28,12 +28,7 @@ type rateLimitSettingsService interface {
 	SetDefaultRateLimit(rate int64) error
 }
 
-type daemonSettingsService interface {
-	GetSettings() (*config.Settings, error)
-	UpdateSettings(*config.Settings) error
-}
-
-func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service service.DownloadService) {
+func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service downloadservice.DownloadService) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 			"status": "ok",
@@ -44,8 +39,12 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 	mux.HandleFunc("/events", eventsHandler(service))
 
+	// ponytail: the process-wide cache lock serializes settings transactions,
+	// including disk I/O; use per-owner transactions if multiple profiles are added.
 	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
-		settingsService, ok := service.(daemonSettingsService)
+		globalSettingsMu.Lock()
+		defer globalSettingsMu.Unlock()
+		settingsService, ok := service.(downloadservice.SettingsService)
 		if !ok {
 			http.Error(w, "Settings service unavailable", http.StatusNotImplemented)
 			return
@@ -81,7 +80,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			if updated.Extension.AuthToken != nil && current.Extension.AuthToken != nil {
 				updated.Extension.AuthToken.Value = current.Extension.AuthToken.Value
 			}
-			if err := updated.ValidateStrict(); err != nil {
+			if err := updated.ValidateStrict(true); err != nil {
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -90,7 +89,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 				http.Error(w, "Failed to update settings: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			setGlobalSettings(updated)
+			globalSettings = updated.Clone()
 			writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 				"status":           "updated",
 				"restart_required": restartRequired,
@@ -274,6 +273,8 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	}))
 
 	mux.HandleFunc("/rate-limit/global", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
+		globalSettingsMu.Lock()
+		defer globalSettingsMu.Unlock()
 		limiter, ok := service.(rateLimitSettingsService)
 		if !ok {
 			http.Error(w, "Service does not support global rate limits", http.StatusNotImplemented)
@@ -295,6 +296,8 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	}))
 
 	mux.HandleFunc("/rate-limit/default", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
+		globalSettingsMu.Lock()
+		defer globalSettingsMu.Unlock()
 		limiter, ok := service.(rateLimitSettingsService)
 		if !ok {
 			http.Error(w, "Service does not support default rate limits", http.StatusNotImplemented)
@@ -353,7 +356,7 @@ func parseRateLimitQuery(w http.ResponseWriter, r *http.Request) (int64, string,
 	return rate, rateStr, true
 }
 
-func eventsHandler(service service.DownloadService) http.HandlerFunc {
+func eventsHandler(service downloadservice.DownloadService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
@@ -441,7 +444,7 @@ func writeJSONResponse(w http.ResponseWriter, status int, payload interface{}) {
 	}
 }
 
-func resolveDownloadDestPath(service service.DownloadService, id string) (string, error) {
+func resolveDownloadDestPath(service downloadservice.DownloadService, id string) (string, error) {
 	if service == nil {
 		return "", ErrServiceUnavailable
 	}

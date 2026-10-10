@@ -155,7 +155,6 @@ func (m *SystemdManager) run(ctx context.Context, args ...string) error {
 }
 
 func (m *SystemdManager) unitContents() string {
-	home, _ := os.UserHomeDir()
 	return "[Unit]\n" +
 		"Description=Surge Download Manager\n" +
 		"Wants=network-online.target\n" +
@@ -163,7 +162,7 @@ func (m *SystemdManager) unitContents() string {
 		"[Service]\n" +
 		"Type=simple\n" +
 		"ExecStart=" + systemdQuote(m.executable) + " server start --managed-service\n" +
-		"WorkingDirectory=" + systemdQuote(home) + "\n" +
+		"WorkingDirectory=%h\n" +
 		"Restart=on-failure\n" +
 		"RestartSec=5\n\n" +
 		"[Install]\n" +
@@ -171,7 +170,7 @@ func (m *SystemdManager) unitContents() string {
 }
 
 func systemdQuote(value string) string {
-	return strconv.Quote(value)
+	return strconv.Quote(strings.ReplaceAll(value, "%", "%%"))
 }
 
 func legacySystemdUnitExists() bool {

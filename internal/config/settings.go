@@ -11,6 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
+	"strconv"
 
 	"strings"
 	"sync"
@@ -1145,20 +1147,29 @@ func (s *Setting) normalizedValue() (any, error) {
 		case bool, int, int64, float64:
 			return Resolve[bool](s), nil
 		}
-	case TypeInt:
+	case TypeInt, TypeInt64:
+		bits := strconv.IntSize
+		if s.Type == TypeInt64 {
+			bits = 64
+		}
 		switch value := s.Value.(type) {
-		case int, int64:
-			return Resolve[int](s), nil
-		case float64:
-			if math.Trunc(value) == value {
-				return Resolve[int](s), nil
+		case int:
+		case int64:
+			if bits == 32 && (value < math.MinInt32 || value > math.MaxInt32) {
+				return nil, errors.New("integer out of range")
 			}
+		case float64:
+			limit := math.Ldexp(1, bits-1)
+			if math.Trunc(value) != value || !(value >= -limit && value < limit) {
+				return nil, errors.New("expected an integer within range")
+			}
+		default:
+			return nil, fmt.Errorf("expected %s value, got %T", s.Type, s.Value)
 		}
-	case TypeInt64:
-		switch s.Value.(type) {
-		case int, int64, float64:
-			return Resolve[int64](s), nil
+		if s.Type == TypeInt {
+			return Resolve[int](s), nil
 		}
+		return Resolve[int64](s), nil
 	case TypeFloat64:
 		switch s.Value.(type) {
 		case int, int64, float32, float64:
@@ -1186,12 +1197,15 @@ func (s *Setting) normalizedValue() (any, error) {
 // ValidateStrict validates an externally supplied settings snapshot without
 // silently replacing invalid values. It is used by the authenticated settings
 // API so malformed updates are rejected instead of partially applied.
-func (s *Settings) ValidateStrict() error {
+func (s *Settings) ValidateStrict(localPaths bool) error {
 	if err := s.validateRequiredSettings(); err != nil {
 		return err
 	}
 	for _, cat := range s.CategoriesList {
 		for _, set := range cat.Settings {
+			if !localPaths && set == s.General.DefaultDownloadDir {
+				continue // Directory accessibility belongs to the daemon filesystem.
+			}
 			if err := set.Validate(set.Value); err != nil {
 				return fmt.Errorf("invalid setting %s.%s: %w", cat.Name, set.Key, err)
 			}
@@ -1202,9 +1216,11 @@ func (s *Settings) ValidateStrict() error {
 		if err := cat.Validate(); err != nil {
 			return fmt.Errorf("invalid category %q: %w", cat.Name, err)
 		}
-		info, err := os.Stat(strings.TrimSpace(cat.Path))
-		if err != nil || !info.IsDir() {
-			return fmt.Errorf("invalid category %q path %q: directory is not accessible", cat.Name, cat.Path)
+		if localPaths {
+			info, err := os.Stat(strings.TrimSpace(cat.Path))
+			if err != nil || !info.IsDir() {
+				return fmt.Errorf("invalid category %q path %q: directory is not accessible", cat.Name, cat.Path)
+			}
 		}
 	}
 	return nil
@@ -1475,11 +1491,7 @@ func (s *Settings) Clone() *Settings {
 		}
 	}
 
-	// Deep copy custom categories
-	if len(s.Categories.Categories) > 0 {
-		cloned.Categories.Categories = make([]Category, len(s.Categories.Categories))
-		copy(cloned.Categories.Categories, s.Categories.Categories)
-	}
+	cloned.Categories.Categories = slices.Clone(s.Categories.Categories)
 
 	// Deep copy startup warnings
 	if len(s.StartupWarnings) > 0 {
