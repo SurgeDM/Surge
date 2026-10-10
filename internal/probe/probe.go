@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	neturl "net/url"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -37,6 +38,7 @@ type ProbeResult struct {
 	Filename         string
 	DetectedFilename string
 	ContentType      string
+	Warning          string
 }
 
 // probeHeadersContextKey is used to pass custom headers to the HTTP client's CheckRedirect function
@@ -190,7 +192,6 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 	}()
 
 	utils.Debug("Probe response status: %d", resp.StatusCode)
-
 	result := &ProbeResult{}
 
 	// Only a 206 response proves resume-safe range support; a 200 means the
@@ -237,11 +238,30 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 	}
 
 	result.ContentType = resp.Header.Get("Content-Type")
+	result.Warning = suspiciousResponseWarning(result.Filename, result.ContentType, result.FileSize)
+	if result.Warning != "" {
+		utils.Debug("Probe warning: %s", result.Warning)
+	}
 
 	utils.Debug("Probe complete - filename: %s, size: %d, range: %v",
 		result.Filename, result.FileSize, result.SupportsRange)
 
 	return result, nil
+}
+
+func suspiciousResponseWarning(filename, contentType string, size int64) string {
+	if size <= 0 || size > 512 {
+		return ""
+	}
+	ct := strings.ToLower(contentType)
+	if !strings.Contains(ct, "text/plain") && !strings.Contains(ct, "text/html") {
+		return ""
+	}
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".7z", ".zip", ".rar", ".gz", ".xz", ".exe", ".pdf", ".png", ".jpg":
+		return fmt.Sprintf("%s: server returned only %d bytes of text; this may be an error message instead of the requested file", filename, size)
+	}
+	return ""
 }
 
 func newProbeRequest(ctx context.Context, rawurl string, headers map[string]string, runCfg *types.RuntimeConfig, includeRange bool) (*http.Request, error) {

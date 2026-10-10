@@ -24,8 +24,9 @@ type DownloadRequest struct {
 	Path                 string            `json:"path,omitempty"`
 	RelativeToDefaultDir bool              `json:"relative_to_default_dir,omitempty"`
 	Mirrors              []string          `json:"mirrors,omitempty"`
-	SkipApproval         bool              `json:"skip_approval,omitempty"` // Extension validated request, skip TUI prompt
-	Headers              map[string]string `json:"headers,omitempty"`       // Custom HTTP headers from browser (cookies, auth, etc.)
+	SkipApproval         bool              `json:"skip_approval,omitempty"`          // Extension validated request, skip TUI prompt
+	SkipDuplicateWarning bool              `json:"skip_duplicate_warning,omitempty"` // Client opted out of duplicate warnings
+	Headers              map[string]string `json:"headers,omitempty"`                // Custom HTTP headers from browser (cookies, auth, etc.)
 	IsExplicitCategory   bool              `json:"is_explicit_category,omitempty"`
 	Workers              int               `json:"workers,omitempty"`        // Per-task worker count override (bypasses √size heuristic when >0)
 	MinChunkSize         int64             `json:"min_chunk_size,omitempty"` // Per-task minimum chunk size override
@@ -113,6 +114,24 @@ func handleDownloadStatusRequest(w http.ResponseWriter, r *http.Request, service
 
 	writeJSONResponse(w, http.StatusOK, status)
 	return true
+}
+
+func handleDuplicateCheck(w http.ResponseWriter, r *http.Request) {
+	var request struct {
+		URL string `json:"url"`
+	}
+	if err := decodeJSONBody(r, &request); err != nil {
+		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	url := strings.TrimSpace(request.URL)
+	if url == "" {
+		http.Error(w, "url is required", http.StatusBadRequest)
+		return
+	}
+	primaryURL, _ := normalizeDownloadTargets(url, nil)
+	exists, _ := resolveDuplicateState(primaryURL)
+	writeJSONResponse(w, http.StatusOK, map[string]bool{"exists": exists})
 }
 
 func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) {
@@ -294,7 +313,7 @@ func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolved
 
 	outPath := utils.EnsureAbsPath(resolveOutputDir(req.Path, req.RelativeToDefaultDir, defaultOutputDir, settings))
 	urlForAdd, mirrorsForAdd := normalizeDownloadTargets(req.URL, req.Mirrors)
-	isDuplicate, isActive := resolveDuplicateState(urlForAdd, settings)
+	isDuplicate, isActive := resolveDuplicateState(urlForAdd)
 
 	utils.Debug("Download request: URL=%s, Filename=%s, SkipApproval=%v, isDuplicate=%v, isActive=%v", urlForAdd, req.Filename, req.SkipApproval, isDuplicate, isActive)
 
@@ -316,7 +335,7 @@ func normalizeDownloadTargets(url string, mirrors []string) (string, []string) {
 	return url, mirrors
 }
 
-func resolveDuplicateState(urlForAdd string, settings *config.Settings) (bool, bool) {
+func resolveDuplicateState(urlForAdd string) (bool, bool) {
 	activeDownloadsFunc := func() map[string]*types.DownloadRecord {
 		active := make(map[string]*types.DownloadRecord)
 		if GlobalPool != nil {
@@ -346,7 +365,7 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 		return false
 	}
 
-	shouldPrompt := config.Resolve[bool](resolved.settings.Extension.ExtensionPrompt) || (config.Resolve[bool](resolved.settings.General.WarnOnDuplicate) && resolved.isDuplicate)
+	shouldPrompt := shouldRequireDownloadApproval(resolved)
 	if !shouldPrompt {
 		return false
 	}
@@ -356,15 +375,16 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 
 		downloadID := uuid.New().String()
 		if err := service.Publish(types.DownloadEvent{
-			Type:         types.EventRequest,
-			DownloadID:   downloadID,
-			URL:          resolved.urlForAdd,
-			Filename:     req.Filename,
-			Path:         resolved.outPath,
-			Mirrors:      resolved.mirrorsForAdd,
-			Headers:      req.Headers,
-			Workers:      req.Workers,
-			MinChunkSize: req.MinChunkSize,
+			Type:                 types.EventRequest,
+			DownloadID:           downloadID,
+			URL:                  resolved.urlForAdd,
+			Filename:             req.Filename,
+			Path:                 resolved.outPath,
+			Mirrors:              resolved.mirrorsForAdd,
+			Headers:              req.Headers,
+			SkipDuplicateWarning: req.SkipDuplicateWarning,
+			Workers:              req.Workers,
+			MinChunkSize:         req.MinChunkSize,
 		}); err != nil {
 			recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding %s: %v", resolved.urlForAdd, err))
@@ -382,9 +402,9 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 
 	// HEADLESS/SERVER MODE:
 	// If we're here, shouldPrompt must be true but we have no TUI.
-	// We auto-approve extension requests that are NOT duplicates, as there is
-	// no way to display a confirmation prompt in headless mode.
-	if !resolved.isDuplicate {
+	// We auto-approve non-duplicates and requests that opted out of duplicate
+	// warnings, as there is no confirmation prompt in headless mode.
+	if !resolved.isDuplicate || req.SkipDuplicateWarning {
 		utils.Debug("Headless mode: auto-approving extension request (bypass ExtensionPrompt)")
 		return false
 	}
@@ -394,6 +414,11 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 		"message": "Download rejected: Duplicate download detected (Headless mode)",
 	})
 	return true
+}
+
+func shouldRequireDownloadApproval(resolved *resolvedDownloadRequest) bool {
+	return config.Resolve[bool](resolved.settings.Extension.ExtensionPrompt) ||
+		(config.Resolve[bool](resolved.settings.General.WarnOnDuplicate) && resolved.isDuplicate && !resolved.request.SkipDuplicateWarning)
 }
 
 func enqueueDownloadRequest(r *http.Request, service service.DownloadService, resolved *resolvedDownloadRequest) (string, string, error) {
@@ -447,11 +472,15 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		baseURL := fmt.Sprintf("http://127.0.0.1:%d", port)
 		token := resolveLocalToken()
 		for _, arg := range urls {
-			url, mirrors := ParseURLArg(arg)
+			url, mirrors, err := parseAndNormalizeURLArg(arg)
+			if err != nil {
+				fmt.Printf("Error adding %s: %v\n", arg, err)
+				continue
+			}
 			if url == "" {
 				continue
 			}
-			err := sendToServer(url, mirrors, outputDir, baseURL, token)
+			err = sendToServer(url, mirrors, outputDir, baseURL, token)
 			if err != nil {
 				fmt.Printf("Error adding %s: %v\n", url, err)
 			} else {
@@ -481,15 +510,12 @@ func processDownloads(urls []string, outputDir string, port int) int {
 			continue
 		}
 
-		urlArg, mirrors := ParseURLArg(arg)
-		if urlArg == "" {
+		url, mirrors, err := parseAndNormalizeURLArg(arg)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error adding %s: %v\n", arg, err)
 			continue
 		}
-
-		// Ensure the URL is valid and normalized
-		url, err := ValidateAndNormalizeURL(urlArg)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error adding %s: %v\n", urlArg, err)
+		if url == "" {
 			continue
 		}
 

@@ -60,8 +60,9 @@ type DownloadEvent struct {
 	Mirrors      []string `json:"mirrors,omitempty"`
 
 	// Request
-	Headers map[string]string `json:"headers,omitempty"`
-	Path    string            `json:"path,omitempty"`
+	Headers              map[string]string `json:"headers,omitempty"`
+	Path                 string            `json:"path,omitempty"`
+	SkipDuplicateWarning bool              `json:"skip_duplicate_warning,omitempty"`
 
 	// Batch
 	BatchEvents []DownloadEvent `json:"batch_events,omitempty"`

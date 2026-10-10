@@ -180,24 +180,26 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
 				return m, nil
 			}
-			if !d.done {
-				if d.paused {
-					// Resume
-					d.paused = false
-					d.resuming = true
-					if err := m.Service.Resume(d.ID); err != nil {
-						m.addLogEntry(LogStyleError.Render("\u2716 Resume failed: " + err.Error()))
-						d.paused = true // Revert
-						d.resuming = false
-					}
+			if d.paused || d.err != nil {
+				// Resume paused and errored downloads; keep their state on failure.
+				if err := m.Service.Resume(d.ID); err != nil {
+					m.addLogEntry(LogStyleError.Render("\u2716 Resume failed: " + err.Error()))
 				} else {
-					// Pause
-					if err := m.Service.Pause(d.ID); err != nil {
-						m.addLogEntry(LogStyleError.Render("\u2716 Pause failed: " + err.Error()))
-					} else {
-						d.resuming = false
-						d.pausing = true
-					}
+					d.done = false
+					d.err = nil
+					d.paused = false
+					d.pausing = false
+					d.resuming = true
+					m.UpdateListItems()
+					return m, m.spinner.Tick
+				}
+			} else if !d.done {
+				// Pause an active download; completed downloads remain untouched.
+				if err := m.Service.Pause(d.ID); err != nil {
+					m.addLogEntry(LogStyleError.Render("\u2716 Pause failed: " + err.Error()))
+				} else {
+					d.resuming = false
+					d.pausing = true
 				}
 			}
 		}

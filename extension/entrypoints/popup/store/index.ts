@@ -92,6 +92,8 @@ const [fallbackToBrowser, setFallbackToBrowser] = createSignal(true);
 export { fallbackToBrowser, setFallbackToBrowser };
 const [minFileSize, setMinFileSize] = createSignal(10);
 export { minFileSize, setMinFileSize };
+const [warnOnDuplicate, setWarnOnDuplicate] = createSignal(true);
+export { warnOnDuplicate, setWarnOnDuplicate };
 
 // Surge server URL for API requests (resolved from the active server profile)
 const [serverUrl, setServerUrl] = createSignal('');
