@@ -68,6 +68,8 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if d := m.FindDownloadByID(msg.id); d != nil {
+			d.done = false
+			d.err = nil
 			d.paused = false
 			d.pausing = false
 			d.resuming = true
@@ -156,6 +158,8 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	case types.EventStarted:
 		found := false
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.done = false
+			d.err = nil
 			d.Filename = msg.Filename
 			d.FilenameLower = strings.ToLower(msg.Filename)
 			d.Total = msg.Total
@@ -172,8 +176,8 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			if d.Total > 0 {
 				progressCmd = d.progress.SetPercent(0)
 			}
-			if d.state == nil && msg.State != nil {
-				d.state = stateProgress(msg.State)
+			if currentState := stateProgress(msg.State); currentState != nil {
+				d.state = currentState
 			}
 			if d.state != nil {
 				d.state.SetTotalSize(msg.Total)
@@ -282,6 +286,8 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 
 	case types.EventResumed:
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.done = false
+			d.err = nil
 			d.paused = false
 			d.pausing = false
 			d.resuming = true

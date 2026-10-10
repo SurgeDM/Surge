@@ -105,6 +105,26 @@ func TestAdaptiveConcurrencyGateRecoversOnTimerWithoutTaskCompletion(t *testing.
 	}
 }
 
+func TestAdaptiveConcurrencyGateSetCapSchedulesRecovery(t *testing.T) {
+	g := newAdaptiveConcurrencyGate(8, 0)
+	g.setCap(8, time.Now().Add(20*time.Millisecond))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	recovered := make(chan struct{}, 1)
+	go g.runRecovery(ctx, func(_, _ int, done bool) {
+		if done {
+			recovered <- struct{}{}
+		}
+	})
+
+	select {
+	case <-recovered:
+	case <-time.After(time.Second):
+		t.Fatal("setCap cooldown did not trigger recovery")
+	}
+}
+
 func TestAdaptiveConcurrencyGateParksUntilBelowCapAndCancels(t *testing.T) {
 	g := newAdaptiveConcurrencyGate(3, 15*time.Second)
 	ctx, cancel := context.WithCancel(context.Background())

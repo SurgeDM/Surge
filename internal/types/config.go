@@ -78,8 +78,10 @@ type RuntimeConfig struct {
 	GlobalRateLimitBps          int64
 	DefaultDownloadRateLimitBps int64
 
-	WorkerBufferSize      int
-	MaxTaskRetries        int
+	WorkerBufferSize int
+	MaxTaskRetries   int
+	// Legacy compatibility field: connection prewarming is no longer performed.
+	// Retained for persisted configuration and API consumers.
 	DialHedgeCount        int
 	SlowWorkerThreshold   float64
 	SlowWorkerGracePeriod time.Duration
@@ -144,7 +146,8 @@ func (r *RuntimeConfig) GetMaxTaskRetries() int {
 	return r.MaxTaskRetries
 }
 
-// GetDialHedgeCount returns the extra prewarmed connection count. Zero disables prewarming.
+// GetDialHedgeCount is retained for compatibility. Connection prewarming is
+// no longer performed, so callers must not use this value to alter behavior.
 func (r *RuntimeConfig) GetDialHedgeCount() int {
 	if r == nil || r.DialHedgeCount < 0 {
 		return DialHedgeCount

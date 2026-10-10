@@ -61,9 +61,10 @@ type NetworkSettings struct {
 	SequentialDownload        *Setting `json:"sequential_download"`
 	MinChunkSize              *Setting `json:"min_chunk_size"`
 	WorkerBufferSize          *Setting `json:"worker_buffer_size"`
-	DialHedgeCount            *Setting `json:"dial_hedge_count"`
-	GlobalRateLimit           *Setting `json:"global_rate_limit"`
-	DefaultDownloadRateLimit  *Setting `json:"default_download_rate_limit"`
+	// Deprecated: retained so existing configuration files continue to load.
+	DialHedgeCount           *Setting `json:"dial_hedge_count"`
+	GlobalRateLimit          *Setting `json:"global_rate_limit"`
+	DefaultDownloadRateLimit *Setting `json:"default_download_rate_limit"`
 }
 
 type PerformanceSettings struct {
@@ -817,7 +818,7 @@ func DefaultSettings() *Settings {
 			DialHedgeCount: &Setting{
 				Key:          "dial_hedge_count",
 				Label:        "Dial Hedge Count",
-				Description:  "Number of extra connections to dial pre-emptively; 0 disables connection prewarming (0-16).",
+				Description:  "Deprecated and ignored; connection prewarming is no longer performed.",
 				Type:         TypeInt,
 				DefaultValue: 4,
 				Value:        4,

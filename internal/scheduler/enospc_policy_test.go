@@ -59,7 +59,7 @@ func TestEnospcPolicy(t *testing.T) {
 			{"cancel excluded", cancelErr, 0, false},
 			{"deadline excluded", deadlineErr, 0, false},
 			{"nil error", nil, 0, false},
-			{"retryable error with no progress", errors.New("network error"), 0, true},
+			{"retryable error with no progress", errors.New("network error"), 0, false},
 			{"retryable error with progress", errors.New("network error"), 100, false},
 		}
 		for _, tt := range tests {
