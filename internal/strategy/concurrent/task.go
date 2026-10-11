@@ -32,6 +32,11 @@ type ActiveTask struct {
 
 	// Set while blocked on rate limiter so health monitor doesn't treat it as stalled
 	WaitingOnLimiter atomic.Bool
+
+	// BackoffUntil stores the Unix nano timestamp until which the worker is backing off
+	// (e.g. following an HTTP 403 response or host rate limit). StealWork will not
+	// steal tasks from workers currently backing off.
+	BackoffUntil atomic.Int64
 }
 
 // RemainingTask returns a Task representing the remaining work, or nil if complete
@@ -95,3 +100,23 @@ func alignedSplitSize(remaining, minChunk int64) int64 {
 	}
 	return half
 }
+
+// SetBackoff records the backoff deadline for this task.
+func (at *ActiveTask) SetBackoff(until time.Time) {
+	at.BackoffUntil.Store(until.UnixNano())
+}
+
+// ClearBackoff resets the backoff deadline.
+func (at *ActiveTask) ClearBackoff() {
+	at.BackoffUntil.Store(0)
+}
+
+// IsBackingOff returns true if the worker is currently waiting on backoff or rate limits.
+func (at *ActiveTask) IsBackingOff(now time.Time) bool {
+	untilNano := at.BackoffUntil.Load()
+	if untilNano > 0 && now.UnixNano() < untilNano {
+		return true
+	}
+	return at.WaitingOnLimiter.Load()
+}
+

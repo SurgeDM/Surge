@@ -44,13 +44,14 @@ type ConcurrentDownloader struct {
 	bufPool            sync.Pool
 	Headers            map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
 	hostLimiter        *transport.HostRateLimiter
-	workerHosts        []string
-	soft403Mu          sync.Mutex
-	forbiddenByMirror  map[string]int
-	nonRangeMirrors    map[string]bool
-	soft403Progress    int64
-	soft403Since       time.Time
-	concurrencyGate    *adaptiveConcurrencyGate
+	workerHosts          []string
+	workerBackoff        map[int]time.Time
+	soft403Mu            sync.Mutex
+	forbiddenByMirror    map[string]int
+	nonRangeMirrors      map[string]bool
+	soft403Progress      int64
+	soft403Since         time.Time
+	concurrencyGate      *adaptiveConcurrencyGate
 	// completing is set when the completion monitor has decided the download
 	// is done. Worker taskCtx cancel is then a completion signal, not a stall.
 	completing atomic.Bool
@@ -65,11 +66,12 @@ func NewConcurrentDownloader(id string, progressCh chan<- types.DownloadEvent, p
 	}
 
 	return &ConcurrentDownloader{
-		ID:           id,
-		ProgressChan: progressCh,
-		State:        progState,
-		activeTasks:  make(map[int]*ActiveTask),
-		Runtime:      runtime,
+		ID:            id,
+		ProgressChan:  progressCh,
+		State:         progState,
+		activeTasks:   make(map[int]*ActiveTask),
+		workerBackoff: make(map[int]time.Time),
+		Runtime:       runtime,
 		hostLimiter:  transport.DefaultHostRateLimiter,
 		bufPool: sync.Pool{
 			New: func() any {

@@ -119,9 +119,14 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 					lastErr = err
 					break
 				}
+				until := time.Now().Add(wait)
+				d.setWorkerBackoff(id, until)
+				activeTask.SetBackoff(until)
 				activeTask.WaitingOnLimiter.Store(true)
 				if !interruptibleSleep(ctx, wait) {
 					activeTask.WaitingOnLimiter.Store(false)
+					activeTask.ClearBackoff()
+					d.clearWorkerBackoff(id)
 					if d.State != nil {
 						d.State.ActiveWorkers.Add(-1)
 					}
@@ -131,6 +136,8 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 					return ctx.Err()
 				}
 				activeTask.WaitingOnLimiter.Store(false)
+				activeTask.ClearBackoff()
+				d.clearWorkerBackoff(id)
 				// Another response may have extended the shared cooldown.
 				continue
 			}
@@ -226,6 +233,8 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			}
 
 			if lastErr == nil {
+				d.clearWorkerBackoff(id)
+				activeTask.ClearBackoff()
 				d.soft403Mu.Lock()
 				delete(d.forbiddenByMirror, currentURL)
 				d.soft403Mu.Unlock()
@@ -277,6 +286,8 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				}
 				// Preserve the host deadline even when this download cannot wait.
 				until, _ := d.hostLimiter.ReportThrottle(host, reportedCap, retryAfter, explicit, now)
+				d.setWorkerBackoff(id, until)
+				activeTask.SetBackoff(until)
 
 				d.soft403Mu.Lock()
 				if d.throttleEpisodeStart.IsZero() {
@@ -360,9 +371,15 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			d.ReportMirrorError(mirrors[currentMirrorIdx])
 			currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
 			if len(mirrors) == 1 {
+				backoffDuration := time.Duration(1<<genericAttempt) * types.RetryBaseDelay
+				until := time.Now().Add(backoffDuration)
+				d.setWorkerBackoff(id, until)
+				activeTask.SetBackoff(until)
 				activeTask.WaitingOnLimiter.Store(true)
-				interruptibleSleep(ctx, time.Duration(1<<genericAttempt)*types.RetryBaseDelay)
+				interruptibleSleep(ctx, backoffDuration)
 				activeTask.WaitingOnLimiter.Store(false)
+				activeTask.ClearBackoff()
+				d.clearWorkerBackoff(id)
 			}
 			resumeOnRetryOffset(&task, activeTask)
 		}
@@ -373,6 +390,9 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 
 		d.activeMu.Lock()
 		delete(d.activeTasks, id)
+		if d.workerBackoff != nil && time.Now().After(d.workerBackoff[id]) {
+			delete(d.workerBackoff, id)
+		}
 		d.activeMu.Unlock()
 		if d.concurrencyGate != nil {
 			d.concurrencyGate.release()
@@ -667,15 +687,106 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 	return nil
 }
 
-// StealWork tries to split an active task from a busy worker
+func (d *ConcurrentDownloader) setWorkerBackoff(id int, until time.Time) {
+	d.activeMu.Lock()
+	defer d.activeMu.Unlock()
+	if d.workerBackoff == nil {
+		d.workerBackoff = make(map[int]time.Time)
+	}
+	d.workerBackoff[id] = until
+}
+
+func (d *ConcurrentDownloader) clearWorkerBackoff(id int) {
+	d.activeMu.Lock()
+	defer d.activeMu.Unlock()
+	if d.workerBackoff != nil {
+		delete(d.workerBackoff, id)
+	}
+}
+
+func (d *ConcurrentDownloader) isWorkerBackingOffLocked(id int, active *ActiveTask, now time.Time) bool {
+	if active != nil && active.IsBackingOff(now) {
+		return true
+	}
+	if d.workerBackoff != nil {
+		if until, ok := d.workerBackoff[id]; ok {
+			if now.Before(until) {
+				return true
+			}
+			delete(d.workerBackoff, id)
+		}
+	}
+	return false
+}
+
+func (d *ConcurrentDownloader) isCooldownActiveLocked(now time.Time) bool {
+	if d.hostLimiter == nil {
+		return false
+	}
+	hosts := d.workerHosts
+	if len(hosts) == 0 && d.URL != "" {
+		hosts = []string{transport.MirrorHost(d.URL)}
+	}
+	if len(hosts) == 0 {
+		return false
+	}
+	_, wait := d.hostLimiter.PickMirror(hosts, 0, now)
+	return wait > 0
+}
+
+// SetWorkerBackoff records the backoff deadline for a worker.
+func (d *ConcurrentDownloader) SetWorkerBackoff(id int, until time.Time) {
+	d.setWorkerBackoff(id, until)
+}
+
+// ClearWorkerBackoff clears the backoff deadline for a worker.
+func (d *ConcurrentDownloader) ClearWorkerBackoff(id int) {
+	d.clearWorkerBackoff(id)
+}
+
+// IsWorkerBackingOff checks whether a worker is currently in backoff state.
+func (d *ConcurrentDownloader) IsWorkerBackingOff(id int, now time.Time) bool {
+	d.activeMu.Lock()
+	defer d.activeMu.Unlock()
+	return d.isWorkerBackingOffLocked(id, d.activeTasks[id], now)
+}
+
+// StealWork tries to split an active task from a busy worker.
 // It greedily targets the worker with the MOST remaining work.
 func (d *ConcurrentDownloader) StealWork(queue *TaskQueue) bool {
+	if queue == nil || queue.Len() > 0 {
+		return false
+	}
+
 	d.activeMu.Lock()
 	defer d.activeMu.Unlock()
 
-	splitFloor := d.Runtime.GetMinChunkSize()
+	now := time.Now()
+
+	// Suppress task stealing when host rate limit or 403 cooldown is active across eligible mirrors.
+	if d.isCooldownActiveLocked(now) {
+		return false
+	}
+
+	defaultMinChunk := d.Runtime.GetMinChunkSize()
+
+	var activeWorkers int
+	var totalRemaining int64
+	for id, active := range d.activeTasks {
+		if active == nil || d.isWorkerBackingOffLocked(id, active, now) {
+			continue
+		}
+		rem := active.RemainingBytes()
+		if rem > 0 {
+			activeWorkers++
+			totalRemaining += rem
+		}
+	}
+
+	splitFloor := defaultMinChunk
 	if d.Runtime.IsAdaptiveConcurrencyEnabled() &&
-		(d.concurrencyGate == nil || !d.concurrencyGate.sawThrottle()) {
+		(d.concurrencyGate == nil || !d.concurrencyGate.sawThrottle()) &&
+		activeWorkers > 0 && totalRemaining < int64(activeWorkers)*defaultMinChunk {
 		splitFloor = types.AlignSize
 	}
 
@@ -683,8 +794,13 @@ func (d *ConcurrentDownloader) StealWork(queue *TaskQueue) bool {
 	var maxRemaining int64 = 0
 	var bestActive *ActiveTask
 
-	// Find the worker with the MOST remaining work
+	// Find the worker with the MOST remaining work.
+	// Skip workers currently in backoff state (e.g. HTTP 403 or rate limiting) to prevent
+	// premature task stealing and greedy reassignment before backoff duration elapses.
 	for id, active := range d.activeTasks {
+		if active == nil || d.isWorkerBackingOffLocked(id, active, now) {
+			continue
+		}
 		remaining := active.RemainingBytes()
 		if remaining > splitFloor && remaining > maxRemaining {
 			maxRemaining = remaining
