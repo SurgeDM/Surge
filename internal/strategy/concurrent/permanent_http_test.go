@@ -29,7 +29,7 @@ func TestDownloadTask_PermanentStatusMatrix(t *testing.T) {
 		{"416", http.StatusRequestedRangeNotSatisfiable, true, false, false},
 		{"429", http.StatusTooManyRequests, false, false, true},
 		{"500", http.StatusInternalServerError, false, false, false},
-		{"503", http.StatusServiceUnavailable, false, false, false},
+		{"503", http.StatusServiceUnavailable, false, false, true},
 	}
 
 	for _, tc := range cases {
