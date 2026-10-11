@@ -25,22 +25,56 @@ import (
 
 func TestPostSettingsAppliesDefaultDownloadDirToRunningLifecycle(t *testing.T) {
 	setupIsolatedCmdState(t)
-	originalSettings, originalLifecycle := globalSettings, GlobalLifecycle
+	originalSettings := globalSettings
+	originalLifecycle := GlobalLifecycle
+	originalService := GlobalService
+	originalPool := GlobalPool
+	originalProgressCh := GlobalProgressCh
+	originalCleanup := GlobalLifecycleCleanup
 	t.Cleanup(func() {
+		if GlobalLifecycleCleanup != nil {
+			GlobalLifecycleCleanup()
+			GlobalLifecycleCleanup = nil
+		}
+		if GlobalService != nil {
+			_ = GlobalService.Shutdown()
+			GlobalService = nil
+		}
 		globalSettings = originalSettings
 		GlobalLifecycle = originalLifecycle
+		GlobalService = originalService
+		GlobalPool = originalPool
+		GlobalProgressCh = originalProgressCh
+		GlobalLifecycleCleanup = originalCleanup
 	})
+
 	initial := config.DefaultSettings()
 	initial.General.DefaultDownloadDir.Value = t.TempDir()
 	globalSettings = initial
-	progressCh := make(chan types.DownloadEvent, 16)
-	pool := scheduler.New(progressCh, 1)
+
 	eventBus := orchestrator.NewEventBus()
-	lifecycle := orchestrator.NewLifecycleManager(pool, eventBus, initial)
+	t.Cleanup(func() { eventBus.Shutdown() })
+	GlobalProgressCh = eventBus.InputCh
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	pool := scheduler.New(GlobalProgressCh, 1)
+	t.Cleanup(func() {
+		if pool != nil {
+			pool.GracefulShutdown()
+		}
+	})
+	GlobalPool = pool
+	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
+	lifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, initial, buildActiveDownloadChecker(getAll))
+	t.Cleanup(func() { lifecycle.Shutdown() })
 	GlobalLifecycle = lifecycle
-	t.Cleanup(lifecycle.Shutdown)
-	t.Cleanup(eventBus.Shutdown)
-	localService := service.NewLocalDownloadService(lifecycle)
+	localService := service.NewLocalDownloadService(GlobalLifecycle)
+	GlobalService = localService
+
+	if err := ensureGlobalLocalServiceAndLifecycle(); err != nil {
+		t.Fatalf("ensureGlobalLocalServiceAndLifecycle failed: %v", err)
+	}
 
 	updatedDir := t.TempDir()
 	updated := initial.Clone()
