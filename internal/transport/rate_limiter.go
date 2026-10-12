@@ -186,6 +186,13 @@ func (r *RateLimiter) SetRate(rate int64, bucketSize int64) {
 	r.wakeWaitersLocked()
 }
 
+// Rate returns the current rate in bytes per second; zero means unlimited.
+func (r *RateLimiter) Rate() int64 {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return r.rate
+}
+
 func (r *RateLimiter) wakeWaitersLocked() {
 	if r.wakeCh == nil {
 		r.wakeCh = make(chan struct{})

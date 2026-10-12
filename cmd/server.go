@@ -245,6 +245,9 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 		case <-cmd.Root().Context().Done():
 			fmt.Printf("\nService stop requested. Shutting down...\n")
 			_ = executeGlobalShutdown("server: service context cancelled")
+		case reason := <-shutDownRequested:
+			fmt.Printf("\n%s Shutting down...\n", reason)
+			_ = executeGlobalShutdown(reason)
 		case <-exitWhenDoneCh:
 			fmt.Println("All downloads finished. Exiting...")
 			_ = executeGlobalShutdown("server: exit when done")
@@ -263,6 +266,9 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 	case <-cmd.Root().Context().Done():
 		fmt.Printf("\nService stop requested. Shutting down...\n")
 		_ = executeGlobalShutdown("server: service context cancelled")
+	case reason := <-shutDownRequested:
+		fmt.Printf("\nShutdown requested. Shutting down...\n")
+		_ = executeGlobalShutdown(reason)
 	}
 	return nil
 }

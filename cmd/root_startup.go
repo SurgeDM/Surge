@@ -63,8 +63,11 @@ func initializeGlobalState() error {
 }
 
 func getSettings() *config.Settings {
+	if lifecycle := currentLifecycle(); lifecycle != nil {
+		return lifecycle.GetSettings()
+	}
 	if globalSettings != nil {
-		return globalSettings
+		return globalSettings.Clone()
 	}
 	settings, err := config.LoadSettings()
 	if err != nil {

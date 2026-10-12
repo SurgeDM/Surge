@@ -1,21 +1,277 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/scheduler"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
 )
+
+func TestPostSettingsAppliesDefaultDownloadDirToRunningLifecycle(t *testing.T) {
+	setupIsolatedCmdState(t)
+	originalSettings := globalSettings
+	originalLifecycle := GlobalLifecycle
+	originalService := GlobalService
+	originalPool := GlobalPool
+	originalProgressCh := GlobalProgressCh
+	originalCleanup := GlobalLifecycleCleanup
+	t.Cleanup(func() {
+		if GlobalLifecycleCleanup != nil {
+			GlobalLifecycleCleanup()
+			GlobalLifecycleCleanup = nil
+		}
+		if GlobalService != nil {
+			_ = GlobalService.Shutdown()
+			GlobalService = nil
+		}
+		globalSettings = originalSettings
+		GlobalLifecycle = originalLifecycle
+		GlobalService = originalService
+		GlobalPool = originalPool
+		GlobalProgressCh = originalProgressCh
+		GlobalLifecycleCleanup = originalCleanup
+	})
+
+	initial := config.DefaultSettings()
+	initial.General.DefaultDownloadDir.Value = t.TempDir()
+	globalSettings = initial
+
+	eventBus := orchestrator.NewEventBus()
+	t.Cleanup(func() { eventBus.Shutdown() })
+	GlobalProgressCh = eventBus.InputCh
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	pool := scheduler.New(GlobalProgressCh, 1)
+	t.Cleanup(func() {
+		if pool != nil {
+			pool.GracefulShutdown()
+		}
+	})
+	GlobalPool = pool
+	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
+	lifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, initial, buildActiveDownloadChecker(getAll))
+	t.Cleanup(func() { lifecycle.Shutdown() })
+	GlobalLifecycle = lifecycle
+	localService := service.NewLocalDownloadService(GlobalLifecycle)
+	GlobalService = localService
+
+	if err := ensureGlobalLocalServiceAndLifecycle(); err != nil {
+		t.Fatalf("ensureGlobalLocalServiceAndLifecycle failed: %v", err)
+	}
+
+	updatedDir := t.TempDir()
+	updated := initial.Clone()
+	updated.General.DefaultDownloadDir.Value = updatedDir
+	body, err := json.Marshal(updated)
+	if err != nil {
+		t.Fatalf("marshal settings: %v", err)
+	}
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", localService)
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/settings", bytes.NewReader(body)))
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("POST /settings returned %d: %s", recorder.Code, recorder.Body.String())
+	}
+
+	const filename = "settings-updated.bin"
+	const fileSize = int64(16 * 1024)
+	downloader := testutil.NewStreamingMockServerT(t, fileSize,
+		testutil.WithFilename(filename), testutil.WithRangeSupport(true))
+	defer downloader.Close()
+	downloadBody, err := json.Marshal(map[string]string{"url": downloader.URL() + "/" + filename})
+	if err != nil {
+		t.Fatalf("marshal download request: %v", err)
+	}
+	downloadRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(downloadRecorder, httptest.NewRequest(http.MethodPost, "/download", bytes.NewReader(downloadBody)))
+	if downloadRecorder.Code != http.StatusOK {
+		t.Fatalf("POST /download returned %d: %s", downloadRecorder.Code, downloadRecorder.Body.String())
+	}
+	wantPath := filepath.Join(updatedDir, filename)
+	deadline := time.Now().Add(10 * time.Second)
+	var downloaded bool
+	for time.Now().Before(deadline) {
+		if info, err := os.Stat(wantPath); err == nil && info.Size() == fileSize {
+			downloaded = true
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if !downloaded {
+		t.Fatalf("download did not complete at %s", wantPath)
+	}
+
+	lifecycle.ApplySettings(initial)
+	globalSettings = initial
+	reloadRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(reloadRecorder, httptest.NewRequest(http.MethodPost, "/settings/reload", nil))
+	if reloadRecorder.Code != http.StatusOK {
+		t.Fatalf("POST /settings/reload returned %d: %s", reloadRecorder.Code, reloadRecorder.Body.String())
+	}
+	if got := config.Resolve[string](lifecycle.GetSettings().General.DefaultDownloadDir); got != updatedDir {
+		t.Fatalf("lifecycle retained default directory %q after reload, want %q", got, updatedDir)
+	}
+}
+
+func TestHTTPSettingsRejectsInvalidUpdatesAndKeepsConcurrentChanges(t *testing.T) {
+	setupIsolatedCmdState(t)
+	previousSettings, previousLifecycle := globalSettings, GlobalLifecycle
+	initial := config.DefaultSettings()
+	globalSettings = initial
+	lifecycle := orchestrator.NewLifecycleManager(nil, nil, initial)
+	GlobalLifecycle = lifecycle
+	t.Cleanup(func() {
+		GlobalLifecycle = previousLifecycle
+		globalSettings = previousSettings
+		lifecycle.Shutdown()
+	})
+
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", &httpAPITestService{})
+	post := func(body string) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(body)))
+		return recorder
+	}
+
+	for _, body := range []string{
+		`{"network":{"max_connections_per_host":1000}}`,
+		`{"network":{"max_connections_per_host":null}}`,
+		`{"general":{"auto_resume":"yes"}}`,
+		`null`,
+		`{} {}`,
+	} {
+		if response := post(body); response.Code != http.StatusBadRequest {
+			t.Fatalf("POST %s returned %d, want 400: %s", body, response.Code, response.Body.String())
+		}
+		if got := config.Resolve[int](lifecycle.GetSettings().Network.MaxConnectionsPerDownload); got != types.PerDownloadMax {
+			t.Fatalf("invalid POST changed active max connections to %d", got)
+		}
+		if _, err := os.Stat(config.GetSettingsPath()); !os.IsNotExist(err) {
+			t.Fatalf("invalid POST wrote settings file: %v", err)
+		}
+	}
+
+	const updates = 20
+	for i := 0; i < updates; i++ {
+		wantConnections, wantDownloads := 8+i%2, 4+i%2
+		start := make(chan struct{})
+		results := make(chan *httptest.ResponseRecorder, 3)
+		for _, body := range []string{
+			fmt.Sprintf(`{"network":{"max_connections_per_host":%d}}`, wantConnections),
+			fmt.Sprintf(`{"network":{"max_concurrent_downloads":%d}}`, wantDownloads),
+		} {
+			go func(body string) {
+				<-start
+				results <- post(body)
+			}(body)
+		}
+		go func() {
+			<-start
+			recorder := httptest.NewRecorder()
+			mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/settings", nil))
+			results <- recorder
+		}()
+		close(start)
+		for j := 0; j < 3; j++ {
+			response := <-results
+			if response.Code != http.StatusOK {
+				t.Fatalf("concurrent settings request returned %d: %s", response.Code, response.Body.String())
+			}
+		}
+		settings := lifecycle.GetSettings()
+		if got := config.Resolve[int](settings.Network.MaxConnectionsPerDownload); got != wantConnections {
+			t.Fatalf("max connections = %d, want %d", got, wantConnections)
+		}
+		if got := config.Resolve[int](settings.Network.MaxConcurrentDownloads); got != wantDownloads {
+			t.Fatalf("max downloads = %d, want %d", got, wantDownloads)
+		}
+	}
+
+	stored, err := config.LoadSettings()
+	if err != nil {
+		t.Fatalf("load saved settings: %v", err)
+	}
+	if got := config.Resolve[int](stored.Network.MaxConnectionsPerDownload); got != 9 {
+		t.Fatalf("saved max connections = %d, want 9", got)
+	}
+	if got := config.Resolve[int](stored.Network.MaxConcurrentDownloads); got != 5 {
+		t.Fatalf("saved max downloads = %d, want 5", got)
+	}
+}
+
+func TestHTTPSettingsAppliesGlobalRateLimit(t *testing.T) {
+	setupIsolatedCmdState(t)
+	previousSettings, previousLifecycle := globalSettings, GlobalLifecycle
+	initial := config.DefaultSettings()
+	initial.Network.GlobalRateLimit.Value = "128 B/s"
+	globalSettings = initial
+
+	pool := scheduler.New(make(chan types.DownloadEvent, 1), 1)
+	lifecycle := orchestrator.NewLifecycleManager(pool, nil, initial)
+	GlobalLifecycle = lifecycle
+	t.Cleanup(func() {
+		GlobalLifecycle = previousLifecycle
+		globalSettings = previousSettings
+		lifecycle.Shutdown()
+	})
+	if got := pool.GlobalRateLimit(); got != 128 {
+		t.Fatalf("initial global rate limit = %d, want 128", got)
+	}
+
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", &httpAPITestService{})
+	post := func(path, body string, wantStatus int) {
+		t.Helper()
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, strings.NewReader(body)))
+		if response.Code != wantStatus {
+			t.Fatalf("POST %s returned %d, want %d: %s", path, response.Code, wantStatus, response.Body.String())
+		}
+	}
+
+	post("/settings", `{"network":{"global_rate_limit":"256 B/s"}}`, http.StatusOK)
+	if got := pool.GlobalRateLimit(); got != 256 {
+		t.Fatalf("global rate limit after update = %d, want 256", got)
+	}
+	post("/settings", `{"network":{"global_rate_limit":"invalid"}}`, http.StatusBadRequest)
+	if got := pool.GlobalRateLimit(); got != 256 {
+		t.Fatalf("global rate limit after invalid update = %d, want 256", got)
+	}
+
+	saved := lifecycle.GetSettings()
+	saved.Network.GlobalRateLimit.Value = "512 B/s"
+	if err := config.SaveSettings(saved); err != nil {
+		t.Fatalf("save settings for reload: %v", err)
+	}
+	post("/settings/reload", "", http.StatusOK)
+	if got := pool.GlobalRateLimit(); got != 512 {
+		t.Fatalf("global rate limit after reload = %d, want 512", got)
+	}
+	post("/settings", `{"network":{"global_rate_limit":"0"}}`, http.StatusOK)
+	if got := pool.GlobalRateLimit(); got != 0 {
+		t.Fatalf("global rate limit after disabling = %d, want 0", got)
+	}
+}
 
 type httpAPITestService struct {
 	history               []types.DownloadRecord

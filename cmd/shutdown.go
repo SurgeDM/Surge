@@ -11,7 +11,16 @@ var (
 	globalShutdownOnce sync.Once
 	globalShutdownErr  error
 	globalShutdownFn   = defaultGlobalShutdown
+	shutDownRequested  = make(chan string, 1)
 )
+
+
+func requestGlobalShutdown(reason string) {
+	select {
+	case shutDownRequested <- reason:
+	default:
+	}
+}
 
 func defaultGlobalShutdown() error {
 	cancelGlobalEnqueue()

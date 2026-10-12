@@ -284,22 +284,12 @@ func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
 		return types.ErrPoolNotInit
 	}
 
-	settings := s.lifecycle.GetSettings()
-	if settings == nil {
-		return fmt.Errorf("settings not found")
-	}
-
-	if settings.Network.GlobalRateLimit == nil {
-		settings.Network.GlobalRateLimit = config.DefaultSettings().Network.GlobalRateLimit
-	}
-	oldValue := settings.Network.GlobalRateLimit.Value
-	settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
-	if err := config.SaveSettings(settings); err != nil {
-		settings.Network.GlobalRateLimit.Value = oldValue
+	if err := s.lifecycle.UpdateSettings(func(settings *config.Settings) error {
+		settings.Network.GlobalRateLimit.Value = fmt.Sprintf("%d B/s", rate)
+		return nil
+	}, nil); err != nil {
 		return err
 	}
-
-	s.lifecycle.GetScheduler().SetGlobalRateLimit(rate)
 	return nil
 }
 
@@ -311,22 +301,12 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 		return types.ErrPoolNotInit
 	}
 
-	settings := s.lifecycle.GetSettings()
-	if settings == nil {
-		return fmt.Errorf("settings not found")
-	}
-
-	if settings.Network.DefaultDownloadRateLimit == nil {
-		settings.Network.DefaultDownloadRateLimit = config.DefaultSettings().Network.DefaultDownloadRateLimit
-	}
-	oldValue := settings.Network.DefaultDownloadRateLimit.Value
-	settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
-	if err := config.SaveSettings(settings); err != nil {
-		settings.Network.DefaultDownloadRateLimit.Value = oldValue
+	if err := s.lifecycle.UpdateSettings(func(settings *config.Settings) error {
+		settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
+		return nil
+	}, func() { s.lifecycle.GetScheduler().SetDefaultDownloadRateLimit(rate) }); err != nil {
 		return err
 	}
-
-	s.lifecycle.GetScheduler().SetDefaultDownloadRateLimit(rate)
 
 	if configs := s.lifecycle.GetScheduler().GetAll(); configs != nil {
 		var dbErrs []string
