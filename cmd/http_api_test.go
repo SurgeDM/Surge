@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -128,6 +129,93 @@ func TestPostSettingsAppliesDefaultDownloadDirToRunningLifecycle(t *testing.T) {
 	}
 	if got := config.Resolve[string](lifecycle.GetSettings().General.DefaultDownloadDir); got != updatedDir {
 		t.Fatalf("lifecycle retained default directory %q after reload, want %q", got, updatedDir)
+	}
+}
+
+func TestHTTPSettingsRejectsInvalidUpdatesAndKeepsConcurrentChanges(t *testing.T) {
+	setupIsolatedCmdState(t)
+	previousSettings, previousLifecycle := globalSettings, GlobalLifecycle
+	initial := config.DefaultSettings()
+	globalSettings = initial
+	lifecycle := orchestrator.NewLifecycleManager(nil, nil, initial)
+	GlobalLifecycle = lifecycle
+	t.Cleanup(func() {
+		GlobalLifecycle = previousLifecycle
+		globalSettings = previousSettings
+		lifecycle.Shutdown()
+	})
+
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", &httpAPITestService{})
+	post := func(body string) *httptest.ResponseRecorder {
+		recorder := httptest.NewRecorder()
+		mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(body)))
+		return recorder
+	}
+
+	for _, body := range []string{
+		`{"network":{"max_connections_per_host":1000}}`,
+		`{"network":{"max_connections_per_host":null}}`,
+		`{"general":{"auto_resume":"yes"}}`,
+		`null`,
+		`{} {}`,
+	} {
+		if response := post(body); response.Code != http.StatusBadRequest {
+			t.Fatalf("POST %s returned %d, want 400: %s", body, response.Code, response.Body.String())
+		}
+		if got := config.Resolve[int](lifecycle.GetSettings().Network.MaxConnectionsPerDownload); got != types.PerDownloadMax {
+			t.Fatalf("invalid POST changed active max connections to %d", got)
+		}
+		if _, err := os.Stat(config.GetSettingsPath()); !os.IsNotExist(err) {
+			t.Fatalf("invalid POST wrote settings file: %v", err)
+		}
+	}
+
+	const updates = 20
+	for i := 0; i < updates; i++ {
+		wantConnections, wantDownloads := 8+i%2, 4+i%2
+		start := make(chan struct{})
+		results := make(chan *httptest.ResponseRecorder, 3)
+		for _, body := range []string{
+			fmt.Sprintf(`{"network":{"max_connections_per_host":%d}}`, wantConnections),
+			fmt.Sprintf(`{"network":{"max_concurrent_downloads":%d}}`, wantDownloads),
+		} {
+			go func(body string) {
+				<-start
+				results <- post(body)
+			}(body)
+		}
+		go func() {
+			<-start
+			recorder := httptest.NewRecorder()
+			mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodGet, "/settings", nil))
+			results <- recorder
+		}()
+		close(start)
+		for j := 0; j < 3; j++ {
+			response := <-results
+			if response.Code != http.StatusOK {
+				t.Fatalf("concurrent settings request returned %d: %s", response.Code, response.Body.String())
+			}
+		}
+		settings := lifecycle.GetSettings()
+		if got := config.Resolve[int](settings.Network.MaxConnectionsPerDownload); got != wantConnections {
+			t.Fatalf("max connections = %d, want %d", got, wantConnections)
+		}
+		if got := config.Resolve[int](settings.Network.MaxConcurrentDownloads); got != wantDownloads {
+			t.Fatalf("max downloads = %d, want %d", got, wantDownloads)
+		}
+	}
+
+	stored, err := config.LoadSettings()
+	if err != nil {
+		t.Fatalf("load saved settings: %v", err)
+	}
+	if got := config.Resolve[int](stored.Network.MaxConnectionsPerDownload); got != 9 {
+		t.Fatalf("saved max connections = %d, want 9", got)
+	}
+	if got := config.Resolve[int](stored.Network.MaxConcurrentDownloads); got != 5 {
+		t.Fatalf("saved max downloads = %d, want 5", got)
 	}
 }
 

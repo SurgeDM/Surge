@@ -178,44 +178,56 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		case http.MethodGet:
 			settings := getSettings()
 			if settings == nil {
-				http.Error(w,"Error getting settings.",http.StatusInternalServerError)
+				http.Error(w, "Error getting settings.", http.StatusInternalServerError)
 				return
 			}
-			writeJSONResponse(w, http.StatusOK,settings)
+			writeJSONResponse(w, http.StatusOK, settings)
 		case http.MethodPost:
-			newSettings := getSettings().Clone() 
-			err := decodeJSONBody(r, &newSettings)
-			if err!=nil{
-				http.Error(w, "Error Decoding JSON:"+err.Error(),http.StatusBadRequest)
+			patch, err := decodeSettingsPatch(r)
+			if err != nil {
+				http.Error(w, "Invalid settings JSON: "+err.Error(), http.StatusBadRequest)
 				return
 			}
-
-			if err := config.SaveSettings(newSettings); err!=nil {
-				http.Error(w, "Error Updating Settings:"+err.Error(),http.StatusInternalServerError)
+			lifecycle := currentLifecycle()
+			if lifecycle == nil {
+				http.Error(w, "Settings service unavailable", http.StatusServiceUnavailable)
 				return
 			}
-			globalSettings = newSettings
-			GlobalLifecycle.ApplySettings(newSettings)
-			writeJSONResponse(w,http.StatusOK,map[string]interface{}{
-				"status":"updated",
+			err = lifecycle.UpdateSettings(func(next *config.Settings) error {
+				if err := applySettingsPatch(next, patch); err != nil {
+					return fmt.Errorf("%w: %v", errInvalidSettings, err)
+				}
+				return nil
+			}, nil)
+			if errors.Is(err, errInvalidSettings) {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			if err != nil {
+				http.Error(w, "Error updating settings: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			writeJSONResponse(w, http.StatusOK, map[string]interface{}{
+				"status": "updated",
 			})
 		default:
-			http.Error(w, "Method not Allowed",http.StatusBadRequest)
+			http.Error(w, "Method not Allowed", http.StatusBadRequest)
 		}
 	})
 
-	mux.HandleFunc("/settings/reload",requireMethod(http.MethodPost,func(w http.ResponseWriter, r *http.Request) {
-		currentSettings, err := config.LoadSettings()
-		if err !=nil{
-			http.Error(w,err.Error(),http.StatusInternalServerError)
+	mux.HandleFunc("/settings/reload", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
+		lifecycle := currentLifecycle()
+		if lifecycle == nil {
+			http.Error(w, "Settings service unavailable", http.StatusServiceUnavailable)
 			return
 		}
-
-		globalSettings = currentSettings
-		GlobalLifecycle.ApplySettings(currentSettings)
-
-		writeJSONResponse(w,http.StatusOK,map[string]interface{}{
-			"status":"reloaded",
+		err := lifecycle.ReloadSettings()
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
+			"status": "reloaded",
 		})
 	}))
 
