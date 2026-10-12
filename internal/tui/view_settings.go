@@ -787,6 +787,9 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 }
 
 func (m *RootModel) persistSettings() error {
+	if m.Orchestrator != nil {
+		return m.Orchestrator.SaveSettings(m.Settings)
+	}
 	if err := config.SaveSettings(m.Settings); err != nil {
 		return err
 	}
@@ -796,9 +799,6 @@ func (m *RootModel) persistSettings() error {
 		if err := reloader.ReloadSettings(m.Settings); err != nil {
 			return err
 		}
-	}
-	if m.Orchestrator != nil {
-		m.Orchestrator.ApplySettings(m.Settings)
 	}
 	return nil
 }

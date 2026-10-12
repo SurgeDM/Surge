@@ -542,7 +542,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool, releaseLock func()) er
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
-	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), globalSettings, noResume, Commit)
+	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), getSettings(), noResume, Commit)
 	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())
 
 	configureServiceUI(&m)
