@@ -157,8 +157,8 @@ func TestPreallocateFile(t *testing.T) {
 	defer func() { _ = file.Close() }()
 
 	const size = int64(2 * utils.MiB)
-	if err := preallocateFile(file, size); err != nil {
-		t.Fatalf("preallocateFile failed: %v", err)
+	if err := utils.PreallocateFile(file, size, utils.FileAllocationFalloc); err != nil {
+		t.Fatalf("PreallocateFile failed: %v", err)
 	}
 
 	info, err := file.Stat()
@@ -688,7 +688,7 @@ func TestSingleDownloader_PreallocateFailure_ReleasesFileHandle(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Cenário: criar o .surge como read-only para que preallocateFile (Truncate) falhe
+	// Cenário: criar o .surge como read-only para que PreallocateFile (Truncate) falhe
 	surgePath := destPath + types.IncompleteSuffix
 	f, err := os.Create(surgePath)
 	if err != nil {

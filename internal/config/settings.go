@@ -49,6 +49,7 @@ type GeneralSettings struct {
 	LogRetentionCount            *Setting `json:"log_retention_count"`
 	LiveSpeedGraph               *Setting `json:"live_speed_graph"`
 	ShowSpeedGraph               *Setting `json:"show_speed_graph"`
+	FileAllocation               *Setting `json:"file_allocation"`
 }
 
 type NetworkSettings struct {
@@ -269,6 +270,7 @@ func (s *Settings) initializeCategoriesList() {
 				s.General.LogRetentionCount,
 				s.General.LiveSpeedGraph,
 				s.General.ShowSpeedGraph,
+				s.General.FileAllocation,
 			},
 		},
 		{
@@ -667,6 +669,26 @@ func DefaultSettings() *Settings {
 				Type:         TypeBool,
 				DefaultValue: true,
 				Value:        true,
+			},
+			FileAllocation: &Setting{
+				Key:          "file_allocation",
+				Label:        "File Allocation",
+				Description:  "How new downloads reserve disk space. falloc sets the file size without zero-filling. prealloc uses truncate, which zero-fills on NTFS.",
+				Type:         TypeString,
+				DefaultValue: utils.FileAllocationFalloc,
+				Value:        utils.FileAllocationFalloc,
+				ValidateFunc: func(val any) error {
+					sVal, ok := val.(string)
+					if !ok {
+						return fmt.Errorf("must be a string")
+					}
+					switch strings.ToLower(strings.TrimSpace(sVal)) {
+					case utils.FileAllocationFalloc, utils.FileAllocationPrealloc:
+						return nil
+					default:
+						return fmt.Errorf("must be falloc or prealloc")
+					}
+				},
 			},
 		},
 		Network: NetworkSettings{
@@ -1312,6 +1334,7 @@ func (s *Settings) ToRuntimeConfig() *types.RuntimeConfig {
 		ProxyURL:                    Resolve[string](s.Network.ProxyURL),
 		CustomDNS:                   Resolve[string](s.Network.CustomDNS),
 		SequentialDownload:          Resolve[bool](s.Network.SequentialDownload),
+		FileAllocation:              utils.NormalizeFileAllocation(Resolve[string](s.General.FileAllocation)),
 		MinChunkSize:                Resolve[int64](s.Network.MinChunkSize),
 		GlobalRateLimitBps:          globalRate,
 		DefaultDownloadRateLimitBps: defaultRate,

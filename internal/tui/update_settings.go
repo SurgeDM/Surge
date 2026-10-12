@@ -289,6 +289,16 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Cycle falloc → prealloc → falloc instead of opening the text editor.
+		if settingKey == "file_allocation" {
+			next := utils.FileAllocationPrealloc
+			if utils.NormalizeFileAllocation(config.Resolve[string](m.Settings.General.FileAllocation)) == utils.FileAllocationPrealloc {
+				next = utils.FileAllocationFalloc
+			}
+			m.Settings.General.FileAllocation.Value = next
+			return m, nil
+		}
+
 		// Toggle bool or enter edit mode for other types
 		typ := m.getCurrentSettingType()
 

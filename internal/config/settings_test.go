@@ -326,6 +326,40 @@ func TestLoadSettings_CorruptedJSON(t *testing.T) {
 	}
 }
 
+func TestFileAllocationSetting(t *testing.T) {
+	settings := DefaultSettings()
+	if got := Resolve[string](settings.General.FileAllocation); got != utils.FileAllocationFalloc {
+		t.Fatalf("default file_allocation = %q, want falloc", got)
+	}
+
+	validate := settings.General.FileAllocation.Validate
+	for _, mode := range []string{"falloc", "FALLOC", "prealloc", "PreAlloc"} {
+		if err := validate(mode); err != nil {
+			t.Errorf("Validate(%q) = %v", mode, err)
+		}
+	}
+	for _, mode := range []string{"", "trunc", "none"} {
+		if err := validate(mode); err == nil {
+			t.Errorf("Validate(%q) succeeded, want error", mode)
+		}
+	}
+	if err := validate(1); err == nil {
+		t.Error("Validate(non-string) succeeded, want error")
+	}
+
+	settings.General.FileAllocation.Value = "PREALLOC"
+	runtime := settings.ToRuntimeConfig()
+	if runtime.FileAllocation != utils.FileAllocationPrealloc {
+		t.Fatalf("ToRuntimeConfig FileAllocation = %q, want prealloc", runtime.FileAllocation)
+	}
+
+	settings.General.FileAllocation.Value = "Falloc"
+	runtime = settings.ToRuntimeConfig()
+	if runtime.FileAllocation != utils.FileAllocationFalloc {
+		t.Fatalf("ToRuntimeConfig FileAllocation = %q, want falloc", runtime.FileAllocation)
+	}
+}
+
 func TestToRuntimeConfig(t *testing.T) {
 	settings := DefaultSettings()
 	settings.Performance.AdaptiveConcurrencyInterval.Value = 0 * time.Second

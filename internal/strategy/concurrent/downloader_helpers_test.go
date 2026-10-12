@@ -10,6 +10,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func TestHandlePause_Normal(t *testing.T) {
@@ -103,35 +104,49 @@ func TestHandlePause_UsesLiveRateLimitFromState(t *testing.T) {
 }
 
 func TestSetupTasks_NewDownload(t *testing.T) {
-	tmpDir := testutil.SetupStateDB(t)
-	cleanup := func() {}
-	defer cleanup()
-
-	fileSize := int64(1000)
-	chunkSize := int64(500)
-	destPath := filepath.Join(tmpDir, "new.bin")
-	workingPath := destPath + types.IncompleteSuffix
-
-	f, err := os.Create(workingPath)
-	if err != nil {
-		t.Fatal(err)
+	cases := []struct {
+		name    string
+		runtime *types.RuntimeConfig
+	}{
+		{name: "zero runtime", runtime: &types.RuntimeConfig{}},
+		{name: "prealloc", runtime: &types.RuntimeConfig{FileAllocation: utils.FileAllocationPrealloc}},
 	}
-	defer func() { _ = f.Close() }()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			tmpDir := testutil.SetupStateDB(t)
+			fileSize := int64(1000)
+			chunkSize := int64(500)
+			destPath := filepath.Join(tmpDir, "new.bin")
+			workingPath := destPath + types.IncompleteSuffix
 
-	state := progress.New("test-id", fileSize)
-	downloader := &ConcurrentDownloader{
-		ID:      "test-id",
-		State:   state,
-		Runtime: &types.RuntimeConfig{},
-	}
+			f, err := os.Create(workingPath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = f.Close() }()
 
-	tasks, err := downloader.setupTasks(destPath, fileSize, chunkSize, 2, f, nil, false)
-	if err != nil {
-		t.Fatalf("setupTasks failed: %v", err)
-	}
+			state := progress.New("test-id", fileSize)
+			downloader := &ConcurrentDownloader{
+				ID:      "test-id",
+				State:   state,
+				Runtime: tc.runtime,
+			}
 
-	if len(tasks) != 2 {
-		t.Errorf("Expected 2 tasks, got %d", len(tasks))
+			tasks, err := downloader.setupTasks(destPath, fileSize, chunkSize, 2, f, nil, false)
+			if err != nil {
+				t.Fatalf("setupTasks failed: %v", err)
+			}
+			if len(tasks) != 2 {
+				t.Errorf("Expected 2 tasks, got %d", len(tasks))
+			}
+			info, err := f.Stat()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if info.Size() != fileSize {
+				t.Fatalf("working file size = %d, want %d", info.Size(), fileSize)
+			}
+		})
 	}
 }
 
@@ -217,8 +232,15 @@ func TestSetupTasks_BitmapRestoration(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	f, _ := os.Create(destPath + types.IncompleteSuffix)
+	f, err := os.Create(destPath + types.IncompleteSuffix)
+	if err != nil {
+		t.Fatal(err)
+	}
 	defer func() { _ = f.Close() }()
+	const resumeSize = int64(321)
+	if err := f.Truncate(resumeSize); err != nil {
+		t.Fatal(err)
+	}
 
 	progState := progress.New("test-id", fileSize)
 	downloader := &ConcurrentDownloader{
@@ -231,9 +253,16 @@ func TestSetupTasks_BitmapRestoration(t *testing.T) {
 	// 1. InitBitmap
 	progState.InitBitmap(fileSize, chunkSize)
 	// 2. setupTasks (which calls RestoreBitmap)
-	_, err := downloader.setupTasks(destPath, fileSize, chunkSize, 1, f, savedState, true)
+	_, err = downloader.setupTasks(destPath, fileSize, chunkSize, 1, f, savedState, true)
 	if err != nil {
 		t.Fatal(err)
+	}
+	info, err := f.Stat()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Size() != resumeSize {
+		t.Fatalf("resume setupTasks changed file size to %d, want %d", info.Size(), resumeSize)
 	}
 
 	// Verify bitmap is NOT empty (it should have the restored data)

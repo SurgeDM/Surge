@@ -208,6 +208,33 @@ func TestDefaultRuntimeConfig_PopulatesDefaults(t *testing.T) {
 	if r.SpeedEmaAlpha != SpeedEMAAlpha {
 		t.Errorf("SpeedEmaAlpha = %f, want %f", r.SpeedEmaAlpha, SpeedEMAAlpha)
 	}
+	if r.FileAllocation != utils.FileAllocationFalloc {
+		t.Errorf("FileAllocation = %q, want %q", r.FileAllocation, utils.FileAllocationFalloc)
+	}
+}
+
+func TestRuntimeConfig_GetFileAllocation(t *testing.T) {
+	var nilCfg *RuntimeConfig
+	if got := nilCfg.GetFileAllocation(); got != utils.FileAllocationFalloc {
+		t.Fatalf("nil GetFileAllocation = %q, want falloc", got)
+	}
+
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{in: "", want: utils.FileAllocationFalloc},
+		{in: "FALLOC", want: utils.FileAllocationFalloc},
+		{in: "prealloc", want: utils.FileAllocationPrealloc},
+		{in: "PREALLOC", want: utils.FileAllocationPrealloc},
+		{in: "trunc", want: utils.FileAllocationFalloc},
+	}
+	for _, tc := range cases {
+		r := &RuntimeConfig{FileAllocation: tc.in}
+		if got := r.GetFileAllocation(); got != tc.want {
+			t.Errorf("GetFileAllocation(%q) = %q, want %q", tc.in, got, tc.want)
+		}
+	}
 }
 
 func TestSizeConstants(t *testing.T) {

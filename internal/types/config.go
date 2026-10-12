@@ -73,6 +73,7 @@ type RuntimeConfig struct {
 	ProxyURL                    string
 	CustomDNS                   string
 	SequentialDownload          bool
+	FileAllocation              string
 	MinChunkSize                int64
 	PrecheckSafetyBuffer        int64
 	GlobalRateLimitBps          int64
@@ -114,6 +115,15 @@ func (r *RuntimeConfig) GetWorkers() int {
 		return 0
 	}
 	return r.Workers
+}
+
+// GetFileAllocation returns the space-reservation mode.
+// Nil, empty, and unknown values are falloc. Only prealloc selects truncate-only.
+func (r *RuntimeConfig) GetFileAllocation() string {
+	if r == nil {
+		return utils.FileAllocationFalloc
+	}
+	return utils.NormalizeFileAllocation(r.FileAllocation)
 }
 
 func (r *RuntimeConfig) GetMinChunkSize() int64 {
@@ -204,6 +214,7 @@ func DefaultRuntimeConfig() *RuntimeConfig {
 		ProxyURL:                    "",
 		CustomDNS:                   "",
 		SequentialDownload:          false,
+		FileAllocation:              utils.FileAllocationFalloc,
 		MinChunkSize:                MinChunk,
 		PrecheckSafetyBuffer:        DefaultPrecheckSafetyBuffer,
 		GlobalRateLimitBps:          0,

@@ -229,7 +229,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 	preallocated := false
 	if fileSize > 0 {
-		if err := preallocateFile(outFile, fileSize); err != nil {
+		if err := utils.PreallocateFile(outFile, fileSize, d.Runtime.GetFileAllocation()); err != nil {
 			return fmt.Errorf("failed to preallocate file: %w", err)
 		}
 		preallocated = true

@@ -118,6 +118,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `theme_path`           | string | Path to a custom `.toml` color scheme or name of theme in the `themes` directory. See [THEMES.md](THEMES.md). | `""`    |
 | `log_retention_count`  | int    | Number of recent log files to keep.                                                                | `5`     |
 | `live_speed_graph`     | bool   | Use live speed for graph instead of EMA smoothed speed.                                            | `false` |
+| `file_allocation`      | string | How new downloads reserve disk space. `falloc` sets the file size without zero-filling. `prealloc` uses truncate, which zero-fills on NTFS. | `falloc` |
 
 ### Connection Settings
 

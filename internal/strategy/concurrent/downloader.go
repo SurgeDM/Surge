@@ -504,7 +504,7 @@ func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize i
 		return savedState.Tasks, nil
 	}
 
-	if err := outFile.Truncate(fileSize); err != nil {
+	if err := utils.PreallocateFile(outFile, fileSize, d.Runtime.GetFileAllocation()); err != nil {
 		return nil, fmt.Errorf("failed to preallocate file: %w", err)
 	}
 	if d.State != nil {
