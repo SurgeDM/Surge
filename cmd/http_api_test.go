@@ -219,6 +219,60 @@ func TestHTTPSettingsRejectsInvalidUpdatesAndKeepsConcurrentChanges(t *testing.T
 	}
 }
 
+func TestHTTPSettingsAppliesGlobalRateLimit(t *testing.T) {
+	setupIsolatedCmdState(t)
+	previousSettings, previousLifecycle := globalSettings, GlobalLifecycle
+	initial := config.DefaultSettings()
+	initial.Network.GlobalRateLimit.Value = "128 B/s"
+	globalSettings = initial
+
+	pool := scheduler.New(make(chan types.DownloadEvent, 1), 1)
+	lifecycle := orchestrator.NewLifecycleManager(pool, nil, initial)
+	GlobalLifecycle = lifecycle
+	t.Cleanup(func() {
+		GlobalLifecycle = previousLifecycle
+		globalSettings = previousSettings
+		lifecycle.Shutdown()
+	})
+	if got := pool.GlobalRateLimit(); got != 128 {
+		t.Fatalf("initial global rate limit = %d, want 128", got)
+	}
+
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", &httpAPITestService{})
+	post := func(path, body string, wantStatus int) {
+		t.Helper()
+		response := httptest.NewRecorder()
+		mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, path, strings.NewReader(body)))
+		if response.Code != wantStatus {
+			t.Fatalf("POST %s returned %d, want %d: %s", path, response.Code, wantStatus, response.Body.String())
+		}
+	}
+
+	post("/settings", `{"network":{"global_rate_limit":"256 B/s"}}`, http.StatusOK)
+	if got := pool.GlobalRateLimit(); got != 256 {
+		t.Fatalf("global rate limit after update = %d, want 256", got)
+	}
+	post("/settings", `{"network":{"global_rate_limit":"invalid"}}`, http.StatusBadRequest)
+	if got := pool.GlobalRateLimit(); got != 256 {
+		t.Fatalf("global rate limit after invalid update = %d, want 256", got)
+	}
+
+	saved := lifecycle.GetSettings()
+	saved.Network.GlobalRateLimit.Value = "512 B/s"
+	if err := config.SaveSettings(saved); err != nil {
+		t.Fatalf("save settings for reload: %v", err)
+	}
+	post("/settings/reload", "", http.StatusOK)
+	if got := pool.GlobalRateLimit(); got != 512 {
+		t.Fatalf("global rate limit after reload = %d, want 512", got)
+	}
+	post("/settings", `{"network":{"global_rate_limit":"0"}}`, http.StatusOK)
+	if got := pool.GlobalRateLimit(); got != 0 {
+		t.Fatalf("global rate limit after disabling = %d, want 0", got)
+	}
+}
+
 type httpAPITestService struct {
 	history               []types.DownloadRecord
 	historyErr            error

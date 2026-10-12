@@ -120,16 +120,16 @@ func NewLifecycleManager(pool *scheduler.Scheduler, eventBus *EventBus, settings
 		aggregator = NewProgressAggregator(pool, eventBus, settings)
 	}
 
-	return &LifecycleManager{
-		settings:            settings,
-		settingsRefreshedAt: time.Now(),
-		pool:                pool,
-		eventBus:            eventBus,
-		aggregator:          aggregator,
-		isNameActive:        activeCheck,
-		probeSem:            sem,
-		inflight:            make(map[string]*inflightEnqueue),
+	mgr := &LifecycleManager{
+		pool:         pool,
+		eventBus:     eventBus,
+		aggregator:   aggregator,
+		isNameActive: activeCheck,
+		probeSem:     sem,
+		inflight:     make(map[string]*inflightEnqueue),
 	}
+	mgr.publishSettingsLocked(settings)
+	return mgr
 }
 
 // GetScheduler returns the underlying scheduler
@@ -172,9 +172,30 @@ func (m *LifecycleManager) ApplySettings(s *config.Settings) {
 		return
 	}
 	m.settingsMu.Lock()
-	m.settings = s.Clone()
-	m.settingsRefreshedAt = time.Now()
+	m.publishSettingsLocked(s.Clone())
 	m.settingsMu.Unlock()
+}
+
+// publishSettingsLocked updates the live snapshot and its global speed limit.
+// Callers hold settingsMu, except during construction before the manager is shared.
+func (m *LifecycleManager) publishSettingsLocked(next *config.Settings) {
+	var nextRate int64
+	var rateChanged bool
+	if m.pool != nil && next.Network.GlobalRateLimit != nil {
+		if rate, err := utils.ParseRateLimitValue(next.Network.GlobalRateLimit.Value); err == nil {
+			nextRate = rate
+			rateChanged = true
+			if m.settings != nil && m.settings.Network.GlobalRateLimit != nil {
+				previousRate, err := utils.ParseRateLimitValue(m.settings.Network.GlobalRateLimit.Value)
+				rateChanged = err != nil || previousRate != nextRate
+			}
+		}
+	}
+	m.settings = next
+	m.settingsRefreshedAt = time.Now()
+	if rateChanged {
+		m.pool.SetGlobalRateLimit(nextRate)
+	}
 }
 
 // UpdateSettings serializes a settings change with persistence and publication.
@@ -194,8 +215,7 @@ func (m *LifecycleManager) UpdateSettings(update func(*config.Settings) error, a
 	if err := config.SaveSettings(next); err != nil {
 		return err
 	}
-	m.settings = next
-	m.settingsRefreshedAt = time.Now()
+	m.publishSettingsLocked(next)
 	if afterCommit != nil {
 		afterCommit()
 	}
@@ -222,8 +242,7 @@ func (m *LifecycleManager) ReloadSettings() error {
 	if err != nil {
 		return err
 	}
-	m.settings = settings
-	m.settingsRefreshedAt = time.Now()
+	m.publishSettingsLocked(settings)
 	return nil
 }
 

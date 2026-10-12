@@ -14,6 +14,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func setupTestService(t *testing.T) (*LocalDownloadService, *httptest.Server, string, <-chan string) {
@@ -162,8 +163,8 @@ func TestLocalDownloadService_RateLimits(t *testing.T) {
 	}
 
 	settings := svc.lifecycle.GetSettings()
-	if settings.Network.GlobalRateLimit.Value != "4.9 KiB/s" && settings.Network.GlobalRateLimit.Value != "5000" {
-		t.Errorf("expected GlobalRateLimit to be set to 4.9 KiB/s, got %s", settings.Network.GlobalRateLimit.Value)
+	if rate, err := utils.ParseRateLimitValue(settings.Network.GlobalRateLimit.Value); err != nil || rate != 5000 {
+		t.Errorf("expected GlobalRateLimit to resolve to 5000 B/s, got %v (error: %v)", settings.Network.GlobalRateLimit.Value, err)
 	}
 
 	// Test Default Rate Limit

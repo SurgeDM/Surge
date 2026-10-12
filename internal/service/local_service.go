@@ -285,9 +285,9 @@ func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
 	}
 
 	if err := s.lifecycle.UpdateSettings(func(settings *config.Settings) error {
-		settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
+		settings.Network.GlobalRateLimit.Value = fmt.Sprintf("%d B/s", rate)
 		return nil
-	}, func() { s.lifecycle.GetScheduler().SetGlobalRateLimit(rate) }); err != nil {
+	}, nil); err != nil {
 		return err
 	}
 	return nil
