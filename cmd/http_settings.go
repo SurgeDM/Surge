@@ -17,7 +17,9 @@ var errInvalidSettings = errors.New("invalid settings")
 // A patch keeps omitted settings intact. Decode it before acquiring the
 // lifecycle's settings lock so a slow request body cannot block readers.
 func decodeSettingsPatch(r *http.Request) (map[string]map[string]json.RawMessage, error) {
-	defer r.Body.Close()
+	defer func (){
+		_ = r.Body.Close()
+	}()
 	decoder := json.NewDecoder(r.Body)
 	var patch map[string]map[string]json.RawMessage
 	if err := decoder.Decode(&patch); err != nil {
