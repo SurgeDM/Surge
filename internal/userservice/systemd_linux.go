@@ -30,6 +30,8 @@ func (execRunner) Run(ctx context.Context, name string, args ...string) ([]byte,
 type SystemdManager struct {
 	executable  string
 	unitPath    string
+	configHome  string
+	stateHome   string
 	runner      commandRunner
 	uid         int
 	legacyCheck func() bool
@@ -42,6 +44,8 @@ func New(executable string) (Manager, error) {
 	return &SystemdManager{
 		executable:  executable,
 		unitPath:    filepath.Join(filepath.Dir(config.GetSurgeDir()), "systemd", "user", systemdUnitName),
+		configHome:  filepath.Dir(config.GetSurgeDir()),
+		stateHome:   filepath.Dir(config.GetStateDir()),
 		runner:      execRunner{},
 		uid:         os.Geteuid(),
 		legacyCheck: legacySystemdUnitExists,
@@ -68,7 +72,7 @@ func (m *SystemdManager) Install(ctx context.Context) error {
 	if err := m.run(ctx, "daemon-reload"); err != nil {
 		return err
 	}
-	return m.run(ctx, "enable", "--now", systemdUnitName)
+	return m.run(ctx, "enable", "--now", m.unitPath)
 }
 
 func (m *SystemdManager) Uninstall(ctx context.Context) error {
@@ -125,12 +129,9 @@ func (m *SystemdManager) Status(ctx context.Context) (State, error) {
 	} else if err != nil {
 		return NotInstalled, err
 	}
-	out, err := m.runner.Run(ctx, "systemctl", "--user", "is-active", systemdUnitName)
+	out, _ := m.runner.Run(ctx, "systemctl", "--user", "is-active", systemdUnitName)
 	if strings.TrimSpace(string(out)) == "active" {
 		return Running, nil
-	}
-	if err != nil {
-		return Stopped, nil
 	}
 	return Stopped, nil
 }
@@ -163,6 +164,8 @@ func (m *SystemdManager) unitContents() string {
 		"Type=simple\n" +
 		"ExecStart=" + systemdQuote(m.executable) + " server start --managed-service\n" +
 		"WorkingDirectory=%h\n" +
+		"Environment=" + systemdQuote("XDG_CONFIG_HOME="+m.configHome) + "\n" +
+		"Environment=" + systemdQuote("XDG_STATE_HOME="+m.stateHome) + "\n" +
 		"Restart=on-failure\n" +
 		"RestartSec=5\n\n" +
 		"[Install]\n" +

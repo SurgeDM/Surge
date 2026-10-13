@@ -61,7 +61,7 @@ func TestSystemdInstallWritesAndEnablesUserUnit(t *testing.T) {
 	if len(runner.commands) != 2 {
 		t.Fatalf("commands = %v, want daemon-reload and enable", runner.commands)
 	}
-	want := []string{"--user", "enable", "--now", "surge.service"}
+	want := []string{"--user", "enable", "--now", m.unitPath}
 	if strings.Join(runner.commands[1].args, " ") != strings.Join(want, " ") {
 		t.Fatalf("enable args = %v, want %v", runner.commands[1].args, want)
 	}
@@ -126,5 +126,21 @@ func TestSystemdUnitEscapesPercentPaths(t *testing.T) {
 	}
 	if out, err := exec.Command(analyzer, "verify", unitPath).CombinedOutput(); err != nil {
 		t.Fatalf("unit rejected: %v: %s", err, out)
+	}
+}
+
+func TestSystemdUnitPreservesUserPaths(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", filepath.Join(t.TempDir(), "config space%"))
+	t.Setenv("XDG_STATE_HOME", filepath.Join(t.TempDir(), "state space%"))
+	manager, err := New("/opt/surge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	unit := manager.(*SystemdManager).unitContents()
+	for _, key := range []string{"XDG_CONFIG_HOME", "XDG_STATE_HOME"} {
+		want := "Environment=" + systemdQuote(key+"="+os.Getenv(key))
+		if !strings.Contains(unit, want) {
+			t.Fatalf("missing %s in unit:\n%s", key, unit)
+		}
 	}
 }
