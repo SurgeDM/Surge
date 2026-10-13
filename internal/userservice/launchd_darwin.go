@@ -122,8 +122,7 @@ func (m *LaunchdManager) Status(ctx context.Context) (State, error) {
 	if err != nil {
 		return Stopped, nil
 	}
-	// ponytail: launchctl exposes status as text; use its structured API if
-	// Apple changes this top-level state field.
+
 	for _, line := range strings.Split(string(out), "\n") {
 		if strings.TrimSpace(line) == "state = running" {
 			return Running, nil

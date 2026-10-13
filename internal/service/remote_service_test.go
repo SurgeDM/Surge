@@ -545,7 +545,7 @@ func TestRemoteSettingsKeepServerPaths(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer svc.Shutdown()
+			defer func() { _ = svc.Shutdown() }()
 			if _, err := svc.GetSettings(); err != nil {
 				t.Fatalf("client rejected server path: %v", err)
 			}

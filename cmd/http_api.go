@@ -39,8 +39,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 	mux.HandleFunc("/events", eventsHandler(service))
 
-	// ponytail: the process-wide cache lock serializes settings transactions,
-	// including disk I/O; use per-owner transactions if multiple profiles are added.
+	// Serialize settings persistence and live updates with the local TUI.
 	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
 		globalSettingsMu.Lock()
 		defer globalSettingsMu.Unlock()
