@@ -10,12 +10,14 @@ import (
 )
 
 type taskInstallRunner struct {
+	commands   []string
 	runtimeErr error
 	configured bool
 	started    bool
 }
 
 func (r *taskInstallRunner) Run(_ context.Context, name string, args ...string) ([]byte, error) {
+	r.commands = append(r.commands, name+" "+strings.Join(args, " "))
 	switch name {
 	case "sc.exe":
 		return nil, errors.New("legacy service absent")
@@ -38,10 +40,40 @@ func TestTaskInstallRemovesRuntimeLimitBeforeStarting(t *testing.T) {
 		if fail {
 			runner.runtimeErr = errors.New("configuration failed")
 		}
-		manager := &TaskManager{executable: `C:\Program Files\Surge\surge.exe`, runner: runner}
+		manager := &TaskManager{executable: `C:\Program Files\Surge\surge.exe`, taskName: "Surge-S-1-5-21-1000", runner: runner}
 		err := manager.Install(context.Background())
 		if !runner.configured || runner.started == fail || (err != nil) != fail {
 			t.Fatalf("configured=%v started=%v err=%v", runner.configured, runner.started, err)
+		}
+	}
+}
+
+func TestTaskCommandsUseCurrentUserName(t *testing.T) {
+	if err := ensureTaskUser(); err != nil {
+		t.Skip("requires a non-elevated user")
+	}
+	manager, err := New(`C:\Surge\surge.exe`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	task := manager.(*TaskManager)
+	if !strings.HasPrefix(task.taskName, "Surge-S-1-") {
+		t.Fatalf("unexpected task name: %s", task.taskName)
+	}
+	runner := &taskInstallRunner{}
+	task.runner = runner
+	ctx := context.Background()
+	for _, action := range []func(context.Context) error{task.Install, task.Stop, task.Restart, task.Uninstall} {
+		if err := action(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if _, err := task.Status(ctx); err != nil {
+		t.Fatal(err)
+	}
+	for _, command := range runner.commands {
+		if !strings.HasPrefix(command, "sc.exe ") && !strings.Contains(command, task.taskName) {
+			t.Fatalf("command does not target current user task: %s", command)
 		}
 	}
 }
