@@ -29,7 +29,11 @@ func TestHealth_DiskWriteDoesNotCountAsNetworkStall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer file.Close()
+	defer func() {
+		if err := file.Close(); err != nil {
+			t.Errorf("close download file: %v", err)
+		}
+	}()
 
 	runtime := &types.RuntimeConfig{StallTimeout: stallTimeout}
 	d := NewConcurrentDownloader("disk-write-stall", nil, progress.New("disk-write-stall", int64(len(data))), runtime)
