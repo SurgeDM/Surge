@@ -16,6 +16,7 @@ import (
 
 func TestHealth_DiskWriteDoesNotCountAsNetworkStall(t *testing.T) {
 	const stallTimeout = 20 * time.Millisecond
+	const previousSpeed = float64(1024 * 1024)
 	data := []byte("downloaded data")
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Range", fmt.Sprintf("bytes 0-%d/%d", len(data)-1, len(data)))
@@ -37,6 +38,7 @@ func TestHealth_DiskWriteDoesNotCountAsNetworkStall(t *testing.T) {
 	active := &ActiveTask{
 		Task:      types.Task{Offset: 0, Length: int64(len(data))},
 		StartTime: time.Now().Add(-time.Second),
+		Speed:     previousSpeed,
 		Cancel:    cancel,
 	}
 	active.StopAt.Store(int64(len(data)))
@@ -61,6 +63,15 @@ func TestHealth_DiskWriteDoesNotCountAsNetworkStall(t *testing.T) {
 				if err != nil {
 					t.Errorf("downloadTask: %v", err)
 				}
+				if active.WritingToDisk.Load() {
+					t.Error("worker still marked as writing after disk write completed")
+				}
+				active.SpeedMu.Lock()
+				speed := active.Speed
+				active.SpeedMu.Unlock()
+				if speed != previousSpeed {
+					t.Errorf("disk wait changed network speed from %v to %v", previousSpeed, speed)
+				}
 			case <-time.After(2 * time.Second):
 				t.Error("downloadTask did not finish after disk write was released")
 			}
@@ -80,9 +91,16 @@ func TestHealth_DiskWriteDoesNotCountAsNetworkStall(t *testing.T) {
 		t.Fatal("downloadTask did not reach disk write")
 	}
 
+	// Put the network speed window just below its two-second sample boundary.
+	// The disk wait crosses that boundary, but should not count toward it.
+	active.WindowStart = time.Now().Add(-2*time.Second + 10*time.Millisecond)
 	// Let the last network read age past the stall timeout while WriteAt is blocked.
 	lastRead := time.Unix(0, active.LastActivity.Load())
-	if wait := time.Until(lastRead.Add(stallTimeout + 10*time.Millisecond)); wait > 0 {
+	deadline := lastRead.Add(stallTimeout + 10*time.Millisecond)
+	if speedDeadline := active.WindowStart.Add(2*time.Second + 10*time.Millisecond); speedDeadline.After(deadline) {
+		deadline = speedDeadline
+	}
+	if wait := time.Until(deadline); wait > 0 {
 		time.Sleep(wait)
 	}
 	d.checkWorkerHealth()
