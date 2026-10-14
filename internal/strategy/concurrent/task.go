@@ -20,7 +20,7 @@ type ActiveTask struct {
 	RangeMu sync.Mutex
 
 	// Health monitoring fields
-	LastActivity atomic.Int64       // Unix nano timestamp of last data received
+	LastActivity atomic.Int64       // Unix nano timestamp used by the network stall clock
 	Speed        float64            // EMA-smoothed speed in bytes/sec (protected by mutex)
 	StartTime    time.Time          // When this task started
 	Cancel       context.CancelFunc // Cancel function to abort this task
@@ -32,6 +32,8 @@ type ActiveTask struct {
 
 	// Set while blocked on rate limiter so health monitor doesn't treat it as stalled
 	WaitingOnLimiter atomic.Bool
+	// Set while waiting for or performing a disk write. No network read is expected then.
+	WritingToDisk atomic.Bool
 }
 
 // RemainingTask returns a Task representing the remaining work, or nil if complete

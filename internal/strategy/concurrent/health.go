@@ -21,6 +21,9 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 	var totalSpeed float64
 	var speedCount int
 	for _, active := range d.activeTasks {
+		if active.WaitingOnLimiter.Load() || active.WritingToDisk.Load() {
+			continue
+		}
 		if speed := active.GetSpeed(); speed > 0 {
 			totalSpeed += speed
 			speedCount++
@@ -54,8 +57,8 @@ func (d *ConcurrentDownloader) checkWorkerHealth() {
 	// Second pass: check for slow and stalled workers
 	stallTimeout := d.Runtime.GetStallTimeout()
 	for workerID, active := range d.activeTasks {
-		// Skip workers that are intentionally blocked by the rate limiter
-		if active.WaitingOnLimiter.Load() {
+		// Neither throttling nor a disk write indicates a stalled network request.
+		if active.WaitingOnLimiter.Load() || active.WritingToDisk.Load() {
 			continue
 		}
 
