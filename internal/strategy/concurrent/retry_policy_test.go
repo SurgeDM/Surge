@@ -219,7 +219,6 @@ func TestTwoDownloadsShareLearnedHostConnectionBudget(t *testing.T) {
 	var active, peak atomic.Int32
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		n := active.Add(1)
-		defer active.Add(-1)
 		for previous := peak.Load(); n > previous; previous = peak.Load() {
 			if peak.CompareAndSwap(previous, n) {
 				break
@@ -228,8 +227,12 @@ func TestTwoDownloadsShareLearnedHostConnectionBudget(t *testing.T) {
 		select {
 		case <-time.After(50 * time.Millisecond):
 		case <-r.Context().Done():
+			active.Add(-1)
 			return
 		}
+		// The client can release its permit after reading the response before
+		// the handler returns, so count only requests still awaiting a response.
+		active.Add(-1)
 		serveRequestedRange(w, r, size)
 	}))
 	defer server.Close()
