@@ -670,6 +670,15 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 // StealWork tries to split an active task from a busy worker
 // It greedily targets the worker with the MOST remaining work.
 func (d *ConcurrentDownloader) StealWork(queue *TaskQueue) bool {
+	// Don't steal while every mirror host is in cooldown: the stolen range
+	// would just be re-requested against a still-throttled host.
+	if d.hostLimiter != nil {
+		if _, wait := d.hostLimiter.PickMirror(d.workerHosts, 0, time.Now()); wait > 0 {
+			utils.Debug("Balancer: steal suppressed, all worker hosts in cooldown")
+			return false
+		}
+	}
+
 	d.activeMu.Lock()
 	defer d.activeMu.Unlock()
 
