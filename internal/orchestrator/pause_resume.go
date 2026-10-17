@@ -105,7 +105,10 @@ func (mgr *LifecycleManager) Resume(id string) error {
 			cfg.ProgressCh = mgr.eventBus.InputCh
 		}
 
-		mgr.pool.Add(*cfg)
+		if !mgr.pool.Add(*cfg) {
+			// A same-ID task won the race; its lifecycle events stand.
+			return types.ErrAlreadyActive
+		}
 
 		if mgr.eventBus != nil {
 			_ = mgr.eventBus.Publish(types.DownloadEvent{
@@ -144,7 +147,10 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	if mgr.eventBus != nil {
 		cfg.ProgressCh = mgr.eventBus.InputCh
 	}
-	mgr.pool.Add(cfg)
+	if !mgr.pool.Add(cfg) {
+		// A same-ID task registered first; its lifecycle events stand.
+		return types.ErrAlreadyActive
+	}
 
 	if mgr.eventBus != nil {
 		_ = mgr.eventBus.Publish(types.DownloadEvent{
@@ -177,7 +183,15 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 	var coldIDs []string
 	coldIdx := make(map[string]int)
 
+	// Only the first occurrence of a duplicated ID goes through resume.
+	seen := make(map[string]struct{}, len(ids))
 	for i, id := range ids {
+		if _, dup := seen[id]; dup {
+			errs[i] = types.ErrAlreadyActive
+			continue
+		}
+		seen[id] = struct{}{}
+
 		if st := mgr.pool.GetStatus(id); st != nil {
 			switch st.Status {
 			case "pausing":
@@ -198,7 +212,11 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 				cfg.ProgressCh = mgr.eventBus.InputCh
 			}
 
-			mgr.pool.Add(*cfg)
+			if !mgr.pool.Add(*cfg) {
+				// Lost a same-ID race; the winner's events stand.
+				errs[i] = types.ErrAlreadyActive
+				continue
+			}
 
 			if mgr.eventBus != nil {
 				_ = mgr.eventBus.Publish(types.DownloadEvent{
@@ -257,7 +275,11 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 			cfg.ProgressCh = mgr.eventBus.InputCh
 		}
 
-		mgr.pool.Add(cfg)
+		if !mgr.pool.Add(cfg) {
+			// A same-ID task registered between the cold load and this add.
+			errs[idx] = types.ErrAlreadyActive
+			continue
+		}
 
 		if mgr.eventBus != nil {
 			_ = mgr.eventBus.Publish(types.DownloadEvent{

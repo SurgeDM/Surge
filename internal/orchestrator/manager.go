@@ -438,7 +438,13 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 			}
 		}
 
-		mgr.pool.Add(*cfg)
+		// A same-ID task slipped past the GetStatus guard and owns the ID;
+		// release only this attempt's .surge reservation. The winner's own
+		// lifecycle events heal the master row and EventQueued residue.
+		if !mgr.pool.Add(*cfg) {
+			_ = os.Remove(surgePath)
+			return "", "", types.ErrIDExists
+		}
 
 		return cfg.ID, finalFilename, nil
 	}
