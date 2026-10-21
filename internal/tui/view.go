@@ -651,8 +651,10 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		valueWidth = 5 // Minimum reasonable width
 	}
 
+	urlText := lipgloss.NewStyle().Width(valueWidth).MaxWidth(valueWidth).Render(StatsValueStyle.Hyperlink(d.URL).Render(utils.TruncateTwoLines(d.URL, valueWidth)))
+
 	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("URL: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(d.URL, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("URL: "), urlText),
 		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("File: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayFilename, valueWidth))),
 		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("Path: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayPath, valueWidth))),
 		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray()).Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(d.ID, valueWidth))),
