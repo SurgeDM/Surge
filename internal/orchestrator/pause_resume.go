@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"maps"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
@@ -18,7 +19,16 @@ func (mgr *LifecycleManager) Pause(id string) error {
 		return types.ErrEngineNotInit
 	}
 
-	if mgr.pool.Pause(id) {
+	if result := mgr.pool.Pause(id); result.Found {
+		if result.QueuedConfig != nil && mgr.eventBus != nil {
+			_ = mgr.eventBus.Publish(types.DownloadEvent{
+				Type:         types.EventPaused,
+				DownloadID:   id,
+				Downloaded:   result.QueuedConfig.Downloaded,
+				RateLimit:    result.QueuedConfig.RateLimit,
+				RateLimitSet: result.QueuedConfig.RateLimitSet,
+			})
+		}
 		return nil
 	}
 
@@ -61,6 +71,9 @@ func hydrateConfigFromDisk(cfg *types.DownloadRecord) {
 		cfg.Tasks = saved.Tasks
 		cfg.ChunkBitmap = saved.ChunkBitmap
 		cfg.ActualChunkSize = saved.ActualChunkSize
+	}
+	if len(cfg.Headers) == 0 && len(saved.Headers) > 0 {
+		cfg.Headers = maps.Clone(saved.Headers)
 	}
 }
 
@@ -371,9 +384,11 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadRecord, saved
 	}
 
 	var mirrorURLs []string
+	var headers map[string]string
 	var dmState *progress.DownloadProgress
 
 	if savedState != nil {
+		headers = maps.Clone(savedState.Headers)
 		dmState = progress.New(id, savedState.TotalSize)
 		dmState.Bytes.Downloaded.Store(savedState.Downloaded)
 		dmState.Bytes.VerifiedProgress.Store(savedState.Downloaded)
@@ -421,6 +436,7 @@ func buildResumeConfig(id, outputPath string, entry *types.DownloadRecord, saved
 		ProgressState:   dmState,
 		Runtime:         runtime,
 		Mirrors:         mirrorURLs,
+		Headers:         headers,
 		RateLimit:       rateLimit,
 		RateLimitSet:    rateLimitSet,
 		Tasks:           tasks,

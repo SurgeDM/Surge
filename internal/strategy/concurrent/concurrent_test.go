@@ -794,8 +794,8 @@ func TestConcurrentDownloader_Download_BootstrapFail_Non206(t *testing.T) {
 	if err == nil {
 		t.Fatal("Expected error when bootstrap fails (non-206)")
 	}
-	if !strings.Contains(err.Error(), "requires 206 response") {
-		t.Errorf("Expected 206 error, got: %v", err)
+	if !errors.Is(err, types.ErrRangeUnsupported) {
+		t.Errorf("Expected range-unsupported sentinel, got: %v", err)
 	}
 }
 

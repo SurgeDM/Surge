@@ -5,10 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"net"
 	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
+	"slices"
+	"strconv"
 
 	"strings"
 	"sync"
@@ -61,9 +65,10 @@ type NetworkSettings struct {
 	SequentialDownload        *Setting `json:"sequential_download"`
 	MinChunkSize              *Setting `json:"min_chunk_size"`
 	WorkerBufferSize          *Setting `json:"worker_buffer_size"`
-	DialHedgeCount            *Setting `json:"dial_hedge_count"`
-	GlobalRateLimit           *Setting `json:"global_rate_limit"`
-	DefaultDownloadRateLimit  *Setting `json:"default_download_rate_limit"`
+	// Deprecated: retained so existing configuration files continue to load.
+	DialHedgeCount           *Setting `json:"dial_hedge_count"`
+	GlobalRateLimit          *Setting `json:"global_rate_limit"`
+	DefaultDownloadRateLimit *Setting `json:"default_download_rate_limit"`
 }
 
 type PerformanceSettings struct {
@@ -584,8 +589,8 @@ func DefaultSettings() *Settings {
 			},
 			AutoStart: &Setting{
 				Key:          "auto_start",
-				Label:        "Automatic Startup",
-				Description:  "Start Surge automatically when the system boots (requires service installation).",
+				Label:        "Start at Login",
+				Description:  "Install the Surge user service and start it automatically when you log in.",
 				Type:         TypeBool,
 				DefaultValue: false,
 				Value:        false,
@@ -821,7 +826,7 @@ func DefaultSettings() *Settings {
 			DialHedgeCount: &Setting{
 				Key:          "dial_hedge_count",
 				Label:        "Dial Hedge Count",
-				Description:  "Number of extra connections to dial pre-emptively; 0 disables connection prewarming (0-16).",
+				Description:  "Deprecated and ignored; connection prewarming is no longer performed.",
 				Type:         TypeInt,
 				Unit:         UnitConnections,
 				DefaultValue: 4,
@@ -1092,15 +1097,6 @@ func (s *Settings) Validate() []string {
 	validCats := make([]Category, 0, len(s.Categories.Categories))
 	for _, cat := range s.Categories.Categories {
 		if err := cat.Validate(); err == nil {
-			// Extra path check for each category
-			catPath := strings.TrimSpace(cat.Path)
-			if catPath != "" {
-				if info, err := os.Stat(catPath); err != nil || !info.IsDir() {
-					// Fallback to default download dir
-					cat.Path = Resolve[string](s.General.DefaultDownloadDir)
-					s.StartupWarnings = append(s.StartupWarnings, fmt.Sprintf("Category %q path is broken; reset to default", cat.Name))
-				}
-			}
 			validCats = append(validCats, cat)
 		} else {
 			s.StartupWarnings = append(s.StartupWarnings, fmt.Sprintf("Removed invalid category %q: %v", cat.Name, err))
@@ -1110,6 +1106,155 @@ func (s *Settings) Validate() []string {
 	s.Categories.Categories = validCats
 
 	return s.StartupWarnings
+}
+
+// NormalizedClone validates the schema and normalizes a caller-owned copy.
+// Validating before cloning prevents null settings from becoming defaults.
+func (s *Settings) NormalizedClone() (*Settings, error) {
+	if err := s.validateRequiredSettings(); err != nil {
+		return nil, err
+	}
+	cloned := s.Clone()
+	if err := cloned.NormalizeValues(); err != nil {
+		return nil, err
+	}
+	return cloned, nil
+}
+
+// NormalizeValues converts decoded JSON/TOML primitives back to the types
+// declared by the settings schema.
+func (s *Settings) NormalizeValues() error {
+	if err := s.validateRequiredSettings(); err != nil {
+		return err
+	}
+	for _, cat := range s.CategoriesList {
+		for _, set := range cat.Settings {
+			value, err := set.normalizedValue()
+			if err != nil {
+				return fmt.Errorf("invalid setting %s.%s: %w", cat.Name, set.Key, err)
+			}
+			set.Value = value
+		}
+	}
+	return nil
+}
+
+func (s *Settings) validateRequiredSettings() error {
+	if s == nil {
+		return errors.New("settings cannot be nil")
+	}
+	s.initializeCategoriesList()
+	for _, cat := range s.CategoriesList {
+		for index, set := range cat.Settings {
+			if set == nil {
+				return fmt.Errorf("settings category %s contains null setting at index %d", cat.Name, index)
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Setting) normalizedValue() (any, error) {
+	if s.Value == nil {
+		return nil, errors.New("value cannot be null")
+	}
+	switch s.Type {
+	case TypeBool:
+		switch s.Value.(type) {
+		case bool, int, int64, float64:
+			return Resolve[bool](s), nil
+		}
+	case TypeInt, TypeInt64:
+		bits := strconv.IntSize
+		if s.Type == TypeInt64 {
+			bits = 64
+		}
+		switch value := s.Value.(type) {
+		case int:
+		case int64:
+			if bits == 32 && (value < math.MinInt32 || value > math.MaxInt32) {
+				return nil, errors.New("integer out of range")
+			}
+		case float64:
+			limit := math.Ldexp(1, bits-1)
+			if math.Trunc(value) != value || !(value >= -limit && value < limit) {
+				return nil, errors.New("expected an integer within range")
+			}
+		default:
+			return nil, fmt.Errorf("expected %s value, got %T", s.Type, s.Value)
+		}
+		if s.Type == TypeInt {
+			return Resolve[int](s), nil
+		}
+		return Resolve[int64](s), nil
+	case TypeFloat64:
+		switch s.Value.(type) {
+		case int, int64, float32, float64:
+			return Resolve[float64](s), nil
+		}
+	case TypeString, TypeAuthToken, TypeLink:
+		if _, ok := s.Value.(string); ok {
+			return Resolve[string](s), nil
+		}
+	case TypeDuration:
+		switch value := s.Value.(type) {
+		case time.Duration, int, int64, float64:
+			return Resolve[time.Duration](s), nil
+		case string:
+			if _, err := time.ParseDuration(value); err == nil {
+				return Resolve[time.Duration](s), nil
+			}
+		}
+	default:
+		return s.Value, nil
+	}
+	return nil, fmt.Errorf("expected %s value, got %T", s.Type, s.Value)
+}
+
+// ValidateStrict validates an externally supplied settings snapshot without
+// silently replacing invalid values. It is used by the authenticated settings
+// API so malformed updates are rejected instead of partially applied.
+func (s *Settings) ValidateStrict(localPaths bool) error {
+	if err := s.validateRequiredSettings(); err != nil {
+		return err
+	}
+	for _, cat := range s.CategoriesList {
+		for _, set := range cat.Settings {
+			if !localPaths && set == s.General.DefaultDownloadDir {
+				continue // Directory accessibility belongs to the daemon filesystem.
+			}
+			if err := set.Validate(set.Value); err != nil {
+				return fmt.Errorf("invalid setting %s.%s: %w", cat.Name, set.Key, err)
+			}
+		}
+	}
+	for i := range s.Categories.Categories {
+		cat := &s.Categories.Categories[i]
+		if err := cat.Validate(); err != nil {
+			return fmt.Errorf("invalid category %q: %w", cat.Name, err)
+		}
+	}
+	return nil
+}
+
+// RequiresRestartComparedTo reports whether a setting marked as restart-only
+// changed between snapshots.
+func (s *Settings) RequiresRestartComparedTo(previous *Settings) bool {
+	if s == nil || previous == nil {
+		return false
+	}
+	for _, cat := range s.CategoriesList {
+		for _, set := range cat.Settings {
+			if !set.NeedsRestart {
+				continue
+			}
+			old := previous.FindSetting(cat.Name, set.Key)
+			if old != nil && !reflect.DeepEqual(old.Value, set.Value) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // ValidateDNSList checks if a comma-separated list of DNS servers (IP or IP:port) is valid.
@@ -1357,11 +1502,7 @@ func (s *Settings) Clone() *Settings {
 		}
 	}
 
-	// Deep copy custom categories
-	if len(s.Categories.Categories) > 0 {
-		cloned.Categories.Categories = make([]Category, len(s.Categories.Categories))
-		copy(cloned.Categories.Categories, s.Categories.Categories)
-	}
+	cloned.Categories.Categories = slices.Clone(s.Categories.Categories)
 
 	// Deep copy startup warnings
 	if len(s.StartupWarnings) > 0 {

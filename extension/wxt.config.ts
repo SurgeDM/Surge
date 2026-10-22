@@ -16,6 +16,25 @@ export default defineConfig({
         'High-performance download acceleration. Intercepts and routes browser downloads to Surge\'s multi-connection engine.',
       permissions: ['downloads', 'storage', 'notifications', 'webRequest'],
       host_permissions: ['http://127.0.0.1/*', '<all_urls>'],
+      icons: {
+        16: 'icons/icon16.png',
+        48: 'icons/icon48.png',
+        128: 'icons/icon128.png',
+      },
+      action: {
+        default_icon: {
+          16: 'icons/icon16.png',
+          48: 'icons/icon48.png',
+          128: 'icons/icon128.png',
+        },
+      },
+      browser_action: {
+        default_icon: {
+          16: 'icons/icon16.png',
+          48: 'icons/icon48.png',
+          128: 'icons/icon128.png',
+        },
+      },
     };
 
     if (browser === 'firefox') {

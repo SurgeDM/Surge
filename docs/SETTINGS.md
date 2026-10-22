@@ -35,7 +35,7 @@ category_enabled = true
 Surge implements a self-healing configuration system to ensure the application remains stable even if the `settings.toml` file is manually edited with invalid values.
 
 - **Range Enforcement**: Numeric values (like connection limits and concurrent downloads) are strictly enforced. If a value is set outside its safe operating range in the TOML file, Surge will automatically reset that specific field to its default value on startup while preserving your other valid settings.
-- **Path Verification**: Paths like `default_download_dir` and individual category paths are verified for existence and accessibility. Broken or inaccessible paths are rolled back to the system's default Downloads directory.
+- **Path Verification**: The default download directory is checked when loading settings. Category paths are preserved even when their directories are missing or unavailable. Surge creates category directories when a download needs them and reports creation or access failures for that download.
 - **Syntactic Validation**: Proxy URLs and DNS server lists are validated for correct syntax.
 - **Category Integrity**: If a custom category has an invalid regular expression pattern, it is automatically pruned from the active list to prevent engine crashes.
 - **Corrupt TOML Fallback**: If the `settings.toml` file is completely unparseable, Surge will log a warning and start with all factory default settings for that session.
@@ -111,7 +111,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `warn_on_duplicate`    | bool   | Show a warning when adding a download that already exists in the list.                             | `true`  |
 | `extension_prompt`     | bool   | Prompt for confirmation in the TUI when adding downloads via the browser extension.                | `false` |
 | `auto_resume`          | bool   | Automatically resume paused downloads when Surge starts.                                           | `false` |
-| `auto_start`           | bool   | Automatically start Surge as a system service on boot. (See [Run Surge as a service](guides/run-as-a-service.md)).      | `false` |
+| `auto_start`           | bool   | Install the current user's Surge service and start it with that user's login session. (See [Run Surge as a service](guides/run-as-a-service.md)). | `false` |
 | `skip_update_check`    | bool   | Disable automatic check for new versions on startup.                                               | `false` |
 | `clipboard_monitor`    | bool   | Watch the system clipboard for URLs and prompt to download them.                                   | `true`  |
 | `theme`                | int    | UI Theme (0=Adaptive, 1=Light, 2=Dark).                                                            | `0`     |
@@ -133,7 +133,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `sequential_download`      | bool   | Download file pieces in strict order (Streaming Mode). Useful for previewing media but may be slower. | `false` |
 | `min_chunk_size`           | int64  | Minimum size of a download chunk in bytes (e.g., `2097152` for 2MB).                                  | `2MB`   |
 | `worker_buffer_size`       | int    | I/O buffer size per worker in bytes (e.g., `524288` for 512KB).                                       | `512KB` |
-| `dial_hedge_count`         | int    | Extra prewarmed connections (0-16). Set to 0 to disable prewarming. | `4`     |
+| `dial_hedge_count`         | int    | Deprecated and ignored; connection prewarming is no longer performed. | `4`     |
 
 ### Performance Settings
 
@@ -144,7 +144,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `slow_worker_grace_period` | duration | Time to wait before checking a worker's speed (e.g., `5s`).                  | `5s`    |
 | `stall_timeout`            | duration | Restart workers that haven't received data for this duration (e.g., `3s`).   | `3s`    |
 | `speed_ema_alpha`          | float    | Exponential moving average smoothing factor for speed calculation (0.0-1.0, 0 disables smoothing). | `0.3`   |
-| `adaptive_concurrency_interval` | duration | Halve connections when throttled, add one connection per interval, and split small tail ranges among idle workers on healthy hosts. Set to `0` to disable adaptation. | `0` |
+| `adaptive_concurrency_interval` | duration | Share a learned host connection budget, halve it when throttled, and add one connection per interval of healthy byte progress. Set to `0` to preserve requested worker counts; shared server cooldowns still apply. | `0` |
 
 ### Category Settings
 

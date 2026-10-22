@@ -581,6 +581,17 @@ func TestUpdate_DownloadRequestMsg(t *testing.T) {
 		t.Errorf("Expected DuplicateWarningState, got %v", newRoot.state)
 	}
 
+	// The extension can suppress only the duplicate warning. Its general
+	// confirmation setting still applies in the TUI.
+	m.Settings.Extension.ExtensionPrompt.Value = true
+	msg.SkipDuplicateWarning = true
+	newM, _ = m.Update(msg)
+	newRoot = newM.(RootModel)
+	if newRoot.state != ExtensionConfirmationState {
+		t.Errorf("Expected ExtensionConfirmationState with duplicate warning disabled, got %v", newRoot.state)
+	}
+	msg.SkipDuplicateWarning = false
+
 	// 3. Test No Prompt (Direct Download)
 	m.Settings.Extension.ExtensionPrompt.Value = false
 	m.Settings.General.WarnOnDuplicate.Value = true

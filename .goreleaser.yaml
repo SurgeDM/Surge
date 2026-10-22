@@ -56,6 +56,7 @@ chocolateys:
       - surge
     package_source_url: https://github.com/SurgeDM/Surge
     owners: SurgeDM
+    authors: SurgeDM contributors
     title: Surge
     project_url: https://github.com/SurgeDM/Surge
     url_template: "https://github.com/SurgeDM/Surge/releases/download/{{ .Tag }}/{{ .ArtifactName }}"

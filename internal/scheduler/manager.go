@@ -12,28 +12,31 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/probe"
 	"github.com/SurgeDM/Surge/internal/progress"
+	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/strategy/concurrent"
 	"github.com/SurgeDM/Surge/internal/strategy/single"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
+const terminalSendTimeout = 3 * time.Second
+
 // safeSendProgress sends msg on ch, recovering from panics caused by sending
 // on a closed channel (which can happen during shutdown).
 func safeSendProgress(ch chan<- types.DownloadEvent, msg types.DownloadEvent, doneCh <-chan struct{}) {
 	defer func() { _ = recover() }()
-	if doneCh != nil {
-		select {
-		case ch <- msg:
-			return
-		default:
-		}
-		select {
-		case ch <- msg:
-		case <-doneCh:
-		}
-	} else {
-		ch <- msg
+	select {
+	case ch <- msg:
+		return
+	default:
+	}
+	timer := time.NewTimer(terminalSendTimeout)
+	defer timer.Stop()
+	select {
+	case ch <- msg:
+	case <-doneCh:
+	case <-timer.C:
+		utils.Debug("safeSendProgress: timed out delivering event %v", msg.Type)
 	}
 }
 
@@ -176,7 +179,8 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		}
 	}
 
-	// Choose downloader based on probe results
+	// Choose downloader based on probe results. Range-capable transfers stay in
+	// the range pipeline even with one worker so fresh downloads remain resumable.
 	var downloadErr error
 	useConcurrent := cfg.SupportsRange
 
@@ -210,6 +214,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		}
 
 		d := concurrent.NewConcurrentDownloader(cfg.ID, cfg.ProgressCh, progState, cfg.Runtime)
+		d.ImportThrottleState(cfg)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.Limiter = cfg.Limiter
 		d.RateLimitBps = cfg.RateLimit
@@ -217,6 +222,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		utils.Debug("Calling Download with mirrors: %v", mirrors)
 		// Pass effectiveTotalSize to avoid unnecessary bootstrap if state already knows the size
 		downloadErr = d.Download(ctx, cfg.URL, mirrors, activeMirrors, finalDestPath, effectiveTotalSize)
+		d.ExportThrottleState(cfg)
 		if d.TotalSize > 0 {
 			effectiveTotalSize = d.TotalSize
 		}
@@ -226,12 +232,11 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 			downloaded = progState.Bytes.Downloaded.Load()
 		}
 
-		// Determine if we should attempt a fallback to single-threaded mode.
-		// We fallback if concurrent failed, but it wasn't a clean pause or external cancellation,
-		// AND we haven't made any progress yet (to avoid discarding progress).
+		// Only confirmed lack of range support warrants restarting from byte zero.
 		if shouldFallbackToSingle(downloadErr, downloaded) {
 			utils.Debug("Concurrent download failed: %v - falling back to single-threaded", downloadErr)
 			useConcurrent = false // Trigger sequential block below
+			cfg.SupportsRange = false
 
 			// Reset progress state cleanly for single-stream restart from byte 0
 			if progState != nil {
@@ -241,7 +246,29 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 			// Truncate the working file to zero to prevent stale tail bytes
 			// from the failed concurrent session.
 			surgePath := finalDestPath + types.IncompleteSuffix
-			_ = os.Truncate(surgePath, 0)
+			if err := os.Truncate(surgePath, 0); err != nil {
+				return fmt.Errorf("reset working file for range fallback: %w", err)
+			}
+			// The range checkpoint describes bytes discarded by the restart.
+			// Retain metadata and headers, but invalidate its offsets and bitmap.
+			if checkpoint, err := store.LoadState(cfg.URL, finalDestPath); err == nil && checkpoint != nil {
+				checkpoint.Tasks = nil
+				checkpoint.ChunkBitmap = nil
+				checkpoint.ActualChunkSize = 0
+				checkpoint.Downloaded = 0
+				checkpoint.Elapsed = 0
+				checkpoint.FileHash = ""
+				if err := store.SaveStateWithOptions(cfg.URL, finalDestPath, checkpoint, store.SaveStateOptions{SkipFileHash: true}); err != nil {
+					return fmt.Errorf("invalidate range checkpoint for fallback: %w", err)
+				}
+			}
+			cfg.IsResume = false
+			cfg.Tasks = nil
+			cfg.ChunkBitmap = nil
+			cfg.Downloaded = 0
+			if progState != nil {
+				progState.TakePendingResumeState()
+			}
 		}
 	}
 
@@ -249,6 +276,8 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		// Fallback to single-threaded downloader
 		utils.Debug("Using single-threaded downloader")
 		d := single.NewSingleDownloader(cfg.ID, cfg.ProgressCh, progState, cfg.Runtime)
+		d.ImportThrottleState(cfg)
+		defer d.ExportThrottleState(cfg)
 		d.Headers = cfg.Headers // Forward custom headers from browser extension
 		d.Limiter = cfg.Limiter
 		// Pass effectiveTotalSize here as well
@@ -263,14 +292,15 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		}
 	}
 
-	// Only send completion if NO error AND not paused.
+	// Return typed pause error rather than normalizing to nil so callers
+	// can distinguish a clean pause from successful completion or errors.
 	if errors.Is(downloadErr, types.ErrPaused) {
 		utils.Debug("Download paused cleanly")
-		return nil // Return nil so worker can remove it from active map
+		return downloadErr
 	}
 
-	isPaused := progState != nil && progState.IsPaused()
-	if downloadErr == nil && !isPaused {
+	// Physical download success takes precedence over late-arriving pause signals.
+	if downloadErr == nil {
 		var elapsed time.Duration
 		if progState != nil {
 			_, elapsed = progState.FinalizeSession(effectiveTotalSize)
@@ -287,6 +317,7 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 
 		if cfg.ProgressCh != nil {
 			rateLimit, rateLimitSet := currentRateLimit()
+			// EventComplete is terminal-reliable and must not be dropped due to canceled context.
 			safeSendProgress(cfg.ProgressCh, types.DownloadEvent{
 				Type:         types.EventComplete,
 				DownloadID:   cfg.ID,
@@ -296,24 +327,21 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 				AvgSpeed:     avgSpeed,
 				RateLimit:    rateLimit,
 				RateLimitSet: rateLimitSet,
-			}, ctx.Done())
+			}, nil)
 		}
-	} else if downloadErr != nil && !isPaused {
-		// Verify it's not a cancellation error
-		if errors.Is(downloadErr, context.Canceled) || errors.Is(downloadErr, context.DeadlineExceeded) {
-			utils.Debug("Download canceled cleanly")
-			return downloadErr
-		}
-		// EventError is emitted by the scheduler's worker() after all retries are exhausted.
+		return nil
+	}
+
+	if errors.Is(downloadErr, context.Canceled) || errors.Is(downloadErr, context.DeadlineExceeded) {
+		utils.Debug("Download canceled cleanly")
+		return downloadErr
 	}
 
 	return downloadErr
 }
 
-// shouldFallbackToSingle reports whether a failed concurrent download
-// should fall back to single-threaded mode. Pause, cancel, deadline, and
-// disk-full errors are excluded — Truncate cannot create free space and
-// single-threaded would hit the same disk-full condition.
+// shouldFallbackToSingle permits a restart only for confirmed range rejection.
+// Pause, cancellation and disk-full errors take precedence in joined errors.
 func shouldFallbackToSingle(downloadErr error, downloaded int64) bool {
 	if downloadErr == nil {
 		return false
@@ -327,7 +355,10 @@ func shouldFallbackToSingle(downloadErr error, downloaded int64) bool {
 	if types.IsInsufficientDiskSpace(downloadErr) {
 		return false
 	}
-	return downloaded == 0
+	if errors.Is(downloadErr, types.ErrRangeUnsupported) {
+		return true
+	}
+	return false
 }
 
 // Download is the CLI entry point (non-TUI) - convenience wrapper

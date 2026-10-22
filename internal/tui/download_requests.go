@@ -23,8 +23,9 @@ func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy
 	}
 
 	duplicate := m.checkForDuplicate(msg.URL)
+	m.pendingSkipDuplicateWarning = msg.SkipDuplicateWarning
 
-	if duplicate != nil && config.Resolve[bool](m.Settings.General.WarnOnDuplicate) {
+	if duplicate != nil && config.Resolve[bool](m.Settings.General.WarnOnDuplicate) && !msg.SkipDuplicateWarning {
 		utils.Debug("Duplicate download detected in TUI: %s", msg.URL)
 		m.pendingURL = msg.URL
 		m.pendingMirrors = msg.Mirrors

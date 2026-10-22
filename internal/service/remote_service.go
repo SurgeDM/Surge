@@ -5,13 +5,16 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"net/url"
 	"strings"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -26,6 +29,14 @@ type RemoteDownloadService struct {
 	cancel    context.CancelFunc
 }
 
+// apiError retains the response status so callers can classify failures.
+type apiError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *apiError) Error() string { return fmt.Sprintf("API error %d: %s", e.StatusCode, e.Body) }
+
 // NewRemoteDownloadService creates a new remote service instance.
 func NewRemoteDownloadService(baseURL string, token string, opts HTTPClientOptions) (*RemoteDownloadService, error) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -34,11 +45,13 @@ func NewRemoteDownloadService(baseURL string, token string, opts HTTPClientOptio
 		cancel()
 		return nil, err
 	}
+	client.CheckRedirect = SameOriginRedirectPolicy
 	sseClient, err := NewStreamingHTTPClient(opts)
 	if err != nil {
 		cancel()
 		return nil, err
 	}
+	sseClient.CheckRedirect = SameOriginRedirectPolicy
 	return &RemoteDownloadService{
 		BaseURL:   baseURL,
 		Token:     token,
@@ -50,6 +63,10 @@ func NewRemoteDownloadService(baseURL string, token string, opts HTTPClientOptio
 }
 
 func (s *RemoteDownloadService) doRequest(method, path string, body interface{}) (*http.Response, error) {
+	return s.doRequestWithContext(s.ctx, method, path, body)
+}
+
+func (s *RemoteDownloadService) doRequestWithContext(ctx context.Context, method, path string, body interface{}) (*http.Response, error) {
 	var bodyReader io.Reader
 	if body != nil {
 		jsonBody, err := json.Marshal(body)
@@ -59,7 +76,7 @@ func (s *RemoteDownloadService) doRequest(method, path string, body interface{})
 		bodyReader = bytes.NewBuffer(jsonBody)
 	}
 
-	req, err := http.NewRequestWithContext(s.ctx, method, s.BaseURL+path, bodyReader)
+	req, err := http.NewRequestWithContext(ctx, method, s.BaseURL+path, bodyReader)
 	if err != nil {
 		return nil, err
 	}
@@ -78,7 +95,7 @@ func (s *RemoteDownloadService) doRequest(method, path string, body interface{})
 		defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 		// Limit error body read to 1KB to prevent DoS
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, utils.KiB))
-		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(bodyBytes))
+		return nil, &apiError{StatusCode: resp.StatusCode, Body: string(bodyBytes)}
 	}
 
 	return resp, nil
@@ -86,7 +103,15 @@ func (s *RemoteDownloadService) doRequest(method, path string, body interface{})
 
 // List returns the status of all active and completed downloads.
 func (s *RemoteDownloadService) List() ([]types.DownloadStatus, error) {
-	resp, err := s.doRequest("GET", "/list", nil)
+	return s.ListContext(context.Background())
+}
+
+// ListContext returns download statuses while honoring the caller's deadline.
+func (s *RemoteDownloadService) ListContext(ctx context.Context) ([]types.DownloadStatus, error) {
+	requestCtx, cancel := mergeContexts(s.ctx, ctx)
+	defer cancel()
+
+	resp, err := s.doRequestWithContext(requestCtx, "GET", "/list", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -112,6 +137,52 @@ func (s *RemoteDownloadService) History() ([]types.DownloadRecord, error) {
 		return nil, err
 	}
 	return history, nil
+}
+
+func (s *RemoteDownloadService) GetSettings() (*config.Settings, error) {
+	resp, err := s.doRequest("GET", "/settings", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+
+	return decodeRemoteSettings(resp.Body)
+}
+
+func decodeRemoteSettings(body io.Reader) (*config.Settings, error) {
+	settings := config.DefaultSettings()
+	if err := json.NewDecoder(body).Decode(settings); err != nil {
+		return nil, err
+	}
+	if err := settings.NormalizeValues(); err != nil {
+		return nil, fmt.Errorf("server returned invalid settings: %w", err)
+	}
+	if err := settings.ValidateStrict(false); err != nil {
+		return nil, fmt.Errorf("server returned invalid settings: %w", err)
+	}
+	return settings, nil
+}
+
+func (s *RemoteDownloadService) UpdateSettings(settings *config.Settings) error {
+	resp, err := s.doRequest("PUT", "/settings", settings)
+	if err != nil {
+		return err
+	}
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+	return nil
+}
+
+func (s *RemoteDownloadService) PatchSettings(patch config.SettingsPatch) (*config.Settings, error) {
+	resp, err := s.doRequest(http.MethodPatch, "/settings", patch)
+	if err != nil {
+		var responseErr *apiError
+		if errors.As(err, &responseErr) && responseErr.StatusCode == http.StatusConflict {
+			return nil, fmt.Errorf("%w: %w", config.ErrSettingsConflict, err)
+		}
+		return nil, err
+	}
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+	return decodeRemoteSettings(resp.Body)
 }
 
 // GetStatus returns a status for a single download by id.
@@ -317,10 +388,15 @@ func (s *RemoteDownloadService) StreamEvents(ctx context.Context) (<-chan types.
 		ctx = context.Background()
 	}
 	streamCtx, cancel := mergeContexts(s.ctx, ctx)
+	resp, err := s.openSSE(streamCtx)
+	if err != nil {
+		cancel()
+		return nil, nil, err
+	}
 	ch := make(chan types.DownloadEvent, 100)
 	go func() {
 		defer cancel()
-		s.streamWithReconnect(streamCtx, ch)
+		s.streamWithReconnect(streamCtx, ch, resp)
 	}()
 	return ch, cancel, nil
 }
@@ -331,30 +407,34 @@ func (s *RemoteDownloadService) Publish(msg types.DownloadEvent) error {
 	return fmt.Errorf("publish not supported for remote service")
 }
 
-func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan types.DownloadEvent) {
+func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan types.DownloadEvent, resp *http.Response) {
 	defer close(ch)
-	backoff := 1 * time.Second
 	for {
-		select {
-		case <-ctx.Done():
+		err := s.consumeSSE(ctx, ch, resp)
+		if ctx.Err() != nil {
 			return
-		default:
 		}
 
-		err := s.connectSSE(ctx, ch)
-		if err == nil {
-			return // Clean shutdown (e.g. server closed stream cleanly or context canceled during request)
-		}
-		// Check context again before sleeping
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(backoff):
-			// Continue
-		}
+		sendStreamStatus(ch, fmt.Sprintf("Remote event stream disconnected: %v; reconnecting", err))
+		backoff := time.Second
+		for {
+			timer := time.NewTimer(backoff)
+			select {
+			case <-ctx.Done():
+				timer.Stop()
+				return
+			case <-timer.C:
+			}
 
-		if backoff < 30*time.Second {
-			backoff *= 2
+			resp, err = s.openSSE(ctx)
+			if err == nil {
+				sendStreamStatus(ch, "Remote event stream reconnected")
+				break
+			}
+			sendStreamStatus(ch, fmt.Sprintf("Remote event stream reconnect failed: %v; retrying in %s", err, backoff))
+			if backoff < 30*time.Second {
+				backoff *= 2
+			}
 		}
 	}
 }
@@ -376,10 +456,10 @@ func mergeContexts(contexts ...context.Context) (context.Context, context.Cancel
 	}
 }
 
-func (s *RemoteDownloadService) connectSSE(ctx context.Context, ch chan types.DownloadEvent) error {
+func (s *RemoteDownloadService) openSSE(ctx context.Context) (*http.Response, error) {
 	req, err := http.NewRequestWithContext(ctx, "GET", s.BaseURL+"/events", nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	req.Header.Set("Authorization", "Bearer "+s.Token)
@@ -389,13 +469,29 @@ func (s *RemoteDownloadService) connectSSE(ctx context.Context, ch chan types.Do
 
 	resp, err := s.SSEClient.Do(req)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
-	if resp.StatusCode != 200 {
-		return fmt.Errorf("failed to connect to event stream: %s", resp.Status)
+	if resp.StatusCode != http.StatusOK {
+		defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, utils.KiB))
+		message := strings.TrimSpace(string(body))
+		detail := resp.Status
+		if message != "" {
+			detail += ": " + message
+		}
+		return nil, fmt.Errorf("failed to connect to event stream: %s", detail)
 	}
+	contentType, _, err := mime.ParseMediaType(resp.Header.Get("Content-Type"))
+	if err != nil || contentType != "text/event-stream" {
+		_ = resp.Body.Close()
+		return nil, fmt.Errorf("failed to connect to event stream: unexpected content type %q", resp.Header.Get("Content-Type"))
+	}
+	return resp, nil
+}
+
+func (s *RemoteDownloadService) consumeSSE(ctx context.Context, ch chan types.DownloadEvent, resp *http.Response) error {
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
 	reader := bufio.NewReader(resp.Body)
 	for {
@@ -438,12 +534,18 @@ func (s *RemoteDownloadService) connectSSE(ctx context.Context, ch chan types.Do
 			continue
 		}
 
-		// Non-blocking send
 		select {
 		case ch <- msg:
-		default:
-			// Drop message if channel is full to prevent blocking the reader
+		case <-ctx.Done():
+			return ctx.Err()
 		}
+	}
+}
+
+func sendStreamStatus(ch chan types.DownloadEvent, message string) {
+	select {
+	case ch <- types.DownloadEvent{Type: types.EventSystem, Message: message}:
+	default:
 	}
 }
 

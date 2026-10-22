@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/service"
+	downloadservice "github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -28,7 +28,7 @@ type rateLimitSettingsService interface {
 	SetDefaultRateLimit(rate int64) error
 }
 
-func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service service.DownloadService) {
+func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service downloadservice.DownloadService) {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 			"status": "ok",
@@ -39,9 +39,80 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 	mux.HandleFunc("/events", eventsHandler(service))
 
+	// Settings persistence and live application are serialized by the owner.
+	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
+		owner, ok := service.(downloadservice.SettingsService)
+		if !ok {
+			http.Error(w, "Settings service unavailable", http.StatusNotImplemented)
+			return
+		}
+		if r.Method == http.MethodGet {
+			settings, err := owner.GetSettings()
+			if err != nil {
+				http.Error(w, "Failed to retrieve settings: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			settings.Extension.AuthToken.Value = ""
+			writeJSONResponse(w, http.StatusOK, settings)
+			return
+		}
+		if r.Method != http.MethodPut && r.Method != http.MethodPatch {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		editor, ok := service.(downloadservice.SettingsEditor)
+		if !ok {
+			http.Error(w, "Settings editing unavailable", http.StatusNotImplemented)
+			return
+		}
+		var patch config.SettingsPatch
+		var restartRequired bool
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		if r.Method == http.MethodPut {
+			current, err := owner.GetSettings()
+			if err != nil {
+				http.Error(w, "Failed to retrieve settings: "+err.Error(), http.StatusInternalServerError)
+				return
+			}
+			updated := current.Clone()
+			if err := decodeJSONBody(r, updated); err != nil {
+				http.Error(w, "Invalid settings: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			if err := updated.NormalizeValues(); err != nil {
+				http.Error(w, err.Error(), http.StatusBadRequest)
+				return
+			}
+			patch = config.DiffSettings(current, updated)
+			restartRequired = updated.RequiresRestartComparedTo(current)
+		} else if err := decodeJSONBody(r, &patch); err != nil {
+			http.Error(w, "Invalid settings patch: "+err.Error(), http.StatusBadRequest)
+			return
+		}
+		updated, err := editor.PatchSettings(patch)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, downloadservice.ErrInvalidSettings) {
+				status = http.StatusBadRequest
+			}
+			if errors.Is(err, config.ErrSettingsConflict) {
+				status = http.StatusConflict
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+		if r.Method == http.MethodPut {
+			writeJSONResponse(w, http.StatusOK, map[string]interface{}{"status": "updated", "restart_required": restartRequired})
+			return
+		}
+		updated.Extension.AuthToken.Value = ""
+		writeJSONResponse(w, http.StatusOK, updated)
+	})
+
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
 		handleDownload(w, r, defaultOutputDir, service)
 	})
+	mux.HandleFunc("/download/duplicate", requireMethod(http.MethodPost, handleDuplicateCheck))
 
 	mux.HandleFunc("/download/batch", func(w http.ResponseWriter, r *http.Request) {
 		handleBatchDownload(w, r, defaultOutputDir, service)
@@ -291,7 +362,7 @@ func parseRateLimitQuery(w http.ResponseWriter, r *http.Request) (int64, string,
 	return rate, rateStr, true
 }
 
-func eventsHandler(service service.DownloadService) http.HandlerFunc {
+func eventsHandler(service downloadservice.DownloadService) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.Header().Set("Cache-Control", "no-cache")
@@ -379,7 +450,7 @@ func writeJSONResponse(w http.ResponseWriter, status int, payload interface{}) {
 	}
 }
 
-func resolveDownloadDestPath(service service.DownloadService, id string) (string, error) {
+func resolveDownloadDestPath(service downloadservice.DownloadService, id string) (string, error) {
 	if service == nil {
 		return "", ErrServiceUnavailable
 	}

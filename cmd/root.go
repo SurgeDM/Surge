@@ -79,7 +79,8 @@ var (
 	GlobalLifecycleCleanup  func()
 	serverProgram           *tea.Program
 	startupIntegrityMessage string
-	globalSettings          *config.Settings
+	globalSettings          *config.Settings // Startup snapshot; live settings belong to GlobalService.
+	globalSettingsMu        sync.RWMutex
 	GlobalLifecycle         *orchestrator.LifecycleManager
 	globalLifecycleMu       sync.Mutex
 	globalEnqueueCtx        context.Context
@@ -226,7 +227,7 @@ func lifecycleForLocalService(service service.DownloadService) (*orchestrator.Li
 func ensureGlobalLocalServiceAndLifecycle() error {
 	if GlobalService == nil {
 		eventBus := orchestrator.NewEventBus()
-		lifecycle := newLocalLifecycleManager(GlobalPool, eventBus, globalSettings, currentPoolConfigs)
+		lifecycle := newLocalLifecycleManager(GlobalPool, eventBus, getGlobalSettings(), currentPoolConfigs)
 		localService := service.NewLocalDownloadService(lifecycle)
 
 		globalLifecycleMu.Lock()
@@ -296,7 +297,7 @@ func ensureLocalLifecycle(service service.DownloadService, getAll func() []types
 
 	if GlobalLifecycle == nil {
 		eventBus := orchestrator.NewEventBus()
-		GlobalLifecycle = newLocalLifecycleManager(GlobalPool, eventBus, globalSettings, getAll)
+		GlobalLifecycle = newLocalLifecycleManager(GlobalPool, eventBus, getGlobalSettings(), getAll)
 	}
 	if GlobalLifecycleCleanup == nil {
 		cleanup, err := startLifecycleEventWorker(service, GlobalLifecycle)
@@ -358,7 +359,7 @@ func maybeRunRemoteTUI(cmd *cobra.Command, args []string) (bool, error) {
 }
 
 func acquireRootInstanceLock() (func(), error) {
-	isMaster, err := AcquireLock()
+	lock, isMaster, err := TryAcquireInstanceLock(resolveRuntimeDir())
 	if err != nil {
 		return nil, fmt.Errorf("error acquiring lock: %w", err)
 	}
@@ -368,7 +369,7 @@ func acquireRootInstanceLock() (func(), error) {
 	}
 
 	return func() {
-		if err := ReleaseLock(); err != nil {
+		if err := lock.Release(); err != nil {
 			utils.Debug("Error releasing lock: %v", err)
 		}
 	}, nil
@@ -479,8 +480,9 @@ var rootCmd = &cobra.Command{
 		}
 
 		GlobalProgressCh = make(chan types.DownloadEvent, 100)
-		globalSettings = getSettings()
-		GlobalPool = scheduler.New(GlobalProgressCh, config.Resolve[int](globalSettings.Network.MaxConcurrentDownloads))
+		settings := getSettings()
+		setGlobalSettings(settings)
+		GlobalPool = scheduler.New(GlobalProgressCh, config.Resolve[int](settings.Network.MaxConcurrentDownloads))
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if ranRemote, err := maybeRunRemoteTUI(cmd, args); err != nil {
@@ -489,8 +491,8 @@ var rootCmd = &cobra.Command{
 			return nil
 		}
 
-		if checkSystemServiceRunning() {
-			return fmt.Errorf("system service is already running. Use 'surge connect' to interact with it, or stop the service first")
+		if checkUserServiceRunning() {
+			return fmt.Errorf("the Surge user service is already running; use 'surge connect' or stop the service first")
 		}
 
 		if len(args) > 0 {
@@ -532,17 +534,17 @@ var rootCmd = &cobra.Command{
 		defer cleanup()
 
 		queueInitialRootDownloads(args, opts)
-		return startTUI(port, opts.exitWhenDone, opts.noResume)
+		return startTUI(port, opts.exitWhenDone, opts.noResume, releaseLock)
 	},
 }
 
 // startTUI initializes and runs the TUI program
-func startTUI(port int, exitWhenDone bool, noResume bool) error {
+func startTUI(port int, exitWhenDone bool, noResume bool, releaseLock func()) error {
 	tui.InitializeTUI()
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
-	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), globalSettings, noResume, Commit)
+	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), getSettings(), noResume, Commit)
 	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())
 
 	configureServiceUI(&m)
@@ -623,20 +625,22 @@ func startTUI(port int, exitWhenDone bool, noResume bool) error {
 
 	// Check if restart was requested (e.g. from settings changed)
 	if m, ok := finalModel.(tui.RootModel); ok && m.RestartRequested {
-		return performRestart()
+		return performRestart(releaseLock)
 	}
 
 	return nil
 }
 
-func performRestart() error {
+func performRestart(releaseLock func()) error {
 	executable, err := os.Executable()
 	if err != nil {
 		return fmt.Errorf("could not get executable path: %w", err)
 	}
 
 	if runtime.GOOS == "windows" {
-		_ = ReleaseLock()
+		if releaseLock != nil {
+			releaseLock()
+		}
 	}
 
 	return utils.Run(executable, os.Args, os.Environ())

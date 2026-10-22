@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/binary"
 	"fmt"
+	"time"
 )
 
 // Task represents a byte range to download.
@@ -68,15 +69,20 @@ type DownloadRecord struct {
 	Workers      int      `json:"workers,omitempty"`
 	MinChunkSize int64    `json:"min_chunk_size,omitempty"`
 
-	// Runtime / Transient Configuration (Not persisted)
-	IsResume           bool                 `json:"-" gob:"-"`
-	ProgressCh         chan<- DownloadEvent `json:"-" gob:"-"`
-	ProgressState      interface{}          `json:"-" gob:"-"` // typically *progress.DownloadProgress
-	Runtime            *RuntimeConfig       `json:"-" gob:"-"`
-	Headers            map[string]string    `json:"-" gob:"-"`
-	Limiter            ByteLimiter          `json:"-" gob:"-"`
-	IsExplicitCategory bool                 `json:"-" gob:"-"`
-	SupportsRange      bool                 `json:"-" gob:"-"`
+	// Execution & Throttle State (Transient across retries)
+	ThrottleEpisodeStart time.Time `json:"-"`
+
+	// Runtime / Transient Configuration. The store controls persistence with
+	// explicit projections because encoding/gob ignores struct tags. Headers are
+	// retained only in per-download detail state for authenticated resumes.
+	IsResume           bool                 `json:"-"`
+	ProgressCh         chan<- DownloadEvent `json:"-"`
+	ProgressState      interface{}          `json:"-"` // typically *progress.DownloadProgress
+	Runtime            *RuntimeConfig       `json:"-"`
+	Headers            map[string]string    `json:"-"`
+	Limiter            ByteLimiter          `json:"-"`
+	IsExplicitCategory bool                 `json:"-"`
+	SupportsRange      bool                 `json:"-"`
 }
 
 // MasterList holds all tracked downloads.

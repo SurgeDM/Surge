@@ -1,7 +1,7 @@
 # Get started with Surge
 
 This guide gets a download running, then helps you choose whether the
-interactive TUI, a headless server, or a system service is the right fit.
+interactive TUI, a headless server, or a user service is the right fit.
 
 ## Install Surge
 
@@ -13,7 +13,15 @@ Use the package manager or release artifact that suits your platform:
 | macOS / Linux | `brew install SurgeDM/tap/surge` |
 | Arch Linux | `yay -S surge` |
 | Nix / NixOS | `nix run github:SurgeDM/Surge` |
+| Linux / macOS (no package manager) | `curl -fsSL https://surgedm.github.io/install \| sh` |
 | Any supported platform | [Download a release](https://github.com/SurgeDM/Surge/releases/latest) |
+
+The install script detects your OS and architecture (including Linux ARM64,
+e.g. Alpine/postmarketOS), downloads the matching release asset, verifies its
+checksum, installs the binary to `~/.local/bin` (override with
+`SURGE_INSTALL_DIR`), and sets up shell completion for zsh/bash/fish.
+Run the same command again to update an existing installation; it reports the
+installed and target versions before replacing the binary.
 
 Run `surge --version` after installing to confirm that your shell can find the
 binary.
@@ -51,12 +59,14 @@ download manager:
 surge server
 ```
 
-Use a **system service** when the server should start with the machine:
+Use a **user service** when the server should start with your login session:
 
 ```bash
 surge service install
-surge service start
 ```
+
+`install` starts the service immediately. Run it as your normal user without
+`sudo` or an Administrator terminal.
 
 See [TUI, server, and remote modes](concepts/modes.md) for the differences and
 [Run Surge as a service](guides/run-as-a-service.md) before installing a

@@ -38,8 +38,9 @@ Get the token from the machine that runs the server:
 surge token
 ```
 
-For a system service, use `surge service token`; it may need elevated
-privileges. Then pass the token with `--token` or set `SURGE_TOKEN`.
+The user service shares this token and configuration. Run the command as the
+same user that installed the service, then pass the token with `--token` or set
+`SURGE_TOKEN`.
 
 ## A remote connection is refused or times out
 

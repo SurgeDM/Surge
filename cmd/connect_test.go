@@ -4,12 +4,14 @@ import (
 	"context"
 	"testing"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui"
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
 type fakeRemoteDownloadService struct {
+	listCalls    int
 	addCalls     int
 	lastURL      string
 	lastPath     string
@@ -17,9 +19,26 @@ type fakeRemoteDownloadService struct {
 	lastExplicit bool
 }
 
+type settingsCapableRemoteService struct {
+	*fakeRemoteDownloadService
+	settings    *config.Settings
+	updateCalls int
+}
+
+func (s *settingsCapableRemoteService) GetSettings() (*config.Settings, error) {
+	return s.settings.Clone(), nil
+}
+
+func (s *settingsCapableRemoteService) UpdateSettings(settings *config.Settings) error {
+	s.settings = settings.Clone()
+	s.updateCalls++
+	return nil
+}
+
 var _ service.DownloadService = (*fakeRemoteDownloadService)(nil)
 
 func (f *fakeRemoteDownloadService) List() ([]types.DownloadStatus, error) {
+	f.listCalls++
 	return nil, nil
 }
 
@@ -73,7 +92,15 @@ func (f *fakeRemoteDownloadService) SetRateLimit(id string, rate int64) error { 
 func (f *fakeRemoteDownloadService) ClearRateLimit(id string) error { return nil }
 
 func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
-	m := newRemoteRootModel("https://example.com:1700", nil)
+	setupIsolatedCmdState(t)
+	setTUITestMode(t)
+	settings := config.DefaultSettings()
+	settings.General.AutoResume.Value = true
+	if err := config.SaveSettings(settings); err != nil {
+		t.Fatalf("SaveSettings: %v", err)
+	}
+
+	m := newRemoteRootModel("https://example.com:1700", nil, nil, nil)
 
 	if m.Orchestrator != nil {
 		t.Fatal("expected remote root model to use nil orchestrator")
@@ -87,11 +114,19 @@ func TestNewRemoteRootModel_UsesNilOrchestrator(t *testing.T) {
 	if m.ServerPort != 1700 {
 		t.Fatalf("server port = %d, want 1700", m.ServerPort)
 	}
+	if !config.Resolve[bool](m.Settings.General.AutoResume) {
+		t.Fatal("remote model did not load the existing client settings")
+	}
+	if !m.SettingsReadOnly || m.SaveSettingsFunc != nil {
+		t.Fatal("remote model must not persist settings without a daemon-backed store")
+	}
 }
 
 func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
+	setupIsolatedCmdState(t)
+	setTUITestMode(t)
 	service := &fakeRemoteDownloadService{}
-	m := newRemoteRootModel("https://example.com:1700", service)
+	m := newRemoteRootModel("https://example.com:1700", service, nil, nil)
 	m.Settings.Extension.ExtensionPrompt.Value = false
 	m.Settings.General.WarnOnDuplicate.Value = false
 
@@ -126,6 +161,63 @@ func TestNewRemoteRootModel_DownloadRequestUsesServiceAdd(t *testing.T) {
 	if selected.ID != "remote-add-id" {
 		t.Fatalf("queued download ID = %q, want remote-add-id", selected.ID)
 	}
+}
+
+func TestNewRemoteRootModel_UsesDaemonSettingsStore(t *testing.T) {
+	setupIsolatedCmdState(t)
+	setTUITestMode(t)
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	settings.General.AutoResume.Value = true
+	remote := &settingsCapableRemoteService{
+		fakeRemoteDownloadService: &fakeRemoteDownloadService{},
+		settings:                  settings,
+	}
+
+	m := newRemoteRootModel("https://example.com:1700", remote, nil, nil)
+	if m.SettingsReadOnly || m.SaveSettingsFunc == nil {
+		t.Fatal("daemon-backed settings should be writable")
+	}
+	m.Settings.General.AutoResume.Value = false
+	if err := m.SaveSettingsFunc(m.Settings); err != nil {
+		t.Fatalf("SaveSettingsFunc: %v", err)
+	}
+	if remote.updateCalls != 1 || config.Resolve[bool](remote.settings.General.AutoResume) {
+		t.Fatal("remote settings store did not receive update")
+	}
+}
+
+func TestNewRemoteRootModel_UsesPrefetchedStatusesAndSettings(t *testing.T) {
+	setTUITestMode(t)
+	service := &fakeRemoteDownloadService{}
+	settings := config.DefaultSettings()
+	statuses := []types.DownloadStatus{{
+		ID:       "prefetched-id",
+		URL:      "https://example.com/file.bin",
+		Filename: "file.bin",
+		Status:   "queued",
+	}}
+
+	m := newRemoteRootModel("https://example.com:1700", service, statuses, settings)
+
+	if service.listCalls != 0 {
+		t.Fatalf("service.List calls = %d, want 0", service.listCalls)
+	}
+	if m.Settings == settings || config.Resolve[bool](m.Settings.General.AutoResume) != config.Resolve[bool](settings.General.AutoResume) {
+		t.Fatal("expected remote model to copy the loaded client settings")
+	}
+	m.UpdateListItems()
+	selected := m.GetSelectedDownload()
+	if selected == nil || selected.ID != "prefetched-id" {
+		t.Fatalf("selected download = %#v, want prefetched-id", selected)
+	}
+}
+
+func setTUITestMode(t *testing.T) {
+	t.Helper()
+	previous := tui.IsTestMode
+	tui.IsTestMode = true
+	t.Cleanup(func() { tui.IsTestMode = previous })
 }
 
 func TestParseConnectTarget_ParsesIPv6AddressWithPort(t *testing.T) {

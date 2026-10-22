@@ -25,7 +25,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/power"
-	"github.com/SurgeDM/Surge/internal/service"
+	downloadservice "github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -135,7 +135,7 @@ type RootModel struct {
 	removeTargetID string
 	// Service Interface
 	// Core
-	Service      service.DownloadService
+	Service      downloadservice.DownloadService
 	Orchestrator *orchestrator.LifecycleManager
 
 	// File picker for directory selection
@@ -152,15 +152,16 @@ type RootModel struct {
 	PWD string
 
 	// Duplicate detection
-	pendingURL           string // URL pending confirmation
-	pendingPath          string // Path pending confirmation
-	pendingIsDefaultPath bool
-	pendingFilename      string   // Filename pending confirmation
-	pendingMirrors       []string // Mirrors pending confirmation
-	pendingHeaders       map[string]string
-	pendingWorkers       int    // Per-task worker override pending confirmation
-	pendingMinChunkSize  int64  // Per-task min chunk size override pending confirmation
-	duplicateInfo        string // Info about the duplicate
+	pendingURL                  string // URL pending confirmation
+	pendingPath                 string // Path pending confirmation
+	pendingIsDefaultPath        bool
+	pendingFilename             string   // Filename pending confirmation
+	pendingMirrors              []string // Mirrors pending confirmation
+	pendingHeaders              map[string]string
+	pendingWorkers              int    // Per-task worker override pending confirmation
+	pendingMinChunkSize         int64  // Per-task min chunk size override pending confirmation
+	pendingSkipDuplicateWarning bool   // Request-specific duplicate warning override
+	duplicateInfo               string // Info about the duplicate
 
 	// Graph Data
 	SpeedHistory           []float64 // Stores the last ~60 ticks of speed data
@@ -175,7 +176,12 @@ type RootModel struct {
 	logFocused  bool           // Whether the log viewport is focused
 
 	// Settings
-	Settings              *config.Settings // Application settings
+	Settings *config.Settings // Application settings
+	// SaveSettingsFunc owns persistence for this model. Local TUIs write the
+	// user config; remote TUIs replace this with a daemon-backed implementation.
+	// A nil function makes settings read-only and must never write defaults.
+	SaveSettingsFunc      func(*config.Settings) error
+	SettingsReadOnly      bool
 	SettingsBaseline      *config.Settings // Snapshot of settings when entering the settings view
 	StartupConfigWarnings []string         // Config validation warnings to emit on first render
 	SettingsActiveTab     int              // Active category tab (0-3)
@@ -308,7 +314,21 @@ func (d *DownloadModel) UpdateETA() {
 	d.lastETA = time.Duration(etaSeconds * float64(time.Second))
 }
 
-func InitialRootModel(serverPort int, currentVersion string, service service.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, currentCommit ...string) RootModel {
+func InitialRootModel(serverPort int, currentVersion string, service downloadservice.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, currentCommit ...string) RootModel {
+	var statuses []types.DownloadStatus
+	if service != nil {
+		statuses, _ = service.List()
+	}
+	return initialRootModel(serverPort, currentVersion, service, orchestrator, settings, noResume, statuses, currentCommit...)
+}
+
+// InitialRootModelWithStatuses builds a model from statuses already fetched by
+// the caller. It avoids a second network request during remote TUI startup.
+func InitialRootModelWithStatuses(serverPort int, currentVersion string, service downloadservice.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, statuses []types.DownloadStatus, currentCommit ...string) RootModel {
+	return initialRootModel(serverPort, currentVersion, service, orchestrator, settings, noResume, statuses, currentCommit...)
+}
+
+func initialRootModel(serverPort int, currentVersion string, service downloadservice.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, statuses []types.DownloadStatus, currentCommit ...string) RootModel {
 	initialDarkBackground := true
 	if !IsTestMode {
 		initialDarkBackground = lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
@@ -322,6 +342,8 @@ func InitialRootModel(serverPort int, currentVersion string, service service.Dow
 
 	if settings == nil {
 		settings = config.DefaultSettings()
+	} else {
+		settings = settings.Clone()
 	}
 
 	urlInput := textinput.New()
@@ -390,76 +412,64 @@ func InitialRootModel(serverPort int, currentVersion string, service service.Dow
 
 	applyColorModeForTheme(config.Resolve[int](settings.General.Theme), config.Resolve[string](settings.General.ThemePath), initialDarkBackground)
 
-	// Load paused downloads from master list (now uses global config directory)
-	var downloads []*DownloadModel
-	// Note: With Service abstraction, we might want to let the Service handle loading.
-	// But LocalDownloadService's List() calls store.ListAllDownloads().
-	// For TUI initialization, we should probably call Service.List() to populate the model.
-	// However, Service.List() returns []DownloadStatus, which we need to convert to []*DownloadModel.
-
-	// Let's use service.List() if available
-	if service != nil {
-		statuses, err := service.List()
-		if err == nil {
-			for _, s := range statuses {
-				dm := NewDownloadModel(s.ID, s.URL, s.Filename, s.TotalSize)
-				dm.Downloaded = s.Downloaded
-				if s.DestPath != "" {
-					dm.Destination = s.DestPath
-				} else {
-					dm.Destination = s.Filename // Fallback
-				}
-				// Status mapping
-				switch s.Status {
-				case "completed":
-					dm.done = true
-					dm.started = true
-					dm.progress.SetPercent(1.0)
-				case "error":
-					dm.done = true
-					dm.started = true
-					if s.Error != "" {
-						dm.err = errors.New(s.Error)
-					} else {
-						dm.err = errors.New("download failed")
-					}
-				case "pausing":
-					dm.pausing = true
-					dm.started = true
-				case "paused":
-					if config.Resolve[bool](settings.General.AutoResume) {
-						dm.resuming = true
-						dm.paused = true // Will update when resume event received
-					} else {
-						dm.paused = true
-					}
-					dm.started = true
-				case "queued":
-					// Always resume queued items
-					dm.resuming = true
-					dm.paused = true // Will update when resume event received
-					dm.started = false
-				case "downloading":
-					dm.started = true
-				}
-
-				if s.TotalSize > 0 {
-					dm.progress.SetPercent(s.Progress / 100.0)
-				}
-				if s.AvgSpeed > 0 {
-					dm.Speed = s.AvgSpeed
-				} else if s.Speed > 0 {
-					dm.Speed = s.Speed
-				}
-				if s.Status == "completed" && s.TimeTaken > 0 {
-					dm.Elapsed = time.Duration(s.TimeTaken) * time.Millisecond
-				}
-				dm.RateLimit = s.RateLimit
-				dm.RateLimitSet = s.RateLimitSet
-
-				downloads = append(downloads, dm)
-			}
+	downloads := make([]*DownloadModel, 0, len(statuses))
+	for _, s := range statuses {
+		dm := NewDownloadModel(s.ID, s.URL, s.Filename, s.TotalSize)
+		dm.Downloaded = s.Downloaded
+		if s.DestPath != "" {
+			dm.Destination = s.DestPath
+		} else {
+			dm.Destination = s.Filename // Fallback
 		}
+		// Status mapping
+		switch s.Status {
+		case "completed":
+			dm.done = true
+			dm.started = true
+			dm.progress.SetPercent(1.0)
+		case "error":
+			dm.done = true
+			dm.started = true
+			if s.Error != "" {
+				dm.err = errors.New(s.Error)
+			} else {
+				dm.err = errors.New("download failed")
+			}
+		case "pausing":
+			dm.pausing = true
+			dm.started = true
+		case "paused":
+			if config.Resolve[bool](settings.General.AutoResume) {
+				dm.resuming = true
+				dm.paused = true // Will update when resume event received
+			} else {
+				dm.paused = true
+			}
+			dm.started = true
+		case "queued":
+			// Always resume queued items
+			dm.resuming = true
+			dm.paused = true // Will update when resume event received
+			dm.started = false
+		case "downloading":
+			dm.started = true
+		}
+
+		if s.TotalSize > 0 {
+			dm.progress.SetPercent(s.Progress / 100.0)
+		}
+		if s.AvgSpeed > 0 {
+			dm.Speed = s.AvgSpeed
+		} else if s.Speed > 0 {
+			dm.Speed = s.Speed
+		}
+		if s.Status == "completed" && s.TimeTaken > 0 {
+			dm.Elapsed = time.Duration(s.TimeTaken) * time.Millisecond
+		}
+		dm.RateLimit = s.RateLimit
+		dm.RateLimitSet = s.RateLimitSet
+
+		downloads = append(downloads, dm)
 	}
 
 	// Initialize the download list
@@ -530,6 +540,7 @@ func InitialRootModel(serverPort int, currentVersion string, service service.Dow
 		Orchestrator:          orchestrator,
 		PWD:                   pwd,
 		Settings:              settings,
+		SaveSettingsFunc:      config.SaveSettings,
 		StartupConfigWarnings: startupConfigWarnings,
 		SettingsActiveTab:     0,
 		SettingsSelectedRow:   0,
@@ -553,6 +564,10 @@ func InitialRootModel(serverPort int, currentVersion string, service service.Dow
 		cancelEnqueue:         cancelEnqueue,
 		powerController:       power.NewController(),
 		spinner:               s,
+	}
+
+	if store, ok := service.(downloadservice.SettingsService); ok {
+		m.SaveSettingsFunc = store.UpdateSettings
 	}
 
 	InitAuthToken() // Cache auth token for TUI to avoid per-frame disk I/O

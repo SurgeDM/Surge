@@ -60,6 +60,7 @@ const capturedHeaders = new Map<string, { headers: Record<string, string>; times
 const PENDING_DUP_KEY = 'pendingDuplicates';
 let pendingDuplicateCounter = 0;
 const pendingDuplicates = new Map<string, PendingDup>();
+const activeDownloadIds = new Set<string>();
 
 // Dedupes rapid onCreated events for the same browser download ID.
 const processedIds = new Set<number>();
@@ -513,7 +514,7 @@ async function sendToSurge(
   filename: string,
   directory: string,
   headers: Record<string, string>,
-  options?: { skipApproval?: boolean },
+  options?: { skipApproval?: boolean; skipDuplicateWarning?: boolean },
 ): Promise<HandoffResult> {
   const base = await getBaseUrl();
   if (!base) {
@@ -532,6 +533,7 @@ async function sendToSurge(
         directory,
         headers,
         skipApproval: options?.skipApproval,
+        skipDuplicateWarning: options?.skipDuplicateWarning,
       })),
       signal: AbortSignal.timeout(5000),
     });
@@ -644,9 +646,35 @@ function isFreshDownload(item: { state?: string; startTime?: string }): boolean 
 }
 
 function updateBadge(): void {
-  const count = pendingDuplicates.size;
+  const count = activeDownloadIds.size || pendingDuplicates.size;
   browser.action.setBadgeText({ text: count > 0 ? count.toString() : '' });
-  if (count > 0) browser.action.setBadgeBackgroundColor({ color: '#FF0000' });
+  if (count > 0) {
+    browser.action.setBadgeBackgroundColor({
+      color: activeDownloadIds.size > 0 ? '#2563EB' : '#FF0000',
+    });
+  }
+}
+
+function syncActiveDownloadBadge(downloads: DownloadStatus[]): void {
+  activeDownloadIds.clear();
+  for (const download of downloads) {
+    if (download.status === 'queued' || download.status === 'paused' || download.status === 'downloading') {
+      activeDownloadIds.add(download.id);
+    }
+  }
+  updateBadge();
+}
+
+function updateActiveDownloadBadge(event: string, data: unknown): void {
+  const downloadId = (data as { DownloadID?: unknown }).DownloadID;
+  if (typeof downloadId !== 'string') return;
+
+  if (event === 'complete' || event === 'error' || event === 'removed') {
+    activeDownloadIds.delete(downloadId);
+  } else if (event === 'queued' || event === 'started' || event === 'progress' || event === 'resumed') {
+    activeDownloadIds.add(downloadId);
+  }
+  updateBadge();
 }
 
 async function tryOpenPopup(): Promise<void> {
@@ -654,6 +682,18 @@ async function tryOpenPopup(): Promise<void> {
 }
 
 async function isDuplicateDownload(url: string): Promise<boolean> {
+  const resp = await apiFetch('/download/duplicate', {
+    method: 'POST',
+    body: JSON.stringify({ url }),
+  });
+  if (resp?.ok) {
+    try {
+      const result: unknown = await resp.json();
+      if (typeof result === 'object' && result !== null && typeof (result as { exists?: unknown }).exists === 'boolean') {
+        return (result as { exists: boolean }).exists;
+      }
+    } catch { /* Fall back to the list check for older servers. */ }
+  }
   const { data: list } = await fetchDownloadsList();
   const normalized = url.replace(/\/$/, '');
   return list.some(dl => (dl.url || '').replace(/\/$/, '') === normalized);
@@ -727,7 +767,8 @@ async function handleDownloadCreated(downloadItem: {
 
   // Check for duplicates in the extension BEFORE sending to server.
   // This way the TUI never sees a duplicate prompt.
-  if (await isDuplicateDownload(downloadItem.url)) {
+  const warnOnDuplicate = (await storageGetBoolean(STORAGE_KEYS.WARN_ON_DUPLICATE)) !== false;
+  if (warnOnDuplicate && await isDuplicateDownload(downloadItem.url)) {
     logDownload('queued duplicate confirmation', { id: downloadItem.id, url: downloadItem.url });
     pendingDuplicateCounter = await queueDuplicateDownload({
       pendingDuplicates,
@@ -745,7 +786,9 @@ async function handleDownloadCreated(downloadItem: {
   }
 
   // Force empty filename hint for backend - rely on backend prober.
-  const result = await sendToSurge(downloadItem.url, '', directory, headers);
+  const result = await sendToSurge(downloadItem.url, '', directory, headers, {
+    skipDuplicateWarning: !warnOnDuplicate,
+  });
   logDownload('handoff complete', { id: downloadItem.id, url: downloadItem.url, outcome: result.outcome });
 
   if (result.outcome === 'surge') {
@@ -798,6 +841,7 @@ async function startSSEStream(): Promise<void> {
             else if (line.startsWith('data: ') && currentEvent) {
               try {
                 const data = JSON.parse(line.slice(6));
+                updateActiveDownloadBadge(currentEvent, data);
                 browser.runtime.sendMessage({ type: 'sseEvent', event: currentEvent, data }).catch(() => { });
               } catch { /* skip malformed */ }
             }
@@ -815,6 +859,7 @@ async function startSSEStream(): Promise<void> {
         else if (line.startsWith('data: ') && currentEvent) {
           try {
             const data = JSON.parse(line.slice(6));
+            updateActiveDownloadBadge(currentEvent, data);
             browser.runtime.sendMessage({ type: 'sseEvent', event: currentEvent, data }).catch(() => { });
           } catch { /* skip malformed */ }
           currentEvent = null;
@@ -835,6 +880,7 @@ function scheduleSSERetry(): void {
 async function fullSync(): Promise<void> {
   if (!await checkHealthSilent()) return;
   const [downloadsResult, historyResult] = await Promise.all([fetchDownloadsList(), fetchHistoryList()]);
+  if (downloadsResult.ok) syncActiveDownloadBadge(downloadsResult.data);
   browser.runtime.sendMessage({
     type: 'syncUpdate',
     downloads: downloadsResult.data,
@@ -1179,6 +1225,7 @@ export const __test__ = {
     capturedHeaders.clear();
     pendingDuplicateCounter = 0;
     pendingDuplicates.clear();
+    activeDownloadIds.clear();
     processedIds.clear();
     interceptingUrls.clear();
   },
@@ -1186,4 +1233,6 @@ export const __test__ = {
   captureHeaders,
   reresolveActiveServerUrl,
   handleMessage,
+  syncActiveDownloadBadge,
+  updateActiveDownloadBadge,
 };
