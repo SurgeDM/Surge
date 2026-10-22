@@ -222,6 +222,28 @@ func TestView_QuitConfirmTinyTerminalDoesNotPanic(t *testing.T) {
 	_ = m.View()
 }
 
+func TestView_CompactQuitConfirmPreservesCopyAndFocus(t *testing.T) {
+	for _, size := range []struct{ width, height int }{{40, 5}, {20, 5}, {20, 1}} {
+		m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
+		m.state = QuitConfirmState
+		m.width, m.height = size.width, size.height
+		yesFocused := m.View().Content
+		plain := ansiEscapeRE.ReplaceAllString(yesFocused, "")
+		for _, label := range []string{"Yep!", "Nope"} {
+			if !strings.Contains(plain, label) {
+				t.Fatalf("expected %q at %dx%d, got %q", label, m.width, m.height, plain)
+			}
+		}
+		if m.width == 40 && !strings.Contains(plain, "Are you sure you want to quit?") {
+			t.Fatalf("expected full confirmation message, got %q", plain)
+		}
+		m.quitConfirmFocused = 1
+		if yesFocused == m.View().Content {
+			t.Fatalf("selection must change visibly at %dx%d", m.width, m.height)
+		}
+	}
+}
+
 func TestView_RemoveConfirmTruncatesUTF8FilenameSafely(t *testing.T) {
 	m := InitialRootModel(1701, "test-version", nil, orchestrator.NewLifecycleManager(nil, nil, nil), nil, false)
 	m.state = RemoveConfirmState

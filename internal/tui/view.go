@@ -588,11 +588,15 @@ func (m RootModel) View() tea.View {
 }
 
 func (m RootModel) viewCompactQuitConfirm() string {
-	content := lipgloss.JoinVertical(lipgloss.Center, "Quit Surge?", "[y] Yep  [n] Nope")
-	if m.height == 1 {
-		content = "Quit? [y] Yep [n] Nope"
+	message := "Are you sure you want to quit?"
+	if m.width < lipgloss.Width(message) {
+		message = "Quit Surge?"
 	}
-	content = lipgloss.NewStyle().Foreground(colors.Cyan()).Render(content)
+	buttons := components.RenderCompactYesNoButtons("Yep!", "Nope", m.quitConfirmFocused, colors.Pink())
+	content := lipgloss.JoinVertical(lipgloss.Center, message, buttons)
+	if m.height == 1 {
+		content = "Quit? " + buttons
+	}
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
 }
 
