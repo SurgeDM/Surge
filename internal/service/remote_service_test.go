@@ -552,3 +552,30 @@ func TestRemoteSettingsKeepServerPaths(t *testing.T) {
 		})
 	}
 }
+
+func TestRemoteSettingsPatchPreservesConflictError(t *testing.T) {
+	for _, status := range []int{http.StatusConflict, http.StatusInternalServerError} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPatch {
+					t.Errorf("expected PATCH, got %s", r.Method)
+				}
+				http.Error(w, "daemon response details", status)
+			}))
+			defer server.Close()
+			svc, err := NewRemoteDownloadService(server.URL, "test-token", HTTPClientOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = svc.Shutdown() }()
+			_, err = svc.PatchSettings(config.SettingsPatch{})
+			if errors.Is(err, config.ErrSettingsConflict) != (status == http.StatusConflict) {
+				t.Fatalf("incorrect conflict classification: %v", err)
+			}
+			var responseErr *apiError
+			if !errors.As(err, &responseErr) || responseErr.StatusCode != status || !strings.Contains(responseErr.Body, "daemon response details") {
+				t.Fatalf("lost API status or response: %v", err)
+			}
+		})
+	}
+}

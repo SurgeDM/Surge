@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 )
 
@@ -61,5 +62,32 @@ func TestSettingsPatchCategoryRulesAndProtectedValues(t *testing.T) {
 		if _, err := (SettingsPatch{Changes: changes}).Apply(baseline); err == nil {
 			t.Fatalf("accepted invalid patch: %+v", changes)
 		}
+	}
+}
+
+func TestSettingsPatchComparesNormalizedCurrentValue(t *testing.T) {
+	baseline := DefaultSettings()
+	original := Resolve[int](baseline.Network.MaxConcurrentDownloads)
+	edited := baseline.Clone()
+	edited.Network.MaxConcurrentDownloads.Value = original + 1
+	patch := DiffSettings(baseline, edited)
+	for _, value := range []any{int64(original), float64(original)} {
+		current := baseline.Clone()
+		current.Network.MaxConcurrentDownloads.Value = value
+		updated, err := patch.Apply(current)
+		if err != nil {
+			t.Fatalf("equivalent %T value caused a conflict: %v", value, err)
+		}
+		if updated.Network.MaxConcurrentDownloads.Value != original+1 {
+			t.Fatal("edit was not applied")
+		}
+		if current.Network.MaxConcurrentDownloads.Value != value {
+			t.Fatal("patch mutated the current snapshot")
+		}
+	}
+	current := baseline.Clone()
+	current.Network.MaxConcurrentDownloads.Value = "invalid"
+	if _, err := patch.Apply(current); err == nil || !strings.Contains(err.Error(), "invalid current value for Network.max_concurrent_downloads") {
+		t.Fatalf("expected contextual current-value error, got %v", err)
 	}
 }

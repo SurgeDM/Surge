@@ -67,7 +67,11 @@ func (p SettingsPatch) Apply(current *Settings) (*Settings, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid baseline for %s: %w", key, err)
 		}
-		if !reflect.DeepEqual(setting.Value, before) {
+		currentValue, err := setting.normalizedValue()
+		if err != nil {
+			return nil, fmt.Errorf("invalid current value for %s: %w", key, err)
+		}
+		if !reflect.DeepEqual(currentValue, before) {
 			return nil, fmt.Errorf("%w: %s", ErrSettingsConflict, key)
 		}
 		setting.Value = change.Value

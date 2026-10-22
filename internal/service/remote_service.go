@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -27,6 +28,14 @@ type RemoteDownloadService struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 }
+
+// apiError retains the response status so callers can classify failures.
+type apiError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *apiError) Error() string { return fmt.Sprintf("API error %d: %s", e.StatusCode, e.Body) }
 
 // NewRemoteDownloadService creates a new remote service instance.
 func NewRemoteDownloadService(baseURL string, token string, opts HTTPClientOptions) (*RemoteDownloadService, error) {
@@ -86,7 +95,7 @@ func (s *RemoteDownloadService) doRequestWithContext(ctx context.Context, method
 		defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 		// Limit error body read to 1KB to prevent DoS
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, utils.KiB))
-		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(bodyBytes))
+		return nil, &apiError{StatusCode: resp.StatusCode, Body: string(bodyBytes)}
 	}
 
 	return resp, nil
@@ -166,6 +175,10 @@ func (s *RemoteDownloadService) UpdateSettings(settings *config.Settings) error 
 func (s *RemoteDownloadService) PatchSettings(patch config.SettingsPatch) (*config.Settings, error) {
 	resp, err := s.doRequest(http.MethodPatch, "/settings", patch)
 	if err != nil {
+		var responseErr *apiError
+		if errors.As(err, &responseErr) && responseErr.StatusCode == http.StatusConflict {
+			return nil, fmt.Errorf("%w: %w", config.ErrSettingsConflict, err)
+		}
 		return nil, err
 	}
 	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
