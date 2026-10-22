@@ -138,8 +138,8 @@ func TestWorkerPool_RateLimit_DefaultChangeUpdatesInheritedActiveLimiter(t *test
 	}()
 
 	select {
-	case <-done:
-		t.Fatal("active inherited limiter waiter should be blocked")
+	case err := <-done:
+		t.Fatalf("active inherited limiter waiter should be blocked; returned %v", err)
 	case <-time.After(100 * time.Millisecond):
 		// expected
 	}
@@ -207,8 +207,8 @@ func TestWorkerPool_RateLimit_DefaultChangeLeavesExplicitActiveLimiter(t *testin
 	}()
 
 	select {
-	case <-done:
-		t.Fatal("active explicit limiter waiter should be blocked")
+	case err := <-done:
+		t.Fatalf("active explicit limiter waiter should be blocked; returned %v", err)
 	case <-time.After(100 * time.Millisecond):
 		// expected
 	}
@@ -216,8 +216,8 @@ func TestWorkerPool_RateLimit_DefaultChangeLeavesExplicitActiveLimiter(t *testin
 	pool.SetDefaultDownloadRateLimit(newDefaultRate)
 
 	select {
-	case <-done:
-		t.Fatal("active explicit limiter should not be updated by default change")
+	case err := <-done:
+		t.Fatalf("active explicit limiter should not be updated by default change; returned %v", err)
 	case <-time.After(100 * time.Millisecond):
 		// expected
 	}
@@ -282,8 +282,8 @@ func TestWorkerPool_RateLimit_SetGlobalHonorsWaiter(t *testing.T) {
 	}()
 
 	select {
-	case <-done:
-		t.Fatal("global limiter waiter should be blocked")
+	case err := <-done:
+		t.Fatalf("global limiter waiter should be blocked; returned %v", err)
 	case <-time.After(100 * time.Millisecond):
 		// expected
 	}
@@ -325,8 +325,8 @@ func TestWorkerPool_RateLimit_SetDownloadHonorsWaiter(t *testing.T) {
 	}()
 
 	select {
-	case <-done:
-		t.Fatal("per-download limiter waiter should be blocked")
+	case err := <-done:
+		t.Fatalf("per-download limiter waiter should be blocked; returned %v", err)
 	case <-time.After(100 * time.Millisecond):
 		// expected
 	}
@@ -362,8 +362,8 @@ func TestWorkerPool_RateLimit_MultiLimiterComposition(t *testing.T) {
 	}()
 
 	select {
-	case <-done:
-		t.Fatal("multi limiter waiter should be blocked")
+	case err := <-done:
+		t.Fatalf("multi limiter waiter should be blocked; returned %v", err)
 	case <-time.After(100 * time.Millisecond):
 		// expected
 	}
@@ -372,8 +372,8 @@ func TestWorkerPool_RateLimit_MultiLimiterComposition(t *testing.T) {
 	global.SetRate(20000, 20000)
 
 	select {
-	case <-done:
-		t.Fatal("multi limiter should still be blocked (per-dl not satisfied)")
+	case err := <-done:
+		t.Fatalf("multi limiter should still be blocked (per-dl not satisfied); returned %v", err)
 	case <-time.After(100 * time.Millisecond):
 		// expected
 	}
