@@ -144,3 +144,38 @@ func TestSystemdUnitPreservesUserPaths(t *testing.T) {
 		}
 	}
 }
+
+func TestSystemdStatusDistinguishesInactiveFromManagerFailure(t *testing.T) {
+	path := filepath.Join(t.TempDir(), systemdUnitName)
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	commandErr := errors.New("systemctl failed")
+	for _, test := range []struct {
+		name, output string
+		commandErr   error
+		want         State
+		wantErr      bool
+	}{
+		{"running", "active\n", nil, Running, false},
+		{"inactive", "inactive\n", commandErr, Stopped, false},
+		{"failed", "failed\n", commandErr, Stopped, false},
+		{"unavailable manager", "Failed to connect to bus: No medium found", commandErr, Stopped, true},
+		{"no output", "", commandErr, Stopped, true},
+		{"cancelled", "", context.Canceled, Stopped, true},
+		{"unknown state", "unknown\n", commandErr, Stopped, true},
+		{"unexpected output", "unexpected", nil, Stopped, true},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			runner := &fakeRunner{output: []byte(test.output), err: test.commandErr}
+			manager := &SystemdManager{unitPath: path, uid: 1000, runner: runner}
+			state, err := manager.Status(context.Background())
+			if state != test.want || (err != nil) != test.wantErr {
+				t.Fatalf("Status = %v, %v", state, err)
+			}
+			if test.wantErr && test.commandErr != nil && !errors.Is(err, test.commandErr) {
+				t.Fatalf("lost command error: %v", err)
+			}
+		})
+	}
+}

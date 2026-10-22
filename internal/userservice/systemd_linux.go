@@ -129,11 +129,20 @@ func (m *SystemdManager) Status(ctx context.Context) (State, error) {
 	} else if err != nil {
 		return NotInstalled, err
 	}
-	out, _ := m.runner.Run(ctx, "systemctl", "--user", "is-active", systemdUnitName)
-	if strings.TrimSpace(string(out)) == "active" {
-		return Running, nil
+	out, err := m.runner.Run(ctx, "systemctl", "--user", "is-active", systemdUnitName)
+	state := strings.TrimSpace(string(out))
+	switch state {
+	case "active", "reloading", "refreshing":
+		if err == nil {
+			return Running, nil
+		}
+	case "inactive", "failed", "activating", "deactivating", "maintenance":
+		return Stopped, nil
 	}
-	return Stopped, nil
+	if err != nil {
+		return Stopped, fmt.Errorf("systemctl --user is-active %s failed: %w: %s", systemdUnitName, err, state)
+	}
+	return Stopped, fmt.Errorf("systemctl --user is-active %s returned unexpected state %q", systemdUnitName, state)
 }
 
 func (m *SystemdManager) ensureUser() error {

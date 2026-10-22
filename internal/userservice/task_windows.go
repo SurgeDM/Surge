@@ -4,6 +4,7 @@ package userservice
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os/exec"
 	"os/user"
@@ -25,6 +26,7 @@ type TaskManager struct {
 	executable string
 	taskName   string
 	runner     taskRunner
+	checkUser  func() error
 }
 
 func New(executable string) (Manager, error) {
@@ -39,7 +41,7 @@ func New(executable string) (Manager, error) {
 }
 
 func (m *TaskManager) Install(ctx context.Context) error {
-	if err := ensureTaskUser(); err != nil {
+	if err := m.ensureUser(); err != nil {
 		return err
 	}
 	if _, err := m.runner.Run(ctx, "sc.exe", "query", "surge"); err == nil {
@@ -53,49 +55,93 @@ func (m *TaskManager) Install(ctx context.Context) error {
 	out, err := m.runner.Run(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
 		`$ErrorActionPreference = 'Stop'; $task = Get-ScheduledTask -TaskPath '\' -TaskName '`+m.taskName+`'; $task.Settings.ExecutionTimeLimit = 'PT0S'; $task.Settings.DisallowStartIfOnBatteries = $false; $task.Settings.StopIfGoingOnBatteries = $false; Set-ScheduledTask -InputObject $task | Out-Null`)
 	if err != nil {
-		return fmt.Errorf("configure user task runtime: %w: %s", err, strings.TrimSpace(string(out)))
+		configureErr := fmt.Errorf("configure user task runtime: %w: %s", err, strings.TrimSpace(string(out)))
+		if cleanupErr := m.Uninstall(ctx); cleanupErr != nil {
+			return errors.Join(configureErr, fmt.Errorf("remove incompletely configured task: %w", cleanupErr))
+		}
+		return configureErr
 	}
 	return m.Start(ctx)
 }
 func (m *TaskManager) Uninstall(ctx context.Context) error {
-	if err := ensureTaskUser(); err != nil {
+	if err := m.ensureUser(); err != nil {
 		return err
 	}
-	_, _ = m.runner.Run(ctx, "schtasks.exe", "/End", "/TN", m.taskName)
+	state, err := m.stopTask(ctx)
+	if err != nil {
+		return err
+	}
+	if state == NotInstalled {
+		return nil
+	}
 	return m.run(ctx, "/Delete", "/F", "/TN", m.taskName)
 }
 func (m *TaskManager) Start(ctx context.Context) error {
-	if err := ensureTaskUser(); err != nil {
+	if err := m.ensureUser(); err != nil {
 		return err
 	}
 	return m.run(ctx, "/Run", "/TN", m.taskName)
 }
 func (m *TaskManager) Stop(ctx context.Context) error {
-	if err := ensureTaskUser(); err != nil {
+	if err := m.ensureUser(); err != nil {
 		return err
 	}
-	return m.run(ctx, "/End", "/TN", m.taskName)
+	_, err := m.stopTask(ctx)
+	return err
 }
 func (m *TaskManager) Restart(ctx context.Context) error {
-	if err := ensureTaskUser(); err != nil {
+	if err := m.Stop(ctx); err != nil {
 		return err
 	}
-	_, _ = m.runner.Run(ctx, "schtasks.exe", "/End", "/TN", m.taskName)
 	return m.Start(ctx)
 }
+
+// stopTask accepts a failed /End only when the scheduler confirms no instance
+// can be running. Query failures must not permit a restart or unregister a task.
+func (m *TaskManager) stopTask(ctx context.Context) (State, error) {
+	stopErr := m.run(ctx, "/End", "/TN", m.taskName)
+	if stopErr == nil {
+		return Stopped, nil
+	}
+	state, statusErr := m.Status(ctx)
+	if statusErr != nil {
+		return state, errors.Join(stopErr, statusErr)
+	}
+	if state == Running {
+		return state, stopErr
+	}
+	return state, nil
+}
+
 func (m *TaskManager) Status(ctx context.Context) (State, error) {
-	if err := ensureTaskUser(); err != nil {
+	if err := m.ensureUser(); err != nil {
 		return NotInstalled, err
 	}
-	out, err := m.runner.Run(ctx, "schtasks.exe", "/Query", "/TN", m.taskName, "/FO", "CSV", "/NH")
+	// Numeric TASK_STATE values avoid parsing localized schtasks output.
+	script := `$ErrorActionPreference = 'Stop'; try { $task = Get-ScheduledTask -TaskPath '\' -TaskName '` + m.taskName + `'; [int]$task.State } catch { if ($_.CategoryInfo.Category -eq [System.Management.Automation.ErrorCategory]::ObjectNotFound) { -1 } else { throw } }`
+	out, err := m.runner.Run(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script)
 	if err != nil {
+		return NotInstalled, fmt.Errorf("query user task status: %w: %s", err, strings.TrimSpace(string(out)))
+	}
+	switch strings.TrimSpace(string(out)) {
+	case "-1":
 		return NotInstalled, nil
-	}
-	if strings.Contains(strings.ToLower(string(out)), "running") {
+	case "1", "3": // disabled or ready, with no queued/running instances
+		return Stopped, nil
+	case "2", "4": // queued or running: neither is safe to unregister
 		return Running, nil
+	default:
+		return NotInstalled, fmt.Errorf("query user task status returned unexpected state %q", strings.TrimSpace(string(out)))
 	}
-	return Stopped, nil
 }
+
+func (m *TaskManager) ensureUser() error {
+	if m.checkUser != nil {
+		return m.checkUser()
+	}
+	return ensureTaskUser()
+}
+
 func ensureTaskUser() error {
 	if windows.GetCurrentProcessToken().IsElevated() {
 		return ErrRootInstall
@@ -105,7 +151,7 @@ func ensureTaskUser() error {
 func (m *TaskManager) run(ctx context.Context, args ...string) error {
 	out, err := m.runner.Run(ctx, "schtasks.exe", args...)
 	if err != nil {
-		return fmt.Errorf("schtasks %s failed: %s", strings.Join(args, " "), strings.TrimSpace(string(out)))
+		return fmt.Errorf("schtasks %s failed: %w: %s", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
