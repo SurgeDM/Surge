@@ -215,7 +215,8 @@ func TestProbeServer_InvalidURL(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	_, err := probe.ProbeServer(ctx, "http://invalid-host-that-does-not-exist.test:9999/file", "", nil)
+	// Keep this a malformed URL so the test does not start a real DNS lookup.
+	_, err := probe.ProbeServer(ctx, "http://%zz/file", "", nil)
 	if err == nil {
 		t.Error("Expected error for invalid URL")
 	}

@@ -115,24 +115,29 @@ surge server --token <token>
 
 ### 3. Auto-Start Service
 
-Surge provides an official way to manage it as a system service (daemon). This is the recommended way for servers and reproducible deployments.
+Surge can run as a service owned by the current user. It uses the same settings,
+download database, category paths, and API token as that user's CLI and TUI.
 
 ```bash
-# Install Surge as a system service
+# Install and immediately start the user service
 surge service install
 
 # Manage the service
 surge service start
 surge service stop
+surge service restart
 surge service status
-surge service token
 
 # Uninstall the service
 surge service uninstall
 ```
 
 > [!NOTE]
-> On Linux, these commands may require `sudo`. On Windows, they should be run in an elevated (Administrator) terminal.
+> [!IMPORTANT]
+> Run these commands as your normal user, without `sudo` or an Administrator
+> terminal. Surge refuses to install a user service as root. The service starts
+> with your login session; see the [service guide](docs/guides/run-as-a-service.md)
+> for platform details and legacy system-service migration.
 
 ### 4. Remote TUI
 
@@ -142,11 +147,8 @@ This means the server is accessible via `localhost` (127.0.0.1) as well as your 
 The API is token-protected. Generate/read your token by running:
 
 ```bash
-# Get the standard token
+# Get the current user's token (the service uses the same token)
 surge token
-
-# Get the token if Surge is installed as a system service
-surge service token
 ```
 
 Alternatively, you can find it in the TUI under **Settings > Extension**.
@@ -254,7 +256,7 @@ requests, and peak accepted concurrency.
 The Surge extension intercepts browser downloads and sends them straight to your terminal. It communicates with the Surge client on port **1700** by default.
 
 > [!IMPORTANT]
-> An **Auth Token** is required to connect the extension to your Surge server. This can be obtained from the TUI under **Settings > Extension**, or by running `surge token` (or `surge service token` if installed as a system service).
+> An **Auth Token** is required to connect the extension to your Surge server. This can be obtained from the TUI under **Settings > Extension**, or by running `surge token` as the user who runs Surge.
 
 ### Chrome / Edge / Brave
 

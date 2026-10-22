@@ -27,7 +27,7 @@ steps. They should be your starting point when you know what you want to do.
 | [`surge ls`, pause, resume, refresh, limit, and rm](commands/inspect-and-manage.md) | Inspect or manage downloads. `rm --purge` also deletes files from disk. |
 | [`surge config [path] [value]`](commands/config.md) | List, read, set, reset, or open settings. |
 | [`surge token`, `completion`, and `bug-report`](commands/utilities.md) | Print a token, generate shell completion, or open the issue flow. |
-| [`surge service`](commands/service.md) | Install and manage a system service. |
+| [`surge service`](commands/service.md) | Install and manage the current user's service. |
 
 See [Download and manage files](../guides/download-files.md) for examples and
 [Run Surge as a service](../guides/run-as-a-service.md) for service commands.

@@ -2,7 +2,6 @@ package config
 
 import (
 	"os"
-	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -41,59 +40,6 @@ func GetStateDir() string {
 		return GetSurgeDir()
 	}
 	return filepath.Join(getXDGBaseDir("XDG_STATE_HOME", xdg.StateHome), "surge")
-}
-
-func GetSystemSurgeDir() string {
-	if runtime.GOOS == "windows" {
-		systemRoot := strings.TrimSpace(os.Getenv("SystemRoot"))
-		if systemRoot == "" {
-			systemRoot = `C:\Windows`
-		}
-		return filepath.Join(systemRoot, "System32", "config", "systemprofile", "AppData", "Roaming", "surge")
-	}
-
-	rootUser, err := user.Lookup("root")
-	if err == nil && strings.TrimSpace(rootUser.HomeDir) != "" {
-		return filepath.Join(rootUser.HomeDir, ".config", "surge")
-	}
-	return filepath.Join(string(filepath.Separator), "root", ".config", "surge")
-}
-
-func GetSystemStateDir() string {
-	// Allow tests (and advanced deployments) to override the system state dir
-	// without needing root access.  The env var must be an absolute path.
-	if override := strings.TrimSpace(os.Getenv("SURGE_SYSTEM_STATE_DIR")); override != "" {
-		if filepath.IsAbs(override) {
-			return override
-		}
-	}
-
-	if runtime.GOOS == "windows" {
-		return GetSystemSurgeDir()
-	}
-
-	rootUser, err := user.Lookup("root")
-	if err == nil && strings.TrimSpace(rootUser.HomeDir) != "" {
-		return filepath.Join(rootUser.HomeDir, ".local", "state", "surge")
-	}
-	return filepath.Join(string(filepath.Separator), "root", ".local", "state", "surge")
-}
-
-func GetSystemRuntimeDir() string {
-	// Allow tests (and advanced deployments) to override without root access.
-	if override := strings.TrimSpace(os.Getenv("SURGE_SYSTEM_RUNTIME_DIR")); override != "" {
-		if filepath.IsAbs(override) {
-			return override
-		}
-	}
-	// On Linux, system services write runtime files (port, PID) to /run/<name>
-	// which is world-readable (0755) by convention — the FHS standard location
-	// used by nginx, postgresql, etc.  This allows non-root users to auto-detect
-	// a system-service Surge daemon without needing read access to /root.
-	if runtime.GOOS == "linux" {
-		return filepath.Join(string(filepath.Separator), "run", "surge")
-	}
-	return filepath.Join(GetSystemStateDir(), "runtime")
 }
 
 func GetDownloadsDir() string {

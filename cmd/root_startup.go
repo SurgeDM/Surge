@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -63,8 +64,13 @@ func initializeGlobalState() error {
 }
 
 func getSettings() *config.Settings {
-	if globalSettings != nil {
-		return globalSettings
+	if owner, ok := GlobalService.(service.SettingsService); ok {
+		if settings, err := owner.GetSettings(); err == nil {
+			return settings
+		}
+	}
+	if settings := getGlobalSettings(); settings != nil {
+		return settings
 	}
 	settings, err := config.LoadSettings()
 	if err != nil {
@@ -75,6 +81,18 @@ func getSettings() *config.Settings {
 		return defaults
 	}
 	return settings
+}
+
+func getGlobalSettings() *config.Settings {
+	globalSettingsMu.RLock()
+	defer globalSettingsMu.RUnlock()
+	return globalSettings.Clone()
+}
+
+func setGlobalSettings(settings *config.Settings) {
+	globalSettingsMu.Lock()
+	globalSettings = settings.Clone()
+	globalSettingsMu.Unlock()
 }
 
 func resumePausedDownloads() {
