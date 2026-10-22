@@ -461,6 +461,23 @@ func TestUpdateSettingsAppliesInheritedRateLimit(t *testing.T) {
 	if snapshot, _ := svc.GetSettings(); snapshot.Network.DefaultDownloadRateLimit.Value != "1 KiB/s" {
 		t.Fatal("caller mutation changed live settings")
 	}
+	if err := config.SaveSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.ReloadSettingsFromDisk(); err != nil {
+		t.Fatal(err)
+	}
+	queued = pool.GetAll()
+	if len(queued) != 1 || queued[0].RateLimit != 2048 {
+		t.Fatalf("reloaded queued rate = %#v", queued)
+	}
+	records, err := store.LoadMasterList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(records.Downloads) != 1 || records.Downloads[0].RateLimit != 2048 {
+		t.Fatalf("reloaded persisted rate = %#v", records)
+	}
 }
 
 func TestConcurrentSettingsPatchesPreserveBothEdits(t *testing.T) {

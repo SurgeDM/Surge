@@ -23,6 +23,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func TestPostSettingsAppliesDefaultDownloadDirToRunningLifecycle(t *testing.T) {
@@ -147,7 +148,7 @@ func TestHTTPSettingsRejectsInvalidUpdatesAndKeepsConcurrentChanges(t *testing.T
 	})
 
 	mux := http.NewServeMux()
-	registerHTTPRoutes(mux, 0, "", &httpAPITestService{})
+	registerHTTPRoutes(mux, 0, "", service.NewLocalDownloadService(lifecycle))
 	post := func(body string) *httptest.ResponseRecorder {
 		recorder := httptest.NewRecorder()
 		mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(body)))
@@ -240,7 +241,7 @@ func TestHTTPSettingsAppliesGlobalRateLimit(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
-	registerHTTPRoutes(mux, 0, "", &httpAPITestService{})
+	registerHTTPRoutes(mux, 0, "", service.NewLocalDownloadService(lifecycle))
 	post := func(path, body string, wantStatus int) {
 		t.Helper()
 		response := httptest.NewRecorder()
@@ -1484,4 +1485,63 @@ func TestSettingsPatchReportsPersistenceFailureAsServerError(t *testing.T) {
 	if rec.Code != http.StatusInternalServerError {
 		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
 	}
+}
+
+func TestMixedSettingsMethodsPreserveEdits(t *testing.T) {
+	setupIsolatedCmdState(t)
+	initial := config.DefaultSettings()
+	initial.Categories.Categories = nil
+	initial.General.DefaultDownloadDir.Value = t.TempDir()
+	pool := scheduler.New(make(chan types.DownloadEvent, 100), 1)
+	lifecycle := orchestrator.NewLifecycleManager(pool, nil, initial)
+	defer lifecycle.Shutdown()
+	svc := service.NewLocalDownloadService(lifecycle)
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", svc)
+	edited := initial.Clone()
+	edited.General.WarnOnDuplicate.Value = !config.Resolve[bool](initial.General.WarnOnDuplicate)
+	patch, err := json.Marshal(config.DiffSettings(initial, edited))
+	if err != nil {
+		t.Fatal(err)
+	}
+	start := make(chan struct{})
+	var wg sync.WaitGroup
+	for _, request := range []struct{ method, body string }{
+		{http.MethodPost, fmt.Sprintf(`{"general":{"auto_resume":%t}}`, !config.Resolve[bool](initial.General.AutoResume))},
+		{http.MethodPatch, string(patch)},
+	} {
+		wg.Go(func() {
+			<-start
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, httptest.NewRequest(request.method, "/settings", strings.NewReader(request.body)))
+			if response.Code != http.StatusOK {
+				t.Errorf("%s: %d %s", request.method, response.Code, response.Body.String())
+			}
+		})
+	}
+	wg.Go(func() {
+		<-start
+		if err := svc.SetGlobalRateLimit(128); err != nil {
+			t.Error(err)
+		}
+	})
+	close(start)
+	wg.Wait()
+	for _, snapshot := range []*config.Settings{lifecycle.GetSettings(), mustLoadSettings(t)} {
+		if config.Resolve[bool](snapshot.General.AutoResume) == config.Resolve[bool](initial.General.AutoResume) || config.Resolve[bool](snapshot.General.WarnOnDuplicate) == config.Resolve[bool](initial.General.WarnOnDuplicate) {
+			t.Fatal("concurrent update lost an edit")
+		}
+		if rate, err := utils.ParseRateLimitValue(snapshot.Network.GlobalRateLimit.Value); err != nil || rate != 128 {
+			t.Fatalf("rate = %d, err = %v", rate, err)
+		}
+	}
+}
+
+func mustLoadSettings(t *testing.T) *config.Settings {
+	t.Helper()
+	settings, err := config.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return settings
 }

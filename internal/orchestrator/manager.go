@@ -198,54 +198,6 @@ func (m *LifecycleManager) publishSettingsLocked(next *config.Settings) {
 	}
 }
 
-// UpdateSettings serializes a settings change with persistence and publication.
-// The callback receives a private copy; a failed update leaves the live state intact.
-// afterCommit runs under the same lock for runtime changes tied to the new snapshot.
-func (m *LifecycleManager) UpdateSettings(update func(*config.Settings) error, afterCommit func()) error {
-	m.settingsMu.Lock()
-	defer m.settingsMu.Unlock()
-
-	next := m.settings.Clone()
-	if next == nil {
-		next = config.DefaultSettings()
-	}
-	if err := update(next); err != nil {
-		return err
-	}
-	if err := config.SaveSettings(next); err != nil {
-		return err
-	}
-	m.publishSettingsLocked(next)
-	if afterCommit != nil {
-		afterCommit()
-	}
-	return nil
-}
-
-// SaveSettings replaces the active settings and persisted file together.
-func (m *LifecycleManager) SaveSettings(s *config.Settings) error {
-	if s == nil {
-		return fmt.Errorf("settings are required")
-	}
-	return m.UpdateSettings(func(next *config.Settings) error {
-		*next = *s.Clone()
-		return nil
-	}, nil)
-}
-
-// ReloadSettings loads the persisted settings without interleaving with an update.
-func (m *LifecycleManager) ReloadSettings() error {
-	m.settingsMu.Lock()
-	defer m.settingsMu.Unlock()
-
-	settings, err := config.LoadSettings()
-	if err != nil {
-		return err
-	}
-	m.publishSettingsLocked(settings)
-	return nil
-}
-
 // DownloadRequest carries the already-approved inputs needed to probe and reserve a file path.
 type DownloadRequest struct {
 	URL                string

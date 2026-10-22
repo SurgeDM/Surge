@@ -39,6 +39,20 @@ func NewLocalDownloadService(lifecycle *orchestrator.LifecycleManager) *LocalDow
 	return &LocalDownloadService{lifecycle: lifecycle}
 }
 
+// ReloadSettingsFromDisk uses the same owner and runtime application as edits.
+func (s *LocalDownloadService) ReloadSettingsFromDisk() error {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	if s.lifecycle == nil {
+		return types.ErrServiceUnavailable
+	}
+	settings, err := config.LoadSettings()
+	if err != nil {
+		return err
+	}
+	return s.reloadSettings(settings)
+}
+
 func (s *LocalDownloadService) ReloadSettings(settings *config.Settings) error {
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()

@@ -55,43 +55,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 	// Settings persistence and live application are serialized by the owner.
 	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method == http.MethodPost {
-			patch, err := decodeSettingsPatch(r)
-			if err != nil {
-				http.Error(w, "Invalid settings JSON: "+err.Error(), http.StatusBadRequest)
-				return
-			}
-			lifecycle := currentLifecycle()
-			if lifecycle == nil {
-				http.Error(w, "Settings service unavailable", http.StatusServiceUnavailable)
-				return
-			}
-			err = lifecycle.UpdateSettings(func(next *config.Settings) error {
-				if err := applySettingsPatch(next, patch); err != nil {
-					return fmt.Errorf("%w: %v", errInvalidSettings, err)
-				}
-				return nil
-			}, nil)
-			if errors.Is(err, errInvalidSettings) {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			if err != nil {
-				http.Error(w, "Error updating settings: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-				"status": "updated",
-			})
-			return
-		}
 		owner, ok := service.(downloadservice.SettingsService)
-		if !ok && r.Method == http.MethodGet && currentLifecycle() != nil {
-			settings := currentLifecycle().GetSettings()
-			settings.Extension.AuthToken.Value = ""
-			writeJSONResponse(w, http.StatusOK, settings)
-			return
-		}
 		if !ok {
 			http.Error(w, "Settings service unavailable", http.StatusNotImplemented)
 			return
@@ -106,7 +70,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			writeJSONResponse(w, http.StatusOK, settings)
 			return
 		}
-		if r.Method != http.MethodPut && r.Method != http.MethodPatch {
+		if r.Method != http.MethodPost && r.Method != http.MethodPut && r.Method != http.MethodPatch {
 			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 			return
 		}
@@ -118,14 +82,23 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		var patch config.SettingsPatch
 		var restartRequired bool
 		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-		if r.Method == http.MethodPut {
+		if r.Method == http.MethodPut || r.Method == http.MethodPost {
 			current, err := owner.GetSettings()
 			if err != nil {
 				http.Error(w, "Failed to retrieve settings: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 			updated := current.Clone()
-			if err := decodeJSONBody(r, updated); err != nil {
+			if r.Method == http.MethodPost {
+				fields, err := decodeSettingsPatch(r)
+				if err == nil {
+					err = applySettingsPatch(updated, fields)
+				}
+				if err != nil {
+					http.Error(w, "Invalid settings: "+err.Error(), http.StatusBadRequest)
+					return
+				}
+			} else if err := decodeJSONBody(r, updated); err != nil {
 				http.Error(w, "Invalid settings: "+err.Error(), http.StatusBadRequest)
 				return
 			}
@@ -151,7 +124,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			http.Error(w, err.Error(), status)
 			return
 		}
-		if r.Method == http.MethodPut {
+		if r.Method == http.MethodPut || r.Method == http.MethodPost {
 			writeJSONResponse(w, http.StatusOK, map[string]interface{}{"status": "updated", "restart_required": restartRequired})
 			return
 		}
@@ -280,12 +253,12 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	})
 
 	mux.HandleFunc("/settings/reload", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
-		lifecycle := currentLifecycle()
-		if lifecycle == nil {
+		reloader, ok := service.(interface{ ReloadSettingsFromDisk() error })
+		if !ok {
 			http.Error(w, "Settings service unavailable", http.StatusServiceUnavailable)
 			return
 		}
-		err := lifecycle.ReloadSettings()
+		err := reloader.ReloadSettingsFromDisk()
 		if err != nil {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
