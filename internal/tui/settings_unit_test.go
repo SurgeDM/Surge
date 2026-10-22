@@ -87,6 +87,19 @@ func TestDurationSettingsDeclareAnEditorUnit(t *testing.T) {
 			if got := formatSettingValueForEdit(setting.Value, meta.Type, meta.Unit, meta.Key, false); got != want {
 				t.Errorf("duration setting %q edit value = %q, want %q", meta.Key, got, want)
 			}
+
+			// Duration values loaded through generic numeric paths can be raw
+			// nanoseconds instead of time.Duration. They must still edit in the
+			// unit declared by the setting.
+			var numericValue float64
+			if meta.Unit == config.UnitMinutes {
+				numericValue = float64(2 * time.Minute)
+			} else {
+				numericValue = float64(7 * time.Second)
+			}
+			if got := formatSettingValueForEdit(numericValue, meta.Type, meta.Unit, meta.Key, false); got != want {
+				t.Errorf("duration setting %q raw numeric edit value = %q, want %q", meta.Key, got, want)
+			}
 		}
 	}
 }
@@ -104,6 +117,59 @@ func TestDurationSettingsCanUseMinutesInTheEditor(t *testing.T) {
 	}
 	if got := config.Resolve[time.Duration](setting); got != 2*time.Minute {
 		t.Errorf("minute duration = %v, want %v", got, 2*time.Minute)
+	}
+}
+
+func TestSettingsMetadataPreservesLabelsAndUnits(t *testing.T) {
+	settings := config.DefaultSettings()
+	for category, metadata := range config.GetSettingsMetadata() {
+		for _, meta := range metadata {
+			setting := settings.FindSetting(category, meta.Key)
+			if setting == nil {
+				t.Fatalf("metadata setting %q missing from category %q", meta.Key, category)
+			}
+			if meta.Label != setting.Label {
+				t.Errorf("setting %q label = %q, metadata label = %q", meta.Key, setting.Label, meta.Label)
+			}
+			if meta.Type != setting.Type || meta.Unit != setting.Unit {
+				t.Errorf("setting %q metadata type/unit = %q/%q, want %q/%q", meta.Key, meta.Type, meta.Unit, setting.Type, setting.Unit)
+			}
+		}
+	}
+}
+
+// Opening and saving a duration must preserve its value, even when the stored
+// number came from JSON or is fractional in the selected editor unit.
+func TestDurationEditorRoundTrip(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		unit  config.SettingUnit
+		value time.Duration
+		want  string
+	}{
+		{"disabled", config.UnitSeconds, 0, "0"},
+		{"seconds", config.UnitSeconds, 7 * time.Second, "7"},
+		{"fractional seconds", config.UnitSeconds, 1500 * time.Millisecond, "1.5"},
+		{"minutes", config.UnitMinutes, 2 * time.Minute, "2"},
+		{"fractional minutes", config.UnitMinutes, 90 * time.Second, "1.5"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			for _, value := range []any{tc.value, int64(tc.value), float64(tc.value)} {
+				m := &RootModel{Settings: config.DefaultSettings()}
+				setting := m.Settings.Performance.SlowWorkerGracePeriod
+				setting.Unit, setting.Value = tc.unit, value
+				input := formatSettingValueForEdit(value, setting.Type, setting.Unit, setting.Key, false)
+				if input != tc.want {
+					t.Fatalf("%T edit value = %q, want %q", value, input, tc.want)
+				}
+				if err := m.setSettingValue("Performance", setting.Key, input); err != nil {
+					t.Fatalf("save %q: %v", input, err)
+				}
+				if got := config.Resolve[time.Duration](setting); got != tc.value {
+					t.Errorf("%T round trip = %v, want %v", value, got, tc.value)
+				}
+			}
+		})
 	}
 }
 

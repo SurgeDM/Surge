@@ -347,7 +347,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	meta := settingsMeta[selectedRow]
 	value := settingsValues[meta.Key]
-  
+
 	unit := settingUnitSuffix(meta.Unit)
 	unitStyle := lipgloss.NewStyle().Foreground(colors.LightGray())
 
@@ -923,25 +923,12 @@ func formatSettingValueForEdit(value interface{}, typ config.SettingType, unit c
 
 	case config.UnitSeconds:
 		if v, ok := asFloat64(value); ok {
-			// Values might be duration or pure float64 depending on decode/init paths.
-			// The settings parse logic handles both, but for UI string we want raw seconds.
-			var secs float64
-			if _, isDuration := value.(time.Duration); isDuration {
-				secs = time.Duration(v).Seconds()
-			} else {
-				secs = v
-			}
-			return fmt.Sprintf("%.0f", secs)
+			// Numeric duration values use nanoseconds, including JSON numbers.
+			return strconv.FormatFloat(time.Duration(v).Seconds(), 'f', -1, 64)
 		}
 	case config.UnitMinutes:
 		if v, ok := asFloat64(value); ok {
-			var mins float64
-			if _, isDuration := value.(time.Duration); isDuration {
-				mins = time.Duration(v).Minutes()
-			} else {
-				mins = v
-			}
-			return fmt.Sprintf("%.0f", mins)
+			return strconv.FormatFloat(time.Duration(v).Minutes(), 'f', -1, 64)
 		}
 	case config.UnitMegabytesPerSecond:
 		if vStr, ok := value.(string); ok && vStr != "" {
