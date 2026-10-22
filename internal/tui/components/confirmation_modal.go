@@ -86,7 +86,7 @@ func renderYesNoButtons(yesLabel, noLabel string, focused int, btnColor color.Co
 
 // RenderCompactYesNoButtons preserves modal button styling with less spacing.
 func RenderCompactYesNoButtons(yesLabel, noLabel string, focused int, btnColor color.Color) string {
-	return renderYesNoButtonsWithSpacing(yesLabel, noLabel, focused, btnColor, "", " ")
+	return renderYesNoButtonsWithSpacing(yesLabel, noLabel, focused, btnColor, " ", " ")
 }
 
 func renderYesNoButtonsWithSpacing(yesLabel, noLabel string, focused int, btnColor color.Color, pad, gap string) string {
