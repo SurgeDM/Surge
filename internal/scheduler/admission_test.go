@@ -57,7 +57,8 @@ func TestAddWithPreparation_PrecedesRunnableTask(t *testing.T) {
 	accepted, err := pool.AddWithPreparation(cfg, func() error {
 		called = true
 		if len(pool.queued) != 0 || len(pool.queueOrder) != 0 {
-			t.Fatal("task runnable before preparation")
+			t.Errorf("task runnable before preparation")
+			return errors.New("task runnable before preparation")
 		}
 		return nil
 	})
