@@ -767,7 +767,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, leftColItems...)
 	rightCol := lipgloss.JoinVertical(lipgloss.Left,
 		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Time:"), StatsValueStyle.Render(timeStr)),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("ETA:"), StatsValueStyle.Render(etaStr)),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("ETC:"), StatsValueStyle.Render(etaStr)),
 	)
 
 	statsContent := lipgloss.JoinHorizontal(lipgloss.Top,
