@@ -1545,3 +1545,29 @@ func mustLoadSettings(t *testing.T) *config.Settings {
 	}
 	return settings
 }
+
+func TestPostSettingsPreservesAuthToken(t *testing.T) {
+	setupIsolatedCmdState(t)
+	initial := config.DefaultSettings()
+	initial.General.DefaultDownloadDir.Value = t.TempDir()
+	initial.Categories.Categories = nil
+	initial.Extension.AuthToken.Value = "original-token"
+	initial.General.AutoResume.Value = true
+	lifecycle := orchestrator.NewLifecycleManager(nil, nil, initial)
+	defer lifecycle.Shutdown()
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", service.NewLocalDownloadService(lifecycle))
+	response := httptest.NewRecorder()
+	mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, "/settings", strings.NewReader(`{"extension":{"auth_token":"replacement"},"general":{"auto_resume":false}}`)))
+	if response.Code != http.StatusOK {
+		t.Fatalf("POST: %d %s", response.Code, response.Body.String())
+	}
+	for _, snapshot := range []*config.Settings{lifecycle.GetSettings(), mustLoadSettings(t)} {
+		if snapshot.Extension.AuthToken.Value != "original-token" {
+			t.Fatal("POST changed auth token")
+		}
+		if config.Resolve[bool](snapshot.General.AutoResume) {
+			t.Fatal("POST did not apply editable setting")
+		}
+	}
+}

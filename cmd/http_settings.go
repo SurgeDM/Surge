@@ -12,12 +12,10 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 )
 
-var errInvalidSettings = errors.New("invalid settings")
-
 // A patch keeps omitted settings intact. Decode it before acquiring the
-// lifecycle's settings lock so a slow request body cannot block readers.
+// settings service is called so a slow request body cannot block readers.
 func decodeSettingsPatch(r *http.Request) (map[string]map[string]json.RawMessage, error) {
-	defer func (){
+	defer func() {
 		_ = r.Body.Close()
 	}()
 	decoder := json.NewDecoder(r.Body)
@@ -39,6 +37,7 @@ func decodeSettingsPatch(r *http.Request) (map[string]map[string]json.RawMessage
 }
 
 func applySettingsPatch(settings *config.Settings, patch map[string]map[string]json.RawMessage) error {
+	var edits config.SettingsPatch
 	for section, fields := range patch {
 		var categoryName string
 		for _, category := range settings.CategoriesList {
@@ -55,28 +54,40 @@ func applySettingsPatch(settings *config.Settings, patch map[string]map[string]j
 				return fmt.Errorf("%s.%s cannot be null", section, key)
 			}
 			if categoryName == "Categories" && key == "categories" {
+				var categories []config.Category
+				if err := json.Unmarshal(raw, &categories); err != nil {
+					return err
+				}
+				edits.Categories = &config.CategoryListChange{Before: settings.Categories.Categories, Value: categories}
 				continue
 			}
 			setting := settings.FindSetting(categoryName, key)
 			if setting == nil {
 				return fmt.Errorf("unknown setting %s.%s", section, key)
 			}
+			if setting.Type == config.TypeAuthToken {
+				continue
+			}
 			if err := validateSettingsJSONType(setting.Type, raw); err != nil {
 				return fmt.Errorf("%s.%s: %w", section, key, err)
 			}
+			var value any
+			if err := json.Unmarshal(raw, &value); err != nil {
+				return err
+			}
+			edits.Changes = append(edits.Changes, config.SettingChange{Category: categoryName, Key: key, Before: setting.Value, Value: value})
 		}
 	}
 
-	encoded, err := json.Marshal(patch)
+	updated, err := edits.Apply(settings)
 	if err != nil {
 		return err
 	}
-	if err := json.Unmarshal(encoded, settings); err != nil {
+	if err := updated.ValidateStrict(true); err != nil {
 		return err
 	}
-	if problems := settings.Validate(); len(problems) > 0 {
-		return errors.New(strings.Join(problems, "; "))
-	}
+	*settings = *updated
+
 	return nil
 }
 
