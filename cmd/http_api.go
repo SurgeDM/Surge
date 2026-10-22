@@ -60,6 +60,33 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 				settings.Extension.AuthToken.Value = ""
 			}
 			writeJSONResponse(w, http.StatusOK, settings)
+		case http.MethodPatch:
+			editor, ok := service.(downloadservice.SettingsEditor)
+			if !ok {
+				http.Error(w, "Settings editing unavailable", http.StatusNotImplemented)
+				return
+			}
+			var patch config.SettingsPatch
+			r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+			if err := decodeJSONBody(r, &patch); err != nil {
+				http.Error(w, "Invalid settings patch: "+err.Error(), http.StatusBadRequest)
+				return
+			}
+			updated, err := editor.PatchSettings(patch)
+			if err != nil {
+				status := http.StatusInternalServerError
+				if errors.Is(err, downloadservice.ErrInvalidSettings) {
+					status = http.StatusBadRequest
+				}
+				if errors.Is(err, config.ErrSettingsConflict) {
+					status = http.StatusConflict
+				}
+				http.Error(w, err.Error(), status)
+				return
+			}
+			globalSettings = updated.Clone()
+			updated.Extension.AuthToken.Value = ""
+			writeJSONResponse(w, http.StatusOK, updated)
 		case http.MethodPut:
 			current, err := settingsService.GetSettings()
 			if err != nil {

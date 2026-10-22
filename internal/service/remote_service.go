@@ -159,6 +159,22 @@ func (s *RemoteDownloadService) UpdateSettings(settings *config.Settings) error 
 	return nil
 }
 
+func (s *RemoteDownloadService) PatchSettings(patch config.SettingsPatch) (*config.Settings, error) {
+	resp, err := s.doRequest(http.MethodPatch, "/settings", patch)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+	settings := config.DefaultSettings()
+	if err := json.NewDecoder(resp.Body).Decode(settings); err != nil {
+		return nil, err
+	}
+	if err := settings.NormalizeValues(); err != nil {
+		return nil, err
+	}
+	return settings, nil
+}
+
 // GetStatus returns a status for a single download by id.
 func (s *RemoteDownloadService) GetStatus(id string) (*types.DownloadStatus, error) {
 	resp, err := s.doRequest("GET", "/download?id="+url.QueryEscape(id), nil)

@@ -13,6 +13,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/orchestrator"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/testutil"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -1133,5 +1134,51 @@ func TestSettingsEndpointConcurrentPartialUpdates(t *testing.T) {
 	wg.Wait()
 	if !config.Resolve[bool](service.settings.General.AutoResume) || !config.Resolve[bool](service.settings.General.WarnOnDuplicate) {
 		t.Fatal("concurrent partial update lost a setting")
+	}
+}
+
+func TestRemoteSettingsPatchRoundTripAndConflict(t *testing.T) {
+	setupXDGEnvIsolation(t)
+	baseline := config.DefaultSettings()
+	baseline.Categories.Categories = nil
+	baseline.Extension.AuthToken.Value = "private-token"
+	manager := orchestrator.NewLifecycleManager(nil, nil, baseline)
+	defer manager.Shutdown()
+	local := service.NewLocalDownloadService(manager)
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 1701, "", local)
+	server := testutil.NewHTTPServerT(t, authMiddleware("test-token", mux))
+	defer server.Close()
+	remote, err := service.NewRemoteDownloadService(server.URL, "test-token", service.HTTPClientOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = remote.Shutdown() }()
+	loaded, err := remote.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := loaded.Clone()
+	edited.Network.MaxConcurrentDownloads.Value = 5
+	patch := config.DiffSettings(loaded, edited)
+	got, err := remote.PatchSettings(patch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Network.MaxConcurrentDownloads.Value != 5 || got.Extension.AuthToken.Value != "" {
+		t.Fatal("patch response incorrect or exposes token")
+	}
+	stored, _ := local.GetSettings()
+	if stored.Extension.AuthToken.Value != "private-token" {
+		t.Fatal("patch changed private token")
+	}
+	data, err := json.Marshal(patch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPatch, "/settings", strings.NewReader(string(data))))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
 	}
 }

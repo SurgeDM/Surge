@@ -87,6 +87,7 @@ func TestSettingsStayOpenWhenSaveFails(t *testing.T) {
 	m := InitialRootModel(1701, "test", nil, nil, config.DefaultSettings(), false)
 	m.state = SettingsState
 	m.snapshotSettings()
+	m.Settings.General.AutoResume.Value = !config.Resolve[bool](m.Settings.General.AutoResume)
 
 	blocker := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(blocker, []byte("x"), 0o600); err != nil {

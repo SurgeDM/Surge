@@ -460,3 +460,35 @@ func TestUpdateSettingsAppliesInheritedRateLimit(t *testing.T) {
 		t.Fatal("caller mutation changed live settings")
 	}
 }
+
+func TestConcurrentSettingsPatchesPreserveBothEdits(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	baseline := config.DefaultSettings()
+	baseline.Categories.Categories = nil
+	mgr := orchestrator.NewLifecycleManager(nil, nil, baseline)
+	defer mgr.Shutdown()
+	svc := NewLocalDownloadService(mgr)
+	var wg sync.WaitGroup
+	for _, key := range []string{"auto_resume", "warn_on_duplicate"} {
+		edited := baseline.Clone()
+		edited.FindSetting("General", key).Value = !config.Resolve[bool](baseline.FindSetting("General", key))
+		patch := config.DiffSettings(baseline, edited)
+		wg.Go(func() {
+			if _, err := svc.PatchSettings(patch); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	got, _ := svc.GetSettings()
+	persisted, err := config.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"auto_resume", "warn_on_duplicate"} {
+		if got.FindSetting("General", key).Value == baseline.FindSetting("General", key).Value || got.FindSetting("General", key).Value != persisted.FindSetting("General", key).Value {
+			t.Fatalf("lost edit or persistence mismatch: %s", key)
+		}
+	}
+}

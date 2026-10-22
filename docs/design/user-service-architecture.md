@@ -32,6 +32,15 @@ user CLI / local TUI / browser extension
 Remote clients use the authenticated settings API instead of assuming that
 their own local settings represent the daemon.
 
+The settings editor refreshes its snapshot when opened. It sends edited fields
+through authenticated `PATCH /settings`, including each field's original value.
+The daemon compares and merges under one lock: unrelated edits survive, while
+conflicting edits return HTTP 409 without saving any part of the patch. Ordered
+category rules are compared as a single list. Closing an unchanged editor does
+not write settings. `GET /settings` and patch responses redact the auth token;
+patches cannot change it. Older daemons may expose settings without supporting
+patches; editing then fails without falling back to a full-snapshot overwrite.
+
 ## Commit-by-commit implementation plan
 
 Each step is independently reviewable and keeps the tree buildable.

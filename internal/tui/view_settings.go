@@ -796,6 +796,21 @@ func (m *RootModel) persistSettings() error {
 	if m.SaveSettingsFunc == nil {
 		return nil
 	}
+	if m.SettingsBaseline != nil {
+		patch := config.DiffSettings(m.SettingsBaseline, m.Settings)
+		if patch.Empty() {
+			return nil
+		}
+		if editor, ok := m.Service.(service.SettingsEditor); ok {
+			settings, err := editor.PatchSettings(patch)
+			if err != nil {
+				return err
+			}
+			m.Settings = settings
+			m.SettingsBaseline = settings.Clone()
+			return nil
+		}
+	}
 	if err := m.SaveSettingsFunc(m.Settings); err != nil {
 		return err
 	}

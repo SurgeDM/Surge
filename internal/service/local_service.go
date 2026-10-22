@@ -94,20 +94,45 @@ func (s *LocalDownloadService) GetSettings() (*config.Settings, error) {
 func (s *LocalDownloadService) UpdateSettings(settings *config.Settings) error {
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
+	return s.updateSettings(settings)
+}
+
+// updateSettings persists and applies a snapshot while settingsMu is held.
+func (s *LocalDownloadService) updateSettings(settings *config.Settings) error {
 	if err := settings.NormalizeValues(); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", ErrInvalidSettings, err)
 	}
 	if s.lifecycle == nil {
 		return types.ErrServiceUnavailable
 	}
 	settings = settings.Clone()
 	if err := settings.ValidateStrict(true); err != nil {
-		return err
+		return fmt.Errorf("%w: %w", ErrInvalidSettings, err)
 	}
 	if err := config.SaveSettings(settings); err != nil {
 		return err
 	}
 	return s.reloadSettings(settings)
+}
+
+func (s *LocalDownloadService) PatchSettings(patch config.SettingsPatch) (*config.Settings, error) {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	if s.lifecycle == nil {
+		return nil, types.ErrServiceUnavailable
+	}
+	current := s.lifecycle.GetSettings()
+	if patch.Empty() {
+		return current, nil
+	}
+	updated, err := patch.Apply(current)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidSettings, err)
+	}
+	if err := s.updateSettings(updated); err != nil {
+		return nil, err
+	}
+	return s.lifecycle.GetSettings(), nil
 }
 
 func (s *LocalDownloadService) StreamEvents(ctx context.Context) (<-chan types.DownloadEvent, func(), error) {
