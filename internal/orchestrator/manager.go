@@ -98,6 +98,8 @@ func (mgr *LifecycleManager) buildIsNameActive() func(string, string) bool {
 func NewLifecycleManager(pool *scheduler.Scheduler, eventBus *EventBus, settings *config.Settings, isNameActive ...IsNameActiveFunc) *LifecycleManager {
 	if settings == nil {
 		settings = config.DefaultSettings()
+	} else {
+		settings = settings.Clone()
 	}
 
 	var activeCheck IsNameActiveFunc
@@ -155,13 +157,14 @@ func (mgr *LifecycleManager) Shutdown() {
 	})
 }
 
+// GetSettings returns a caller-owned snapshot; callers never mutate the live settings.
 func (m *LifecycleManager) GetSettings() *config.Settings {
 	m.settingsMu.RLock()
 	settings := m.settings
 	m.settingsMu.RUnlock()
 
 	if settings != nil {
-		return settings
+		return settings.Clone()
 	}
 	return config.DefaultSettings()
 }
@@ -172,7 +175,7 @@ func (m *LifecycleManager) ApplySettings(s *config.Settings) {
 		return
 	}
 	m.settingsMu.Lock()
-	m.settings = s
+	m.settings = s.Clone()
 	m.settingsRefreshedAt = time.Now()
 	m.settingsMu.Unlock()
 }

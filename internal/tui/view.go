@@ -69,6 +69,10 @@ func (m RootModel) View() tea.View {
 		return m.wrapView("Loading...")
 	}
 
+	if m.state == QuitConfirmState && (m.width < MinTermWidth || m.height < MinTermHeight) {
+		return m.wrapView(m.viewCompactQuitConfirm())
+	}
+
 	// Terminal too small to render any meaningful layout
 	if m.width < MinTermWidth || m.height < MinTermHeight {
 		msg := lipgloss.NewStyle().Foreground(colors.Cyan()).Render(fmt.Sprintf("Terminal too small (min: %d\u00D7%d)", MinTermWidth, MinTermHeight))
@@ -583,6 +587,19 @@ func (m RootModel) View() tea.View {
 	return m.wrapView(lipgloss.Place(layout.AvailableWidth, m.height, lipgloss.Center, lipgloss.Top, fullView))
 }
 
+func (m RootModel) viewCompactQuitConfirm() string {
+	message := "Are you sure you want to quit?"
+	if m.width < lipgloss.Width(message) {
+		message = "Quit Surge?"
+	}
+	buttons := components.RenderCompactYesNoButtons("Yep!", "Nope", m.quitConfirmFocused, colors.Pink())
+	content := lipgloss.JoinVertical(lipgloss.Center, message, buttons)
+	if m.height == 1 {
+		content = "Quit? " + buttons
+	}
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
+}
+
 // Helper to render the detailed info pane
 func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	pct := 0.0
@@ -638,8 +655,10 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		valueWidth = 5 // Minimum reasonable width
 	}
 
+	urlText := lipgloss.NewStyle().Width(valueWidth).MaxWidth(valueWidth).Render(StatsValueStyle.Hyperlink(d.URL).Render(utils.TruncateTwoLines(d.URL, valueWidth)))
+
 	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("URL: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(d.URL, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("URL: "), urlText),
 		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("File: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayFilename, valueWidth))),
 		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("Path: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayPath, valueWidth))),
 		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray()).Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(d.ID, valueWidth))),

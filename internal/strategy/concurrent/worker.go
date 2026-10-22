@@ -585,6 +585,10 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 				activeTask.LastActivity.Store(time.Now().UnixNano())
 			}
 
+			// Disk writes can block for longer than the network stall timeout.
+			// Include time waiting for RangeMu, since no network read happens there either.
+			diskWriteStart := time.Now()
+			activeTask.WritingToDisk.Store(true)
 			activeTask.RangeMu.Lock()
 			// Recheck the boundary while excluding StealWork. Without this lock,
 			// stealing between the check and WriteAt could overlap the new task.
@@ -593,6 +597,8 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 				readSoFar = int(currentStopAt - offset)
 				if readSoFar <= 0 {
 					activeTask.RangeMu.Unlock()
+					activeTask.LastActivity.Store(time.Now().UnixNano())
+					activeTask.WritingToDisk.Store(false)
 					return nil // stolen completely
 				}
 			}
@@ -600,10 +606,15 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			_, writeErr := writeAtFn(file, buf[:readSoFar], offset)
 			if writeErr != nil {
 				activeTask.RangeMu.Unlock()
+				activeTask.LastActivity.Store(time.Now().UnixNano())
+				activeTask.WritingToDisk.Store(false)
 				return fmt.Errorf("write error: %w", writeErr)
 			}
 
 			now := time.Now()
+			// The slow-worker comparison measures network throughput, so remove
+			// time spent waiting for the write lock and disk from its sample window.
+			activeTask.WindowStart = activeTask.WindowStart.Add(now.Sub(diskWriteStart))
 			offset += int64(readSoFar)
 			newlyWritten := int64(readSoFar)
 
@@ -614,6 +625,7 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 			offset, newlyWritten = clampWriteToStopAt(offset, newlyWritten, activeTask.StopAt.Load())
 			activeTask.WindowBytes.Add(newlyWritten)
 			activeTask.LastActivity.Store(now.UnixNano())
+			activeTask.WritingToDisk.Store(false)
 
 			// Calculate effective contribution
 			if newlyWritten > 0 {
@@ -670,6 +682,15 @@ func (d *ConcurrentDownloader) downloadTask(ctx context.Context, rawurl string, 
 // StealWork tries to split an active task from a busy worker
 // It greedily targets the worker with the MOST remaining work.
 func (d *ConcurrentDownloader) StealWork(queue *TaskQueue) bool {
+	// Don't steal while every mirror host is in cooldown: the stolen range
+	// would just be re-requested against a still-throttled host.
+	if d.hostLimiter != nil {
+		if _, wait := d.hostLimiter.PickMirror(d.workerHosts, 0, time.Now()); wait > 0 {
+			utils.Debug("Balancer: steal suppressed, all worker hosts in cooldown")
+			return false
+		}
+	}
+
 	d.activeMu.Lock()
 	defer d.activeMu.Unlock()
 
