@@ -137,8 +137,12 @@ func (s *RemoteDownloadService) GetSettings() (*config.Settings, error) {
 	}
 	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 
+	return decodeRemoteSettings(resp.Body)
+}
+
+func decodeRemoteSettings(body io.Reader) (*config.Settings, error) {
 	settings := config.DefaultSettings()
-	if err := json.NewDecoder(resp.Body).Decode(settings); err != nil {
+	if err := json.NewDecoder(body).Decode(settings); err != nil {
 		return nil, err
 	}
 	if err := settings.NormalizeValues(); err != nil {
@@ -165,14 +169,7 @@ func (s *RemoteDownloadService) PatchSettings(patch config.SettingsPatch) (*conf
 		return nil, err
 	}
 	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
-	settings := config.DefaultSettings()
-	if err := json.NewDecoder(resp.Body).Decode(settings); err != nil {
-		return nil, err
-	}
-	if err := settings.NormalizeValues(); err != nil {
-		return nil, err
-	}
-	return settings, nil
+	return decodeRemoteSettings(resp.Body)
 }
 
 // GetStatus returns a status for a single download by id.

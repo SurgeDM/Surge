@@ -39,62 +39,42 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 	mux.HandleFunc("/events", eventsHandler(service))
 
-	// Serialize settings persistence and live updates with the local TUI.
+	// Settings persistence and live application are serialized by the owner.
 	mux.HandleFunc("/settings", func(w http.ResponseWriter, r *http.Request) {
-		globalSettingsMu.Lock()
-		defer globalSettingsMu.Unlock()
-		settingsService, ok := service.(downloadservice.SettingsService)
+		owner, ok := service.(downloadservice.SettingsService)
 		if !ok {
 			http.Error(w, "Settings service unavailable", http.StatusNotImplemented)
 			return
 		}
-
-		switch r.Method {
-		case http.MethodGet:
-			settings, err := settingsService.GetSettings()
+		if r.Method == http.MethodGet {
+			settings, err := owner.GetSettings()
 			if err != nil {
 				http.Error(w, "Failed to retrieve settings: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
-			if settings.Extension.AuthToken != nil {
-				settings.Extension.AuthToken.Value = ""
-			}
+			settings.Extension.AuthToken.Value = ""
 			writeJSONResponse(w, http.StatusOK, settings)
-		case http.MethodPatch:
-			editor, ok := service.(downloadservice.SettingsEditor)
-			if !ok {
-				http.Error(w, "Settings editing unavailable", http.StatusNotImplemented)
-				return
-			}
-			var patch config.SettingsPatch
-			r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
-			if err := decodeJSONBody(r, &patch); err != nil {
-				http.Error(w, "Invalid settings patch: "+err.Error(), http.StatusBadRequest)
-				return
-			}
-			updated, err := editor.PatchSettings(patch)
-			if err != nil {
-				status := http.StatusInternalServerError
-				if errors.Is(err, downloadservice.ErrInvalidSettings) {
-					status = http.StatusBadRequest
-				}
-				if errors.Is(err, config.ErrSettingsConflict) {
-					status = http.StatusConflict
-				}
-				http.Error(w, err.Error(), status)
-				return
-			}
-			globalSettings = updated.Clone()
-			updated.Extension.AuthToken.Value = ""
-			writeJSONResponse(w, http.StatusOK, updated)
-		case http.MethodPut:
-			current, err := settingsService.GetSettings()
+			return
+		}
+		if r.Method != http.MethodPut && r.Method != http.MethodPatch {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+		editor, ok := service.(downloadservice.SettingsEditor)
+		if !ok {
+			http.Error(w, "Settings editing unavailable", http.StatusNotImplemented)
+			return
+		}
+		var patch config.SettingsPatch
+		var restartRequired bool
+		r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+		if r.Method == http.MethodPut {
+			current, err := owner.GetSettings()
 			if err != nil {
 				http.Error(w, "Failed to retrieve settings: "+err.Error(), http.StatusInternalServerError)
 				return
 			}
 			updated := current.Clone()
-			r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
 			if err := decodeJSONBody(r, updated); err != nil {
 				http.Error(w, "Invalid settings: "+err.Error(), http.StatusBadRequest)
 				return
@@ -103,26 +83,30 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 				http.Error(w, err.Error(), http.StatusBadRequest)
 				return
 			}
-			if updated.Extension.AuthToken != nil && current.Extension.AuthToken != nil {
-				updated.Extension.AuthToken.Value = current.Extension.AuthToken.Value
-			}
-			if err := updated.ValidateStrict(true); err != nil {
-				http.Error(w, err.Error(), http.StatusBadRequest)
-				return
-			}
-			restartRequired := updated.RequiresRestartComparedTo(current)
-			if err := settingsService.UpdateSettings(updated); err != nil {
-				http.Error(w, "Failed to update settings: "+err.Error(), http.StatusInternalServerError)
-				return
-			}
-			globalSettings = updated.Clone()
-			writeJSONResponse(w, http.StatusOK, map[string]interface{}{
-				"status":           "updated",
-				"restart_required": restartRequired,
-			})
-		default:
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			patch = config.DiffSettings(current, updated)
+			restartRequired = updated.RequiresRestartComparedTo(current)
+		} else if err := decodeJSONBody(r, &patch); err != nil {
+			http.Error(w, "Invalid settings patch: "+err.Error(), http.StatusBadRequest)
+			return
 		}
+		updated, err := editor.PatchSettings(patch)
+		if err != nil {
+			status := http.StatusInternalServerError
+			if errors.Is(err, downloadservice.ErrInvalidSettings) {
+				status = http.StatusBadRequest
+			}
+			if errors.Is(err, config.ErrSettingsConflict) {
+				status = http.StatusConflict
+			}
+			http.Error(w, err.Error(), status)
+			return
+		}
+		if r.Method == http.MethodPut {
+			writeJSONResponse(w, http.StatusOK, map[string]interface{}{"status": "updated", "restart_required": restartRequired})
+			return
+		}
+		updated.Extension.AuthToken.Value = ""
+		writeJSONResponse(w, http.StatusOK, updated)
 	})
 
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
@@ -299,8 +283,6 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	}))
 
 	mux.HandleFunc("/rate-limit/global", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
-		globalSettingsMu.Lock()
-		defer globalSettingsMu.Unlock()
 		limiter, ok := service.(rateLimitSettingsService)
 		if !ok {
 			http.Error(w, "Service does not support global rate limits", http.StatusNotImplemented)
@@ -322,8 +304,6 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	}))
 
 	mux.HandleFunc("/rate-limit/default", requireMethod(http.MethodPost, func(w http.ResponseWriter, r *http.Request) {
-		globalSettingsMu.Lock()
-		defer globalSettingsMu.Unlock()
 		limiter, ok := service.(rateLimitSettingsService)
 		if !ok {
 			http.Error(w, "Service does not support default rate limits", http.StatusNotImplemented)

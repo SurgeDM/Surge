@@ -80,6 +80,11 @@ Each step is independently reviewable and keeps the tree buildable.
   mirrored into a world-readable runtime file.
 - A remote TUI saves through the daemon settings API. If that API is absent,
   settings are read-only.
+- The local settings service owns validation, persistence, and live application.
+  CLI handlers read its snapshots once the service exists; the command-layer
+  snapshot is used only during startup. Settings edits and rate-limit changes
+  share the service's lock and persistence path. Failed persistence leaves the
+  live snapshot unchanged.
 - Installation detects a known legacy system service rather than allowing two
   service identities to coexist silently.
 

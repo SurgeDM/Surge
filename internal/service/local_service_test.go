@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -490,5 +491,70 @@ func TestConcurrentSettingsPatchesPreserveBothEdits(t *testing.T) {
 		if got.FindSetting("General", key).Value == baseline.FindSetting("General", key).Value || got.FindSetting("General", key).Value != persisted.FindSetting("General", key).Value {
 			t.Fatalf("lost edit or persistence mismatch: %s", key)
 		}
+	}
+}
+
+func TestFailedSettingsPersistenceLeavesOwnerUnchanged(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	mgr := orchestrator.NewLifecycleManager(nil, nil, settings)
+	defer mgr.Shutdown()
+	svc := NewLocalDownloadService(mgr)
+	blocker := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", blocker)
+	t.Setenv("APPDATA", blocker)
+	updated := settings.Clone()
+	updated.Network.GlobalRateLimit.Value = "1024 B/s"
+	if err := svc.UpdateSettings(updated); err == nil {
+		t.Fatal("expected persistence failure")
+	}
+	current, _ := svc.GetSettings()
+	if current.Network.GlobalRateLimit.Value != settings.Network.GlobalRateLimit.Value {
+		t.Fatal("failed save published new settings")
+	}
+	if _, err := svc.PatchSettings(config.DiffSettings(settings, updated)); err == nil {
+		t.Fatal("expected patch persistence failure")
+	}
+	current, _ = svc.GetSettings()
+	if current.Network.GlobalRateLimit.Value != settings.Network.GlobalRateLimit.Value {
+		t.Fatal("failed patch published new settings")
+	}
+}
+
+func TestSettingsOwnerRejectsInvalidSnapshotsWithoutMutatingCaller(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	baseline := config.DefaultSettings()
+	baseline.Categories.Categories = nil
+	mgr := orchestrator.NewLifecycleManager(nil, nil, baseline)
+	defer mgr.Shutdown()
+	svc := NewLocalDownloadService(mgr)
+	invalid := baseline.Clone()
+	invalid.General.AutoResume = nil
+	if err := svc.UpdateSettings(invalid); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected invalid settings error, got %v", err)
+	}
+	if err := svc.UpdateSettings(nil); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected nil settings error, got %v", err)
+	}
+	updated := baseline.Clone()
+	updated.Network.MaxConcurrentDownloads.Value = float64(5)
+	if err := svc.UpdateSettings(updated); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := updated.Network.MaxConcurrentDownloads.Value.(float64); !ok {
+		t.Fatal("owner mutated caller during normalization")
+	}
+	updated.Network.MaxConcurrentDownloads.Value = 6
+	current, _ := svc.GetSettings()
+	if current.Network.MaxConcurrentDownloads.Value != 5 {
+		t.Fatal("owner retained caller snapshot")
+	}
+	persisted, err := config.LoadSettings()
+	if err != nil || persisted.Network.MaxConcurrentDownloads.Value != 5 {
+		t.Fatalf("settings not persisted: %v", err)
 	}
 }

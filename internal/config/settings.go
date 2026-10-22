@@ -1104,6 +1104,19 @@ func (s *Settings) Validate() []string {
 	return s.StartupWarnings
 }
 
+// NormalizedClone validates the schema and normalizes a caller-owned copy.
+// Validating before cloning prevents null settings from becoming defaults.
+func (s *Settings) NormalizedClone() (*Settings, error) {
+	if err := s.validateRequiredSettings(); err != nil {
+		return nil, err
+	}
+	cloned := s.Clone()
+	if err := cloned.NormalizeValues(); err != nil {
+		return nil, err
+	}
+	return cloned, nil
+}
+
 // NormalizeValues converts decoded JSON/TOML primitives back to the types
 // declared by the settings schema.
 func (s *Settings) NormalizeValues() error {

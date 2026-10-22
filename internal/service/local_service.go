@@ -85,6 +85,8 @@ func (s *LocalDownloadService) reloadSettings(settings *config.Settings) error {
 }
 
 func (s *LocalDownloadService) GetSettings() (*config.Settings, error) {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
 	if s.lifecycle == nil {
 		return nil, types.ErrServiceUnavailable
 	}
@@ -99,16 +101,18 @@ func (s *LocalDownloadService) UpdateSettings(settings *config.Settings) error {
 
 // updateSettings persists and applies a snapshot while settingsMu is held.
 func (s *LocalDownloadService) updateSettings(settings *config.Settings) error {
-	if err := settings.NormalizeValues(); err != nil {
+	var err error
+	settings, err = settings.NormalizedClone()
+	if err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidSettings, err)
 	}
 	if s.lifecycle == nil {
 		return types.ErrServiceUnavailable
 	}
-	settings = settings.Clone()
 	if err := settings.ValidateStrict(true); err != nil {
 		return fmt.Errorf("%w: %w", ErrInvalidSettings, err)
 	}
+	settings.Extension.AuthToken.Value = s.lifecycle.GetSettings().Extension.AuthToken.Value
 	if err := config.SaveSettings(settings); err != nil {
 		return err
 	}
@@ -378,19 +382,8 @@ func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
 	settings := s.lifecycle.GetSettings()
-	if settings == nil {
-		return fmt.Errorf("settings not found")
-	}
-
-	if settings.Network.GlobalRateLimit == nil {
-		settings.Network.GlobalRateLimit = config.DefaultSettings().Network.GlobalRateLimit
-	}
 	settings.Network.GlobalRateLimit.Value = fmt.Sprintf("%d B/s", rate)
-	if err := config.SaveSettings(settings); err != nil {
-		return err
-	}
-
-	return s.reloadSettings(settings)
+	return s.updateSettings(settings)
 }
 
 func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
@@ -404,19 +397,8 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 	s.settingsMu.Lock()
 	defer s.settingsMu.Unlock()
 	settings := s.lifecycle.GetSettings()
-	if settings == nil {
-		return fmt.Errorf("settings not found")
-	}
-
-	if settings.Network.DefaultDownloadRateLimit == nil {
-		settings.Network.DefaultDownloadRateLimit = config.DefaultSettings().Network.DefaultDownloadRateLimit
-	}
 	settings.Network.DefaultDownloadRateLimit.Value = fmt.Sprintf("%d B/s", rate)
-	if err := config.SaveSettings(settings); err != nil {
-		return err
-	}
-
-	return s.reloadSettings(settings)
+	return s.updateSettings(settings)
 }
 
 func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {

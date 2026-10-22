@@ -92,7 +92,7 @@ func TestCmd_AutoResume_Execution(t *testing.T) {
 	eventBus := orchestrator.NewEventBus()
 	t.Cleanup(func() { eventBus.Shutdown() })
 	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
-	tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, settings, buildActiveDownloadChecker(getAll))
 	t.Cleanup(func() { tmpLifecycle.Shutdown() })
 	GlobalLifecycle = tmpLifecycle
 	GlobalService = service.NewLocalDownloadService(GlobalLifecycle)

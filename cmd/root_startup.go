@@ -6,6 +6,7 @@ import (
 	"sync/atomic"
 
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -63,6 +64,11 @@ func initializeGlobalState() error {
 }
 
 func getSettings() *config.Settings {
+	if owner, ok := GlobalService.(service.SettingsService); ok {
+		if settings, err := owner.GetSettings(); err == nil {
+			return settings
+		}
+	}
 	if settings := getGlobalSettings(); settings != nil {
 		return settings
 	}
@@ -80,12 +86,12 @@ func getSettings() *config.Settings {
 func getGlobalSettings() *config.Settings {
 	globalSettingsMu.RLock()
 	defer globalSettingsMu.RUnlock()
-	return globalSettings
+	return globalSettings.Clone()
 }
 
 func setGlobalSettings(settings *config.Settings) {
 	globalSettingsMu.Lock()
-	globalSettings = settings
+	globalSettings = settings.Clone()
 	globalSettingsMu.Unlock()
 }
 

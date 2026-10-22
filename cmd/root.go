@@ -79,7 +79,7 @@ var (
 	GlobalLifecycleCleanup  func()
 	serverProgram           *tea.Program
 	startupIntegrityMessage string
-	globalSettings          *config.Settings
+	globalSettings          *config.Settings // Startup snapshot; live settings belong to GlobalService.
 	globalSettingsMu        sync.RWMutex
 	GlobalLifecycle         *orchestrator.LifecycleManager
 	globalLifecycleMu       sync.Mutex
@@ -544,18 +544,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool, releaseLock func()) er
 	// Initialize TUI
 	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
 
-	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), getGlobalSettings(), noResume, Commit)
-	// Serialize settings persistence and live updates with the HTTP API.
-	saveSettings := m.SaveSettingsFunc
-	m.SaveSettingsFunc = func(settings *config.Settings) error {
-		globalSettingsMu.Lock()
-		defer globalSettingsMu.Unlock()
-		if err := saveSettings(settings); err != nil {
-			return err
-		}
-		globalSettings = settings.Clone()
-		return nil
-	}
+	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), getSettings(), noResume, Commit)
 	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())
 
 	configureServiceUI(&m)

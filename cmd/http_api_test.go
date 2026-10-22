@@ -4,9 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -38,18 +41,38 @@ type httpAPITestService struct {
 
 type settingsHTTPTestService struct {
 	*httpAPITestService
+	mu          sync.Mutex
 	settings    *config.Settings
 	updateCalls int
 }
 
 func (s *settingsHTTPTestService) GetSettings() (*config.Settings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	return s.settings.Clone(), nil
 }
 
 func (s *settingsHTTPTestService) UpdateSettings(settings *config.Settings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	s.settings = settings.Clone()
 	s.updateCalls++
 	return nil
+}
+
+func (s *settingsHTTPTestService) PatchSettings(patch config.SettingsPatch) (*config.Settings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings, err := patch.Apply(s.settings)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", service.ErrInvalidSettings, err)
+	}
+	if err := settings.ValidateStrict(true); err != nil {
+		return nil, fmt.Errorf("%w: %w", service.ErrInvalidSettings, err)
+	}
+	s.settings = settings
+	s.updateCalls++
+	return settings.Clone(), nil
 }
 
 func newRateLimitTestService() *httpAPITestService {
@@ -1180,5 +1203,33 @@ func TestRemoteSettingsPatchRoundTripAndConflict(t *testing.T) {
 	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPatch, "/settings", strings.NewReader(string(data))))
 	if rec.Code != http.StatusConflict {
 		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSettingsPatchReportsPersistenceFailureAsServerError(t *testing.T) {
+	setupXDGEnvIsolation(t)
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	manager := orchestrator.NewLifecycleManager(nil, nil, settings)
+	defer manager.Shutdown()
+	owner := service.NewLocalDownloadService(manager)
+	blocker := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", blocker)
+	t.Setenv("APPDATA", blocker)
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", owner)
+	rec := httptest.NewRecorder()
+	updated := settings.Clone()
+	updated.Network.GlobalRateLimit.Value = "1024 B/s"
+	data, err := json.Marshal(config.DiffSettings(settings, updated))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPatch, "/settings", strings.NewReader(string(data))))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
