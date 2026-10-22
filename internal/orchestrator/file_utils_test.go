@@ -272,8 +272,13 @@ func TestCategoryDirectoryFailureIdentifiesDestination(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.Categories.CategoryEnabled.Value = true
 	settings.Categories.Categories = []config.Category{{Name: "Test", Pattern: ".*", Path: target}}
-	_, _, err := ResolveDestination("https://example.com/file.bin", "file.bin", base, true, settings, nil, nil)
-	if err == nil || !strings.Contains(err.Error(), target) || !strings.Contains(err.Error(), "cannot access download directory") {
-		t.Fatalf("expected actionable destination error, got %v", err)
+	path, name, err := ResolveDestination("https://example.com/file.bin", "file.bin", base, true, settings, nil, nil)
+	if err == nil {
+		// Windows can report a child of a regular file as not found during
+		// filename selection; reservation must still reject the destination.
+		err = precreateWorkingFile(path, name)
+	}
+	if err == nil || !strings.Contains(err.Error(), blocker) {
+		t.Fatalf("expected an error identifying the blocked destination, got %v", err)
 	}
 }

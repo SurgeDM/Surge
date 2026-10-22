@@ -192,12 +192,7 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 
 	finalFilename := GetUniqueFilename(destPath, filename, isNameActive)
 	if finalFilename == "" {
-		if info, err := os.Stat(destPath); err != nil {
-			return "", "", fmt.Errorf("cannot access download directory %q: %w", destPath, err)
-		} else if !info.IsDir() {
-			return "", "", fmt.Errorf("download destination %q is not a directory", destPath)
-		}
-		return "", "", fmt.Errorf("could not determine a unique filename for %s in %q", url, destPath)
+		return "", "", fmt.Errorf("could not determine a unique filename for %s in %q; check directory access and existing filenames", url, destPath)
 	}
 
 	return destPath, finalFilename, nil
