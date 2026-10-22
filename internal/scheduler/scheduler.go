@@ -160,6 +160,14 @@ func resolveDestPath(cfg *types.DownloadRecord) string {
 // the shutdown sweep is refused. The caller (LifecycleManager) is responsible
 // for emitting lifecycle events (e.g. DownloadQueuedMsg).
 func (p *Scheduler) Add(cfg types.DownloadRecord) bool {
+	accepted, _ := p.AddWithPreparation(cfg, nil)
+	return accepted
+}
+
+// AddWithPreparation checks admission before preparing persistence and events,
+// then makes the task runnable. prepare runs under the scheduler lock and must
+// not call scheduler methods. If it fails, no task is queued.
+func (p *Scheduler) AddWithPreparation(cfg types.DownloadRecord, prepare func() error) (bool, error) {
 	if cfg.ProgressCh == nil {
 		cfg.ProgressCh = p.progressCh
 	}
@@ -167,19 +175,25 @@ func (p *Scheduler) Add(cfg types.DownloadRecord) bool {
 	if p.isShuttingDown {
 		p.mu.Unlock()
 		utils.Debug("Scheduler: Add refused for %s: shutting down", cfg.ID)
-		return false
+		return false, nil
 	}
 	// A queued entry owns the ID even while inFlight — the claiming worker
 	// settles its wait-group count itself.
 	if _, exists := p.queued[cfg.ID]; exists {
 		p.mu.Unlock()
 		utils.Debug("Scheduler: Add refused for %s: ID already queued", cfg.ID)
-		return false
+		return false, nil
 	}
 	if _, exists := p.downloads[cfg.ID]; exists {
 		p.mu.Unlock()
 		utils.Debug("Scheduler: Add refused for %s: ID already active", cfg.ID)
-		return false
+		return false, nil
+	}
+	if prepare != nil {
+		if err := prepare(); err != nil {
+			p.mu.Unlock()
+			return false, err
+		}
 	}
 	p.ensureLimiterForConfigLocked(&cfg)
 	qt := &queuedTask{cfg: cfg}
@@ -188,7 +202,7 @@ func (p *Scheduler) Add(cfg types.DownloadRecord) bool {
 	p.wg.Add(1)
 	p.taskCond.Signal()
 	p.mu.Unlock()
-	return true
+	return true, nil
 }
 
 func (p *Scheduler) ensureLimiterForConfigLocked(cfg *types.DownloadRecord) {

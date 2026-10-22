@@ -392,59 +392,60 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 			Workers:      req.Workers,
 			MinChunkSize: req.MinChunkSize,
 		}
-		// Persist synchronously before publishing so the download survives a restart
-		// even if the event bus is full and Publish returns DeadlineExceeded.
-		// Doing this BEFORE pool.Add prevents EventStarted from racing with this
-		// persistence and corrupting the status to "queued" if it starts instantly.
-		if err := store.AddToMasterList(types.DownloadRecord{
-			ID:           queuedEvent.DownloadID,
-			URL:          queuedEvent.URL,
-			URLHash:      store.URLHash(queuedEvent.URL),
-			DestPath:     queuedEvent.DestPath,
-			Filename:     queuedEvent.Filename,
-			Mirrors:      append([]string(nil), queuedEvent.Mirrors...),
-			Status:       "queued",
-			RateLimit:    queuedEvent.RateLimit,
-			RateLimitSet: queuedEvent.RateLimitSet,
-			Workers:      queuedEvent.Workers,
-			MinChunkSize: queuedEvent.MinChunkSize,
-		}); err != nil {
-			utils.Debug("Lifecycle: Failed to persist queued download synchronously: %v", err)
-		}
-		if len(cfg.Headers) > 0 {
-			snapshot := &types.DownloadRecord{
-				ID:           cfg.ID,
-				URL:          cfg.URL,
+		// Reject duplicates and shutdown before touching persistence or publishing.
+		// The scheduler keeps workers blocked until preparation completes, so
+		// EventStarted cannot race ahead of the queued record.
+		accepted, err := mgr.pool.AddWithPreparation(*cfg, func() error {
+			if err := store.AddToMasterList(types.DownloadRecord{
+				ID:           queuedEvent.DownloadID,
+				URL:          queuedEvent.URL,
+				URLHash:      store.URLHash(queuedEvent.URL),
 				DestPath:     queuedEvent.DestPath,
-				Filename:     cfg.Filename,
-				TotalSize:    cfg.TotalSize,
+				Filename:     queuedEvent.Filename,
+				Mirrors:      append([]string(nil), queuedEvent.Mirrors...),
 				Status:       "queued",
-				Mirrors:      append([]string(nil), cfg.Mirrors...),
-				RateLimit:    cfg.RateLimit,
-				RateLimitSet: cfg.RateLimitSet,
-				Workers:      cfg.Workers,
-				MinChunkSize: cfg.MinChunkSize,
-				Headers:      maps.Clone(cfg.Headers),
+				RateLimit:    queuedEvent.RateLimit,
+				RateLimitSet: queuedEvent.RateLimitSet,
+				Workers:      queuedEvent.Workers,
+				MinChunkSize: queuedEvent.MinChunkSize,
+			}); err != nil {
+				utils.Debug("Lifecycle: Failed to persist queued download synchronously: %v", err)
 			}
-			if err := store.SaveStateWithOptions(cfg.URL, queuedEvent.DestPath, snapshot, store.SaveStateOptions{SkipFileHash: true}); err != nil {
-				if rollbackErr := store.DeleteState(cfg.ID); rollbackErr != nil {
-					utils.Debug("Lifecycle: Failed to roll back queued download after header persistence failure: %v", rollbackErr)
+			if len(cfg.Headers) > 0 {
+				snapshot := &types.DownloadRecord{
+					ID:           cfg.ID,
+					URL:          cfg.URL,
+					DestPath:     queuedEvent.DestPath,
+					Filename:     cfg.Filename,
+					TotalSize:    cfg.TotalSize,
+					Status:       "queued",
+					Mirrors:      append([]string(nil), cfg.Mirrors...),
+					RateLimit:    cfg.RateLimit,
+					RateLimitSet: cfg.RateLimitSet,
+					Workers:      cfg.Workers,
+					MinChunkSize: cfg.MinChunkSize,
+					Headers:      maps.Clone(cfg.Headers),
 				}
-				_ = os.Remove(surgePath)
-				return "", "", fmt.Errorf("persist queued download headers: %w", err)
+				if err := store.SaveStateWithOptions(cfg.URL, queuedEvent.DestPath, snapshot, store.SaveStateOptions{SkipFileHash: true}); err != nil {
+					if rollbackErr := store.DeleteState(cfg.ID); rollbackErr != nil {
+						utils.Debug("Lifecycle: Failed to roll back queued download after header persistence failure: %v", rollbackErr)
+					}
+					return fmt.Errorf("persist queued download headers: %w", err)
+				}
 			}
-		}
-		if mgr.eventBus != nil {
-			_ = mgr.eventBus.Publish(queuedEvent)
-			if probeResult.Warning != "" {
-				_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: cfg.ID, Message: probeResult.Warning})
+			if mgr.eventBus != nil {
+				_ = mgr.eventBus.Publish(queuedEvent)
+				if probeResult.Warning != "" {
+					_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: cfg.ID, Message: probeResult.Warning})
+				}
 			}
+			return nil
+		})
+		if err != nil {
+			_ = os.Remove(surgePath)
+			return "", "", err
 		}
-
-		// A same-ID task slipped past the GetStatus guard and owns the ID;
-		// release only this attempt's .surge reservation. The winner's own
-		// lifecycle events heal the master row and EventQueued residue.
-		if !mgr.pool.Add(*cfg) {
+		if !accepted {
 			_ = os.Remove(surgePath)
 			return "", "", types.ErrIDExists
 		}
