@@ -15,6 +15,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -181,6 +182,17 @@ func renderEmptyMessage(width, height int, message string) string {
 	}
 	return lipgloss.Place(width, height, lipgloss.Center, lipgloss.Center,
 		EmptyMessageStyle.Render(message))
+}
+
+func (m *RootModel) refreshSettings() error {
+	if provider, ok := m.Service.(service.SettingsService); ok && !m.SettingsReadOnly {
+		settings, err := provider.GetSettings()
+		if err != nil {
+			return err
+		}
+		m.Settings = settings
+	}
+	return nil
 }
 
 func (m *RootModel) snapshotSettings() {

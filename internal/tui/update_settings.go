@@ -28,6 +28,11 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if m.SettingsReadOnly && (m.SettingsIsEditing || key.Matches(msg, m.keys.Settings.Edit, m.keys.Settings.Reset, m.keys.Settings.Browse)) {
+		m.settingsError = "This daemon does not support editing settings"
+		return m, nil
+	}
+
 	// Handle editing mode first
 	if m.SettingsIsEditing {
 		typ := m.getCurrentSettingType()
@@ -73,6 +78,10 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			s := msg.String()
 
 			if m.catMgrEditField == 3 && key.Matches(msg, m.keys.Settings.Browse) {
+				if m.IsRemote {
+					m.settingsError = "Enter the category path on the server"
+					return m, nil
+				}
 				originalPath := strings.TrimSpace(m.catMgrInputs[3].Value())
 				browseDir := originalPath
 				if browseDir == "" {
@@ -144,7 +153,9 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.settingsError = "Failed to save settings: " + err.Error()
 			return m, nil
 		}
-		if requiresRestart {
+		if requiresRestart && m.IsRemote {
+			m.addLogEntry("Settings saved. Restart Surge on the server to apply restart-required changes.")
+		} else if requiresRestart {
 			m.state = RestartConfirmState
 			m.quitConfirmFocused = 0
 			return m, nil
@@ -233,6 +244,10 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	// Open file browser for default_download_dir or theme_path
 	if key.Matches(msg, m.keys.Settings.Browse) {
+		if m.IsRemote {
+			m.settingsError = "Enter the directory path on the server; browsing uses the local filesystem"
+			return m, nil
+		}
 		if m.SettingsFocusedPane == 0 {
 			return m, nil // Can't browse when tabs are focused
 		}
@@ -349,7 +364,11 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.SettingsIsEditing = true
 			// Pre-fill with current value (without units)
 			values := m.getSettingsValues(currentCategory)
-			m.SettingsInput.SetValue(formatSettingValueForEdit(values[settingKey], typ, settingKey, false))
+			unit := config.UnitNone
+			if meta := m.getCurrentSettingMeta(); meta != nil {
+				unit = meta.Unit
+			}
+			m.SettingsInput.SetValue(formatSettingValueForEdit(values[settingKey], typ, unit, settingKey, false))
 			m.updateSettingsInputWidthForViewport()
 			m.SettingsInput.Focus()
 		}

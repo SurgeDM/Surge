@@ -220,3 +220,28 @@ func TestGetSettings_LoadError_PopulatesStartupWarnings(t *testing.T) {
 		t.Error("expected StartupWarnings when LoadSettings fails")
 	}
 }
+
+func TestGetSettingsUsesLiveOwnerInsteadOfStartupSnapshot(t *testing.T) {
+	previousService, previousSettings := GlobalService, globalSettings
+	t.Cleanup(func() { GlobalService, globalSettings = previousService, previousSettings })
+	initial := config.DefaultSettings()
+	setGlobalSettings(initial)
+	live := initial.Clone()
+	live.Network.GlobalRateLimit.Value = "1024 B/s"
+	manager := orchestrator.NewLifecycleManager(nil, nil, live)
+	defer manager.Shutdown()
+	GlobalService = service.NewLocalDownloadService(manager)
+	got := getSettings()
+	if got.Network.GlobalRateLimit.Value != "1024 B/s" {
+		t.Fatal("read stale startup settings")
+	}
+	got.Network.GlobalRateLimit.Value = "2048 B/s"
+	if getSettings().Network.GlobalRateLimit.Value != "1024 B/s" {
+		t.Fatal("caller mutated owner settings")
+	}
+	GlobalService = nil
+	initial.Network.GlobalRateLimit.Value = "4096 B/s"
+	if getSettings().Network.GlobalRateLimit.Value == "4096 B/s" {
+		t.Fatal("startup settings retained caller snapshot")
+	}
+}

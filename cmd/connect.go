@@ -6,7 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
-	"github.com/SurgeDM/Surge/internal/service"
+	downloadservice "github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/spf13/cobra"
@@ -79,7 +79,7 @@ func connectAndRunTUI(cmd *cobra.Command, target string) error {
 	}
 
 	tui.InitializeTUI()
-	settings := globalSettings
+	settings := getGlobalSettings()
 	if settings == nil {
 		settings = getSettings()
 	}
@@ -104,9 +104,32 @@ func connectAndRunTUI(cmd *cobra.Command, target string) error {
 	return nil
 }
 
-func newRemoteRootModel(baseURL string, service service.DownloadService, statuses []types.DownloadStatus, settings *config.Settings) tui.RootModel {
+func newRemoteRootModel(baseURL string, service downloadservice.DownloadService, statuses []types.DownloadStatus, settings *config.Settings) tui.RootModel {
 	serverHost, serverPort := parseRemoteServerAddress(baseURL)
+	if settings == nil {
+		var err error
+		settings, err = config.LoadSettings()
+		if err != nil {
+			settings = config.DefaultSettings()
+		}
+	}
+	var remoteSettings downloadservice.SettingsService
+	if provider, ok := service.(downloadservice.SettingsService); ok {
+		if serverSettings, getErr := provider.GetSettings(); getErr == nil {
+			settings = serverSettings
+			remoteSettings = provider
+		}
+	}
 	m := tui.InitialRootModelWithStatuses(serverPort, Version, service, nil, settings, false, statuses, Commit)
+	if remoteSettings == nil {
+		// Older servers do not expose settings. Never let their remote TUI write
+		// a synthesized/default snapshot into the client's local config.
+		m.SaveSettingsFunc = nil
+		m.SettingsReadOnly = true
+	} else {
+		m.SaveSettingsFunc = remoteSettings.UpdateSettings
+		m.SettingsReadOnly = false
+	}
 	m.ServerHost = serverHost
 	m.ServerPort = serverPort
 	m.IsRemote = true

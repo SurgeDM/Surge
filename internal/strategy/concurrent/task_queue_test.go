@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/transport"
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
@@ -183,6 +184,46 @@ func TestStealWork_AdaptiveTailFloor(t *testing.T) {
 	}
 	if throttledQueue.Len() != 0 || throttledActive.StopAt.Load() != originalEnd {
 		t.Fatal("throttled adaptation changed the active range")
+	}
+}
+
+func TestStealWork_SuppressedWhileHostsCooling(t *testing.T) {
+	const workerID = 1
+
+	newDownloader := func(hosts ...string) (*ConcurrentDownloader, *ActiveTask) {
+		runtime := &types.RuntimeConfig{MinChunkSize: 4 * types.AlignSize}
+		d := NewConcurrentDownloader("steal-cooldown", nil, nil, runtime)
+		d.hostLimiter = transport.NewHostRateLimiter()
+		d.workerHosts = hosts
+		active := &ActiveTask{Task: types.Task{Offset: 0, Length: 16 * types.AlignSize}}
+		active.CurrentOffset.Store(4 * types.AlignSize)
+		active.StopAt.Store(16 * types.AlignSize)
+		d.activeTasks[workerID] = active
+		return d, active
+	}
+
+	// Every worker host in cooldown: no steal.
+	d, active := newDownloader("cooling.example")
+	d.hostLimiter.Penalize("cooling.example", time.Second, true, time.Now())
+	if d.StealWork(NewTaskQueue()) {
+		t.Fatal("stole work while every worker host was in cooldown")
+	}
+	if active.StopAt.Load() != 16*types.AlignSize {
+		t.Fatal("suppressed steal still modified the active range")
+	}
+
+	// A free mirror keeps stealing alive.
+	d, _ = newDownloader("cooling.example", "free.example")
+	d.hostLimiter.Penalize("cooling.example", time.Second, true, time.Now())
+	if !d.StealWork(NewTaskQueue()) {
+		t.Fatal("steal suppressed while a mirror host was still free")
+	}
+
+	// An expired cooldown restores stealing.
+	d, _ = newDownloader("cooling.example")
+	d.hostLimiter.Penalize("cooling.example", time.Second, true, time.Now().Add(-time.Hour))
+	if !d.StealWork(NewTaskQueue()) {
+		t.Fatal("steal suppressed after cooldown expired")
 	}
 }
 

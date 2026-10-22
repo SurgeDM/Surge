@@ -275,6 +275,10 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.Settings) {
+		if err := m.refreshSettings(); err != nil {
+			m.addLogEntry("Failed to retrieve settings: " + err.Error())
+			return m, nil
+		}
 		m.snapshotSettings()
 		m.state = SettingsState
 		m.SettingsActiveTab = 0
@@ -285,6 +289,10 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if key.Matches(msg, m.keys.Dashboard.SpeedLimits) {
+		if err := m.refreshSettings(); err != nil {
+			m.addLogEntry("Failed to retrieve settings: " + err.Error())
+			return m, nil
+		}
 		m.snapshotSettings()
 		m.state = SpeedLimitsState
 		m.speedLimitsCursor = 0
