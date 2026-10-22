@@ -1571,3 +1571,55 @@ func TestPostSettingsPreservesAuthToken(t *testing.T) {
 		}
 	}
 }
+
+type failingBulkService struct {
+	*httpAPITestService
+	status string
+}
+
+func (s *failingBulkService) List() ([]types.DownloadStatus, error) {
+	return []types.DownloadStatus{{ID: "success", Status: s.status}, {ID: "failure", Status: s.status}}, nil
+}
+func (s *failingBulkService) Pause(id string) error {
+	if id == "failure" {
+		return errors.New("pause failed")
+	}
+	return nil
+}
+func (s *failingBulkService) Resume(id string) error {
+	if id == "failure" {
+		return errors.New("resume failed")
+	}
+	return nil
+}
+func TestBulkActionCountsOnlySuccesses(t *testing.T) {
+	for _, tc := range []struct{ path, status, count string }{
+		{"/pause-all", "downloading", "paused"},
+		{"/resume-all", "paused", "resumed"},
+	} {
+		t.Run(tc.path, func(t *testing.T) {
+			mux := http.NewServeMux()
+			registerHTTPRoutes(mux, 0, "", &failingBulkService{httpAPITestService: &httpAPITestService{}, status: tc.status})
+			response := httptest.NewRecorder()
+			mux.ServeHTTP(response, httptest.NewRequest(http.MethodPost, tc.path, nil))
+			if response.Code != http.StatusOK {
+				t.Fatalf("status = %d", response.Code)
+			}
+			var body map[string]json.RawMessage
+			if err := json.Unmarshal(response.Body.Bytes(), &body); err != nil {
+				t.Fatal(err)
+			}
+			var count int
+			if err := json.Unmarshal(body[tc.count], &count); err != nil {
+				t.Fatal(err)
+			}
+			var results []downloadActionResult
+			if err := json.Unmarshal(body["results"], &results); err != nil {
+				t.Fatal(err)
+			}
+			if count != 1 || len(results) != 2 || results[0].Error != "" || results[1].Error == "" {
+				t.Fatalf("unexpected response: %s", response.Body.String())
+			}
+		})
+	}
+}

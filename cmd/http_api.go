@@ -32,12 +32,7 @@ type ResumeBatchRequest struct {
 	IDs []string `json:"ids"`
 }
 
-type ResumeBatchResult struct {
-	ID    string `json:"id"`
-	Error string `json:"error,omitempty"`
-}
-
-type PauseResult struct {
+type downloadActionResult struct {
 	ID    string `json:"id"`
 	Error string `json:"error,omitempty"`
 }
@@ -434,7 +429,7 @@ func handleBatchResume(service downloadservice.DownloadService) http.HandlerFunc
 		}
 
 		errs := service.ResumeBatch(req.IDs)
-		res := make([]ResumeBatchResult, len(req.IDs))
+		res := make([]downloadActionResult, len(req.IDs))
 
 		if len(errs) < len(req.IDs) {
 			var serviceError error
@@ -480,18 +475,19 @@ func handlePauseAll(service downloadservice.DownloadService) http.HandlerFunc {
 			return
 		}
 
-		results := make([]PauseResult, 0)
+		results := make([]downloadActionResult, 0)
 		pauseCount := 0
 
 		for _, download := range downloadList {
 			if download.Status != "completed" && download.Status != "paused" && download.Status != "error" {
-				result := PauseResult{
+				result := downloadActionResult{
 					ID: download.ID,
 				}
 				if err := service.Pause(download.ID); err != nil {
 					result.Error = err.Error()
+				} else {
+					pauseCount++
 				}
-				pauseCount++
 				results = append(results, result)
 			}
 		}
@@ -510,18 +506,19 @@ func handleResumeAll(service downloadservice.DownloadService) http.HandlerFunc {
 			http.Error(w, fmt.Sprintf("Error getting downloads :%v", err), http.StatusInternalServerError)
 			return
 		}
-		results := make([]ResumeBatchResult, 0)
+		results := make([]downloadActionResult, 0)
 		resumeCount := 0
 
 		for _, download := range downloadList {
 			if download.Status == "paused" {
-				result := ResumeBatchResult{
+				result := downloadActionResult{
 					ID: download.ID,
 				}
 				if err := service.Resume(download.ID); err != nil {
 					result.Error = err.Error()
+				} else {
+					resumeCount++
 				}
-				resumeCount++
 				results = append(results, result)
 			}
 		}
