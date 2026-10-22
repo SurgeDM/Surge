@@ -49,9 +49,9 @@ func (m *TaskManager) Install(ctx context.Context) error {
 	if err := m.run(ctx, "/Create", "/F", "/SC", "ONLOGON", "/RL", "LIMITED", "/TN", m.taskName, "/TR", command); err != nil {
 		return err
 	}
-	// Preserve the task's other settings while removing the default 72-hour limit.
+	// A daemon must keep running on battery power and beyond the default 72-hour limit.
 	out, err := m.runner.Run(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
-		`$ErrorActionPreference = 'Stop'; $task = Get-ScheduledTask -TaskPath '\' -TaskName '`+m.taskName+`'; $task.Settings.ExecutionTimeLimit = 'PT0S'; Set-ScheduledTask -InputObject $task | Out-Null`)
+		`$ErrorActionPreference = 'Stop'; $task = Get-ScheduledTask -TaskPath '\' -TaskName '`+m.taskName+`'; $task.Settings.ExecutionTimeLimit = 'PT0S'; $task.Settings.DisallowStartIfOnBatteries = $false; $task.Settings.StopIfGoingOnBatteries = $false; Set-ScheduledTask -InputObject $task | Out-Null`)
 	if err != nil {
 		return fmt.Errorf("configure user task runtime: %w: %s", err, strings.TrimSpace(string(out)))
 	}

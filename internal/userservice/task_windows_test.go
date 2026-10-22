@@ -22,7 +22,10 @@ func (r *taskInstallRunner) Run(_ context.Context, name string, args ...string) 
 	case "sc.exe":
 		return nil, errors.New("legacy service absent")
 	case "powershell.exe":
-		r.configured = strings.Contains(strings.Join(args, " "), "ExecutionTimeLimit = 'PT0S'")
+		script := strings.Join(args, " ")
+		r.configured = strings.Contains(script, "ExecutionTimeLimit = 'PT0S'") &&
+			strings.Contains(script, "DisallowStartIfOnBatteries = $false") &&
+			strings.Contains(script, "StopIfGoingOnBatteries = $false")
 		return nil, r.runtimeErr
 	case "schtasks.exe":
 		if args[0] == "/Run" {
@@ -31,7 +34,7 @@ func (r *taskInstallRunner) Run(_ context.Context, name string, args ...string) 
 	}
 	return nil, nil
 }
-func TestTaskInstallRemovesRuntimeLimitBeforeStarting(t *testing.T) {
+func TestTaskInstallConfiguresDaemonLifetimeBeforeStarting(t *testing.T) {
 	if err := ensureTaskUser(); err != nil {
 		t.Skip("requires a non-elevated user")
 	}

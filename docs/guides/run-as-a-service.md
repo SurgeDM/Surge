@@ -27,6 +27,9 @@ Surge uses the platform's user-scoped supervisor:
 | Windows | Current-user scheduled task | When the user logs in |
 | Termux | termux-services/runit | With the user's Termux service supervisor |
 
+On Windows, the task is configured to start and continue running on battery
+power, with no execution time limit.
+
 Termux requires `pkg install termux-services` first.
 
 ## Control the service
