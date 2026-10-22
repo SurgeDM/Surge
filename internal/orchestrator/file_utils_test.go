@@ -240,3 +240,40 @@ func TestResolveDestination_ErrorsWhenUniqueNameExhausted(t *testing.T) {
 		t.Fatal("expected unique-name exhaustion error")
 	}
 }
+
+func TestCategoryDirectoryIsCreatedAtReservation(t *testing.T) {
+	base := t.TempDir()
+	target := filepath.Join(base, "new", "category")
+	settings := config.DefaultSettings()
+	settings.Categories.CategoryEnabled.Value = true
+	settings.Categories.Categories = []config.Category{{Name: "Test", Pattern: ".*", Path: target}}
+	path, name, err := ResolveDestination("https://example.com/file.bin", "file.bin", base, true, settings, nil, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if path != target {
+		t.Fatalf("category destination = %q, want %q", path, target)
+	}
+	if err := precreateWorkingFile(path, name); err != nil {
+		t.Fatalf("reserve in missing category directory: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(target, name) + types.IncompleteSuffix); err != nil {
+		t.Fatalf("working file missing: %v", err)
+	}
+}
+
+func TestCategoryDirectoryFailureIdentifiesDestination(t *testing.T) {
+	base := t.TempDir()
+	blocker := filepath.Join(base, "file")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	target := filepath.Join(blocker, "category")
+	settings := config.DefaultSettings()
+	settings.Categories.CategoryEnabled.Value = true
+	settings.Categories.Categories = []config.Category{{Name: "Test", Pattern: ".*", Path: target}}
+	_, _, err := ResolveDestination("https://example.com/file.bin", "file.bin", base, true, settings, nil, nil)
+	if err == nil || !strings.Contains(err.Error(), target) || !strings.Contains(err.Error(), "cannot access download directory") {
+		t.Fatalf("expected actionable destination error, got %v", err)
+	}
+}

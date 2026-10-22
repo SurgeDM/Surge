@@ -1084,15 +1084,6 @@ func (s *Settings) Validate() []string {
 	validCats := make([]Category, 0, len(s.Categories.Categories))
 	for _, cat := range s.Categories.Categories {
 		if err := cat.Validate(); err == nil {
-			// Extra path check for each category
-			catPath := strings.TrimSpace(cat.Path)
-			if catPath != "" {
-				if info, err := os.Stat(catPath); err != nil || !info.IsDir() {
-					// Fallback to default download dir
-					cat.Path = Resolve[string](s.General.DefaultDownloadDir)
-					s.StartupWarnings = append(s.StartupWarnings, fmt.Sprintf("Category %q path is broken; reset to default", cat.Name))
-				}
-			}
 			validCats = append(validCats, cat)
 		} else {
 			s.StartupWarnings = append(s.StartupWarnings, fmt.Sprintf("Removed invalid category %q: %v", cat.Name, err))
@@ -1228,12 +1219,6 @@ func (s *Settings) ValidateStrict(localPaths bool) error {
 		cat := &s.Categories.Categories[i]
 		if err := cat.Validate(); err != nil {
 			return fmt.Errorf("invalid category %q: %w", cat.Name, err)
-		}
-		if localPaths {
-			info, err := os.Stat(strings.TrimSpace(cat.Path))
-			if err != nil || !info.IsDir() {
-				return fmt.Errorf("invalid category %q path %q: directory is not accessible", cat.Name, cat.Path)
-			}
 		}
 	}
 	return nil

@@ -35,7 +35,7 @@ category_enabled = true
 Surge implements a self-healing configuration system to ensure the application remains stable even if the `settings.toml` file is manually edited with invalid values.
 
 - **Range Enforcement**: Numeric values (like connection limits and concurrent downloads) are strictly enforced. If a value is set outside its safe operating range in the TOML file, Surge will automatically reset that specific field to its default value on startup while preserving your other valid settings.
-- **Path Verification**: Paths like `default_download_dir` and individual category paths are verified for existence and accessibility. Broken or inaccessible paths are rolled back to the system's default Downloads directory.
+- **Path Verification**: The default download directory is checked when loading settings. Category paths are preserved even when their directories are missing or unavailable. Surge creates category directories when a download needs them and reports creation or access failures for that download.
 - **Syntactic Validation**: Proxy URLs and DNS server lists are validated for correct syntax.
 - **Category Integrity**: If a custom category has an invalid regular expression pattern, it is automatically pruned from the active list to prevent engine crashes.
 - **Corrupt TOML Fallback**: If the `settings.toml` file is completely unparseable, Surge will log a warning and start with all factory default settings for that session.

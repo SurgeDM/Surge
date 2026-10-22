@@ -558,3 +558,32 @@ func TestSettingsOwnerRejectsInvalidSnapshotsWithoutMutatingCaller(t *testing.T)
 		t.Fatalf("settings not persisted: %v", err)
 	}
 }
+
+func TestMissingCategoryDirectoryDoesNotBlockSettingsSave(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	categoryDir := filepath.Join(t.TempDir(), "new-category")
+	for _, enabled := range []bool{false, true} {
+		settings := config.DefaultSettings()
+		settings.Categories.CategoryEnabled.Value = enabled
+		settings.Categories.Categories = []config.Category{{Name: "Archive", Pattern: ".*", Path: categoryDir}}
+		mgr := orchestrator.NewLifecycleManager(nil, nil, settings)
+		svc := NewLocalDownloadService(mgr)
+		settings.General.AutoResume.Value = true
+		err := svc.UpdateSettings(settings)
+		mgr.Shutdown()
+		if err != nil {
+			t.Fatalf("enabled=%v: unrelated save blocked: %v", enabled, err)
+		}
+		loaded, err := config.LoadSettings()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !config.Resolve[bool](loaded.General.AutoResume) || len(loaded.Categories.Categories) != 1 || loaded.Categories.Categories[0].Path != categoryDir {
+			t.Fatalf("enabled=%v: reload lost settings or category path", enabled)
+		}
+		if _, err := os.Stat(categoryDir); !os.IsNotExist(err) {
+			t.Fatalf("settings save created category directory: %v", err)
+		}
+	}
+}

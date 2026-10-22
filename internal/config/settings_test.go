@@ -129,7 +129,7 @@ func TestNormalizeValuesRejectsFractionalTypeInt(t *testing.T) {
 	}
 }
 
-func TestValidateStrictRejectsInvalidCategoryPaths(t *testing.T) {
+func TestValidateStrictDefersCategoryFilesystemChecks(t *testing.T) {
 	filePath := filepath.Join(t.TempDir(), "not-a-directory")
 	if err := os.WriteFile(filePath, []byte("file"), 0o600); err != nil {
 		t.Fatalf("WriteFile: %v", err)
@@ -145,8 +145,8 @@ func TestValidateStrictRejectsInvalidCategoryPaths(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			settings := DefaultSettings()
 			settings.Categories.Categories = []Category{{Name: "Test", Pattern: ".*", Path: test.path}}
-			if err := settings.ValidateStrict(true); err == nil || !strings.Contains(err.Error(), `invalid category "Test" path`) {
-				t.Fatalf("ValidateStrict() error = %v, want invalid category path error", err)
+			if err := settings.ValidateStrict(true); err != nil {
+				t.Fatalf("filesystem checks should happen when downloading: %v", err)
 			}
 		})
 	}
