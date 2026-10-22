@@ -25,7 +25,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/power"
-	"github.com/SurgeDM/Surge/internal/service"
+	downloadservice "github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -135,7 +135,7 @@ type RootModel struct {
 	removeTargetID string
 	// Service Interface
 	// Core
-	Service      service.DownloadService
+	Service      downloadservice.DownloadService
 	Orchestrator *orchestrator.LifecycleManager
 
 	// File picker for directory selection
@@ -176,7 +176,12 @@ type RootModel struct {
 	logFocused  bool           // Whether the log viewport is focused
 
 	// Settings
-	Settings              *config.Settings // Application settings
+	Settings *config.Settings // Application settings
+	// SaveSettingsFunc owns persistence for this model. Local TUIs write the
+	// user config; remote TUIs replace this with a daemon-backed implementation.
+	// A nil function makes settings read-only and must never write defaults.
+	SaveSettingsFunc      func(*config.Settings) error
+	SettingsReadOnly      bool
 	SettingsBaseline      *config.Settings // Snapshot of settings when entering the settings view
 	StartupConfigWarnings []string         // Config validation warnings to emit on first render
 	SettingsActiveTab     int              // Active category tab (0-3)
@@ -309,7 +314,7 @@ func (d *DownloadModel) UpdateETA() {
 	d.lastETA = time.Duration(etaSeconds * float64(time.Second))
 }
 
-func InitialRootModel(serverPort int, currentVersion string, service service.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, currentCommit ...string) RootModel {
+func InitialRootModel(serverPort int, currentVersion string, service downloadservice.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, currentCommit ...string) RootModel {
 	var statuses []types.DownloadStatus
 	if service != nil {
 		statuses, _ = service.List()
@@ -319,11 +324,11 @@ func InitialRootModel(serverPort int, currentVersion string, service service.Dow
 
 // InitialRootModelWithStatuses builds a model from statuses already fetched by
 // the caller. It avoids a second network request during remote TUI startup.
-func InitialRootModelWithStatuses(serverPort int, currentVersion string, service service.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, statuses []types.DownloadStatus, currentCommit ...string) RootModel {
+func InitialRootModelWithStatuses(serverPort int, currentVersion string, service downloadservice.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, statuses []types.DownloadStatus, currentCommit ...string) RootModel {
 	return initialRootModel(serverPort, currentVersion, service, orchestrator, settings, noResume, statuses, currentCommit...)
 }
 
-func initialRootModel(serverPort int, currentVersion string, service service.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, statuses []types.DownloadStatus, currentCommit ...string) RootModel {
+func initialRootModel(serverPort int, currentVersion string, service downloadservice.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, statuses []types.DownloadStatus, currentCommit ...string) RootModel {
 	initialDarkBackground := true
 	if !IsTestMode {
 		initialDarkBackground = lipgloss.HasDarkBackground(os.Stdin, os.Stdout)
@@ -337,6 +342,8 @@ func initialRootModel(serverPort int, currentVersion string, service service.Dow
 
 	if settings == nil {
 		settings = config.DefaultSettings()
+	} else {
+		settings = settings.Clone()
 	}
 
 	urlInput := textinput.New()
@@ -533,6 +540,7 @@ func initialRootModel(serverPort int, currentVersion string, service service.Dow
 		Orchestrator:          orchestrator,
 		PWD:                   pwd,
 		Settings:              settings,
+		SaveSettingsFunc:      config.SaveSettings,
 		StartupConfigWarnings: startupConfigWarnings,
 		SettingsActiveTab:     0,
 		SettingsSelectedRow:   0,
@@ -556,6 +564,10 @@ func initialRootModel(serverPort int, currentVersion string, service service.Dow
 		cancelEnqueue:         cancelEnqueue,
 		powerController:       power.NewController(),
 		spinner:               s,
+	}
+
+	if store, ok := service.(downloadservice.SettingsService); ok {
+		m.SaveSettingsFunc = store.UpdateSettings
 	}
 
 	InitAuthToken() // Cache auth token for TUI to avoid per-frame disk I/O

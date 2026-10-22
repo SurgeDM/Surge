@@ -2,13 +2,16 @@ package service
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/orchestrator"
 	"github.com/SurgeDM/Surge/internal/scheduler"
 	"github.com/SurgeDM/Surge/internal/store"
@@ -379,5 +382,209 @@ func TestLocalDownloadService_Delete(t *testing.T) {
 	_, err = svc.GetStatus(id)
 	if err == nil {
 		t.Error("expected error getting status of deleted download")
+	}
+}
+
+func TestSettingsReadDuringRateUpdates(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("APPDATA", dir)
+	pool := scheduler.New(make(chan types.DownloadEvent, 100), 1)
+	mgr := orchestrator.NewLifecycleManager(pool, nil, config.DefaultSettings())
+	defer mgr.Shutdown()
+	svc := NewLocalDownloadService(mgr)
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 50; i++ {
+			if err := svc.SetGlobalRateLimit(int64(i)); err != nil {
+				t.Error(err)
+				return
+			}
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		for i := 0; i < 1000; i++ {
+			if _, err := svc.GetSettings(); err != nil {
+				t.Error(err)
+				return
+			}
+		}
+	}()
+	wg.Wait()
+}
+
+func TestUpdateSettingsAppliesInheritedRateLimit(t *testing.T) {
+	testutil.SetupStateDB(t)
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("APPDATA", dir)
+	pool := scheduler.New(make(chan types.DownloadEvent, 100), 1)
+	settings := config.DefaultSettings()
+	settings.General.DefaultDownloadDir.Value = dir
+	settings.Categories.Categories = nil
+	mgr := orchestrator.NewLifecycleManager(pool, nil, settings)
+	defer mgr.Shutdown()
+	svc := NewLocalDownloadService(mgr)
+	block := make(chan struct{})
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-block:
+		case <-r.Context().Done():
+		}
+	}))
+	defer ts.Close()
+	defer close(block)
+	cfg := types.DownloadRecord{ID: "queued-limit", URL: ts.URL, Filename: "file", DestPath: filepath.Join(dir, "file"), Status: "queued"}
+	if err := store.AddToMasterList(cfg); err != nil {
+		t.Fatal(err)
+	}
+	pool.Add(cfg)
+	settings.Network.DefaultDownloadRateLimit.Value = "1 KiB/s"
+	if err := svc.UpdateSettings(settings); err != nil {
+		t.Fatal(err)
+	}
+	queued := pool.GetAll()
+	if len(queued) != 1 || queued[0].RateLimit != 1024 {
+		t.Fatalf("queued rate = %#v", queued)
+	}
+	loaded, err := config.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Network.DefaultDownloadRateLimit.Value != "1 KiB/s" {
+		t.Fatalf("persisted rate = %v", loaded.Network.DefaultDownloadRateLimit.Value)
+	}
+	settings.Network.DefaultDownloadRateLimit.Value = "2 KiB/s"
+	if snapshot, _ := svc.GetSettings(); snapshot.Network.DefaultDownloadRateLimit.Value != "1 KiB/s" {
+		t.Fatal("caller mutation changed live settings")
+	}
+}
+
+func TestConcurrentSettingsPatchesPreserveBothEdits(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	baseline := config.DefaultSettings()
+	baseline.Categories.Categories = nil
+	mgr := orchestrator.NewLifecycleManager(nil, nil, baseline)
+	defer mgr.Shutdown()
+	svc := NewLocalDownloadService(mgr)
+	var wg sync.WaitGroup
+	for _, key := range []string{"auto_resume", "warn_on_duplicate"} {
+		edited := baseline.Clone()
+		edited.FindSetting("General", key).Value = !config.Resolve[bool](baseline.FindSetting("General", key))
+		patch := config.DiffSettings(baseline, edited)
+		wg.Go(func() {
+			if _, err := svc.PatchSettings(patch); err != nil {
+				t.Error(err)
+			}
+		})
+	}
+	wg.Wait()
+	got, _ := svc.GetSettings()
+	persisted, err := config.LoadSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, key := range []string{"auto_resume", "warn_on_duplicate"} {
+		if got.FindSetting("General", key).Value == baseline.FindSetting("General", key).Value || got.FindSetting("General", key).Value != persisted.FindSetting("General", key).Value {
+			t.Fatalf("lost edit or persistence mismatch: %s", key)
+		}
+	}
+}
+
+func TestFailedSettingsPersistenceLeavesOwnerUnchanged(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	mgr := orchestrator.NewLifecycleManager(nil, nil, settings)
+	defer mgr.Shutdown()
+	svc := NewLocalDownloadService(mgr)
+	blocker := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", blocker)
+	t.Setenv("APPDATA", blocker)
+	updated := settings.Clone()
+	updated.Network.GlobalRateLimit.Value = "1024 B/s"
+	if err := svc.UpdateSettings(updated); err == nil {
+		t.Fatal("expected persistence failure")
+	}
+	current, _ := svc.GetSettings()
+	if current.Network.GlobalRateLimit.Value != settings.Network.GlobalRateLimit.Value {
+		t.Fatal("failed save published new settings")
+	}
+	if _, err := svc.PatchSettings(config.DiffSettings(settings, updated)); err == nil {
+		t.Fatal("expected patch persistence failure")
+	}
+	current, _ = svc.GetSettings()
+	if current.Network.GlobalRateLimit.Value != settings.Network.GlobalRateLimit.Value {
+		t.Fatal("failed patch published new settings")
+	}
+}
+
+func TestSettingsOwnerRejectsInvalidSnapshotsWithoutMutatingCaller(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	baseline := config.DefaultSettings()
+	baseline.Categories.Categories = nil
+	mgr := orchestrator.NewLifecycleManager(nil, nil, baseline)
+	defer mgr.Shutdown()
+	svc := NewLocalDownloadService(mgr)
+	invalid := baseline.Clone()
+	invalid.General.AutoResume = nil
+	if err := svc.UpdateSettings(invalid); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected invalid settings error, got %v", err)
+	}
+	if err := svc.UpdateSettings(nil); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("expected nil settings error, got %v", err)
+	}
+	updated := baseline.Clone()
+	updated.Network.MaxConcurrentDownloads.Value = float64(5)
+	if err := svc.UpdateSettings(updated); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := updated.Network.MaxConcurrentDownloads.Value.(float64); !ok {
+		t.Fatal("owner mutated caller during normalization")
+	}
+	updated.Network.MaxConcurrentDownloads.Value = 6
+	current, _ := svc.GetSettings()
+	if current.Network.MaxConcurrentDownloads.Value != 5 {
+		t.Fatal("owner retained caller snapshot")
+	}
+	persisted, err := config.LoadSettings()
+	if err != nil || persisted.Network.MaxConcurrentDownloads.Value != 5 {
+		t.Fatalf("settings not persisted: %v", err)
+	}
+}
+
+func TestMissingCategoryDirectoryDoesNotBlockSettingsSave(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+	t.Setenv("APPDATA", t.TempDir())
+	categoryDir := filepath.Join(t.TempDir(), "new-category")
+	for _, enabled := range []bool{false, true} {
+		settings := config.DefaultSettings()
+		settings.Categories.CategoryEnabled.Value = enabled
+		settings.Categories.Categories = []config.Category{{Name: "Archive", Pattern: ".*", Path: categoryDir}}
+		mgr := orchestrator.NewLifecycleManager(nil, nil, settings)
+		svc := NewLocalDownloadService(mgr)
+		settings.General.AutoResume.Value = true
+		err := svc.UpdateSettings(settings)
+		mgr.Shutdown()
+		if err != nil {
+			t.Fatalf("enabled=%v: unrelated save blocked: %v", enabled, err)
+		}
+		loaded, err := config.LoadSettings()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !config.Resolve[bool](loaded.General.AutoResume) || len(loaded.Categories.Categories) != 1 || loaded.Categories.Categories[0].Path != categoryDir {
+			t.Fatalf("enabled=%v: reload lost settings or category path", enabled)
+		}
+		if _, err := os.Stat(categoryDir); !os.IsNotExist(err) {
+			t.Fatalf("settings save created category directory: %v", err)
+		}
 	}
 }

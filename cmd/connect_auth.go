@@ -16,7 +16,7 @@ func resolveTokenForConnectTarget(target connectTarget) (string, error) {
 	}
 
 	serverHost, serverPort := parseRemoteServerAddress(target.BaseURL)
-	if isLoopbackHost(serverHost) {
+	if isLocalHost(serverHost) {
 		details, ok := getActiveConnectionDetails()
 		if !ok || details.port != serverPort {
 			return "", fmt.Errorf("local target %q does not match the discovered Surge daemon: use --token or set SURGE_TOKEN", target.BaseURL)

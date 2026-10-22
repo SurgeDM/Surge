@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"mime"
@@ -13,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
@@ -26,6 +28,14 @@ type RemoteDownloadService struct {
 	ctx       context.Context
 	cancel    context.CancelFunc
 }
+
+// apiError retains the response status so callers can classify failures.
+type apiError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *apiError) Error() string { return fmt.Sprintf("API error %d: %s", e.StatusCode, e.Body) }
 
 // NewRemoteDownloadService creates a new remote service instance.
 func NewRemoteDownloadService(baseURL string, token string, opts HTTPClientOptions) (*RemoteDownloadService, error) {
@@ -85,7 +95,7 @@ func (s *RemoteDownloadService) doRequestWithContext(ctx context.Context, method
 		defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
 		// Limit error body read to 1KB to prevent DoS
 		bodyBytes, _ := io.ReadAll(io.LimitReader(resp.Body, utils.KiB))
-		return nil, fmt.Errorf("API error %d: %s", resp.StatusCode, string(bodyBytes))
+		return nil, &apiError{StatusCode: resp.StatusCode, Body: string(bodyBytes)}
 	}
 
 	return resp, nil
@@ -127,6 +137,52 @@ func (s *RemoteDownloadService) History() ([]types.DownloadRecord, error) {
 		return nil, err
 	}
 	return history, nil
+}
+
+func (s *RemoteDownloadService) GetSettings() (*config.Settings, error) {
+	resp, err := s.doRequest("GET", "/settings", nil)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+
+	return decodeRemoteSettings(resp.Body)
+}
+
+func decodeRemoteSettings(body io.Reader) (*config.Settings, error) {
+	settings := config.DefaultSettings()
+	if err := json.NewDecoder(body).Decode(settings); err != nil {
+		return nil, err
+	}
+	if err := settings.NormalizeValues(); err != nil {
+		return nil, fmt.Errorf("server returned invalid settings: %w", err)
+	}
+	if err := settings.ValidateStrict(false); err != nil {
+		return nil, fmt.Errorf("server returned invalid settings: %w", err)
+	}
+	return settings, nil
+}
+
+func (s *RemoteDownloadService) UpdateSettings(settings *config.Settings) error {
+	resp, err := s.doRequest("PUT", "/settings", settings)
+	if err != nil {
+		return err
+	}
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+	return nil
+}
+
+func (s *RemoteDownloadService) PatchSettings(patch config.SettingsPatch) (*config.Settings, error) {
+	resp, err := s.doRequest(http.MethodPatch, "/settings", patch)
+	if err != nil {
+		var responseErr *apiError
+		if errors.As(err, &responseErr) && responseErr.StatusCode == http.StatusConflict {
+			return nil, fmt.Errorf("%w: %w", config.ErrSettingsConflict, err)
+		}
+		return nil, err
+	}
+	defer func() { _, _ = io.Copy(io.Discard, resp.Body); _ = resp.Body.Close() }()
+	return decodeRemoteSettings(resp.Body)
 }
 
 // GetStatus returns a status for a single download by id.

@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"math"
 	"os"
 	"path/filepath"
 	"reflect"
@@ -109,6 +110,46 @@ func TestDefaultSettings(t *testing.T) {
 			t.Error("InstructionsURL should not be empty")
 		}
 	})
+}
+
+func TestNormalizeValuesRejectsFractionalTypeInt(t *testing.T) {
+	settings := DefaultSettings()
+	settings.Network.MaxConnectionsPerDownload.Value = 3.5
+
+	if err := settings.NormalizeValues(); err == nil {
+		t.Fatal("expected fractional TypeInt value to be rejected")
+	}
+
+	settings.Network.MaxConnectionsPerDownload.Value = 3.0
+	if err := settings.NormalizeValues(); err != nil {
+		t.Fatalf("integral float TypeInt value was rejected: %v", err)
+	}
+	if got := settings.Network.MaxConnectionsPerDownload.Value; got != 3 {
+		t.Fatalf("normalized TypeInt value = %#v, want 3", got)
+	}
+}
+
+func TestValidateStrictDefersCategoryFilesystemChecks(t *testing.T) {
+	filePath := filepath.Join(t.TempDir(), "not-a-directory")
+	if err := os.WriteFile(filePath, []byte("file"), 0o600); err != nil {
+		t.Fatalf("WriteFile: %v", err)
+	}
+
+	for _, test := range []struct {
+		name string
+		path string
+	}{
+		{name: "missing", path: filepath.Join(t.TempDir(), "missing")},
+		{name: "file", path: filePath},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			settings := DefaultSettings()
+			settings.Categories.Categories = []Category{{Name: "Test", Pattern: ".*", Path: test.path}}
+			if err := settings.ValidateStrict(true); err != nil {
+				t.Fatalf("filesystem checks should happen when downloading: %v", err)
+			}
+		})
+	}
 }
 
 func TestDefaultSettings_Consistency(t *testing.T) {
@@ -657,5 +698,27 @@ func TestCategorySettings_UnmarshalJSON_BackwardCompatibility(t *testing.T) {
 	// CategoryEnabled should remain default (false)
 	if Resolve[bool](s2.Categories.CategoryEnabled) {
 		t.Errorf("Expected category_enabled to remain false")
+	}
+}
+
+func TestClonePreservesEmptyCategories(t *testing.T) {
+	for _, categories := range [][]Category{nil, {}} {
+		settings := DefaultSettings()
+		settings.Categories.Categories = categories
+		if got := settings.Clone().Categories.Categories; !reflect.DeepEqual(got, categories) {
+			t.Fatalf("Clone categories = %#v, want %#v", got, categories)
+		}
+	}
+}
+
+func TestNormalizeValuesRejectsInvalidIntegers(t *testing.T) {
+	for _, setting := range []string{"max_connections_per_host", "min_chunk_size"} {
+		for _, value := range []float64{1048576.5, math.NaN(), math.Inf(1), math.Ldexp(1, 63)} {
+			settings := DefaultSettings()
+			settings.FindSetting("Network", setting).Value = value
+			if err := settings.NormalizeValues(); err == nil {
+				t.Fatalf("%s accepted %v", setting, value)
+			}
+		}
 	}
 }

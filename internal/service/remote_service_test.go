@@ -2,18 +2,80 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/types"
 )
+
+func TestRemoteDownloadService_SettingsRoundTrip(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	settings.General.AutoResume.Value = true
+	putCalled := false
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.Method {
+		case http.MethodGet:
+			_ = json.NewEncoder(w).Encode(settings)
+		case http.MethodPut:
+			putCalled = true
+			incoming := config.DefaultSettings()
+			if err := json.NewDecoder(r.Body).Decode(incoming); err != nil {
+				t.Errorf("Decode update: %v", err)
+			}
+			if !config.Resolve[bool](incoming.General.AutoResume) {
+				t.Error("updated setting was not sent")
+			}
+			w.WriteHeader(http.StatusOK)
+		}
+	}))
+	defer ts.Close()
+
+	svc, err := NewRemoteDownloadService(ts.URL, "token", HTTPClientOptions{})
+	if err != nil {
+		t.Fatalf("NewRemoteDownloadService: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Shutdown() })
+	loaded, err := svc.GetSettings()
+	if err != nil {
+		t.Fatalf("GetSettings: %v", err)
+	}
+	if !config.Resolve[bool](loaded.General.AutoResume) {
+		t.Fatal("remote settings were not decoded")
+	}
+	if err := svc.UpdateSettings(loaded); err != nil {
+		t.Fatalf("UpdateSettings: %v", err)
+	}
+	if !putCalled {
+		t.Fatal("settings update was not sent")
+	}
+}
+
+func TestRemoteDownloadService_RejectsNullSetting(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"general":{"auto_resume":null}}`))
+	}))
+	defer ts.Close()
+
+	svc, err := NewRemoteDownloadService(ts.URL, "token", HTTPClientOptions{})
+	if err != nil {
+		t.Fatalf("NewRemoteDownloadService: %v", err)
+	}
+	t.Cleanup(func() { _ = svc.Shutdown() })
+	if _, err := svc.GetSettings(); err == nil {
+		t.Fatal("expected null remote setting to be rejected")
+	}
+}
 
 func TestRemoteDownloadService_SetRateLimit_ProxiesRequest(t *testing.T) {
 	called := false
@@ -462,5 +524,58 @@ func TestRemoteDownloadService_StreamEvents_ReceivesMessages(t *testing.T) {
 		}
 	case <-time.After(2 * time.Second):
 		t.Errorf("timed out waiting for message")
+	}
+}
+
+func TestRemoteSettingsKeepServerPaths(t *testing.T) {
+	for _, category := range []bool{false, true} {
+		t.Run(map[bool]string{false: "default_directory", true: "category_directory"}[category], func(t *testing.T) {
+			s := config.DefaultSettings()
+			s.General.DefaultDownloadDir.Value = ""
+			s.Categories.Categories = nil
+			serverPath := filepath.Join(t.TempDir(), "exists-only-on-server")
+			if category {
+				s.Categories.Categories = []config.Category{{Name: "Remote", Pattern: ".*", Path: serverPath}}
+			} else {
+				s.General.DefaultDownloadDir.Value = serverPath
+			}
+			ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { _ = json.NewEncoder(w).Encode(s) }))
+			defer ts.Close()
+			svc, err := NewRemoteDownloadService(ts.URL, "token", HTTPClientOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = svc.Shutdown() }()
+			if _, err := svc.GetSettings(); err != nil {
+				t.Fatalf("client rejected server path: %v", err)
+			}
+		})
+	}
+}
+
+func TestRemoteSettingsPatchPreservesConflictError(t *testing.T) {
+	for _, status := range []int{http.StatusConflict, http.StatusInternalServerError} {
+		t.Run(http.StatusText(status), func(t *testing.T) {
+			server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPatch {
+					t.Errorf("expected PATCH, got %s", r.Method)
+				}
+				http.Error(w, "daemon response details", status)
+			}))
+			defer server.Close()
+			svc, err := NewRemoteDownloadService(server.URL, "test-token", HTTPClientOptions{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = svc.Shutdown() }()
+			_, err = svc.PatchSettings(config.SettingsPatch{})
+			if errors.Is(err, config.ErrSettingsConflict) != (status == http.StatusConflict) {
+				t.Fatalf("incorrect conflict classification: %v", err)
+			}
+			var responseErr *apiError
+			if !errors.As(err, &responseErr) || responseErr.StatusCode != status || !strings.Contains(responseErr.Body, "daemon response details") {
+				t.Fatalf("lost API status or response: %v", err)
+			}
+		})
 	}
 }

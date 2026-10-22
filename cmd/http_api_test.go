@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -290,6 +291,42 @@ type httpAPITestService struct {
 	clearFailedErr        error
 }
 
+type settingsHTTPTestService struct {
+	*httpAPITestService
+	mu          sync.Mutex
+	settings    *config.Settings
+	updateCalls int
+}
+
+func (s *settingsHTTPTestService) GetSettings() (*config.Settings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.settings.Clone(), nil
+}
+
+func (s *settingsHTTPTestService) UpdateSettings(settings *config.Settings) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.settings = settings.Clone()
+	s.updateCalls++
+	return nil
+}
+
+func (s *settingsHTTPTestService) PatchSettings(patch config.SettingsPatch) (*config.Settings, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	settings, err := patch.Apply(s.settings)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", service.ErrInvalidSettings, err)
+	}
+	if err := settings.ValidateStrict(true); err != nil {
+		return nil, fmt.Errorf("%w: %w", service.ErrInvalidSettings, err)
+	}
+	s.settings = settings
+	s.updateCalls++
+	return settings.Clone(), nil
+}
+
 func newRateLimitTestService() *httpAPITestService {
 	return &httpAPITestService{
 		rateLimitCalls:  make([]string, 0),
@@ -460,6 +497,87 @@ func TestEnsureOpenActionRequestAllowed_RemoteToggle(t *testing.T) {
 	globalSettings.General.AllowRemoteOpenActions.Value = true
 	if err := ensureOpenActionRequestAllowed(request); err != nil {
 		t.Fatalf("expected remote open action to be allowed when enabled, got: %v", err)
+	}
+}
+
+func TestSettingsEndpoint_ReadsAndUpdatesDaemonSettings(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	settings.General.AutoResume.Value = false
+	service := &settingsHTTPTestService{httpAPITestService: &httpAPITestService{}, settings: settings}
+
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", service)
+
+	getRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(getRecorder, httptest.NewRequest(http.MethodGet, "/settings", nil))
+	if getRecorder.Code != http.StatusOK {
+		t.Fatalf("GET /settings status = %d: %s", getRecorder.Code, getRecorder.Body.String())
+	}
+
+	updated := settings.Clone()
+	updated.General.AutoResume.Value = true
+	body, err := json.Marshal(updated)
+	if err != nil {
+		t.Fatalf("Marshal settings: %v", err)
+	}
+	putRecorder := httptest.NewRecorder()
+	mux.ServeHTTP(putRecorder, httptest.NewRequest(http.MethodPut, "/settings", strings.NewReader(string(body))))
+	if putRecorder.Code != http.StatusOK {
+		t.Fatalf("PUT /settings status = %d: %s", putRecorder.Code, putRecorder.Body.String())
+	}
+	if service.updateCalls != 1 || !config.Resolve[bool](service.settings.General.AutoResume) {
+		t.Fatal("daemon settings were not updated")
+	}
+}
+
+func TestSettingsEndpoint_RejectsInvalidUpdate(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	service := &settingsHTTPTestService{httpAPITestService: &httpAPITestService{}, settings: settings}
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", service)
+
+	updated := settings.Clone()
+	updated.Network.MaxConnectionsPerDownload.Value = 0
+	body, err := json.Marshal(updated)
+	if err != nil {
+		t.Fatalf("Marshal settings: %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPut, "/settings", strings.NewReader(string(body))))
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("PUT invalid settings status = %d, want 400: %s", recorder.Code, recorder.Body.String())
+	}
+	if service.updateCalls != 0 {
+		t.Fatal("invalid settings update reached the service")
+	}
+}
+
+func TestSettingsEndpoint_RejectsNullAndWrongTypeSettings(t *testing.T) {
+	for _, test := range []struct {
+		name string
+		body string
+	}{
+		{name: "null setting", body: `{"general":{"auto_resume":null}}`},
+		{name: "wrong boolean type", body: `{"general":{"warn_on_duplicate":"false"}}`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			settings := config.DefaultSettings()
+			settings.Categories.Categories = nil
+			service := &settingsHTTPTestService{httpAPITestService: &httpAPITestService{}, settings: settings}
+			mux := http.NewServeMux()
+			registerHTTPRoutes(mux, 0, "", service)
+
+			recorder := httptest.NewRecorder()
+			mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPut, "/settings", strings.NewReader(test.body)))
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("PUT invalid settings status = %d, want 400: %s", recorder.Code, recorder.Body.String())
+			}
+			if service.updateCalls != 0 {
+				t.Fatal("invalid settings update reached the service")
+			}
+		})
 	}
 }
 
@@ -1265,5 +1383,105 @@ func TestClearFailedEndpoint(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestSettingsEndpointConcurrentPartialUpdates(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	settings.General.AutoResume.Value = false
+	settings.General.WarnOnDuplicate.Value = false
+	service := &settingsHTTPTestService{httpAPITestService: &httpAPITestService{}, settings: settings}
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", service)
+	var wg sync.WaitGroup
+	for _, body := range []string{`{"general":{"auto_resume":true}}`, `{"general":{"warn_on_duplicate":true}}`} {
+		wg.Add(1)
+		go func(body string) {
+			defer wg.Done()
+			recorder := httptest.NewRecorder()
+			mux.ServeHTTP(recorder, httptest.NewRequest(http.MethodPut, "/settings", strings.NewReader(body)))
+			if recorder.Code != http.StatusOK {
+				t.Errorf("PUT status = %d: %s", recorder.Code, recorder.Body.String())
+			}
+		}(body)
+	}
+	wg.Wait()
+	if !config.Resolve[bool](service.settings.General.AutoResume) || !config.Resolve[bool](service.settings.General.WarnOnDuplicate) {
+		t.Fatal("concurrent partial update lost a setting")
+	}
+}
+
+func TestRemoteSettingsPatchRoundTripAndConflict(t *testing.T) {
+	setupXDGEnvIsolation(t)
+	baseline := config.DefaultSettings()
+	baseline.Categories.Categories = nil
+	baseline.Extension.AuthToken.Value = "private-token"
+	manager := orchestrator.NewLifecycleManager(nil, nil, baseline)
+	defer manager.Shutdown()
+	local := service.NewLocalDownloadService(manager)
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 1701, "", local)
+	server := testutil.NewHTTPServerT(t, authMiddleware("test-token", mux))
+	defer server.Close()
+	remote, err := service.NewRemoteDownloadService(server.URL, "test-token", service.HTTPClientOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = remote.Shutdown() }()
+	loaded, err := remote.GetSettings()
+	if err != nil {
+		t.Fatal(err)
+	}
+	edited := loaded.Clone()
+	edited.Network.MaxConcurrentDownloads.Value = 5
+	patch := config.DiffSettings(loaded, edited)
+	got, err := remote.PatchSettings(patch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Network.MaxConcurrentDownloads.Value != 5 || got.Extension.AuthToken.Value != "" {
+		t.Fatal("patch response incorrect or exposes token")
+	}
+	stored, _ := local.GetSettings()
+	if stored.Extension.AuthToken.Value != "private-token" {
+		t.Fatal("patch changed private token")
+	}
+	data, err := json.Marshal(patch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	rec := httptest.NewRecorder()
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPatch, "/settings", strings.NewReader(string(data))))
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("expected 409, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
+
+func TestSettingsPatchReportsPersistenceFailureAsServerError(t *testing.T) {
+	setupXDGEnvIsolation(t)
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = nil
+	manager := orchestrator.NewLifecycleManager(nil, nil, settings)
+	defer manager.Shutdown()
+	owner := service.NewLocalDownloadService(manager)
+	blocker := filepath.Join(t.TempDir(), "file")
+	if err := os.WriteFile(blocker, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("XDG_CONFIG_HOME", blocker)
+	t.Setenv("APPDATA", blocker)
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", owner)
+	rec := httptest.NewRecorder()
+	updated := settings.Clone()
+	updated.Network.GlobalRateLimit.Value = "1024 B/s"
+	data, err := json.Marshal(config.DiffSettings(settings, updated))
+	if err != nil {
+		t.Fatal(err)
+	}
+	mux.ServeHTTP(rec, httptest.NewRequest(http.MethodPatch, "/settings", strings.NewReader(string(data))))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("expected 500, got %d: %s", rec.Code, rec.Body.String())
 	}
 }
