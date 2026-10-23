@@ -25,12 +25,10 @@ import (
 )
 
 func TestHandleDownload_PathResolution(t *testing.T) {
-	// Setup temporary directory for mocking XDG_CONFIG_HOME
-	tempDir, err := os.MkdirTemp("", "surge-test-home")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.RemoveAll(tempDir) }()
+	// Resolve relative download paths inside a temporary directory, not the
+	// source tree that other package tests may be scanning concurrently.
+	tempDir := t.TempDir()
+	t.Chdir(tempDir)
 
 	origLifecycle := GlobalLifecycle
 	origLifecycleCleanup := GlobalLifecycleCleanup
@@ -249,9 +247,6 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			}
 		})
 	}
-	t.Cleanup(func() {
-		_ = os.RemoveAll(filepath.Join(mustGetwd(t), "relative"))
-	})
 }
 
 func TestShouldFallbackUnmappedWindowsPath(t *testing.T) {
