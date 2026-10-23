@@ -69,6 +69,10 @@ func (m RootModel) View() tea.View {
 		return m.wrapView("Loading...")
 	}
 
+	if m.state == QuitConfirmState && (m.width < MinTermWidth || m.height < MinTermHeight) {
+		return m.wrapView(m.viewCompactQuitConfirm())
+	}
+
 	// Terminal too small to render any meaningful layout
 	if m.width < MinTermWidth || m.height < MinTermHeight {
 		msg := lipgloss.NewStyle().Foreground(colors.Cyan()).Render(fmt.Sprintf("Terminal too small (min: %d\u00D7%d)", MinTermWidth, MinTermHeight))
@@ -581,6 +585,19 @@ func (m RootModel) View() tea.View {
 	fullView := lipgloss.JoinVertical(lipgloss.Left, body, footer)
 	// Place content into available space, then wrap with WindowStyle margins
 	return m.wrapView(lipgloss.Place(layout.AvailableWidth, m.height, lipgloss.Center, lipgloss.Top, fullView))
+}
+
+func (m RootModel) viewCompactQuitConfirm() string {
+	message := "Are you sure you want to quit?"
+	if m.width < lipgloss.Width(message) {
+		message = "Quit Surge?"
+	}
+	buttons := components.RenderCompactYesNoButtons("Yep!", "Nope", m.quitConfirmFocused, colors.Pink())
+	content := lipgloss.JoinVertical(lipgloss.Center, message, buttons)
+	if m.height == 1 {
+		content = "Quit? " + buttons
+	}
+	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
 }
 
 // Helper to render the detailed info pane
