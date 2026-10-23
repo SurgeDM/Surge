@@ -359,7 +359,7 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 
 	// EXTENSION VETTING SHORTCUT:
 	// If SkipApproval is true, we trust the extension completely.
-	// The backend will auto-rename duplicate files, so no need to reject.
+	// The backend resolves filename collisions per file_exists_action, so no need to reject.
 	if req.SkipApproval {
 		utils.Debug("Extension request: skipping all prompts, proceeding with download")
 		return false

@@ -67,6 +67,15 @@ func InferFilenameFromURL(rawURL string) string {
 // GetUniqueFilename keeps final files and .surge working files in the same
 // collision namespace so concurrent or resumed downloads do not share a path.
 func GetUniqueFilename(dir, filename string, isNameActive func(string, string) bool) string {
+	return resolveFilename(dir, filename, isNameActive, false)
+}
+
+// resolveFilename picks the final file name inside dir. With allowOverwrite,
+// an existing regular file with the requested name is not treated as a
+// collision, so the completed download replaces it. Active downloads and
+// .surge working files always count as collisions and fall back to suffixing,
+// because overwriting those would corrupt another in-flight download.
+func resolveFilename(dir, filename string, isNameActive func(string, string) bool, allowOverwrite bool) string {
 	if filename == "" {
 		return filename
 	}
@@ -108,6 +117,10 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string, string) b
 		return filename
 	}
 
+	if allowOverwrite && canOverwrite(dir, filename, isNameActive) {
+		return filename
+	}
+
 	// Keep suffixing from the same base so repeated retries stay deterministic.
 	ext := filepath.Ext(filename)
 	name := strings.TrimSuffix(filename, ext)
@@ -134,6 +147,20 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string, string) b
 	}
 
 	return ""
+}
+
+// canOverwrite reports whether name in dir is only blocked by a finished
+// regular file (not a directory, an active download or a .surge working file).
+func canOverwrite(dir, name string, isNameActive func(string, string) bool) bool {
+	if isNameActive != nil && isNameActive(dir, name) {
+		return false
+	}
+	targetPath := filepath.Join(dir, name)
+	if _, err := os.Stat(targetPath + types.IncompleteSuffix); !os.IsNotExist(err) {
+		return false
+	}
+	info, err := os.Stat(targetPath)
+	return err == nil && info.Mode().IsRegular()
 }
 
 // GetCategoryPath applies category routing only while the caller is still using
@@ -190,7 +217,8 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 	// Safety: Truncate early so GetUniqueFilename has room to append a suffix
 	filename = utils.TruncateFilename(filename)
 
-	finalFilename := GetUniqueFilename(destPath, filename, isNameActive)
+	allowOverwrite := settings != nil && config.Resolve[string](settings.General.FileExistsAction) == config.FileExistsOverwrite
+	finalFilename := resolveFilename(destPath, filename, isNameActive, allowOverwrite)
 	if finalFilename == "" {
 		return "", "", fmt.Errorf("could not determine a unique filename for %s in %q; check directory access and existing filenames", url, destPath)
 	}

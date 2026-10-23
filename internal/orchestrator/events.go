@@ -82,8 +82,13 @@ func finalizeCompletedFile(finalPath string) error {
 			}
 			return nil
 		}
-		if _, statErr := os.Stat(finalPath); statErr == nil {
-			return nil
+		// The rename may already have happened (e.g. a retried finalize). Only
+		// treat it as done when the working file is gone; otherwise an existing
+		// file at finalPath (overwrite mode) would hide a failed replace.
+		if _, statErr := os.Stat(surgePath); os.IsNotExist(statErr) {
+			if _, statErr := os.Stat(finalPath); statErr == nil {
+				return nil
+			}
 		}
 		return err
 	}
