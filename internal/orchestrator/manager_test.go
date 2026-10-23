@@ -177,13 +177,19 @@ func TestLifecycleManager_EnqueueCoalescesConcurrentRequests(t *testing.T) {
 }
 
 func TestLifecycleManager_EnqueueDoesNotCoalesceDifferentRequests(t *testing.T) {
-	started := make(chan struct{}, 2)
+	started := make(chan struct{}, 1)
 	release := make(chan struct{})
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		started <- struct{}{}
+		// Queued downloads may also hit this server. Only the first probe
+		// needs to notify the test; later requests must not block the handler.
+		select {
+		case started <- struct{}{}:
+		default:
+		}
 		<-release
 		w.Header().Set("Content-Length", "1")
 		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("x"))
 	}))
 	defer ts.Close()
 
