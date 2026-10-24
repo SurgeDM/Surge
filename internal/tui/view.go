@@ -618,6 +618,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 		contentWidth = 0
 	}
 
+	detailValueStyle := lipgloss.NewStyle().Foreground(colors.White())
 	// Separator Style
 	divider := lipgloss.NewStyle().
 		Foreground(colors.Gray()).
@@ -665,19 +666,32 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 			labelWidth = lipgloss.Width(label) + 1
 		}
 	}
-	fieldLabel := func(index int) string { return StatsLabelStyle.Width(labelWidth).Render(labels[index]) }
+	fieldLabel := func(index int) string {
+		label := labels[index]
+		if start := strings.Index(label, "["); start >= 0 {
+			end := strings.Index(label, "]") + 1
+			label = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(label[:start]) +
+				lipgloss.NewStyle().Foreground(colors.Gray()).Render(label[start:end]) +
+				lipgloss.NewStyle().Foreground(colors.LightGray()).Render(label[end:])
+		} else {
+			label = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(label)
+		}
+		return lipgloss.NewStyle().Width(labelWidth).Render(label)
+	}
 	valueWidth := innerWidth - labelWidth
 	if valueWidth < 5 {
 		valueWidth = 5 // Minimum reasonable width
 	}
 
-	urlText := lipgloss.NewStyle().Width(valueWidth).MaxWidth(valueWidth).Render(StatsValueStyle.Hyperlink(d.URL).Render(utils.TruncateTwoLines(d.URL, valueWidth)))
+	urlText := lipgloss.NewStyle().Width(valueWidth).MaxWidth(valueWidth).Render(detailValueStyle.Hyperlink(d.URL).Render(utils.TruncateMiddle(d.URL, valueWidth)))
 
 	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
+		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(3), detailValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(d.ID, valueWidth))),
+		"",
+		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(1), detailValueStyle.Bold(true).Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayFilename, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(2), detailValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayPath, valueWidth))),
+		"",
 		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(0), urlText),
-		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(1), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayFilename, valueWidth))),
-		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(2), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayPath, valueWidth))),
-		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(3), lipgloss.NewStyle().Foreground(colors.LightGray()).Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(d.ID, valueWidth))),
 	)
 
 	fileSection := sectionStyle.Render(fileInfoContent)
@@ -789,8 +803,8 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 	// Stats Layout
 	colWidth := (contentWidth - (components.BorderFrameWidth * 2)) / 2
 	leftColItems := []string{
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Size:"), StatsValueStyle.Render(sizeStr)),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Speed:"), StatsValueStyle.Render(speedStr)),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Size:"), detailValueStyle.Render(sizeStr)),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Speed:"), detailValueStyle.Render(speedStr)),
 	}
 	isActive := !d.done && !d.paused && !d.pausing && d.Speed > 0
 	if isActive {
@@ -799,12 +813,12 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 			conns = 1 // Single-connection download (range requests not supported)
 		}
 		connStr := fmt.Sprintf("%d", conns)
-		leftColItems = append(leftColItems, lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Conns:"), StatsValueStyle.Render(connStr)))
+		leftColItems = append(leftColItems, lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Conns:"), detailValueStyle.Render(connStr)))
 	}
 	leftCol := lipgloss.JoinVertical(lipgloss.Left, leftColItems...)
 	rightCol := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Time:"), StatsValueStyle.Render(timeStr)),
-		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("ETC:"), StatsValueStyle.Render(etaStr)),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("Time:"), detailValueStyle.Render(timeStr)),
+		lipgloss.JoinHorizontal(lipgloss.Left, StatsLabelStyle.Width(7).Render("ETC:"), detailValueStyle.Render(etaStr)),
 	)
 
 	statsContent := lipgloss.JoinHorizontal(lipgloss.Top,

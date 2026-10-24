@@ -111,7 +111,7 @@ func newDelegateKeyMap() *delegateKeyMap {
 }
 
 func newDownloadDelegate() downloadDelegate {
-	baseTitle := lipgloss.NewStyle().Foreground(colors.White()).Bold(true)
+	baseTitle := lipgloss.NewStyle().Foreground(colors.LightGray())
 	baseDesc := lipgloss.NewStyle().Foreground(colors.LightGray())
 
 	selTitle := lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true)
