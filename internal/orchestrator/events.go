@@ -295,7 +295,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 					utils.Debug("Lifecycle: Failed to save pause state: %v", err)
 				}
 			} else {
-				utils.Debug("Lifecycle: Skipping SaveState for %s: destPath=%q url=%q", m.DownloadID, destPath, url)
+				utils.Debug("Lifecycle: Skipping SaveState for %s: destPath=%q host=%q", m.DownloadID, destPath, utils.URLHostForLog(url))
 			}
 
 		case types.EventComplete:
@@ -510,7 +510,7 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 						utils.Debug("Lifecycle: Failed to persist error detail state: %v", err)
 					}
 				} else {
-					utils.Debug("Lifecycle: Skipping SaveState on error for %s: destPath=%q url=%q", m.DownloadID, destPath, url)
+					utils.Debug("Lifecycle: Skipping SaveState on error for %s: destPath=%q host=%q", m.DownloadID, destPath, utils.URLHostForLog(url))
 				}
 			} else {
 				if existing == nil {

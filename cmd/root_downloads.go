@@ -38,6 +38,8 @@ type BatchDownloadRequest struct {
 	SkipApproval bool              `json:"skip_approval,omitempty"`
 }
 
+const maxBatchDownloads = 1000
+
 type resolvedDownloadRequest struct {
 	request       DownloadRequest
 	settings      *config.Settings
@@ -62,10 +64,12 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		http.Error(w, "Service unavailable", http.StatusInternalServerError)
 		return
 	}
+	atomic.AddInt32(&pendingEnqueue, 1)
+	defer atomic.AddInt32(&pendingEnqueue, -1)
 
 	resolved, err := resolveDownloadRequest(r, defaultOutputDir)
 	if err != nil {
-		http.Error(w, err.Error(), http.StatusBadRequest)
+		http.Error(w, err.Error(), jsonDecodeErrorStatus(err))
 		return
 	}
 
@@ -76,12 +80,11 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 	newID, filename, err := enqueueDownloadRequest(r, service, resolved)
 	if err != nil {
 		recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
-		publishSystemLog(fmt.Sprintf("Error adding %s: %v", resolved.urlForAdd, err))
+		publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(resolved.urlForAdd), err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
-	atomic.AddInt32(&activeDownloads, 1)
 	writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 		"status":   "queued",
 		"message":  "Download queued successfully",
@@ -121,7 +124,7 @@ func handleDuplicateCheck(w http.ResponseWriter, r *http.Request) {
 		URL string `json:"url"`
 	}
 	if err := decodeJSONBody(r, &request); err != nil {
-		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "invalid json: "+err.Error(), jsonDecodeErrorStatus(err))
 		return
 	}
 	url := strings.TrimSpace(request.URL)
@@ -179,14 +182,20 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 		http.Error(w, "Service unavailable", http.StatusInternalServerError)
 		return
 	}
+	atomic.AddInt32(&pendingEnqueue, 1)
+	defer atomic.AddInt32(&pendingEnqueue, -1)
 
 	var req BatchDownloadRequest
 	if err := decodeJSONBody(r, &req); err != nil {
-		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		http.Error(w, "invalid json: "+err.Error(), jsonDecodeErrorStatus(err))
 		return
 	}
 	if len(req.Downloads) == 0 {
 		http.Error(w, "downloads are required", http.StatusBadRequest)
+		return
+	}
+	if len(req.Downloads) > maxBatchDownloads {
+		http.Error(w, fmt.Sprintf("batch exceeds %d downloads", maxBatchDownloads), http.StatusRequestEntityTooLarge)
 		return
 	}
 
@@ -207,15 +216,16 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 		urlForAdd, mirrorsForAdd := normalizeDownloadTargets(validated.URL, validated.Mirrors)
 		itemPath := utils.EnsureAbsPath(resolveOutputDir(validated.Path, validated.RelativeToDefaultDir, defaultOutputDir, settings))
 		requests = append(requests, types.DownloadEvent{
-			Type:         types.EventRequest,
-			DownloadID:   uuid.New().String(),
-			URL:          urlForAdd,
-			Filename:     validated.Filename,
-			Path:         itemPath,
-			Mirrors:      mirrorsForAdd,
-			Headers:      validated.Headers,
-			Workers:      validated.Workers,
-			MinChunkSize: validated.MinChunkSize,
+			Type:               types.EventRequest,
+			DownloadID:         uuid.New().String(),
+			URL:                urlForAdd,
+			Filename:           validated.Filename,
+			Path:               itemPath,
+			Mirrors:            mirrorsForAdd,
+			Headers:            validated.Headers,
+			IsExplicitCategory: validated.IsExplicitCategory,
+			Workers:            validated.Workers,
+			MinChunkSize:       validated.MinChunkSize,
 		})
 	}
 
@@ -250,14 +260,15 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 	for _, item := range requests {
 		resolved := &resolvedDownloadRequest{
 			request: DownloadRequest{
-				URL:          item.URL,
-				Filename:     item.Filename,
-				Path:         item.Path,
-				Mirrors:      item.Mirrors,
-				SkipApproval: true,
-				Headers:      item.Headers,
-				Workers:      item.Workers,
-				MinChunkSize: item.MinChunkSize,
+				URL:                item.URL,
+				Filename:           item.Filename,
+				Path:               item.Path,
+				Mirrors:            item.Mirrors,
+				SkipApproval:       true,
+				Headers:            item.Headers,
+				IsExplicitCategory: item.IsExplicitCategory,
+				Workers:            item.Workers,
+				MinChunkSize:       item.MinChunkSize,
 			},
 			settings:      settings,
 			outPath:       item.Path,
@@ -266,14 +277,13 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 		}
 		if _, _, err := enqueueDownloadRequest(r, service, resolved); err != nil {
 			recordPreflightDownloadError(item.URL, item.Path, err)
-			publishSystemLog(fmt.Sprintf("Error adding %s: %v", item.URL, err))
+			publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(item.URL), err))
 			failures = append(failures, map[string]string{
 				"url":   item.URL,
 				"error": err.Error(),
 			})
 			continue
 		}
-		atomic.AddInt32(&activeDownloads, 1)
 		queued++
 	}
 
@@ -309,13 +319,13 @@ func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolved
 		return nil, err
 	}
 
-	utils.Debug("Received download request: URL=%s, Filename=%s, Path=%s, Headers=%v", req.URL, req.Filename, req.Path, req.Headers)
+	utils.Debug("Received download request: host=%s, Filename=%s, Path=%s, HeaderCount=%d", utils.URLHostForLog(req.URL), req.Filename, req.Path, len(req.Headers))
 
 	outPath := utils.EnsureAbsPath(resolveOutputDir(req.Path, req.RelativeToDefaultDir, defaultOutputDir, settings))
 	urlForAdd, mirrorsForAdd := normalizeDownloadTargets(req.URL, req.Mirrors)
 	isDuplicate, isActive := resolveDuplicateState(urlForAdd)
 
-	utils.Debug("Download request: URL=%s, Filename=%s, SkipApproval=%v, isDuplicate=%v, isActive=%v", urlForAdd, req.Filename, req.SkipApproval, isDuplicate, isActive)
+	utils.Debug("Download request: host=%s, Filename=%s, SkipApproval=%v, isDuplicate=%v, isActive=%v", utils.URLHostForLog(urlForAdd), req.Filename, req.SkipApproval, isDuplicate, isActive)
 
 	return &resolvedDownloadRequest{
 		request:       req,
@@ -371,7 +381,7 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 	}
 
 	if serverProgram != nil {
-		utils.Debug("Requesting TUI confirmation for: %s (Duplicate: %v)", req.URL, resolved.isDuplicate)
+		utils.Debug("Requesting TUI confirmation for host %s (Duplicate: %v)", utils.URLHostForLog(req.URL), resolved.isDuplicate)
 
 		downloadID := uuid.New().String()
 		if err := service.Publish(types.DownloadEvent{
@@ -382,12 +392,13 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 			Path:                 resolved.outPath,
 			Mirrors:              resolved.mirrorsForAdd,
 			Headers:              req.Headers,
+			IsExplicitCategory:   req.IsExplicitCategory,
 			SkipDuplicateWarning: req.SkipDuplicateWarning,
 			Workers:              req.Workers,
 			MinChunkSize:         req.MinChunkSize,
 		}); err != nil {
 			recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
-			publishSystemLog(fmt.Sprintf("Error adding %s: %v", resolved.urlForAdd, err))
+			publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(resolved.urlForAdd), err))
 			http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
 			return true
 		}
@@ -528,7 +539,7 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		if lifecycle == nil {
 			err = fmt.Errorf("lifecycle manager unavailable")
 			recordPreflightDownloadError(url, outPath, err)
-			publishSystemLog(fmt.Sprintf("Error adding %s: %v", url, err))
+			publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(url), err))
 			continue
 		}
 
@@ -540,10 +551,9 @@ func processDownloads(urls []string, outputDir string, port int) int {
 		})
 		if err != nil {
 			recordPreflightDownloadError(url, outPath, err)
-			publishSystemLog(fmt.Sprintf("Error adding %s: %v", url, err))
+			publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(url), err))
 			continue
 		}
-		atomic.AddInt32(&activeDownloads, 1)
 		successCount++
 	}
 	return successCount

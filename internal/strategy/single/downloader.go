@@ -154,7 +154,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 		resp, err = client.Do(req)
 		if err != nil {
-			utils.Debug("Single downloader: GET %s failed: %v", rawurl, err)
+			utils.Debug("Single downloader: GET host %s failed: %v", utils.URLHostForLog(rawurl), err)
 			return err
 		}
 
@@ -174,7 +174,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 			}
 			rlRetries++
 			if rlRetries > maxRlRetries {
-				utils.Debug("Single downloader: rate limited after %d retries for %s", maxRlRetries, rawurl)
+				utils.Debug("Single downloader: rate limited after %d retries for host %s", maxRlRetries, utils.URLHostForLog(rawurl))
 				return fmt.Errorf("rate limited after %d retries: %d", maxRlRetries, resp.StatusCode)
 			}
 
@@ -194,7 +194,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		}
 
 		_ = resp.Body.Close()
-		utils.Debug("Single downloader: unexpected status %d for %s", resp.StatusCode, rawurl)
+		utils.Debug("Single downloader: unexpected status %d for host %s", resp.StatusCode, utils.URLHostForLog(rawurl))
 		if types.IsPermanentHTTPStatus(resp.StatusCode) {
 			return fmt.Errorf("unexpected status code: %d: %w", resp.StatusCode, types.ErrPermanentHTTP)
 		}
@@ -261,7 +261,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 		if ctxErr := ctx.Err(); ctxErr != nil {
 			return ctxErr
 		}
-		utils.Debug("Single downloader: copy error for %s: %v", rawurl, err)
+		utils.Debug("Single downloader: copy error for host %s: %v", utils.URLHostForLog(rawurl), err)
 		return fmt.Errorf("copy error: %w", err)
 	}
 

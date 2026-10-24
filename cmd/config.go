@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
-
 	"time"
+	"unicode"
 
 	"charm.land/lipgloss/v2"
 	"charm.land/lipgloss/v2/table"
@@ -211,8 +211,12 @@ func openSettingsFile() error {
 	var args []string
 
 	if editor := os.Getenv("EDITOR"); editor != "" {
-		command = editor
-		args = []string{path}
+		parts, err := splitEditorCommand(editor)
+		if err != nil {
+			return fmt.Errorf("invalid EDITOR: %w", err)
+		}
+		command = parts[0]
+		args = append(parts[1:], path)
 	} else {
 		switch runtime.GOOS {
 		case "windows":
@@ -236,4 +240,56 @@ func openSettingsFile() error {
 		return fmt.Errorf("failed to open editor: %w", err)
 	}
 	return nil
+}
+
+// splitEditorCommand accepts an executable and arguments without invoking a shell.
+func splitEditorCommand(value string) ([]string, error) {
+	var parts []string
+	var current strings.Builder
+	var quote rune
+	started := false
+	runes := []rune(value)
+	for i := 0; i < len(runes); i++ {
+		r := runes[i]
+		if r == '\\' && quote != '\'' && i+1 < len(runes) {
+			next := runes[i+1]
+			if next == '\\' || next == '"' || unicode.IsSpace(next) {
+				current.WriteRune(next)
+				i++
+				started = true
+				continue
+			}
+		}
+		if r == '\'' || r == '"' {
+			if quote == 0 {
+				quote = r
+				started = true
+				continue
+			}
+			if quote == r {
+				quote = 0
+				continue
+			}
+		}
+		if quote == 0 && unicode.IsSpace(r) {
+			if started {
+				parts = append(parts, current.String())
+				current.Reset()
+				started = false
+			}
+			continue
+		}
+		current.WriteRune(r)
+		started = true
+	}
+	if quote != 0 {
+		return nil, fmt.Errorf("unclosed quote")
+	}
+	if started {
+		parts = append(parts, current.String())
+	}
+	if len(parts) == 0 || parts[0] == "" {
+		return nil, fmt.Errorf("missing editor command")
+	}
+	return parts, nil
 }

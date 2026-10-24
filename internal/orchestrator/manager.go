@@ -217,7 +217,7 @@ func (mgr *LifecycleManager) Enqueue(ctx context.Context, req *DownloadRequest) 
 		return "", "", types.ErrServiceUnavailable
 	}
 
-	utils.Debug("Lifecycle: Enqueue %s (Filename: %s)", req.URL, req.Filename)
+	utils.Debug("Lifecycle: Enqueue from host %s (Filename: %s)", utils.URLHostForLog(req.URL), req.Filename)
 	return mgr.enqueueResolved(ctx, req, "")
 }
 
@@ -227,7 +227,7 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 		return "", "", types.ErrServiceUnavailable
 	}
 
-	utils.Debug("Lifecycle: EnqueueWithID %s (%s)", req.URL, requestID)
+	utils.Debug("Lifecycle: EnqueueWithID from host %s (%s)", utils.URLHostForLog(req.URL), requestID)
 	return mgr.enqueueResolved(ctx, req, requestID)
 }
 

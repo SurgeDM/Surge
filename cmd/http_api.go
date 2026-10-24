@@ -90,11 +90,11 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 					err = applySettingsPatch(updated, fields)
 				}
 				if err != nil {
-					http.Error(w, "Invalid settings: "+err.Error(), http.StatusBadRequest)
+					http.Error(w, "Invalid settings: "+err.Error(), jsonDecodeErrorStatus(err))
 					return
 				}
 			} else if err := decodeJSONBody(r, updated); err != nil {
-				http.Error(w, "Invalid settings: "+err.Error(), http.StatusBadRequest)
+				http.Error(w, "Invalid settings: "+err.Error(), jsonDecodeErrorStatus(err))
 				return
 			}
 			if err := updated.NormalizeValues(); err != nil {
@@ -104,7 +104,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			patch = config.DiffSettings(current, updated)
 			restartRequired = updated.RequiresRestartComparedTo(current)
 		} else if err := decodeJSONBody(r, &patch); err != nil {
-			http.Error(w, "Invalid settings patch: "+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Invalid settings patch: "+err.Error(), jsonDecodeErrorStatus(err))
 			return
 		}
 		updated, err := editor.PatchSettings(patch)
@@ -187,6 +187,9 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		writeJSONResponse(w, http.StatusAccepted, map[string]interface{}{
 			"status": "shutting_down",
 		})
+		if flusher, ok := w.(http.Flusher); ok {
+			flusher.Flush()
+		}
 		requestGlobalShutdown("API requested shutdown")
 	}))
 
@@ -195,7 +198,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			Message string `json:"message"`
 		}
 		if err := decodeJSONBody(r, &request); err != nil {
-			http.Error(w, "Error Decoding body :"+err.Error(), http.StatusBadRequest)
+			http.Error(w, "Error Decoding body :"+err.Error(), jsonDecodeErrorStatus(err))
 			return
 		}
 		if request.Message == "" {
@@ -306,7 +309,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	mux.HandleFunc("/update-url", requireMethod(http.MethodPut, withRequiredID(func(w http.ResponseWriter, r *http.Request, id string) {
 		var req map[string]string
 		if err := decodeJSONBody(r, &req); err != nil {
-			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			http.Error(w, "Invalid request body", jsonDecodeErrorStatus(err))
 			return
 		}
 
@@ -419,7 +422,7 @@ func handleBatchResume(service downloadservice.DownloadService) http.HandlerFunc
 	return func(w http.ResponseWriter, r *http.Request) {
 		var req ResumeBatchRequest
 		if err := decodeJSONBody(r, &req); err != nil {
-			http.Error(w, fmt.Sprintf("Invalid JSON body :%v", err), http.StatusBadRequest)
+			http.Error(w, fmt.Sprintf("Invalid JSON body :%v", err), jsonDecodeErrorStatus(err))
 			return
 		}
 
@@ -726,4 +729,12 @@ func decodeJSONBody(r *http.Request, dst interface{}) error {
 		_ = r.Body.Close()
 	}()
 	return json.NewDecoder(r.Body).Decode(dst)
+}
+
+func jsonDecodeErrorStatus(err error) int {
+	var limitErr *http.MaxBytesError
+	if errors.As(err, &limitErr) {
+		return http.StatusRequestEntityTooLarge
+	}
+	return http.StatusBadRequest
 }

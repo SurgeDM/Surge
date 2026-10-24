@@ -1,8 +1,10 @@
 package cmd
 
 import (
+	"encoding/json"
 	"fmt"
-
+	"io"
+	"net/http"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -82,28 +84,48 @@ var serverStartCmd = &cobra.Command{
 var serverStopCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop the running Surge server",
-	Run: func(cmd *cobra.Command, args []string) {
-		pid := readPID()
-		if pid == 0 {
-			fmt.Println("No running Surge server found (PID file missing).")
-			return
-		}
-
-		process, err := os.FindProcess(pid)
+	RunE: func(cmd *cobra.Command, args []string) error {
+		baseURL, token, err := resolveAPIConnection(true)
 		if err != nil {
-			fmt.Printf("Error finding process: %v\n", err)
-			return
+			return err
 		}
-
-		// Try to send SIGTERM
-		err = process.Signal(syscall.SIGTERM)
+		if err := verifySurgeServer(baseURL); err != nil {
+			return err
+		}
+		resp, err := doAPIRequest(http.MethodPost, baseURL, token, "/shutdown", nil)
 		if err != nil {
-			fmt.Printf("Error stopping server: %v\n", err)
-			return
+			return fmt.Errorf("request server shutdown: %w", err)
 		}
-
-		fmt.Printf("Sent stop signal to process %d\n", pid)
+		defer func() { _ = resp.Body.Close() }()
+		if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+			body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+			return fmt.Errorf("server rejected shutdown: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+		}
+		_, err = fmt.Fprintln(cmd.OutOrStdout(), "Server shutdown requested.")
+		return err
 	},
+}
+
+func verifySurgeServer(baseURL string) error {
+	resp, err := doAPIRequest(http.MethodGet, baseURL, "", "/health", nil)
+	if err != nil {
+		return fmt.Errorf("verify Surge server: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("verify Surge server: health endpoint returned %s", resp.Status)
+	}
+	var health struct {
+		Status string `json:"status"`
+		Mode   string `json:"mode"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1024)).Decode(&health); err != nil {
+		return fmt.Errorf("verify Surge server: decode health response: %w", err)
+	}
+	if health.Status != "ok" || (health.Mode != "local" && health.Mode != "service") {
+		return fmt.Errorf("verify Surge server: unexpected health response")
+	}
+	return nil
 }
 
 var serverStatusCmd = &cobra.Command{
@@ -222,7 +244,7 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
 			for range ticker.C {
-				if atomic.LoadInt32(&pendingEnqueue) == 0 && atomic.LoadInt32(&activeDownloads) == 0 {
+				if atomic.LoadInt32(&pendingEnqueue) == 0 {
 					if GlobalPool != nil && GlobalPool.ActiveCount() == 0 {
 						select {
 						case exitWhenDoneCh <- struct{}{}:

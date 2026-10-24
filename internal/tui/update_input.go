@@ -184,7 +184,7 @@ func (m RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, 
 
 		if !m.pendingSkipDuplicateWarning {
 			if d := m.checkForDuplicate(m.pendingURL); d != nil {
-				utils.Debug("Duplicate download detected after confirmation: %s", m.pendingURL)
+				utils.Debug("Duplicate download detected after confirmation for host %s", utils.URLHostForLog(m.pendingURL))
 				m.duplicateInfo = d.Filename
 				m.state = DuplicateWarningState
 				return m, nil

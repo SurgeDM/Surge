@@ -138,7 +138,7 @@ func (p *NetworkPool) CloseAll() {
 }
 
 func (p *NetworkPool) createNewTransport(proxyURL, customDNS string, maxConns int) *http.Transport {
-	utils.Debug("NetworkPool: creating new shared transport (proxy=%s, limit=%d)", proxyURL, maxConns)
+	utils.Debug("NetworkPool: creating new shared transport (proxy host=%s, limit=%d)", utils.URLHostForLog(proxyURL), maxConns)
 
 	dialer := &net.Dialer{
 		Timeout:   types.DialTimeout,
@@ -151,7 +151,7 @@ func (p *NetworkPool) createNewTransport(proxyURL, customDNS string, maxConns in
 		if parsed, err := url.Parse(proxyURL); err == nil {
 			proxyFunc = http.ProxyURL(parsed)
 		} else {
-			utils.Debug("NetworkPool: invalid proxy URL %s: %v", proxyURL, err)
+			utils.Debug("NetworkPool: invalid proxy URL for host %s: %v", utils.URLHostForLog(proxyURL), err)
 		}
 	}
 
