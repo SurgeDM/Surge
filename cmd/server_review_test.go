@@ -3,7 +3,6 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
-	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -17,7 +16,7 @@ import (
 
 func TestServerStopRequestsAuthenticatedShutdown(t *testing.T) {
 	var called atomic.Bool
-	server := newIPv4TestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHandlerTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			if got := r.Header.Get("Authorization"); got != "" {
 				t.Errorf("health request sent token %q", got)
@@ -34,13 +33,16 @@ func TestServerStopRequestsAuthenticatedShutdown(t *testing.T) {
 		called.Store(true)
 		w.WriteHeader(http.StatusAccepted)
 	}))
-	defer server.Close()
 
 	previousHost, previousToken := globalHost, globalToken
-	globalHost, globalToken = server.URL, "test-token"
+	globalHost, globalToken = "http://127.0.0.1:1700", "test-token"
 	t.Cleanup(func() { globalHost, globalToken = previousHost, previousToken })
 
-	if err := serverStopCmd.RunE(serverStopCmd, nil); err != nil {
+	baseURL, token, err := resolveAPIConnection(true)
+	if err != nil {
+		t.Fatalf("resolve API connection: %v", err)
+	}
+	if err := requestServerShutdown(serverStopCmd, client, baseURL, token); err != nil {
 		t.Fatalf("stop server: %v", err)
 	}
 	if !called.Load() {
@@ -50,18 +52,21 @@ func TestServerStopRequestsAuthenticatedShutdown(t *testing.T) {
 
 func TestServerStopRejectsUnrelatedProcessAtStalePort(t *testing.T) {
 	var shutdownCalled atomic.Bool
-	server := newIPv4TestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	client := newHandlerTestClient(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/shutdown" {
 			shutdownCalled.Store(true)
 		}
 		_, _ = w.Write([]byte(`{"status":"ok"}`))
 	}))
-	defer server.Close()
 	previousHost, previousToken := globalHost, globalToken
-	globalHost, globalToken = server.URL, "test-token"
+	globalHost, globalToken = "http://127.0.0.1:1700", "test-token"
 	t.Cleanup(func() { globalHost, globalToken = previousHost, previousToken })
 
-	if err := serverStopCmd.RunE(serverStopCmd, nil); err == nil {
+	baseURL, token, err := resolveAPIConnection(true)
+	if err != nil {
+		t.Fatalf("resolve API connection: %v", err)
+	}
+	if err := requestServerShutdown(serverStopCmd, client, baseURL, token); err == nil {
 		t.Fatal("expected unrelated service to be rejected")
 	}
 	if shutdownCalled.Load() {
@@ -69,18 +74,18 @@ func TestServerStopRejectsUnrelatedProcessAtStalePort(t *testing.T) {
 	}
 }
 
-func newIPv4TestServer(t *testing.T, handler http.Handler) *httptest.Server {
-	t.Helper()
-	listener, err := net.Listen("tcp4", "127.0.0.1:0")
-	if err != nil {
-		t.Fatalf("listen on IPv4 loopback: %v", err)
-	}
-	server := &httptest.Server{
-		Listener: listener,
-		Config:   &http.Server{Handler: handler},
-	}
-	server.Start()
-	return server
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (roundTrip roundTripFunc) RoundTrip(request *http.Request) (*http.Response, error) {
+	return roundTrip(request)
+}
+
+func newHandlerTestClient(handler http.Handler) *http.Client {
+	return &http.Client{Transport: roundTripFunc(func(request *http.Request) (*http.Response, error) {
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, request)
+		return recorder.Result(), nil
+	})}
 }
 
 type blockingAddService struct {

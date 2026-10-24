@@ -89,25 +89,33 @@ var serverStopCmd = &cobra.Command{
 		if err != nil {
 			return err
 		}
-		if err := verifySurgeServer(baseURL); err != nil {
+		client, err := newRemoteAPIHTTPClient()
+		if err != nil {
 			return err
 		}
-		resp, err := doAPIRequest(http.MethodPost, baseURL, token, "/shutdown", nil)
-		if err != nil {
-			return fmt.Errorf("request server shutdown: %w", err)
-		}
-		defer func() { _ = resp.Body.Close() }()
-		if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
-			body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
-			return fmt.Errorf("server rejected shutdown: %s: %s", resp.Status, strings.TrimSpace(string(body)))
-		}
-		_, err = fmt.Fprintln(cmd.OutOrStdout(), "Server shutdown requested.")
-		return err
+		return requestServerShutdown(cmd, client, baseURL, token)
 	},
 }
 
-func verifySurgeServer(baseURL string) error {
-	resp, err := doAPIRequest(http.MethodGet, baseURL, "", "/health", nil)
+func requestServerShutdown(cmd *cobra.Command, client *http.Client, baseURL, token string) error {
+	if err := verifySurgeServer(client, baseURL); err != nil {
+		return err
+	}
+	resp, err := doAPIRequestWithClient(client, http.MethodPost, baseURL, token, "/shutdown", nil)
+	if err != nil {
+		return fmt.Errorf("request server shutdown: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusAccepted && resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 1024))
+		return fmt.Errorf("server rejected shutdown: %s: %s", resp.Status, strings.TrimSpace(string(body)))
+	}
+	_, err = fmt.Fprintln(cmd.OutOrStdout(), "Server shutdown requested.")
+	return err
+}
+
+func verifySurgeServer(client *http.Client, baseURL string) error {
+	resp, err := doAPIRequestWithClient(client, http.MethodGet, baseURL, "", "/health", nil)
 	if err != nil {
 		return fmt.Errorf("verify Surge server: %w", err)
 	}
