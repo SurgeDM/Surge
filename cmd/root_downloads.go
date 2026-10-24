@@ -19,6 +19,7 @@ import (
 
 // DownloadRequest represents a download request from the browser extension
 type DownloadRequest struct {
+	ID                   string            `json:"id,omitempty"`
 	URL                  string            `json:"url"`
 	Filename             string            `json:"filename,omitempty"`
 	Path                 string            `json:"path,omitempty"`
@@ -143,6 +144,7 @@ func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) 
 }
 
 func validateDownloadRequest(req DownloadRequest) (DownloadRequest, error) {
+	req.ID = strings.TrimSpace(req.ID)
 	if req.URL == "" {
 		return req, fmt.Errorf("url is required")
 	}
@@ -309,6 +311,10 @@ func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolved
 		return nil, err
 	}
 
+	if req.ID == "" && r != nil && r.URL != nil {
+		req.ID = strings.TrimSpace(r.URL.Query().Get("id"))
+	}
+
 	utils.Debug("Received download request: URL=%s, Filename=%s, Path=%s, Headers=%v", req.URL, req.Filename, req.Path, req.Headers)
 
 	outPath := utils.EnsureAbsPath(resolveOutputDir(req.Path, req.RelativeToDefaultDir, defaultOutputDir, settings))
@@ -373,7 +379,10 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 	if serverProgram != nil {
 		utils.Debug("Requesting TUI confirmation for: %s (Duplicate: %v)", req.URL, resolved.isDuplicate)
 
-		downloadID := uuid.New().String()
+		downloadID := req.ID
+		if downloadID == "" {
+			downloadID = uuid.New().String()
+		}
 		if err := service.Publish(types.DownloadEvent{
 			Type:                 types.EventRequest,
 			DownloadID:           downloadID,
@@ -428,7 +437,10 @@ func enqueueDownloadRequest(r *http.Request, service service.DownloadService, re
 	}
 
 	req := resolved.request
-	reqID := r.URL.Query().Get("id")
+	reqID := req.ID
+	if reqID == "" && r != nil && r.URL != nil {
+		reqID = strings.TrimSpace(r.URL.Query().Get("id"))
+	}
 
 	if lifecycle != nil {
 		dlReq := &orchestrator.DownloadRequest{

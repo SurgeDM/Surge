@@ -695,3 +695,187 @@ func TestHandleDownload_DoesNotUseCancelledHTTPRequestContext(t *testing.T) {
 		t.Fatalf("filename = %q, want %q", configs[0].Filename, "ctx-test.bin")
 	}
 }
+
+type trackingDownloadService struct {
+	fakeRemoteDownloadService
+	addCalls       int
+	addWithIDCalls int
+	lastID         string
+	allAddedIDs    []string
+}
+
+func (s *trackingDownloadService) Add(url, path, filename string, mirrors []string, headers map[string]string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
+	s.addCalls++
+	return "generated-id", nil
+}
+
+func (s *trackingDownloadService) AddWithID(url, path, filename string, mirrors []string, headers map[string]string, id string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
+	s.addWithIDCalls++
+	s.lastID = id
+	s.allAddedIDs = append(s.allAddedIDs, id)
+	return id, nil
+}
+
+func TestHandleDownload_WithCustomID_CallsAddWithID(t *testing.T) {
+	setupIsolatedCmdState(t)
+
+	svc := &trackingDownloadService{}
+	body := `{"url": "https://example.com/test.bin", "id": "custom-id-999", "skip_approval": true}`
+	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handleDownload(rec, req, "", svc)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if svc.addWithIDCalls != 1 {
+		t.Fatalf("expected 1 call to AddWithID, got %d", svc.addWithIDCalls)
+	}
+	if svc.lastID != "custom-id-999" {
+		t.Fatalf("expected ID %q, got %q", "custom-id-999", svc.lastID)
+	}
+	if svc.addCalls != 0 {
+		t.Fatalf("expected 0 calls to Add, got %d", svc.addCalls)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["id"] != "custom-id-999" {
+		t.Fatalf("expected response id %q, got %v", "custom-id-999", resp["id"])
+	}
+	if resp["status"] != "queued" {
+		t.Fatalf("expected response status 'queued', got %v", resp["status"])
+	}
+}
+
+func TestHandleDownload_WithoutCustomID_CallsAdd(t *testing.T) {
+	setupIsolatedCmdState(t)
+
+	svc := &trackingDownloadService{}
+	body := `{"url": "https://example.com/test.bin", "skip_approval": true}`
+	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handleDownload(rec, req, "", svc)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if svc.addCalls != 1 {
+		t.Fatalf("expected 1 call to Add, got %d", svc.addCalls)
+	}
+	if svc.addWithIDCalls != 0 {
+		t.Fatalf("expected 0 calls to AddWithID, got %d", svc.addWithIDCalls)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["id"] != "generated-id" {
+		t.Fatalf("expected response id 'generated-id', got %v", resp["id"])
+	}
+}
+
+func TestHandleDownload_WithQueryParamID_CallsAddWithID(t *testing.T) {
+	setupIsolatedCmdState(t)
+
+	svc := &trackingDownloadService{}
+	body := `{"url": "https://example.com/test.bin", "skip_approval": true}`
+	req := httptest.NewRequest(http.MethodPost, "/download?id=query-param-id", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handleDownload(rec, req, "", svc)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if svc.addWithIDCalls != 1 {
+		t.Fatalf("expected 1 call to AddWithID, got %d", svc.addWithIDCalls)
+	}
+	if svc.lastID != "query-param-id" {
+		t.Fatalf("expected ID %q, got %q", "query-param-id", svc.lastID)
+	}
+}
+
+func TestHandleDownload_WithCustomID_LifecycleEnqueue(t *testing.T) {
+	setupIsolatedCmdState(t)
+
+	progressCh := make(chan types.DownloadEvent, 10)
+	GlobalProgressCh = progressCh
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(progressCh, 1)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
+
+	origLifecycle := GlobalLifecycle
+	origService := GlobalService
+	t.Cleanup(func() {
+		GlobalLifecycle = origLifecycle
+		GlobalService = origService
+		GlobalPool = nil
+		GlobalProgressCh = nil
+	})
+
+	probeServer := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "10")
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("0123456789"))
+	}))
+	defer probeServer.Close()
+
+	tempDir := t.TempDir()
+	eventBus := orchestrator.NewEventBus()
+	t.Cleanup(func() { eventBus.Shutdown() })
+	getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
+	tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, nil, buildActiveDownloadChecker(getAll))
+	t.Cleanup(func() { tmpLifecycle.Shutdown() })
+	GlobalLifecycle = tmpLifecycle
+	svc := service.NewLocalDownloadService(GlobalLifecycle)
+	GlobalService = svc
+	t.Cleanup(func() {
+		_ = svc.Shutdown()
+	})
+
+	body := fmt.Sprintf(`{
+		"url": %q,
+		"filename": "custom-id-test.bin",
+		"id": "my-custom-uuid-456",
+		"path": %q,
+		"skip_approval": true
+	}`, probeServer.URL, tempDir)
+
+	req := httptest.NewRequest(http.MethodPost, "/download", bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+
+	handleDownload(rec, req, "", svc)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d: %s", rec.Code, rec.Body.String())
+	}
+	configs := GlobalPool.GetAll()
+	if len(configs) != 1 {
+		t.Fatalf("expected 1 download queued, got %d", len(configs))
+	}
+	if configs[0].ID != "my-custom-uuid-456" {
+		t.Fatalf("expected config ID %q, got %q", "my-custom-uuid-456", configs[0].ID)
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	if resp["id"] != "my-custom-uuid-456" {
+		t.Fatalf("expected response id %q, got %v", "my-custom-uuid-456", resp["id"])
+	}
+}
