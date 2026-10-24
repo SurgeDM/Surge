@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	"bytes"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -33,12 +36,43 @@ type DownloadRequest struct {
 }
 
 type BatchDownloadRequest struct {
-	Downloads    []DownloadRequest `json:"downloads"`
-	Path         string            `json:"path,omitempty"`
-	SkipApproval bool              `json:"skip_approval,omitempty"`
+	Downloads    boundedDownloads `json:"downloads"`
+	Path         string           `json:"path,omitempty"`
+	SkipApproval bool             `json:"skip_approval,omitempty"`
 }
 
 const maxBatchDownloads = 1000
+
+var errBatchTooLarge = errors.New("batch exceeds download limit")
+
+type boundedDownloads []DownloadRequest
+
+func (downloads *boundedDownloads) UnmarshalJSON(data []byte) error {
+	if bytes.Equal(data, []byte("null")) {
+		*downloads = nil
+		return nil
+	}
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	token, err := decoder.Token()
+	if err != nil {
+		return err
+	}
+	if token != json.Delim('[') {
+		return fmt.Errorf("downloads must be an array")
+	}
+	for decoder.More() {
+		if len(*downloads) >= maxBatchDownloads {
+			return errBatchTooLarge
+		}
+		var item DownloadRequest
+		if err := decoder.Decode(&item); err != nil {
+			return err
+		}
+		*downloads = append(*downloads, item)
+	}
+	_, err = decoder.Token()
+	return err
+}
 
 type resolvedDownloadRequest struct {
 	request       DownloadRequest
@@ -187,6 +221,10 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 
 	var req BatchDownloadRequest
 	if err := decodeJSONBody(r, &req); err != nil {
+		if errors.Is(err, errBatchTooLarge) {
+			http.Error(w, fmt.Sprintf("batch exceeds %d downloads", maxBatchDownloads), http.StatusRequestEntityTooLarge)
+			return
+		}
 		http.Error(w, "invalid json: "+err.Error(), jsonDecodeErrorStatus(err))
 		return
 	}

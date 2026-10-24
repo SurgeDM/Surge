@@ -151,7 +151,7 @@ func (p *NetworkPool) createNewTransport(proxyURL, customDNS string, maxConns in
 		if parsed, err := url.Parse(proxyURL); err == nil {
 			proxyFunc = http.ProxyURL(parsed)
 		} else {
-			utils.Debug("NetworkPool: invalid proxy URL for host %s: %v", utils.URLHostForLog(proxyURL), err)
+			utils.Debug("NetworkPool: invalid proxy URL for host %s", utils.URLHostForLog(proxyURL))
 		}
 	}
 

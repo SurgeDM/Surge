@@ -235,3 +235,23 @@ func TestSplitEditorCommand_QuotedExecutableAndArguments(t *testing.T) {
 		}
 	}
 }
+
+func TestConfigOpenUnquotedEditorPathWithSpaces(t *testing.T) {
+	setupIsolatedCmdState(t)
+	var editor string
+	if runtime.GOOS == "windows" {
+		editor = filepath.Join(t.TempDir(), "editor with spaces.bat")
+		if err := os.WriteFile(editor, []byte("@echo off\r\nexit 0\r\n"), 0755); err != nil {
+			t.Fatal(err)
+		}
+	} else {
+		editor = filepath.Join(t.TempDir(), "editor with spaces")
+		if err := os.WriteFile(editor, []byte("#!/bin/sh\nexit 0\n"), 0755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	t.Setenv("EDITOR", editor)
+	if err := openSettingsFile(); err != nil {
+		t.Fatalf("open settings with unquoted editor path: %v", err)
+	}
+}

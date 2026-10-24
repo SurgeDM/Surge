@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"path/filepath"
@@ -728,7 +729,18 @@ func decodeJSONBody(r *http.Request, dst interface{}) error {
 	defer func() {
 		_ = r.Body.Close()
 	}()
-	return json.NewDecoder(r.Body).Decode(dst)
+	decoder := json.NewDecoder(r.Body)
+	if err := decoder.Decode(dst); err != nil {
+		return err
+	}
+	var trailing json.RawMessage
+	if err := decoder.Decode(&trailing); err != io.EOF {
+		if err != nil {
+			return err
+		}
+		return fmt.Errorf("multiple JSON values in request body")
+	}
+	return nil
 }
 
 func jsonDecodeErrorStatus(err error) int {

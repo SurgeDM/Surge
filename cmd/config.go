@@ -211,12 +211,17 @@ func openSettingsFile() error {
 	var args []string
 
 	if editor := os.Getenv("EDITOR"); editor != "" {
-		parts, err := splitEditorCommand(editor)
-		if err != nil {
-			return fmt.Errorf("invalid EDITOR: %w", err)
+		if _, err := exec.LookPath(editor); err == nil {
+			command = editor
+			args = []string{path}
+		} else {
+			parts, err := splitEditorCommand(editor)
+			if err != nil {
+				return fmt.Errorf("invalid EDITOR: %w", err)
+			}
+			command = parts[0]
+			args = append(parts[1:], path)
 		}
-		command = parts[0]
-		args = append(parts[1:], path)
 	} else {
 		switch runtime.GOOS {
 		case "windows":

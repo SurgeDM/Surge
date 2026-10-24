@@ -154,7 +154,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 		resp, err = client.Do(req)
 		if err != nil {
-			utils.Debug("Single downloader: GET host %s failed: %v", utils.URLHostForLog(rawurl), err)
+			utils.Debug("Single downloader: GET host %s failed", utils.URLHostForLog(rawurl))
 			return err
 		}
 

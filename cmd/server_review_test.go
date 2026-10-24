@@ -3,6 +3,7 @@ package cmd
 import (
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -16,7 +17,7 @@ import (
 
 func TestServerStopRequestsAuthenticatedShutdown(t *testing.T) {
 	var called atomic.Bool
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4TestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/health" {
 			if got := r.Header.Get("Authorization"); got != "" {
 				t.Errorf("health request sent token %q", got)
@@ -49,7 +50,7 @@ func TestServerStopRequestsAuthenticatedShutdown(t *testing.T) {
 
 func TestServerStopRejectsUnrelatedProcessAtStalePort(t *testing.T) {
 	var shutdownCalled atomic.Bool
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	server := newIPv4TestServer(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/shutdown" {
 			shutdownCalled.Store(true)
 		}
@@ -66,6 +67,20 @@ func TestServerStopRejectsUnrelatedProcessAtStalePort(t *testing.T) {
 	if shutdownCalled.Load() {
 		t.Fatal("sent shutdown to unrelated service")
 	}
+}
+
+func newIPv4TestServer(t *testing.T, handler http.Handler) *httptest.Server {
+	t.Helper()
+	listener, err := net.Listen("tcp4", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen on IPv4 loopback: %v", err)
+	}
+	server := &httptest.Server{
+		Listener: listener,
+		Config:   &http.Server{Handler: handler},
+	}
+	server.Start()
+	return server
 }
 
 type blockingAddService struct {
@@ -126,6 +141,26 @@ func TestAPIRejectsOversizedDownloadRequest(t *testing.T) {
 	limitAPIRequestBody(mux).ServeHTTP(recorder, request)
 	if recorder.Code != http.StatusRequestEntityTooLarge {
 		t.Fatalf("status = %d, want 413: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestAPIRejectsOversizedTrailingRequestBody(t *testing.T) {
+	mux := http.NewServeMux()
+	registerHTTPRoutes(mux, 0, "", &httpAPITestService{})
+	body := `{"url":"https://example.com/file"}` + strings.Repeat(" ", maxAPIRequestBodyBytes)
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/download", strings.NewReader(body))
+	limitAPIRequestBody(mux).ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("status = %d, want 413: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestAPIRejectsSecondJSONValue(t *testing.T) {
+	request := httptest.NewRequest(http.MethodPost, "/download", strings.NewReader(`{"url":"https://example.com/file"} {}`))
+	var decoded DownloadRequest
+	if err := decodeJSONBody(request, &decoded); err == nil {
+		t.Fatal("accepted a second JSON value")
 	}
 }
 
