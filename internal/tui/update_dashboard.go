@@ -208,6 +208,16 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Open file
+	if key.Matches(msg, m.keys.Dashboard.CopyURL) {
+		if d := m.GetSelectedDownload(); d != nil && d.URL != "" {
+			if err := clipboard.Write(d.URL); err != nil {
+				m.addLogEntry(LogStyleError.Render("Copy URL failed: " + err.Error()))
+			} else {
+				m.addLogEntry(LogStyleComplete.Render("URL copied"))
+			}
+		}
+		return m, nil
+	}
 	if key.Matches(msg, m.keys.Dashboard.OpenFile) {
 		if d := m.GetSelectedDownload(); d != nil {
 			canOpen := d.done || (config.Resolve[bool](m.Settings.Network.SequentialDownload) && !d.paused && d.Downloaded > 0)

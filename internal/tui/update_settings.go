@@ -17,6 +17,14 @@ import (
 type extensionTokenFlashFadeMsg struct{}
 
 func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if !m.SettingsIsEditing && (m.settingsSearchActive || msg.String() == "/" || key.Matches(msg, m.keys.Dashboard.Search)) {
+		model, cmd := m.updateSettingsSearch(msg)
+		next := model.(RootModel)
+		next.SettingsSelectedRow = 0
+		next.SettingsFocusedPane = 1
+		next.normalizeSettingsSelection()
+		return next, cmd
+	}
 	if m.SettingsBaseline == nil {
 		m.snapshotSettings()
 	}
@@ -119,7 +127,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keys.SettingsEditor.Confirm) {
-			currentCategory := categories[m.SettingsActiveTab]
+			currentCategory := m.currentSettingsCategory()
 			settingKey := m.getCurrentSettingKey()
 			val := m.SettingsInput.Value()
 
@@ -291,6 +299,9 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 		settingKey := m.getCurrentSettingKey()
+		if settingKey == "" {
+			return m, nil
+		}
 		// Prevent editing ignored settings
 		if settingKey == "max_global_connections" {
 			return m, nil
@@ -321,7 +332,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 		if typ == "link" {
-			currentCategory := categories[m.SettingsActiveTab]
+			currentCategory := m.currentSettingsCategory()
 			values := m.getSettingsValues(currentCategory)
 			if url, ok := values[settingKey].(string); ok && url != "" {
 				_ = utils.OpenBrowser(url)
@@ -329,7 +340,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		currentCategory := categories[m.SettingsActiveTab]
+		currentCategory := m.currentSettingsCategory()
 		switch typ {
 		case "bool":
 			if err := m.setSettingValue(currentCategory, settingKey, ""); err != nil {
@@ -403,7 +414,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 		defaults := config.DefaultSettings()
-		currentCategory := categories[m.SettingsActiveTab]
+		currentCategory := m.currentSettingsCategory()
 		if err := m.resetSettingToDefault(currentCategory, settingKey, defaults); err != nil {
 			m.settingsError = err.Error()
 			return m, nil

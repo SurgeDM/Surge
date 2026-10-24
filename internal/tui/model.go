@@ -210,6 +210,10 @@ type RootModel struct {
 	helpSearchActive bool
 	helpSearchQuery  string
 
+	settingsSearchInput  textinput.Model
+	settingsSearchActive bool
+	settingsSearchQuery  string
+
 	// Batch import
 	pendingBatchURLs         []string // URLs pending batch import
 	pendingBatchRequests     []types.DownloadEvent
@@ -556,6 +560,7 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 		SettingsInput:         settingsInput,
 		searchInput:           searchInput,
 		helpSearchInput:       textinput.New(),
+		settingsSearchInput:   textinput.New(),
 		urlUpdateInput:        urlUpdateInput,
 		catMgrInputs:          [4]textinput.Model{catNameInput, catDescInput, catPatternInput, catPathInput},
 		keys:                  keys,

@@ -52,6 +52,14 @@ func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case SettingsState:
+		if m.settingsSearchActive {
+			var cmd tea.Cmd
+			m.settingsSearchInput, cmd = m.settingsSearchInput.Update(msg)
+			m.settingsSearchQuery = m.settingsSearchInput.Value()
+			m.SettingsSelectedRow = 0
+			m.normalizeSettingsSelection()
+			return m, cmd
+		}
 		if m.SettingsIsEditing {
 			typ := m.getCurrentSettingType()
 			if typ == config.TypeCustomCategory || typ == config.TypeCustomCategoryAdd {

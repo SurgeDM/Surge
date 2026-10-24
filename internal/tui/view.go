@@ -498,7 +498,7 @@ func (m RootModel) View() tea.View {
 		detailWidth = layout.LeftWidth
 	}
 	if selected != nil {
-		detailContent = renderFocusedDetails(selected, detailWidth-components.BorderFrameWidth, m.spinner.View())
+		detailContent = renderFocusedDetails(selected, detailWidth-components.BorderFrameWidth, m.spinner.View(), m.keys)
 	} else {
 		detailContent = renderEmptyMessage(detailWidth-components.BorderFrameWidth, layout.DetailHeight-components.BorderFrameHeight, "No download selected")
 	}
@@ -603,7 +603,11 @@ func (m RootModel) viewCompactQuitConfirm() string {
 }
 
 // Helper to render the detailed info pane
-func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
+func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps ...*config.KeyMap) string {
+	keys := config.DefaultKeyMap()
+	if len(keymaps) > 0 && keymaps[0] != nil {
+		keys = keymaps[0]
+	}
 	pct := 0.0
 	if d.Total > 0 {
 		pct = float64(d.Downloaded) / float64(d.Total)
@@ -652,7 +656,18 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	if innerWidth < 0 {
 		innerWidth = 0
 	}
-	valueWidth := innerWidth - 12
+	labels := []string{"URL [" + keys.Dashboard.CopyURL.Help().Key + "]:", "File:", "Path [" + keys.Dashboard.OpenFolder.Help().Key + "]:", "ID:"}
+	if d.done && d.err == nil {
+		labels[1] = "File [" + keys.Dashboard.OpenFile.Help().Key + "]:"
+	}
+	labelWidth := 0
+	for _, label := range labels {
+		if lipgloss.Width(label)+1 > labelWidth {
+			labelWidth = lipgloss.Width(label) + 1
+		}
+	}
+	fieldLabel := func(index int) string { return StatsLabelStyle.Width(labelWidth).Render(labels[index]) }
+	valueWidth := innerWidth - labelWidth
 	if valueWidth < 5 {
 		valueWidth = 5 // Minimum reasonable width
 	}
@@ -660,11 +675,12 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	urlText := lipgloss.NewStyle().Width(valueWidth).MaxWidth(valueWidth).Render(StatsValueStyle.Hyperlink(d.URL).Render(utils.TruncateTwoLines(d.URL, valueWidth)))
 
 	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("URL: "), urlText),
-		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("File: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayFilename, valueWidth))),
-		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("Path: "), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayPath, valueWidth))),
-		lipgloss.JoinHorizontal(lipgloss.Top, StatsLabelStyle.Render("ID:   "), lipgloss.NewStyle().Foreground(colors.LightGray()).Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(d.ID, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(0), urlText),
+		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(1), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayFilename, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(2), StatsValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayPath, valueWidth))),
+		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(3), lipgloss.NewStyle().Foreground(colors.LightGray()).Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(d.ID, valueWidth))),
 	)
+
 	fileSection := sectionStyle.Render(fileInfoContent)
 
 	// --- 3. Progress Section ---

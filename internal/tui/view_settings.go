@@ -28,7 +28,7 @@ func (m RootModel) viewSettings() string {
 			Padding(DefaultPaddingY, DefaultPaddingX*2).
 			Foreground(colors.LightGray()).
 			Render("Terminal too small for settings view")
-		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.Magenta())
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), m.settingsSearchTitle(), content, width, height, colors.Magenta())
 		return m.renderModalWithOverlay(box)
 	}
 
@@ -38,7 +38,7 @@ func (m RootModel) viewSettings() string {
 			Padding(1, 2).
 			Foreground(colors.LightGray()).
 			Render("No settings categories available")
-		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.Magenta())
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), m.settingsSearchTitle(), content, width, height, colors.Magenta())
 		return m.renderModalWithOverlay(box)
 	}
 
@@ -56,8 +56,8 @@ func (m RootModel) viewSettings() string {
 		content := lipgloss.NewStyle().
 			Padding(1, 2).
 			Foreground(colors.LightGray()).
-			Render("No settings available in this category")
-		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.Magenta())
+			Render("No matching settings")
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), m.settingsSearchTitle(), content, width, height, colors.Magenta())
 		return m.renderModalWithOverlay(box)
 	}
 
@@ -70,6 +70,13 @@ func (m RootModel) viewSettings() string {
 	}
 
 	settingsValues := m.getSettingsValues(currentCategory)
+	if m.settingsSearchQuery != "" {
+		for _, category := range categories {
+			for key, value := range m.getSettingsValues(category) {
+				settingsValues[key] = value
+			}
+		}
+	}
 	tabBar := m.renderSettingsTabBar(categories, activeTab, width-(ProgressBarWidthOffset+HeaderWidthOffset))
 	helpText := m.renderSettingsHelp(width - (ProgressBarWidthOffset + HeaderWidthOffset))
 
@@ -139,7 +146,7 @@ func (m RootModel) viewSettings() string {
 
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
-	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, colors.Magenta())
+	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), m.settingsSearchTitle(), fullContent, width, height, colors.Magenta())
 	return m.renderModalWithOverlay(box)
 }
 
@@ -356,6 +363,12 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	unitStyle := lipgloss.NewStyle().Foreground(colors.LightGray())
 
 	valueLabel := "Value: "
+	if !m.SettingsIsEditing && !m.SettingsReadOnly {
+		switch meta.Type {
+		case config.TypeString, config.TypeInt, config.TypeInt64, config.TypeFloat64, config.TypeDuration:
+			valueLabel = "[" + m.keys.Settings.Edit.Help().Key + "] Change value: "
+		}
+	}
 	var valueStr string
 	if m.SettingsIsEditing {
 		if meta.Type == config.TypeCustomCategory || meta.Type == config.TypeCustomCategoryAdd {
@@ -418,6 +431,10 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	if (meta.Key == "default_download_dir" || meta.Key == "theme_path") && !m.SettingsIsEditing {
 		valueLabel = "[" + m.keys.Settings.Browse.Help().Key + "] Browse: "
+	}
+
+	if !m.SettingsIsEditing && !m.SettingsReadOnly && meta.Type == config.TypeBool {
+		valueLabel = "[" + m.keys.Settings.Edit.Help().Key + "] Toggle: "
 	}
 
 	valueLabelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Bold(true)
@@ -726,7 +743,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 	case config.TypeString, config.TypeAuthToken, config.TypeLink:
 		if setting.Unit == config.UnitMegabytesPerSecond {
 			if _, err := strconv.ParseFloat(value, 64); err == nil {
-				value += " MB/s"
+				value += " MiB/s"
 			}
 			if bps, err := utils.ParseRateLimitValue(value); err == nil {
 				value = utils.FormatRateLimit(bps)
@@ -859,6 +876,22 @@ func (m RootModel) getCurrentSettingMeta() *config.SettingMeta {
 
 // buildSettingsMetaForCategory retrieves and dynamically augments metadata
 func (m RootModel) buildSettingsMetaForCategory(category string) []config.SettingMeta {
+	if m.settingsSearchQuery != "" {
+		unfiltered := m
+		unfiltered.settingsSearchQuery = ""
+		query := strings.ToLower(m.settingsSearchQuery)
+		var results []config.SettingMeta
+		for _, name := range config.CategoryOrder() {
+			for _, meta := range unfiltered.buildSettingsMetaForCategory(name) {
+				if strings.Contains(strings.ToLower(name+" "+meta.Label+" "+meta.Key+" "+meta.Description), query) {
+					meta.Label = "[" + name + "] " + meta.Label
+					results = append(results, meta)
+				}
+			}
+		}
+		return results
+	}
+
 	settingsMap := config.GetSettingsMetadata()
 	settingsList, ok := settingsMap[category]
 	if !ok {
