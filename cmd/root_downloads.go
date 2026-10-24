@@ -175,33 +175,33 @@ func handleDuplicateCheck(w http.ResponseWriter, r *http.Request) {
 func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) {
 	var req DownloadRequest
 	if err := decodeJSONBody(r, &req); err != nil {
-		return req, fmt.Errorf("invalid json: %w", err)
+		return DownloadRequest{}, fmt.Errorf("invalid json: %w", err)
 	}
 	return validateDownloadRequest(req)
 }
 
 func validateDownloadRequest(req DownloadRequest) (DownloadRequest, error) {
 	if req.URL == "" {
-		return req, fmt.Errorf("url is required")
+		return DownloadRequest{}, fmt.Errorf("url is required")
 	}
 	if strings.Contains(req.Filename, "..") {
-		return req, fmt.Errorf("invalid filename")
+		return DownloadRequest{}, fmt.Errorf("invalid filename")
 	}
-	if strings.Contains(req.Filename, "/") || strings.Contains(req.Filename, "\\") {
-		return req, fmt.Errorf("invalid filename")
+	if req.Filename != "" && (!filepath.IsLocal(req.Filename) || strings.ContainsAny(req.Filename, "/\\:\x00")) {
+		return DownloadRequest{}, fmt.Errorf("invalid filename")
 	}
 	if strings.Contains(req.Path, "..") {
-		return req, fmt.Errorf("invalid path")
+		return DownloadRequest{}, fmt.Errorf("invalid path")
 	}
 	if req.RelativeToDefaultDir && req.Path != "" {
 		// Linux filepath.IsAbs does not recognize Windows drive paths, so those
 		// are normalized later against the daemon's default download directory.
 		if filepath.IsAbs(req.Path) && !utils.IsWindowsAbsPath(req.Path) {
-			return req, fmt.Errorf("invalid path")
+			return DownloadRequest{}, fmt.Errorf("invalid path")
 		}
 		cleanPath := filepath.Clean(req.Path)
 		if cleanPath == ".." || strings.HasPrefix(cleanPath, ".."+string(filepath.Separator)) {
-			return req, fmt.Errorf("invalid path")
+			return DownloadRequest{}, fmt.Errorf("invalid path")
 		}
 		req.Path = cleanPath
 	}

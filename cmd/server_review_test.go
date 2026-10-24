@@ -234,3 +234,25 @@ func TestBatchDuplicateDownloadsFieldReplacesEarlierItems(t *testing.T) {
 		t.Fatalf("downloads = %#v, want only second item", request.Downloads)
 	}
 }
+
+func TestInvalidDownloadRequestReturnsNoUsableRequest(t *testing.T) {
+	for _, body := range []string{
+		`{"url":"https://example.com/file","filename":"../outside"}`,
+		`{"url":"https://example.com/file","filename":"C:outside"}`,
+		`{"url":"https://example.com/file","filename":"file:stream"}`,
+		`{"url":"https://example.com/file","path":"../outside"}`,
+		`{"filename":"unsafe","path":"outside"}`,
+		`{"url":"https://example.com/file","path":"outside"} {}`,
+	} {
+		t.Run(body, func(t *testing.T) {
+			request := httptest.NewRequest(http.MethodPost, "/download", strings.NewReader(body))
+			got, err := decodeAndValidateDownloadRequest(request)
+			if err == nil {
+				t.Fatal("expected validation error")
+			}
+			if got.URL != "" || got.Filename != "" || got.Path != "" {
+				t.Fatalf("failed validation returned request data: %#v", got)
+			}
+		})
+	}
+}
