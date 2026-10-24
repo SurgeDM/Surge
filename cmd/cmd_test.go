@@ -561,6 +561,7 @@ func TestHandleDownload_StatusQuery_NotFound(t *testing.T) {
 
 func TestDownloadRequest_JSONSerialization(t *testing.T) {
 	req := DownloadRequest{
+		ID:       "custom-id-123",
 		URL:      "https://example.com/file.zip",
 		Filename: "file.zip",
 		Path:     "/downloads",
@@ -576,6 +577,9 @@ func TestDownloadRequest_JSONSerialization(t *testing.T) {
 		t.Fatalf("Failed to unmarshal: %v", err)
 	}
 
+	if loaded.ID != req.ID {
+		t.Errorf("ID mismatch: got %q, want %q", loaded.ID, req.ID)
+	}
 	if loaded.URL != req.URL {
 		t.Error("URL mismatch")
 	}
@@ -596,6 +600,9 @@ func TestDownloadRequest_OptionalFields(t *testing.T) {
 		t.Fatalf("Failed to unmarshal: %v", err)
 	}
 
+	if req.ID != "" {
+		t.Error("ID should be empty")
+	}
 	if req.URL != "https://example.com/file.zip" {
 		t.Error("URL not parsed correctly")
 	}
@@ -896,6 +903,9 @@ func TestSendToServer_Success(t *testing.T) {
 			t.Errorf("Failed to parse request: %v", err)
 		}
 
+		if req.ID != "" {
+			t.Error("ID should be empty")
+		}
 		if req.URL != "https://example.com/file.zip" {
 			t.Errorf("URL mismatch: %s", req.URL)
 		}
