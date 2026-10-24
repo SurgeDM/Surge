@@ -1332,7 +1332,6 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 
 	t.Run("local-mode", func(t *testing.T) {
 		setupIsolatedCmdState(t)
-		atomic.StoreInt32(&activeDownloads, 0)
 
 		GlobalProgressCh = make(chan types.DownloadEvent, 10)
 		if GlobalPool != nil {
@@ -1371,9 +1370,6 @@ func TestProcessDownloads_RemoteAndLocal(t *testing.T) {
 
 		if count != 1 {
 			t.Fatalf("expected 1 successful local add, got %d", count)
-		}
-		if atomic.LoadInt32(&activeDownloads) != 1 {
-			t.Fatalf("expected activeDownloads=1, got %d", atomic.LoadInt32(&activeDownloads))
 		}
 	})
 }

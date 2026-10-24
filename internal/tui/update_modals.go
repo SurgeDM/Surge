@@ -248,6 +248,9 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 			}
 
 			isDefaultPath := m.isDefaultDownloadPath(requestPath)
+			if !pathChanged && request.IsExplicitCategory {
+				isDefaultPath = false
+			}
 			if requestPath == "" {
 				isDefaultPath = true
 				requestPath = m.defaultDownloadPath()

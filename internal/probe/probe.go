@@ -84,7 +84,7 @@ func lockProbeHost(rawurl string) func() {
 // the effective proxy and want probe traffic to match the eventual download path
 // without re-reading settings from disk.
 func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint string, headers map[string]string, runCfg *types.RuntimeConfig) (*ProbeResult, error) {
-	utils.Debug("Probing server: %s", rawurl)
+	utils.Debug("Probing server host: %s", utils.URLHostForLog(rawurl))
 
 	// Embed custom headers in context so CheckRedirect can use them
 	if headers != nil {
