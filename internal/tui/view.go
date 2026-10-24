@@ -444,8 +444,6 @@ func (m RootModel) View() tea.View {
 	}
 	powerChunk := lipgloss.NewStyle().
 		Foreground(powerColor).
-		Width(3).
-		Align(lipgloss.Center).
 		Render("\u23fb")
 
 	// Version indicator
