@@ -656,7 +656,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 	if innerWidth < 0 {
 		innerWidth = 0
 	}
-	labels := []string{"URL", "File", "Path", "ID"}
+	labels := []string{"URL:", "File:", "Path:", "ID:"}
 	shortcuts := []string{keys.Dashboard.CopyURL.Help().Key, "", keys.Dashboard.OpenFolder.Help().Key, keys.Dashboard.CopyID.Help().Key}
 	if d.done && d.err == nil {
 		shortcuts[1] = keys.Dashboard.OpenFile.Help().Key
@@ -670,11 +670,11 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 			shortcutWidth = width
 		}
 	}
-	labelWidth := max(6, shortcutWidth+1)
+	const nameWidth = 6
+	labelWidth := nameWidth + shortcutWidth
 	fieldLabel := func(index int) string {
-		name := lipgloss.NewStyle().Foreground(colors.LightGray()).Render(labels[index])
-		hint := lipgloss.NewStyle().Foreground(colors.Gray()).Render(shortcuts[index])
-		return lipgloss.NewStyle().Width(labelWidth).Render(name + "\n" + hint)
+		return lipgloss.NewStyle().Foreground(colors.LightGray()).Width(nameWidth).Render(labels[index]) +
+			lipgloss.NewStyle().Foreground(colors.Gray()).Width(shortcutWidth).Render(shortcuts[index])
 	}
 
 	valueWidth := innerWidth - labelWidth
