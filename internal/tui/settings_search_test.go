@@ -4,7 +4,6 @@ import (
 	"strings"
 	"testing"
 
-	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
 )
@@ -51,14 +50,17 @@ func TestSettingsSearchNoMatchesStillShowsSearch(t *testing.T) {
 
 func TestContextHintsUseConfiguredKeys(t *testing.T) {
 	m := InitialRootModel(1701, "test", nil, nil, config.DefaultSettings(), false)
-	m.keys.Dashboard.Log = key.NewBinding(key.WithKeys("ctrl+l"), key.WithHelp("ctrl+l", "log"))
-	m.keys.Dashboard.CopyURL = key.NewBinding(key.WithKeys("ctrl+y"), key.WithHelp("ctrl+y", "copy URL"))
+	m.keys.ApplyConfig(&config.KeyMapConfig{Dashboard: map[string]config.KeyBindingConfig{
+		"Log":     {Keys: []string{"ctrl+l"}},
+		"CopyURL": {Keys: []string{"ctrl+y"}},
+		"CopyID":  {Keys: []string{"ctrl+i"}},
+	}})
 	if !strings.Contains(m.renderLogBox(70, 10), "[ctrl+l]") {
 		t.Fatal("log hint ignores configured binding")
 	}
 	d := &DownloadModel{done: true, Filename: "file", Destination: "/tmp/file", URL: "https://example.com/file"}
 	text := stripANSI.ReplaceAllString(renderFocusedDetails(d, 100, "", m.keys), "")
-	for _, hint := range []string{"URL [ctrl+y]:", "File [o]:", "Path [shift+o]:"} {
+	for _, hint := range []string{"URL [ctrl+y]:", "File [o]:", "Path [shift+o]:", "ID [ctrl+i]:"} {
 		if !strings.Contains(text, hint) {
 			t.Fatalf("missing hint %q: %s", hint, text)
 		}

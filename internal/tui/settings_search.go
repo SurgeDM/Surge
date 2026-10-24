@@ -3,7 +3,9 @@ package tui
 import (
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
 
 func (m RootModel) updateSettingsSearch(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
@@ -38,10 +40,10 @@ func (m RootModel) updateSettingsSearch(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 
 func (m RootModel) settingsSearchTitle() string {
 	if m.settingsSearchActive {
-		return " > " + m.settingsSearchInput.View() + " [esc] Exit "
+		return " " + lipgloss.NewStyle().Foreground(colors.Cyan()).Render("> ") + m.settingsSearchInput.View() + " [esc] Exit "
 	}
 	if m.settingsSearchQuery != "" {
-		return " > " + m.settingsSearchQuery + " [" + m.keys.Dashboard.Search.Help().Key + "] Edit "
+		return " " + lipgloss.NewStyle().Foreground(colors.Cyan()).Render("> ") + m.settingsSearchQuery + " [" + m.keys.Dashboard.Search.Help().Key + "] Edit "
 	}
 	return " [" + m.keys.Dashboard.Search.Help().Key + "] Search "
 }

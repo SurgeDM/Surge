@@ -656,7 +656,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 	if innerWidth < 0 {
 		innerWidth = 0
 	}
-	labels := []string{"URL [" + keys.Dashboard.CopyURL.Help().Key + "]:", "File:", "Path [" + keys.Dashboard.OpenFolder.Help().Key + "]:", "ID:"}
+	labels := []string{"URL [" + keys.Dashboard.CopyURL.Help().Key + "]:", "File:", "Path [" + keys.Dashboard.OpenFolder.Help().Key + "]:", "ID [" + keys.Dashboard.CopyID.Help().Key + "]:"}
 	if d.done && d.err == nil {
 		labels[1] = "File [" + keys.Dashboard.OpenFile.Help().Key + "]:"
 	}

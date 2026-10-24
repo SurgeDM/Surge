@@ -208,6 +208,17 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Open file
+
+	if key.Matches(msg, m.keys.Dashboard.CopyID) {
+		if d := m.GetSelectedDownload(); d != nil && d.ID != "" {
+			if err := clipboard.Write(d.ID); err != nil {
+				m.addLogEntry(LogStyleError.Render("Copy ID failed: " + err.Error()))
+			} else {
+				m.addLogEntry(LogStyleComplete.Render("ID copied"))
+			}
+		}
+		return m, nil
+	}
 	if key.Matches(msg, m.keys.Dashboard.CopyURL) {
 		if d := m.GetSelectedDownload(); d != nil && d.URL != "" {
 			if err := clipboard.Write(d.URL); err != nil {
