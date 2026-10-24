@@ -1513,3 +1513,72 @@ func TestStateOperationsRejectPathIDs(t *testing.T) {
 		t.Fatalf("outside state file changed: %v", err)
 	}
 }
+
+func TestCleanupValidatesIDsBeforeDeletingDetails(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  string
+		cleanup func() (int64, error)
+	}{
+		{"remove completed", "completed", RemoveCompletedDownloads},
+		{"integrity", "queued", func() (int64, error) { count, err := ValidateIntegrity(); return int64(count), err }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			CloseDB()
+			Configure(filepath.Join(dir, "surge.db"))
+			t.Cleanup(CloseDB)
+			for _, entry := range []types.DownloadRecord{
+				{ID: "valid", URL: "https://example.com/valid", DestPath: filepath.Join(dir, "missing.bin"), Status: test.status},
+				{ID: "../invalid", URL: "https://example.com/invalid", DestPath: filepath.Join(dir, "other.bin"), Status: test.status},
+			} {
+				if err := AddToMasterList(entry); err != nil {
+					t.Fatal(err)
+				}
+			}
+			detailPath := mustDetailPath(t, dir, "valid")
+			detail := []byte("detail must survive rejected cleanup")
+			if err := os.WriteFile(detailPath, detail, 0600); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.ReadFile(getMasterPath())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if count, err := test.cleanup(); err == nil || count != 0 {
+				t.Fatalf("cleanup = %d, %v; want zero removals and error", count, err)
+			}
+			after, err := os.ReadFile(getMasterPath())
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatalf("master list changed: %v", err)
+			}
+			actual, err := os.ReadFile(detailPath)
+			if err != nil || !bytes.Equal(detail, actual) {
+				t.Fatalf("detail file changed: %v", err)
+			}
+		})
+	}
+}
+
+func TestRemoveCompletedIgnoresInvalidIDWithOtherStatus(t *testing.T) {
+	dir := t.TempDir()
+	CloseDB()
+	Configure(filepath.Join(dir, "surge.db"))
+	t.Cleanup(CloseDB)
+	for _, entry := range []types.DownloadRecord{
+		{ID: "valid", URL: "https://example.com/valid", Status: "completed"},
+		{ID: "../invalid", URL: "https://example.com/invalid", Status: "paused"},
+	} {
+		if err := AddToMasterList(entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if count, err := RemoveCompletedDownloads(); err != nil || count != 1 {
+		t.Fatalf("cleanup = %d, %v; want one removal", count, err)
+	}
+	list, err := ListAllDownloads()
+	if err != nil || len(list) != 1 || list[0].ID != "../invalid" {
+		t.Fatalf("remaining downloads = %#v, %v", list, err)
+	}
+}

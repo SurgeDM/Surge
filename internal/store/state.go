@@ -753,16 +753,22 @@ func removeDownloadsByStatus(status string) (int64, error) {
 	if err != nil {
 		return 0, err
 	}
+	detailPaths := make([]string, len(list.Downloads))
+	for i, entry := range list.Downloads {
+		if entry.Status != status {
+			continue
+		}
+		detailPaths[i], err = getDetailPath(baseDir, entry.ID)
+		if err != nil {
+			return 0, err
+		}
+	}
 	var count int64
 	out := []types.DownloadRecord{}
-	for _, e := range list.Downloads {
+	for i, e := range list.Downloads {
 		if e.Status == status {
-			detailPath, err := getDetailPath(baseDir, e.ID)
-			if err != nil {
-				return count, err
-			}
 			count++
-			_ = utils.RemoveFile(detailPath)
+			_ = utils.RemoveFile(detailPaths[i])
 		} else {
 			out = append(out, e)
 		}
@@ -884,6 +890,13 @@ func ValidateIntegrity() (int, error) {
 	if err != nil {
 		return 0, err
 	}
+	detailPaths := make([]string, len(list.Downloads))
+	for i, entry := range list.Downloads {
+		detailPaths[i], err = getDetailPath(baseDir, entry.ID)
+		if err != nil {
+			return 0, err
+		}
+	}
 
 	removed := 0
 	expectedSurgePaths := make(map[string]struct{})
@@ -891,11 +904,8 @@ func ValidateIntegrity() (int, error) {
 
 	var out []types.DownloadRecord
 
-	for _, e := range list.Downloads {
-		detailPath, err := getDetailPath(baseDir, e.ID)
-		if err != nil {
-			return removed, err
-		}
+	for i, e := range list.Downloads {
+		detailPath := detailPaths[i]
 		if e.DestPath == "" {
 			out = append(out, e)
 			continue
