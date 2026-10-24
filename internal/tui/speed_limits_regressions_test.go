@@ -97,19 +97,19 @@ func TestUpdateSpeedLimits_ArrowNavClearsError(t *testing.T) {
 	}
 }
 
-func TestSpeedLimitsPreserveDecimalMegabytes(t *testing.T) {
+func TestSpeedLimitsPreserveBinaryMegabytes(t *testing.T) {
 	m := newSpeedLimitsTestModel(t)
 	m.downloads = []*DownloadModel{{ID: "download"}}
 	for _, key := range []string{"global_rate_limit", "default_download_rate_limit", "dl:download"} {
 		t.Run(key, func(t *testing.T) {
-			value := "10 MBps"
+			value := "10 MiB/s"
 			for i := 0; i < 3; i++ {
 				if err := m.setSpeedLimitValue(key, value); err != nil {
 					t.Fatal(err)
 				}
 				value = m.getSpeedLimitsValues()[key].(string)
-				if value != "10 MB/s" {
-					t.Fatalf("saved limit = %q, want 10 MB/s", value)
+				if value != "10 MiB/s" {
+					t.Fatalf("saved limit = %q, want 10 MiB/s", value)
 				}
 			}
 		})
@@ -118,7 +118,7 @@ func TestSpeedLimitsPreserveDecimalMegabytes(t *testing.T) {
 
 func TestSpeedLimitsSaveAndReopen(t *testing.T) {
 	for cursor, name := range []string{"global", "default", "download"} {
-		for _, input := range []string{"10", "100", "0.000001", "1.234567"} {
+		for _, input := range []string{"10", "100", "0.00000095367431640625", "1.234375"} {
 			t.Run(name+"/"+input, func(t *testing.T) {
 				m := newSpeedLimitsTestModel(t)
 				m.downloads = []*DownloadModel{{ID: "download"}}

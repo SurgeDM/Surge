@@ -845,7 +845,7 @@ func DefaultSettings() *Settings {
 			GlobalRateLimit: &Setting{
 				Key:          "global_rate_limit",
 				Label:        "Global Rate Limit",
-				Description:  "Cap total download bandwidth (e.g., 10MB/s, 80Mbps). Use 0 to disable.",
+				Description:  "Cap total download bandwidth (e.g., 10MiB/s, 80Mbps). Use 0 to disable.",
 				Type:         TypeString,
 				Unit:         UnitMegabytesPerSecond,
 				DefaultValue: "0",
@@ -858,7 +858,7 @@ func DefaultSettings() *Settings {
 			DefaultDownloadRateLimit: &Setting{
 				Key:          "default_download_rate_limit",
 				Label:        "Default Download Rate Limit",
-				Description:  "Default cap per download (e.g., 2MB/s). Use 0 to disable.",
+				Description:  "Default cap per download (e.g., 2MiB/s). Use 0 to disable.",
 				Type:         TypeString,
 				Unit:         UnitMegabytesPerSecond,
 				DefaultValue: "0",

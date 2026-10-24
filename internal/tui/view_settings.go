@@ -925,7 +925,7 @@ func settingUnitSuffix(unit config.SettingUnit) string {
 	case config.UnitRatio:
 		return " (0.0-1.0)"
 	case config.UnitMegabytesPerSecond:
-		return " MB/s"
+		return " MiB/s"
 	default:
 		return ""
 	}
@@ -960,11 +960,7 @@ func formatSettingValueForEdit(value interface{}, typ config.SettingType, unit c
 				if parsed == 0 {
 					return "\u221E"
 				}
-				mb := float64(parsed) / 1000000.0
-				if mb == float64(int64(mb)) {
-					return fmt.Sprintf("%.0f", mb)
-				}
-				return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.3f", mb), "0"), ".")
+				return strconv.FormatFloat(float64(parsed)/float64(utils.MiB), 'f', -1, 64)
 			}
 		}
 	}

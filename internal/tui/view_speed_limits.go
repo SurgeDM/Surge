@@ -33,7 +33,7 @@ func (m RootModel) viewSpeedLimits() string {
 			valStr = "0"
 		}
 
-		suffix := "MB/s"
+		suffix := "MiB/s"
 		if strings.HasPrefix(meta.Key, "dl:") {
 			defaultRate := int64(0)
 			if m.Settings != nil && m.Settings.Network.DefaultDownloadRateLimit != nil {
@@ -43,9 +43,9 @@ func (m RootModel) viewSpeedLimits() string {
 			}
 			displayRate := utils.FormatRateLimit(defaultRate)
 			if defaultRate <= 0 {
-				displayRate = "0 MB/s"
+				displayRate = "0 MiB/s"
 			}
-			suffix = fmt.Sprintf("MB/s (-1 to inherit %s)", displayRate)
+			suffix = fmt.Sprintf("MiB/s (-1 to inherit %s)", displayRate)
 		}
 		items = append(items, components.ListInputItem{
 			Label:       meta.Label,

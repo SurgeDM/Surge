@@ -30,9 +30,9 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				valueStr := strings.TrimSpace(value)
 				if !utils.IsRateLimitInherit(valueStr) {
 					if _, err := strconv.ParseFloat(valueStr, 64); err != nil {
-						m.speedLimitsError = "Please enter a number (in MB/s)"
+						m.speedLimitsError = "Please enter a number (in MiB/s)"
 						if strings.HasPrefix(meta.Key, "dl:") {
-							m.speedLimitsError = "Please enter a number (in MB/s) or -1"
+							m.speedLimitsError = "Please enter a number (in MiB/s) or -1"
 						}
 						return m, nil
 					}
@@ -50,8 +50,8 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				newValues := m.getSpeedLimitsValues()
 				newVal := newValues[meta.Key]
 
-				oldStr := strings.ReplaceAll(fmt.Sprintf("%v", oldVal), "\u221E", "0 MB/s")
-				newStr := strings.ReplaceAll(fmt.Sprintf("%v", newVal), "\u221E", "0 MB/s")
+				oldStr := strings.ReplaceAll(fmt.Sprintf("%v", oldVal), "\u221E", "0 MiB/s")
+				newStr := strings.ReplaceAll(fmt.Sprintf("%v", newVal), "\u221E", "0 MiB/s")
 
 				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 %s updated: %s \u2192 %s", meta.Label, oldStr, newStr)))
 			}
@@ -120,7 +120,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				if bps == 0 {
 					valStr = "0"
 				} else {
-					valStr = strconv.FormatFloat(float64(bps)/1000000.0, 'f', -1, 64)
+					valStr = strconv.FormatFloat(float64(bps)/float64(utils.MiB), 'f', -1, 64)
 					if valStr == "" {
 						valStr = "0"
 					}
@@ -148,8 +148,8 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				newValues := m.getSpeedLimitsValues()
 				newVal := newValues[meta.Key]
 
-				oldStr := strings.ReplaceAll(fmt.Sprintf("%v", oldVal), "\u221E", "0 MB/s")
-				newStr := strings.ReplaceAll(fmt.Sprintf("%v", newVal), "\u221E", "0 MB/s")
+				oldStr := strings.ReplaceAll(fmt.Sprintf("%v", oldVal), "\u221E", "0 MiB/s")
+				newStr := strings.ReplaceAll(fmt.Sprintf("%v", newVal), "\u221E", "0 MiB/s")
 
 				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 %s reset: %s \u2192 %s", meta.Label, oldStr, newStr)))
 			}

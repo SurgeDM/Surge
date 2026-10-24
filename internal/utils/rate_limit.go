@@ -3,6 +3,7 @@ package utils
 import (
 	"fmt"
 	"math"
+	"math/big"
 	"strconv"
 	"strings"
 )
@@ -40,6 +41,7 @@ var rateUnits = map[string]rateUnit{
 }
 
 // ParseRateLimit parses a human-friendly rate limit string into bytes per second.
+// Values without a unit use MiB/s, matching the speed-limit editors.
 func ParseRateLimit(input string) (int64, error) {
 	trimmed := strings.TrimSpace(input)
 	lower := strings.ToLower(trimmed)
@@ -66,7 +68,7 @@ func ParseRateLimit(input string) (int64, error) {
 	numStr := trimmed[:numEnd]
 	unitStr := trimmed[numEnd:]
 	if unitStr == "" {
-		unitStr = "MB"
+		unitStr = "MiB"
 	}
 
 	value, err := strconv.ParseFloat(numStr, 64)
@@ -151,19 +153,18 @@ func FormatRateLimit(bps int64) string {
 	if bps <= 0 {
 		return "\u221E"
 	}
-	// Limits are parsed and persisted in decimal units. Keep every byte when
-	// formatting so saving or editing a limit cannot silently change its value.
-	units := []string{"B/s", "KB/s", "MB/s", "GB/s", "TB/s"}
+	// Use IEC units consistently with live speeds, without rounding persisted limits.
+	units := []string{"B/s", "KiB/s", "MiB/s", "GiB/s", "TiB/s"}
 	divisor := int64(1)
 	unit := 0
-	for unit < len(units)-1 && bps/divisor >= 1000 {
-		divisor *= 1000
+	for unit < len(units)-1 && bps/divisor >= 1024 {
+		divisor *= 1024
 		unit++
 	}
-	value := strconv.FormatInt(bps/divisor, 10)
-	if remainder := bps % divisor; remainder != 0 {
-		fraction := strconv.FormatInt(divisor+remainder, 10)[1:]
-		value += "." + strings.TrimRight(fraction, "0")
+	value := strconv.FormatInt(bps, 10)
+	if divisor > 1 {
+		value = new(big.Rat).SetFrac64(bps, divisor).FloatString(40)
+		value = strings.TrimRight(strings.TrimRight(value, "0"), ".")
 	}
 	return value + " " + units[unit]
 }

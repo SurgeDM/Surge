@@ -38,7 +38,7 @@ func TestParseRateLimit(t *testing.T) {
 		{"Invalid unit", "10 xyz", 0, true},
 		{"Negative value", "-10 mb", 0, true},
 		{"Sub-byte value", "0.1 B/s", 0, true},
-		{"No unit defaults to MB", "10", 10 * 1000 * 1000, false},
+		{"No unit defaults to MiB", "10", 10 * MiB, false},
 	}
 
 	for _, tt := range tests {
@@ -64,9 +64,9 @@ func TestFormatRateLimit(t *testing.T) {
 		{"Zero", 0, "\u221E"},
 		{"Negative", -100, "\u221E"},
 		{"Bytes", 500, "500 B/s"},
-		{"Kilobytes", 1024, "1.024 KB/s"},
-		{"Megabytes", 1024 * 1024, "1.048576 MB/s"},
-		{"Gigabytes", 1024 * 1024 * 1024, "1.073741824 GB/s"},
+		{"Kilobytes", 1024, "1 KiB/s"},
+		{"Megabytes", 1024 * 1024, "1 MiB/s"},
+		{"Gigabytes", 1024 * 1024 * 1024, "1 GiB/s"},
 	}
 
 	for _, tt := range tests {
@@ -120,9 +120,6 @@ func TestRateLimitRoundTrip(t *testing.T) {
 				t.Fatal(err)
 			}
 			formatted := FormatRateLimit(rate)
-			if input == "10 MBps" && formatted != "10 MB/s" {
-				t.Fatalf("formatted = %q, want 10 MB/s", formatted)
-			}
 			for i := 0; i < 3; i++ {
 				got, err := ParseRateLimit(formatted)
 				if err != nil || got != rate {
