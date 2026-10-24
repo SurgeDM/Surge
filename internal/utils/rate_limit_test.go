@@ -64,9 +64,9 @@ func TestFormatRateLimit(t *testing.T) {
 		{"Zero", 0, "\u221E"},
 		{"Negative", -100, "\u221E"},
 		{"Bytes", 500, "500 B/s"},
-		{"Kilobytes", 1024, "1.0 KiB/s"},
-		{"Megabytes", 1024 * 1024, "1.0 MiB/s"},
-		{"Gigabytes", 1024 * 1024 * 1024, "1.0 GiB/s"},
+		{"Kilobytes", 1024, "1.024 KB/s"},
+		{"Megabytes", 1024 * 1024, "1.048576 MB/s"},
+		{"Gigabytes", 1024 * 1024 * 1024, "1.073741824 GB/s"},
 	}
 
 	for _, tt := range tests {
@@ -107,6 +107,28 @@ func TestParseRateLimitValue(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("ParseRateLimitValue() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRateLimitRoundTrip(t *testing.T) {
+	for _, input := range []string{"10", "10 MBps", "10 MB/s", "1.234567 MB/s", "80 Mbps", "10 MiB/s", "1 B/s", "1001 B/s", "9223372036854775 B/s"} {
+		t.Run(input, func(t *testing.T) {
+			rate, err := ParseRateLimit(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			formatted := FormatRateLimit(rate)
+			if input == "10 MBps" && formatted != "10 MB/s" {
+				t.Fatalf("formatted = %q, want 10 MB/s", formatted)
+			}
+			for i := 0; i < 3; i++ {
+				got, err := ParseRateLimit(formatted)
+				if err != nil || got != rate {
+					t.Fatalf("round trip %q = (%d, %v), want %d", formatted, got, err, rate)
+				}
+				formatted = FormatRateLimit(got)
 			}
 		})
 	}

@@ -151,7 +151,21 @@ func FormatRateLimit(bps int64) string {
 	if bps <= 0 {
 		return "\u221E"
 	}
-	return FormatBytes(bps) + "/s"
+	// Limits are parsed and persisted in decimal units. Keep every byte when
+	// formatting so saving or editing a limit cannot silently change its value.
+	units := []string{"B/s", "KB/s", "MB/s", "GB/s", "TB/s"}
+	divisor := int64(1)
+	unit := 0
+	for unit < len(units)-1 && bps/divisor >= 1000 {
+		divisor *= 1000
+		unit++
+	}
+	value := strconv.FormatInt(bps/divisor, 10)
+	if remainder := bps % divisor; remainder != 0 {
+		fraction := strconv.FormatInt(divisor+remainder, 10)[1:]
+		value += "." + strings.TrimRight(fraction, "0")
+	}
+	return value + " " + units[unit]
 }
 
 // IsRateLimitInherit checks if the string is one of the recognized aliases for inheriting the default limit.
