@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -646,9 +647,9 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 		displayFilename = d.URL
 	}
 
-	displayPath := d.Destination
-	if displayPath == "" {
-		displayPath = d.URL
+	displayPath := "Not available"
+	if d.Destination != "" {
+		displayPath = filepath.Dir(d.Destination)
 	}
 
 	// Calculate inner width accounting for sectionStyle padding (0, 1)
