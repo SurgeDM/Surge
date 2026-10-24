@@ -363,6 +363,17 @@ func (p *Scheduler) SetGlobalRateLimit(rate int64) {
 	p.globalLimiter.SetRate(rate, rateLimiterBurst(rate))
 }
 
+// GlobalRateLimit returns the active global limit in bytes per second.
+func (p *Scheduler) GlobalRateLimit() int64 {
+	p.mu.RLock()
+	limiter := p.globalLimiter
+	p.mu.RUnlock()
+	if limiter == nil {
+		return 0
+	}
+	return limiter.Rate()
+}
+
 // SetDefaultDownloadRateLimit updates the default per-download rate limit (bytes/sec).
 func (p *Scheduler) SetDefaultDownloadRateLimit(rate int64) {
 	p.mu.Lock()

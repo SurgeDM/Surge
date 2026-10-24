@@ -1,7 +1,7 @@
 # Get started with Surge
 
 This guide gets a download running, then helps you choose whether the
-interactive TUI, a headless server, or a system service is the right fit.
+interactive TUI, a headless server, or a user service is the right fit.
 
 ## Install Surge
 
@@ -59,12 +59,14 @@ download manager:
 surge server
 ```
 
-Use a **system service** when the server should start with the machine:
+Use a **user service** when the server should start with your login session:
 
 ```bash
 surge service install
-surge service start
 ```
+
+`install` starts the service immediately. Run it as your normal user without
+`sudo` or an Administrator terminal.
 
 See [TUI, server, and remote modes](concepts/modes.md) for the differences and
 [Run Surge as a service](guides/run-as-a-service.md) before installing a

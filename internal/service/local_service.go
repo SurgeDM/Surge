@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/orchestrator"
@@ -30,18 +31,126 @@ func completedSpeedBps(entry types.DownloadRecord) float64 {
 }
 
 type LocalDownloadService struct {
-	lifecycle *orchestrator.LifecycleManager
+	lifecycle  *orchestrator.LifecycleManager
+	settingsMu sync.Mutex
 }
 
 func NewLocalDownloadService(lifecycle *orchestrator.LifecycleManager) *LocalDownloadService {
 	return &LocalDownloadService{lifecycle: lifecycle}
 }
 
+// ReloadSettingsFromDisk uses the same owner and runtime application as edits.
+func (s *LocalDownloadService) ReloadSettingsFromDisk() error {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	if s.lifecycle == nil {
+		return types.ErrServiceUnavailable
+	}
+	settings, err := config.LoadSettings()
+	if err != nil {
+		return err
+	}
+	return s.reloadSettings(settings)
+}
+
 func (s *LocalDownloadService) ReloadSettings(settings *config.Settings) error {
-	if s.lifecycle != nil {
-		s.lifecycle.ApplySettings(settings)
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	return s.reloadSettings(settings)
+}
+
+// reloadSettings applies the same live settings for TUI, API and rate updates.
+// The caller holds settingsMu through persistence and application.
+func (s *LocalDownloadService) reloadSettings(settings *config.Settings) error {
+	if s.lifecycle == nil {
+		return nil
+	}
+	previous := s.lifecycle.GetSettings()
+	globalRate, err := utils.ParseRateLimitValue(settings.Network.GlobalRateLimit.Value)
+	if err != nil {
+		return err
+	}
+	defaultRate, err := utils.ParseRateLimitValue(settings.Network.DefaultDownloadRateLimit.Value)
+	if err != nil {
+		return err
+	}
+	s.lifecycle.ApplySettings(settings)
+	pool := s.lifecycle.GetScheduler()
+	if pool == nil {
+		return nil
+	}
+	pool.SetGlobalRateLimit(globalRate)
+	if settings.Network.DefaultDownloadRateLimit.Value == previous.Network.DefaultDownloadRateLimit.Value {
+		return nil
+	}
+	pool.SetDefaultDownloadRateLimit(defaultRate)
+	var dbErrs []string
+	for _, cfg := range pool.GetAll() {
+		if !cfg.RateLimitSet {
+			if err := store.UpdateDefaultRateLimit(cfg.ID, defaultRate); err != nil {
+				dbErrs = append(dbErrs, fmt.Sprintf("%s: %v", cfg.ID, err))
+			}
+		}
+	}
+	if len(dbErrs) > 0 {
+		return fmt.Errorf("failed to update default rate limit in DB for some downloads: %s", strings.Join(dbErrs, "; "))
 	}
 	return nil
+}
+
+func (s *LocalDownloadService) GetSettings() (*config.Settings, error) {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	if s.lifecycle == nil {
+		return nil, types.ErrServiceUnavailable
+	}
+	return s.lifecycle.GetSettings(), nil
+}
+
+func (s *LocalDownloadService) UpdateSettings(settings *config.Settings) error {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	return s.updateSettings(settings)
+}
+
+// updateSettings persists and applies a snapshot while settingsMu is held.
+func (s *LocalDownloadService) updateSettings(settings *config.Settings) error {
+	var err error
+	settings, err = settings.NormalizedClone()
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidSettings, err)
+	}
+	if s.lifecycle == nil {
+		return types.ErrServiceUnavailable
+	}
+	if err := settings.ValidateStrict(true); err != nil {
+		return fmt.Errorf("%w: %w", ErrInvalidSettings, err)
+	}
+	settings.Extension.AuthToken.Value = s.lifecycle.GetSettings().Extension.AuthToken.Value
+	if err := config.SaveSettings(settings); err != nil {
+		return err
+	}
+	return s.reloadSettings(settings)
+}
+
+func (s *LocalDownloadService) PatchSettings(patch config.SettingsPatch) (*config.Settings, error) {
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
+	if s.lifecycle == nil {
+		return nil, types.ErrServiceUnavailable
+	}
+	current := s.lifecycle.GetSettings()
+	if patch.Empty() {
+		return current, nil
+	}
+	updated, err := patch.Apply(current)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %w", ErrInvalidSettings, err)
+	}
+	if err := s.updateSettings(updated); err != nil {
+		return nil, err
+	}
+	return s.lifecycle.GetSettings(), nil
 }
 
 func (s *LocalDownloadService) StreamEvents(ctx context.Context) (<-chan types.DownloadEvent, func(), error) {
@@ -284,23 +393,11 @@ func (s *LocalDownloadService) SetGlobalRateLimit(rate int64) error {
 		return types.ErrPoolNotInit
 	}
 
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
 	settings := s.lifecycle.GetSettings()
-	if settings == nil {
-		return fmt.Errorf("settings not found")
-	}
-
-	if settings.Network.GlobalRateLimit == nil {
-		settings.Network.GlobalRateLimit = config.DefaultSettings().Network.GlobalRateLimit
-	}
-	oldValue := settings.Network.GlobalRateLimit.Value
-	settings.Network.GlobalRateLimit.Value = utils.FormatRateLimit(rate)
-	if err := config.SaveSettings(settings); err != nil {
-		settings.Network.GlobalRateLimit.Value = oldValue
-		return err
-	}
-
-	s.lifecycle.GetScheduler().SetGlobalRateLimit(rate)
-	return nil
+	settings.Network.GlobalRateLimit.Value = fmt.Sprintf("%d B/s", rate)
+	return s.updateSettings(settings)
 }
 
 func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
@@ -311,37 +408,11 @@ func (s *LocalDownloadService) SetDefaultRateLimit(rate int64) error {
 		return types.ErrPoolNotInit
 	}
 
+	s.settingsMu.Lock()
+	defer s.settingsMu.Unlock()
 	settings := s.lifecycle.GetSettings()
-	if settings == nil {
-		return fmt.Errorf("settings not found")
-	}
-
-	if settings.Network.DefaultDownloadRateLimit == nil {
-		settings.Network.DefaultDownloadRateLimit = config.DefaultSettings().Network.DefaultDownloadRateLimit
-	}
-	oldValue := settings.Network.DefaultDownloadRateLimit.Value
-	settings.Network.DefaultDownloadRateLimit.Value = utils.FormatRateLimit(rate)
-	if err := config.SaveSettings(settings); err != nil {
-		settings.Network.DefaultDownloadRateLimit.Value = oldValue
-		return err
-	}
-
-	s.lifecycle.GetScheduler().SetDefaultDownloadRateLimit(rate)
-
-	if configs := s.lifecycle.GetScheduler().GetAll(); configs != nil {
-		var dbErrs []string
-		for _, cfg := range configs {
-			if !cfg.RateLimitSet {
-				if err := store.UpdateDefaultRateLimit(cfg.ID, rate); err != nil {
-					dbErrs = append(dbErrs, fmt.Sprintf("%s: %v", cfg.ID, err))
-				}
-			}
-		}
-		if len(dbErrs) > 0 {
-			return fmt.Errorf("failed to update default rate limit in DB for some downloads: %s", strings.Join(dbErrs, "; "))
-		}
-	}
-	return nil
+	settings.Network.DefaultDownloadRateLimit.Value = fmt.Sprintf("%d B/s", rate)
+	return s.updateSettings(settings)
 }
 
 func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {

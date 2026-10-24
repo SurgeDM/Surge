@@ -81,8 +81,15 @@ func (m ConfirmationModal) renderBody(width int) string {
 }
 
 func renderYesNoButtons(yesLabel, noLabel string, focused int, btnColor color.Color) string {
-	pad := "   "
+	return renderYesNoButtonsWithSpacing(yesLabel, noLabel, focused, btnColor, "   ", "     ")
+}
 
+// RenderCompactYesNoButtons preserves modal button styling with less spacing.
+func RenderCompactYesNoButtons(yesLabel, noLabel string, focused int, btnColor color.Color) string {
+	return renderYesNoButtonsWithSpacing(yesLabel, noLabel, focused, btnColor, " ", " ")
+}
+
+func renderYesNoButtonsWithSpacing(yesLabel, noLabel string, focused int, btnColor color.Color, pad, gap string) string {
 	if btnColor == nil {
 		btnColor = colors.Pink()
 	}
@@ -112,7 +119,7 @@ func renderYesNoButtons(yesLabel, noLabel string, focused int, btnColor color.Co
 	yesBtn := renderBtn(yesPadStyle, yesFirstStyle, yesRestStyle, yesFirst, yesRest)
 	noBtn := renderBtn(noPadStyle, noFirstStyle, noRestStyle, noFirst, noRest)
 
-	return lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, "     ", noBtn)
+	return lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, gap, noBtn)
 }
 
 func splitFirst(label string) (string, string) {

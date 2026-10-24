@@ -626,7 +626,7 @@ func TestLayout_DetailContentNotClippedByChunkMap(t *testing.T) {
 				"File:",
 				"Path:",
 				"Speed:",
-				"ETA:",
+				"ETC:",
 			}
 			for _, label := range requiredLabels {
 				if !strings.Contains(rendered, label) {

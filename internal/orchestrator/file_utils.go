@@ -192,7 +192,7 @@ func ResolveDestination(url, candidateFilename, defaultDir string, routeToCatego
 
 	finalFilename := GetUniqueFilename(destPath, filename, isNameActive)
 	if finalFilename == "" {
-		return "", "", fmt.Errorf("could not determine a unique filename for %s", url)
+		return "", "", fmt.Errorf("could not determine a unique filename for %s in %q; check directory access and existing filenames", url, destPath)
 	}
 
 	return destPath, finalFilename, nil
