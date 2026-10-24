@@ -223,3 +223,14 @@ func TestBatchRejectsExcessiveDownloadCount(t *testing.T) {
 		t.Fatalf("status = %d, queued = %d; want 413 and no enqueues", recorder.Code, len(service.added))
 	}
 }
+
+func TestBatchDuplicateDownloadsFieldReplacesEarlierItems(t *testing.T) {
+	var request BatchDownloadRequest
+	data := []byte(`{"downloads":[{"url":"https://example.com/first"}],"downloads":[{"url":"https://example.com/second"}]}`)
+	if err := json.Unmarshal(data, &request); err != nil {
+		t.Fatalf("decode batch: %v", err)
+	}
+	if len(request.Downloads) != 1 || request.Downloads[0].URL != "https://example.com/second" {
+		t.Fatalf("downloads = %#v, want only second item", request.Downloads)
+	}
+}

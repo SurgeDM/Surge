@@ -60,6 +60,7 @@ func (downloads *boundedDownloads) UnmarshalJSON(data []byte) error {
 	if token != json.Delim('[') {
 		return fmt.Errorf("downloads must be an array")
 	}
+	*downloads = nil
 	for decoder.More() {
 		if len(*downloads) >= maxBatchDownloads {
 			return errBatchTooLarge
