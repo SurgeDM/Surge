@@ -831,8 +831,10 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	parts = append(parts, statusBox)
 	parts = append(parts, fileSection)
 	parts = append(parts, divider)
-	parts = append(parts, progSection)
-	parts = append(parts, divider)
+	if progSection != "" {
+		parts = append(parts, progSection)
+		parts = append(parts, divider)
+	}
 	parts = append(parts, statsSection)
 
 	if mirrorSection != "" {
