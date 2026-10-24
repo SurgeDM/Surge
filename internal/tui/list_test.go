@@ -103,3 +103,17 @@ func BenchmarkDownloadDelegateRender(b *testing.B) {
 		d.Render(&buf, m, 0, di)
 	}
 }
+
+func TestDownloadItemCompletedHidesSpeedLimit(t *testing.T) {
+	for _, rate := range []int64{0, 10 * 1024 * 1024} {
+		d := &DownloadModel{Speed: 1024 * 1024, RateLimit: rate, RateLimitSet: true}
+		item := DownloadItem{download: d}
+		if !strings.Contains(item.Description(), "Limit:") {
+			t.Fatal("active download should show its explicit speed limit")
+		}
+		d.done = true
+		if strings.Contains(item.Description(), "Limit:") {
+			t.Fatal("completed download should hide its speed limit")
+		}
+	}
+}
