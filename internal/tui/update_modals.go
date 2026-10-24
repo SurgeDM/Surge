@@ -120,8 +120,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				if bps == 0 {
 					valStr = "0"
 				} else {
-					valStr = fmt.Sprintf("%v", float64(bps)/1000000.0)
-					valStr = strings.TrimRight(strings.TrimRight(valStr, "0"), ".")
+					valStr = strconv.FormatFloat(float64(bps)/1000000.0, 'f', -1, 64)
 					if valStr == "" {
 						valStr = "0"
 					}

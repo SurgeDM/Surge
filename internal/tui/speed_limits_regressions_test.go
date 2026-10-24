@@ -96,3 +96,48 @@ func TestUpdateSpeedLimits_ArrowNavClearsError(t *testing.T) {
 		t.Fatal("expected error to be cleared on Down arrow")
 	}
 }
+
+func TestSpeedLimitsPreserveDecimalMegabytes(t *testing.T) {
+	m := newSpeedLimitsTestModel(t)
+	m.downloads = []*DownloadModel{{ID: "download"}}
+	for _, key := range []string{"global_rate_limit", "default_download_rate_limit", "dl:download"} {
+		t.Run(key, func(t *testing.T) {
+			value := "10 MBps"
+			for i := 0; i < 3; i++ {
+				if err := m.setSpeedLimitValue(key, value); err != nil {
+					t.Fatal(err)
+				}
+				value = m.getSpeedLimitsValues()[key].(string)
+				if value != "10 MB/s" {
+					t.Fatalf("saved limit = %q, want 10 MB/s", value)
+				}
+			}
+		})
+	}
+}
+
+func TestSpeedLimitsSaveAndReopen(t *testing.T) {
+	for cursor, name := range []string{"global", "default", "download"} {
+		for _, input := range []string{"10", "100", "0.000001", "1.234567"} {
+			t.Run(name+"/"+input, func(t *testing.T) {
+				m := newSpeedLimitsTestModel(t)
+				m.downloads = []*DownloadModel{{ID: "download"}}
+				m.speedLimitsCursor = cursor
+				m.speedLimitsIsEditing = true
+				m.SettingsInput.SetValue(input)
+				for i := 0; i < 3; i++ {
+					updated, _ := m.updateSpeedLimits(tea.KeyPressMsg{Code: tea.KeyEnter})
+					m = updated.(RootModel)
+					if m.speedLimitsIsEditing || m.speedLimitsError != "" {
+						t.Fatalf("save failed: %s", m.speedLimitsError)
+					}
+					updated, _ = m.updateSpeedLimits(tea.KeyPressMsg{Code: tea.KeyEnter})
+					m = updated.(RootModel)
+					if got := m.SettingsInput.Value(); got != input {
+						t.Fatalf("reopened input = %q, want %q", got, input)
+					}
+				}
+			})
+		}
+	}
+}
