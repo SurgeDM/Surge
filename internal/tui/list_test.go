@@ -117,3 +117,14 @@ func TestDownloadItemCompletedHidesSpeedLimit(t *testing.T) {
 		}
 	}
 }
+
+func TestCompletedDownloadDescriptionShowsOnlyDownloadedSize(t *testing.T) {
+	d := &DownloadModel{done: true, Total: 100 * 1024 * 1024, Downloaded: 1234}
+	text := testAnsiEscapeRE.ReplaceAllString((DownloadItem{download: d}).Description(), "")
+	if strings.Contains(text, "%") || strings.Contains(text, " / ") || strings.Contains(text, "100 MiB") {
+		t.Fatalf("completed description contains progress or server size: %q", text)
+	}
+	if !strings.Contains(text, "1.2 KiB") {
+		t.Fatalf("completed description lacks actual size: %q", text)
+	}
+}

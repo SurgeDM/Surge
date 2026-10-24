@@ -54,6 +54,10 @@ func (i DownloadItem) Description() string {
 		utils.FormatBytes(d.Downloaded),
 		utils.FormatBytes(d.Total))
 
+	if d.done && d.err == nil {
+		sizeInfo = utils.FormatBytes(d.Downloaded)
+	}
+
 	speedInfo := ""
 	if d.Speed > 0 {
 		speedInfo = fmt.Sprintf(" \u2022 %s", utils.FormatSpeed(d.Speed))
@@ -64,6 +68,9 @@ func (i DownloadItem) Description() string {
 		}
 	}
 
+	if d.done && d.err == nil {
+		return fmt.Sprintf("%s%s \u2022 %s", styledStatus, speedInfo, sizeInfo)
+	}
 	return fmt.Sprintf("%s \u2022 %.0f%%%s \u2022 %s", styledStatus, pct, speedInfo, sizeInfo)
 }
 

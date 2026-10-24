@@ -605,3 +605,21 @@ func TestMissingCategoryDirectoryDoesNotBlockSettingsSave(t *testing.T) {
 		}
 	}
 }
+
+func TestListCompletedDownloadUsesActualFileSize(t *testing.T) {
+	testutil.SetupStateDB(t)
+	path := filepath.Join(t.TempDir(), "completed.bin")
+	if err := os.WriteFile(path, make([]byte, 1234), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddToMasterList(types.DownloadRecord{ID: "actual-size", Filename: "completed.bin", DestPath: path, Status: "completed", TotalSize: 9999, Downloaded: 9999}); err != nil {
+		t.Fatal(err)
+	}
+	statuses, err := NewLocalDownloadService(nil).List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(statuses) != 1 || statuses[0].TotalSize != 1234 || statuses[0].Downloaded != 1234 {
+		t.Fatalf("completed status should use file size: %+v", statuses)
+	}
+}

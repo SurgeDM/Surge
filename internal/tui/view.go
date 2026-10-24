@@ -701,6 +701,9 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	}
 
 	progSection := lipgloss.NewStyle().Width(contentWidth).Render(progContent)
+	if d.done && d.err == nil {
+		progSection = ""
+	}
 
 	// --- 4. Stats Grid Section ---
 	var speedStr, etaStr, sizeStr, timeStr string
@@ -717,7 +720,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 
 	// Size
 	if d.done {
-		sizeStr = utils.FormatBytes(d.Total)
+		sizeStr = utils.FormatBytes(d.Downloaded)
 	} else {
 		sizeStr = fmt.Sprintf("%s / %s", utils.FormatBytes(d.Downloaded), utils.FormatBytes(d.Total))
 	}

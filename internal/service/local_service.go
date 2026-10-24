@@ -486,6 +486,12 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 			if existingIDs[d.ID] {
 				continue
 			}
+			if d.Status == "completed" {
+				if info, err := os.Stat(d.DestPath); err == nil && info.Mode().IsRegular() {
+					d.TotalSize = info.Size()
+					d.Downloaded = info.Size()
+				}
+			}
 			var progress float64
 			if d.TotalSize > 0 {
 				progress = float64(d.Downloaded) * 100 / float64(d.TotalSize)
