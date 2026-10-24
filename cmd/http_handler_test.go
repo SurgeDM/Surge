@@ -804,6 +804,28 @@ func TestHandleDownload_WithQueryParamID_CallsAddWithID(t *testing.T) {
 func TestHandleDownload_WithCustomID_LifecycleEnqueue(t *testing.T) {
 	setupIsolatedCmdState(t)
 
+	progressCh := make(chan types.DownloadEvent, 10)
+	GlobalProgressCh = progressCh
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	tmpPool := scheduler.New(progressCh, 1)
+	t.Cleanup(func() {
+		if tmpPool != nil {
+			tmpPool.GracefulShutdown()
+		}
+	})
+	GlobalPool = tmpPool
+
+	origLifecycle := GlobalLifecycle
+	origService := GlobalService
+	t.Cleanup(func() {
+		GlobalLifecycle = origLifecycle
+		GlobalService = origService
+		GlobalPool = nil
+		GlobalProgressCh = nil
+	})
+
 	probeServer := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Length", "10")
 		w.Header().Set("Accept-Ranges", "bytes")
