@@ -240,7 +240,9 @@ func TestInvalidDownloadRequestReturnsNoUsableRequest(t *testing.T) {
 		`{"url":"https://example.com/file","filename":"../outside"}`,
 		`{"url":"https://example.com/file","filename":"C:outside"}`,
 		`{"url":"https://example.com/file","filename":"file:stream"}`,
+		`{"url":"https://example.com/file","filename":"."}`,
 		`{"url":"https://example.com/file","path":"../outside"}`,
+		`{"url":"https://example.com/file","path":"bad\u0000path"}`,
 		`{"filename":"unsafe","path":"outside"}`,
 		`{"url":"https://example.com/file","path":"outside"} {}`,
 	} {

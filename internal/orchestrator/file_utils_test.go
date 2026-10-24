@@ -99,7 +99,7 @@ func TestGetUniqueFilename(t *testing.T) {
 
 func TestGetUniqueFilenameRejectsUnsafeComponents(t *testing.T) {
 	dir := t.TempDir()
-	for _, filename := range []string{".", "..", `..\outside`, "C:outside", "file:stream", "bad\x00name"} {
+	for _, filename := range []string{".", "..", "../outside", "/outside", `..\outside`, "C:outside", "file:stream", "bad\x00name"} {
 		if got := GetUniqueFilename(dir, filename, nil); got != "" {
 			t.Errorf("GetUniqueFilename(%q) = %q, want rejection", filename, got)
 		}

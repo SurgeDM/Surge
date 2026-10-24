@@ -76,10 +76,6 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string, string) b
 	if filename == "" {
 		return filename
 	}
-	baseName := filepath.Base(filename)
-	if baseName != filename {
-		filename = baseName
-	}
 	if !filepath.IsLocal(filename) || strings.ContainsAny(filename, "/\\:\x00") || filename == "." {
 		return ""
 	}

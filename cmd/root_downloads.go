@@ -184,28 +184,42 @@ func validateDownloadRequest(req DownloadRequest) (DownloadRequest, error) {
 	if req.URL == "" {
 		return DownloadRequest{}, fmt.Errorf("url is required")
 	}
-	if strings.Contains(req.Filename, "..") {
+	filename := req.Filename
+	if strings.Contains(filename, "..") {
 		return DownloadRequest{}, fmt.Errorf("invalid filename")
 	}
-	if req.Filename != "" && (!filepath.IsLocal(req.Filename) || strings.ContainsAny(req.Filename, "/\\:\x00")) {
+	if filename != "" && (!filepath.IsLocal(filename) || strings.ContainsAny(filename, "/\\:\x00") || filename == ".") {
 		return DownloadRequest{}, fmt.Errorf("invalid filename")
 	}
-	if strings.Contains(req.Path, "..") {
+	requestPath := req.Path
+	if strings.Contains(requestPath, "..") || strings.ContainsRune(requestPath, '\x00') {
 		return DownloadRequest{}, fmt.Errorf("invalid path")
 	}
-	if req.RelativeToDefaultDir && req.Path != "" {
+	if req.RelativeToDefaultDir && requestPath != "" {
 		// Linux filepath.IsAbs does not recognize Windows drive paths, so those
 		// are normalized later against the daemon's default download directory.
-		if filepath.IsAbs(req.Path) && !utils.IsWindowsAbsPath(req.Path) {
+		if filepath.IsAbs(requestPath) && !utils.IsWindowsAbsPath(requestPath) {
 			return DownloadRequest{}, fmt.Errorf("invalid path")
 		}
-		cleanPath := filepath.Clean(req.Path)
+		cleanPath := filepath.Clean(requestPath)
 		if cleanPath == ".." || strings.HasPrefix(cleanPath, ".."+string(filepath.Separator)) {
 			return DownloadRequest{}, fmt.Errorf("invalid path")
 		}
-		req.Path = cleanPath
+		requestPath = cleanPath
 	}
-	return req, nil
+	return DownloadRequest{
+		URL:                  req.URL,
+		Filename:             filename,
+		Path:                 requestPath,
+		RelativeToDefaultDir: req.RelativeToDefaultDir,
+		Mirrors:              req.Mirrors,
+		SkipApproval:         req.SkipApproval,
+		SkipDuplicateWarning: req.SkipDuplicateWarning,
+		Headers:              req.Headers,
+		IsExplicitCategory:   req.IsExplicitCategory,
+		Workers:              req.Workers,
+		MinChunkSize:         req.MinChunkSize,
+	}, nil
 }
 
 func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir string, service service.DownloadService) {
