@@ -389,6 +389,8 @@ func (m RootModel) View() tea.View {
 		w, h := GetDynamicModalDimensions(m.width, m.height, 40, 10, PopupWidth, 22)
 		modal := components.HelpModal{
 			Title:       "Keyboard Shortcuts",
+			Query:       m.helpSearchQuery,
+			SearchTitle: m.helpSearchTitle(),
 			HelpKeys:    m.keys.Dashboard,
 			Help:        m.help,
 			BorderColor: colors.Cyan(),

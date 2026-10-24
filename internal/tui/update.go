@@ -10,7 +10,6 @@ import (
 	"github.com/SurgeDM/Surge/internal/selfupdate"
 	"github.com/SurgeDM/Surge/internal/utils"
 
-	"charm.land/bubbles/v2/key"
 	"charm.land/lipgloss/v2"
 
 	tea "charm.land/bubbletea/v2"
@@ -29,6 +28,14 @@ func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.state {
+	case HelpModalState:
+		if m.helpSearchActive {
+			var cmd tea.Cmd
+			m.helpSearchInput, cmd = m.helpSearchInput.Update(msg)
+			m.helpSearchQuery = m.helpSearchInput.Value()
+			return m, cmd
+		}
+		return m, nil
 	case InputState, ExtensionConfirmationState:
 		var cmd tea.Cmd
 		m.inputs[m.focusedInput], cmd = m.inputs[m.focusedInput].Update(msg)
@@ -274,11 +281,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateURLUpdate(msg)
 
 		case HelpModalState:
-			if msg.String() == "esc" || key.Matches(msg, m.keys.Dashboard.ToggleHelp) {
-				m.state = DashboardState
-				return m, nil
-			}
-			return m, nil
+			return m.updateHelpModal(msg)
 
 		case BugReportTargetState:
 			return m.updateBugReportTarget(msg)
