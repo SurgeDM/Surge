@@ -656,28 +656,27 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 	if innerWidth < 0 {
 		innerWidth = 0
 	}
-	labels := []string{"URL [" + keys.Dashboard.CopyURL.Help().Key + "]:", "File:", "Path [" + keys.Dashboard.OpenFolder.Help().Key + "]:", "ID [" + keys.Dashboard.CopyID.Help().Key + "]:"}
+	labels := []string{"URL:", "File:", "Path:", "ID:"}
+	shortcuts := []string{keys.Dashboard.CopyURL.Help().Key, "", keys.Dashboard.OpenFolder.Help().Key, keys.Dashboard.CopyID.Help().Key}
 	if d.done && d.err == nil {
-		labels[1] = "File [" + keys.Dashboard.OpenFile.Help().Key + "]:"
+		shortcuts[1] = keys.Dashboard.OpenFile.Help().Key
 	}
-	labelWidth := 0
-	for _, label := range labels {
-		if lipgloss.Width(label)+1 > labelWidth {
-			labelWidth = lipgloss.Width(label) + 1
+	shortcutWidth := 0
+	for i, shortcut := range shortcuts {
+		if shortcut != "" {
+			shortcuts[i] = "[" + shortcut + "]"
+		}
+		if width := lipgloss.Width(shortcuts[i]) + 1; width > shortcutWidth {
+			shortcutWidth = width
 		}
 	}
+	const nameWidth = 6
+	labelWidth := nameWidth + shortcutWidth
 	fieldLabel := func(index int) string {
-		label := labels[index]
-		if start := strings.Index(label, "["); start >= 0 {
-			end := strings.Index(label, "]") + 1
-			label = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(label[:start]) +
-				lipgloss.NewStyle().Foreground(colors.Gray()).Render(label[start:end]) +
-				lipgloss.NewStyle().Foreground(colors.LightGray()).Render(label[end:])
-		} else {
-			label = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(label)
-		}
-		return lipgloss.NewStyle().Width(labelWidth).Render(label)
+		return lipgloss.NewStyle().Foreground(colors.LightGray()).Width(nameWidth).Render(labels[index]) +
+			lipgloss.NewStyle().Foreground(colors.Gray()).Width(shortcutWidth).Render(shortcuts[index])
 	}
+
 	valueWidth := innerWidth - labelWidth
 	if valueWidth < 5 {
 		valueWidth = 5 // Minimum reasonable width
