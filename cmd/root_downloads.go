@@ -210,6 +210,7 @@ func validateDownloadRequest(req DownloadRequest) (DownloadRequest, error) {
 		requestPath = cleanPath
 	}
 	return DownloadRequest{
+		ID:                   req.ID,
 		URL:                  req.URL,
 		Filename:             filename,
 		Path:                 requestPath,
@@ -378,7 +379,7 @@ func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolved
 		req.ID = strings.TrimSpace(r.URL.Query().Get("id"))
 	}
 
-	utils.Debug("Received download request: URL=%s, Filename=%s, Path=%s, Headers=%v", req.URL, req.Filename, req.Path, req.Headers)
+	utils.Debug("Received download request: host=%s, Filename=%s, Path=%s, HeaderCount=%d", utils.URLHostForLog(req.URL), req.Filename, req.Path, len(req.Headers))
 
 	outPath := utils.EnsureAbsPath(resolveOutputDir(req.Path, req.RelativeToDefaultDir, defaultOutputDir, settings))
 	urlForAdd, mirrorsForAdd := normalizeDownloadTargets(req.URL, req.Mirrors)
