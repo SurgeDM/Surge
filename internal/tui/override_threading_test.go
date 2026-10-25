@@ -218,6 +218,7 @@ func TestOverride_ManualURLDuplicateDoesNotInheritStaleOverride(t *testing.T) {
 	m.Settings.Extension.ExtensionPrompt.Value = false
 	m.Settings.General.WarnOnDuplicate.Value = true
 
+	m.pendingDownloadID = "stale-id"
 	m.pendingWorkers = 16
 	m.pendingMinChunkSize = 2 << 20
 
@@ -237,6 +238,9 @@ func TestOverride_ManualURLDuplicateDoesNotInheritStaleOverride(t *testing.T) {
 
 	if root.state != DuplicateWarningState {
 		t.Fatalf("expected DuplicateWarningState, got %v", root.state)
+	}
+	if root.pendingDownloadID != "" {
+		t.Fatalf("stale download ID leaked: %q", root.pendingDownloadID)
 	}
 	if root.pendingWorkers != 0 {
 		t.Fatalf("pendingWorkers = %d, want 0 (stale override leaked)", root.pendingWorkers)
@@ -314,5 +318,44 @@ func TestOverride_BatchConfirmPreservesWorkersAndMinChunkSize(t *testing.T) {
 	}
 	if !captured[0].explicit || captured[1].explicit {
 		t.Fatalf("batch category intent was lost: %#v", captured)
+	}
+}
+
+func TestDownloadApprovalPreservesCustomID(t *testing.T) {
+	for _, duplicate := range []bool{false, true} {
+		name := "extension"
+		if duplicate {
+			name = "duplicate"
+		}
+		t.Run(name, func(t *testing.T) {
+			m := newOverrideTestModel(t, nil)
+			m.Settings.Extension.ExtensionPrompt.Value = !duplicate
+			m.Settings.General.WarnOnDuplicate.Value = duplicate
+			const customID = "caller-owned-id"
+			const url = "https://example.com/file.zip"
+			if duplicate {
+				m.downloads = append(m.downloads, &DownloadModel{URL: url, Filename: "file.zip"})
+			}
+			updated, _ := m.Update(types.DownloadEvent{
+				Type: types.EventRequest, DownloadID: customID, URL: url,
+				Filename: "file.zip", Path: t.TempDir(),
+			})
+			root := updated.(RootModel)
+			expectedState := ExtensionConfirmationState
+			confirm := tea.KeyPressMsg{Code: tea.KeyEnter}
+			if duplicate {
+				expectedState = DuplicateWarningState
+				confirm = tea.KeyPressMsg{Code: 'c', Text: "c"}
+			}
+			if root.state != expectedState {
+				t.Fatalf("state = %v, want %v", root.state, expectedState)
+			}
+			updated, cmd := root.Update(confirm)
+			executeCmds(cmd)
+			root = updated.(RootModel)
+			if root.FindDownloadByID(customID) == nil {
+				t.Fatal("approved download did not retain caller-owned ID")
+			}
+		})
 	}
 }

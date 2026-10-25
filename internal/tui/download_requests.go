@@ -36,6 +36,7 @@ func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy
 		m.pendingPath = path
 		m.pendingIsDefaultPath = isDefaultPath
 		m.pendingFilename = msg.Filename
+		m.pendingDownloadID = msg.DownloadID
 		m.pendingWorkers = msg.Workers
 		m.pendingMinChunkSize = msg.MinChunkSize
 		m.duplicateInfo = duplicate.Filename
@@ -50,6 +51,7 @@ func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy
 		m.pendingPath = path
 		m.pendingIsDefaultPath = isDefaultPath
 		m.pendingFilename = msg.Filename
+		m.pendingDownloadID = msg.DownloadID
 		m.pendingWorkers = msg.Workers
 		m.pendingMinChunkSize = msg.MinChunkSize
 		m.inputs[2].SetValue(path)

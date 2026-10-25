@@ -165,7 +165,7 @@ func (m RootModel) updateDuplicateWarning(msg tea.KeyPressMsg) (tea.Model, tea.C
 	if key.Matches(msg, m.keys.Duplicate.Continue) {
 		// Continue anyway - startDownload handles unique filename generation
 		m.state = DashboardState
-		updated, cmd := m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "", m.pendingWorkers, m.pendingMinChunkSize)
+		updated, cmd := m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, m.pendingDownloadID, m.pendingWorkers, m.pendingMinChunkSize)
 		nextModel, nextCmd := updated.showNextPendingRequest()
 		return nextModel, tea.Batch(cmd, nextCmd)
 	}

@@ -119,6 +119,7 @@ func (m RootModel) submitInputForm() (tea.Model, tea.Cmd) {
 		m.pendingPath = path
 		m.pendingIsDefaultPath = isDefaultPath
 		m.pendingFilename = filename
+		m.pendingDownloadID = ""
 		m.pendingWorkers = 0
 		m.pendingMinChunkSize = 0
 		m.duplicateInfo = d.Filename
@@ -192,7 +193,7 @@ func (m RootModel) updateExtensionConfirmation(msg tea.KeyPressMsg) (tea.Model, 
 		}
 
 		m.state = DashboardState
-		updated, cmd := m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, "", m.pendingWorkers, m.pendingMinChunkSize)
+		updated, cmd := m.startDownload(m.pendingURL, m.pendingMirrors, m.pendingHeaders, m.pendingPath, m.pendingIsDefaultPath, m.pendingFilename, m.pendingDownloadID, m.pendingWorkers, m.pendingMinChunkSize)
 		nextModel, nextCmd := updated.showNextPendingRequest()
 		return nextModel, tea.Batch(cmd, nextCmd)
 	}
