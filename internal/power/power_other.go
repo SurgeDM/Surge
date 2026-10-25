@@ -7,9 +7,7 @@ import (
 	"errors"
 )
 
-type osController struct {
-	noopController
-}
+type osController struct{}
 
 func NewController() Controller {
 	return osController{}
@@ -17,4 +15,8 @@ func NewController() Controller {
 
 func (osController) Shutdown(context.Context) error {
 	return errors.New("shutdown is not supported on this platform")
+}
+
+func (osController) AcquireInhibitor(string) (ReleaseFunc, error) {
+	return func() error { return nil }, nil
 }
