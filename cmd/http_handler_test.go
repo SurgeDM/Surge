@@ -90,17 +90,12 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Initialize GlobalPool (required by handleDownload)
+	// Release any pool inherited from an earlier test. Each subtest installs
+	// its own below because manager shutdown closes the pool it wraps.
 	if GlobalPool != nil {
 		GlobalPool.GracefulShutdown()
+		GlobalPool = nil
 	}
-	tmpPool := scheduler.New(nil, 1)
-	t.Cleanup(func() {
-		if tmpPool != nil {
-			tmpPool.GracefulShutdown()
-		}
-	})
-	GlobalPool = tmpPool
 
 	tests := []struct {
 		name               string
@@ -205,6 +200,9 @@ func TestHandleDownload_PathResolution(t *testing.T) {
 			w := httptest.NewRecorder()
 			eventBus := orchestrator.NewEventBus()
 			t.Cleanup(func() { eventBus.Shutdown() })
+			tmpPool := scheduler.New(nil, 1)
+			t.Cleanup(func() { tmpPool.GracefulShutdown() })
+			GlobalPool = tmpPool
 			getAll := func() []types.DownloadRecord { return GlobalPool.GetAll() }
 			tmpLifecycle := orchestrator.NewLifecycleManager(GlobalPool, eventBus, settings, buildActiveDownloadChecker(getAll))
 			t.Cleanup(func() { tmpLifecycle.Shutdown() })

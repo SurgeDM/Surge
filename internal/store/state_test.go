@@ -243,7 +243,7 @@ func TestLoadState_LoadsLegacyDetailState(t *testing.T) {
 		Version int
 		State   *types.DownloadRecord
 	}{Version: 1, State: state}
-	if err := atomicWrite(getDetailPath(tmpDir, state.ID), legacy); err != nil {
+	if err := atomicWrite(mustDetailPath(t, tmpDir, state.ID), legacy); err != nil {
 		t.Fatalf("writing legacy detail state failed: %v", err)
 	}
 
@@ -963,7 +963,7 @@ func TestValidateIntegrity_MissingFile(t *testing.T) {
 	}
 
 	// Check if detail file was deleted
-	if _, err := os.Stat(getDetailPath(tmpDir, entry.ID)); !os.IsNotExist(err) {
+	if _, err := os.Stat(mustDetailPath(t, tmpDir, entry.ID)); !os.IsNotExist(err) {
 		t.Errorf("Expected detail file to be removed, got: %v", err)
 	}
 }
@@ -1008,7 +1008,7 @@ func TestValidateIntegrity_ValidFile(t *testing.T) {
 		FileHash: expectedHash,
 	}
 	ds := DetailState{Version: 1, State: toPersistedDetail(state)}
-	_ = atomicWrite(getDetailPath(tmpDir, "integrity-valid"), ds)
+	_ = atomicWrite(mustDetailPath(t, tmpDir, "integrity-valid"), ds)
 
 	// Run integrity check - file exists with matching hash, should keep it
 	removed, err := ValidateIntegrity()
@@ -1064,7 +1064,7 @@ func TestValidateIntegrity_TamperedFile(t *testing.T) {
 		FileHash: "0000000000000000000000000000000000000000000000000000000000000000",
 	}
 	ds := DetailState{Version: 1, State: toPersistedDetail(state)}
-	_ = atomicWrite(getDetailPath(tmpDir, "integrity-tampered"), ds)
+	_ = atomicWrite(mustDetailPath(t, tmpDir, "integrity-tampered"), ds)
 
 	// Run integrity check - hash mismatch, entry AND file should be removed
 	removed, err := ValidateIntegrity()
@@ -1459,5 +1459,126 @@ func TestLoadMasterListUnlocked_UnsupportedVersion_StartsFresh(t *testing.T) {
 	}
 	if len(list.Downloads) != 0 {
 		t.Fatalf("expected empty list, got %d items", len(list.Downloads))
+	}
+}
+
+func mustDetailPath(t *testing.T, dir, id string) string {
+	t.Helper()
+	path, err := getDetailPath(dir, id)
+	if err != nil {
+		t.Fatalf("detail path: %v", err)
+	}
+	return path
+}
+
+func TestStateOperationsRejectPathIDs(t *testing.T) {
+	root := t.TempDir()
+	stateDir := filepath.Join(root, "state")
+	CloseDB()
+	Configure(filepath.Join(stateDir, "surge.db"))
+	t.Cleanup(CloseDB)
+	if err := ensureDirs(); err != nil {
+		t.Fatal(err)
+	}
+	outsidePath := filepath.Join(root, "outside.gob")
+	record := &types.DownloadRecord{ID: "outside", Filename: "outside"}
+	if err := atomicWrite(outsidePath, DetailState{Version: 2, State: toPersistedDetail(record)}); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.ReadFile(outsidePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, id := range []string{"../../outside", `..\..\outside`, "/outside", "C:outside", ".", "", "bad\x00id"} {
+		t.Run(id, func(t *testing.T) {
+			if states, err := LoadStates([]string{id}); err == nil || len(states) != 0 {
+				t.Fatalf("LoadStates(%q) = %v, %v", id, states, err)
+			}
+			if err := DeleteState(id); err == nil {
+				t.Fatalf("DeleteState(%q) succeeded", id)
+			}
+			if err := DeleteTasks(id); err == nil {
+				t.Fatalf("DeleteTasks(%q) succeeded", id)
+			}
+			state := &types.DownloadRecord{ID: id, DestPath: filepath.Join(root, "download")}
+			if id != "" {
+				if err := SaveStateWithOptions("https://example.com/file", state.DestPath, state, SaveStateOptions{SkipFileHash: true}); err == nil {
+					t.Fatalf("SaveState(%q) succeeded", id)
+				}
+			}
+		})
+	}
+	after, err := os.ReadFile(outsidePath)
+	if err != nil || !bytes.Equal(before, after) {
+		t.Fatalf("outside state file changed: %v", err)
+	}
+}
+
+func TestCleanupValidatesIDsBeforeDeletingDetails(t *testing.T) {
+	tests := []struct {
+		name    string
+		status  string
+		cleanup func() (int64, error)
+	}{
+		{"remove completed", "completed", RemoveCompletedDownloads},
+		{"integrity", "queued", func() (int64, error) { count, err := ValidateIntegrity(); return int64(count), err }},
+	}
+	for _, test := range tests {
+		t.Run(test.name, func(t *testing.T) {
+			dir := t.TempDir()
+			CloseDB()
+			Configure(filepath.Join(dir, "surge.db"))
+			t.Cleanup(CloseDB)
+			for _, entry := range []types.DownloadRecord{
+				{ID: "valid", URL: "https://example.com/valid", DestPath: filepath.Join(dir, "missing.bin"), Status: test.status},
+				{ID: "../invalid", URL: "https://example.com/invalid", DestPath: filepath.Join(dir, "other.bin"), Status: test.status},
+			} {
+				if err := AddToMasterList(entry); err != nil {
+					t.Fatal(err)
+				}
+			}
+			detailPath := mustDetailPath(t, dir, "valid")
+			detail := []byte("detail must survive rejected cleanup")
+			if err := os.WriteFile(detailPath, detail, 0600); err != nil {
+				t.Fatal(err)
+			}
+			before, err := os.ReadFile(getMasterPath())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if count, err := test.cleanup(); err == nil || count != 0 {
+				t.Fatalf("cleanup = %d, %v; want zero removals and error", count, err)
+			}
+			after, err := os.ReadFile(getMasterPath())
+			if err != nil || !bytes.Equal(before, after) {
+				t.Fatalf("master list changed: %v", err)
+			}
+			actual, err := os.ReadFile(detailPath)
+			if err != nil || !bytes.Equal(detail, actual) {
+				t.Fatalf("detail file changed: %v", err)
+			}
+		})
+	}
+}
+
+func TestRemoveCompletedIgnoresInvalidIDWithOtherStatus(t *testing.T) {
+	dir := t.TempDir()
+	CloseDB()
+	Configure(filepath.Join(dir, "surge.db"))
+	t.Cleanup(CloseDB)
+	for _, entry := range []types.DownloadRecord{
+		{ID: "valid", URL: "https://example.com/valid", Status: "completed"},
+		{ID: "../invalid", URL: "https://example.com/invalid", Status: "paused"},
+	} {
+		if err := AddToMasterList(entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if count, err := RemoveCompletedDownloads(); err != nil || count != 1 {
+		t.Fatalf("cleanup = %d, %v; want one removal", count, err)
+	}
+	list, err := ListAllDownloads()
+	if err != nil || len(list) != 1 || list[0].ID != "../invalid" {
+		t.Fatalf("remaining downloads = %#v, %v", list, err)
 	}
 }

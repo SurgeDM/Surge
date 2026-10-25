@@ -76,15 +76,14 @@ func GetUniqueFilename(dir, filename string, isNameActive func(string, string) b
 	if filename == "" {
 		return filename
 	}
-	baseName := filepath.Base(filename)
-	if baseName != filename {
-		filename = baseName
-	}
-	if strings.Contains(filename, "/") || strings.Contains(filename, "\\") || filename == "." || filename == ".." {
+	if !filepath.IsLocal(filename) || strings.ContainsAny(filename, "/\\:\x00") || filename == "." {
 		return ""
 	}
 
 	existsOnDisk := func(name string) bool {
+		if !filepath.IsLocal(name) || strings.ContainsAny(name, "/\\:\x00") || name == "." {
+			return true
+		}
 		targetPath := filepath.Join(dir, name)
 		if _, err := os.Stat(targetPath); !os.IsNotExist(err) {
 			return true

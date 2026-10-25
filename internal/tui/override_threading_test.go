@@ -26,7 +26,7 @@ func (m *overrideMockService) Add(url, path, filename string, mirrors []string, 
 
 func (m *overrideMockService) AddWithID(url string, path string, filename string, mirrors []string, headers map[string]string, id string, isExplicitCategory bool, workers int, minChunkSize int64) (string, error) {
 	if m.addFunc != nil {
-		return m.addFunc(url, path, filename, mirrors, headers, false, workers, minChunkSize)
+		return m.addFunc(url, path, filename, mirrors, headers, isExplicitCategory, workers, minChunkSize)
 	}
 	return id, nil
 }
@@ -261,13 +261,15 @@ func TestOverride_BatchConfirmPreservesWorkersAndMinChunkSize(t *testing.T) {
 	var captured []struct {
 		workers      int
 		minChunkSize int64
+		explicit     bool
 	}
 
 	addFunc := func(url, path, filename string, mirrors []string, headers map[string]string, isExplicit bool, workers int, minChunkSize int64) (string, error) {
 		captured = append(captured, struct {
 			workers      int
 			minChunkSize int64
-		}{workers, minChunkSize})
+			explicit     bool
+		}{workers, minChunkSize, isExplicit})
 		return "real-id-" + url, nil
 	}
 
@@ -275,11 +277,12 @@ func TestOverride_BatchConfirmPreservesWorkersAndMinChunkSize(t *testing.T) {
 	m.Settings.General.WarnOnDuplicate.Value = false
 
 	batchPath := t.TempDir()
+	m.Settings.General.DefaultDownloadDir.Value = batchPath
 	batchMsg := types.DownloadEvent{
 		Type: types.EventBatchRequest,
 		Path: batchPath,
 		BatchEvents: []types.DownloadEvent{
-			{Type: types.EventRequest, URL: "http://example.com/one.zip", Filename: "one.zip", Path: batchPath, Workers: 2, MinChunkSize: 256 * 1024},
+			{Type: types.EventRequest, URL: "http://example.com/one.zip", Filename: "one.zip", Path: batchPath, IsExplicitCategory: true, Workers: 2, MinChunkSize: 256 * 1024},
 			{URL: "http://example.com/two.zip", Filename: "two.zip", Path: batchPath, Workers: 6, MinChunkSize: 1 << 20},
 		},
 	}
@@ -308,5 +311,8 @@ func TestOverride_BatchConfirmPreservesWorkersAndMinChunkSize(t *testing.T) {
 	}
 	if captured[1].workers != 6 || captured[1].minChunkSize != 1<<20 {
 		t.Fatalf("item 1: workers=%d minChunkSize=%d, want 6 and %d", captured[1].workers, captured[1].minChunkSize, 1<<20)
+	}
+	if !captured[0].explicit || captured[1].explicit {
+		t.Fatalf("batch category intent was lost: %#v", captured)
 	}
 }

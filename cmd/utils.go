@@ -261,6 +261,14 @@ func resolveAPIConnection(requireServer bool) (string, string, error) {
 }
 
 func doAPIRequest(method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
+	client, err := newRemoteAPIHTTPClient()
+	if err != nil {
+		return nil, err
+	}
+	return doAPIRequestWithClient(client, method, baseURL, token, path, body)
+}
+
+func doAPIRequestWithClient(client *http.Client, method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
 	reqURL := fmt.Sprintf("%s%s", strings.TrimRight(baseURL, "/"), path)
 	req, err := http.NewRequest(method, reqURL, body)
 	if err != nil {
@@ -274,10 +282,6 @@ func doAPIRequest(method string, baseURL string, token string, path string, body
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	client, err := newRemoteAPIHTTPClient()
-	if err != nil {
-		return nil, err
-	}
 	return client.Do(req)
 }
 

@@ -108,7 +108,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 			optimisticFilename = f
 		}
 	} else {
-		utils.Debug("Optimistic destination resolve failed for %s: %v", url, err)
+		utils.Debug("Optimistic destination resolve failed for host %s: %v", utils.URLHostForLog(url), err)
 	}
 
 	// Call Orchestrator Enqueue
@@ -224,7 +224,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		}
 	}
 
-	utils.Debug("Queued enqueue command (via Orchestrator): %s -> %s", url, optimisticFilename)
+	utils.Debug("Queued enqueue command (via Orchestrator): host %s -> %s", utils.URLHostForLog(url), optimisticFilename)
 	return m, cmd
 }
 

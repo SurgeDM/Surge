@@ -62,6 +62,7 @@ type DownloadEvent struct {
 	// Request
 	Headers              map[string]string `json:"headers,omitempty"`
 	Path                 string            `json:"path,omitempty"`
+	IsExplicitCategory   bool              `json:"is_explicit_category,omitempty"`
 	SkipDuplicateWarning bool              `json:"skip_duplicate_warning,omitempty"`
 
 	// Batch
