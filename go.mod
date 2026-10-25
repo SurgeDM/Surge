@@ -12,7 +12,7 @@ require (
 	github.com/charmbracelet/x/ansi v0.11.9
 	github.com/charmbracelet/x/term v0.2.2
 	github.com/dustin/go-humanize v1.1.0
-	github.com/gen2brain/beeep v0.11.2
+	github.com/gen2brain/beeep v0.11.3
 	github.com/gofrs/flock v0.13.1
 	github.com/google/uuid v1.6.0
 	github.com/h2non/filetype v1.1.3
