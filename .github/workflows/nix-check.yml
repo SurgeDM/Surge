@@ -1,0 +1,51 @@
+name: Nix
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nix-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Nix package
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+
+      - name: Test hash update safeguards
+        run: node --test .github/scripts/nix-vendor-hash.test.cjs
+
+      - uses: cachix/install-nix-action@d9186cbdca7adedf113a159fa91f725a27866771 # v31
+
+      - name: Calculate hash and build Surge
+        id: hash
+        env:
+          NIX_UPDATE_DIR: ${{ runner.temp }}/nix-vendor-hash
+          NIX_CONFIG: extra-experimental-features = nix-command flakes
+        run: node .github/scripts/nix-vendor-hash.cjs
+
+      # Artifacts are created only after the updated package builds successfully.
+      - name: Upload verified hash update
+        if: steps.hash.outputs.changed == 'true'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nix-vendor-hash-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/nix-vendor-hash/
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Require the hash to be committed
+        if: steps.hash.outputs.changed == 'true'
+        run: |
+          echo '::error file=package.nix::vendorHash is stale. The update workflow will fix repository-owned PR branches. For fork PRs, apply package.nix.patch from the artifact.'
+          exit 1

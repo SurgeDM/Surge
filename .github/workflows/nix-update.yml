@@ -1,0 +1,59 @@
+name: Update Nix vendor hash
+
+on:
+  workflow_run:
+    workflows: [Nix]
+    types: [completed]
+
+permissions: {}
+
+jobs:
+  update:
+    # The read-only check intentionally fails after uploading a verified update.
+    # workflow_run supplies write permission even for Dependabot's read-only runs.
+    if: >-
+      github.event.workflow_run.event == 'pull_request' &&
+      github.event.workflow_run.conclusion == 'failure' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: read
+    concurrency:
+      group: nix-update-${{ github.event.workflow_run.head_branch }}
+      cancel-in-progress: false
+    steps:
+      # Execute only the trusted default-branch scripts, never the PR checkout.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Find a verified update for the current PR head
+        id: update
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const { findUpdate } = require('./.github/scripts/nix-vendor-hash.cjs');
+            await findUpdate({ github, context, core });
+
+      - name: Download update data
+        if: steps.update.outputs.artifact-id != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: nix-vendor-hash-${{ github.event.workflow_run.run_attempt }}
+          run-id: ${{ github.event.workflow_run.id }}
+          github-token: ${{ github.token }}
+          path: ${{ runner.temp }}/nix-vendor-hash
+
+      - name: Commit only the vendor hash
+        if: steps.update.outputs.artifact-id != ''
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        env:
+          NIX_UPDATE_DIR: ${{ runner.temp }}/nix-vendor-hash
+        with:
+          script: |
+            const { applyUpdate } = require('./.github/scripts/nix-vendor-hash.cjs');
+            await applyUpdate({ github, context, core });

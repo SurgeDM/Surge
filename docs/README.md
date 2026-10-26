@@ -27,6 +27,7 @@ want to do.
 ## Design notes
 
 - [User-service architecture and migration rationale](design/user-service-architecture.md)
+- [Nix dependency hash updates](design/nix-hash-updates.md)
 
 ## Get help
 
