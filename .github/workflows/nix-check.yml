@@ -1,0 +1,97 @@
+name: Nix
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      source-ref:
+        description: Commit containing the trusted updater and package definitions
+        type: string
+        default: ''
+      release-artifact:
+        description: Candidate metadata artifact from the release updater
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+jobs:
+  tooling:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.source-ref || github.sha }}
+          persist-credentials: false
+      - run: node --test .github/scripts/nix-release.test.cjs
+
+  package:
+    name: Package (${{ matrix.system }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            system: x86_64-linux
+          - runner: ubuntu-24.04-arm
+            system: aarch64-linux
+          - runner: macos-15-intel
+            system: x86_64-darwin
+          - runner: macos-15
+            system: aarch64-darwin
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.source-ref || github.sha }}
+          persist-credentials: false
+      - name: Load candidate release
+        if: inputs.release-artifact != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ inputs.release-artifact }}
+          path: nix
+      - uses: cachix/install-nix-action@d9186cbdca7adedf113a159fa91f725a27866771 # v31
+      - name: Check package and version
+        env:
+          NIX_CONFIG: extra-experimental-features = nix-command flakes
+          EXPECTED_SYSTEM: ${{ matrix.system }}
+        run: |
+          test "$(nix eval --impure --raw --expr builtins.currentSystem)" = "$EXPECTED_SYSTEM"
+          nix flake check --no-write-lock-file --print-build-logs
+          nix run --no-write-lock-file .#surge -- --version
+      - name: Verify profile installation and PATH
+        env:
+          NIX_CONFIG: extra-experimental-features = nix-command flakes
+        run: |
+          nix profile install --profile "$RUNNER_TEMP/surge-profile" .#surge
+          expected="Surge v$(node -p "require('./nix/release.json').version")"
+          actual=$(PATH="$RUNNER_TEMP/surge-profile/bin:$PATH" surge --version)
+          test "$actual" = "$expected"
+
+  nixos:
+    name: NixOS integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ inputs.source-ref || github.sha }}
+          persist-credentials: false
+      - name: Load candidate release
+        if: inputs.release-artifact != ''
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: ${{ inputs.release-artifact }}
+          path: nix
+      - uses: cachix/install-nix-action@d9186cbdca7adedf113a159fa91f725a27866771 # v31
+      - name: Evaluate NixOS package and service
+        env:
+          NIX_CONFIG: extra-experimental-features = nix-command flakes
+        run: nix eval --impure --json --file nix/check-nixos.nix

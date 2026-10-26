@@ -1,0 +1,89 @@
+name: Update Nix release
+
+on:
+  # GoReleaser publishes with GITHUB_TOKEN, so its release event does not start workflows.
+  workflow_run:
+    workflows: [Core Build and Release]
+    types: [completed]
+  workflow_dispatch:
+  schedule:
+    - cron: '17 * * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nix-release-update
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      changed: ${{ steps.release.outputs.changed }}
+      artifact: ${{ steps.artifact.outputs.artifact-id }}
+      source-ref: ${{ steps.source.outputs.ref }}
+    steps:
+      # Only execute the trusted main-branch updater, never a PR or release-tag checkout.
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: main
+          persist-credentials: false
+      - name: Record the checked source commit
+        id: source
+        run: echo "ref=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - name: Download and verify the latest stable release
+        id: release
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const { prepareUpdate } = require('./.github/scripts/nix-release.cjs');
+            await prepareUpdate({ github, context, core });
+      - name: Save candidate metadata
+        if: steps.release.outputs.changed == 'true'
+        id: artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: nix-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: nix/release.json
+          if-no-files-found: error
+          retention-days: 7
+
+  check:
+    needs: prepare
+    if: needs.prepare.outputs.changed == 'true'
+    uses: ./.github/workflows/nix-check.yml
+    with:
+      source-ref: ${{ needs.prepare.outputs.source-ref }}
+      release-artifact: nix-release-${{ github.run_id }}-${{ github.run_attempt }}
+
+  publish:
+    needs: [prepare, check]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          ref: ${{ needs.prepare.outputs.source-ref }}
+          persist-credentials: false
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          artifact-ids: ${{ needs.prepare.outputs.artifact }}
+          merge-multiple: true
+          path: nix
+      - name: Open an update PR after all installation checks pass
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
+        with:
+          script: |
+            const { publishUpdate } = require('./.github/scripts/nix-release.cjs');
+            await publishUpdate({ github, context, core });
