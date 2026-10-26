@@ -8,14 +8,14 @@ buildGoModule {
   pname = "surge";
   inherit version src;
 
-  vendorHash = "sha256-uZrSOcwfXJ9LwuHi+0wIjPBIsAdULU60GbWrJNV923s=";
+  vendorHash = "sha256-+L0Pq4+d5rgVsoV17991TWkloEFg7ohde6UCpl0NBlY=";
 
   subPackages = ["."];
 
   ldflags = [
     "-s"
     "-w"
-    "-X main.version=${version}"
+    "-X github.com/SurgeDM/Surge/cmd.Version=${version}"
   ];
 
   postInstall = ''
