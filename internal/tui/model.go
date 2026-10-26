@@ -152,6 +152,7 @@ type RootModel struct {
 	PWD string
 
 	// Duplicate detection
+	pendingDownloadID           string // Request ID pending confirmation
 	pendingURL                  string // URL pending confirmation
 	pendingPath                 string // Path pending confirmation
 	pendingIsDefaultPath        bool

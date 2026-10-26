@@ -27,6 +27,7 @@ func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy
 
 	if duplicate != nil && config.Resolve[bool](m.Settings.General.WarnOnDuplicate) && !msg.SkipDuplicateWarning {
 		utils.Debug("Duplicate download detected in TUI: %s", msg.URL)
+		m.pendingDownloadID = msg.DownloadID
 		m.pendingURL = msg.URL
 		m.pendingMirrors = msg.Mirrors
 		m.pendingHeaders = msg.Headers
@@ -41,6 +42,7 @@ func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy
 	}
 
 	if m.Settings != nil && config.Resolve[bool](m.Settings.Extension.ExtensionPrompt) {
+		m.pendingDownloadID = msg.DownloadID
 		m.pendingURL = msg.URL
 		m.pendingMirrors = msg.Mirrors
 		m.pendingHeaders = msg.Headers

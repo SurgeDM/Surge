@@ -1453,3 +1453,48 @@ func TestUpdate_UnlistedStatePasteIsIgnored(t *testing.T) {
 		t.Fatalf("expected unlisted state paste to be ignored, got %q", got)
 	}
 }
+
+func TestDownloadConfirmationPreservesRequestID(t *testing.T) {
+	for _, duplicate := range []bool{false, true} {
+		name := "extension"
+		if duplicate {
+			name = "duplicate"
+		}
+		t.Run(name, func(t *testing.T) {
+			m := RootModel{
+				Settings: config.DefaultSettings(),
+				Service:  &updateMockService{DownloadService: &mockService{}},
+				list:     NewDownloadList(80, 20),
+				keys:     config.DefaultKeyMap(),
+				inputs:   []textinput.Model{textinput.New(), textinput.New(), textinput.New(), textinput.New()},
+			}
+			m.Settings.Extension.ExtensionPrompt.Value = true
+			m.Settings.General.WarnOnDuplicate.Value = true
+			request := types.DownloadEvent{
+				URL: "https://example.com/confirmation-id.bin", Filename: "confirmation-id.bin",
+				Path: t.TempDir(), DownloadID: "caller-request-id",
+			}
+			if duplicate {
+				m.downloads = append(m.downloads, NewDownloadModel("existing", request.URL, request.Filename, 0))
+			}
+			model, _ := m.handleDownloadRequestMsg(request, false)
+			pending := model.(RootModel)
+			var confirmed tea.Model
+			if duplicate {
+				if pending.state != DuplicateWarningState {
+					t.Fatalf("state = %v, want duplicate warning", pending.state)
+				}
+				confirmed, _ = pending.updateDuplicateWarning(tea.KeyPressMsg{Code: tea.KeyEnter})
+			} else {
+				if pending.state != ExtensionConfirmationState {
+					t.Fatalf("state = %v, want extension confirmation", pending.state)
+				}
+				confirmed, _ = pending.updateExtensionConfirmation(tea.KeyPressMsg{Code: tea.KeyEnter})
+			}
+			root := confirmed.(RootModel)
+			if got := root.downloads[len(root.downloads)-1].ID; got != request.DownloadID {
+				t.Fatalf("confirmed download ID = %q, want %q", got, request.DownloadID)
+			}
+		})
+	}
+}
