@@ -31,7 +31,10 @@ in
     installPhase = ''
       runHook preInstall
       install -Dm755 surge "$out/bin/surge"
-      ln -s surge "$out/bin/Surge"
+      # Case-insensitive macOS stores already resolve both executable names.
+      if [ ! -e "$out/bin/Surge" ]; then
+        ln -s surge "$out/bin/Surge"
+      fi
       install -Dm644 LICENSE "$out/share/licenses/surge/LICENSE"
       runHook postInstall
     '';
