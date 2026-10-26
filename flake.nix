@@ -1,13 +1,13 @@
 {
   description = "Nix flake for Surge - blazing fast TUI download manager";
 
-  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+  # The 26.05 branch supports all four release platforms, including Intel macOS.
+  inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-26.05";
 
   outputs = {
     self,
     nixpkgs,
   }: let
-    version = "0.11.2";
     systems = ["x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin"];
     forEachSystem = f:
       nixpkgs.lib.genAttrs systems (
@@ -16,18 +16,16 @@
       );
   in {
     packages = forEachSystem (pkgs: rec {
-      surge = pkgs.callPackage ./package.nix {
-        src = self;
-        inherit version;
-      };
+      surge = pkgs.callPackage ./package.nix {};
       default = surge;
     });
 
+    checks = forEachSystem (pkgs: {
+      package = self.packages.${pkgs.stdenv.hostPlatform.system}.surge;
+    });
+
     overlays.default = final: _prev: {
-      surge = final.callPackage ./package.nix {
-        src = self;
-        inherit version;
-      };
+      surge = final.callPackage ./package.nix {};
     };
 
     nixosModules.default = {
