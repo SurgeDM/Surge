@@ -47,12 +47,22 @@ func (m *TaskManager) Install(ctx context.Context) error {
 	if _, err := m.runner.Run(ctx, "sc.exe", "query", "surge"); err == nil {
 		return fmt.Errorf("%w; remove the legacy Windows service from an elevated terminal before retrying", ErrLegacySystemService)
 	}
-	command := `\"` + m.executable + `\" server start --managed-service`
-	if err := m.run(ctx, "/Create", "/F", "/SC", "ONLOGON", "/RL", "LIMITED", "/TN", m.taskName, "/TR", command); err != nil {
-		return err
+	// An unscoped ONLOGON trigger requires elevation. Restrict both the
+	// trigger and the interactive principal to the current user's SID.
+	// Keep the executable separate from its arguments so paths with spaces
+	// do not depend on schtasks command-line quoting.
+	script := `$ErrorActionPreference = 'Stop'; ` +
+		`$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value; ` +
+		`$action = New-ScheduledTaskAction -Execute '` + strings.ReplaceAll(m.executable, "'", "''") + `' -Argument 'server start --managed-service'; ` +
+		`$trigger = New-ScheduledTaskTrigger -AtLogOn -User $user; ` +
+		`$principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited; ` +
+		`Register-ScheduledTask -TaskPath '\' -TaskName '` + m.taskName + `' -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null`
+	out, err := m.runner.Run(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script)
+	if err != nil {
+		return fmt.Errorf("register user task: %w: %s", err, strings.TrimSpace(string(out)))
 	}
 	// A daemon must keep running on battery power and beyond the default 72-hour limit.
-	out, err := m.runner.Run(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
+	out, err = m.runner.Run(ctx, "powershell.exe", "-NoProfile", "-NonInteractive", "-Command",
 		`$ErrorActionPreference = 'Stop'; $task = Get-ScheduledTask -TaskPath '\' -TaskName '`+m.taskName+`'; $task.Settings.ExecutionTimeLimit = 'PT0S'; $task.Settings.DisallowStartIfOnBatteries = $false; $task.Settings.StopIfGoingOnBatteries = $false; Set-ScheduledTask -InputObject $task | Out-Null`)
 	if err != nil {
 		configureErr := fmt.Errorf("configure user task runtime: %w: %s", err, strings.TrimSpace(string(out)))

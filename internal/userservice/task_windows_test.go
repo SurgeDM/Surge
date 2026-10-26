@@ -11,6 +11,7 @@ import (
 
 type taskInstallRunner struct {
 	commands     []string
+	registerErr  error
 	runtimeErr   error
 	endErr       error
 	deleteErr    error
@@ -28,6 +29,9 @@ func (r *taskInstallRunner) Run(_ context.Context, name string, args ...string) 
 		return nil, errors.New("legacy service absent")
 	case "powershell.exe":
 		script := strings.Join(args, " ")
+		if strings.Contains(script, "Register-ScheduledTask") {
+			return nil, r.registerErr
+		}
 		if !strings.Contains(script, "ExecutionTimeLimit") {
 			output := r.statusOutput
 			if output == "" {
@@ -166,5 +170,37 @@ func TestTaskActionsRejectElevatedSessionBeforeCommands(t *testing.T) {
 	}
 	if len(runner.commands) != 0 {
 		t.Fatalf("elevated session executed commands: %v", runner.commands)
+	}
+}
+
+func TestTaskInstallRegistersCurrentUserLogon(t *testing.T) {
+	for _, fail := range []bool{false, true} {
+		runner := &taskInstallRunner{}
+		if fail {
+			runner.registerErr = errors.New("registration denied")
+		}
+		manager := &TaskManager{executable: `C:\Users\O'Brien\Surge App\surge.exe`, taskName: "Surge-S-1-5-21-1000", runner: runner, checkUser: func() error { return nil }}
+		err := manager.Install(context.Background())
+		if !errors.Is(err, runner.registerErr) {
+			t.Fatalf("Install error = %v, want %v", err, runner.registerErr)
+		}
+		if len(runner.commands) < 2 {
+			t.Fatalf("missing registration: %v", runner.commands)
+		}
+		registration := runner.commands[1]
+		for _, want := range []string{
+			"WindowsIdentity]::GetCurrent().User.Value",
+			"New-ScheduledTaskTrigger -AtLogOn -User $user",
+			"New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited",
+			`New-ScheduledTaskAction -Execute 'C:\Users\O''Brien\Surge App\surge.exe' -Argument 'server start --managed-service'`,
+			"Register-ScheduledTask -TaskPath '\\' -TaskName 'Surge-S-1-5-21-1000'",
+		} {
+			if !strings.Contains(registration, want) {
+				t.Errorf("registration missing %q: %s", want, registration)
+			}
+		}
+		if fail && (len(runner.commands) != 2 || runner.started || runner.configured || runner.deleted) {
+			t.Fatalf("registration failure continued installation: %+v", runner)
+		}
 	}
 }
