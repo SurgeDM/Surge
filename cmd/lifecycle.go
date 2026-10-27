@@ -43,10 +43,8 @@ func newLifecycleCommand(action, short string) *cobra.Command {
 			if all && len(args) != 0 {
 				return clioutput.NewError(clioutput.InvalidArguments, "--all cannot be used with a download ID", nil)
 			}
-			if resolveHostTarget() == "" {
-				if err := initializeGlobalState(); err != nil {
-					return err
-				}
+			if err := initializeClientState(); err != nil {
+				return err
 			}
 			if all {
 				return runLifecycleAll(ctx, cmd, action)
