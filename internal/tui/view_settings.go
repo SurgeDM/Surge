@@ -920,7 +920,7 @@ func (m RootModel) buildSettingsMetaForCategory(category string) []config.Settin
 		}
 		settingsList = append(settingsList, config.SettingMeta{
 			Key:   "add_category",
-			Label: "+ Add Category...",
+			Label: "+ Add category...",
 			Type:  config.TypeCustomCategoryAdd,
 		})
 	}
