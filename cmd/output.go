@@ -19,6 +19,8 @@ func Run(args []string, stdout, stderr io.Writer) int {
 	return runCommand(rootCmd, args, stdout, stderr)
 }
 
+// Stderr diagnostics are best effort: a failed diagnostic write cannot be
+// reported to another stream without corrupting stdout, and we already fail.
 func runCommand(root *cobra.Command, args []string, stdout, stderr io.Writer) int {
 	root.SetArgs(args)
 	root.SetOut(stdout)
@@ -41,17 +43,17 @@ func runCommand(root *cobra.Command, args []string, stdout, stderr io.Writer) in
 
 	var writeError *clioutput.WriteError
 	if errors.As(err, &writeError) {
-		fmt.Fprintln(stderr, err)
+		_, _ = fmt.Fprintln(stderr, err)
 		return 1
 	}
 	if version == "1" {
 		if writeErr := clioutput.WriteJSON(stdout, clioutput.Failed(command.Name(), err)); writeErr != nil {
-			fmt.Fprintln(stderr, writeErr)
+			_, _ = fmt.Fprintln(stderr, writeErr)
 			return 1
 		}
 		return clioutput.ExitCode(err)
 	}
-	fmt.Fprintln(stderr, err)
+	_, _ = fmt.Fprintln(stderr, err)
 	if versionSelected {
 		return clioutput.ExitCode(err)
 	}
