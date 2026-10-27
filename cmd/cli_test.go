@@ -156,7 +156,7 @@ func TestResolveDownloadID_LocalModeFallsBackToDBWhenRemoteListFails(t *testing.
 
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.URL.Path == "/list" {
-			http.Error(w, "boom", http.StatusInternalServerError)
+			http.Error(w, "boom", http.StatusServiceUnavailable)
 			return
 		}
 		http.NotFound(w, r)
@@ -839,7 +839,7 @@ func TestActionCommandsRunE_ReturnAmbiguousIDErrors(t *testing.T) {
 
 			server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 				if r.URL.Path == "/list" {
-					http.Error(w, "boom", http.StatusInternalServerError)
+					http.Error(w, "boom", http.StatusServiceUnavailable)
 					return
 				}
 				http.NotFound(w, r)
