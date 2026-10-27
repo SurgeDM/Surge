@@ -1024,7 +1024,7 @@ func DefaultSettings() *Settings {
 			CategoryEnabled: &Setting{
 				Key:          "category_enabled",
 				Label:        "Manage categories",
-				Description:  "Sort downloads into subfolders by file type. Press Enter to open Category Manager.",
+				Description:  "Sort downloads into subfolders using category rules.",
 				Type:         TypeBool,
 				DefaultValue: false,
 				Value:        false,

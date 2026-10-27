@@ -496,6 +496,10 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	}
 
 	wrappedDesc := utils.WrapText(desc, innerWidth)
+	if meta.Key == "category_enabled" {
+		priority := utils.WrapText("Categories are checked from top to bottom; the first match wins.", innerWidth)
+		wrappedDesc += "\n\n" + lipgloss.NewStyle().Bold(true).Render(priority)
+	}
 	descDisplay := lipgloss.NewStyle().
 		Foreground(colors.LightGray()).
 		Width(innerWidth).
