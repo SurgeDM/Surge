@@ -28,7 +28,7 @@ var resumeCmd = &cobra.Command{
 			return fmt.Errorf("--all cannot be used with a download ID")
 		}
 
-		if err := initializeGlobalState(); err != nil {
+		if err := initializeClientState(); err != nil {
 			return err
 		}
 

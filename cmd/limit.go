@@ -55,7 +55,7 @@ func validateLimitArgs(cmd *cobra.Command, args []string) error {
 }
 
 func runLimitCommand(cmd *cobra.Command, args []string) error {
-	if err := initializeGlobalState(); err != nil {
+	if err := initializeClientState(); err != nil {
 		return err
 	}
 

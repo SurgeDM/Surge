@@ -47,7 +47,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	if len(urls) == 0 {
 		return clioutput.NewError(clioutput.InvalidArguments, "Provide at least one URL or a nonempty --batch file.", nil)
 	}
-	if err := initializeGlobalState(); err != nil {
+	if err := initializeClientState(); err != nil {
 		return err
 	}
 	baseURL, token, err := resolveAPIConnection(true)

@@ -24,7 +24,7 @@ var refreshCmd = &cobra.Command{
 }
 
 func runRefreshCommand(_ *cobra.Command, args []string) error {
-	if err := initializeGlobalState(); err != nil {
+	if err := initializeClientState(); err != nil {
 		return err
 	}
 

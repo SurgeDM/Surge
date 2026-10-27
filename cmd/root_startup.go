@@ -5,10 +5,64 @@ import (
 	"path/filepath"
 
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/scheduler"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
+
+// initializeLocalEngine is called only by local TUI/server owners, after the
+// instance lock is acquired. Client and metadata commands never create a pool.
+func initializeLocalEngine() error {
+	if GlobalService != nil {
+		if err := GlobalService.Shutdown(); err != nil {
+			return fmt.Errorf("stop previous local service: %w", err)
+		}
+	}
+	if lifecycle := currentLifecycle(); lifecycle != nil {
+		lifecycle.Shutdown()
+	}
+	if GlobalPool != nil {
+		GlobalPool.GracefulShutdown()
+	}
+	if cleanup := takeLifecycleCleanup(); cleanup != nil {
+		cleanup()
+	}
+	globalLifecycleMu.Lock()
+	GlobalService = nil
+	GlobalLifecycle = nil
+	globalLifecycleMu.Unlock()
+	GlobalPool = nil
+	GlobalProgressCh = nil
+	globalHTTPServerMu.Lock()
+	server := globalHTTPServer
+	globalHTTPServer = nil
+	globalHTTPServerMu.Unlock()
+	if server != nil {
+		_ = server.Close()
+	}
+
+	setGlobalSettings(nil)
+	settings := getSettings()
+	setGlobalSettings(settings)
+	if err := initializeGlobalState(); err != nil {
+		return err
+	}
+	GlobalProgressCh = make(chan types.DownloadEvent, types.ProgressChannelBuffer)
+	GlobalPool = scheduler.New(GlobalProgressCh, config.Resolve[int](settings.Network.MaxConcurrentDownloads))
+	return nil
+}
+
+// initializeClientState prepares local history/auth/logging only when needed.
+// Explicit remote clients use the configured endpoint without touching local
+// settings, state directories, history, or a local download engine.
+func initializeClientState() error {
+	if resolveHostTarget() != "" {
+		return nil
+	}
+	return initializeGlobalState()
+}
 
 func runStartupIntegrityCheck() string {
 	// Normalize downloads stuck in "downloading" status from a prior crash/kill.

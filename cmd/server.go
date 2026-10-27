@@ -55,7 +55,7 @@ var serverStartCmd = &cobra.Command{
 			}
 		}()
 
-		if err := initializeGlobalState(); err != nil {
+		if err := initializeLocalEngine(); err != nil {
 			return err
 		}
 

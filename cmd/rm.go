@@ -15,7 +15,7 @@ var rmCmd = &cobra.Command{
 	Long:    `Remove a download by its ID. Use --clean to remove all completed downloads. Use --clean-failed to remove all failed downloads. Use --purge to also delete the file(s) from disk.`,
 	Args:    cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := initializeGlobalState(); err != nil {
+		if err := initializeClientState(); err != nil {
 			return err
 		}
 

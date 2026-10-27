@@ -373,7 +373,7 @@ func acquireRootInstanceLock() (func(), error) {
 }
 
 func initializeRootLocalRuntime() error {
-	if err := initializeGlobalState(); err != nil {
+	if err := initializeLocalEngine(); err != nil {
 		return err
 	}
 	resetGlobalEnqueueContext()
@@ -443,7 +443,7 @@ var rootCmd = &cobra.Command{
 	Args:          cobra.ArbitraryArgs,
 	SilenceErrors: true, //errors are printed in main.go this prevents double printing
 	SilenceUsage:  true, // prevent usage text from being printed on every error
-	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+	RunE: func(cmd *cobra.Command, args []string) error {
 		if reset, _ := cmd.Flags().GetBool("reset-settings"); reset {
 			err1 := utils.RemoveFile(config.GetSettingsPath())
 			err2 := utils.RemoveFile(config.GetKeyMapConfigPath())
@@ -454,34 +454,6 @@ var rootCmd = &cobra.Command{
 			}
 		}
 
-		if GlobalService != nil {
-			_ = GlobalService.Shutdown()
-			globalLifecycleMu.Lock()
-			GlobalService = nil
-			GlobalLifecycle = nil
-			globalLifecycleMu.Unlock()
-		}
-		if GlobalPool != nil {
-			GlobalPool.GracefulShutdown()
-		}
-
-		if cleanup := takeLifecycleCleanup(); cleanup != nil {
-			cleanup()
-		}
-		globalHTTPServerMu.Lock()
-		srv := globalHTTPServer
-		globalHTTPServer = nil
-		globalHTTPServerMu.Unlock()
-		if srv != nil {
-			_ = srv.Close()
-		}
-
-		GlobalProgressCh = make(chan types.DownloadEvent, 100)
-		settings := getSettings()
-		setGlobalSettings(settings)
-		GlobalPool = scheduler.New(GlobalProgressCh, config.Resolve[int](settings.Network.MaxConcurrentDownloads))
-	},
-	RunE: func(cmd *cobra.Command, args []string) error {
 		if ranRemote, err := maybeRunRemoteTUI(cmd, args); err != nil {
 			return err
 		} else if ranRemote {
@@ -539,7 +511,7 @@ var rootCmd = &cobra.Command{
 func startTUI(port int, exitWhenDone bool, noResume bool, releaseLock func()) error {
 	tui.InitializeTUI()
 	// Initialize TUI
-	// GlobalService and GlobalProgressCh are already initialized in PersistentPreRun or Run
+	// The local runtime was initialized by the owning command before starting the TUI.
 
 	m := tui.InitialRootModel(port, Version, GlobalService, currentLifecycle(), getSettings(), noResume, Commit)
 	m = m.WithEnqueueContext(currentEnqueueContext(), currentEnqueueCancel())

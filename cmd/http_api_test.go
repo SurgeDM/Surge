@@ -483,6 +483,9 @@ func (s *httpAPITestService) SetDefaultRateLimit(rate int64) error {
 }
 
 func TestEnsureOpenActionRequestAllowed_RemoteToggle(t *testing.T) {
+	originalService := GlobalService
+	GlobalService = nil
+	t.Cleanup(func() { GlobalService = originalService })
 	original := globalSettings
 	t.Cleanup(func() {
 		globalSettings = original
@@ -929,6 +932,9 @@ func TestOpenEndpoints_ReturnMappedResolveStatuses(t *testing.T) {
 }
 
 func TestEnsureOpenActionRequestAllowed_ForwardedLoopbackDenied(t *testing.T) {
+	originalService := GlobalService
+	GlobalService = nil
+	t.Cleanup(func() { GlobalService = originalService })
 	original := globalSettings
 	t.Cleanup(func() {
 		globalSettings = original

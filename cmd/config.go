@@ -43,6 +43,9 @@ Usage:
 		return nil, cobra.ShellCompDirectiveNoFileComp
 	},
 	RunE: func(cmd *cobra.Command, args []string) error {
+		if len(args) > 0 && args[0] == "help" {
+			return cmd.Help()
+		}
 		settings, err := config.LoadSettings()
 		if err != nil {
 			return fmt.Errorf("failed to load settings: %w", err)
@@ -50,10 +53,6 @@ Usage:
 
 		if len(args) > 0 && args[0] == "open" {
 			return openSettingsFile()
-		}
-
-		if len(args) > 0 && args[0] == "help" {
-			return cmd.Help()
 		}
 
 		isSetOperation := len(args) >= 2 && strings.Contains(args[0], ".")
