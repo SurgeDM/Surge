@@ -108,8 +108,8 @@ func TestDownloadItemCompletedHidesSpeedLimit(t *testing.T) {
 	for _, rate := range []int64{0, 10 * 1024 * 1024} {
 		d := &DownloadModel{Speed: 1024 * 1024, RateLimit: rate, RateLimitSet: true}
 		item := DownloadItem{download: d}
-		if !strings.Contains(item.Description(), "Limit:") {
-			t.Fatal("active download should show its explicit speed limit")
+		if got := strings.Contains(item.Description(), "Limit:"); got != (rate > 0) {
+			t.Fatalf("active download limit visibility = %v for rate %d", got, rate)
 		}
 		d.done = true
 		if strings.Contains(item.Description(), "Limit:") {

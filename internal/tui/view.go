@@ -779,16 +779,12 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 		speedStr = "Paused"
 		if d.RateLimitSet && d.RateLimit > 0 {
 			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
-		} else if d.RateLimitSet {
-			speedStr += " (Limit: \u221E)"
 		}
 		etaStr = "\u221e"
 	} else {
 		speedStr = utils.FormatSpeed(d.Speed)
 		if d.RateLimitSet && d.RateLimit > 0 {
 			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
-		} else if d.RateLimitSet {
-			speedStr += " (Limit: \u221E)"
 		}
 		if d.Speed > 0 && d.Total > 0 && d.lastETA > 0 {
 			etaStr = formatDurationForUI(d.lastETA)
