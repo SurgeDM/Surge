@@ -29,8 +29,11 @@ func (m RootModel) viewSpeedLimits() string {
 			valStr = fmt.Sprintf("%v", val)
 		}
 
-		if bps, err := utils.ParseRateLimitValue(valStr); err == nil && bps == 0 {
-			valStr = "0"
+		if bps, err := utils.ParseRateLimitValue(valStr); err == nil {
+			valStr = utils.FormatRateLimitDisplay(bps)
+			if bps == 0 {
+				valStr = "0"
+			}
 		}
 
 		suffix := "MiB/s"
@@ -41,7 +44,7 @@ func (m RootModel) viewSpeedLimits() string {
 					defaultRate = rate
 				}
 			}
-			displayRate := utils.FormatRateLimit(defaultRate)
+			displayRate := utils.FormatRateLimitDisplay(defaultRate)
 			if defaultRate <= 0 {
 				displayRate = "0 MiB/s"
 			}
@@ -266,7 +269,7 @@ func (m RootModel) formatDownloadRateLimitValue(d *DownloadModel) string {
 			defaultRate = rate
 		}
 	}
-	return fmt.Sprintf("inherit (%s)", utils.FormatRateLimit(defaultRate))
+	return fmt.Sprintf("inherit (%s)", utils.FormatRateLimitDisplay(defaultRate))
 }
 
 func isRateLimitInheritValue(value string) bool {

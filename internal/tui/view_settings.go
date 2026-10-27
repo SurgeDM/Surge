@@ -53,15 +53,6 @@ func (m RootModel) viewSettings() string {
 
 	currentCategory := categories[activeTab]
 	settingsMeta := m.buildSettingsMetaForCategory(currentCategory)
-	if len(settingsMeta) == 0 {
-		content := lipgloss.NewStyle().
-			Padding(1, 2).
-			Foreground(colors.LightGray()).
-			Render("No matching settings")
-		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), m.settingsSearchTitle(), content, width, height, colors.Magenta())
-		return m.renderModalWithOverlay(box)
-	}
-
 	selectedRow := m.SettingsSelectedRow
 	if selectedRow < 0 {
 		selectedRow = 0
@@ -119,7 +110,9 @@ func (m RootModel) viewSettings() string {
 	}
 
 	var content string
-	if width >= 72 && bodyHeight >= 8 {
+	if len(settingsMeta) == 0 {
+		content = formatSettingsBlock("No matching settings", width-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
+	} else if width >= 72 && bodyHeight >= 8 {
 		content = m.renderSettingsTwoColumn(settingsMeta, selectedRow, settingsValues, width, bodyHeight)
 	} else {
 		content = m.renderSettingsCompact(settingsMeta, selectedRow, settingsValues, width, bodyHeight)
@@ -1020,6 +1013,9 @@ func formatSettingValueForEdit(value interface{}, typ config.SettingType, unit c
 			if parsed, err := utils.ParseRateLimitValue(vStr); err == nil {
 				if parsed == 0 {
 					return "\u221E"
+				}
+				if truncate && parsed >= utils.MiB/1000 {
+					return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.3f", float64(parsed)/float64(utils.MiB)), "0"), ".")
 				}
 				return strconv.FormatFloat(float64(parsed)/float64(utils.MiB), 'f', -1, 64)
 			}

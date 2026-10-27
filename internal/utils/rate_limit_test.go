@@ -38,7 +38,8 @@ func TestParseRateLimit(t *testing.T) {
 		{"Invalid unit", "10 xyz", 0, true},
 		{"Negative value", "-10 mb", 0, true},
 		{"Sub-byte value", "0.1 B/s", 0, true},
-		{"No unit defaults to MiB", "10", 10 * MiB, false},
+		{"No unit preserves decimal MB", "10", 10_000_000, false},
+		{"Fractional unitless value", "1.5", 1_500_000, false},
 	}
 
 	for _, tt := range tests {
@@ -94,6 +95,7 @@ func TestParseRateLimitValue(t *testing.T) {
 		{"Float64 positive", float64(500.2), 500, false},
 		{"Float64 negative", float64(-500.2), 0, true},
 		{"String valid", "500 b", 500, false},
+		{"Legacy unitless setting", "10", 10_000_000, false},
 		{"String invalid", "invalid", 0, true},
 		{"Unsupported type", struct{}{}, 0, true},
 	}
@@ -109,6 +111,16 @@ func TestParseRateLimitValue(t *testing.T) {
 				t.Errorf("ParseRateLimitValue() = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestRateLimitDisplayDoesNotChangePersistedPrecision(t *testing.T) {
+	const rate = int64(10_000_000)
+	if got := FormatRateLimitDisplay(rate); got != "9.5 MiB/s" {
+		t.Fatalf("display = %q", got)
+	}
+	if got, err := ParseRateLimit(FormatRateLimit(rate)); err != nil || got != rate {
+		t.Fatalf("persisted round trip = (%d, %v)", got, err)
 	}
 }
 

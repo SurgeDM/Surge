@@ -41,7 +41,7 @@ var rateUnits = map[string]rateUnit{
 }
 
 // ParseRateLimit parses a human-friendly rate limit string into bytes per second.
-// Values without a unit use MiB/s, matching the speed-limit editors.
+// Values without a unit use MB/s for compatibility with existing settings and CLI inputs.
 func ParseRateLimit(input string) (int64, error) {
 	trimmed := strings.TrimSpace(input)
 	lower := strings.ToLower(trimmed)
@@ -68,7 +68,7 @@ func ParseRateLimit(input string) (int64, error) {
 	numStr := trimmed[:numEnd]
 	unitStr := trimmed[numEnd:]
 	if unitStr == "" {
-		unitStr = "MiB"
+		unitStr = "MB"
 	}
 
 	value, err := strconv.ParseFloat(numStr, 64)
@@ -147,6 +147,15 @@ func ParseRateLimitValue(val any) (int64, error) {
 	default:
 		return 0, fmt.Errorf("unsupported rate limit type")
 	}
+}
+
+// FormatRateLimitDisplay rounds a limit for presentation. Use FormatRateLimit
+// when the result will be saved or used to prefill an editor.
+func FormatRateLimitDisplay(bps int64) string {
+	if bps <= 0 {
+		return "\u221E"
+	}
+	return FormatBytes(bps) + "/s"
 }
 
 func FormatRateLimit(bps int64) string {

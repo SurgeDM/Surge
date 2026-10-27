@@ -17,6 +17,28 @@ import (
 
 var ansiEscapeRE = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
+func TestDownloadDirectoryUsesDestinationPathFormat(t *testing.T) {
+	for _, tt := range []struct{ destination, want string }{
+		{`C:\Users\Alice\Downloads\file.zip`, `C:\Users\Alice\Downloads`},
+		{`C:\file.zip`, `C:\`},
+		{`C:/file.zip`, `C:/`},
+		{`C:/Users/Alice/file.zip`, `C:/Users/Alice`},
+		{`C:\Users/Alice\file.zip`, `C:\Users/Alice`},
+		{`\\server\share\file.zip`, `\\server\share`},
+		{`//server/share/file.zip`, `//server/share`},
+		{"/home/alice/Downloads/file.zip", "/home/alice/Downloads"},
+		{"/file.zip", "/"},
+		{`/home/alice/a\b/file.zip`, `/home/alice/a\b`},
+		{"file.zip", "."},
+	} {
+		t.Run(tt.destination, func(t *testing.T) {
+			if got := downloadDirectory(tt.destination); got != tt.want {
+				t.Fatalf("directory = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestFormatDurationForUI(t *testing.T) {
 	tests := []struct {
 		name string

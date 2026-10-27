@@ -41,7 +41,12 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				oldValues := m.getSpeedLimitsValues()
 				oldVal := oldValues[meta.Key]
 
-				if err := m.setSpeedLimitValue(meta.Key, valueStr); err != nil {
+				// The editor uses MiB/s; the shared parser preserves legacy MB/s defaults.
+				limitValue := valueStr
+				if !utils.IsRateLimitInherit(limitValue) {
+					limitValue += " MiB/s"
+				}
+				if err := m.setSpeedLimitValue(meta.Key, limitValue); err != nil {
 					m.speedLimitsError = err.Error()
 					return m, nil
 				}

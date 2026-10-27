@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func newSpeedLimitsTestModel(t *testing.T) RootModel {
@@ -139,5 +140,30 @@ func TestSpeedLimitsSaveAndReopen(t *testing.T) {
 				}
 			})
 		}
+	}
+}
+
+func TestSpeedLimitsEditingPreservesLegacyLimits(t *testing.T) {
+	for cursor, key := range []string{"global_rate_limit", "default_download_rate_limit", "dl:download"} {
+		t.Run(key, func(t *testing.T) {
+			m := newSpeedLimitsTestModel(t)
+			m.Settings.Network.GlobalRateLimit.Value = "10"
+			m.Settings.Network.DefaultDownloadRateLimit.Value = "10"
+			m.downloads = []*DownloadModel{{ID: "download", RateLimit: 10_000_000, RateLimitSet: true}}
+			m.speedLimitsCursor = cursor
+			for i := 0; i < 3; i++ {
+				updated, _ := m.updateSpeedLimits(tea.KeyPressMsg{Code: tea.KeyEnter})
+				m = updated.(RootModel)
+				if got := m.SettingsInput.Value(); got != "9.5367431640625" {
+					t.Fatalf("editor should convert legacy MB to MiB, got %q", got)
+				}
+				updated, _ = m.updateSpeedLimits(tea.KeyPressMsg{Code: tea.KeyEnter})
+				m = updated.(RootModel)
+				rate, err := utils.ParseRateLimitValue(m.getSpeedLimitsValues()[key])
+				if err != nil || rate != 10_000_000 || m.speedLimitsIsEditing {
+					t.Fatalf("saved legacy limit = (%d, %v), error = %s", rate, err, m.speedLimitsError)
+				}
+			}
+		})
 	}
 }

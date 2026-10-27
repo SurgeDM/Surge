@@ -2,6 +2,7 @@ package tui
 
 import (
 	"errors"
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -55,6 +56,19 @@ func TestSettingsEditorPreservesConcurrentDaemonChanges(t *testing.T) {
 	got, _ = svc.GetSettings()
 	if got.Network.MaxConcurrentDownloads.Value != 6 {
 		t.Fatal("conflict overwrote daemon setting")
+	}
+	// A filter with no matches must still show a failed save when closing.
+	m.state = SettingsState
+	m.width, m.height = 120, 40
+	m.settingsSearchQuery = "no-setting-matches-this"
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = updated.(RootModel)
+	if m.state != SettingsState || m.settingsError == "" {
+		t.Fatal("failed save should keep settings open with an error")
+	}
+	view := stripANSI.ReplaceAllString(m.viewSettings(), "")
+	if !strings.Contains(view, "No matching settings") || !strings.Contains(view, "Failed to save settings") {
+		t.Fatalf("no-match view hid save failure: %s", view)
 	}
 }
 

@@ -2,7 +2,7 @@ package tui
 
 import (
 	"fmt"
-	"path/filepath"
+	"path"
 	"strings"
 	"time"
 
@@ -427,7 +427,7 @@ func (m RootModel) View() tea.View {
 	var limitVal string
 	if m.Settings != nil && m.Settings.Network.GlobalRateLimit != nil {
 		if rate, err := utils.ParseRateLimitValue(m.Settings.Network.GlobalRateLimit.Value); err == nil && rate > 0 {
-			limitVal = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(utils.FormatRateLimit(rate))
+			limitVal = lipgloss.NewStyle().Foreground(colors.LightGray()).Render(utils.FormatRateLimitDisplay(rate))
 		}
 	}
 	var limitChunk string
@@ -602,7 +602,21 @@ func (m RootModel) viewCompactQuitConfirm() string {
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, content)
 }
 
-// Helper to render the detailed info pane
+// Download paths belong to the daemon, whose OS can differ from the client's.
+func downloadDirectory(destination string) string {
+	windowsDrive := len(destination) >= 3 && destination[1] == ':' && (destination[2] == '\\' || destination[2] == '/')
+	if windowsDrive || strings.HasPrefix(destination, `\\`) || strings.HasPrefix(destination, "//") {
+		if i := strings.LastIndexAny(destination, `\/`); i >= 0 {
+			if windowsDrive && i == 2 {
+				return destination[:3]
+			}
+			return destination[:i]
+		}
+	}
+	return path.Dir(destination)
+}
+
+// Helper to render the detailed info pane.
 func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	pct := 0.0
 	if d.Total > 0 {
@@ -635,7 +649,7 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 
 	displayPath := "Not available"
 	if d.Destination != "" {
-		displayPath = filepath.Dir(d.Destination)
+		displayPath = downloadDirectory(d.Destination)
 	}
 
 	// Calculate inner width accounting for sectionStyle padding (0, 1)
@@ -746,13 +760,13 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	} else if d.paused || d.Speed == 0 {
 		speedStr = "Paused"
 		if d.RateLimitSet && d.RateLimit > 0 {
-			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
+			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimitDisplay(d.RateLimit))
 		}
 		etaStr = "\u221e"
 	} else {
 		speedStr = utils.FormatSpeed(d.Speed)
 		if d.RateLimitSet && d.RateLimit > 0 {
-			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
+			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimitDisplay(d.RateLimit))
 		}
 		if d.Speed > 0 && d.Total > 0 && d.lastETA > 0 {
 			etaStr = formatDurationForUI(d.lastETA)

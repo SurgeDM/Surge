@@ -85,7 +85,7 @@ func TestRunLimitCommandSendsEscapedDownloadRequest(t *testing.T) {
 	if err != nil {
 		t.Fatalf("runLimitCommand() error = %v", err)
 	}
-	if got := output.String(); got != "Set speed limit for "+id+" to 1.9073486328125 MiB/s\n" {
+	if got := output.String(); got != "Set speed limit for "+id+" to 1.9 MiB/s\n" {
 		t.Errorf("output = %q", got)
 	}
 }
