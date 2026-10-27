@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -262,16 +263,24 @@ func resolveAPIConnection(requireServer bool) (string, string, error) {
 }
 
 func doAPIRequest(method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
+	return doAPIRequestContext(context.Background(), method, baseURL, token, path, body)
+}
+
+func doAPIRequestContext(ctx context.Context, method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
 	client, err := newRemoteAPIHTTPClient()
 	if err != nil {
 		return nil, err
 	}
-	return doAPIRequestWithClient(client, method, baseURL, token, path, body)
+	return doAPIRequestWithClientContext(ctx, client, method, baseURL, token, path, body)
 }
 
 func doAPIRequestWithClient(client *http.Client, method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
+	return doAPIRequestWithClientContext(context.Background(), client, method, baseURL, token, path, body)
+}
+
+func doAPIRequestWithClientContext(ctx context.Context, client *http.Client, method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
 	reqURL := fmt.Sprintf("%s%s", strings.TrimRight(baseURL, "/"), path)
-	req, err := http.NewRequest(method, reqURL, body)
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
 	if err != nil {
 		return nil, err
 	}
@@ -370,7 +379,11 @@ func sendBatchToServer(urls []string, outPath string, baseURL string, token stri
 
 // GetRemoteDownloads fetches all downloads from the running server
 func GetRemoteDownloads(baseURL string, token string) ([]types.DownloadStatus, error) {
-	resp, err := doAPIRequest(http.MethodGet, baseURL, token, "/list", nil)
+	return getRemoteDownloadsContext(context.Background(), baseURL, token)
+}
+
+func getRemoteDownloadsContext(ctx context.Context, baseURL, token string) ([]types.DownloadStatus, error) {
+	resp, err := doAPIRequestContext(ctx, http.MethodGet, baseURL, token, "/list", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -446,11 +459,12 @@ func resolveDownloadID(partialID string) (string, error) {
 	if baseURL != "" {
 		remoteDownloads, err := GetRemoteDownloads(baseURL, token)
 		if err != nil {
-			if strictRemote {
+			if !canUseHistory(err, strictRemote) {
 				return "", fmt.Errorf("failed to list remote downloads: %w", err)
 			}
 		} else {
 			appendCandidateIDs(&candidates, remoteDownloads)
+			return resolveIDFromCandidates(partialID, candidates)
 		}
 	}
 

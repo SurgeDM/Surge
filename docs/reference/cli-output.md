@@ -16,12 +16,25 @@ have not adopted this contract yet. Versioned snapshots cannot be combined with 
 
 Existing `surge ls --json` returns its existing array. Existing
 `surge ls ID --json` returns its existing detail object. Their field names,
-units, indentation, and empty-list output are unchanged. Existing human output
-and the legacy exit convention (0 for success, 1 for error) are retained.
+units, indentation, and empty-list output are unchanged. The legacy exit
+convention (0 for success, 1 for error) is retained; rate semantics and freshness
+warnings are clarified below.
 
-The versioned contract uses the same data lookup and local-history fallback as
-legacy listing. It does not yet introduce freshness metadata or change that
-fallback policy. It is a snapshot, not proof of artifact integrity.
+A successful live response is authoritative, even when empty. Local history is
+used only when no local server is discovered, or the local server has a transport
+failure or classified temporary unavailability. Authentication, decoding, and
+unclassified server errors remain failures. Explicit remote targets never fall
+back to local data. These rules also apply to ID-prefix resolution.
+
+Successful v1 snapshots include additive `source` (`live` or `history`) and
+`stale` fields. `stale: true` means saved history cannot establish current transfer
+state; it does not mean the artifact is corrupt. Clients must tolerate absent
+freshness fields on older v1 builds. A snapshot is not proof of artifact integrity.
+Legacy JSON retains its array/detail shape; its saved live rate is cleared, with
+historical averages retained in the detail object's `avg_speed`. Human output
+and legacy JSON commands warn on stderr when displaying saved entries or when
+falling back from an unavailable local server. V1 communicates this through
+metadata, without a duplicate warning.
 
 ## Result envelope
 
@@ -45,7 +58,9 @@ preamble in this output. Operation failures do not print a second diagnostic.
       "total_bytes": "4294967296",
       "speed_bytes_per_second": 12582912
     }
-  ]
+  ],
+  "source": "live",
+  "stale": false
 }
 ```
 
@@ -57,9 +72,8 @@ preamble in this output. Operation failures do not print a second diagnostic.
   The current backend cannot reliably distinguish an unknown total from an
   empty file, so both are represented as `null`.
 - `speed_bytes_per_second` is a number for a downloading job with a finite,
-  nonnegative sample, including zero; it is otherwise `null`. For other states,
-  historical average speed is not represented as a current rate. The source
-  freshness limitation described above still applies to history fallback.
+  nonnegative live sample, including zero; it is otherwise `null`. History-backed
+  rates are always `null`, and historical averages are not shown as current rates.
 - Status is the backend's state string. Clients must tolerate new state strings
   and additional object properties. Field removal, changed units, or changed
   meanings require a new output version.
