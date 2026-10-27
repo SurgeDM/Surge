@@ -161,6 +161,7 @@ type lifecycleFailingWriter struct{}
 func (lifecycleFailingWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
 
 func TestRemoveRejectsIDWithBulkCleanup(t *testing.T) {
+	setupIsolatedCmdState(t)
 	for _, flag := range []string{"clean", "clean-failed"} {
 		t.Run(flag, func(t *testing.T) {
 			if err := rmCmd.Flags().Set(flag, "true"); err != nil {

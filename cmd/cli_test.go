@@ -871,7 +871,7 @@ func TestActionCommandsRunE_ReturnAmbiguousIDErrors(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected %s command to return an ambiguous ID error", tt.name)
 			}
-			want := "HTTP 500" // Mutations must resolve IDs against the live server only.
+			want := "server returned HTTP" // Mutations must resolve IDs against the live server only.
 			if tt.name == "rm" {
 				want = "ambiguous ID prefix"
 			}
