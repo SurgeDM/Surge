@@ -60,8 +60,9 @@ func Describe(err error) Failure {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return Failure{Code: Timeout, Message: "The operation timed out."}
 	}
-	var networkError net.Error
-	if errors.As(err, &networkError) {
+	var operationError *net.OpError
+	var dnsError *net.DNSError
+	if errors.As(err, &operationError) || errors.As(err, &dnsError) {
 		return Failure{Code: Unavailable, Message: "The Surge server could not be reached.", Retryable: true}
 	}
 	return Failure{Code: OperationFailed, Message: "The operation failed."}

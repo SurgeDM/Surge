@@ -416,7 +416,9 @@ func TestPrintDownloadDetail_TextAndJSON(t *testing.T) {
 	}
 
 	textOut := captureStdout(t, func() {
-		printDownloadDetail(status, false)
+		if err := printDownloadDetail(os.Stdout, status, false); err != nil {
+			t.Fatal(err)
+		}
 	})
 	if !strings.Contains(textOut, "ID:         "+status.ID) {
 		t.Fatalf("expected text output to contain ID, got: %s", textOut)
@@ -429,7 +431,9 @@ func TestPrintDownloadDetail_TextAndJSON(t *testing.T) {
 	}
 
 	jsonOut := captureStdout(t, func() {
-		printDownloadDetail(status, true)
+		if err := printDownloadDetail(os.Stdout, status, true); err != nil {
+			t.Fatal(err)
+		}
 	})
 	var decoded types.DownloadStatus
 	if err := json.Unmarshal([]byte(jsonOut), &decoded); err != nil {
@@ -890,7 +894,7 @@ func TestPrintDownloads_FromDatabase_TableAndJSON(t *testing.T) {
 	}
 
 	tableOut := captureStdout(t, func() {
-		if err := printDownloads(false, "", "", false); err != nil {
+		if err := printDownloads(os.Stdout, false, "", "", false); err != nil {
 			t.Fatalf("printDownloads table failed: %v", err)
 		}
 	})
@@ -908,7 +912,7 @@ func TestPrintDownloads_FromDatabase_TableAndJSON(t *testing.T) {
 	}
 
 	jsonOut := captureStdout(t, func() {
-		if err := printDownloads(true, "", "", false); err != nil {
+		if err := printDownloads(os.Stdout, true, "", "", false); err != nil {
 			t.Fatalf("printDownloads json failed: %v", err)
 		}
 	})
@@ -930,7 +934,7 @@ func TestPrintDownloads_JSONEmpty(t *testing.T) {
 	removeActivePort()
 
 	out := captureStdout(t, func() {
-		if err := printDownloads(true, "", "", false); err != nil {
+		if err := printDownloads(os.Stdout, true, "", "", false); err != nil {
 			t.Fatalf("printDownloads empty json failed: %v", err)
 		}
 	})
@@ -1029,7 +1033,7 @@ func TestPrintDownloads_StrictRemoteEmpty_DoesNotFallbackToDB(t *testing.T) {
 	defer server.Close()
 
 	out := captureStdout(t, func() {
-		if err := printDownloads(true, server.URL, "", true); err != nil {
+		if err := printDownloads(os.Stdout, true, server.URL, "", true); err != nil {
 			t.Fatalf("printDownloads strict remote failed: %v", err)
 		}
 	})
@@ -1055,7 +1059,7 @@ func TestShowDownloadDetails_UsesDatabaseFallback(t *testing.T) {
 	}
 
 	out := captureStdout(t, func() {
-		if err := showDownloadDetails("87654321", true, "", ""); err != nil {
+		if err := showDownloadDetails(os.Stdout, "87654321", true, "", ""); err != nil {
 			t.Fatalf("showDownloadDetails fallback failed: %v", err)
 		}
 	})

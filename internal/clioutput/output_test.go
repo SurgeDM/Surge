@@ -9,6 +9,7 @@ import (
 	"io"
 	"math"
 	"net"
+	"net/url"
 	"strings"
 	"testing"
 )
@@ -108,5 +109,13 @@ func TestExitCodesAndSafeMessages(t *testing.T) {
 	}
 	if ExitCode(context.DeadlineExceeded) != 8 {
 		t.Fatal("deadline must be timeout")
+	}
+}
+
+func TestNonNetworkURLFailureIsNotRetryable(t *testing.T) {
+	err := &url.Error{Op: "Get", URL: "https://example.com/?token=secret", Err: errors.New("certificate or configuration failure")}
+	failure := Describe(err)
+	if failure.Code != OperationFailed || failure.Retryable || strings.Contains(failure.Message, "secret") {
+		t.Fatalf("unexpected failure: %+v", failure)
 	}
 }

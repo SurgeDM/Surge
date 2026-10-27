@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/SurgeDM/Surge/internal/clioutput"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -380,7 +381,7 @@ func GetRemoteDownloads(baseURL string, token string) ([]types.DownloadStatus, e
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned status: %s", resp.Status)
+		return nil, remoteStatusError(resp.StatusCode, fmt.Errorf("server returned status: %s", resp.Status))
 	}
 
 	var statuses []types.DownloadStatus
@@ -495,7 +496,7 @@ func resolveIDFromCandidates(partialID string, candidates []string) (string, err
 		return matches[0], nil
 	}
 	if len(matches) > 1 {
-		return "", fmt.Errorf("ambiguous ID prefix '%s' matches %d downloads", partialID, len(matches))
+		return "", clioutput.NewError(clioutput.Conflict, "The download ID prefix is ambiguous; use a longer ID.", fmt.Errorf("ambiguous ID prefix '%s' matches %d downloads", partialID, len(matches)))
 	}
 
 	return partialID, nil // No match, use as-is (will fail with "not found" later)
