@@ -174,3 +174,22 @@ func TestRemoveRejectsIDWithBulkCleanup(t *testing.T) {
 		})
 	}
 }
+
+func TestLifecycleUncertainResultDoesNotRecommendMutationRetry(t *testing.T) {
+	root := newOutputTestRoot(t)
+	root.AddCommand(newLifecycleCommand("cancel", "Cancel"))
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer server.Close()
+	globalHost, globalToken = server.URL, "test-token"
+	var out, diagnostic bytes.Buffer
+	code := runCommand(root, []string{"cancel", "--output-version=1", "12345678-1234-1234-1234-123456789012"}, &out, &diagnostic)
+	var result clioutput.Result[lifecycleItem]
+	if err := json.Unmarshal(out.Bytes(), &result); err != nil {
+		t.Fatal(err)
+	}
+	if code != 6 || result.Error == nil || result.Error.Retryable || len(result.Items) != 1 || result.Items[0].Status != "unknown" || result.Items[0].Error.Retryable {
+		t.Fatalf("exit=%d result=%+v", code, result)
+	}
+}

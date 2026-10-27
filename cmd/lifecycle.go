@@ -173,7 +173,10 @@ func writeLifecycleResult(cmd *cobra.Command, action string, items []lifecycleIt
 		if failures < len(items) {
 			code = clioutput.PartialFailure
 		}
-		err = clioutput.NewError(code, "Some lifecycle requests failed or have an unknown outcome; inspect the per-job receipts.", nil)
+		// A batch-level retry must not replay requests with uncertain outcomes.
+		err = &clioutput.Error{Failure: clioutput.Failure{
+			Code: code, Message: "Some lifecycle requests failed or have an unknown outcome; inspect the per-job receipts.",
+		}}
 	}
 	version, _ := cmd.Flags().GetString("output-version")
 	if version == "1" {
