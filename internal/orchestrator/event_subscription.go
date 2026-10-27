@@ -25,7 +25,7 @@ func (sub *eventSubscription) stop() { sub.stopOnce.Do(func() { close(sub.done) 
 
 func persistenceEvent(msg types.DownloadEvent) bool {
 	switch msg.Type {
-	case types.EventStarted, types.EventQueued, types.EventComplete, types.EventPaused, types.EventError:
+	case types.EventStarted, types.EventQueued, types.EventComplete, types.EventPaused, types.EventError, types.EventRemoved:
 		return true
 	default:
 		return false
