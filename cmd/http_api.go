@@ -597,7 +597,7 @@ func eventsHandler(service downloadservice.DownloadService) http.HandlerFunc {
 		if err := prepareSSEWrite(controller); err != nil {
 			return
 		}
-		if err := controller.Flush(); err != nil {
+		if err := flushSSEWrite(controller); err != nil {
 			return
 		}
 
@@ -628,7 +628,7 @@ func eventsHandler(service downloadservice.DownloadService) http.HandlerFunc {
 						return
 					}
 				}
-				if err := controller.Flush(); err != nil {
+				if err := flushSSEWrite(controller); err != nil {
 					return
 				}
 			}
@@ -640,6 +640,19 @@ func eventsHandler(service downloadservice.DownloadService) http.HandlerFunc {
 // indefinitely. Test/middleware writers may not expose deadline support.
 func prepareSSEWrite(controller *http.ResponseController) error {
 	err := controller.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	if errors.Is(err, http.ErrNotSupported) {
+		return nil
+	}
+	return err
+}
+
+// Flush under the current deadline, then leave idle streams without a deadline.
+// An expired write deadline cannot reliably be renewed after an idle interval.
+func flushSSEWrite(controller *http.ResponseController) error {
+	if err := controller.Flush(); err != nil {
+		return err
+	}
+	err := controller.SetWriteDeadline(time.Time{})
 	if errors.Is(err, http.ErrNotSupported) {
 		return nil
 	}

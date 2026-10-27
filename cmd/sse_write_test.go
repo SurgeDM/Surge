@@ -1,11 +1,14 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/types"
@@ -50,4 +53,71 @@ func TestSSEStopsOnOutputFailureAndSetsDeadline(t *testing.T) {
 			}
 		})
 	}
+}
+
+// Emulate the response controller's expired-deadline behavior without waiting
+// on a real socket: advancing virtual time past an active deadline is fatal.
+type idleSSEWriter struct {
+	*httptest.ResponseRecorder
+	deadline time.Time
+	flushes  int
+}
+
+func (w *idleSSEWriter) SetWriteDeadline(deadline time.Time) error {
+	if !w.deadline.IsZero() && !time.Now().Before(w.deadline) {
+		return context.DeadlineExceeded
+	}
+	w.deadline = deadline
+	return nil
+}
+
+func (w *idleSSEWriter) FlushError() error {
+	if w.deadline.IsZero() || !time.Now().Before(w.deadline) {
+		return context.DeadlineExceeded
+	}
+	w.flushes++
+	return nil
+}
+
+type idleSSEService struct {
+	*httpAPITestService
+	stream <-chan types.DownloadEvent
+}
+
+func (s *idleSSEService) StreamEvents(context.Context) (<-chan types.DownloadEvent, func(), error) {
+	return s.stream, func() {}, nil
+}
+
+func TestSSEIdleIntervalsDoNotExpireWriteDeadline(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ctx, cancel := context.WithCancel(context.Background())
+		defer cancel()
+		stream := make(chan types.DownloadEvent)
+		go func() {
+			defer close(stream)
+			for _, id := range []string{"first", "second"} {
+				select {
+				case <-time.After(11 * time.Second):
+				case <-ctx.Done():
+					return
+				}
+				select {
+				case stream <- types.DownloadEvent{Type: types.EventQueued, DownloadID: id}:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}()
+		writer := &idleSSEWriter{ResponseRecorder: httptest.NewRecorder()}
+		service := &idleSSEService{stream: stream}
+		eventsHandler(service)(writer, httptest.NewRequest(http.MethodGet, "/events", nil))
+		if writer.flushes != 3 || !writer.deadline.IsZero() {
+			t.Fatalf("flushes=%d deadline=%s", writer.flushes, writer.deadline)
+		}
+		for _, id := range []string{"first", "second"} {
+			if !strings.Contains(writer.Body.String(), id) {
+				t.Fatalf("idle stream lost %q: %s", id, writer.Body)
+			}
+		}
+	})
 }
