@@ -218,6 +218,27 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	// Category order determines matching priority; move the selected rule with it.
+	if m.SettingsFocusedPane == 1 && m.settingsSearchQuery == "" && m.getCurrentSettingType() == config.TypeCustomCategory && key.Matches(msg, m.keys.Settings.MoveCategoryUp, m.keys.Settings.MoveCategoryDown) {
+		if m.SettingsReadOnly {
+			m.settingsError = "This daemon does not support editing settings"
+			return m, nil
+		}
+		idx, err := strconv.Atoi(strings.TrimPrefix(m.getCurrentSettingKey(), "category_"))
+		delta := 1
+		if key.Matches(msg, m.keys.Settings.MoveCategoryUp) {
+			delta = -1
+		}
+		next := idx + delta
+		cats := m.Settings.Categories.Categories
+		if err == nil && idx >= 0 && idx < len(cats) && next >= 0 && next < len(cats) {
+			cats[idx], cats[next] = cats[next], cats[idx]
+			m.SettingsSelectedRow += delta
+			m.settingsError = ""
+		}
+		return m, nil
+	}
+
 	// Up/Down navigation & pane switching between tabs and lists
 	if m.SettingsFocusedPane == 0 { // Tabs focused
 		if key.Matches(msg, m.keys.Settings.Down) {

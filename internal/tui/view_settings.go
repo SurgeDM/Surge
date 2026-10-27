@@ -231,6 +231,9 @@ func (m RootModel) renderSettingsHelp(width int) string {
 	help := m.help
 	help.SetWidth(width)
 	helpText := help.View(m.keys.Settings)
+	if !m.SettingsIsEditing && m.settingsSearchQuery == "" && m.SettingsFocusedPane == 1 && m.getCurrentSettingType() == config.TypeCustomCategory {
+		helpText += "  " + m.keys.Settings.MoveCategoryUp.Help().Key + "/" + m.keys.Settings.MoveCategoryDown.Help().Key + " reorder"
+	}
 	if m.SettingsIsEditing {
 		helpText = help.View(m.keys.SettingsEditor)
 	}

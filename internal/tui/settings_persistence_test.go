@@ -73,3 +73,35 @@ func TestOpeningSettingsRefreshesDaemonSnapshot(t *testing.T) {
 		t.Fatalf("editor did not refresh settings: state=%v", got.state)
 	}
 }
+
+func TestReorderCategories(t *testing.T) {
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = []config.Category{{Name: "First"}, {Name: "Second"}, {Name: "Third"}}
+	m := RootModel{Settings: settings, keys: config.DefaultKeyMap(), SettingsFocusedPane: 1}
+	for i, name := range config.CategoryOrder() {
+		if name == "Categories" {
+			m.SettingsActiveTab = i
+		}
+	}
+	m.SettingsSelectedRow = len(config.GetSettingsMetadata()["Categories"]) + 1
+	for _, tc := range []struct {
+		key       tea.KeyPressMsg
+		wantIndex int
+	}{
+		{tea.KeyPressMsg{Code: tea.KeyUp, Mod: tea.ModShift}, 0},
+		{tea.KeyPressMsg{Code: 'j', Text: "J", Mod: tea.ModShift}, 1},
+		{tea.KeyPressMsg{Code: tea.KeyDown, Mod: tea.ModShift}, 2},
+		{tea.KeyPressMsg{Code: 'k', Text: "K", Mod: tea.ModShift}, 1},
+	} {
+		updated, _ := m.updateSettings(tc.key)
+		m = updated.(RootModel)
+		if m.Settings.Categories.Categories[tc.wantIndex].Name != "Second" || m.SettingsSelectedRow != len(config.GetSettingsMetadata()["Categories"])+tc.wantIndex {
+			t.Fatalf("move %s: categories = %v, row = %d", tc.key.String(), m.Settings.Categories.Categories, m.SettingsSelectedRow)
+		}
+	}
+	updated, _ := m.updateSettings(tea.KeyPressMsg{Code: tea.KeyUp, Mod: tea.ModShift})
+	m = updated.(RootModel)
+	if config.DiffSettings(m.SettingsBaseline, m.Settings).Categories == nil {
+		t.Fatal("reordered categories not included in settings changes")
+	}
+}

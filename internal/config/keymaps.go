@@ -115,20 +115,22 @@ type ExtensionKeyMap struct {
 
 // SettingsKeyMap defines keybindings for the settings view
 type SettingsKeyMap struct {
-	Tab1      key.Binding
-	Tab2      key.Binding
-	Tab3      key.Binding
-	Tab4      key.Binding
-	Tab5      key.Binding
-	NextTab   key.Binding
-	PrevTab   key.Binding
-	Browse    key.Binding
-	Edit      key.Binding
-	Up        key.Binding
-	Down      key.Binding
-	Reset     key.Binding
-	Close     key.Binding
-	ReportBug key.Binding
+	MoveCategoryUp   key.Binding
+	MoveCategoryDown key.Binding
+	Tab1             key.Binding
+	Tab2             key.Binding
+	Tab3             key.Binding
+	Tab4             key.Binding
+	Tab5             key.Binding
+	NextTab          key.Binding
+	PrevTab          key.Binding
+	Browse           key.Binding
+	Edit             key.Binding
+	Up               key.Binding
+	Down             key.Binding
+	Reset            key.Binding
+	Close            key.Binding
+	ReportBug        key.Binding
 }
 
 // SettingsEditorKeyMap defines keybindings for editing a setting
@@ -653,6 +655,8 @@ func DefaultKeyMap() *KeyMap {
 			),
 		},
 		Settings: SettingsKeyMap{
+			MoveCategoryUp:   key.NewBinding(key.WithKeys("shift+up", "K"), key.WithHelp("shift+↑/K", "move up")),
+			MoveCategoryDown: key.NewBinding(key.WithKeys("shift+down", "J"), key.WithHelp("shift+↓/J", "move down")),
 			Tab1: key.NewBinding(
 				key.WithKeys("1"),
 				key.WithHelp("1", "general"),
@@ -855,6 +859,7 @@ func (k SettingsKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Tab1, k.Tab2, k.Tab3, k.Tab4, k.Tab5},
 		{k.PrevTab, k.NextTab, k.Up, k.Down, k.Edit, k.Reset, k.Browse, k.ReportBug, k.Close},
+		{k.MoveCategoryUp, k.MoveCategoryDown},
 	}
 }
 
