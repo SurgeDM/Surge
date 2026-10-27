@@ -54,3 +54,7 @@ type resyncDownloadsMsg struct {
 	statuses []types.DownloadStatus
 	err      error
 }
+
+// A delayed retry belongs to one recovery cycle, not a lifecycle revision:
+// intervening lifecycle events must be included in its fresh snapshot.
+type resyncRetryMsg struct{ generation uint64 }

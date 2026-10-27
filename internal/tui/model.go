@@ -124,6 +124,8 @@ type DownloadModel struct {
 type RootModel struct {
 	lifecycleRevision uint64
 	resyncing         bool
+	resyncGeneration  uint64
+	resyncRetryDelay  time.Duration
 	downloads         []*DownloadModel
 	width             int
 	height            int
