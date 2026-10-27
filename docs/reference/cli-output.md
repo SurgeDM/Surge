@@ -1,7 +1,7 @@
 # CLI output contract
 
-The versioned contract is opt-in. This first version is available for `ls`
-(and its alias `l`), with or without a download ID:
+The versioned contract is opt-in. It is available for `ls` (and its alias `l`)
+with or without a download ID, and for `add` (and its alias `get`):
 
 ```bash
 surge ls --output-version 1
@@ -9,8 +9,8 @@ surge ls --output-version 1 aabbccdd
 ```
 
 No `--json` flag is necessary. If both flags are supplied, the selected output
-version takes precedence. The flag is local to `ls`; other commands have not
-adopted this contract yet. Versioned snapshots cannot be combined with `--watch`.
+version takes precedence. The flag is local to `ls` and `add`; other commands
+have not adopted this contract yet. Versioned snapshots cannot be combined with `--watch`.
 
 ## Compatibility
 
@@ -40,7 +40,8 @@ metadata, without a duplicate warning.
 
 The selected version writes exactly one JSON document to stdout for success or
 an operation failure. A detail result contains one item; an empty result and a
-failure contain `items: []`, never `null`. There is no ANSI styling or human
+listing failure contain `items: []`, never `null`. Submission failures preserve
+per-input receipts, including accepted IDs; see [submission receipts](commands/add.md#submission-receipts-and-automation). There is no ANSI styling or human
 preamble in this output. Operation failures do not print a second diagnostic.
 
 ```json
@@ -109,7 +110,7 @@ raw errors and server response bodies are not copied into the JSON result.
 | 0 | — | Snapshot successfully obtained and written |
 | 1 | `operation_failed` | Unclassified operation, encoding, or output failure |
 | 2 | `invalid_arguments` | Invalid arguments or incompatible flags |
-| 3 | `partial_failure` | Reserved for commands adopting per-item batch outcomes |
+| 3 | `partial_failure` | Submission accepted some inputs but could not confirm acceptance for others |
 | 4 | `not_found` | Download or requested server resource not found |
 | 5 | `unauthorized` | Server returned HTTP 401 or 403 |
 | 6 | `unavailable` | Network connection/DNS failure or HTTP 429, 502, or 503 |
