@@ -32,6 +32,12 @@ steps. They should be your starting point when you know what you want to do.
 See [Download and manage files](../guides/download-files.md) for examples and
 [Run Surge as a service](../guides/run-as-a-service.md) for service commands.
 
+## Output contracts
+
+`surge ls --output-version 1` selects the opt-in versioned JSON result and
+exit-code contract. Existing `ls --json` list/detail shapes remain unchanged.
+See [CLI output contract](cli-output.md) for fields, failure handling, and schema.
+
 ## Root command flags
 
 | Flag | Meaning |
