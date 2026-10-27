@@ -140,8 +140,9 @@ func getWaitStatus(ctx context.Context, client *http.Client, baseURL, token, id 
 	}
 	defer func() { _ = resp.Body.Close() }()
 	if resp.Header.Get("X-Surge-Result-Version") != "1" {
-		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
-			return nil, remoteStatusError(resp.StatusCode, fmt.Errorf("server denied result access"))
+		switch resp.StatusCode {
+		case http.StatusUnauthorized, http.StatusForbidden, http.StatusRequestTimeout, http.StatusTooManyRequests:
+			return nil, remoteStatusError(resp.StatusCode, fmt.Errorf("server returned HTTP %d", resp.StatusCode))
 		}
 		if resp.StatusCode >= 500 && resp.StatusCode != http.StatusNotImplemented {
 			return nil, remoteStatusError(resp.StatusCode, fmt.Errorf("server returned HTTP %d", resp.StatusCode))

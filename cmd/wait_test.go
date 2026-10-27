@@ -138,6 +138,8 @@ func TestWaitRequiresFinalizedResultCapability(t *testing.T) {
 	}{
 		{"", 404, "not found", clioutput.Conflict}, {"", 200, `{}`, clioutput.Conflict},
 		{"", 401, "secret", clioutput.Unauthorized},
+		{"", 408, "secret", clioutput.Timeout},
+		{"", 429, "secret", clioutput.Unavailable},
 		{"1", 200, `{"id":"other","status":"completed","dest_path":"/wrong"}`, clioutput.OperationFailed},
 		{"1", 200, `{"id":"job","status":"completed"}`, clioutput.OperationFailed},
 		{"1", 404, "secret", clioutput.NotFound},
