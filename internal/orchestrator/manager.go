@@ -411,8 +411,9 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 			MinChunkSize: req.MinChunkSize,
 		}
 		// Reject duplicates and shutdown before touching persistence or publishing.
-		// The scheduler keeps workers blocked until preparation completes, so
-		// EventStarted cannot race ahead of the queued record.
+		// Persistence runs under the scheduler lock; the queued event is
+		// published only after AddWithPreparation returns so Publish
+		// backpressure cannot stall the lock, and EventStarted may arrive first.
 		accepted, err := mgr.pool.AddWithPreparation(*cfg, func() error {
 			if err := store.AddToMasterList(types.DownloadRecord{
 				ID:           queuedEvent.DownloadID,
@@ -451,12 +452,6 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 					return fmt.Errorf("persist queued download headers: %w", err)
 				}
 			}
-			if mgr.eventBus != nil {
-				_ = mgr.eventBus.Publish(queuedEvent)
-				if probeResult.Warning != "" {
-					_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: cfg.ID, Message: probeResult.Warning})
-				}
-			}
 			return nil
 		})
 		if err != nil {
@@ -466,6 +461,12 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 		if !accepted {
 			_ = os.Remove(surgePath)
 			return "", "", types.ErrIDExists
+		}
+		if mgr.eventBus != nil {
+			_ = mgr.eventBus.Publish(queuedEvent)
+			if probeResult.Warning != "" {
+				_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: cfg.ID, Message: probeResult.Warning})
+			}
 		}
 
 		return cfg.ID, finalFilename, nil
