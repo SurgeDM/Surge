@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"io"
 	"strings"
 
@@ -187,21 +188,22 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 	line1 := prefix + titleStyle.Render(title)
 	line2 := prefix + descStyle.Render(description)
 	if isSelected {
-		selection := lipgloss.NewStyle().Background(colors.SelectionBackground()).Width(availableWidth + prefixWidth)
-		background := ansi.NewStyle().BackgroundColor(colors.SelectionBackground()).String()
-		shade := func(line string) string {
-			line = selection.Render(line)
-			// Nested styles may reset all attributes, including the row background.
-			line = strings.ReplaceAll(line, "\x1b[0m", "\x1b[0m"+background)
-			line = strings.ReplaceAll(line, ansi.ResetStyle, ansi.ResetStyle+background)
-			line = strings.ReplaceAll(line, "\x1b[49m", "\x1b[49m"+background)
-			return line + ansi.ResetStyle
-		}
-		line1 = shade(line1)
-		line2 = shade(line2)
+		line1 = shadeSelectedRow(line1, availableWidth+prefixWidth, colors.SelectionBackground())
+		line2 = shadeSelectedRow(line2, availableWidth+prefixWidth, colors.SelectionBackground())
 	}
 
 	_, _ = fmt.Fprintf(w, "%s\n%s", line1, line2)
+}
+
+// shadeSelectedRow fills the row while preserving the background across nested styles.
+func shadeSelectedRow(line string, width int, shade color.Color) string {
+	selection := lipgloss.NewStyle().Background(shade).Width(width)
+	background := ansi.NewStyle().BackgroundColor(shade).String()
+	line = selection.Render(line)
+	line = strings.ReplaceAll(line, "\x1b[0m", "\x1b[0m"+background)
+	line = strings.ReplaceAll(line, ansi.ResetStyle, ansi.ResetStyle+background)
+	line = strings.ReplaceAll(line, "\x1b[49m", "\x1b[49m"+background)
+	return line + ansi.ResetStyle
 }
 
 // ShortHelp returns keybindings to show in the mini help view

@@ -342,7 +342,11 @@ func (m RootModel) renderSettingsListViewport(settingsMeta []config.SettingMeta,
 		// Truncate to avoid line wrapping which breaks parent height constraints
 		label = utils.TruncateMiddle(label, maxLabelLen)
 
-		lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+label))
+		line := style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix + label)
+		if idx == selectedRow {
+			line = shadeSelectedRow(line, innerWidth, colors.SettingsSelectionBackground())
+		}
+		lines = append(lines, line)
 	}
 
 	return strings.Join(lines, "\n")

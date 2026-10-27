@@ -296,6 +296,12 @@ func SelectionBackground() color.Color {
 	return lipgloss.Color(blendHex(accent, p.Primary.Background, 0.18))
 }
 
+// SettingsSelectionBackground matches the cyan settings selector.
+func SettingsSelectionBackground() color.Color {
+	p := palette()
+	return lipgloss.Color(blendHex(p.Normal.Cyan, p.Primary.Background, 0.18))
+}
+
 func DarkGray() color.Color { return lipgloss.Color(palette().Primary.Background) }
 
 // State Mappings
