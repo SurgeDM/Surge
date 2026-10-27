@@ -178,18 +178,18 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case selfUpdateResultMsg:
 		if errors.Is(msg.err, selfupdate.ErrNoUpdate) {
-			m.addLogEntry(LogStyleComplete.Render("\u2714 Surge is already up to date"))
+			m.addStyledLogEntry(logComplete, "\u2714 Surge is already up to date")
 			return m, nil
 		}
 		if msg.err != nil {
-			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Update failed: %s", msg.err.Error())))
+			m.addStyledLogEntry(logError, fmt.Sprintf("\u2716 Update failed: %s", msg.err.Error()))
 			return m, nil
 		}
 		versionLabel := "latest version"
 		if msg.Info != nil && msg.Info.LatestVersion != "" {
 			versionLabel = msg.Info.LatestVersion
 		}
-		m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 Installed Surge %s. Restarting...", versionLabel)))
+		m.addStyledLogEntry(logComplete, fmt.Sprintf("\u2714 Installed Surge %s. Restarting...", versionLabel))
 		m.RestartRequested = true
 		m.shuttingDown = true
 		return m, shutdownCmd(m.Service)

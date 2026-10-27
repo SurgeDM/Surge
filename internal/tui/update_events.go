@@ -64,7 +64,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case resumeResultMsg:
 		if msg.err != nil {
-			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Auto-resume failed for %s: %v", msg.id, msg.err)))
+			m.addStyledLogEntry(logError, fmt.Sprintf("\u2716 Auto-resume failed for %s: %v", msg.id, msg.err))
 			return m, nil
 		}
 		if d := m.FindDownloadByID(msg.id); d != nil && (d.paused || !d.started) {
@@ -132,14 +132,14 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.UpdateListItems()
 		}
-		m.addLogEntry(LogStyleError.Render("\u2716 Failed to enqueue download: " + msg.err.Error()))
+		m.addStyledLogEntry(logError, "\u2716 Failed to enqueue download: "+msg.err.Error())
 		m, autoCmd := m.refreshAutoShutdown()
 		return m, autoCmd
 
 	case startupConfigWarningMsg:
 		for _, w := range msg {
 			if w != "" {
-				m.addLogEntry(LogStyleError.Render("\u26a0 " + w))
+				m.addStyledLogEntry(logError, "\u26a0 "+w)
 			}
 		}
 		return m, nil
@@ -186,7 +186,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			d.started = true
 			m.SelectedDownloadID = msg.DownloadID
 			m.UpdateListItems()
-			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
+			m.addStyledLogEntry(logStarted, "\u2b07 Started: "+msg.Filename)
 			return m, tea.Batch(progressCmd, m.spinner.Tick)
 		}
 
@@ -202,7 +202,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			m.downloads = append(m.downloads, newDownload)
 			m.SelectedDownloadID = msg.DownloadID
 			m.UpdateListItems()
-			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
+			m.addStyledLogEntry(logStarted, "\u2b07 Started: "+msg.Filename)
 			return m, m.spinner.Tick
 		}
 
@@ -244,7 +244,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 				} else if msg.Elapsed.Seconds() > 0 {
 					speed = float64(d.Total) / msg.Elapsed.Seconds()
 				}
-				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 Done: %s (%.2f MiB/s)", d.Filename, speed/float64(utils.MiB))))
+				m.addStyledLogEntry(logComplete, fmt.Sprintf("\u2714 Done: %s (%.2f MiB/s)", d.Filename, speed/float64(utils.MiB)))
 			}
 		}
 		m.cachedTotalSpeed = m.calcTotalSpeedBps()
@@ -256,7 +256,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
 			d.err = msg.Err
 			d.done = true
-			m.addLogEntry(LogStyleError.Render("\u2716 Error: " + d.Filename))
+			m.addStyledLogEntry(logError, "\u2716 Error: "+d.Filename)
 			found = true
 		}
 		if !found {
@@ -264,7 +264,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			newDownload.err = msg.Err
 			newDownload.done = true
 			m.downloads = append(m.downloads, newDownload)
-			m.addLogEntry(LogStyleError.Render("\u2716 Error: " + msg.Filename))
+			m.addStyledLogEntry(logError, "\u2716 Error: "+msg.Filename)
 		}
 		m.cachedTotalSpeed = m.calcTotalSpeedBps()
 		m.UpdateListItems()
@@ -279,7 +279,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			d.RateLimit = msg.RateLimit
 			d.RateLimitSet = msg.RateLimitSet
 			d.Speed = 0
-			m.addLogEntry(LogStylePaused.Render("\u23f8 Paused: " + d.Filename))
+			m.addStyledLogEntry(logPaused, "\u23f8 Paused: "+d.Filename)
 		}
 		m.cachedTotalSpeed = m.calcTotalSpeedBps()
 		m.UpdateListItems()
@@ -298,7 +298,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			d.hasEtaSpeed = false
 			d.etaSpeed = 0
 			d.lastETA = 0
-			m.addLogEntry(LogStyleStarted.Render("\u25b6 Resumed: " + d.Filename))
+			m.addStyledLogEntry(logStarted, "\u25b6 Resumed: "+d.Filename)
 		}
 		m.UpdateListItems()
 		return m, m.spinner.Tick
@@ -333,7 +333,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	case types.EventRemoved:
 		if m.removeDownloadByID(msg.DownloadID) {
 			if msg.Filename != "" {
-				m.addLogEntry(LogStyleError.Render("\u2716 Removed: " + msg.Filename))
+				m.addStyledLogEntry(logError, "\u2716 Removed: "+msg.Filename)
 			}
 			m.cachedTotalSpeed = m.calcTotalSpeedBps()
 			m.UpdateListItems()
@@ -342,7 +342,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 
 	case types.EventSystem:
 		if msg.Message != "" {
-			m.addLogEntry(LogStyleStarted.Render("\u2139 " + msg.Message))
+			m.addStyledLogEntry(logStarted, "\u2139 "+msg.Message)
 		}
 		return m, nil
 	}

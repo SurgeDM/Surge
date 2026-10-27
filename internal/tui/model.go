@@ -173,6 +173,7 @@ type RootModel struct {
 	// Notification log system
 	logViewport viewport.Model // Scrollable log viewport
 	logEntries  []string       // Log entries for download events
+	logKinds    []logKind      // Semantic styles, applied using the current palette
 	logFocused  bool           // Whether the log viewport is focused
 
 	// Settings
@@ -278,6 +279,8 @@ type RootModel struct {
 func NewDownloadModel(id string, url string, filename string, total int64) *DownloadModel {
 	// Create dummy state container for compatibility if needed
 	state := engineprogress.New(id, total)
+	p := progress.New(progress.WithSpringOptions(0.5, 0.1))
+	applyProgressTheme(&p)
 	return &DownloadModel{
 		ID:            id,
 		URL:           url,
@@ -285,12 +288,8 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 		FilenameLower: strings.ToLower(filename),
 		Total:         total,
 		StartTime:     time.Now(),
-		progress: progress.New(
-			progress.WithSpringOptions(0.5, 0.1),
-			progress.WithColors(colors.Pink(), colors.Pink()),
-			progress.WithScaled(true),
-		),
-		state: state,
+		progress:      p,
+		state:         state,
 	}
 }
 
@@ -825,21 +824,48 @@ func (m *RootModel) refreshThemeCaches() {
 	m.help.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.LightGray())
 	m.help.Styles.FullKey = lipgloss.NewStyle().Foreground(colors.Pink())
 	m.help.Styles.FullDesc = lipgloss.NewStyle().Foreground(colors.LightGray())
+	m.help.Styles.ShortSeparator = lipgloss.NewStyle().Foreground(colors.Gray())
+	m.help.Styles.FullSeparator = lipgloss.NewStyle().Foreground(colors.Gray())
+	m.help.Styles.Ellipsis = lipgloss.NewStyle().Foreground(colors.Gray())
 	applyListTheme(&m.list)
 	applyFilepickerTheme(&m.filepicker)
+	for i := range m.inputs {
+		applyTextinputTheme(&m.inputs[i])
+	}
+	for _, input := range []*textinput.Model{&m.SettingsInput, &m.searchInput, &m.helpSearchInput, &m.settingsSearchInput, &m.urlUpdateInput} {
+		applyTextinputTheme(input)
+	}
+	for i := range m.catMgrInputs {
+		applyTextinputTheme(&m.catMgrInputs[i])
+	}
+	m.spinner.Style = lipgloss.NewStyle().Foreground(colors.Pink())
+	m.refreshLogViewportContent()
 	m.logoCache = ""
 	if m.graphRenderer != nil {
 		m.graphRenderer.InvalidateCache()
 	}
-	// Rebuild progress bar colors for all existing downloads so the solid pink color
-	// matches the newly loaded palette rather than the one active at creation time.
+	// Recolor existing bars without losing their animation or current percentage.
 	for _, d := range m.downloads {
-		d.progress = progress.New(
-			progress.WithSpringOptions(0.5, 0.1),
-			progress.WithColors(colors.Pink(), colors.Pink()),
-			progress.WithScaled(true),
-		)
+		applyProgressTheme(&d.progress)
 	}
+}
+
+func applyProgressTheme(p *progress.Model) {
+	progress.WithColors(colors.Pink())(p)
+	p.EmptyColor = colors.Gray()
+	p.PercentageStyle = lipgloss.NewStyle().Foreground(colors.Foreground())
+}
+
+func applyTextinputTheme(input *textinput.Model) {
+	styles := input.Styles()
+	for _, state := range []*textinput.StyleState{&styles.Focused, &styles.Blurred} {
+		state.Text = state.Text.Foreground(colors.Foreground())
+		state.Prompt = state.Prompt.Foreground(colors.Cyan())
+		state.Placeholder = state.Placeholder.Foreground(colors.LightGray())
+		state.Suggestion = state.Suggestion.Foreground(colors.LightGray())
+	}
+	styles.Cursor.Color = colors.Pink()
+	input.SetStyles(styles)
 }
 
 func applyFilepickerTheme(fp *filepicker.Model) {
@@ -848,6 +874,7 @@ func applyFilepickerTheme(fp *filepicker.Model) {
 	}
 
 	fp.Styles.Cursor = lipgloss.NewStyle().Foreground(colors.Pink())
+	fp.Styles.DisabledCursor = lipgloss.NewStyle().Foreground(colors.Gray())
 	fp.Styles.Symlink = lipgloss.NewStyle().Foreground(colors.Cyan())
 	fp.Styles.Directory = lipgloss.NewStyle().Foreground(colors.Blue())
 	fp.Styles.File = lipgloss.NewStyle().Foreground(colors.LightGray())

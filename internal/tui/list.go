@@ -250,6 +250,11 @@ func applyListTheme(l *list.Model) {
 	l.Styles.Filter.Focused.Prompt = lipgloss.NewStyle().Foreground(colors.Cyan())
 	l.Styles.Filter.Blurred.Prompt = lipgloss.NewStyle().Foreground(colors.Cyan())
 	l.Styles.Filter.Cursor.Color = colors.Pink()
+	l.Styles.ActivePaginationDot = lipgloss.NewStyle().Foreground(colors.Pink()).SetString("\u2022")
+	l.Styles.InactivePaginationDot = lipgloss.NewStyle().Foreground(colors.Gray()).SetString("\u2022")
+	l.Paginator.ActiveDot = l.Styles.ActivePaginationDot.String()
+	l.Paginator.InactiveDot = l.Styles.InactivePaginationDot.String()
+	l.Styles.ArabicPagination = l.Styles.ArabicPagination.Foreground(colors.LightGray())
 
 	l.Styles.NoItems = lipgloss.NewStyle().
 		Foreground(colors.Cyan()).

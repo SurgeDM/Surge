@@ -56,7 +56,7 @@ func (m *RootModel) acquirePowerInhibitor() {
 	}
 	release, err := m.powerController.AcquireInhibitor(autoShutdownReason)
 	if err != nil {
-		m.addLogEntry(LogStyleError.Render("\u26a0 Auto-shutdown enabled, but sleep prevention failed: " + err.Error()))
+		m.addStyledLogEntry(logError, "\u26a0 Auto-shutdown enabled, but sleep prevention failed: "+err.Error())
 		utils.Debug("Auto-shutdown: acquire inhibitor failed: %v", err)
 		return
 	}
@@ -83,7 +83,7 @@ func (m RootModel) refreshAutoShutdown() (RootModel, tea.Cmd) {
 		}
 		m.autoShutdownArmed = true
 		m.acquirePowerInhibitor()
-		m.addLogEntry(LogStyleStarted.Render("\u23fb Auto-shutdown armed"))
+		m.addStyledLogEntry(logStarted, "\u23fb Auto-shutdown armed")
 		return m, nil
 	}
 
@@ -94,7 +94,7 @@ func (m RootModel) refreshAutoShutdown() (RootModel, tea.Cmd) {
 	m.autoShutdownTriggered = true
 	m.releasePowerInhibitor()
 	m.ensurePowerController()
-	m.addLogEntry(LogStyleStarted.Render("\u23fb All downloads finished; shutting down computer"))
+	m.addStyledLogEntry(logStarted, "\u23fb All downloads finished; shutting down computer")
 
 	controller := m.powerController
 	return m, func() tea.Msg {
@@ -117,7 +117,7 @@ func (m *RootModel) applyAutoShutdownSettingChange() {
 
 	m.autoShutdownArmed = true
 	m.acquirePowerInhibitor()
-	m.addLogEntry(LogStyleStarted.Render("\u23fb Auto-shutdown armed"))
+	m.addStyledLogEntry(logStarted, "\u23fb Auto-shutdown armed")
 }
 
 func (m RootModel) handleAutoShutdownResult(err error) (RootModel, tea.Cmd) {
@@ -125,7 +125,7 @@ func (m RootModel) handleAutoShutdownResult(err error) (RootModel, tea.Cmd) {
 		m.autoShutdownTriggered = false
 		m.autoShutdownRetrying = true
 		m.acquirePowerInhibitor()
-		m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Auto-shutdown failed: %v", err)))
+		m.addStyledLogEntry(logError, fmt.Sprintf("\u2716 Auto-shutdown failed: %v", err))
 		return m, tea.Tick(autoShutdownRetryDelay, func(time.Time) tea.Msg {
 			return autoShutdownRetryMsg{}
 		})

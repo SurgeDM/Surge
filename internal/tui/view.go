@@ -50,18 +50,20 @@ func formatDurationForUI(d time.Duration) string {
 	return fmt.Sprintf("%d:%02d", mins, secs)
 }
 
-// renderModalWithOverlay renders a modal centered on screen with a dark overlay effect
+// renderModalWithOverlay renders a modal centered on the themed surface.
 func (m RootModel) renderModalWithOverlay(modal string) string {
 	// Place modal centered with dark gray background fill for overlay effect
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal,
 		lipgloss.WithWhitespaceChars(" "), // Changed from "░" to avoid terminal rendering glitches
-		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Background(lipgloss.Color("236"))),
+		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Background(colors.Background())),
 	)
 }
 
 func (m RootModel) wrapView(content string) tea.View {
 	v := tea.NewView(content)
 	v.AltScreen = true
+	v.BackgroundColor = colors.Background()
+	v.ForegroundColor = colors.Foreground()
 	return v
 }
 
@@ -447,7 +449,7 @@ func (m RootModel) View() tea.View {
 		Render("\u23fb")
 
 	// Version indicator
-	versionBlue := colors.ThemeColor("#005cc5", "#58a6ff")
+	versionBlue := colors.StateVersion()
 	versionChunk := lipgloss.NewStyle().Foreground(versionBlue).Render(fmt.Sprintf("v%s", m.CurrentVersion))
 
 	rightFooter := lipgloss.NewStyle().PaddingRight(2).Render(lipgloss.JoinHorizontal(lipgloss.Center,

@@ -3,6 +3,7 @@ package colors
 import (
 	"fmt"
 	"image/color"
+	"math"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -242,8 +243,11 @@ func Foreground() color.Color { return lipgloss.Color(palette().Primary.Foregrou
 
 // Semantic Mappings
 func White() color.Color { return lipgloss.Color(palette().Normal.White) }
-func Gray() color.Color  { return lipgloss.Color(palette().Normal.Black) }
-func Red() color.Color   { return lipgloss.Color(palette().Normal.Red) }
+func Gray() color.Color {
+	p := palette()
+	return lipgloss.Color(blendHex(p.Primary.Foreground, p.Primary.Background, 0.35))
+}
+func Red() color.Color { return lipgloss.Color(palette().Normal.Red) }
 func Pink() color.Color {
 	acc := palette().Primary.Accent
 	if acc != "" {
@@ -304,6 +308,31 @@ func SettingsSelectionBackground() color.Color {
 
 func DarkGray() color.Color { return lipgloss.Color(palette().Primary.Background) }
 
+// ContrastForeground chooses the theme's text or background color, whichever
+// is more readable on a filled control.
+func ContrastForeground(background color.Color) color.Color {
+	luminance := func(c color.Color) float64 {
+		r, g, b, _ := c.RGBA()
+		linear := func(v uint32) float64 {
+			s := float64(v) / 65535
+			if s <= 0.04045 {
+				return s / 12.92
+			}
+			return math.Pow((s+0.055)/1.055, 2.4)
+		}
+		return 0.2126*linear(r) + 0.7152*linear(g) + 0.0722*linear(b)
+	}
+	contrast := func(a, b color.Color) float64 {
+		l1, l2 := luminance(a), luminance(b)
+		return (math.Max(l1, l2) + 0.05) / (math.Min(l1, l2) + 0.05)
+	}
+	fg, bg := Foreground(), Background()
+	if contrast(bg, background) > contrast(fg, background) {
+		return bg
+	}
+	return fg
+}
+
 // State Mappings
 func StateError() color.Color       { return Red() }
 func StatePaused() color.Color      { return Orange() }
@@ -331,12 +360,12 @@ func GraphColors() []color.Color {
 		return g
 	}
 
-	// Fallback to brighter vibrant default gradient if not specified in TOML
+	// Derive the fallback from the active palette, including custom light variants.
 	return []color.Color{
-		ThemeColor("#d99ce3", "#700070"), // Bottom
-		ThemeColor("#b658c7", "#9800c0"),
-		ThemeColor("#9934b5", "#c000e8"),
-		ThemeColor("#5b259d", "#ff55ff"), // Top
+		Blue(),
+		Cyan(),
+		Pink(),
+		Magenta(),
 	}
 }
 

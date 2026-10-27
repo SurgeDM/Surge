@@ -50,7 +50,7 @@ func (m RootModel) updateCategoryPicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 				}
 				d.categoryOverride = &category
 				label := selected
-				m.addLogEntry(LogStyleStarted.Render("Category: " + label))
+				m.addStyledLogEntry(logStarted, "Category: "+label)
 				m.UpdateListItems()
 			}
 			m.categoryPickerTarget = ""
@@ -62,7 +62,7 @@ func (m RootModel) updateCategoryPicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 		if label == "" {
 			label = "All"
 		}
-		m.addLogEntry(LogStyleStarted.Render("Filter: " + label))
+		m.addStyledLogEntry(logStarted, "Filter: "+label)
 		m.UpdateListItems()
 		m.state = DashboardState
 	}

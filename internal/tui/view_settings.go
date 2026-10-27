@@ -181,7 +181,7 @@ func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxW
 	var settingsActiveTab lipgloss.Style
 	if m.SettingsFocusedPane == 0 {
 		settingsActiveTab = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("0")).
+			Foreground(colors.ContrastForeground(colors.Magenta())).
 			Background(colors.Magenta()).
 			Bold(true)
 	} else {
@@ -204,7 +204,7 @@ func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxW
 	fallbackStyle := lipgloss.NewStyle().Foreground(colors.Gray())
 	if m.SettingsFocusedPane == 0 {
 		fallbackStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("0")).
+			Foreground(colors.ContrastForeground(colors.Magenta())).
 			Background(colors.Magenta()).
 			Bold(true)
 	}
@@ -331,14 +331,14 @@ func (m RootModel) renderSettingsListViewport(settingsMeta []config.SettingMeta,
 		}
 
 		if meta.Key == "max_global_connections" {
-			style = lipgloss.NewStyle().Foreground(colors.ThemeColor("#aaaaaa", "238"))
+			style = lipgloss.NewStyle().Foreground(colors.LightGray())
 			if idx == selectedRow {
 				if m.SettingsFocusedPane == 1 {
 					prefix = "# "
 					style = lipgloss.NewStyle().Foreground(colors.Gray())
 				} else {
 					prefix = "  "
-					style = lipgloss.NewStyle().Foreground(colors.ThemeColor("#777777", "236"))
+					style = lipgloss.NewStyle().Foreground(colors.Gray())
 				}
 			}
 		}

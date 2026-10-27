@@ -58,7 +58,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				oldStr := strings.ReplaceAll(fmt.Sprintf("%v", oldVal), "\u221E", "0 MiB/s")
 				newStr := strings.ReplaceAll(fmt.Sprintf("%v", newVal), "\u221E", "0 MiB/s")
 
-				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 %s updated: %s \u2192 %s", meta.Label, oldStr, newStr)))
+				m.addStyledLogEntry(logComplete, fmt.Sprintf("\u2714 %s updated: %s \u2192 %s", meta.Label, oldStr, newStr))
 			}
 			m.speedLimitsIsEditing = false
 			m.SettingsInput.Blur()
@@ -148,7 +148,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			oldVal := oldValues[meta.Key]
 
 			if err := m.resetSpeedLimitToDefault(meta.Key, config.DefaultSettings()); err != nil {
-				m.addLogEntry(LogStyleError.Render("\u2716 Reset failed: " + err.Error()))
+				m.addStyledLogEntry(logError, "\u2716 Reset failed: "+err.Error())
 			} else {
 				newValues := m.getSpeedLimitsValues()
 				newVal := newValues[meta.Key]
@@ -156,7 +156,7 @@ func (m RootModel) updateSpeedLimits(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				oldStr := strings.ReplaceAll(fmt.Sprintf("%v", oldVal), "\u221E", "0 MiB/s")
 				newStr := strings.ReplaceAll(fmt.Sprintf("%v", newVal), "\u221E", "0 MiB/s")
 
-				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 %s reset: %s \u2192 %s", meta.Label, oldStr, newStr)))
+				m.addStyledLogEntry(logComplete, fmt.Sprintf("\u2714 %s reset: %s \u2192 %s", meta.Label, oldStr, newStr))
 			}
 		}
 		return m, nil
@@ -285,9 +285,9 @@ func (m RootModel) updateBatchConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		}
 
 		if skipped > 0 {
-			m.addLogEntry(LogStyleStarted.Render(fmt.Sprintf("\u2b07 Added %d downloads from batch (%d duplicates skipped)", added, skipped)))
+			m.addStyledLogEntry(logStarted, fmt.Sprintf("\u2b07 Added %d downloads from batch (%d duplicates skipped)", added, skipped))
 		} else {
-			m.addLogEntry(LogStyleStarted.Render(fmt.Sprintf("\u2b07 Added %d downloads from batch", added)))
+			m.addStyledLogEntry(logStarted, fmt.Sprintf("\u2b07 Added %d downloads from batch", added))
 		}
 		m.pendingBatchURLs = nil
 		m.pendingBatchRequests = nil
@@ -320,9 +320,9 @@ func (m RootModel) updateURLUpdate(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if newURL != "" {
 			if d := m.GetSelectedDownload(); d != nil {
 				if err := m.Service.UpdateURL(d.ID, newURL); err != nil {
-					m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Failed to update URL: %s", err.Error())))
+					m.addStyledLogEntry(logError, fmt.Sprintf("\u2716 Failed to update URL: %s", err.Error()))
 				} else {
-					m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 URL Updated: %s", d.Filename)))
+					m.addStyledLogEntry(logComplete, fmt.Sprintf("\u2714 URL Updated: %s", d.Filename))
 					d.URL = newURL
 				}
 			}
@@ -340,7 +340,7 @@ func (m RootModel) updateURLUpdate(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 func (m RootModel) updateUpdateAvailable(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Update.Install) {
-		m.addLogEntry(LogStyleStarted.Render("\u2b06 Installing Surge update..."))
+		m.addStyledLogEntry(logStarted, "\u2b06 Installing Surge update...")
 		m.state = DashboardState
 		m.UpdateInfo = nil
 		return m, selfUpdateCmd(m.CurrentVersion)
@@ -505,21 +505,21 @@ func (m RootModel) buildCoreBugReportURL() string {
 
 func (m RootModel) tryOpenBugReportURL(reportURL string) RootModel {
 	if reportURL == "" {
-		m.addLogEntry(LogStyleError.Render("\u2716 Could not open browser. Try running surge bug-report from your terminal instead."))
+		m.addStyledLogEntry(logError, "\u2716 Could not open browser. Try running surge bug-report from your terminal instead.")
 		return m
 	}
 
 	if err := openBugReportBrowser(reportURL); err != nil {
 		if err := writeBugReportClipboard(reportURL); err == nil {
-			m.addLogEntry(LogStyleError.Render("\u2716 Could not open browser. URL copied to clipboard."))
+			m.addStyledLogEntry(logError, "\u2716 Could not open browser. URL copied to clipboard.")
 			return m
 		}
 
-		m.addLogEntry(LogStyleError.Render("\u2716 Could not open browser. Try running surge bug-report from your terminal instead."))
+		m.addStyledLogEntry(logError, "\u2716 Could not open browser. Try running surge bug-report from your terminal instead.")
 		return m
 	}
 
-	m.addLogEntry(LogStyleStarted.Render("\U0001F41E Opening browser to file bug report..."))
+	m.addStyledLogEntry(logStarted, "\U0001F41E Opening browser to file bug report...")
 	return m
 }
 
@@ -571,7 +571,7 @@ func (m RootModel) updatePurgeConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 		m.state = DashboardState
 
 		if m.Service == nil {
-			m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
+			m.addStyledLogEntry(logError, "\u2716 Service unavailable")
 			return m, nil
 		}
 
@@ -603,15 +603,15 @@ func (m RootModel) updatePurgeConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) 
 
 		if err != nil {
 			if !errors.Is(err, types.ErrNotFound) {
-				m.addLogEntry(LogStyleError.Render("\u2716 Purge failed: " + err.Error()))
+				m.addStyledLogEntry(logError, "\u2716 Purge failed: "+err.Error())
 				return m, nil
 			}
 		}
 
 		if filename != "" {
-			m.addLogEntry(LogStyleStarted.Render("\u2714 Purged: " + filename))
+			m.addStyledLogEntry(logStarted, "\u2714 Purged: "+filename)
 		} else {
-			m.addLogEntry(LogStyleStarted.Render("\u2714 Purged download"))
+			m.addStyledLogEntry(logStarted, "\u2714 Purged download")
 		}
 
 		m, autoCmd := m.refreshAutoShutdown()
@@ -683,7 +683,7 @@ func (m RootModel) deleteDownload(targetID string) (tea.Model, tea.Cmd) {
 	}
 
 	if m.Service == nil {
-		m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
+		m.addStyledLogEntry(logError, "\u2716 Service unavailable")
 		return m, nil
 	}
 
@@ -693,7 +693,7 @@ func (m RootModel) deleteDownload(targetID string) (tea.Model, tea.Cmd) {
 		if errors.Is(err, types.ErrNotFound) {
 			m.removeDownloadByID(targetID)
 		} else {
-			m.addLogEntry(LogStyleError.Render("\u2716 Delete failed: " + err.Error()))
+			m.addStyledLogEntry(logError, "\u2716 Delete failed: "+err.Error())
 		}
 	} else {
 		m.removeDownloadByID(targetID)
