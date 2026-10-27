@@ -655,8 +655,8 @@ func DefaultKeyMap() *KeyMap {
 			),
 		},
 		Settings: SettingsKeyMap{
-			MoveCategoryUp:   key.NewBinding(key.WithKeys("shift+up", "K"), key.WithHelp("shift+↑/K", "move up")),
-			MoveCategoryDown: key.NewBinding(key.WithKeys("shift+down", "J"), key.WithHelp("shift+↓/J", "move down")),
+			MoveCategoryUp:   key.NewBinding(key.WithKeys("shift+up", "K"), key.WithHelp("shift+\u2191/K", "move up")),
+			MoveCategoryDown: key.NewBinding(key.WithKeys("shift+down", "J"), key.WithHelp("shift+\u2193/J", "move down")),
 			Tab1: key.NewBinding(
 				key.WithKeys("1"),
 				key.WithHelp("1", "general"),

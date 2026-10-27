@@ -43,7 +43,7 @@ func TestSettingsSearchNoMatchesStillShowsSearch(t *testing.T) {
 	m.width, m.height = 120, 40
 	m.settingsSearchQuery = "no-setting-matches-this"
 	text := stripANSI.ReplaceAllString(m.viewSettings(), "")
-	if !strings.Contains(text, "No matching settings") || !strings.Contains(text, "[f] Edit") {
+	if !strings.Contains(text, "No matching settings") || !strings.Contains(text, "[f//] Edit") {
 		t.Fatalf("missing empty search feedback: %s", text)
 	}
 }

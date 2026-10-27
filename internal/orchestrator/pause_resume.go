@@ -105,17 +105,14 @@ func (mgr *LifecycleManager) Resume(id string) error {
 			cfg.ProgressCh = mgr.eventBus.InputCh
 		}
 
-		if !mgr.pool.Add(*cfg) {
-			// A same-ID task won the race; its lifecycle events stand.
+		accepted, _ := mgr.pool.AddWithPreparation(*cfg, func() error {
+			if mgr.eventBus != nil {
+				_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventResumed, DownloadID: id, Filename: cfg.Filename})
+			}
+			return nil
+		})
+		if !accepted {
 			return types.ErrAlreadyActive
-		}
-
-		if mgr.eventBus != nil {
-			_ = mgr.eventBus.Publish(types.DownloadEvent{
-				Type:       types.EventResumed,
-				DownloadID: id,
-				Filename:   cfg.Filename,
-			})
 		}
 		return nil
 	}
@@ -147,17 +144,14 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	if mgr.eventBus != nil {
 		cfg.ProgressCh = mgr.eventBus.InputCh
 	}
-	if !mgr.pool.Add(cfg) {
-		// A same-ID task registered first; its lifecycle events stand.
+	accepted, _ := mgr.pool.AddWithPreparation(cfg, func() error {
+		if mgr.eventBus != nil {
+			_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventResumed, DownloadID: id, Filename: entry.Filename})
+		}
+		return nil
+	})
+	if !accepted {
 		return types.ErrAlreadyActive
-	}
-
-	if mgr.eventBus != nil {
-		_ = mgr.eventBus.Publish(types.DownloadEvent{
-			Type:       types.EventResumed,
-			DownloadID: id,
-			Filename:   entry.Filename,
-		})
 	}
 	return nil
 }
@@ -212,18 +206,15 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 				cfg.ProgressCh = mgr.eventBus.InputCh
 			}
 
-			if !mgr.pool.Add(*cfg) {
-				// Lost a same-ID race; the winner's events stand.
+			accepted, _ := mgr.pool.AddWithPreparation(*cfg, func() error {
+				if mgr.eventBus != nil {
+					_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventResumed, DownloadID: id, Filename: cfg.Filename})
+				}
+				return nil
+			})
+			if !accepted {
 				errs[i] = types.ErrAlreadyActive
 				continue
-			}
-
-			if mgr.eventBus != nil {
-				_ = mgr.eventBus.Publish(types.DownloadEvent{
-					Type:       types.EventResumed,
-					DownloadID: id,
-					Filename:   cfg.Filename,
-				})
 			}
 			errs[i] = nil
 			continue
@@ -275,18 +266,15 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 			cfg.ProgressCh = mgr.eventBus.InputCh
 		}
 
-		if !mgr.pool.Add(cfg) {
-			// A same-ID task registered between the cold load and this add.
+		accepted, _ := mgr.pool.AddWithPreparation(cfg, func() error {
+			if mgr.eventBus != nil {
+				_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventResumed, DownloadID: id, Filename: cfg.Filename})
+			}
+			return nil
+		})
+		if !accepted {
 			errs[idx] = types.ErrAlreadyActive
 			continue
-		}
-
-		if mgr.eventBus != nil {
-			_ = mgr.eventBus.Publish(types.DownloadEvent{
-				Type:       types.EventResumed,
-				DownloadID: id,
-				Filename:   cfg.Filename,
-			})
 		}
 		errs[idx] = nil
 	}
