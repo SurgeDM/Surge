@@ -11,14 +11,10 @@ import (
 var rmCmd = &cobra.Command{
 	Use:     "rm <ID>",
 	Aliases: []string{"kill"},
-	Short:   "Remove a download",
-	Long:    `Remove a download by its ID. Use --clean to remove all completed downloads. Use --clean-failed to remove all failed downloads. Use --purge to also delete the file(s) from disk.`,
+	Short:   "Remove a download record and its unfinished working file",
+	Long:    `Remove a download record and its unfinished working file by ID. Use cancel instead to retain resumable data. Use --clean to remove all completed downloads. Use --clean-failed to remove all failed downloads. Use --purge to also delete the file(s) from disk.`,
 	Args:    cobra.MaximumNArgs(1),
 	RunE: func(cmd *cobra.Command, args []string) error {
-		if err := initializeClientState(); err != nil {
-			return err
-		}
-
 		clean, _ := cmd.Flags().GetBool("clean")
 		cleanFailed, _ := cmd.Flags().GetBool("clean-failed")
 		purge, _ := cmd.Flags().GetBool("purge")
@@ -36,6 +32,13 @@ var rmCmd = &cobra.Command{
 
 		if !clean && !cleanFailed && len(args) == 0 {
 			return fmt.Errorf("provide a download ID, or use --clean or --clean-failed")
+		}
+
+		if (clean || cleanFailed) && len(args) != 0 {
+			return fmt.Errorf("--clean and --clean-failed cannot be used with a download ID")
+		}
+		if err := initializeClientState(); err != nil {
+			return err
 		}
 
 		if clean {
