@@ -1,0 +1,195 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Surge add output version 1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "operation",
+    "ok",
+    "items"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "operation": {
+      "const": "add"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/receipt"
+      }
+    },
+    "error": {
+      "$ref": "#/$defs/failure"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "ok": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "error"
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "error"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "failure": {
+      "type": "object",
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "operation_failed",
+            "invalid_arguments",
+            "partial_failure",
+            "not_found",
+            "unauthorized",
+            "unavailable",
+            "conflict",
+            "timeout"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "required": [
+        "input_index",
+        "status"
+      ],
+      "properties": {
+        "input_index": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "status": {
+          "enum": [
+            "queued",
+            "pending_approval",
+            "not_submitted",
+            "failed",
+            "unknown"
+          ]
+        },
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "request_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "error": {
+          "$ref": "#/$defs/failure"
+        }
+      },
+      "oneOf": [
+        {
+          "properties": {
+            "status": {
+              "const": "queued"
+            }
+          },
+          "required": [
+            "id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "request_id"
+                ]
+              },
+              {
+                "required": [
+                  "error"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "status": {
+              "const": "pending_approval"
+            }
+          },
+          "required": [
+            "request_id"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "id"
+                ]
+              },
+              {
+                "required": [
+                  "error"
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "properties": {
+            "status": {
+              "enum": [
+                "not_submitted",
+                "failed",
+                "unknown"
+              ]
+            }
+          },
+          "required": [
+            "error"
+          ],
+          "not": {
+            "anyOf": [
+              {
+                "required": [
+                  "id"
+                ]
+              },
+              {
+                "required": [
+                  "request_id"
+                ]
+              }
+            ]
+          }
+        }
+      ]
+    }
+  }
+}
