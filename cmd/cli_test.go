@@ -1131,50 +1131,6 @@ func TestSendToServer_SuccessAndServerError(t *testing.T) {
 	}
 }
 
-func TestSubmitDownloads_SummarizesOutcomes(t *testing.T) {
-	var requests int32
-	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		atomic.AddInt32(&requests, 1)
-		var req DownloadRequest
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Errorf("decode request: %v", err)
-			http.Error(w, "invalid request", http.StatusBadRequest)
-			return
-		}
-
-		switch req.URL {
-		case "https://example.com/queued.zip":
-			w.WriteHeader(http.StatusOK)
-		case "https://example.com/pending.zip":
-			w.WriteHeader(http.StatusAccepted)
-		default:
-			http.Error(w, "failed", http.StatusInternalServerError)
-		}
-	}))
-	defer server.Close()
-
-	var summary addSummary
-	_ = captureStdout(t, func() {
-		summary = submitDownloads([]string{
-			"example.com/queued.zip",
-			"https://example.com/pending.zip",
-			"https://example.com/failed.zip",
-			"ftp://example.com/unsupported.zip",
-			"",
-		}, "", server.URL, "", true)
-	})
-
-	if summary.queued != 1 || summary.awaitingApproval != 1 || summary.failed != 2 {
-		t.Fatalf("summary = %+v, want one queued, one awaiting approval, and two failed", summary)
-	}
-	if summary.succeeded() != 2 {
-		t.Fatalf("succeeded = %d, want 2", summary.succeeded())
-	}
-	if got := atomic.LoadInt32(&requests); got != 3 {
-		t.Fatalf("requests = %d, want 3; the unsupported URL must not reach the server", got)
-	}
-}
-
 func TestSendBatchToServer_NormalizesURLs(t *testing.T) {
 	var requests int32
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

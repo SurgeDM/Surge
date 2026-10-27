@@ -9,7 +9,7 @@ import (
 const SchemaVersion = 1
 
 // Result has the same envelope for list, detail, empty, and failure results.
-// Items is always an array, including when the operation fails.
+// Items is always an array. Failed batch operations retain per-input receipts.
 type Result[T any] struct {
 	SchemaVersion int      `json:"schema_version"`
 	Operation     string   `json:"operation"`
@@ -28,6 +28,14 @@ func Success[T any](operation string, items []T) Result[T] {
 func Failed(operation string, err error) Result[any] {
 	failure := Describe(err)
 	return Result[any]{SchemaVersion: SchemaVersion, Operation: operation, Items: []any{}, Error: &failure}
+}
+
+// FailedItems preserves accepted receipts when a batch also contains failures.
+func FailedItems[T any](operation string, items []T, err error) Result[T] {
+	result := Success(operation, items)
+	failure := Describe(err)
+	result.OK, result.Error = false, &failure
+	return result
 }
 
 // WriteError means output may already have been partially written. Callers must

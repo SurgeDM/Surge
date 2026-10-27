@@ -13,6 +13,16 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// commandResultError carries receipts from an operation that partially failed.
+// The process boundary writes this result once and preserves its exit status.
+type commandResultError struct {
+	result any
+	cause  error
+}
+
+func (e *commandResultError) Error() string { return e.cause.Error() }
+func (e *commandResultError) Unwrap() error { return e.cause }
+
 // Run is the process boundary: commands return errors; this function reports
 // them once and selects the exit status. The caller owns process termination.
 func Run(args []string, stdout, stderr io.Writer) int {
@@ -47,7 +57,12 @@ func runCommand(root *cobra.Command, args []string, stdout, stderr io.Writer) in
 		return 1
 	}
 	if version == "1" {
-		if writeErr := clioutput.WriteJSON(stdout, clioutput.Failed(command.Name(), err)); writeErr != nil {
+		result := any(clioutput.Failed(command.Name(), err))
+		var resultError *commandResultError
+		if errors.As(err, &resultError) {
+			result = resultError.result
+		}
+		if writeErr := clioutput.WriteJSON(stdout, result); writeErr != nil {
 			_, _ = fmt.Fprintln(stderr, writeErr)
 			return 1
 		}
