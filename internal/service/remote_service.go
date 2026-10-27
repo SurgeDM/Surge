@@ -415,7 +415,7 @@ func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan
 			return
 		}
 
-		sendStreamStatus(ch, fmt.Sprintf("Remote event stream disconnected: %v; reconnecting", err))
+		sendStreamStatus(ctx, ch, fmt.Sprintf("Remote event stream disconnected: %v; reconnecting", err))
 		backoff := time.Second
 		for {
 			timer := time.NewTimer(backoff)
@@ -428,10 +428,10 @@ func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan
 
 			resp, err = s.openSSE(ctx)
 			if err == nil {
-				sendStreamStatus(ch, "Remote event stream reconnected")
+				sendStreamStatus(ctx, ch, "Remote event stream reconnected")
 				break
 			}
-			sendStreamStatus(ch, fmt.Sprintf("Remote event stream reconnect failed: %v; retrying in %s", err, backoff))
+			sendStreamStatus(ctx, ch, fmt.Sprintf("Remote event stream reconnect failed: %v; retrying in %s", err, backoff))
 			if backoff < 30*time.Second {
 				backoff *= 2
 			}
@@ -542,10 +542,10 @@ func (s *RemoteDownloadService) consumeSSE(ctx context.Context, ch chan types.Do
 	}
 }
 
-func sendStreamStatus(ch chan types.DownloadEvent, message string) {
+func sendStreamStatus(ctx context.Context, ch chan types.DownloadEvent, message string) {
 	select {
-	case ch <- types.DownloadEvent{Type: types.EventSystem, Message: message}:
-	default:
+	case ch <- types.DownloadEvent{Type: types.EventSystem, Message: message, ResyncRequired: true}:
+	case <-ctx.Done():
 	}
 }
 

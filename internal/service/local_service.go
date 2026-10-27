@@ -153,12 +153,58 @@ func (s *LocalDownloadService) PatchSettings(patch config.SettingsPatch) (*confi
 	return s.lifecycle.GetSettings(), nil
 }
 
+// StreamLifecycleEvents is the internal reliable persistence subscription.
+func (s *LocalDownloadService) StreamLifecycleEvents(ctx context.Context) (<-chan types.DownloadEvent, func(), error) {
+	if s.lifecycle == nil || s.lifecycle.GetEventBus() == nil {
+		return nil, nil, fmt.Errorf("event bus not initialized")
+	}
+	stream, cleanup := s.lifecycle.GetEventBus().SubscribeLifecycle()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	stop := context.AfterFunc(ctx, cleanup)
+	return stream, func() { stop(); cleanup() }, nil
+}
+
 func (s *LocalDownloadService) StreamEvents(ctx context.Context) (<-chan types.DownloadEvent, func(), error) {
 	if s.lifecycle == nil || s.lifecycle.GetEventBus() == nil {
 		return nil, nil, fmt.Errorf("event bus not initialized")
 	}
-	ch, cleanup := s.lifecycle.GetEventBus().Subscribe()
-	return ch, cleanup, nil
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	bus := s.lifecycle.GetEventBus()
+	stream, cleanup := bus.Subscribe()
+	out := make(chan types.DownloadEvent)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		defer close(out)
+		defer cancel()
+		defer func() { cleanup() }()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-stream:
+				if !ok {
+					cleanup()
+					if bus.Closed() {
+						return
+					}
+					stream, cleanup = bus.Subscribe()
+					msg = types.DownloadEvent{Type: types.EventSystem, ResyncRequired: true, Message: "Live updates fell behind; refreshing download state. Pending approval requests may need resubmission."}
+				}
+				select {
+				case out <- msg:
+				case <-ctx.Done():
+					return
+				}
+			}
+		}
+	}()
+	return out, func() { cancel(); <-done }, nil
 }
 
 func (s *LocalDownloadService) Publish(msg types.DownloadEvent) error {

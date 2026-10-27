@@ -69,7 +69,8 @@ type DownloadEvent struct {
 	BatchEvents []DownloadEvent `json:"batch_events,omitempty"`
 
 	// System
-	Message string `json:"message,omitempty"`
+	Message        string `json:"message,omitempty"`
+	ResyncRequired bool   `json:"resync_required,omitempty"`
 }
 
 func (m DownloadEvent) MarshalJSON() ([]byte, error) {

@@ -79,7 +79,14 @@ func (pa *ProgressAggregator) reportProgressLoop() {
 		case <-ticker.C:
 		}
 
-		if pa.pool == nil {
+		if pa.pool == nil || pa.eventBus == nil {
+			continue
+		}
+		if !pa.eventBus.HasObservers() {
+			clear(lastSpeeds)
+			clear(lastChunkSnapshot)
+			clear(lastDownloaded)
+			clear(lastUpdateTime)
 			continue
 		}
 		alpha := pa.getSpeedEmaAlpha()
