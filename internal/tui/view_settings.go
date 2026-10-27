@@ -13,6 +13,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/utils"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/lipgloss/v2"
 )
 
@@ -232,7 +233,8 @@ func (m RootModel) renderSettingsHelp(width int) string {
 	help.SetWidth(width)
 	helpText := help.View(m.keys.Settings)
 	if !m.SettingsIsEditing && m.settingsSearchQuery == "" && m.SettingsFocusedPane == 1 && m.getCurrentSettingType() == config.TypeCustomCategory {
-		helpText += "  " + m.keys.Settings.MoveCategoryUp.Help().Key + "/" + m.keys.Settings.MoveCategoryDown.Help().Key + " reorder"
+		reorder := help.ShortHelpView([]key.Binding{m.keys.Settings.MoveCategoryUp, m.keys.Settings.MoveCategoryDown})
+		helpText = lipgloss.JoinVertical(lipgloss.Center, helpText, reorder)
 	}
 	if m.SettingsIsEditing {
 		helpText = help.View(m.keys.SettingsEditor)
@@ -287,11 +289,26 @@ func (m RootModel) renderSettingsListViewport(settingsMeta []config.SettingMeta,
 		selectedRow = len(settingsMeta) - 1
 	}
 
-	start := selectedRow - (rows / 2)
+	// Keep the category toggle separate from the editable rules without adding
+	// a navigable row to the settings model.
+	visualRows := make([]int, 0, len(settingsMeta)+1)
+	selectedVisualRow := selectedRow
+	for i, meta := range settingsMeta {
+		if m.settingsSearchQuery == "" && i > 0 && settingsMeta[i-1].Key == "category_enabled" &&
+			(meta.Type == config.TypeCustomCategory || meta.Type == config.TypeCustomCategoryAdd) {
+			visualRows = append(visualRows, -1)
+			if selectedRow >= i {
+				selectedVisualRow++
+			}
+		}
+		visualRows = append(visualRows, i)
+	}
+
+	start := selectedVisualRow - (rows / 2)
 	if start < 0 {
 		start = 0
 	}
-	maxStart := len(settingsMeta) - rows
+	maxStart := len(visualRows) - rows
 	if maxStart < 0 {
 		maxStart = 0
 	}
@@ -301,12 +318,12 @@ func (m RootModel) renderSettingsListViewport(settingsMeta []config.SettingMeta,
 
 	lines := make([]string, 0, rows)
 	for i := 0; i < rows; i++ {
-		idx := start + i
-		if idx >= len(settingsMeta) {
+		visualIndex := start + i
+		if visualIndex >= len(visualRows) || visualRows[visualIndex] < 0 {
 			lines = append(lines, "")
 			continue
 		}
-
+		idx := visualRows[visualIndex]
 		meta := settingsMeta[idx]
 		prefix := "  "
 		style := lipgloss.NewStyle().Foreground(colors.LightGray())
