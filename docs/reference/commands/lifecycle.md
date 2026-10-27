@@ -11,7 +11,9 @@ surge resume --all
 Pause and cancel request a stop while retaining the record, working file, and
 resume metadata. Cancel uses the existing pause/checkpoint mechanism: the final
 stopped state is `paused`, and `resume` can restart it. Cancel does not create a
-second kind of resume state. Repeating pause/cancel on an already stopped or
+second kind of resume state. The daemon's existing startup auto-resume policy
+also applies to these paused jobs; start it with `--no-resume` to keep them stopped
+after restart. Repeating pause/cancel on an already stopped or
 completed job succeeds without changing the record. Completion wins over a late
 pause acknowledgment. Resume while active, pausing, or already completed returns
 HTTP 409 (v1 `conflict`). A missing pause/resume/cancel target returns HTTP 404.
