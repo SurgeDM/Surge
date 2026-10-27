@@ -20,15 +20,22 @@ silently losing a terminal transition. Other observers and persistence continue.
 
 Local service streams resubscribe after overflow and send a system event with
 `resync_required: true`. Remote service reconnect status events carry the same
-flag and are cancellation-aware. The TUI queries authoritative state, reconciles
+flag only after reconnection and are cancellation-aware. The TUI queries
+authoritative state, reconciles
 removed/completed jobs, and rejects a snapshot if a lifecycle transition occurred
-while it loaded. This is recovery from event loss, not a durable replay protocol.
+while it loaded. Transient snapshot failures keep recovery pending with exponential
+backoff from one to thirty seconds, logging once per outage. Authentication and
+protocol failures do not retry automatically. A successful snapshot also refreshes
+the cached aggregate speed. This is recovery from event loss, not a durable
+replay protocol.
 Transient logs and approval prompts cannot be reconstructed from job history;
 the recovery notice tells users that pending approval requests may need resubmission.
 Other SSE consumers should refresh `/list` after reconnect or a resync requirement.
 
 SSE batches have a renewed ten-second write deadline where the response writer
-supports deadlines. Write/flush errors terminate the handler and clean up its
+supports deadlines. Successful flushes clear the deadline while the stream is
+idle, so the next batch does not inherit an expired deadline. Write/flush errors
+terminate the handler and clean up its
 subscription. Ordinary consoles may block their own writer, but cannot hold the
 bus or persistence worker. Progress aggregation skips chunk/rate snapshots while
 there are no observers.
