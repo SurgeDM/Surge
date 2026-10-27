@@ -67,7 +67,8 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Auto-resume failed for %s: %v", msg.id, msg.err)))
 			return m, nil
 		}
-		if d := m.FindDownloadByID(msg.id); d != nil {
+		if d := m.FindDownloadByID(msg.id); d != nil && (d.paused || !d.started) {
+			d.started = false
 			d.done = false
 			d.err = nil
 			d.paused = false
@@ -206,7 +207,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 		}
 
 	case types.EventProgress:
-		if d := m.FindDownloadByID(msg.DownloadID); d != nil && !d.done && !d.paused {
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil && d.started && !d.done && !d.paused {
 			d.Speed = msg.Speed
 		}
 		m.cachedTotalSpeed = m.calcTotalSpeedBps()
@@ -216,7 +217,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	case types.EventBatchProgress:
 		var cmds []tea.Cmd
 		for _, bm := range msg.BatchEvents {
-			if d := m.FindDownloadByID(bm.DownloadID); d != nil && !d.done && !d.paused {
+			if d := m.FindDownloadByID(bm.DownloadID); d != nil && d.started && !d.done && !d.paused {
 				d.Speed = bm.Speed
 			}
 		}
@@ -286,6 +287,9 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 
 	case types.EventResumed:
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.started = false
+			d.Speed = 0
+			d.Connections = 0
 			d.done = false
 			d.err = nil
 			d.paused = false
@@ -302,9 +306,17 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	case types.EventQueued:
 		found := false
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.started = false
+			d.resuming = false
+			d.paused = false
+			d.pausing = false
+			d.Speed = 0
+			d.Connections = 0
 			d.RateLimit = msg.RateLimit
 			d.RateLimitSet = msg.RateLimitSet
 			found = true
+			m.cachedTotalSpeed = m.calcTotalSpeedBps()
+			m.UpdateListItems()
 		}
 		if !found {
 			newDownload := NewDownloadModel(msg.DownloadID, msg.URL, msg.Filename, 0)

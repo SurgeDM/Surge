@@ -190,6 +190,9 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 					d.paused = false
 					d.pausing = false
 					d.resuming = true
+					d.started = false
+					d.Speed = 0
+					d.Connections = 0
 					m.UpdateListItems()
 					return m, m.spinner.Tick
 				}

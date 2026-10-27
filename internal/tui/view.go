@@ -491,13 +491,14 @@ func (m RootModel) View() tea.View {
 	}
 
 	// Pre-compute details content to avoid double-computation and width mismatches
-	var detailContent string
+	var detailContent, detailStatus string
 	detailWidth := layout.RightWidth
 	if layout.HideRightColumn {
 		detailWidth = layout.LeftWidth
 	}
 	if selected != nil {
-		detailContent = renderFocusedDetails(selected, detailWidth-components.BorderFrameWidth, m.spinner.View(), m.keys)
+		detailStatus = " " + getDownloadStatus(selected, m.spinner.View()) + " "
+		detailContent = renderFocusedDetails(selected, detailWidth-components.BorderFrameWidth, m.spinner.View())
 	} else {
 		detailContent = renderEmptyMessage(detailWidth-components.BorderFrameWidth, layout.DetailHeight-components.BorderFrameHeight, "No download selected")
 	}
@@ -547,7 +548,7 @@ func (m RootModel) View() tea.View {
 		} else if layout.GraphHeight > 0 {
 			layout.DetailHeight += layout.GraphHeight
 		}
-		detailBox := renderBtopBox("", PaneTitleStyle.Render(" File Details "), detailContent, layout.RightWidth, layout.DetailHeight, colors.Gray())
+		detailBox := renderBtopBox(detailStatus, PaneTitleStyle.Render(" File Details "), detailContent, layout.RightWidth, layout.DetailHeight, colors.Gray())
 
 		var rightParts []string
 		if showGraph {
@@ -566,7 +567,7 @@ func (m RootModel) View() tea.View {
 	var body string
 	if layout.HideRightColumn {
 		if layout.VerticalLayout {
-			detailBox := renderBtopBox("", PaneTitleStyle.Render(" File Details "), detailContent, layout.LeftWidth, layout.DetailHeight, colors.Gray())
+			detailBox := renderBtopBox(detailStatus, PaneTitleStyle.Render(" File Details "), detailContent, layout.LeftWidth, layout.DetailHeight, colors.Gray())
 			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox, detailBox)
 		} else {
 			body = lipgloss.JoinVertical(lipgloss.Left, headerBox, listBox)
@@ -602,11 +603,7 @@ func (m RootModel) viewCompactQuitConfirm() string {
 }
 
 // Helper to render the detailed info pane
-func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps ...*config.KeyMap) string {
-	keys := config.DefaultKeyMap()
-	if len(keymaps) > 0 && keymaps[0] != nil {
-		keys = keymaps[0]
-	}
+func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	pct := 0.0
 	if d.Total > 0 {
 		pct = float64(d.Downloaded) / float64(d.Total)
@@ -630,16 +627,6 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 		Width(contentWidth).
 		Padding(0, 1)
 
-	// --- 1. Status Section ---
-	statusStr := getDownloadStatus(d, spinnerView)
-	statusStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colors.Gray()).
-		Width(contentWidth).
-		Align(lipgloss.Center)
-
-	statusBox := statusStyle.Render(statusStr)
-
 	// --- 2. File Information Section ---
 	displayFilename := d.Filename
 	if displayFilename == "" || displayFilename == "Queued" {
@@ -656,41 +643,22 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 	if innerWidth < 0 {
 		innerWidth = 0
 	}
-	labels := []string{"URL:", "File:", "Path:", "ID:"}
-	shortcuts := []string{keys.Dashboard.CopyURL.Help().Key, "", keys.Dashboard.OpenFolder.Help().Key, keys.Dashboard.CopyID.Help().Key}
-	if d.done && d.err == nil {
-		shortcuts[1] = keys.Dashboard.OpenFile.Help().Key
-	}
-	shortcutWidth := 0
-	for i, shortcut := range shortcuts {
-		if shortcut != "" {
-			shortcuts[i] = "[" + shortcut + "]"
-		}
-		if width := lipgloss.Width(shortcuts[i]) + 1; width > shortcutWidth {
-			shortcutWidth = width
-		}
-	}
-	const nameWidth = 6
-	labelWidth := nameWidth + shortcutWidth
-	fieldLabel := func(index int) string {
-		return lipgloss.NewStyle().Foreground(colors.LightGray()).Width(nameWidth).Render(labels[index]) +
-			lipgloss.NewStyle().Foreground(colors.Gray()).Width(shortcutWidth).Render(shortcuts[index])
-	}
-
+	const labelWidth = 6
 	valueWidth := innerWidth - labelWidth
 	if valueWidth < 5 {
-		valueWidth = 5 // Minimum reasonable width
+		valueWidth = 5
+	}
+	field := func(label, value string, style lipgloss.Style) string {
+		labelText := lipgloss.NewStyle().Foreground(colors.LightGray()).Width(labelWidth).Render(label)
+		valueText := style.Width(valueWidth).MaxWidth(valueWidth).Height(2).Render(utils.TruncateTwoLines(value, valueWidth))
+		return lipgloss.JoinHorizontal(lipgloss.Top, labelText, valueText)
 	}
 
-	urlText := lipgloss.NewStyle().Width(valueWidth).MaxWidth(valueWidth).Render(detailValueStyle.Hyperlink(d.URL).Render(utils.TruncateMiddle(d.URL, valueWidth)))
-
 	fileInfoContent := lipgloss.JoinVertical(lipgloss.Left,
-		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(3), detailValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.WrapText(d.ID, valueWidth))),
-		"",
-		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(1), detailValueStyle.Bold(true).Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayFilename, valueWidth))),
-		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(2), detailValueStyle.Width(valueWidth).MaxWidth(valueWidth).Render(utils.TruncateTwoLines(displayPath, valueWidth))),
-		"",
-		lipgloss.JoinHorizontal(lipgloss.Top, fieldLabel(0), urlText),
+		field("File:", displayFilename, detailValueStyle.Bold(true)),
+		field("Path:", displayPath, detailValueStyle),
+		field("ID:", d.ID, detailValueStyle),
+		field("URL:", d.URL, detailValueStyle.Hyperlink(d.URL)),
 	)
 
 	fileSection := sectionStyle.Render(fileInfoContent)
@@ -854,7 +822,6 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string, keymaps .
 	// Use explicit calls to insert divider only where needed
 	var parts []string
 
-	parts = append(parts, statusBox)
 	parts = append(parts, fileSection)
 	parts = append(parts, divider)
 	if progSection != "" {
@@ -884,7 +851,7 @@ func getDownloadStatus(d *DownloadModel, spinnerView string) string {
 	if d.pausing {
 		return lipgloss.NewStyle().Foreground(colors.StatePaused()).Render(spinnerView + " Pausing...")
 	}
-	if d.resuming {
+	if d.resuming && d.started {
 		return lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(spinnerView + " Resuming...")
 	}
 	status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming)
@@ -909,7 +876,7 @@ func (m RootModel) ComputeViewStats() ViewStats {
 	for _, d := range m.downloads {
 		if d.done {
 			stats.DownloadedCount++
-		} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming) {
+		} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.started) {
 			stats.ActiveCount++
 		} else {
 			stats.QueuedCount++

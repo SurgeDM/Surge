@@ -16,7 +16,7 @@ import (
 
 func (m *RootModel) processProgressMsg(msg types.DownloadEvent) tea.Cmd {
 	d := m.FindDownloadByID(msg.DownloadID)
-	if d == nil || d.done || d.paused {
+	if d == nil || !d.started || d.done || d.paused {
 		return nil
 	}
 

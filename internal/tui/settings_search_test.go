@@ -58,13 +58,7 @@ func TestContextHintsUseConfiguredKeys(t *testing.T) {
 	if !strings.Contains(m.renderLogBox(70, 10), "[ctrl+l]") {
 		t.Fatal("log hint ignores configured binding")
 	}
-	d := &DownloadModel{done: true, Filename: "file", Destination: "/tmp/file", URL: "https://example.com/file"}
-	text := stripANSI.ReplaceAllString(renderFocusedDetails(d, 100, "", m.keys), "")
-	for _, hint := range []string{"URL:  [ctrl+y]", "File: [o]", "Path: [shift+o]", "ID:   [ctrl+i]"} {
-		if !strings.Contains(text, hint) {
-			t.Fatalf("missing hint %q: %s", hint, text)
-		}
-	}
+
 }
 
 func TestGlobalSettingsSearchChangesValueInOriginalCategory(t *testing.T) {

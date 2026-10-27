@@ -36,6 +36,7 @@ func TestDownloadItem_Description(t *testing.T) {
 			name: "Resuming State",
 			model: &DownloadModel{
 				resuming: true,
+				started:  true,
 			},
 			expected: "\u280b Resuming...",
 		},

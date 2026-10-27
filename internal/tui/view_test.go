@@ -103,6 +103,7 @@ func TestGetDownloadStatus(t *testing.T) {
 			name: "Resuming State",
 			model: &DownloadModel{
 				resuming: true,
+				started:  true,
 			},
 			expected: "⠋ Resuming...",
 		},
@@ -827,5 +828,42 @@ func TestUpdateETA_ResetOnResume(t *testing.T) {
 	d.UpdateETA()
 	if d.etaSpeed != 5*1024*1024 {
 		t.Fatalf("expected ETA speed to re-seed entirely at new speed, got %v", d.etaSpeed)
+	}
+}
+
+func TestFileDetailsFieldOrder(t *testing.T) {
+	d := NewDownloadModel("id", "https://example.com/file", "file", 100)
+	d.Destination = "/tmp/file"
+	text := ansiEscapeRE.ReplaceAllString(renderFocusedDetails(d, 100, ""), "")
+	previous := -1
+	for _, label := range []string{"File:", "Path:", "ID:", "URL:"} {
+		index := strings.Index(text, label)
+		if index <= previous {
+			t.Fatalf("field %q out of order in details: %s", label, text)
+		}
+		previous = index
+	}
+}
+
+func TestFileDetailsTwoLinesAndNoKeyboardHints(t *testing.T) {
+	d := NewDownloadModel(strings.Repeat("i", 80), "https://example.com/"+strings.Repeat("u", 80), strings.Repeat("f", 80), 100)
+	d.Destination = "/tmp/" + strings.Repeat("p", 80) + "/file"
+	text := ansiEscapeRE.ReplaceAllString(renderFocusedDetails(d, 50, ""), "")
+	lines := strings.Split(text, "\n")
+	positions := make([]int, 0, 4)
+	for i, line := range lines {
+		for _, label := range []string{"File:", "Path:", "ID:", "URL:"} {
+			if strings.Contains(line, label) {
+				positions = append(positions, i)
+			}
+		}
+	}
+	if len(positions) != 4 || positions[1]-positions[0] != 2 || positions[2]-positions[1] != 2 || positions[3]-positions[2] != 2 {
+		t.Fatalf("expected two lines per field: %s", text)
+	}
+	for _, hint := range []string{"[o]", "[shift+o]", "[ctrl+y]", "[ctrl+i]"} {
+		if strings.Contains(text, hint) {
+			t.Fatalf("unexpected keyboard hint %q: %s", hint, text)
+		}
 	}
 }
