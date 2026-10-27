@@ -291,28 +291,7 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 	}
 	entry, err := store.GetDownload(id)
 	if err == nil && entry != nil {
-		var progress float64
-		if entry.TotalSize > 0 {
-			progress = float64(entry.Downloaded) * 100 / float64(entry.TotalSize)
-		} else if entry.Status == "completed" {
-			progress = 100.0
-		}
-		status := types.DownloadStatus{
-			ID:           entry.ID,
-			URL:          entry.URL,
-			Filename:     entry.Filename,
-			DestPath:     entry.DestPath,
-			TotalSize:    entry.TotalSize,
-			Downloaded:   entry.Downloaded,
-			Progress:     progress,
-			Speed:        completedSpeedBps(*entry),
-			Status:       entry.Status,
-			Error:        entry.Error,
-			TimeTaken:    entry.TimeTaken,
-			AvgSpeed:     entry.AvgSpeed,
-			RateLimit:    entry.RateLimit,
-			RateLimitSet: entry.RateLimitSet,
-		}
+		status := statusFromDownloadRecord(*entry)
 		return &status, nil
 	}
 	return nil, types.ErrNotFound
@@ -512,4 +491,29 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 		}
 	}
 	return statuses, nil
+}
+
+func statusFromDownloadRecord(entry types.DownloadRecord) types.DownloadStatus {
+	var progress float64
+	if entry.TotalSize > 0 {
+		progress = float64(entry.Downloaded) * 100 / float64(entry.TotalSize)
+	} else if entry.Status == "completed" {
+		progress = 100.0
+	}
+	return types.DownloadStatus{
+		ID:           entry.ID,
+		URL:          entry.URL,
+		Filename:     entry.Filename,
+		DestPath:     entry.DestPath,
+		TotalSize:    entry.TotalSize,
+		Downloaded:   entry.Downloaded,
+		Progress:     progress,
+		Speed:        completedSpeedBps(entry),
+		Status:       entry.Status,
+		Error:        entry.Error,
+		TimeTaken:    entry.TimeTaken,
+		AvgSpeed:     entry.AvgSpeed,
+		RateLimit:    entry.RateLimit,
+		RateLimitSet: entry.RateLimitSet,
+	}
 }
