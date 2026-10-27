@@ -26,6 +26,9 @@ func stateProgress(state interface{}) *engineprogress.DownloadProgress {
 
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if ev, ok := msg.(types.DownloadEvent); ok {
+		if ev.Type != types.EventProgress && ev.Type != types.EventBatchProgress && ev.Type != types.EventSystem {
+			m.lifecycleRevision++
+		}
 		model, cmd := m.handleDownloadEvent(ev)
 		root, ok := model.(RootModel)
 		if !ok {
@@ -36,6 +39,23 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case resyncDownloadsMsg:
+		if msg.revision != m.lifecycleRevision {
+			return m, m.resyncDownloadsCmd()
+		}
+		m.resyncing = false
+		if msg.err != nil {
+			m.addLogEntry(LogStyleError.Render("Could not refresh download state: " + msg.err.Error()))
+			return m, nil
+		}
+		downloads := make([]*DownloadModel, 0, len(msg.statuses))
+		for _, status := range msg.statuses {
+			downloads = append(downloads, downloadModelFromStatus(status, false))
+		}
+		m.downloads = downloads
+		m.UpdateListItems()
+		return m, nil
+
 	case autoShutdownCheckMsg:
 		return m.refreshAutoShutdown()
 
@@ -332,8 +352,22 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 		if msg.Message != "" {
 			m.addLogEntry(LogStyleStarted.Render("\u2139 " + msg.Message))
 		}
+		if msg.ResyncRequired && m.Service != nil && !m.resyncing {
+			m.resyncing = true
+			return m, m.resyncDownloadsCmd()
+		}
 		return m, nil
 	}
 
 	return m, nil
+}
+
+// A snapshot is applied only if no lifecycle transition occurred while it was
+// loading. Progress updates do not force retries or add polling to normal use.
+func (m RootModel) resyncDownloadsCmd() tea.Cmd {
+	service, revision := m.Service, m.lifecycleRevision
+	return func() tea.Msg {
+		statuses, err := service.List()
+		return resyncDownloadsMsg{statuses: statuses, err: err, revision: revision}
+	}
 }
