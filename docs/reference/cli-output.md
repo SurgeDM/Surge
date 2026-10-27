@@ -1,7 +1,7 @@
 # CLI output contract
 
 The versioned contract is opt-in. It is available for `ls` (and its alias `l`)
-with or without a download ID, and for `add` (and its alias `get`):
+with or without a download ID, for `add` (and its alias `get`), and for `pause`, `resume`, and `cancel`:
 
 ```bash
 surge ls --output-version 1
@@ -9,7 +9,7 @@ surge ls --output-version 1 aabbccdd
 ```
 
 No `--json` flag is necessary. If both flags are supplied, the selected output
-version takes precedence. The flag is local to `ls` and `add`; other commands
+version takes precedence. The flag is local to these commands; other commands
 have not adopted this contract yet. Versioned snapshots cannot be combined with `--watch`.
 
 ## Compatibility
@@ -136,3 +136,9 @@ while the versioned DTO is independent of `types.DownloadStatus`. Tests cover
 these boundaries, both output modes, error classification, and failed writers.
 Future commands must opt into the contract deliberately rather than inheriting
 new exit codes or JSON shapes accidentally.
+
+## Lifecycle receipts
+
+`pause`, `resume`, and `cancel` accept `--output-version 1`. See
+[lifecycle commands](commands/lifecycle.md) and the
+[lifecycle result schema](schemas/lifecycle-output-v1.schema.json).
