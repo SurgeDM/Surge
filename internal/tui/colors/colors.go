@@ -286,6 +286,16 @@ func LightGray() color.Color {
 	return lipgloss.Color(blendHex(palette().Primary.Foreground, palette().Primary.Background, 0.55))
 }
 
+// SelectionBackground blends the accent into the theme background for a subtle highlight.
+func SelectionBackground() color.Color {
+	p := palette()
+	accent := p.Primary.Accent
+	if accent == "" {
+		accent = p.Bright.Red
+	}
+	return lipgloss.Color(blendHex(accent, p.Primary.Background, 0.18))
+}
+
 func DarkGray() color.Color { return lipgloss.Color(palette().Primary.Background) }
 
 // State Mappings

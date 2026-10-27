@@ -502,7 +502,7 @@ func DefaultKeyMap() *KeyMap {
 				key.WithHelp("?", "bug report"),
 			),
 			CopyID:  key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "copy ID")),
-			CopyURL: key.NewBinding(key.WithKeys("y"), key.WithHelp("y", "copy URL")),
+			CopyURL: key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "copy URL")),
 			OpenFile: key.NewBinding(
 				key.WithKeys("o"),
 				key.WithHelp("o", "open file"),

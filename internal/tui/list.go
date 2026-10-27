@@ -13,6 +13,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // DownloadItem implements list.Item interface for downloads
@@ -66,10 +67,11 @@ func (i DownloadItem) Description() string {
 		}
 	}
 
-	if d.done && d.err == nil {
-		return fmt.Sprintf("%s%s \u2022 %s", styledStatus, speedInfo, sizeInfo)
+	details := fmt.Sprintf("%s \u2022 %s", speedInfo, sizeInfo)
+	if !d.done || d.err != nil {
+		details = fmt.Sprintf(" \u2022 %.0f%%%s \u2022 %s", pct, speedInfo, sizeInfo)
 	}
-	return fmt.Sprintf("%s \u2022 %.0f%%%s \u2022 %s", styledStatus, pct, speedInfo, sizeInfo)
+	return styledStatus + lipgloss.NewStyle().Foreground(colors.LightGray()).Render(details)
 }
 
 func (i DownloadItem) FilterValue() string {
@@ -109,11 +111,11 @@ func newDelegateKeyMap() *delegateKeyMap {
 }
 
 func newDownloadDelegate() downloadDelegate {
-	baseTitle := lipgloss.NewStyle().Foreground(colors.LightGray())
+	baseTitle := lipgloss.NewStyle().Foreground(colors.White())
 	baseDesc := lipgloss.NewStyle().Foreground(colors.LightGray())
 
-	selTitle := lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true)
-	selDesc := lipgloss.NewStyle().Foreground(colors.Cyan())
+	selTitle := lipgloss.NewStyle().Foreground(colors.White())
+	selDesc := lipgloss.NewStyle().Foreground(colors.LightGray())
 
 	return downloadDelegate{
 		keys:           newDelegateKeyMap(),
@@ -184,6 +186,20 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 	// Render lines
 	line1 := prefix + titleStyle.Render(title)
 	line2 := prefix + descStyle.Render(description)
+	if isSelected {
+		selection := lipgloss.NewStyle().Background(colors.SelectionBackground()).Width(availableWidth + prefixWidth)
+		background := ansi.NewStyle().BackgroundColor(colors.SelectionBackground()).String()
+		shade := func(line string) string {
+			line = selection.Render(line)
+			// Nested styles may reset all attributes, including the row background.
+			line = strings.ReplaceAll(line, "\x1b[0m", "\x1b[0m"+background)
+			line = strings.ReplaceAll(line, ansi.ResetStyle, ansi.ResetStyle+background)
+			line = strings.ReplaceAll(line, "\x1b[49m", "\x1b[49m"+background)
+			return line + ansi.ResetStyle
+		}
+		line1 = shade(line1)
+		line2 = shade(line2)
+	}
 
 	_, _ = fmt.Fprintf(w, "%s\n%s", line1, line2)
 }
