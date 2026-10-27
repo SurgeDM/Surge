@@ -30,3 +30,19 @@ func TestResyncDoesNotApplySnapshotOlderThanLifecycleTransition(t *testing.T) {
 		t.Fatal("stale snapshot applied instead of requesting a fresh one")
 	}
 }
+
+func TestReconnectInvalidatesRefreshAlreadyInFlight(t *testing.T) {
+	model := benchModel(1)
+	model.resyncing = true
+	updated, _ := model.updateEvents(types.DownloadEvent{Type: types.EventSystem, ResyncRequired: true, Message: "reconnected"})
+	got := updated.(RootModel)
+	if got.lifecycleRevision != 1 {
+		t.Fatal("new resync requirement did not invalidate the in-flight query")
+	}
+	// Even a failed response from the earlier connection must trigger a fresh
+	// query rather than consuming the reconnect notice and leaving stale rows.
+	refreshed, cmd := got.updateEvents(resyncDownloadsMsg{revision: 0})
+	if cmd == nil || !refreshed.(RootModel).resyncing {
+		t.Fatal("reconnect recovery was lost behind an older refresh")
+	}
+}

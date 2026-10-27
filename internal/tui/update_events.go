@@ -26,7 +26,7 @@ func stateProgress(state interface{}) *engineprogress.DownloadProgress {
 
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if ev, ok := msg.(types.DownloadEvent); ok {
-		if ev.Type != types.EventProgress && ev.Type != types.EventBatchProgress && ev.Type != types.EventSystem {
+		if ev.ResyncRequired || (ev.Type != types.EventProgress && ev.Type != types.EventBatchProgress && ev.Type != types.EventSystem) {
 			m.lifecycleRevision++
 		}
 		model, cmd := m.handleDownloadEvent(ev)
