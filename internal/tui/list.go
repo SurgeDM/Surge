@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"io"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // DownloadItem implements list.Item interface for downloads
@@ -32,16 +34,7 @@ func (i DownloadItem) Title() string {
 func (i DownloadItem) Description() string {
 	d := i.download
 
-	// Get styled status using the shared component
-	var styledStatus string
-	if d.pausing {
-		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused()).Render(i.spinnerView + " Pausing...")
-	} else if d.resuming {
-		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(i.spinnerView + " Resuming...")
-	} else {
-		status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming)
-		styledStatus = status.RenderWithSpinner(i.spinnerView)
-	}
+	styledStatus := getDownloadStatus(d, i.spinnerView)
 
 	// Build progress info
 	pct := 0.0
@@ -54,17 +47,23 @@ func (i DownloadItem) Description() string {
 		utils.FormatBytes(d.Downloaded),
 		utils.FormatBytes(d.Total))
 
+	if d.done && d.err == nil {
+		sizeInfo = utils.FormatBytes(d.Downloaded)
+	}
+
 	speedInfo := ""
 	if d.Speed > 0 {
 		speedInfo = fmt.Sprintf(" \u2022 %s", utils.FormatSpeed(d.Speed))
-		if d.RateLimitSet && d.RateLimit > 0 {
-			speedInfo += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimit(d.RateLimit))
-		} else if d.RateLimitSet {
-			speedInfo += " (Limit: \u221E)"
+		if !d.done && d.RateLimitSet && d.RateLimit > 0 {
+			speedInfo += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimitDisplay(d.RateLimit))
 		}
 	}
 
-	return fmt.Sprintf("%s \u2022 %.0f%%%s \u2022 %s", styledStatus, pct, speedInfo, sizeInfo)
+	details := fmt.Sprintf("%s \u2022 %s", speedInfo, sizeInfo)
+	if !d.done || d.err != nil {
+		details = fmt.Sprintf(" \u2022 %.0f%%%s \u2022 %s", pct, speedInfo, sizeInfo)
+	}
+	return styledStatus + lipgloss.NewStyle().Foreground(colors.LightGray()).Render(details)
 }
 
 func (i DownloadItem) FilterValue() string {
@@ -104,11 +103,11 @@ func newDelegateKeyMap() *delegateKeyMap {
 }
 
 func newDownloadDelegate() downloadDelegate {
-	baseTitle := lipgloss.NewStyle().Foreground(colors.White()).Bold(true)
+	baseTitle := lipgloss.NewStyle().Foreground(colors.White())
 	baseDesc := lipgloss.NewStyle().Foreground(colors.LightGray())
 
-	selTitle := lipgloss.NewStyle().Foreground(colors.Pink()).Bold(true)
-	selDesc := lipgloss.NewStyle().Foreground(colors.Cyan())
+	selTitle := lipgloss.NewStyle().Foreground(colors.White())
+	selDesc := lipgloss.NewStyle().Foreground(colors.LightGray())
 
 	return downloadDelegate{
 		keys:           newDelegateKeyMap(),
@@ -179,8 +178,23 @@ func (d downloadDelegate) Render(w io.Writer, m list.Model, index int, listItem 
 	// Render lines
 	line1 := prefix + titleStyle.Render(title)
 	line2 := prefix + descStyle.Render(description)
+	if isSelected {
+		line1 = shadeSelectedRow(line1, availableWidth+prefixWidth, colors.SelectionBackground())
+		line2 = shadeSelectedRow(line2, availableWidth+prefixWidth, colors.SelectionBackground())
+	}
 
 	_, _ = fmt.Fprintf(w, "%s\n%s", line1, line2)
+}
+
+// shadeSelectedRow fills the row while preserving the background across nested styles.
+func shadeSelectedRow(line string, width int, shade color.Color) string {
+	selection := lipgloss.NewStyle().Background(shade).Width(width)
+	background := ansi.NewStyle().BackgroundColor(shade).String()
+	line = selection.Render(line)
+	line = strings.ReplaceAll(line, "\x1b[0m", "\x1b[0m"+background)
+	line = strings.ReplaceAll(line, ansi.ResetStyle, ansi.ResetStyle+background)
+	line = strings.ReplaceAll(line, "\x1b[49m", "\x1b[49m"+background)
+	return line + ansi.ResetStyle
 }
 
 // ShortHelp returns keybindings to show in the mini help view
@@ -227,6 +241,11 @@ func applyListTheme(l *list.Model) {
 	l.Styles.Filter.Focused.Prompt = lipgloss.NewStyle().Foreground(colors.Cyan())
 	l.Styles.Filter.Blurred.Prompt = lipgloss.NewStyle().Foreground(colors.Cyan())
 	l.Styles.Filter.Cursor.Color = colors.Pink()
+	l.Styles.ActivePaginationDot = lipgloss.NewStyle().Foreground(colors.Pink()).SetString("\u2022")
+	l.Styles.InactivePaginationDot = lipgloss.NewStyle().Foreground(colors.Gray()).SetString("\u2022")
+	l.Paginator.ActiveDot = l.Styles.ActivePaginationDot.String()
+	l.Paginator.InactiveDot = l.Styles.InactivePaginationDot.String()
+	l.Styles.ArabicPagination = l.Styles.ArabicPagination.Foreground(colors.LightGray())
 
 	l.Styles.NoItems = lipgloss.NewStyle().
 		Foreground(colors.Cyan()).
@@ -291,14 +310,14 @@ func (m *RootModel) UpdateListItems() {
 					var newTab int
 					if d.done {
 						newTab = TabDone
-					} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming || d.started) {
+					} else if !d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.started) {
 						newTab = TabActive
 					} else {
 						newTab = TabQueued
 					}
 
 					// If it belongs to a different tab, switch to it (unless current tab is pinned)
-					if m.pinnedTab == -1 && newTab != -1 && newTab != m.activeTab {
+					if m.pinnedTab == -1 && m.activeTab != TabAll && newTab != -1 && newTab != m.activeTab {
 						m.activeTab = newTab
 
 						// Force selection for the recursive call

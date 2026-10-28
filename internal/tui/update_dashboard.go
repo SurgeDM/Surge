@@ -15,7 +15,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Handle search input FIRST when active (intercepts ALL keys)
 	if m.searchActive {
 		switch msg.String() {
-		case "esc", "Q":
+		case "esc", "Q", "ctrl+c":
 			// Cancel search and clear query
 			m.searchActive = false
 			m.searchInput.Blur()
@@ -45,10 +45,17 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if d := m.GetSelectedDownload(); d != nil && d.moving && key.Matches(msg,
+		m.keys.Dashboard.Delete, m.keys.Dashboard.PurgeFile, m.keys.Dashboard.Pause,
+		m.keys.Dashboard.Refresh, m.keys.Dashboard.AssignCategory) {
+		m.addStyledLogEntry(logError, types.ErrMoving.Error())
+		return m, nil
+	}
+
 	// Tab switching
 	pinnedGuard := func() bool {
 		if m.pinnedTab != -1 {
-			m.addLogEntry(LogStyleError.Render("\u25c6 Tab is pinned \u2014 press " + m.keys.Dashboard.PinTab.Help().Key + " to unpin"))
+			m.addStyledLogEntry(logError, "\u25c6 Tab is pinned \u2014 press "+m.keys.Dashboard.PinTab.Help().Key+" to unpin")
 			return true
 		}
 		return false
@@ -61,6 +68,12 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if key.Matches(msg, m.keys.Dashboard.TabAll) {
+		if pinnedGuard() {
+			return m, nil
+		}
+		return switchTab(TabAll)
+	}
 	if key.Matches(msg, m.keys.Dashboard.TabQueued) {
 		if pinnedGuard() {
 			return m, nil
@@ -127,7 +140,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if pinnedGuard() {
 			return m, nil
 		}
-		m.activeTab = (m.activeTab + 1) % 3
+		m.activeTab = (m.activeTab + 1) % dashboardTabCount
 		m.ManualTabSwitch = true
 		m.UpdateListItems()
 		return m, nil
@@ -136,7 +149,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if pinnedGuard() {
 			return m, nil
 		}
-		m.activeTab = (m.activeTab + 2) % 3 // +2 mod 3 = prev
+		m.activeTab = (m.activeTab + dashboardTabCount - 1) % dashboardTabCount
 		m.ManualTabSwitch = true
 		m.UpdateListItems()
 		return m, nil
@@ -159,11 +172,11 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Dashboard.PurgeFile) {
 		if d := m.GetSelectedDownload(); d != nil {
 			if !d.done || d.err != nil {
-				m.addLogEntry(LogStyleError.Render("\u2716 Purge is only for successfully completed downloads"))
+				m.addStyledLogEntry(logError, "\u2716 Purge is only for successfully completed downloads")
 				return m, nil
 			}
 			if m.Service == nil {
-				m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
+				m.addStyledLogEntry(logError, "\u2716 Service unavailable")
 				return m, nil
 			}
 			m.purgeTargetID = d.ID
@@ -177,26 +190,29 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Dashboard.Pause) {
 		if d := m.GetSelectedDownload(); d != nil {
 			if m.Service == nil {
-				m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
+				m.addStyledLogEntry(logError, "\u2716 Service unavailable")
 				return m, nil
 			}
 			if d.paused || d.err != nil {
 				// Resume paused and errored downloads; keep their state on failure.
 				if err := m.Service.Resume(d.ID); err != nil {
-					m.addLogEntry(LogStyleError.Render("\u2716 Resume failed: " + err.Error()))
+					m.addStyledLogEntry(logError, "\u2716 Resume failed: "+err.Error())
 				} else {
 					d.done = false
 					d.err = nil
 					d.paused = false
 					d.pausing = false
 					d.resuming = true
+					d.started = false
+					d.Speed = 0
+					d.Connections = 0
 					m.UpdateListItems()
 					return m, m.spinner.Tick
 				}
 			} else if !d.done {
 				// Pause an active download; completed downloads remain untouched.
 				if err := m.Service.Pause(d.ID); err != nil {
-					m.addLogEntry(LogStyleError.Render("\u2716 Pause failed: " + err.Error()))
+					m.addStyledLogEntry(logError, "\u2716 Pause failed: "+err.Error())
 				} else {
 					d.resuming = false
 					d.pausing = true
@@ -208,6 +224,27 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Open file
+
+	if key.Matches(msg, m.keys.Dashboard.CopyID) {
+		if d := m.GetSelectedDownload(); d != nil && d.ID != "" {
+			if err := clipboard.Write(d.ID); err != nil {
+				m.addStyledLogEntry(logError, "Copy ID failed: "+err.Error())
+			} else {
+				m.addStyledLogEntry(logComplete, "ID copied")
+			}
+		}
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.Dashboard.CopyURL) {
+		if d := m.GetSelectedDownload(); d != nil && d.URL != "" {
+			if err := clipboard.Write(d.URL); err != nil {
+				m.addStyledLogEntry(logError, "Copy URL failed: "+err.Error())
+			} else {
+				m.addStyledLogEntry(logComplete, "URL copied")
+			}
+		}
+		return m, nil
+	}
 	if key.Matches(msg, m.keys.Dashboard.OpenFile) {
 		if d := m.GetSelectedDownload(); d != nil {
 			canOpen := d.done || (config.Resolve[bool](m.Settings.Network.SequentialDownload) && !d.paused && d.Downloaded > 0)
@@ -240,7 +277,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Dashboard.Refresh) {
 		if d := m.GetSelectedDownload(); d != nil {
 			if m.Service == nil {
-				m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
+				m.addStyledLogEntry(logError, "\u2716 Service unavailable")
 				return m, nil
 			}
 			// Only allow refresh if download is paused or errored
@@ -249,7 +286,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.urlUpdateInput.SetValue(d.URL)
 				m.urlUpdateInput.Focus()
 			} else {
-				m.addLogEntry(LogStyleError.Render("\u2716 Pause download before refreshing URL"))
+				m.addStyledLogEntry(logError, "\u2716 Pause download before refreshing URL")
 			}
 		}
 		return m, nil
@@ -279,6 +316,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.addLogEntry("Failed to retrieve settings: " + err.Error())
 			return m, nil
 		}
+		m.clearSettingsSearch()
 		m.snapshotSettings()
 		m.state = SettingsState
 		m.SettingsActiveTab = 0
@@ -305,7 +343,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.categoryPickerAssign = false
 		m.categoryPickerTarget = ""
 		if !config.Resolve[bool](m.Settings.Categories.CategoryEnabled) || len(m.Settings.Categories.Categories) == 0 {
-			m.addLogEntry(LogStyleError.Render("\u2716 Enable categories in Settings first"))
+			m.addStyledLogEntry(logError, "\u2716 Enable categories in Settings first")
 			return m, nil
 		}
 		m.categoryPickerCursor = m.categoryFilterPickerCursor()
@@ -316,7 +354,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		d := m.GetSelectedDownload()
 		m.categoryPickerAssign = true
 		if !config.Resolve[bool](m.Settings.Categories.CategoryEnabled) || len(m.Settings.Categories.Categories) == 0 {
-			m.addLogEntry(LogStyleError.Render("\u2716 Enable categories in Settings first"))
+			m.addStyledLogEntry(logError, "\u2716 Enable categories in Settings first")
 			return m, nil
 		}
 		m.categoryPickerTarget = d.ID
@@ -328,11 +366,13 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if key.Matches(msg, m.keys.Dashboard.PinTab) {
 		if m.pinnedTab == m.activeTab {
 			m.pinnedTab = -1
-			m.addLogEntry(LogStyleStarted.Render("\u25c6 Tab Unpinned"))
+			m.addStyledLogEntry(logStarted, "\u25c6 Tab Unpinned")
 		} else {
 			m.pinnedTab = m.activeTab
 			var tabName string
 			switch m.activeTab {
+			case TabAll:
+				tabName = "All"
 			case TabActive:
 				tabName = "Active"
 			case TabDone:
@@ -340,7 +380,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			default:
 				tabName = "Queued"
 			}
-			m.addLogEntry(LogStyleStarted.Render("\u25c6 Tab Pinned: " + tabName))
+			m.addStyledLogEntry(logStarted, "\u25c6 Tab Pinned: "+tabName)
 		}
 		return m, nil
 	}

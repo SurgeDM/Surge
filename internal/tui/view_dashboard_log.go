@@ -23,5 +23,5 @@ func (m *RootModel) renderLogBox(width, height int) string {
 		logBorderColor = colors.Pink()
 	}
 
-	return renderBtopBox(PaneTitleStyle.Render(" Activity Log "), "", innerContent, width, height, logBorderColor)
+	return renderBtopBox(PaneTitleStyle.Render(" Activity Log ["+m.keys.Dashboard.Log.Help().Key+"] "), "", innerContent, width, height, logBorderColor)
 }

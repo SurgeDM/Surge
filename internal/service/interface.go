@@ -65,3 +65,8 @@ type DownloadService interface {
 	// ClearRateLimit removes a download's rate limit override so it inherits the default.
 	ClearRateLimit(id string) error
 }
+
+// CategoryService is implemented by backends supporting durable assignments.
+type CategoryService interface {
+	AssignCategory(id, category string, move bool) error
+}

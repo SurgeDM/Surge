@@ -38,7 +38,8 @@ func TestParseRateLimit(t *testing.T) {
 		{"Invalid unit", "10 xyz", 0, true},
 		{"Negative value", "-10 mb", 0, true},
 		{"Sub-byte value", "0.1 B/s", 0, true},
-		{"No unit defaults to MB", "10", 10 * 1000 * 1000, false},
+		{"No unit preserves decimal MB", "10", 10_000_000, false},
+		{"Fractional unitless value", "1.5", 1_500_000, false},
 	}
 
 	for _, tt := range tests {
@@ -64,9 +65,9 @@ func TestFormatRateLimit(t *testing.T) {
 		{"Zero", 0, "\u221E"},
 		{"Negative", -100, "\u221E"},
 		{"Bytes", 500, "500 B/s"},
-		{"Kilobytes", 1024, "1.0 KiB/s"},
-		{"Megabytes", 1024 * 1024, "1.0 MiB/s"},
-		{"Gigabytes", 1024 * 1024 * 1024, "1.0 GiB/s"},
+		{"Kilobytes", 1024, "1 KiB/s"},
+		{"Megabytes", 1024 * 1024, "1 MiB/s"},
+		{"Gigabytes", 1024 * 1024 * 1024, "1 GiB/s"},
 	}
 
 	for _, tt := range tests {
@@ -94,6 +95,7 @@ func TestParseRateLimitValue(t *testing.T) {
 		{"Float64 positive", float64(500.2), 500, false},
 		{"Float64 negative", float64(-500.2), 0, true},
 		{"String valid", "500 b", 500, false},
+		{"Legacy unitless setting", "10", 10_000_000, false},
 		{"String invalid", "invalid", 0, true},
 		{"Unsupported type", struct{}{}, 0, true},
 	}
@@ -107,6 +109,35 @@ func TestParseRateLimitValue(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("ParseRateLimitValue() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestRateLimitDisplayDoesNotChangePersistedPrecision(t *testing.T) {
+	const rate = int64(10_000_000)
+	if got := FormatRateLimitDisplay(rate); got != "9.5 MiB/s" {
+		t.Fatalf("display = %q", got)
+	}
+	if got, err := ParseRateLimit(FormatRateLimit(rate)); err != nil || got != rate {
+		t.Fatalf("persisted round trip = (%d, %v)", got, err)
+	}
+}
+
+func TestRateLimitRoundTrip(t *testing.T) {
+	for _, input := range []string{"10", "10 MBps", "10 MB/s", "1.234567 MB/s", "80 Mbps", "10 MiB/s", "1 B/s", "1001 B/s", "9223372036854775 B/s"} {
+		t.Run(input, func(t *testing.T) {
+			rate, err := ParseRateLimit(input)
+			if err != nil {
+				t.Fatal(err)
+			}
+			formatted := FormatRateLimit(rate)
+			for i := 0; i < 3; i++ {
+				got, err := ParseRateLimit(formatted)
+				if err != nil || got != rate {
+					t.Fatalf("round trip %q = (%d, %v), want %d", formatted, got, err, rate)
+				}
+				formatted = FormatRateLimit(got)
 			}
 		})
 	}
