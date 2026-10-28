@@ -53,7 +53,7 @@ func (m *TaskManager) Install(ctx context.Context) error {
 	// do not depend on schtasks command-line quoting.
 	script := `$ErrorActionPreference = 'Stop'; ` +
 		`$user = [System.Security.Principal.WindowsIdentity]::GetCurrent().User.Value; ` +
-		`$action = New-ScheduledTaskAction -Execute '` + strings.ReplaceAll(m.executable, "'", "''") + `' -Argument 'server start --managed-service'; ` +
+		`$action = New-ScheduledTaskAction -Execute '` + strings.NewReplacer("'", "''", "’", "’’").Replace(m.executable) + `' -Argument 'server start --managed-service'; ` +
 		`$trigger = New-ScheduledTaskTrigger -AtLogOn -User $user; ` +
 		`$principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited; ` +
 		`Register-ScheduledTask -TaskPath '\' -TaskName '` + m.taskName + `' -Action $action -Trigger $trigger -Principal $principal -Force | Out-Null`
