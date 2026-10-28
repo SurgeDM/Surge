@@ -2,15 +2,98 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
 )
+
+type rejectingApprovalModel struct{}
+
+func (rejectingApprovalModel) Init() tea.Cmd { return nil }
+func (m rejectingApprovalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if event, ok := msg.(types.DownloadEvent); ok && event.ApprovalResult != nil {
+		select {
+		case event.ApprovalResult <- errors.New("download ID already exists"):
+		case <-event.ApprovalContext.Done():
+		}
+	}
+	return m, nil
+}
+func (rejectingApprovalModel) View() tea.View { return tea.NewView("") }
+
+func TestApprovalRejectsDuplicateIDBeforeAcknowledgment(t *testing.T) {
+	previous := serverProgram
+	serverProgram = tea.NewProgram(rejectingApprovalModel{}, tea.WithInput(nil), tea.WithOutput(&bytes.Buffer{}))
+	program := serverProgram
+	done := make(chan struct{})
+	go func() { _, _ = program.Run(); close(done) }()
+	t.Cleanup(func() { program.Quit(); <-done; serverProgram = previous })
+	settings := config.DefaultSettings()
+	settings.Extension.ExtensionPrompt.Value = true
+	resolved := &resolvedDownloadRequest{request: DownloadRequest{ID: "same"}, settings: settings}
+	rec := httptest.NewRecorder()
+	service := &publishRecordingHTTPService{httpAPITestService: &httpAPITestService{}}
+	if !maybeRequireDownloadApproval(context.Background(), rec, service, resolved) || rec.Code != http.StatusConflict {
+		t.Fatalf("expected conflict, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(service.published) != 0 {
+		t.Fatal("rejected request was broadcast")
+	}
+}
+
+type acceptingApprovalModel struct{}
+
+func (acceptingApprovalModel) Init() tea.Cmd { return nil }
+func (m acceptingApprovalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if event, ok := msg.(types.DownloadEvent); ok && event.ApprovalResult != nil {
+		select {
+		case event.ApprovalResult <- nil:
+		case <-event.ApprovalContext.Done():
+		}
+	}
+	return m, nil
+}
+func (acceptingApprovalModel) View() tea.View { return tea.NewView("") }
+
+func TestApprovalBroadcastsNonActionableNotification(t *testing.T) {
+	previous := serverProgram
+	program := tea.NewProgram(acceptingApprovalModel{}, tea.WithInput(nil), tea.WithOutput(&bytes.Buffer{}))
+	serverProgram = program
+	done := make(chan struct{})
+	go func() { _, _ = program.Run(); close(done) }()
+	t.Cleanup(func() { program.Quit(); <-done; serverProgram = previous })
+	settings := config.DefaultSettings()
+	settings.Extension.ExtensionPrompt.Value = true
+	resolved := &resolvedDownloadRequest{request: DownloadRequest{ID: "request-id"}, settings: settings}
+	rec := httptest.NewRecorder()
+	service := &publishRecordingHTTPService{httpAPITestService: &httpAPITestService{}}
+	if !maybeRequireDownloadApproval(context.Background(), rec, service, resolved) || rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(service.published) != 1 {
+		t.Fatalf("published %d events", len(service.published))
+	}
+	data, err := json.Marshal(service.published[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var received types.DownloadEvent
+	if err := json.Unmarshal(data, &received); err != nil {
+		t.Fatal(err)
+	}
+	if received.Type != types.EventSystem || received.DownloadID != "request-id" {
+		t.Fatalf("unexpected remote event: %+v", received)
+	}
+}
 
 func TestDuplicateCheckIncludesPersistedDownloads(t *testing.T) {
 	setupIsolatedCmdState(t)
@@ -84,7 +167,7 @@ func TestSkipDuplicateWarningAutoApprovesInHeadlessMode(t *testing.T) {
 		request:     DownloadRequest{SkipDuplicateWarning: true},
 	}
 	rec := httptest.NewRecorder()
-	if maybeRequireDownloadApproval(rec, nil, resolved) {
+	if maybeRequireDownloadApproval(context.Background(), rec, nil, resolved) {
 		t.Fatalf("headless duplicate was rejected: %d %s", rec.Code, rec.Body.String())
 	}
 }

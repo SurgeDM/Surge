@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -10,6 +11,54 @@ import (
 )
 
 func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy bool) (tea.Model, tea.Cmd) {
+	if msg.ApprovalResult != nil {
+		if msg.ApprovalContext != nil && msg.ApprovalContext.Err() != nil {
+			return m, nil
+		}
+		id := strings.TrimSpace(msg.DownloadID)
+		duplicate := id != "" && m.FindDownloadByID(id) != nil
+		if id != "" && (m.state == ExtensionConfirmationState || m.state == DuplicateWarningState) && m.pendingDownloadID == id {
+			duplicate = true
+		}
+		for _, pending := range m.pendingRequestQueue {
+			if id != "" && strings.TrimSpace(pending.DownloadID) == id {
+				duplicate = true
+			}
+		}
+		for _, pending := range m.pendingBatchRequests {
+			if id != "" && strings.TrimSpace(pending.DownloadID) == id && m.state == BatchConfirmState {
+				duplicate = true
+			}
+		}
+		for _, batch := range m.pendingBatchRequestQueue {
+			for _, pending := range batch.BatchEvents {
+				if id != "" && strings.TrimSpace(pending.DownloadID) == id {
+					duplicate = true
+				}
+			}
+		}
+		if duplicate {
+			if msg.ApprovalContext == nil {
+				msg.ApprovalResult <- errors.New("download ID already exists")
+			} else {
+				select {
+				case msg.ApprovalResult <- errors.New("download ID already exists"):
+				case <-msg.ApprovalContext.Done():
+				}
+			}
+			return m, nil
+		}
+		if msg.ApprovalContext == nil {
+			msg.ApprovalResult <- nil
+		} else {
+			select {
+			case msg.ApprovalResult <- nil:
+			case <-msg.ApprovalContext.Done():
+				return m, nil
+			}
+		}
+		msg.ApprovalResult = nil
+	}
 	msg.DownloadID = strings.TrimSpace(msg.DownloadID)
 	if msg.DownloadID != "" {
 		duplicateID := m.FindDownloadByID(msg.DownloadID) != nil ||
@@ -54,6 +103,7 @@ func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy
 		m.pendingPath = path
 		m.pendingIsDefaultPath = isDefaultPath
 		m.pendingFilename = msg.Filename
+		m.pendingDownloadID = msg.DownloadID
 		m.pendingWorkers = msg.Workers
 		m.pendingMinChunkSize = msg.MinChunkSize
 		m.duplicateInfo = duplicate.Filename
@@ -69,6 +119,7 @@ func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy
 		m.pendingPath = path
 		m.pendingIsDefaultPath = isDefaultPath
 		m.pendingFilename = msg.Filename
+		m.pendingDownloadID = msg.DownloadID
 		m.pendingWorkers = msg.Workers
 		m.pendingMinChunkSize = msg.MinChunkSize
 		m.inputs[2].SetValue(path)

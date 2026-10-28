@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,10 +12,12 @@ import (
 	"runtime"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/orchestrator"
 	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/google/uuid"
@@ -22,6 +25,7 @@ import (
 
 // DownloadRequest represents a download request from the browser extension
 type DownloadRequest struct {
+	ID                   string            `json:"id,omitempty"`
 	URL                  string            `json:"url"`
 	Filename             string            `json:"filename,omitempty"`
 	Path                 string            `json:"path,omitempty"`
@@ -108,12 +112,16 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		return
 	}
 
-	if maybeRequireDownloadApproval(w, service, resolved) {
+	if maybeRequireDownloadApproval(r.Context(), w, service, resolved) {
 		return
 	}
 
 	newID, filename, err := enqueueDownloadRequest(r, service, resolved)
 	if err != nil {
+		if errors.Is(err, types.ErrIDExists) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
 		publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(resolved.urlForAdd), err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -181,6 +189,12 @@ func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) 
 }
 
 func validateDownloadRequest(req DownloadRequest) (DownloadRequest, error) {
+	req.ID = strings.TrimSpace(req.ID)
+	if req.ID != "" {
+		if err := store.ValidateDownloadID(req.ID); err != nil {
+			return DownloadRequest{}, err
+		}
+	}
 	if req.URL == "" {
 		return DownloadRequest{}, fmt.Errorf("url is required")
 	}
@@ -208,6 +222,7 @@ func validateDownloadRequest(req DownloadRequest) (DownloadRequest, error) {
 		requestPath = cleanPath
 	}
 	return DownloadRequest{
+		ID:                   req.ID,
 		URL:                  req.URL,
 		Filename:             filename,
 		Path:                 requestPath,
@@ -372,6 +387,15 @@ func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolved
 		return nil, err
 	}
 
+	if req.ID == "" && r != nil && r.URL != nil {
+		req.ID = strings.TrimSpace(r.URL.Query().Get("id"))
+	}
+	if req.ID != "" {
+		if err := store.ValidateDownloadID(req.ID); err != nil {
+			return nil, err
+		}
+	}
+
 	utils.Debug("Received download request: host=%s, Filename=%s, Path=%s, HeaderCount=%d", utils.URLHostForLog(req.URL), req.Filename, req.Path, len(req.Headers))
 
 	outPath := utils.EnsureAbsPath(resolveOutputDir(req.Path, req.RelativeToDefaultDir, defaultOutputDir, settings))
@@ -417,7 +441,7 @@ func resolveDuplicateState(urlForAdd string) (bool, bool) {
 	return dupResult.Exists, dupResult.IsActive
 }
 
-func maybeRequireDownloadApproval(w http.ResponseWriter, service service.DownloadService, resolved *resolvedDownloadRequest) bool {
+func maybeRequireDownloadApproval(ctx context.Context, w http.ResponseWriter, service service.DownloadService, resolved *resolvedDownloadRequest) bool {
 	req := resolved.request
 
 	// EXTENSION VETTING SHORTCUT:
@@ -436,8 +460,19 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 	if serverProgram != nil {
 		utils.Debug("Requesting TUI confirmation for host %s (Duplicate: %v)", utils.URLHostForLog(req.URL), resolved.isDuplicate)
 
-		downloadID := uuid.New().String()
-		if err := service.Publish(types.DownloadEvent{
+		downloadID := req.ID
+		if downloadID == "" {
+			downloadID = uuid.New().String()
+		}
+		var approvalResult chan error
+		var approvalContext context.Context
+		if req.ID != "" {
+			approvalResult = make(chan error)
+			var cancel context.CancelFunc
+			approvalContext, cancel = context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+		}
+		event := types.DownloadEvent{
 			Type:                 types.EventRequest,
 			DownloadID:           downloadID,
 			URL:                  resolved.urlForAdd,
@@ -449,7 +484,28 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 			SkipDuplicateWarning: req.SkipDuplicateWarning,
 			Workers:              req.Workers,
 			MinChunkSize:         req.MinChunkSize,
-		}); err != nil {
+			ApprovalResult:       approvalResult,
+			ApprovalContext:      approvalContext,
+		}
+		if approvalResult != nil {
+			go serverProgram.Send(event)
+			select {
+			case err := <-approvalResult:
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusConflict)
+					return true
+				}
+			case <-approvalContext.Done():
+				http.Error(w, "TUI did not respond to download request", http.StatusServiceUnavailable)
+				return true
+			}
+			event = types.DownloadEvent{
+				Type:       types.EventSystem,
+				DownloadID: downloadID,
+				Message:    "Download request sent to TUI for confirmation",
+			}
+		}
+		if err := service.Publish(event); err != nil {
 			recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(resolved.urlForAdd), err))
 			http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
@@ -492,7 +548,10 @@ func enqueueDownloadRequest(r *http.Request, service service.DownloadService, re
 	}
 
 	req := resolved.request
-	reqID := r.URL.Query().Get("id")
+	reqID := req.ID
+	if reqID == "" && r != nil && r.URL != nil {
+		reqID = strings.TrimSpace(r.URL.Query().Get("id"))
+	}
 
 	if lifecycle != nil {
 		dlReq := &orchestrator.DownloadRequest{

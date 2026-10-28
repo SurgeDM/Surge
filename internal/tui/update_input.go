@@ -120,6 +120,7 @@ func (m RootModel) submitInputForm() (tea.Model, tea.Cmd) {
 		m.pendingPath = path
 		m.pendingIsDefaultPath = isDefaultPath
 		m.pendingFilename = filename
+		m.pendingDownloadID = ""
 		m.pendingWorkers = 0
 		m.pendingMinChunkSize = 0
 		m.duplicateInfo = d.Filename

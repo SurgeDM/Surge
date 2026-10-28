@@ -162,10 +162,10 @@ type RootModel struct {
 	PWD string
 
 	// Duplicate detection
-	pendingDownloadID           string // Requested ID pending confirmation
 	pendingURL                  string // URL pending confirmation
 	pendingPath                 string // Path pending confirmation
 	pendingIsDefaultPath        bool
+	pendingDownloadID           string   // Caller-owned ID pending confirmation
 	pendingFilename             string   // Filename pending confirmation
 	pendingMirrors              []string // Mirrors pending confirmation
 	pendingHeaders              map[string]string
