@@ -28,6 +28,7 @@ type DownloadProgress struct {
 	Bitmap  BitmapTracker
 
 	ActiveWorkers atomic.Int32
+	Verifying     atomic.Bool
 	Done          atomic.Bool
 	Paused        atomic.Bool
 	Pausing       atomic.Bool // Intermediate state: Pause requested but workers not yet exited

@@ -41,6 +41,8 @@ type MasterState struct {
 // resume state. It retains only fields needed to reconstruct a paused download,
 // including request headers, while excluding runtime handles and output paths.
 type persistedDetailRecord struct {
+	Artifact        types.ArtifactPolicy
+	ErrorCode       string
 	ID              string
 	URLHash         string
 	URL             string
@@ -75,6 +77,8 @@ func toPersistedDetail(state *types.DownloadRecord) *persistedDetailRecord {
 
 	return &persistedDetailRecord{
 		ID:              state.ID,
+		Artifact:        state.Artifact,
+		ErrorCode:       state.ErrorCode,
 		URLHash:         state.URLHash,
 		URL:             state.URL,
 		Filename:        state.Filename,
@@ -109,6 +113,8 @@ func fromPersistedDetail(state *persistedDetailRecord) *types.DownloadRecord {
 
 	return &types.DownloadRecord{
 		ID:              state.ID,
+		Artifact:        state.Artifact,
+		ErrorCode:       state.ErrorCode,
 		URLHash:         state.URLHash,
 		URL:             state.URL,
 		Filename:        state.Filename,
@@ -541,6 +547,9 @@ func AddToMasterList(entry types.DownloadRecord, onMoving ...func(bool)) error {
 	found := false
 	for i, e := range list.Downloads {
 		if e.ID == entry.ID {
+			if entry.Artifact == (types.ArtifactPolicy{}) {
+				entry.Artifact = e.Artifact
+			}
 			entry.CategoryOverride = e.CategoryOverride
 			entry.CategoryAssigned = e.CategoryAssigned
 			entry.PendingCategoryMove = e.PendingCategoryMove

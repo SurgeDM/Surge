@@ -25,7 +25,7 @@ func (s *LocalDownloadService) GetResult(id string) (*types.DownloadStatus, erro
 	if s.lifecycle != nil && s.lifecycle.GetScheduler() != nil {
 		live = s.lifecycle.GetScheduler().GetStatus(id)
 	}
-	if live != nil && (live.Status == "downloading" || live.Status == "queued" || live.Status == "pausing") {
+	if live != nil && (live.Status == "downloading" || live.Status == "queued" || live.Status == "pausing" || live.Status == "verifying") {
 		return live, nil
 	}
 	entry, err := store.GetDownload(id)

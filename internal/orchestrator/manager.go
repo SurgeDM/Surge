@@ -203,6 +203,7 @@ func (m *LifecycleManager) publishSettingsLocked(next *config.Settings) {
 
 // DownloadRequest carries the already-approved inputs needed to probe and reserve a file path.
 type DownloadRequest struct {
+	Artifact           types.ArtifactPolicy
 	URL                string
 	Filename           string
 	Path               string
@@ -235,6 +236,12 @@ func (mgr *LifecycleManager) EnqueueWithID(ctx context.Context, req *DownloadReq
 }
 
 func (mgr *LifecycleManager) enqueueResolved(ctx context.Context, req *DownloadRequest, requestID string) (string, string, error) {
+	copyRequest := *req
+	req = &copyRequest
+	if err := req.Artifact.Validate(); err != nil {
+		return "", "", err
+	}
+	req.Artifact = req.Artifact.Normalized()
 	if req.URL == "" {
 		return "", "", types.ErrURLRequired
 	}
@@ -286,6 +293,8 @@ func enqueueCoalescingKey(req *DownloadRequest) string {
 	writeString(req.URL)
 	writeString(req.Filename)
 	writeString(req.Path)
+	writeString(req.Artifact.OnExists)
+	writeString(req.Artifact.ExpectedSHA256)
 	fmt.Fprintf(&key, "%d:", len(req.Mirrors))
 	for _, mirror := range req.Mirrors {
 		writeString(mirror)
@@ -307,6 +316,10 @@ func enqueueCoalescingKey(req *DownloadRequest) string {
 }
 
 func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadRequest, requestID string) (string, string, error) {
+	if err := req.Artifact.Validate(); err != nil {
+		return "", "", err
+	}
+	req.Artifact = req.Artifact.Normalized()
 	settings := mgr.GetSettings()
 
 	// Throttle concurrent probes — acquire a semaphore slot before probing.
@@ -356,7 +369,7 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 			return "", "", fmt.Errorf("enqueue aborted: %w", ctx.Err())
 		}
 
-		finalPath, finalFilename, err := ResolveDestination(
+		finalPath, finalFilename, err := resolveDestinationWithPolicy(
 			req.URL,
 			req.Filename,
 			req.Path,
@@ -364,6 +377,7 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 			settings,
 			probeResult,
 			isNameActive,
+			req.Artifact.OnExists,
 		)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to resolve destination: %w", err)
@@ -388,6 +402,9 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 		// pick a different name instead of truncating this in-flight download.
 		if err := reserveWorkingFile(finalPath, finalFilename); err != nil {
 			if errors.Is(err, os.ErrExist) {
+				if req.Artifact.OnExists == "fail" {
+					return "", "", types.ErrDestinationExists
+				}
 				continue
 			}
 			return "", "", err
@@ -401,7 +418,7 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 			return "", "", err
 		}
 
-		queuedEvent := types.DownloadEvent{
+		queuedEvent := types.DownloadEvent{Artifact: cfg.Artifact,
 			Type:         types.EventQueued,
 			DownloadID:   cfg.ID,
 			Filename:     finalFilename,
@@ -424,7 +441,7 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 		// published only after AddWithPreparation returns so Publish
 		// backpressure cannot stall the lock, and EventStarted may arrive first.
 		accepted, err := mgr.pool.AddWithPreparation(*cfg, func() error {
-			if err := store.AddToMasterList(types.DownloadRecord{
+			if err := store.AddToMasterList(types.DownloadRecord{Artifact: cfg.Artifact,
 				ID:           queuedEvent.DownloadID,
 				URL:          queuedEvent.URL,
 				URLHash:      store.URLHash(queuedEvent.URL),
@@ -440,7 +457,7 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 				utils.Debug("Lifecycle: Failed to persist queued download synchronously: %v", err)
 			}
 			if len(cfg.Headers) > 0 {
-				snapshot := &types.DownloadRecord{
+				snapshot := &types.DownloadRecord{Artifact: cfg.Artifact,
 					ID:           cfg.ID,
 					URL:          cfg.URL,
 					DestPath:     queuedEvent.DestPath,
@@ -532,7 +549,7 @@ func (mgr *LifecycleManager) buildDownloadRecord(req *DownloadRequest, requestID
 		}
 	}
 
-	cfg := types.DownloadRecord{
+	cfg := types.DownloadRecord{Artifact: req.Artifact,
 		URL:                req.URL,
 		Mirrors:            req.Mirrors,
 		OutputPath:         finalPath,

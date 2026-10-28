@@ -394,7 +394,7 @@ func (p *Scheduler) Pause(downloadID string) PauseResult {
 		if total <= 0 {
 			total = configTotal
 		}
-		if total > 0 && prog.Bytes.VerifiedProgress.Load() >= total {
+		if total > 0 && prog.Bytes.VerifiedProgress.Load() >= total && !prog.Verifying.Load() {
 			return PauseResult{Found: true}
 		}
 
@@ -1007,7 +1007,7 @@ func (p *Scheduler) worker() {
 				if finalFilename == "" {
 					finalFilename = localCfg.Filename
 				}
-				errEvent = &types.DownloadEvent{
+				errEvent = &types.DownloadEvent{Artifact: localCfg.Artifact,
 					Type:       types.EventError,
 					DownloadID: localCfg.ID,
 					Filename:   finalFilename,
@@ -1015,6 +1015,7 @@ func (p *Scheduler) worker() {
 					Err:        err,
 				}
 				if localCfg.ProgressState != nil {
+					errEvent.Downloaded = progress.CfgProgress(&localCfg).Bytes.Downloaded.Load()
 					if pending := progress.CfgProgress(&localCfg).TakePendingResumeState(); pending != nil {
 						errEvent.State = pending
 						if pending.Downloaded > 0 {
@@ -1094,6 +1095,9 @@ func shouldRetryFailedDownload(isShuttingDown bool, err error, retries int) bool
 		return false
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	if errors.Is(err, types.ErrIntegrityMismatch) || errors.Is(err, types.ErrDestinationExists) {
 		return false
 	}
 	if types.IsPermanentHTTPError(err) {
@@ -1180,6 +1184,9 @@ func (p *Scheduler) GetStatus(id string) *types.DownloadStatus {
 		status.DestPath = adDestPath
 	}
 
+	if state.Verifying.Load() {
+		status.Status = "verifying"
+	}
 	if state.IsPausing() {
 		status.Status = "pausing"
 	} else if state.IsPaused() {
