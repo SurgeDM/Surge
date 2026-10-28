@@ -9,9 +9,19 @@ import (
 
 	"charm.land/bubbles/v2/help"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 )
+
+func TestSettingsFooterKeepsCategoryPaneHeightStable(t *testing.T) {
+	for _, setting := range []string{"category_enabled", "category_0", "add_category"} {
+		m := confirmationSettingsModel(t, "Categories", setting)
+		if got := lipgloss.Height(m.renderSettingsHelp(150)); got != 2 {
+			t.Errorf("%s footer height = %d, want 2", setting, got)
+		}
+	}
+}
 
 func confirmationSettingsModel(t *testing.T, category, setting string) RootModel {
 	t.Helper()

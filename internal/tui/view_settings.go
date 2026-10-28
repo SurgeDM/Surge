@@ -262,6 +262,8 @@ func (m RootModel) renderSettingsHelp(width int) string {
 	return lipgloss.NewStyle().
 		Foreground(colors.Gray()).
 		Width(width).
+		Height(2).
+		AlignVertical(lipgloss.Bottom).
 		Align(lipgloss.Center).
 		Render(helpText)
 }
