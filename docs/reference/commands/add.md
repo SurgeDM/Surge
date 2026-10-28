@@ -93,3 +93,46 @@ connection and security guidance.
 - [`surge ls`](inspect-and-manage.md#surge-ls) shows queued downloads and IDs.
 - [`surge pause`, `resume`, and `refresh`](inspect-and-manage.md) control a
   queued download.
+
+## Submission receipts and automation
+
+`add` and `get` report acceptance, not completion. Each human receipt names its
+one-based input index and full queued download ID, or a separate approval request
+ID. Warnings and errors go to stderr. A mixed batch now exits unsuccessfully
+instead of silently treating partial acceptance as success (legacy exit 1).
+
+Use the opt-in v1 contract for a single JSON document and classified exit codes:
+
+```bash
+surge add --output-version 1 https://example.com/one.iso https://example.com/two.iso
+surge get --output-version 1 --batch urls.txt
+```
+
+Each item contains `input_index`, `status`, and, when available, `id` or
+`request_id`. Indices follow positional URLs, then URLs parsed from the batch
+file; the batch reader's existing comment handling and deduplication still apply.
+Source URLs and raw server error bodies are not echoed in receipts.
+
+| Status | Meaning |
+| --- | --- |
+| `queued` | The server returned a download ID; the transfer is not necessarily started or complete. |
+| `pending_approval` | The server accepted an approval request. `request_id` is not a queued job ID or a completion guarantee. |
+| `not_submitted` | Local validation prevented submission. |
+| `failed` | The server rejected the request; the item includes a safe structured error. |
+| `unknown` | A reliable acceptance receipt could not be obtained. The request may have taken effect. Inspect the server before resubmitting. |
+
+With v1, mixed accepted/failed outcomes retain every item and return exit 3 with
+`ok: false` and `error.code: partial_failure`. An entirely failed batch uses its
+common classified error code, or exit 1 if the errors differ. `items` can also be
+empty for an operation-wide failure before submission, such as missing input or
+an unavailable local connection. See the [output contract](../cli-output.md).
+
+`--batch FILE --confirm` retains one TUI batch prompt. Pending items share the
+batch approval `request_id`; no per-job IDs are invented. Invalid local input
+prevents submission of that entire confirmed batch. Without batch confirmation,
+inputs are submitted individually and valid inputs can be accepted alongside
+invalid ones. No automatic POST retries are performed. Empty, malformed, oversized,
+or ID-less success responses and server-side 5xx responses are treated as unknown
+outcomes, not permission to repeat a possibly successful mutation.
+
+The [add v1 JSON Schema](../schemas/add-output-v1.schema.json) describes receipts.

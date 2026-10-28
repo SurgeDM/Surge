@@ -2,118 +2,95 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
+	"github.com/SurgeDM/Surge/internal/clioutput"
 	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/spf13/cobra"
 )
 
-var addCmd = &cobra.Command{
-	Use:     "add [url]...",
-	Aliases: []string{"get"},
-	Short:   "Add a new download to the running Surge instance",
-	Long:    `Add one or more URLs to the download queue of a running Surge instance.`,
-	RunE: func(cmd *cobra.Command, args []string) error {
-		//initializeGlobally is required to ensure that the config and logger are set up before we attempt to resolve the API connection or read the batch file.
-		if err := initializeGlobalState(); err != nil {
-			return err
-		}
+var addCmd = newAddCommand()
 
-		batchFile, _ := cmd.Flags().GetString("batch")
-		output, _ := cmd.Flags().GetString("output")
-		confirm, _ := cmd.Flags().GetBool("confirm")
-
-		var urls []string
-		urls = append(urls, args...)
-
-		// 2. URLs from batch file
-		if batchFile != "" {
-			fileUrls, err := utils.ReadURLsFromFile(batchFile)
-			if err != nil {
-				return fmt.Errorf("error reading batch file: %w", err)
-			}
-			urls = append(urls, fileUrls...)
-		}
-
-		if len(urls) == 0 {
-			_ = cmd.Help()
-			return nil
-		}
-
-		baseURL, token, err := resolveAPIConnection(true)
-		if err != nil {
-			return err
-		}
-		resolvedOutput := resolveClientOutputPath(output)
-
-		if batchFile != "" && confirm {
-			if err := sendBatchToServer(urls, resolvedOutput, baseURL, token, false); err != nil {
-				return err
-			}
-			fmt.Printf("Batch confirmation requested for %d downloads.\n", len(urls))
-			return nil
-		}
-
-		summary := submitDownloads(urls, resolvedOutput, baseURL, token, confirm)
-
-		if summary.queued > 0 {
-			fmt.Printf("Successfully added %d downloads.\n", summary.queued)
-		}
-		if summary.awaitingApproval > 0 {
-			fmt.Printf("Confirmation requested for %d downloads.\n", summary.awaitingApproval)
-		}
-		if summary.succeeded() > 0 {
-			return nil
-		}
-
-		if summary.failed > 0 {
-			return fmt.Errorf("failed to add any downloads")
-		}
-
-		return fmt.Errorf("no valid URLs to add")
-	},
+func newAddCommand() *cobra.Command {
+	command := &cobra.Command{
+		Use: "add [url]...", Aliases: []string{"get"},
+		Short: "Add a new download to the running Surge instance",
+		Long:  "Add URLs to a running Surge instance and report acceptance receipts, not completed downloads.",
+		RunE:  runAdd,
+	}
+	command.Flags().StringP("batch", "b", "", "File containing URLs to download (one per line)")
+	command.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
+	command.Flags().Bool("confirm", false, "Request confirmation in the running TUI before starting downloads")
+	command.Flags().String("output-version", "", "Use a versioned JSON contract (supported: 1)")
+	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return clioutput.NewError(clioutput.InvalidArguments, "Invalid command flags.", err)
+	})
+	return command
 }
 
-type addSummary struct {
-	queued           int
-	awaitingApproval int
-	failed           int
-}
-
-func (s addSummary) succeeded() int {
-	return s.queued + s.awaitingApproval
-}
-
-func submitDownloads(urls []string, output, baseURL, token string, confirm bool) addSummary {
-	var summary addSummary
-	for _, arg := range urls {
-		url, mirrors, err := parseAndNormalizeURLArg(arg)
+func runAdd(cmd *cobra.Command, args []string) error {
+	version, _ := cmd.Flags().GetString("output-version")
+	if cmd.Flags().Changed("output-version") && version != "1" {
+		return clioutput.NewError(clioutput.InvalidArguments, "Only --output-version 1 is supported.", nil)
+	}
+	batchFile, _ := cmd.Flags().GetString("batch")
+	output, _ := cmd.Flags().GetString("output")
+	confirm, _ := cmd.Flags().GetBool("confirm")
+	urls := append([]string(nil), args...)
+	if batchFile != "" {
+		fileURLs, err := utils.ReadURLsFromFile(batchFile)
 		if err != nil {
-			fmt.Printf("Error adding %s: %v\n", arg, err)
-			summary.failed++
-			continue
+			return clioutput.NewError(clioutput.InvalidArguments, "Could not read the batch URL file.", fmt.Errorf("error reading batch file: %w", err))
 		}
-		if url == "" {
-			continue
-		}
-
-		pendingApproval, err := sendToServerWithApproval(url, mirrors, output, baseURL, token, !confirm)
+		urls = append(urls, fileURLs...)
+	}
+	if len(urls) == 0 {
+		return clioutput.NewError(clioutput.InvalidArguments, "Provide at least one URL or a nonempty --batch file.", nil)
+	}
+	if err := initializeGlobalState(); err != nil {
+		return err
+	}
+	baseURL, token, err := resolveAPIConnection(true)
+	if err != nil {
+		return err
+	}
+	resolvedOutput := resolveClientOutputPath(output)
+	var items []submissionItem
+	if batchFile != "" && confirm {
+		items = collectConfirmedBatch(urls, resolvedOutput, baseURL, token)
+	} else {
+		items = collectSubmissions(urls, resolvedOutput, baseURL, token, confirm)
+	}
+	err = submissionFailure(items)
+	if version == "1" {
 		if err != nil {
-			fmt.Printf("Error adding %s: %v\n", url, err)
-			summary.failed++
-			continue
+			return &commandResultError{result: clioutput.FailedItems("add", items, err), cause: err}
 		}
-		if pendingApproval {
-			summary.awaitingApproval++
-		} else {
-			summary.queued++
+		return clioutput.WriteJSON(cmd.OutOrStdout(), clioutput.Success("add", items))
+	}
+	var text, diagnostics strings.Builder
+	for _, item := range items {
+		switch item.Status {
+		case "queued":
+			fmt.Fprintf(&text, "Input %d: queued %q\n", item.InputIndex, item.ID)
+		case "pending_approval":
+			fmt.Fprintf(&text, "Input %d: awaiting approval (request %q)\n", item.InputIndex, item.RequestID)
+		default:
+			fmt.Fprintf(&text, "Input %d: %s\n", item.InputIndex, item.Status)
+		}
+		if item.Error != nil {
+			fmt.Fprintf(&diagnostics, "Input %d: %s\n", item.InputIndex, item.Error.Message)
 		}
 	}
-	return summary
+	if writeErr := clioutput.WriteText(cmd.OutOrStdout(), text.String()); writeErr != nil {
+		return writeErr
+	}
+	if diagnostics.Len() > 0 {
+		if writeErr := clioutput.WriteText(cmd.ErrOrStderr(), diagnostics.String()); writeErr != nil {
+			return writeErr
+		}
+	}
+	return err
 }
 
-func init() {
-	rootCmd.AddCommand(addCmd)
-	addCmd.Flags().StringP("batch", "b", "", "File containing URLs to download (one per line)")
-	addCmd.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
-	addCmd.Flags().Bool("confirm", false, "Show confirmation prompt before starting downloads")
-}
+func init() { rootCmd.AddCommand(addCmd) }

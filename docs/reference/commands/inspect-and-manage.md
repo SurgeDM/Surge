@@ -29,6 +29,30 @@ surge ls --watch
 
 `l` is an alias for `ls`.
 
+A successful live list is authoritative, including an empty queue. Saved local
+history is used when no server is discovered or the local server is temporarily
+unavailable. Authentication, malformed responses, and unclassified server errors
+are reported instead of hidden by old records. An explicit `--host` never falls
+back to local history. Prefixes resolve against one source, not a merged list of
+live and historical IDs. Full IDs query the detail endpoint directly.
+
+Saved entries may have stale status; they do not display historical averages as
+current transfer speed. Detail output labels retained averages as `Average`.
+Human output and legacy JSON warn on stderr when displaying saved entries or
+falling back from an unavailable local server. `ls --output-version 1` instead
+includes `source` and `stale` metadata; its history-backed rates are `null`.
+
+Watch checks once per second and writes only changed snapshots. Suitable terminals
+use redraws; pipes, non-terminal writers, and empty/`dumb` terminal capabilities
+receive append-only plain text without escape sequences. Each watch frame names
+its source, and fallback warnings repeat only on a source transition. A refresh
+error preserves the last frame before exiting unsuccessfully. No cursor-hiding
+or alternate-screen mode is used, and watching does not control transfers.
+External filenames and metadata are stripped of terminal controls only for human
+presentation; JSON retains original values with JSON escaping.
+`--watch` still cannot be combined with JSON output or an individual ID. This is
+human watch output, not the future structured event-stream interface.
+
 ## `surge pause`
 
 Pause one download:
