@@ -95,6 +95,14 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 
 	candidateFilename := strings.TrimSpace(filename)
 	requestID := strings.TrimSpace(id)
+	if requestID != "" {
+		for _, download := range m.downloads {
+			if download.ID == requestID {
+				m.addStyledLogEntry(logError, "\u2716 Download ID already exists")
+				return m, nil
+			}
+		}
+	}
 
 	resolvedPath := path
 	resolvedFilename := candidateFilename

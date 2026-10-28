@@ -713,6 +713,15 @@ func TestUpdate_BatchDownloadRequestMsg_QueuesWhileConfirmationActive(t *testing
 	}
 }
 
+func TestStartDownload_RejectsExistingID(t *testing.T) {
+	existing := &DownloadModel{ID: "request-id", Filename: "existing.zip"}
+	m := RootModel{Service: &mockService{}, downloads: []*DownloadModel{existing}, SelectedDownloadID: "request-id"}
+	updated, cmd := m.startDownload("https://example.com/new.zip", nil, nil, t.TempDir(), false, "new.zip", " request-id ", 0, 0)
+	if cmd != nil || len(updated.downloads) != 1 || updated.downloads[0] != existing || existing.Filename != "existing.zip" || updated.SelectedDownloadID != "request-id" {
+		t.Fatal("duplicate ID must leave the existing download unchanged and not enqueue")
+	}
+}
+
 func TestStartDownload_UsesProvidedIDWhenServiceSupportsIt(t *testing.T) {
 	svc := &updateMockService{
 		DownloadService: &mockService{},
