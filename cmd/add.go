@@ -123,7 +123,11 @@ func writeSubmissionResults(cmd *cobra.Command, version string, items []submissi
 		case "pending_approval":
 			fmt.Fprintf(&text, "Input %d: awaiting approval (request %q)\n", item.InputIndex, item.RequestID)
 		default:
-			fmt.Fprintf(&text, "Input %d: %s\n", item.InputIndex, item.Status)
+			if item.ID != "" {
+				fmt.Fprintf(&text, "Input %d: %s (download %q)\n", item.InputIndex, item.Status, item.ID)
+			} else {
+				fmt.Fprintf(&text, "Input %d: %s\n", item.InputIndex, item.Status)
+			}
 		}
 		if item.Error != nil {
 			fmt.Fprintf(&diagnostics, "Input %d: %s\n", item.InputIndex, item.Error.Message)

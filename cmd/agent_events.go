@@ -101,7 +101,7 @@ func agentEventsHandler(owner service.DownloadService) http.HandlerFunc {
 			}
 			return flushSSEWrite(controller)
 		}
-		if err := send(agentEvent{Type: "snapshot", Items: downloadItems(statuses)}); err != nil {
+		if err := send(agentEvent{Type: "snapshot", Items: agentDownloadItems(statuses)}); err != nil {
 			return
 		}
 		lastProgress := make(map[string]time.Time, len(ids))
@@ -126,7 +126,7 @@ func agentEventsHandler(owner service.DownloadService) http.HandlerFunc {
 						}
 						lastProgress[item.DownloadID] = time.Now()
 						notice.Type = "progress"
-						notice.Items = downloadItems([]types.DownloadStatus{{ID: item.DownloadID, Status: "downloading", Phase: item.Phase, Downloaded: item.Downloaded, TotalSize: item.Total, Speed: item.Speed, Connections: item.Connections}})
+						notice.Items = agentDownloadItems([]types.DownloadStatus{{ID: item.DownloadID, Status: "downloading", Phase: item.Phase, Downloaded: item.Downloaded, TotalSize: item.Total, Speed: item.Speed, Connections: item.Connections}})
 					}
 					if err := send(notice); err != nil {
 						return
@@ -202,6 +202,7 @@ func newEventsCommand() *cobra.Command {
 	command.Flags().Bool("progress", false, "Include bounded scalar progress samples (no chunk maps)")
 	command.Flags().Duration("interval", time.Second, "Minimum per-job progress interval (250ms-1m)")
 	command.Flags().Duration("timeout", 0, "Stop observing after this duration; jobs continue")
+	configureContractValidation(command)
 	return command
 }
 
@@ -216,3 +217,16 @@ func (*streamEndedError) Unwrap() error {
 }
 func isStreamEnded(err error) bool { var ended *streamEndedError; return errors.As(err, &ended) }
 func init()                        { rootCmd.AddCommand(newEventsCommand()) }
+
+// Keep every selected snapshot within the client's 2 MiB frame bound, including
+// worst-case JSON escaping. Agent streams never need arbitrary metadata sizes.
+func agentDownloadItems(statuses []types.DownloadStatus) []downloadItem {
+	items := downloadItems(statuses)
+	for index := range items {
+		item := &items[index]
+		item.Filename = strings.Clone(item.Filename[:min(len(item.Filename), 1024)])
+		item.Status = strings.Clone(item.Status[:min(len(item.Status), 64)])
+		item.Phase = strings.Clone(item.Phase[:min(len(item.Phase), 64)])
+	}
+	return items
+}

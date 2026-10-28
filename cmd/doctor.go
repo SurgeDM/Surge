@@ -141,6 +141,7 @@ func newDoctorCommand() *cobra.Command {
 	command.Flags().Bool("server", false, "Explicitly check server authentication and health (five-second limit)")
 	command.Flags().Bool("json", false, "Write redacted version 1 diagnostics")
 	command.Flags().String("output-version", "", "Supported output version: 1")
+	configureContractValidation(command)
 	return command
 }
 func init() { rootCmd.AddCommand(newDoctorCommand()) }

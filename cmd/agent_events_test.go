@@ -91,3 +91,27 @@ func TestEventsCommandWritesOneRecordPerLine(t *testing.T) {
 		}
 	}
 }
+
+func TestAgentSnapshotFrameIsBounded(t *testing.T) {
+	statuses := make([]types.DownloadStatus, maxWaitIDs)
+	for index := range statuses {
+		statuses[index] = types.DownloadStatus{ID: uuid.NewString(), Filename: strings.Repeat("\x00", 2048), Status: strings.Repeat("\x00", 128), Phase: strings.Repeat("\x00", 128)}
+	}
+	data, err := json.Marshal(agentEvent{SchemaVersion: 1, Type: "snapshot", Items: agentDownloadItems(statuses)})
+	if err != nil || len(data) >= 2<<20 {
+		t.Fatalf("unbounded frame: %d %v", len(data), err)
+	}
+}
+
+func TestEventsFlagFailureUsesNDJSONArgumentError(t *testing.T) {
+	root := newOutputTestRoot(t)
+	root.AddCommand(newEventsCommand())
+	var out, diagnostic strings.Builder
+	if code := runCommand(root, []string{"events", "--unsupported"}, &out, &diagnostic); code != 2 {
+		t.Fatalf("argument exit=%d: %s", code, out.String())
+	}
+	var record agentEvent
+	if json.Unmarshal([]byte(out.String()), &record) != nil || record.Type != "error" || record.Error == nil || record.Error.Code != "invalid_arguments" {
+		t.Fatalf("invalid stream error: %s", out.String())
+	}
+}

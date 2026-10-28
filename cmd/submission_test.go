@@ -209,3 +209,22 @@ func TestAddRequiresInputAndHonorsOutputFailures(t *testing.T) {
 		}
 	})
 }
+
+func TestAmbiguousReceiptPreservesRecoveryID(t *testing.T) {
+	root := newOutputTestRoot(t)
+	root.AddCommand(newAddCommand())
+	id := "727917b8-36f2-4ac7-b0f2-2a27e40fc71a"
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-Surge-Download-ID", id)
+		http.Error(w, "private server details", http.StatusConflict)
+	}))
+	defer server.Close()
+	globalHost, globalToken = server.URL, "test-token"
+	var out, diagnostics bytes.Buffer
+	if code := runCommand(root, []string{"add", "https://example.com/file"}, &out, &diagnostics); code != 1 {
+		t.Fatalf("legacy exit changed: %d", code)
+	}
+	if !strings.Contains(out.String(), id) || !strings.Contains(out.String(), "unknown") || strings.Contains(out.String()+diagnostics.String(), "private") {
+		t.Fatalf("recovery receipt missing: %s %s", out.String(), diagnostics.String())
+	}
+}

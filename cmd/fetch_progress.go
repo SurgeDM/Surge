@@ -107,7 +107,7 @@ func (p *fetchProgress) update(status *types.DownloadStatus) {
 	if state != "downloading" || !transferui.FiniteRate(rate) {
 		rate = 0
 	}
-	snapshot := progressSnapshot{ID: status.ID, Filename: strings.Clone(status.Filename[:min(len(status.Filename), 1024)]), State: state, Downloaded: status.Downloaded, Total: status.TotalSize, Speed: rate, Connections: status.Connections, Capacity: status.MaxConnections}
+	snapshot := progressSnapshot{ID: status.ID, Filename: strings.Clone(status.Filename[:min(len(status.Filename), 1024)]), State: strings.Clone(state[:min(len(state), 64)]), Downloaded: status.Downloaded, Total: status.TotalSize, Speed: rate, Connections: status.Connections, Capacity: status.MaxConnections}
 	p.mu.Lock()
 	if previous, ok := p.latest[status.ID]; ok {
 		if snapshot.Filename == "" {

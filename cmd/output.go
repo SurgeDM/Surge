@@ -76,7 +76,9 @@ func runCommand(root *cobra.Command, args []string, stdout, stderr io.Writer) in
 		}
 		if !isStreamEnded(err) {
 			failure := clioutput.Describe(err)
-			_ = clioutput.WriteNDJSON(stdout, agentEvent{SchemaVersion: 1, Type: "error", Error: &failure})
+			if writeErr := clioutput.WriteNDJSON(stdout, agentEvent{SchemaVersion: 1, Type: "error", Error: &failure}); writeErr != nil {
+				return 1
+			}
 		}
 		return clioutput.ExitCode(err)
 	}

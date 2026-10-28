@@ -54,6 +54,7 @@ func newCapabilitiesCommand() *cobra.Command {
 	command.Flags().Bool("server", false, "Explicitly query the configured server with a five-second limit")
 	command.Flags().Bool("json", false, "Write machine-readable capabilities")
 	command.Flags().String("output-version", "", "Supported output version: 1")
+	configureContractValidation(command)
 	return command
 }
 func init() { rootCmd.AddCommand(newCapabilitiesCommand()) }

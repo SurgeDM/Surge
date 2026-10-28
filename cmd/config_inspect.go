@@ -92,6 +92,7 @@ func newConfigInspectCommand(mode string) *cobra.Command {
 	command.ValidArgsFunction = func(_ *cobra.Command, _ []string, _ string) ([]string, cobra.ShellCompDirective) {
 		return config.GetSettingPaths(), cobra.ShellCompDirectiveNoFileComp
 	}
+	configureContractValidation(command)
 	return command
 }
 func init() {
