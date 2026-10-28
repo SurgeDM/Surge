@@ -53,9 +53,10 @@ A remote result path belongs to the daemon, not the client's filesystem.
 
 `--json` and `--output-version 1` write one v1 result, including failure receipts.
 Human output prints final artifact receipts and a copyable session resume command.
-Receipts include decimal-string byte counts, reused checkpoint bytes, invocation
-duration in seconds, and average newly downloaded bytes per second. The average
-includes verification and finalization time. A completed job is returned only
+Receipts include decimal-string byte counts, checkpoint information, invocation
+duration in seconds, and an invocation average when the transferred byte count
+is known. The average includes probing, verification, and finalization time.
+A completed job is returned only
 after finalization and persistence, followed by an existence/size check.
 
 The direct API rejects interactive approval requests that specify artifact
@@ -102,3 +103,7 @@ restart, so the estimate is not proof of actual reuse. Resumed work reports a nu
 `average_bytes_per_second` instead of inventing a transfer rate. Fresh downloads
 report exact zero reused bytes and an invocation average including probing and
 verification. Older v1 receipts may omit the new checkpoint and exactness fields.
+
+See [agent submissions](agents.md) for manifests, stdin batches, and durable remote
+submission keys. Invalid inputs excluded by `--allow-partial` do not enter the
+saved resumable session.
