@@ -605,3 +605,130 @@ func TestMissingCategoryDirectoryDoesNotBlockSettingsSave(t *testing.T) {
 		}
 	}
 }
+
+func TestListCompletedDownloadUsesActualFileSize(t *testing.T) {
+	testutil.SetupStateDB(t)
+	path := filepath.Join(t.TempDir(), "completed.bin")
+	if err := os.WriteFile(path, make([]byte, 1234), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddToMasterList(types.DownloadRecord{ID: "actual-size", Filename: "completed.bin", DestPath: path, Status: "completed", TotalSize: 9999, Downloaded: 9999}); err != nil {
+		t.Fatal(err)
+	}
+	statuses, err := NewLocalDownloadService(nil).List()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(statuses) != 1 || statuses[0].TotalSize != 1234 || statuses[0].Downloaded != 1234 {
+		t.Fatalf("completed status should use file size: %+v", statuses)
+	}
+}
+
+func TestCategoryAssignmentIsDurableAndExposedByService(t *testing.T) {
+	testutil.SetupStateDB(t)
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = []config.Category{{Name: "Videos", Path: t.TempDir(), Pattern: ".*"}}
+	mgr := orchestrator.NewLifecycleManager(nil, orchestrator.NewEventBus(), settings)
+	svc := NewLocalDownloadService(mgr)
+	t.Cleanup(func() {
+		if err := svc.Shutdown(); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	})
+	entry := types.DownloadRecord{ID: "category", Status: "paused", DestPath: filepath.Join(t.TempDir(), "file.bin")}
+	if err := store.AddToMasterList(entry); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.AssignCategory(entry.ID, "Videos", true); err != nil {
+		t.Fatal(err)
+	}
+	status, err := svc.GetStatus(entry.ID)
+	if err != nil || status.CategoryOverride == nil || *status.CategoryOverride != "Videos" || status.DestPath != entry.DestPath {
+		t.Fatalf("status=%+v error=%v", status, err)
+	}
+	if err := svc.AssignCategory(entry.ID, "", false); err != nil {
+		t.Fatal(err)
+	}
+	statuses, err := svc.List()
+	if err != nil || len(statuses) != 1 || statuses[0].CategoryOverride == nil || *statuses[0].CategoryOverride != "" {
+		t.Fatalf("list=%+v error=%v", statuses, err)
+	}
+	if err := svc.AssignCategory(entry.ID, "missing", false); err == nil {
+		t.Fatal("unknown category accepted")
+	}
+}
+
+func TestCompletedFileMissingIsTransient(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "file.bin")
+	if !completedFileMissing("completed", path) {
+		t.Fatal("missing completed file not detected")
+	}
+	if completedFileMissing("paused", path) {
+		t.Fatal("paused file treated as missing")
+	}
+	if err := os.WriteFile(path, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if completedFileMissing("completed", path) {
+		t.Fatal("restored file still missing")
+	}
+}
+
+func TestAssignCategoryMissingRecordReturnsNotFound(t *testing.T) {
+	testutil.SetupStateDB(t)
+	settings := config.DefaultSettings()
+	settings.General.DefaultDownloadDir.Value = t.TempDir()
+	mgr := orchestrator.NewLifecycleManager(nil, nil, settings)
+	svc := NewLocalDownloadService(mgr)
+	t.Cleanup(func() { _ = svc.Shutdown() })
+	if err := svc.AssignCategory("missing", "", true); !errors.Is(err, types.ErrNotFound) {
+		t.Fatalf("got %v, want not found", err)
+	}
+}
+
+func TestMovingStatusAndMutationGuards(t *testing.T) {
+	testutil.SetupStateDB(t)
+	mgr := orchestrator.NewLifecycleManager(nil, nil, config.DefaultSettings())
+	svc := NewLocalDownloadService(mgr)
+	t.Cleanup(func() { _ = svc.Shutdown() })
+	source := filepath.Join(t.TempDir(), "file.bin")
+	if err := os.WriteFile(source, []byte("contents"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.AddToMasterList(types.DownloadRecord{ID: "moving", Status: "completed", DestPath: source}); err != nil {
+		t.Fatal(err)
+	}
+	err := store.MoveCompletedCategory("moving", "Videos", t.TempDir(), func(moving bool) {
+		if !moving {
+			return
+		}
+		status, err := svc.GetStatus("moving")
+		if err != nil || status == nil || !status.Moving {
+			t.Errorf("moving status missing: %+v %v", status, err)
+		}
+		statuses, err := svc.List()
+		if err != nil || len(statuses) != 1 || !statuses[0].Moving {
+			t.Errorf("moving list status missing: %+v %v", statuses, err)
+		}
+		for _, mutate := range []func() error{
+			func() error { return svc.AssignCategory("moving", "", false) },
+			func() error { return svc.Delete("moving") },
+			func() error { return svc.Purge("moving") },
+			func() error { return svc.UpdateURL("moving", "other") },
+			func() error { return svc.SetRateLimit("moving", 1) },
+			func() error { return svc.ClearRateLimit("moving") },
+			func() error { return svc.Resume("moving") },
+		} {
+			if err := mutate(); !errors.Is(err, types.ErrMoving) {
+				t.Errorf("mutation returned %v, want moving", err)
+			}
+		}
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	status, err := svc.GetStatus("moving")
+	if err != nil || status.Moving {
+		t.Fatalf("moving status did not clear: %+v %v", status, err)
+	}
+}

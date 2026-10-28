@@ -283,11 +283,11 @@ func TestProcessDownloads_RoutesBinFilesToCustomCategory(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.General.DefaultDownloadDir.Value = defaultDir
 	settings.Categories.CategoryEnabled.Value = true
-	settings.Categories.Categories = append(settings.Categories.Categories, config.Category{
+	settings.Categories.Categories = append([]config.Category{{
 		Name:    "Binary",
 		Pattern: `(?i)\.bin$`,
 		Path:    customDir,
-	})
+	}}, settings.Categories.Categories...)
 	if err := config.SaveSettings(settings); err != nil {
 		t.Fatalf("SaveSettings failed: %v", err)
 	}

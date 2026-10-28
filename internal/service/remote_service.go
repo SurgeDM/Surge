@@ -576,3 +576,16 @@ func (s *RemoteDownloadService) doClearDownloads(endpoint string) (int64, error)
 
 	return result.Deleted, nil
 }
+
+func (s *RemoteDownloadService) AssignCategory(id, category string, move bool) error {
+	resp, err := s.doRequest("PUT", "/category?id="+url.QueryEscape(id), map[string]any{"category": category, "move": move})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("category update failed (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return nil
+}

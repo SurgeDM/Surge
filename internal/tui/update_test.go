@@ -346,6 +346,7 @@ func TestUpdate_DownloadQueuedExistingDownloadPropagatesRateLimit(t *testing.T) 
 func TestProcessProgressMsg_ClearsResumingOnTransfer(t *testing.T) {
 	dm := NewDownloadModel("id-1", "http://example.com/file", "file", 100)
 	dm.resuming = true
+	dm.started = true
 	dm.Downloaded = 50
 	m := RootModel{
 		downloads: []*DownloadModel{dm},
@@ -496,6 +497,7 @@ func TestUpdate_DownloadRemoved_NoOpWhenUnknownID(t *testing.T) {
 
 func TestProcessProgressMsg_UpdatesElapsed(t *testing.T) {
 	dm := NewDownloadModel("id-1", "http://example.com/file", "file", 1000)
+	dm.started = true
 	m := RootModel{
 		downloads: []*DownloadModel{dm},
 		list:      NewDownloadList(80, 20),
@@ -708,6 +710,15 @@ func TestUpdate_BatchDownloadRequestMsg_QueuesWhileConfirmationActive(t *testing
 	}
 	if root.pendingURL != first.URL {
 		t.Fatalf("queued batch should not mutate abandoned single fields, got pendingURL %q", root.pendingURL)
+	}
+}
+
+func TestStartDownload_RejectsExistingID(t *testing.T) {
+	existing := &DownloadModel{ID: "request-id", Filename: "existing.zip"}
+	m := RootModel{Service: &mockService{}, downloads: []*DownloadModel{existing}, SelectedDownloadID: "request-id"}
+	updated, cmd := m.startDownload("https://example.com/new.zip", nil, nil, t.TempDir(), false, "new.zip", " request-id ", 0, 0)
+	if cmd != nil || len(updated.downloads) != 1 || updated.downloads[0] != existing || existing.Filename != "existing.zip" || updated.SelectedDownloadID != "request-id" {
+		t.Fatal("duplicate ID must leave the existing download unchanged and not enqueue")
 	}
 }
 
@@ -1451,5 +1462,24 @@ func TestUpdate_UnlistedStatePasteIsIgnored(t *testing.T) {
 	}
 	if got := m2.urlUpdateInput.Value(); got != "https://example.com/original" {
 		t.Fatalf("expected unlisted state paste to be ignored, got %q", got)
+	}
+}
+
+func TestQueuedAndResumedDownloadsWaitForStart(t *testing.T) {
+	for _, event := range []types.EventType{types.EventQueued, types.EventResumed} {
+		d := NewDownloadModel("id-1", "http://example.com/file", "file", 100)
+		d.started, d.Speed, d.Connections = true, 100, 3
+		m := RootModel{downloads: []*DownloadModel{d}, list: NewDownloadList(80, 20), logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)), activeTab: TabQueued, pinnedTab: TabQueued}
+		updated, _ := m.Update(types.DownloadEvent{Type: event, DownloadID: d.ID})
+		m = updated.(RootModel)
+		if d.started || d.Speed != 0 || d.Connections != 0 || len(m.getFilteredDownloads()) != 1 || m.ComputeViewStats().QueuedCount != 1 {
+			t.Fatalf("event %v did not move download to queue: %+v", event, d)
+		}
+		updated, _ = m.Update(types.DownloadEvent{Type: types.EventStarted, DownloadID: d.ID, Filename: "file", Total: 100})
+		m = updated.(RootModel)
+		m.activeTab = TabActive
+		if !d.started || len(m.getFilteredDownloads()) != 1 || m.ComputeViewStats().ActiveCount != 1 {
+			t.Fatalf("event %v: started download did not become active", event)
+		}
 	}
 }

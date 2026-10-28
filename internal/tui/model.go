@@ -65,8 +65,10 @@ const (
 	BugReportLogPathState
 	SpeedLimitsState
 	CategoryPickerState
+	CategoryMoveConfirmState
 	PurgeConfirmState
 	RemoveConfirmState
+	SettingsConfirmState
 )
 
 type FilePickerOrigin int
@@ -81,12 +83,16 @@ const (
 )
 
 const (
-	TabQueued = 0
-	TabActive = 1
-	TabDone   = 2
+	TabQueued         = 0
+	TabActive         = 1
+	TabDone           = 2
+	TabAll            = 3
+	dashboardTabCount = 4
 )
 
 type DownloadModel struct {
+	moving           bool
+	fileMissing      bool
 	ID               string
 	URL              string
 	Filename         string
@@ -137,6 +143,17 @@ type RootModel struct {
 	hideMirrors       bool
 	purgeTargetID     string
 	removeTargetID    string
+	downloads      []*DownloadModel
+	width          int
+	height         int
+	state          UIState
+	activeTab      int // TabQueued, TabActive, TabDone, or TabAll
+	pinnedTab      int // -1=None, otherwise a dashboard tab
+	inputs         []textinput.Model
+	focusedInput   int
+	hideMirrors    bool
+	purgeTargetID  string
+	removeTargetID string
 	// Service Interface
 	// Core
 	Service      downloadservice.DownloadService
@@ -156,6 +173,7 @@ type RootModel struct {
 	PWD string
 
 	// Duplicate detection
+	pendingDownloadID           string // Requested ID pending confirmation
 	pendingURL                  string // URL pending confirmation
 	pendingPath                 string // Path pending confirmation
 	pendingIsDefaultPath        bool
@@ -177,6 +195,7 @@ type RootModel struct {
 	// Notification log system
 	logViewport viewport.Model // Scrollable log viewport
 	logEntries  []string       // Log entries for download events
+	logKinds    []logKind      // Semantic styles, applied using the current palette
 	logFocused  bool           // Whether the log viewport is focused
 
 	// Settings
@@ -194,7 +213,8 @@ type RootModel struct {
 	SettingsIsEditing     bool             // Whether currently editing a value
 	SettingsInput         textinput.Model  // Input for editing string/int values
 	settingsError         string           // Current validation error in settings
-	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
+	settingsAction        *settingsAction
+	ExtensionTokenCopied  bool // Flash message for "Token Copied!"
 
 	// Speed Limits Modal
 	speedLimitsCursor    int
@@ -209,6 +229,14 @@ type RootModel struct {
 	searchInput  textinput.Model // Text input for search
 	searchActive bool            // Whether search mode is active
 	searchQuery  string          // Current search query
+
+	helpSearchInput  textinput.Model
+	helpSearchActive bool
+	helpSearchQuery  string
+
+	settingsSearchInput  textinput.Model
+	settingsSearchActive bool
+	settingsSearchQuery  string
 
 	// Batch import
 	pendingBatchURLs         []string // URLs pending batch import
@@ -225,6 +253,8 @@ type RootModel struct {
 	categoryPickerCursor int
 	categoryPickerAssign bool
 	categoryPickerTarget string
+	pendingCategory      string
+	AssignCategoryFunc   func(string, string, bool) error
 	catMgrEditField      int                // 0=Name, 1=Description, 2=Pattern, 3=Path
 	catMgrInputs         [4]textinput.Model // Inputs for Name, Description, Pattern, Path
 	catMgrIsNew          bool               // Whether adding a new category
@@ -274,6 +304,8 @@ type RootModel struct {
 func NewDownloadModel(id string, url string, filename string, total int64) *DownloadModel {
 	// Create dummy state container for compatibility if needed
 	state := engineprogress.New(id, total)
+	p := progress.New(progress.WithSpringOptions(0.5, 0.1))
+	applyProgressTheme(&p)
 	return &DownloadModel{
 		ID:            id,
 		URL:           url,
@@ -281,12 +313,8 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 		FilenameLower: strings.ToLower(filename),
 		Total:         total,
 		StartTime:     time.Now(),
-		progress: progress.New(
-			progress.WithSpringOptions(0.5, 0.1),
-			progress.WithColors(colors.Pink(), colors.Pink()),
-			progress.WithScaled(true),
-		),
-		state: state,
+		progress:      p,
+		state:         state,
 	}
 }
 
@@ -419,6 +447,66 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 	downloads := make([]*DownloadModel, 0, len(statuses))
 	for _, status := range statuses {
 		downloads = append(downloads, downloadModelFromStatus(status, config.Resolve[bool](settings.General.AutoResume)))
+	for _, s := range statuses {
+		dm := NewDownloadModel(s.ID, s.URL, s.Filename, s.TotalSize)
+		dm.moving = s.Moving
+		dm.fileMissing = s.FileMissing
+		dm.categoryOverride = s.CategoryOverride
+		dm.Downloaded = s.Downloaded
+		if s.DestPath != "" {
+			dm.Destination = s.DestPath
+		} else {
+			dm.Destination = s.Filename // Fallback
+		}
+		// Status mapping
+		switch s.Status {
+		case "completed":
+			dm.done = true
+			dm.started = true
+			dm.progress.SetPercent(1.0)
+		case "error":
+			dm.done = true
+			dm.started = true
+			if s.Error != "" {
+				dm.err = errors.New(s.Error)
+			} else {
+				dm.err = errors.New("download failed")
+			}
+		case "pausing":
+			dm.pausing = true
+			dm.started = true
+		case "paused":
+			if config.Resolve[bool](settings.General.AutoResume) {
+				dm.resuming = true
+				dm.paused = true // Will update when resume event received
+			} else {
+				dm.paused = true
+			}
+			dm.started = true
+		case "queued":
+			// Always resume queued items
+			dm.resuming = true
+			dm.paused = true // Will update when resume event received
+			dm.started = false
+		case "downloading":
+			dm.started = true
+		}
+
+		if s.TotalSize > 0 {
+			dm.progress.SetPercent(s.Progress / 100.0)
+		}
+		if s.AvgSpeed > 0 {
+			dm.Speed = s.AvgSpeed
+		} else if s.Speed > 0 {
+			dm.Speed = s.Speed
+		}
+		if s.Status == "completed" && s.TimeTaken > 0 {
+			dm.Elapsed = time.Duration(s.TimeTaken) * time.Millisecond
+		}
+		dm.RateLimit = s.RateLimit
+		dm.RateLimitSet = s.RateLimitSet
+
+		downloads = append(downloads, dm)
 	}
 
 	// Initialize the download list
@@ -479,6 +567,7 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 
 	m := RootModel{
 		downloads:             downloads,
+		activeTab:             TabAll,
 		pinnedTab:             -1,
 		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
 		state:                 DashboardState,
@@ -500,6 +589,8 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 		logEntries:            make([]string, 0),
 		SettingsInput:         settingsInput,
 		searchInput:           searchInput,
+		helpSearchInput:       textinput.New(),
+		settingsSearchInput:   textinput.New(),
 		urlUpdateInput:        urlUpdateInput,
 		catMgrInputs:          [4]textinput.Model{catNameInput, catDescInput, catPatternInput, catPathInput},
 		keys:                  keys,
@@ -620,14 +711,16 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 	for _, d := range m.downloads {
 		// Apply tab filter first
 		switch m.activeTab {
+		case TabAll:
+			// All states remain subject to the search and category filters below.
 		case TabQueued:
 			// Queued includes paused downloads and anything not currently active or done
-			if d.done || (!d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.resuming || d.started)) {
+			if d.done || (!d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.started)) {
 				continue
 			}
 		case TabActive:
 			// Active excludes paused downloads and anything without current activity
-			if d.done || d.paused || d.pausing || (d.Speed == 0 && d.Connections == 0 && !d.resuming && !d.started) {
+			if d.done || d.paused || d.pausing || (d.Speed == 0 && d.Connections == 0 && !d.started) {
 				continue
 			}
 		case TabDone:
@@ -764,21 +857,52 @@ func (m *RootModel) refreshThemeCaches() {
 	m.help.Styles.ShortDesc = lipgloss.NewStyle().Foreground(colors.LightGray())
 	m.help.Styles.FullKey = lipgloss.NewStyle().Foreground(colors.Pink())
 	m.help.Styles.FullDesc = lipgloss.NewStyle().Foreground(colors.LightGray())
+	m.help.Styles.ShortSeparator = lipgloss.NewStyle().Foreground(colors.Gray())
+	m.help.Styles.FullSeparator = lipgloss.NewStyle().Foreground(colors.Gray())
+	m.help.Styles.Ellipsis = lipgloss.NewStyle().Foreground(colors.Gray())
 	applyListTheme(&m.list)
 	applyFilepickerTheme(&m.filepicker)
+	for i := range m.inputs {
+		applyTextinputTheme(&m.inputs[i])
+	}
+	for _, input := range []*textinput.Model{&m.SettingsInput, &m.searchInput, &m.helpSearchInput, &m.settingsSearchInput, &m.urlUpdateInput} {
+		applyTextinputTheme(input)
+	}
+	for i := range m.catMgrInputs {
+		applyTextinputTheme(&m.catMgrInputs[i])
+	}
+	m.spinner.Style = lipgloss.NewStyle().Foreground(colors.Pink())
+	m.refreshLogViewportContent()
 	m.logoCache = ""
 	if m.graphRenderer != nil {
 		m.graphRenderer.InvalidateCache()
 	}
-	// Rebuild progress bar colors for all existing downloads so the solid pink color
-	// matches the newly loaded palette rather than the one active at creation time.
+	// Recolor existing bars without losing their animation or current percentage.
 	for _, d := range m.downloads {
-		d.progress = progress.New(
-			progress.WithSpringOptions(0.5, 0.1),
-			progress.WithColors(colors.Pink(), colors.Pink()),
-			progress.WithScaled(true),
-		)
+		applyProgressTheme(&d.progress)
 	}
+}
+
+func applyProgressTheme(p *progress.Model) {
+	// The default fill character is a half block. Two identical blend stops
+	// paint both its foreground and background, preserving a continuous bar.
+	progress.WithColors(colors.Pink())(p)
+	progress.WithColors(colors.Pink(), colors.Pink())(p)
+	progress.WithScaled(true)(p)
+	p.EmptyColor = colors.Gray()
+	p.PercentageStyle = lipgloss.NewStyle().Foreground(colors.Foreground())
+}
+
+func applyTextinputTheme(input *textinput.Model) {
+	styles := input.Styles()
+	for _, state := range []*textinput.StyleState{&styles.Focused, &styles.Blurred} {
+		state.Text = state.Text.Foreground(colors.Foreground())
+		state.Prompt = state.Prompt.Foreground(colors.Cyan())
+		state.Placeholder = state.Placeholder.Foreground(colors.LightGray())
+		state.Suggestion = state.Suggestion.Foreground(colors.LightGray())
+	}
+	styles.Cursor.Color = colors.Pink()
+	input.SetStyles(styles)
 }
 
 func applyFilepickerTheme(fp *filepicker.Model) {
@@ -787,6 +911,7 @@ func applyFilepickerTheme(fp *filepicker.Model) {
 	}
 
 	fp.Styles.Cursor = lipgloss.NewStyle().Foreground(colors.Pink())
+	fp.Styles.DisabledCursor = lipgloss.NewStyle().Foreground(colors.Gray())
 	fp.Styles.Symlink = lipgloss.NewStyle().Foreground(colors.Cyan())
 	fp.Styles.Directory = lipgloss.NewStyle().Foreground(colors.Blue())
 	fp.Styles.File = lipgloss.NewStyle().Foreground(colors.LightGray())

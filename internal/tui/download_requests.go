@@ -10,11 +10,28 @@ import (
 )
 
 func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy bool) (tea.Model, tea.Cmd) {
+	msg.DownloadID = strings.TrimSpace(msg.DownloadID)
+	if msg.DownloadID != "" {
+		duplicateID := m.FindDownloadByID(msg.DownloadID) != nil ||
+			(m.isRequestConfirmationBusy() && m.pendingDownloadID == msg.DownloadID)
+		for _, queued := range m.pendingRequestQueue {
+			duplicateID = duplicateID || strings.TrimSpace(queued.DownloadID) == msg.DownloadID
+		}
+		if duplicateID {
+			m.addStyledLogEntry(logError, "\u2716 Download ID already exists")
+			if !queueIfBusy {
+				return m.showNextPendingRequest()
+			}
+			return m, nil
+		}
+	}
+
 	if queueIfBusy && m.isRequestConfirmationBusy() {
 		m.pendingRequestQueue = append(m.pendingRequestQueue, msg)
 		return m, nil
 	}
 
+	m.pendingDownloadID = msg.DownloadID
 	path := strings.TrimSpace(msg.Path)
 	isDefaultPath := m.isDefaultDownloadPath(path)
 	if path == "" {
@@ -91,6 +108,7 @@ func (m RootModel) isRequestConfirmationBusy() bool {
 }
 
 func (m RootModel) showNextPendingRequest() (tea.Model, tea.Cmd) {
+	m.pendingDownloadID = ""
 	if len(m.pendingRequestQueue) == 0 {
 		if len(m.pendingBatchRequestQueue) == 0 {
 			return m, nil

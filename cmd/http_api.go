@@ -308,6 +308,27 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "ok", "id": id})
 	})))
 
+	mux.HandleFunc("/category", requireMethod(http.MethodPut, withRequiredID(func(w http.ResponseWriter, r *http.Request, id string) {
+		backend, ok := service.(downloadCategoryService)
+		if !ok {
+			http.Error(w, "Category assignment unsupported", http.StatusNotImplemented)
+			return
+		}
+		var req struct {
+			Category string `json:"category"`
+			Move     bool   `json:"move"`
+		}
+		if err := decodeJSONBody(r, &req); err != nil {
+			http.Error(w, "Invalid request body", jsonDecodeErrorStatus(err))
+			return
+		}
+		if err := backend.AssignCategory(id, req.Category, req.Move); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "updated"})
+	})))
+
 	mux.HandleFunc("/update-url", requireMethod(http.MethodPut, withRequiredID(func(w http.ResponseWriter, r *http.Request, id string) {
 		var req map[string]string
 		if err := decodeJSONBody(r, &req); err != nil {
@@ -786,4 +807,8 @@ func jsonDecodeErrorStatus(err error) int {
 		return http.StatusRequestEntityTooLarge
 	}
 	return http.StatusBadRequest
+}
+
+type downloadCategoryService interface {
+	AssignCategory(string, string, bool) error
 }

@@ -16,19 +16,39 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // addLogEntry adds a log entry to the log viewport
 func (m *RootModel) addLogEntry(msg string) {
+	m.addStyledLogEntry(logPlain, msg)
+}
+
+type logKind uint8
+
+const (
+	logPlain logKind = iota
+	logStarted
+	logComplete
+	logError
+	logPaused
+)
+
+func (m *RootModel) addStyledLogEntry(kind logKind, msg string) {
 	timestamp := time.Now().Format("15:04:05")
 	entry := fmt.Sprintf("[%s] %s", timestamp, msg)
+	if len(m.logKinds) != len(m.logEntries) {
+		m.logKinds = make([]logKind, len(m.logEntries))
+	}
 	m.logEntries = append(m.logEntries, entry)
+	m.logKinds = append(m.logKinds, kind)
 
 	// Keep only the last 100 entries to prevent memory issues
 	if len(m.logEntries) > 100 {
 		m.logEntries = m.logEntries[len(m.logEntries)-100:]
+		m.logKinds = m.logKinds[len(m.logKinds)-100:]
 	}
 
 	m.refreshLogViewportContent()
@@ -47,7 +67,21 @@ func (m *RootModel) refreshLogViewportContent() {
 	// TruncateTwoLines ensures long messages don't overflow the UI.
 
 	var wrappedEntries []string
-	for _, entry := range m.logEntries {
+	for i, entry := range m.logEntries {
+		style := lipgloss.NewStyle().Foreground(colors.Foreground())
+		if i < len(m.logKinds) {
+			switch m.logKinds[i] {
+			case logStarted:
+				style = LogStyleStarted
+			case logComplete:
+				style = LogStyleComplete
+			case logError:
+				style = LogStyleError
+			case logPaused:
+				style = LogStylePaused
+			}
+		}
+		entry = style.Render(entry)
 		wrapped := utils.TruncateTwoLines(entry, width)
 		wrappedEntries = append(wrappedEntries, strings.Split(wrapped, "\n")...)
 	}

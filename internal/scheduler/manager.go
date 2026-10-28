@@ -301,6 +301,13 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 
 	// Physical download success takes precedence over late-arriving pause signals.
 	if downloadErr == nil {
+		// The response length may be unknown or differ from the completed file.
+		// Completion is emitted before the lifecycle promotes the working file.
+		if info, err := os.Stat(finalDestPath + types.IncompleteSuffix); err == nil && info.Mode().IsRegular() {
+			effectiveTotalSize = info.Size()
+		} else if info, err := os.Stat(finalDestPath); err == nil && info.Mode().IsRegular() {
+			effectiveTotalSize = info.Size()
+		}
 		var elapsed time.Duration
 		if progState != nil {
 			_, elapsed = progState.FinalizeSession(effectiveTotalSize)
