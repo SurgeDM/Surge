@@ -11,7 +11,9 @@ import (
 	"github.com/SurgeDM/Surge/internal/clioutput"
 	"github.com/SurgeDM/Surge/internal/transferui"
 	"github.com/SurgeDM/Surge/internal/types"
+	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
+	"os"
 )
 
 // commandResultError carries receipts from an operation that partially failed.
@@ -27,7 +29,13 @@ func (e *commandResultError) Unwrap() error { return e.cause }
 // Run is the process boundary: commands return errors; this function reports
 // them once and selects the exit status. The caller owns process termination.
 func Run(args []string, stdout, stderr io.Writer) int {
-
+	configureCommandHelp()
+	if len(args) == 0 {
+		output, ok := stdout.(*os.File)
+		if !ok || !term.IsTerminal(os.Stdin.Fd()) || !term.IsTerminal(output.Fd()) {
+			args = []string{"--help"}
+		}
+	}
 	return runCommand(rootCmd, args, stdout, stderr)
 }
 

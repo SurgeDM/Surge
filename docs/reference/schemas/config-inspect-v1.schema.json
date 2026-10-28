@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Surge config-inspect version 1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "valid",
+    "items"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "valid": {
+      "type": "boolean"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "key",
+          "value",
+          "default",
+          "source",
+          "description",
+          "needs_restart"
+        ],
+        "properties": {
+          "key": {
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "file",
+              "default"
+            ]
+          },
+          "needs_restart": {
+            "type": "boolean"
+          }
+        }
+      }
+    }
+  }
+}
