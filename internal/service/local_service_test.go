@@ -676,7 +676,9 @@ func TestCompletedFileMissingIsTransient(t *testing.T) {
 
 func TestAssignCategoryMissingRecordReturnsNotFound(t *testing.T) {
 	testutil.SetupStateDB(t)
-	mgr := orchestrator.NewLifecycleManager(nil, nil, config.DefaultSettings())
+	settings := config.DefaultSettings()
+	settings.General.DefaultDownloadDir.Value = t.TempDir()
+	mgr := orchestrator.NewLifecycleManager(nil, nil, settings)
 	svc := NewLocalDownloadService(mgr)
 	t.Cleanup(func() { _ = svc.Shutdown() })
 	if err := svc.AssignCategory("missing", "", true); !errors.Is(err, types.ErrNotFound) {

@@ -40,10 +40,11 @@ func TestSettingsSearchEditsFilteredSetting(t *testing.T) {
 
 func TestSettingsSearchNoMatchesStillShowsSearch(t *testing.T) {
 	m := InitialRootModel(1701, "test", nil, nil, config.DefaultSettings(), false)
+	m.keys = config.DefaultKeyMap() // Keep the hint independent of the saved keymap.
 	m.width, m.height = 120, 40
 	m.settingsSearchQuery = "no-setting-matches-this"
 	text := stripANSI.ReplaceAllString(m.viewSettings(), "")
-	if !strings.Contains(text, "No matching settings") || !strings.Contains(text, "[f//] Edit") {
+	if !strings.Contains(text, "No matching settings") || !strings.Contains(text, "[f /] Edit") {
 		t.Fatalf("missing empty search feedback: %s", text)
 	}
 }
