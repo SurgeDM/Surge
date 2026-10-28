@@ -70,3 +70,8 @@ type DownloadService interface {
 type CategoryService interface {
 	AssignCategory(id, category string, move bool) error
 }
+
+// ObserverService is optional; servers must not silently fall back to unfiltered streams.
+type ObserverService interface {
+	StreamObserver(context.Context, types.ObserverOptions) (<-chan types.DownloadEvent, func(), error)
+}

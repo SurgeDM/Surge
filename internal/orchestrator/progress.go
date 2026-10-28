@@ -82,7 +82,8 @@ func (pa *ProgressAggregator) reportProgressLoop() {
 		if pa.pool == nil || pa.eventBus == nil {
 			continue
 		}
-		if !pa.eventBus.HasObservers() {
+		wantsProgress, wantsChunks := pa.eventBus.ProgressInterest()
+		if !wantsProgress {
 			clear(lastSpeeds)
 			clear(lastChunkSnapshot)
 			clear(lastDownloaded)
@@ -146,7 +147,7 @@ func (pa *ProgressAggregator) reportProgressLoop() {
 				RateLimited: progress.CfgProgress(&cfg).RateLimited.Load(),
 			}
 
-			if time.Since(lastChunkSnapshot[cfg.ID]) >= 500*time.Millisecond {
+			if wantsChunks && time.Since(lastChunkSnapshot[cfg.ID]) >= 500*time.Millisecond {
 				bitmap, width, _, chunkSize, chunkProgress := progress.CfgProgress(&cfg).GetBitmapSnapshot(true)
 				if width > 0 && len(bitmap) > 0 {
 					msg.ChunkBitmap = bitmap

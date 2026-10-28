@@ -109,6 +109,14 @@ func (p *fetchProgress) update(status *types.DownloadStatus) {
 	}
 	snapshot := progressSnapshot{ID: status.ID, Filename: strings.Clone(status.Filename[:min(len(status.Filename), 1024)]), State: state, Downloaded: status.Downloaded, Total: status.TotalSize, Speed: rate, Connections: status.Connections, Capacity: status.MaxConnections}
 	p.mu.Lock()
+	if previous, ok := p.latest[status.ID]; ok {
+		if snapshot.Filename == "" {
+			snapshot.Filename = previous.Filename
+		}
+		if snapshot.Capacity == 0 {
+			snapshot.Capacity = previous.Capacity
+		}
+	}
 	p.latest[status.ID] = snapshot
 	p.mu.Unlock()
 }

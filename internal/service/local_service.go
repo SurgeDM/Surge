@@ -699,3 +699,15 @@ func statusFromDownloadRecord(entry types.DownloadRecord) types.DownloadStatus {
 }
 
 func (s *LocalDownloadService) SupportsArtifactPolicies() bool { return s.lifecycle != nil }
+
+func (s *LocalDownloadService) StreamObserver(ctx context.Context, options types.ObserverOptions) (<-chan types.DownloadEvent, func(), error) {
+	if s.lifecycle == nil || s.lifecycle.GetEventBus() == nil {
+		return nil, nil, types.ErrServiceUnavailable
+	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	stream, cleanup := s.lifecycle.GetEventBus().SubscribeObserver(options)
+	stop := context.AfterFunc(ctx, cleanup)
+	return stream, func() { stop(); cleanup() }, nil
+}

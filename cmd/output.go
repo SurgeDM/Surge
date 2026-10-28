@@ -27,6 +27,7 @@ func (e *commandResultError) Unwrap() error { return e.cause }
 // Run is the process boundary: commands return errors; this function reports
 // them once and selects the exit status. The caller owns process termination.
 func Run(args []string, stdout, stderr io.Writer) int {
+
 	return runCommand(rootCmd, args, stdout, stderr)
 }
 
@@ -60,6 +61,17 @@ func runCommand(root *cobra.Command, args []string, stdout, stderr io.Writer) in
 		}
 	}
 
+	if command != nil && command.Name() == "events" {
+		var streamWrite *clioutput.WriteError
+		if errors.As(err, &streamWrite) {
+			return 1
+		}
+		if !isStreamEnded(err) {
+			failure := clioutput.Describe(err)
+			_ = clioutput.WriteNDJSON(stdout, agentEvent{SchemaVersion: 1, Type: "error", Error: &failure})
+		}
+		return clioutput.ExitCode(err)
+	}
 	var writeError *clioutput.WriteError
 	if errors.As(err, &writeError) {
 		_, _ = fmt.Fprintln(stderr, err)

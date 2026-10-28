@@ -67,3 +67,12 @@ func write(w io.Writer, data []byte) error {
 	}
 	return nil
 }
+
+// WriteNDJSON writes one compact, newline-terminated stream record.
+func WriteNDJSON(w io.Writer, value any) error {
+	data, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("encode event record: %w", err)
+	}
+	return write(w, append(data, '\n'))
+}

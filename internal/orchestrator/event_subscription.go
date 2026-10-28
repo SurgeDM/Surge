@@ -10,6 +10,8 @@ import (
 // a producer except the reliable queue, after engine ingress has been drained.
 type eventSubscription struct {
 	reliable bool
+	observer *types.ObserverOptions
+	ids      map[string]bool
 	critical chan types.DownloadEvent
 	progress chan types.DownloadEvent
 	out      chan types.DownloadEvent
@@ -38,6 +40,13 @@ func (sub *eventSubscription) enqueue(msg types.DownloadEvent) bool {
 	case <-sub.done:
 		return false
 	default:
+	}
+	if sub.observer != nil {
+		var keep bool
+		msg, keep = sub.filter(msg)
+		if !keep {
+			return true
+		}
 	}
 	if sub.reliable {
 		if !persistenceEvent(msg) {
@@ -109,4 +118,40 @@ func (sub *eventSubscription) run() {
 			return
 		}
 	}
+}
+
+// Filter before queueing, so unrelated work never consumes observer capacity.
+func (sub *eventSubscription) filter(msg types.DownloadEvent) (types.DownloadEvent, bool) {
+	if msg.Type == types.EventBatchProgress {
+		if !sub.observer.Progress {
+			return msg, false
+		}
+		batch := make([]types.DownloadEvent, 0, len(msg.BatchEvents))
+		for _, item := range msg.BatchEvents {
+			if filtered, ok := sub.filter(item); ok {
+				batch = append(batch, filtered)
+			}
+		}
+		msg.BatchEvents = batch
+		return msg, len(batch) > 0
+	}
+	if msg.ResyncRequired {
+		return msg, true
+	}
+	if msg.Type == types.EventSystem || msg.Type == types.EventRequest || msg.Type == types.EventBatchRequest {
+		return msg, false
+	}
+	if len(sub.ids) > 0 && !sub.ids[msg.DownloadID] {
+		return msg, false
+	}
+	if isProgressEvent(msg) && !sub.observer.Progress {
+		return msg, false
+	}
+	if !sub.observer.Chunks {
+		msg.ChunkBitmap = nil
+		msg.ChunkProgress = nil
+		msg.BitmapWidth = 0
+		msg.ChunkSize = 0
+	}
+	return msg, true
 }

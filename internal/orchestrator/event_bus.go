@@ -98,20 +98,29 @@ func (bus *EventBus) Publish(msg types.DownloadEvent) error {
 // Subscribe creates a bounded observer. Progress samples coalesce; overflowing
 // lifecycle notifications close the stream so the client can resynchronize.
 func (bus *EventBus) Subscribe() (<-chan types.DownloadEvent, func()) {
-	return bus.subscribe(false)
+	return bus.subscribe(false, nil)
 }
 
 // SubscribeLifecycle is reserved for the persistence worker, which must consume
 // until shutdown or call cleanup. It skips transient events and drains accepted
 // lifecycle events on shutdown. Storage backpressure is intentional here.
 func (bus *EventBus) SubscribeLifecycle() (<-chan types.DownloadEvent, func()) {
-	return bus.subscribe(true)
+	return bus.subscribe(true, nil)
 }
 
-func (bus *EventBus) subscribe(reliable bool) (<-chan types.DownloadEvent, func()) {
+func (bus *EventBus) subscribe(reliable bool, options *types.ObserverOptions) (<-chan types.DownloadEvent, func()) {
 	bus.pubMu.RLock()
 	defer bus.pubMu.RUnlock()
 	sub := newEventSubscription(reliable)
+	if options != nil {
+		copyOptions := *options
+		copyOptions.IDs = nil
+		sub.observer = &copyOptions
+		sub.ids = make(map[string]bool, len(options.IDs))
+		for _, id := range options.IDs {
+			sub.ids[id] = true
+		}
+	}
 	if bus.ctx.Err() != nil {
 		close(sub.out)
 		return sub.out, func() {}
@@ -153,4 +162,25 @@ func (bus *EventBus) Shutdown() {
 		close(bus.InputCh)
 	})
 	bus.wg.Wait()
+}
+
+func (bus *EventBus) SubscribeObserver(options types.ObserverOptions) (<-chan types.DownloadEvent, func()) {
+	return bus.subscribe(false, &options)
+}
+
+// ProgressInterest prevents lifecycle-only agents from producing progress or bitmaps.
+func (bus *EventBus) ProgressInterest() (progress, chunks bool) {
+	bus.listenerMu.Lock()
+	defer bus.listenerMu.Unlock()
+	for sub := range bus.listeners {
+		if sub.reliable {
+			continue
+		}
+		if sub.observer == nil {
+			return true, true
+		}
+		progress = progress || sub.observer.Progress
+		chunks = chunks || (sub.observer.Progress && sub.observer.Chunks)
+	}
+	return progress, chunks
 }

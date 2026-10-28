@@ -50,13 +50,15 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	})
 
 	mux.HandleFunc("/events", eventsHandler(service))
+	mux.HandleFunc("/events/agent", requireMethod(http.MethodGet, agentEventsHandler(service)))
 	mux.HandleFunc("/capabilities", requireMethod(http.MethodGet, func(w http.ResponseWriter, r *http.Request) {
 		_, results := service.(downloadservice.ResultService)
+		_, filteredEvents := service.(downloadservice.ObserverService)
 		artifacts := false
 		if owner, ok := service.(interface{ SupportsArtifactPolicies() bool }); ok {
 			artifacts = owner.SupportsArtifactPolicies()
 		}
-		writeJSONResponse(w, http.StatusOK, serverCapabilities{SchemaVersion: 1, Features: map[string]bool{"finalized_results": results, "artifact_sha256": artifacts, "destination_policy": artifacts, "idempotency": ledger != nil}})
+		writeJSONResponse(w, http.StatusOK, serverCapabilities{SchemaVersion: 1, Features: map[string]bool{"finalized_results": results, "artifact_sha256": artifacts, "destination_policy": artifacts, "idempotency": ledger != nil, "filtered_events": filteredEvents}})
 	}))
 
 	// Settings persistence and live application are serialized by the owner.

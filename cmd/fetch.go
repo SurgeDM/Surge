@@ -198,6 +198,12 @@ func runFetch(cmd *cobra.Command, requests []DownloadRequest, opts fetchOptions)
 		}
 		positions[job.ID] = i
 	}
+	ownedIDs := make([]string, 0, len(owner.session.Jobs))
+	for _, job := range owner.session.Jobs {
+		ownedIDs = append(ownedIDs, job.ID)
+	}
+	stopRelay := relayFetchProgress(ctx, owner.service, ownedIDs, progress)
+	defer stopRelay()
 	if opts.resume == "" {
 		validJobs := make([]fetchJob, 0, len(owner.session.Jobs))
 		for i, job := range owner.session.Jobs {
