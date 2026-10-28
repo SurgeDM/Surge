@@ -155,7 +155,9 @@ func TestVisualFixtureRendersAllDownloadsOnOneScreen(t *testing.T) {
 					t.Fatalf("fixture exceeds screen %v", size)
 				}
 			}
-			if m.Snapshot(160, 56) != m.Snapshot(160, 56) {
+			first := m.Snapshot(160, 56)
+			second := m.Snapshot(160, 56)
+			if first != second {
 				t.Fatal("fixture snapshot changed without input")
 			}
 			if m.root.Service != nil || m.root.Orchestrator != nil || m.root.SaveSettingsFunc != nil {

@@ -630,7 +630,11 @@ func TestCategoryAssignmentIsDurableAndExposedByService(t *testing.T) {
 	settings.Categories.Categories = []config.Category{{Name: "Videos", Path: t.TempDir(), Pattern: ".*"}}
 	mgr := orchestrator.NewLifecycleManager(nil, orchestrator.NewEventBus(), settings)
 	svc := NewLocalDownloadService(mgr)
-	defer svc.Shutdown()
+	t.Cleanup(func() {
+		if err := svc.Shutdown(); err != nil {
+			t.Errorf("shutdown: %v", err)
+		}
+	})
 	entry := types.DownloadRecord{ID: "category", Status: "paused", DestPath: filepath.Join(t.TempDir(), "file.bin")}
 	if err := store.AddToMasterList(entry); err != nil {
 		t.Fatal(err)

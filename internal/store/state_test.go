@@ -1586,7 +1586,7 @@ func TestRemoveCompletedIgnoresInvalidIDWithOtherStatus(t *testing.T) {
 
 func TestCategoryAssignmentSurvivesEngineSnapshots(t *testing.T) {
 	dir := setupTestDB(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	entry := types.DownloadRecord{ID: "category-test", Status: "queued"}
 	if err := AddToMasterList(entry); err != nil {
 		t.Fatal(err)
@@ -1613,7 +1613,7 @@ func TestCategoryAssignmentSurvivesEngineSnapshots(t *testing.T) {
 
 func TestMoveCategoryPreservesDestinationAndSourceOnConflict(t *testing.T) {
 	dir := setupTestDB(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	source := filepath.Join(dir, "file.bin")
 	targetDir := filepath.Join(dir, "Videos")
 	if err := os.WriteFile(source, []byte("source"), 0600); err != nil {
@@ -1651,7 +1651,7 @@ func TestMoveCategoryPreservesDestinationAndSourceOnConflict(t *testing.T) {
 
 func TestCategoryMoveWaitsForCompletionAndCanBeCancelled(t *testing.T) {
 	dir := setupTestDB(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	source := filepath.Join(dir, "file.bin")
 	target := filepath.Join(dir, "Videos")
 	entry := types.DownloadRecord{ID: "deferred", Status: "downloading", DestPath: source}
@@ -1711,7 +1711,7 @@ func TestCategoryMoveWaitsForCompletionAndCanBeCancelled(t *testing.T) {
 
 func TestDeferredCategoryMoveFailureKeepsCompletedFile(t *testing.T) {
 	dir := setupTestDB(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	source := filepath.Join(dir, "file.bin")
 	target := filepath.Join(dir, "Videos")
 	if err := os.MkdirAll(target, 0755); err != nil {
@@ -1745,7 +1745,7 @@ func TestDeferredCategoryMoveFailureKeepsCompletedFile(t *testing.T) {
 
 func TestMissingFileMoveDoesNotChangeCategoryEvenAtSamePath(t *testing.T) {
 	dir := setupTestDB(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	entry := types.DownloadRecord{ID: "missing", Status: "completed", DestPath: filepath.Join(dir, "gone.bin")}
 	if err := AddToMasterList(entry); err != nil {
 		t.Fatal(err)
