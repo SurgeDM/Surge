@@ -127,12 +127,12 @@ func TestCategoryShortcutsMatchContextAndConfiguredKeys(t *testing.T) {
 	m := confirmationSettingsModel(t, "Categories", "category_0")
 	m.keys.ApplyConfig(&config.KeyMapConfig{Settings: map[string]config.KeyBindingConfig{"DeleteCategory": {Keys: []string{"ctrl+d"}}}})
 	text := stripANSI.ReplaceAllString(m.renderSettingsHelp(150), "")
-	for _, hint := range []string{"ctrl+d delete category", "reset all", "move up", "tabs"} {
+	for _, hint := range []string{"ctrl+d delete category", "move up"} {
 		if !strings.Contains(text, hint) {
 			t.Fatalf("missing context shortcut %q: %s", hint, text)
 		}
 	}
-	for _, wrong := range []string{"prev tab", "next tab", "reset setting"} {
+	for _, wrong := range []string{"prev tab", "next tab", "reset setting", "reset all", "shift+r", "tabs", "1/2/3/4/5"} {
 		if strings.Contains(text, wrong) {
 			t.Fatalf("category context still advertises %q", wrong)
 		}
@@ -156,6 +156,21 @@ func TestCategoryShortcutsMatchContextAndConfiguredKeys(t *testing.T) {
 	m = settingsPress(t, m, tea.KeyPressMsg{Code: tea.KeyRight})
 	if m.SettingsActiveTab != 1 {
 		t.Fatal("normal settings lost left/right tab navigation")
+	}
+}
+
+func TestManageCategoriesAllowsTabNavigation(t *testing.T) {
+	for _, msg := range []tea.KeyPressMsg{{Code: tea.KeyLeft}, {Code: tea.KeyRight}, settingRune('h'), settingRune('l')} {
+		m := confirmationSettingsModel(t, "Categories", "category_enabled")
+		text := stripANSI.ReplaceAllString(m.renderSettingsHelp(150), "")
+		if !strings.Contains(text, "prev tab") || !strings.Contains(text, "next tab") {
+			t.Fatal("Manage categories should advertise tab navigation")
+		}
+		tab := m.SettingsActiveTab
+		m = settingsPress(t, m, msg)
+		if m.SettingsActiveTab == tab {
+			t.Fatalf("Manage categories blocked %s tab navigation", msg.String())
+		}
 	}
 }
 

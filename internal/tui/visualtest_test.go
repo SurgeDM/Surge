@@ -222,6 +222,26 @@ func TestVisualFixtureUsesNormalNavigationAndSettings(t *testing.T) {
 	}
 }
 
+func TestVisualFixtureFilePickerSelection(t *testing.T) {
+	isolateVisualConfig(t, false)
+	t.Cleanup(func() { colors.LoadTheme("", true) })
+	m := NewVisualTestModel(fixtureSettings(t, "", true), "test")
+	dir := t.TempDir()
+	m.root.filepicker = newFilepicker(dir)
+	m.root.filepickerOrigin = FilePickerOriginSettings
+	m.root.state = FilePickerState
+	updated, _ := m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	m = updated.(VisualTestModel)
+	if m.root.state != SettingsState || config.Resolve[string](m.root.Settings.General.DefaultDownloadDir) != dir {
+		t.Fatal("visual fixture lost the pointer model returned by file selection")
+	}
+	// Continue interacting after a pointer-returning update.
+	updated, _ = m.Update(tea.KeyPressMsg{Code: tea.KeyEsc})
+	if updated.(VisualTestModel).root.state != DashboardState {
+		t.Fatal("settings did not close after file selection")
+	}
+}
+
 func TestVisualFixtureCannotChangeUserConfiguration(t *testing.T) {
 	isolateVisualConfig(t, false)
 	if err := config.SaveKeyMap(config.DefaultKeyMap()); err != nil {

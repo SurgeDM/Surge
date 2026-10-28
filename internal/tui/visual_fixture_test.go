@@ -140,7 +140,12 @@ func (m VisualTestModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	updated, cmd := m.root.Update(msg)
-	m.root = updated.(RootModel)
+	switch root := updated.(type) {
+	case RootModel:
+		m.root = root
+	case *RootModel:
+		m.root = *root
+	}
 	return m, cmd
 }
 

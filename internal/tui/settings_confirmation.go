@@ -27,7 +27,8 @@ type settingsAction struct {
 }
 
 func (m RootModel) categoryListFocused() bool {
-	return m.SettingsFocusedPane == 1 && m.currentSettingsCategory() == "Categories"
+	typ := m.getCurrentSettingType()
+	return m.SettingsFocusedPane == 1 && (typ == config.TypeCustomCategory || typ == config.TypeCustomCategoryAdd)
 }
 
 func (m RootModel) requestSettingsConfirmation(kind settingsActionKind) RootModel {

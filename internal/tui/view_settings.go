@@ -235,21 +235,15 @@ func (m RootModel) renderSettingsHelp(width int) string {
 		default:
 			keys = append(keys, m.keys.Settings.Reset)
 		}
-		keys = append(keys, m.keys.Settings.ResetAll, m.keys.Settings.Close)
+		keys = append(keys, m.keys.Settings.Close)
 		helpText = help.ShortHelpView(keys)
 		var secondary []key.Binding
 		if m.settingsSearchQuery == "" && m.getCurrentSettingType() == config.TypeCustomCategory {
 			secondary = append(secondary, m.keys.Settings.MoveCategoryUp, m.keys.Settings.MoveCategoryDown)
 		}
-		tabKeys := []key.Binding{m.keys.Settings.Tab1, m.keys.Settings.Tab2, m.keys.Settings.Tab3, m.keys.Settings.Tab4, m.keys.Settings.Tab5}
-		var tabLabels []string
-		var tabShortcuts []string
-		for _, binding := range tabKeys {
-			tabLabels = append(tabLabels, binding.Help().Key)
-			tabShortcuts = append(tabShortcuts, binding.Keys()...)
+		if len(secondary) > 0 {
+			helpText = lipgloss.JoinVertical(lipgloss.Center, helpText, help.ShortHelpView(secondary))
 		}
-		secondary = append(secondary, key.NewBinding(key.WithHelp(strings.Join(tabLabels, "/"), "tabs"), key.WithKeys(tabShortcuts...)))
-		helpText = lipgloss.JoinVertical(lipgloss.Center, helpText, help.ShortHelpView(secondary))
 	}
 	if m.SettingsIsEditing {
 		helpText = help.View(m.keys.SettingsEditor)
