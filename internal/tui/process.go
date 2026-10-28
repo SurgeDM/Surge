@@ -144,7 +144,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	}
 	m.downloads = append(m.downloads, newDownload)
 	m.SelectedDownloadID = optimisticID
-	if m.pinnedTab == -1 {
+	if m.pinnedTab == -1 && m.activeTab != TabAll {
 		m.activeTab = TabQueued
 	}
 	m.UpdateListItems()

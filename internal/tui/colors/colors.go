@@ -62,6 +62,7 @@ var (
 )
 
 var defaultDark = Palette{
+	Graph: []string{"#700070", "#9800c0", "#c000e8", "#ff55ff"},
 	Primary: struct {
 		Background string `toml:"background"`
 		Foreground string `toml:"foreground"`
@@ -92,6 +93,7 @@ var defaultDark = Palette{
 }
 
 var defaultLight = Palette{
+	Graph: []string{"#d99ce3", "#b658c7", "#9934b5", "#5b259d"},
 	Primary: struct {
 		Background string `toml:"background"`
 		Foreground string `toml:"foreground"`

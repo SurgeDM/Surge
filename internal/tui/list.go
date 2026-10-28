@@ -34,16 +34,7 @@ func (i DownloadItem) Title() string {
 func (i DownloadItem) Description() string {
 	d := i.download
 
-	// Get styled status using the shared component
-	var styledStatus string
-	if d.pausing {
-		styledStatus = lipgloss.NewStyle().Foreground(colors.StatePaused()).Render(i.spinnerView + " Pausing...")
-	} else if d.resuming && d.started {
-		styledStatus = lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(i.spinnerView + " Resuming...")
-	} else {
-		status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming)
-		styledStatus = status.RenderWithSpinner(i.spinnerView)
-	}
+	styledStatus := getDownloadStatus(d, i.spinnerView)
 
 	// Build progress info
 	pct := 0.0
@@ -326,7 +317,7 @@ func (m *RootModel) UpdateListItems() {
 					}
 
 					// If it belongs to a different tab, switch to it (unless current tab is pinned)
-					if m.pinnedTab == -1 && newTab != -1 && newTab != m.activeTab {
+					if m.pinnedTab == -1 && m.activeTab != TabAll && newTab != -1 && newTab != m.activeTab {
 						m.activeTab = newTab
 
 						// Force selection for the recursive call

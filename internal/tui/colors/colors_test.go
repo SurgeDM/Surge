@@ -178,3 +178,21 @@ func TestBundledThemesUseTheirPaletteInBothModes(t *testing.T) {
 		}
 	}
 }
+
+func TestDefaultGraphPreservesOriginalPurpleGradient(t *testing.T) {
+	t.Cleanup(func() { LoadTheme("", true) })
+	for _, tc := range []struct {
+		dark bool
+		want []string
+	}{
+		{true, []string{"#700070", "#9800c0", "#c000e8", "#ff55ff"}},
+		{false, []string{"#d99ce3", "#b658c7", "#9934b5", "#5b259d"}},
+	} {
+		LoadTheme("", tc.dark)
+		for i, got := range GraphColors() {
+			if colorHex(got) != tc.want[i] {
+				t.Errorf("dark=%v graph stop %d = %s, want original %s", tc.dark, i, colorHex(got), tc.want[i])
+			}
+		}
+	}
+}

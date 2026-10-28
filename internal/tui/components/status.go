@@ -7,6 +7,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // DownloadStatus represents the state of a download
@@ -109,7 +110,7 @@ func (s DownloadStatus) RenderWithSpinner(spinnerView string) string {
 		cacheMu.RLock()
 		style := queuedSpinnerStyle
 		cacheMu.RUnlock()
-		return style.Render(spinnerView + " " + s.Label())
+		return style.Render(ansi.Strip(spinnerView) + " " + s.Label())
 	}
 	return s.Render()
 }

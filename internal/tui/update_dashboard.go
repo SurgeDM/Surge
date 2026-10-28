@@ -61,6 +61,12 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if key.Matches(msg, m.keys.Dashboard.TabAll) {
+		if pinnedGuard() {
+			return m, nil
+		}
+		return switchTab(TabAll)
+	}
 	if key.Matches(msg, m.keys.Dashboard.TabQueued) {
 		if pinnedGuard() {
 			return m, nil
@@ -127,7 +133,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if pinnedGuard() {
 			return m, nil
 		}
-		m.activeTab = (m.activeTab + 1) % 3
+		m.activeTab = (m.activeTab + 1) % dashboardTabCount
 		m.ManualTabSwitch = true
 		m.UpdateListItems()
 		return m, nil
@@ -136,7 +142,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		if pinnedGuard() {
 			return m, nil
 		}
-		m.activeTab = (m.activeTab + 2) % 3 // +2 mod 3 = prev
+		m.activeTab = (m.activeTab + dashboardTabCount - 1) % dashboardTabCount
 		m.ManualTabSwitch = true
 		m.UpdateListItems()
 		return m, nil
@@ -357,6 +363,8 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.pinnedTab = m.activeTab
 			var tabName string
 			switch m.activeTab {
+			case TabAll:
+				tabName = "All"
 			case TabActive:
 				tabName = "Active"
 			case TabDone:

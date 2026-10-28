@@ -14,6 +14,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // Viewport layout
@@ -864,6 +865,9 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 }
 
 func getDownloadStatus(d *DownloadModel, spinnerView string) string {
+	// The spinner's own ANSI reset must not terminate the surrounding status
+	// color before the label is rendered.
+	spinnerView = ansi.Strip(spinnerView)
 	if d.pausing {
 		return lipgloss.NewStyle().Foreground(colors.StatePaused()).Render(spinnerView + " Pausing...")
 	}
@@ -904,11 +908,14 @@ func (m RootModel) ComputeViewStats() ViewStats {
 
 func (m RootModel) renderTabs(activeTab, activeCount, queuedCount, doneCount int) string {
 	tabs := []components.Tab{
+		{Label: "All", Count: activeCount + queuedCount + doneCount, Pinned: m.pinnedTab == TabAll},
 		{Label: "Queued", Count: queuedCount, Pinned: m.pinnedTab == TabQueued},
 		{Label: "Active", Count: activeCount, Pinned: m.pinnedTab == TabActive},
 		{Label: "Done", Count: doneCount, Pinned: m.pinnedTab == TabDone},
 	}
-	return components.RenderTabBar(tabs, activeTab, ActiveTabStyle, TabStyle)
+	// Keep the existing tab IDs and keybindings while displaying All first.
+	selected := (activeTab + 1) % dashboardTabCount
+	return components.RenderTabBar(tabs, selected, ActiveTabStyle, TabStyle)
 }
 
 func (m RootModel) viewQuitConfirm() string {

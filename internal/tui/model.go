@@ -81,9 +81,11 @@ const (
 )
 
 const (
-	TabQueued = 0
-	TabActive = 1
-	TabDone   = 2
+	TabQueued         = 0
+	TabActive         = 1
+	TabDone           = 2
+	TabAll            = 3
+	dashboardTabCount = 4
 )
 
 type DownloadModel struct {
@@ -126,8 +128,8 @@ type RootModel struct {
 	width          int
 	height         int
 	state          UIState
-	activeTab      int // 0=Queued, 1=Active, 2=Done
-	pinnedTab      int // -1=None, 0=Queued, 1=Active, 2=Done
+	activeTab      int // TabQueued, TabActive, TabDone, or TabAll
+	pinnedTab      int // -1=None, otherwise a dashboard tab
 	inputs         []textinput.Model
 	focusedInput   int
 	hideMirrors    bool
@@ -680,6 +682,8 @@ func (m RootModel) getFilteredDownloads() []*DownloadModel {
 	for _, d := range m.downloads {
 		// Apply tab filter first
 		switch m.activeTab {
+		case TabAll:
+			// All states remain subject to the search and category filters below.
 		case TabQueued:
 			// Queued includes paused downloads and anything not currently active or done
 			if d.done || (!d.paused && !d.pausing && (d.Speed > 0 || d.Connections > 0 || d.started)) {
@@ -851,7 +855,11 @@ func (m *RootModel) refreshThemeCaches() {
 }
 
 func applyProgressTheme(p *progress.Model) {
+	// The default fill character is a half block. Two identical blend stops
+	// paint both its foreground and background, preserving a continuous bar.
 	progress.WithColors(colors.Pink())(p)
+	progress.WithColors(colors.Pink(), colors.Pink())(p)
+	progress.WithScaled(true)(p)
 	p.EmptyColor = colors.Gray()
 	p.PercentageStyle = lipgloss.NewStyle().Foreground(colors.Foreground())
 }

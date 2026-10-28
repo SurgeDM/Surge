@@ -38,6 +38,7 @@ type KeyMap struct {
 
 // DashboardKeyMap defines keybindings for the main dashboard
 type DashboardKeyMap struct {
+	TabAll           key.Binding
 	TabQueued        key.Binding
 	TabActive        key.Binding
 	TabDone          key.Binding
@@ -431,6 +432,7 @@ func (k *KeyMap) Validate() {
 func DefaultKeyMap() *KeyMap {
 	return &KeyMap{
 		Dashboard: DashboardKeyMap{
+			TabAll: key.NewBinding(key.WithKeys("0"), key.WithHelp("0", "all downloads")),
 			TabQueued: key.NewBinding(
 				key.WithKeys("q"),
 				key.WithHelp("q", "queued tab"),
@@ -813,7 +815,7 @@ func (k DashboardKeyMap) ShortHelp() []key.Binding {
 // FullHelp returns keybindings for the expanded help view
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab, k.PrevTab},
+		{k.TabAll, k.TabQueued, k.TabActive, k.TabDone, k.NextTab, k.PrevTab},
 		{k.Add, k.AddFromClipboard, k.BatchImport, k.Search, k.CategoryFilter, k.AssignCategory, k.Pause, k.Refresh, k.Delete, k.PurgeFile, k.Settings, k.SpeedLimits, k.PinTab},
 		{k.Log, k.CopyURL, k.CopyID, k.OpenFile, k.OpenFolder, k.ToggleHelp, k.ReportBug, k.Quit},
 	}
