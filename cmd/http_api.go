@@ -40,6 +40,7 @@ type downloadActionResult struct {
 }
 
 func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, service downloadservice.DownloadService) {
+	ledger := submissionLedger()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 			"status": "ok",
@@ -55,7 +56,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		if owner, ok := service.(interface{ SupportsArtifactPolicies() bool }); ok {
 			artifacts = owner.SupportsArtifactPolicies()
 		}
-		writeJSONResponse(w, http.StatusOK, serverCapabilities{SchemaVersion: 1, Features: map[string]bool{"finalized_results": results, "artifact_sha256": artifacts, "destination_policy": artifacts}})
+		writeJSONResponse(w, http.StatusOK, serverCapabilities{SchemaVersion: 1, Features: map[string]bool{"finalized_results": results, "artifact_sha256": artifacts, "destination_policy": artifacts, "idempotency": ledger != nil}})
 	}))
 
 	// Settings persistence and live application are serialized by the owner.
@@ -138,7 +139,7 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	})
 
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
-		handleDownload(w, r, defaultOutputDir, service)
+		handleDownload(w, r, defaultOutputDir, service, ledger)
 	})
 	mux.HandleFunc("/download/result", requireMethod(http.MethodGet, withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
 		owner, ok := service.(downloadservice.ResultService)

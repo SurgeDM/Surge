@@ -12,7 +12,9 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"github.com/SurgeDM/Surge/internal/clioutput"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/idempotency"
 	"github.com/SurgeDM/Surge/internal/orchestrator"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -22,6 +24,8 @@ import (
 
 // DownloadRequest represents a download request from the browser extension
 type DownloadRequest struct {
+	ClientRef            string `json:"-"`
+	inputFailure         *clioutput.Failure
 	Artifact             types.ArtifactPolicy `json:"artifact,omitzero"`
 	URL                  string               `json:"url"`
 	Filename             string               `json:"filename,omitempty"`
@@ -86,7 +90,7 @@ type resolvedDownloadRequest struct {
 	isActive      bool
 }
 
-func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir string, service service.DownloadService) {
+func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir string, service service.DownloadService, ledgers ...*idempotency.Ledger) {
 	if handleDownloadStatusRequest(w, r, service) {
 		return
 	}
@@ -109,6 +113,22 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		return
 	}
 
+	var ledger *idempotency.Ledger
+	if len(ledgers) > 0 {
+		ledger = ledgers[0]
+	}
+	finish, handled := reserveSubmission(w, r, resolved, ledger)
+	if handled {
+		return
+	}
+	accepted := false
+	if finish != nil {
+		defer func() {
+			if finish != nil {
+				_ = finish(accepted)
+			}
+		}()
+	}
 	if maybeRequireDownloadApproval(w, service, resolved) {
 		return
 	}
@@ -125,6 +145,14 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		return
 	}
 
+	if finish != nil {
+		if err := finish(true); err != nil {
+			http.Error(w, "Receipt persistence failed; outcome unknown", http.StatusServiceUnavailable)
+			return
+		}
+		finish = nil
+	}
+	accepted = true
 	writeJSONResponse(w, http.StatusOK, map[string]interface{}{
 		"status":   "queued",
 		"message":  "Download queued successfully",
