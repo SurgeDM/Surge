@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"sync"
 	"time"
 
@@ -151,5 +152,16 @@ func (l *Ledger) save() error {
 	if closeErr != nil {
 		return closeErr
 	}
-	return os.Rename(name, l.path)
+	if err := os.Rename(name, l.path); err != nil {
+		return err
+	}
+	if runtime.GOOS == "windows" {
+		return nil
+	}
+	directory, err := os.Open(filepath.Dir(l.path))
+	if err != nil {
+		return err
+	}
+	defer func() { _ = directory.Close() }()
+	return directory.Sync()
 }
