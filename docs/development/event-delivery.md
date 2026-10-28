@@ -9,6 +9,15 @@ The internal persistence worker uses `SubscribeLifecycle`, via the local service
 progress/log/request traffic, and drains accepted events on shutdown. Persistence
 may backpressure on storage work. It must not use the lossy observer subscription.
 The command's lifecycle cleanup also waits for the worker to finish persistence.
+Removal events use this reliable path too, so deleting a job removes its saved
+record, resume metadata, and incomplete file.
+
+Queue notifications publish after scheduler admission releases its lock. A
+short-lived per-download lock orders admission and its queue notification before
+removal of that same ID. A stalled publisher can delay removal of its own job,
+but cannot hold the scheduler lock or block operations on other download IDs.
+The locks are discarded after the last caller finishes. Started/completed events
+may precede the queue notification; consumers preserve the already advanced state.
 
 Every observer owns a bounded notification queue, one replaceable progress frame,
 and its own output goroutine. The normal progress producer emits complete active

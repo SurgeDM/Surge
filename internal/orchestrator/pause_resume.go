@@ -297,6 +297,9 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 // Cancel stops a download (both pool in-memory and DB) and emits a removal event.
 // The event worker handles file cleanup and DB removal via DownloadRemovedMsg.
 func (mgr *LifecycleManager) Cancel(id string) error {
+	unlock := mgr.lockDownload(id)
+	defer unlock()
+
 	var filename, destPath string
 	var completed bool
 	var found bool
