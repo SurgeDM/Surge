@@ -9,6 +9,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -29,11 +30,14 @@ func (m RootModel) viewSpeedLimits() string {
 			valStr = fmt.Sprintf("%v", val)
 		}
 
-		if bps, err := utils.ParseRateLimitValue(valStr); err == nil && bps == 0 {
-			valStr = "0"
+		if bps, err := utils.ParseRateLimitValue(valStr); err == nil {
+			valStr = utils.FormatRateLimitDisplay(bps)
+			if bps == 0 {
+				valStr = "0"
+			}
 		}
 
-		suffix := "MB/s"
+		suffix := "MiB/s"
 		if strings.HasPrefix(meta.Key, "dl:") {
 			defaultRate := int64(0)
 			if m.Settings != nil && m.Settings.Network.DefaultDownloadRateLimit != nil {
@@ -41,11 +45,8 @@ func (m RootModel) viewSpeedLimits() string {
 					defaultRate = rate
 				}
 			}
-			displayRate := utils.FormatRateLimit(defaultRate)
-			if defaultRate <= 0 {
-				displayRate = "0 MB/s"
-			}
-			suffix = fmt.Sprintf("MB/s (-1 to inherit %s)", displayRate)
+			displayRate := utils.FormatRateLimitDisplay(defaultRate)
+			suffix = fmt.Sprintf("MiB/s (-1 to inherit %s)", displayRate)
 		}
 		items = append(items, components.ListInputItem{
 			Label:       meta.Label,
@@ -172,6 +173,9 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 
 	if strings.HasPrefix(key, "dl:") {
 		dlID := strings.TrimPrefix(key, "dl:")
+		if d := m.FindDownloadByID(dlID); d != nil && d.moving {
+			return types.ErrMoving
+		}
 		if isRateLimitInheritValue(value) {
 			if err := m.clearDownloadRateLimit(dlID); err != nil {
 				return err
@@ -240,6 +244,9 @@ func (m *RootModel) resetSpeedLimitToDefault(key string, defaults *config.Settin
 	}
 	if strings.HasPrefix(key, "dl:") {
 		dlID := strings.TrimPrefix(key, "dl:")
+		if d := m.FindDownloadByID(dlID); d != nil && d.moving {
+			return types.ErrMoving
+		}
 		if err := m.clearDownloadRateLimit(dlID); err != nil {
 			return err
 		}
@@ -266,7 +273,7 @@ func (m RootModel) formatDownloadRateLimitValue(d *DownloadModel) string {
 			defaultRate = rate
 		}
 	}
-	return fmt.Sprintf("inherit (%s)", utils.FormatRateLimit(defaultRate))
+	return fmt.Sprintf("inherit (%s)", utils.FormatRateLimitDisplay(defaultRate))
 }
 
 func isRateLimitInheritValue(value string) bool {

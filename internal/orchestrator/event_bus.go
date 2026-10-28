@@ -3,153 +3,154 @@ package orchestrator
 import (
 	"context"
 	"sync"
-	"time"
 
 	"github.com/SurgeDM/Surge/internal/types"
-	"github.com/SurgeDM/Surge/internal/utils"
 )
 
-// EventBus handles broadcasting events from the orchestrator to all listeners.
+const eventQueueCapacity = 100
+
+// EventBus separates reliable persistence from bounded, replaceable observers.
+// InputCh is engine-owned ingress; producers must stop before Shutdown.
 type EventBus struct {
-	InputCh       chan types.DownloadEvent
-	listeners     []chan types.DownloadEvent
-	listenerMu    sync.Mutex
-	unsubscribeCh chan chan types.DownloadEvent
-	ctx           context.Context
-	cancel        context.CancelFunc
-	wg            sync.WaitGroup
-	pubMu         sync.RWMutex
-	pubWg         sync.WaitGroup
-	shutdownOnce  sync.Once
+	InputCh      chan types.DownloadEvent
+	listenerMu   sync.Mutex
+	listeners    map[*eventSubscription]struct{}
+	ctx          context.Context
+	cancel       context.CancelFunc
+	wg           sync.WaitGroup
+	pubMu        sync.RWMutex
+	pubWg        sync.WaitGroup
+	shutdownOnce sync.Once
 }
 
 func NewEventBus() *EventBus {
 	ctx, cancel := context.WithCancel(context.Background())
-	eb := &EventBus{
-		InputCh:       make(chan types.DownloadEvent, 100),
-		listeners:     make([]chan types.DownloadEvent, 0),
-		unsubscribeCh: make(chan chan types.DownloadEvent, 10),
-		ctx:           ctx,
-		cancel:        cancel,
-	}
-	eb.wg.Add(1)
-	go eb.broadcastLoop()
-	return eb
+	bus := &EventBus{InputCh: make(chan types.DownloadEvent, eventQueueCapacity), listeners: make(map[*eventSubscription]struct{}), ctx: ctx, cancel: cancel}
+	bus.wg.Add(1)
+	go bus.broadcastLoop()
+	return bus
 }
 
-func (eb *EventBus) broadcastLoop() {
-	defer eb.wg.Done()
-	for {
-		select {
-		case msg, ok := <-eb.InputCh:
-			if !ok {
-				eb.listenerMu.Lock()
-				for _, ch := range eb.listeners {
-					close(ch)
-				}
-				eb.listeners = nil
-				eb.listenerMu.Unlock()
-				return
-			}
-			eb.broadcastMsg(msg)
+func (bus *EventBus) broadcastLoop() {
+	defer bus.wg.Done()
+	for msg := range bus.InputCh {
+		bus.broadcastMsg(msg)
+	}
+	bus.listenerMu.Lock()
+	for sub := range bus.listeners {
+		if sub.reliable {
+			close(sub.critical)
+		} else {
+			sub.stop()
+		}
+	}
+	bus.listeners = make(map[*eventSubscription]struct{})
+	bus.listenerMu.Unlock()
+}
 
-		case chToClose := <-eb.unsubscribeCh:
-			eb.listenerMu.Lock()
-			for i, listener := range eb.listeners {
-				if listener == chToClose {
-					eb.listeners = append(eb.listeners[:i], eb.listeners[i+1:]...)
-					close(chToClose)
-					break
-				}
-			}
-			eb.listenerMu.Unlock()
+func (bus *EventBus) broadcastMsg(msg types.DownloadEvent) {
+	bus.listenerMu.Lock()
+	listeners := make([]*eventSubscription, 0, len(bus.listeners))
+	for sub := range bus.listeners {
+		listeners = append(listeners, sub)
+	}
+	bus.listenerMu.Unlock()
+	for _, sub := range listeners {
+		if !sub.enqueue(msg) {
+			sub.stop()
+			bus.listenerMu.Lock()
+			delete(bus.listeners, sub)
+			bus.listenerMu.Unlock()
 		}
 	}
 }
 
-func (eb *EventBus) broadcastMsg(msg types.DownloadEvent) {
-	eb.listenerMu.Lock()
-	listenersCopy := make([]chan types.DownloadEvent, len(eb.listeners))
-	copy(listenersCopy, eb.listeners)
-	eb.listenerMu.Unlock()
-
-	isProgress := msg.Type == types.EventProgress || msg.Type == types.EventBatchProgress
-
-	for _, ch := range listenersCopy {
-		func() {
-			defer func() { _ = recover() }()
-			if isProgress {
-				select {
-				case ch <- msg:
-				default:
-				}
-			} else {
-				timer := time.NewTimer(1 * time.Second)
-				select {
-				case ch <- msg:
-					if !timer.Stop() {
-						select {
-						case <-timer.C:
-						default:
-						}
-					}
-				case <-timer.C:
-					utils.Debug("Dropped critical event due to slow client")
-				}
-			}
-		}()
-	}
+func isProgressEvent(msg types.DownloadEvent) bool {
+	return msg.Type == types.EventProgress || msg.Type == types.EventBatchProgress
 }
 
-// Publish emits an event into the bus.
-func (eb *EventBus) Publish(msg types.DownloadEvent) error {
-	eb.pubMu.RLock()
-	if eb.ctx.Err() != nil {
-		eb.pubMu.RUnlock()
+// Publish never waits for an observer. Progress can be replaced at the next
+// sample; lifecycle publication can backpressure only on persistence work.
+func (bus *EventBus) Publish(msg types.DownloadEvent) error {
+	bus.pubMu.RLock()
+	if bus.ctx.Err() != nil {
+		bus.pubMu.RUnlock()
 		return context.Canceled
 	}
-	eb.pubWg.Add(1)
-	eb.pubMu.RUnlock()
-
-	defer eb.pubWg.Done()
-
-	select {
-	case <-eb.ctx.Done():
-		return context.Canceled
-	case eb.InputCh <- msg:
+	bus.pubWg.Add(1)
+	bus.pubMu.RUnlock()
+	defer bus.pubWg.Done()
+	if isProgressEvent(msg) {
+		select {
+		case bus.InputCh <- msg:
+		default:
+		}
 		return nil
-	case <-time.After(1 * time.Second):
-		return context.DeadlineExceeded
+	}
+	select {
+	case bus.InputCh <- msg:
+		return nil
+	case <-bus.ctx.Done():
+		return context.Canceled
 	}
 }
 
-// Subscribe returns a channel that receives events.
-func (eb *EventBus) Subscribe() (<-chan types.DownloadEvent, func()) {
-	outCh := make(chan types.DownloadEvent, 100)
-	eb.listenerMu.Lock()
-	eb.listeners = append(eb.listeners, outCh)
-	eb.listenerMu.Unlock()
+// Subscribe creates a bounded observer. Progress samples coalesce; overflowing
+// lifecycle notifications close the stream so the client can resynchronize.
+func (bus *EventBus) Subscribe() (<-chan types.DownloadEvent, func()) {
+	return bus.subscribe(false)
+}
 
-	var once sync.Once
+// SubscribeLifecycle is reserved for the persistence worker, which must consume
+// until shutdown or call cleanup. It skips transient events and drains accepted
+// lifecycle events on shutdown. Storage backpressure is intentional here.
+func (bus *EventBus) SubscribeLifecycle() (<-chan types.DownloadEvent, func()) {
+	return bus.subscribe(true)
+}
+
+func (bus *EventBus) subscribe(reliable bool) (<-chan types.DownloadEvent, func()) {
+	bus.pubMu.RLock()
+	defer bus.pubMu.RUnlock()
+	sub := newEventSubscription(reliable)
+	if bus.ctx.Err() != nil {
+		close(sub.out)
+		return sub.out, func() {}
+	}
+	bus.listenerMu.Lock()
+	bus.listeners[sub] = struct{}{}
+	bus.listenerMu.Unlock()
+	bus.wg.Add(1)
+	go func() { defer bus.wg.Done(); sub.run() }()
 	cleanup := func() {
-		once.Do(func() {
-			select {
-			case eb.unsubscribeCh <- outCh:
-			case <-eb.ctx.Done():
-			}
-		})
+		sub.stop()
+		bus.listenerMu.Lock()
+		delete(bus.listeners, sub)
+		bus.listenerMu.Unlock()
 	}
-	return outCh, cleanup
+	return sub.out, cleanup
 }
 
-func (eb *EventBus) Shutdown() {
-	eb.shutdownOnce.Do(func() {
-		eb.pubMu.Lock()
-		eb.cancel()
-		eb.pubMu.Unlock()
+// HasObservers avoids producing expensive progress snapshots for persistence alone.
+func (bus *EventBus) HasObservers() bool {
+	bus.listenerMu.Lock()
+	defer bus.listenerMu.Unlock()
+	for sub := range bus.listeners {
+		if !sub.reliable {
+			return true
+		}
+	}
+	return false
+}
 
-		eb.pubWg.Wait()   // wait for all active Publish calls to return
-		close(eb.InputCh) // safely close to trigger drain
+func (bus *EventBus) Closed() bool { return bus.ctx.Err() != nil }
+
+func (bus *EventBus) Shutdown() {
+	bus.shutdownOnce.Do(func() {
+		bus.pubMu.Lock()
+		bus.cancel()
+		bus.pubMu.Unlock()
+		bus.pubWg.Wait()
+		close(bus.InputCh)
 	})
-	eb.wg.Wait()
+	bus.wg.Wait()
 }

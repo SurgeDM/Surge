@@ -40,14 +40,17 @@ type LifecycleManager struct {
 
 	// probeSem caps the number of simultaneous server probes so adding a
 	// large batch of downloads does not flood the network with HEAD requests.
-	probeSem     chan struct{}
-	shutdownOnce sync.Once
-	inflightMu   sync.Mutex
-	inflight     map[string]*inflightEnqueue
+	probeSem        chan struct{}
+	shutdownOnce    sync.Once
+	inflightMu      sync.Mutex
+	inflight        map[string]*inflightEnqueue
+	downloadLocksMu sync.Mutex
+	downloadLocks   map[string]*downloadLock
 	// Test hooks make concurrent enqueue tests deterministic without affecting
 	// production behavior.
-	inflightJoinHook  func()
-	inflightStartHook func()
+	inflightJoinHook    func()
+	inflightStartHook   func()
+	beforeQueuedPublish func()
 }
 
 type inflightEnqueue struct {
@@ -410,9 +413,16 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 			Workers:      req.Workers,
 			MinChunkSize: req.MinChunkSize,
 		}
+		// A removal of this download must follow its queued publication. This
+		// lock is per ID: event backpressure never holds the scheduler lock or
+		// prevents operations on other downloads. All paths below return.
+		unlock := mgr.lockDownload(cfg.ID)
+		defer unlock()
+
 		// Reject duplicates and shutdown before touching persistence or publishing.
-		// The scheduler keeps workers blocked until preparation completes, so
-		// EventStarted cannot race ahead of the queued record.
+		// Persistence runs under the scheduler lock; the queued event is
+		// published only after AddWithPreparation returns so Publish
+		// backpressure cannot stall the lock, and EventStarted may arrive first.
 		accepted, err := mgr.pool.AddWithPreparation(*cfg, func() error {
 			if err := store.AddToMasterList(types.DownloadRecord{
 				ID:           queuedEvent.DownloadID,
@@ -451,12 +461,6 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 					return fmt.Errorf("persist queued download headers: %w", err)
 				}
 			}
-			if mgr.eventBus != nil {
-				_ = mgr.eventBus.Publish(queuedEvent)
-				if probeResult.Warning != "" {
-					_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: cfg.ID, Message: probeResult.Warning})
-				}
-			}
 			return nil
 		})
 		if err != nil {
@@ -466,6 +470,15 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 		if !accepted {
 			_ = os.Remove(surgePath)
 			return "", "", types.ErrIDExists
+		}
+		if mgr.eventBus != nil {
+			if mgr.beforeQueuedPublish != nil {
+				mgr.beforeQueuedPublish()
+			}
+			_ = mgr.eventBus.Publish(queuedEvent)
+			if probeResult.Warning != "" {
+				_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: cfg.ID, Message: probeResult.Warning})
+			}
 		}
 
 		return cfg.ID, finalFilename, nil

@@ -6,8 +6,6 @@ import (
 	"regexp"
 	"strings"
 	"sync"
-
-	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 // Category defines a download category for auto-sorting.
@@ -63,6 +61,18 @@ func DefaultCategories() []Category {
 	picturesDir := existingDirOrFallback(GetPicturesDir(), downloadsDir)
 
 	return []Category{
+		{
+			Name:        "Shows",
+			Description: "Shows identified by a season or episode number.",
+			Pattern:     `(?i)(^|[^a-z0-9])s[0-9]{2}(e[0-9]{2})?([^a-z0-9].*\.|\.)(mp4|mkv|avi|mov|wmv|flv|webm|m4v|mpg|mpeg|3gp|zip|rar|7z|tar|gz|bz2|xz|zst|tgz)$`,
+			Path:        videosDir,
+		},
+		{
+			Name:        "Movies",
+			Description: "Movies identified by a release year.",
+			Pattern:     `(?i)(^|[^0-9])(19[0-9]{2}|2[0-9]{3})([^0-9].*\.|\.)(mp4|mkv|avi|mov|wmv|flv|webm|m4v|mpg|mpeg|3gp|zip|rar|7z|tar|gz|bz2|xz|zst|tgz)$`,
+			Path:        videosDir,
+		},
 		{
 			Name:        "Videos",
 			Description: "MP4s, MKVs, AVIs, and other video files.",
@@ -130,31 +140,20 @@ func getCompiledPattern(pattern string) *regexp.Regexp {
 	return re
 }
 
-// GetCategoryForFile returns the last matching category so user-added rules can
-// override broader defaults that appear earlier in the list.
+// GetCategoryForFile returns the first matching category in priority order.
 func GetCategoryForFile(filename string, categories []Category) (*Category, error) {
-	if filename == "" || len(categories) == 0 {
+	if filename == "" {
 		return nil, nil
 	}
-
-	var matched *Category
-
 	for i := range categories {
 		cat := &categories[i]
-		if cat.Pattern == "" {
-			continue
-		}
-
-		re := getCompiledPattern(cat.Pattern)
-		if re != nil && re.MatchString(filename) {
-			if matched != nil {
-				utils.Debug("Config: Category pattern %q matched %q, overriding earlier match %q", cat.Pattern, filename, matched.Pattern)
+		if cat.Pattern != "" {
+			if re := getCompiledPattern(cat.Pattern); re != nil && re.MatchString(filename) {
+				return cat, nil
 			}
-			matched = cat
 		}
 	}
-
-	return matched, nil
+	return nil, nil
 }
 
 // ResolveCategoryPath returns the Path of a category.

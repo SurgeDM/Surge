@@ -33,6 +33,9 @@ cyan =    '#8be9fd'
 white =   '#f8f8f2'
 
 # Standard Light
+[colors.light]
+graph = ['#d99ce3', '#b658c7', '#9934b5', '#5b259d']
+
 [colors.light.primary]
 background = "#ffffff"
 foreground = "#1a1a1a"

@@ -36,6 +36,7 @@ func TestDownloadItem_Description(t *testing.T) {
 			name: "Resuming State",
 			model: &DownloadModel{
 				resuming: true,
+				started:  true,
 			},
 			expected: "\u280b Resuming...",
 		},
@@ -101,5 +102,30 @@ func BenchmarkDownloadDelegateRender(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		buf.Reset()
 		d.Render(&buf, m, 0, di)
+	}
+}
+
+func TestDownloadItemCompletedHidesSpeedLimit(t *testing.T) {
+	for _, rate := range []int64{0, 10 * 1024 * 1024} {
+		d := &DownloadModel{Speed: 1024 * 1024, RateLimit: rate, RateLimitSet: true}
+		item := DownloadItem{download: d}
+		if got := strings.Contains(item.Description(), "Limit:"); got != (rate > 0) {
+			t.Fatalf("active download limit visibility = %v for rate %d", got, rate)
+		}
+		d.done = true
+		if strings.Contains(item.Description(), "Limit:") {
+			t.Fatal("completed download should hide its speed limit")
+		}
+	}
+}
+
+func TestCompletedDownloadDescriptionShowsOnlyDownloadedSize(t *testing.T) {
+	d := &DownloadModel{done: true, Total: 100 * 1024 * 1024, Downloaded: 1234}
+	text := testAnsiEscapeRE.ReplaceAllString((DownloadItem{download: d}).Description(), "")
+	if strings.Contains(text, "%") || strings.Contains(text, " / ") || strings.Contains(text, "100 MiB") {
+		t.Fatalf("completed description contains progress or server size: %q", text)
+	}
+	if !strings.Contains(text, "1.2 KiB") {
+		t.Fatalf("completed description lacks actual size: %q", text)
 	}
 }

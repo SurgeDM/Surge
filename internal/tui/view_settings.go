@@ -13,6 +13,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/utils"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/lipgloss/v2"
 )
 
@@ -28,7 +29,7 @@ func (m RootModel) viewSettings() string {
 			Padding(DefaultPaddingY, DefaultPaddingX*2).
 			Foreground(colors.LightGray()).
 			Render("Terminal too small for settings view")
-		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.Magenta())
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), m.settingsSearchTitle(), content, width, height, colors.Magenta())
 		return m.renderModalWithOverlay(box)
 	}
 
@@ -38,7 +39,7 @@ func (m RootModel) viewSettings() string {
 			Padding(1, 2).
 			Foreground(colors.LightGray()).
 			Render("No settings categories available")
-		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.Magenta())
+		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), m.settingsSearchTitle(), content, width, height, colors.Magenta())
 		return m.renderModalWithOverlay(box)
 	}
 
@@ -52,15 +53,6 @@ func (m RootModel) viewSettings() string {
 
 	currentCategory := categories[activeTab]
 	settingsMeta := m.buildSettingsMetaForCategory(currentCategory)
-	if len(settingsMeta) == 0 {
-		content := lipgloss.NewStyle().
-			Padding(1, 2).
-			Foreground(colors.LightGray()).
-			Render("No settings available in this category")
-		box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", content, width, height, colors.Magenta())
-		return m.renderModalWithOverlay(box)
-	}
-
 	selectedRow := m.SettingsSelectedRow
 	if selectedRow < 0 {
 		selectedRow = 0
@@ -70,6 +62,13 @@ func (m RootModel) viewSettings() string {
 	}
 
 	settingsValues := m.getSettingsValues(currentCategory)
+	if m.settingsSearchQuery != "" {
+		for _, category := range categories {
+			for key, value := range m.getSettingsValues(category) {
+				settingsValues[key] = value
+			}
+		}
+	}
 	tabBar := m.renderSettingsTabBar(categories, activeTab, width-(ProgressBarWidthOffset+HeaderWidthOffset))
 	helpText := m.renderSettingsHelp(width - (ProgressBarWidthOffset + HeaderWidthOffset))
 
@@ -111,7 +110,9 @@ func (m RootModel) viewSettings() string {
 	}
 
 	var content string
-	if width >= 72 && bodyHeight >= 8 {
+	if len(settingsMeta) == 0 {
+		content = formatSettingsBlock("No matching settings", width-BoxStyle.GetHorizontalFrameSize(), bodyHeight)
+	} else if width >= 72 && bodyHeight >= 8 {
 		content = m.renderSettingsTwoColumn(settingsMeta, selectedRow, settingsValues, width, bodyHeight)
 	} else {
 		content = m.renderSettingsCompact(settingsMeta, selectedRow, settingsValues, width, bodyHeight)
@@ -139,7 +140,7 @@ func (m RootModel) viewSettings() string {
 
 	fullContent := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
-	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), "", fullContent, width, height, colors.Magenta())
+	box := renderBtopBox(PaneTitleStyle.Render(" Settings "), m.settingsSearchTitle(), fullContent, width, height, colors.Magenta())
 	return m.renderModalWithOverlay(box)
 }
 
@@ -180,7 +181,7 @@ func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxW
 	var settingsActiveTab lipgloss.Style
 	if m.SettingsFocusedPane == 0 {
 		settingsActiveTab = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("0")).
+			Foreground(colors.ContrastForeground(colors.Magenta())).
 			Background(colors.Magenta()).
 			Bold(true)
 	} else {
@@ -203,7 +204,7 @@ func (m RootModel) renderSettingsTabBar(categories []string, activeTab int, maxW
 	fallbackStyle := lipgloss.NewStyle().Foreground(colors.Gray())
 	if m.SettingsFocusedPane == 0 {
 		fallbackStyle = lipgloss.NewStyle().
-			Foreground(lipgloss.Color("0")).
+			Foreground(colors.ContrastForeground(colors.Magenta())).
 			Background(colors.Magenta()).
 			Bold(true)
 	}
@@ -224,13 +225,45 @@ func (m RootModel) renderSettingsHelp(width int) string {
 	help := m.help
 	help.SetWidth(width)
 	helpText := help.View(m.keys.Settings)
+	if !m.SettingsIsEditing && m.categoryListFocused() {
+		keys := []key.Binding{m.keys.Settings.Up, m.keys.Settings.Down, m.keys.Settings.Edit}
+		switch m.getCurrentSettingType() {
+		case config.TypeCustomCategory:
+			keys = append(keys, m.keys.Settings.DeleteCategory)
+		case config.TypeCustomCategoryAdd:
+			// Add has no existing category to delete or setting to reset.
+		default:
+			keys = append(keys, m.keys.Settings.Reset)
+		}
+		keys = append(keys, m.keys.Settings.Close)
+		helpText = help.ShortHelpView(keys)
+		var secondary []key.Binding
+		if m.settingsSearchQuery == "" && m.getCurrentSettingType() == config.TypeCustomCategory {
+			secondary = append(secondary, m.keys.Settings.MoveCategoryUp, m.keys.Settings.MoveCategoryDown)
+		}
+		if len(secondary) > 0 {
+			helpText = lipgloss.JoinVertical(lipgloss.Center, helpText, help.ShortHelpView(secondary))
+		}
+	}
 	if m.SettingsIsEditing {
 		helpText = help.View(m.keys.SettingsEditor)
+		if typ := m.getCurrentSettingType(); typ == config.TypeCustomCategory || typ == config.TypeCustomCategoryAdd {
+			navigation := []key.Binding{
+				key.NewBinding(key.WithKeys("tab", "down"), key.WithHelp("tab/\u2193", "next field")),
+				key.NewBinding(key.WithKeys("shift+tab", "up"), key.WithHelp("shift+tab/\u2191", "prev field")),
+			}
+			if m.catMgrEditField == 3 && !m.IsRemote {
+				navigation = append(navigation, m.keys.Settings.Browse)
+			}
+			helpText = lipgloss.JoinVertical(lipgloss.Center, helpText, help.ShortHelpView(navigation))
+		}
 	}
 
 	return lipgloss.NewStyle().
 		Foreground(colors.Gray()).
 		Width(width).
+		Height(2).
+		AlignVertical(lipgloss.Bottom).
 		Align(lipgloss.Center).
 		Render(helpText)
 }
@@ -277,11 +310,26 @@ func (m RootModel) renderSettingsListViewport(settingsMeta []config.SettingMeta,
 		selectedRow = len(settingsMeta) - 1
 	}
 
-	start := selectedRow - (rows / 2)
+	// Keep the category toggle separate from the editable rules without adding
+	// a navigable row to the settings model.
+	visualRows := make([]int, 0, len(settingsMeta)+1)
+	selectedVisualRow := selectedRow
+	for i, meta := range settingsMeta {
+		if m.settingsSearchQuery == "" && i > 0 && settingsMeta[i-1].Key == "category_enabled" &&
+			(meta.Type == config.TypeCustomCategory || meta.Type == config.TypeCustomCategoryAdd) {
+			visualRows = append(visualRows, -1)
+			if selectedRow >= i {
+				selectedVisualRow++
+			}
+		}
+		visualRows = append(visualRows, i)
+	}
+
+	start := selectedVisualRow - (rows / 2)
 	if start < 0 {
 		start = 0
 	}
-	maxStart := len(settingsMeta) - rows
+	maxStart := len(visualRows) - rows
 	if maxStart < 0 {
 		maxStart = 0
 	}
@@ -291,12 +339,12 @@ func (m RootModel) renderSettingsListViewport(settingsMeta []config.SettingMeta,
 
 	lines := make([]string, 0, rows)
 	for i := 0; i < rows; i++ {
-		idx := start + i
-		if idx >= len(settingsMeta) {
+		visualIndex := start + i
+		if visualIndex >= len(visualRows) || visualRows[visualIndex] < 0 {
 			lines = append(lines, "")
 			continue
 		}
-
+		idx := visualRows[visualIndex]
 		meta := settingsMeta[idx]
 		prefix := "  "
 		style := lipgloss.NewStyle().Foreground(colors.LightGray())
@@ -311,14 +359,14 @@ func (m RootModel) renderSettingsListViewport(settingsMeta []config.SettingMeta,
 		}
 
 		if meta.Key == "max_global_connections" {
-			style = lipgloss.NewStyle().Foreground(colors.ThemeColor("#aaaaaa", "238"))
+			style = lipgloss.NewStyle().Foreground(colors.LightGray())
 			if idx == selectedRow {
 				if m.SettingsFocusedPane == 1 {
 					prefix = "# "
 					style = lipgloss.NewStyle().Foreground(colors.Gray())
 				} else {
 					prefix = "  "
-					style = lipgloss.NewStyle().Foreground(colors.ThemeColor("#777777", "236"))
+					style = lipgloss.NewStyle().Foreground(colors.Gray())
 				}
 			}
 		}
@@ -332,7 +380,11 @@ func (m RootModel) renderSettingsListViewport(settingsMeta []config.SettingMeta,
 		// Truncate to avoid line wrapping which breaks parent height constraints
 		label = utils.TruncateMiddle(label, maxLabelLen)
 
-		lines = append(lines, style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix+label))
+		line := style.Width(innerWidth).MaxWidth(innerWidth).Render(prefix + label)
+		if idx == selectedRow {
+			line = shadeSelectedRow(line, innerWidth, colors.SettingsSelectionBackground())
+		}
+		lines = append(lines, line)
 	}
 
 	return strings.Join(lines, "\n")
@@ -356,13 +408,22 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	unitStyle := lipgloss.NewStyle().Foreground(colors.LightGray())
 
 	valueLabel := "Value: "
+	if !m.SettingsIsEditing && !m.SettingsReadOnly {
+		switch meta.Type {
+		case config.TypeString, config.TypeInt, config.TypeInt64, config.TypeFloat64, config.TypeDuration:
+			valueLabel = "[" + m.keys.Settings.Edit.Help().Key + "] Change value: "
+		}
+	}
 	var valueStr string
 	if m.SettingsIsEditing {
 		if meta.Type == config.TypeCustomCategory || meta.Type == config.TypeCustomCategoryAdd {
 			valueStr = lipgloss.JoinVertical(lipgloss.Left,
 				m.renderCategoryInputLine("Name:", 0, innerWidth),
+				"",
 				m.renderCategoryInputLine("Desc:", 1, innerWidth),
+				"",
 				m.renderCategoryInputLine("Regex:", 2, innerWidth),
+				"",
 				m.renderCategoryInputLine("Path:", 3, innerWidth),
 			)
 			valueLabel = ""
@@ -400,8 +461,11 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 			labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Width(8)
 			valueStr = lipgloss.JoinVertical(lipgloss.Left,
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Name:"), utils.TruncateMiddle(cat.Name, innerWidth-20)),
+				"",
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Desc:"), utils.TruncateMiddle(cat.Description, innerWidth-20)),
+				"",
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Regex:"), utils.TruncateMiddle(cat.Pattern, innerWidth-20)),
+				"",
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Path:"), utils.TruncateMiddle(cat.Path, innerWidth-20)),
 			)
 			valueLabel = ""
@@ -418,6 +482,10 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 
 	if (meta.Key == "default_download_dir" || meta.Key == "theme_path") && !m.SettingsIsEditing {
 		valueLabel = "[" + m.keys.Settings.Browse.Help().Key + "] Browse: "
+	}
+
+	if !m.SettingsIsEditing && !m.SettingsReadOnly && meta.Type == config.TypeBool {
+		valueLabel = "[" + m.keys.Settings.Edit.Help().Key + "] Toggle: "
 	}
 
 	valueLabelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Bold(true)
@@ -455,6 +523,10 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	}
 
 	wrappedDesc := utils.WrapText(desc, innerWidth)
+	if meta.Key == "category_enabled" {
+		priority := utils.WrapText("Categories are checked from top to bottom; the first match wins.", innerWidth)
+		wrappedDesc += "\n\n" + lipgloss.NewStyle().Bold(true).Render(priority)
+	}
 	descDisplay := lipgloss.NewStyle().
 		Foreground(colors.LightGray()).
 		Width(innerWidth).
@@ -726,7 +798,7 @@ func (m *RootModel) setSettingValue(category, key, value string) error {
 	case config.TypeString, config.TypeAuthToken, config.TypeLink:
 		if setting.Unit == config.UnitMegabytesPerSecond {
 			if _, err := strconv.ParseFloat(value, 64); err == nil {
-				value += " MB/s"
+				value += " MiB/s"
 			}
 			if bps, err := utils.ParseRateLimitValue(value); err == nil {
 				value = utils.FormatRateLimit(bps)
@@ -859,6 +931,22 @@ func (m RootModel) getCurrentSettingMeta() *config.SettingMeta {
 
 // buildSettingsMetaForCategory retrieves and dynamically augments metadata
 func (m RootModel) buildSettingsMetaForCategory(category string) []config.SettingMeta {
+	if m.settingsSearchQuery != "" {
+		unfiltered := m
+		unfiltered.settingsSearchQuery = ""
+		query := strings.ToLower(m.settingsSearchQuery)
+		var results []config.SettingMeta
+		for _, name := range config.CategoryOrder() {
+			for _, meta := range unfiltered.buildSettingsMetaForCategory(name) {
+				if strings.Contains(strings.ToLower(name+" "+meta.Label+" "+meta.Key+" "+meta.Description), query) {
+					meta.Label = "[" + name + "] " + meta.Label
+					results = append(results, meta)
+				}
+			}
+		}
+		return results
+	}
+
 	settingsMap := config.GetSettingsMetadata()
 	settingsList, ok := settingsMap[category]
 	if !ok {
@@ -880,7 +968,7 @@ func (m RootModel) buildSettingsMetaForCategory(category string) []config.Settin
 		}
 		settingsList = append(settingsList, config.SettingMeta{
 			Key:   "add_category",
-			Label: "+ Add Category...",
+			Label: "+ Add category...",
 			Type:  config.TypeCustomCategoryAdd,
 		})
 	}
@@ -925,7 +1013,7 @@ func settingUnitSuffix(unit config.SettingUnit) string {
 	case config.UnitRatio:
 		return " (0.0-1.0)"
 	case config.UnitMegabytesPerSecond:
-		return " MB/s"
+		return " MiB/s"
 	default:
 		return ""
 	}
@@ -960,11 +1048,10 @@ func formatSettingValueForEdit(value interface{}, typ config.SettingType, unit c
 				if parsed == 0 {
 					return "\u221E"
 				}
-				mb := float64(parsed) / 1000000.0
-				if mb == float64(int64(mb)) {
-					return fmt.Sprintf("%.0f", mb)
+				if truncate && parsed >= utils.MiB/1000 {
+					return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.3f", float64(parsed)/float64(utils.MiB)), "0"), ".")
 				}
-				return strings.TrimRight(strings.TrimRight(fmt.Sprintf("%.3f", mb), "0"), ".")
+				return strconv.FormatFloat(float64(parsed)/float64(utils.MiB), 'f', -1, 64)
 			}
 		}
 	}

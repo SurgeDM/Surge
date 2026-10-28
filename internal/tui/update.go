@@ -10,7 +10,6 @@ import (
 	"github.com/SurgeDM/Surge/internal/selfupdate"
 	"github.com/SurgeDM/Surge/internal/utils"
 
-	"charm.land/bubbles/v2/key"
 	"charm.land/lipgloss/v2"
 
 	tea "charm.land/bubbletea/v2"
@@ -29,6 +28,14 @@ func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch m.state {
+	case HelpModalState:
+		if m.helpSearchActive {
+			var cmd tea.Cmd
+			m.helpSearchInput, cmd = m.helpSearchInput.Update(msg)
+			m.helpSearchQuery = m.helpSearchInput.Value()
+			return m, cmd
+		}
+		return m, nil
 	case InputState, ExtensionConfirmationState:
 		var cmd tea.Cmd
 		m.inputs[m.focusedInput], cmd = m.inputs[m.focusedInput].Update(msg)
@@ -45,6 +52,14 @@ func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 	case SettingsState:
+		if m.settingsSearchActive {
+			var cmd tea.Cmd
+			m.settingsSearchInput, cmd = m.settingsSearchInput.Update(msg)
+			m.settingsSearchQuery = m.settingsSearchInput.Value()
+			m.SettingsSelectedRow = 0
+			m.normalizeSettingsSelection()
+			return m, cmd
+		}
 		if m.SettingsIsEditing {
 			typ := m.getCurrentSettingType()
 			if typ == config.TypeCustomCategory || typ == config.TypeCustomCategoryAdd {
@@ -65,6 +80,38 @@ func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 
 // Update handles messages and updates the model
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if result, ok := msg.(categoryAssignedMsg); ok {
+		if d := m.FindDownloadByID(result.id); d != nil {
+			d.moving = false
+			if result.status != nil {
+				d.fileMissing = result.status.FileMissing
+				d.moving = result.status.Moving
+			}
+		}
+		m.UpdateListItems()
+		if result.err != nil {
+			if result.status != nil && result.status.FileMissing {
+				m.addStyledLogEntry(logError, "Move failed: file missing")
+				return m, nil
+			}
+			m.addStyledLogEntry(logError, "Category update failed: "+result.err.Error())
+			return m, nil
+		}
+		if d := m.FindDownloadByID(result.id); d != nil {
+			category := result.category
+			d.categoryOverride = &category
+			if result.status != nil {
+				if result.status.DestPath != "" {
+					d.Destination = result.status.DestPath
+				}
+				d.fileMissing = result.status.FileMissing
+			}
+		}
+		m.addStyledLogEntry(logStarted, "Category assignment saved")
+		m.UpdateListItems()
+		return m, nil
+	}
+
 	// Dynamically reload keymap.json on the fly if it is updated on disk
 	if time.Since(m.lastConfigCheckTime) > 1*time.Second {
 		m.lastConfigCheckTime = time.Now()
@@ -163,18 +210,18 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case selfUpdateResultMsg:
 		if errors.Is(msg.err, selfupdate.ErrNoUpdate) {
-			m.addLogEntry(LogStyleComplete.Render("\u2714 Surge is already up to date"))
+			m.addStyledLogEntry(logComplete, "\u2714 Surge is already up to date")
 			return m, nil
 		}
 		if msg.err != nil {
-			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Update failed: %s", msg.err.Error())))
+			m.addStyledLogEntry(logError, fmt.Sprintf("\u2716 Update failed: %s", msg.err.Error()))
 			return m, nil
 		}
 		versionLabel := "latest version"
 		if msg.Info != nil && msg.Info.LatestVersion != "" {
 			versionLabel = msg.Info.LatestVersion
 		}
-		m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 Installed Surge %s. Restarting...", versionLabel)))
+		m.addStyledLogEntry(logComplete, fmt.Sprintf("\u2714 Installed Surge %s. Restarting...", versionLabel))
 		m.RestartRequested = true
 		m.shuttingDown = true
 		return m, shutdownCmd(m.Service)
@@ -261,11 +308,16 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case SpeedLimitsState:
 			return m.updateSpeedLimits(msg)
 
+		case CategoryMoveConfirmState:
+			return m.updateCategoryMoveConfirm(msg)
+
 		case CategoryPickerState:
 			return m.updateCategoryPicker(msg)
 
 		case SettingsState:
 			return m.updateSettings(msg)
+		case SettingsConfirmState:
+			return m.updateSettingsConfirmation(msg)
 
 		case UpdateAvailableState:
 			return m.updateUpdateAvailable(msg)
@@ -274,11 +326,7 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m.updateURLUpdate(msg)
 
 		case HelpModalState:
-			if msg.String() == "esc" || key.Matches(msg, m.keys.Dashboard.ToggleHelp) {
-				m.state = DashboardState
-				return m, nil
-			}
-			return m, nil
+			return m.updateHelpModal(msg)
 
 		case BugReportTargetState:
 			return m.updateBugReportTarget(msg)

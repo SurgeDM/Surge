@@ -415,7 +415,7 @@ func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan
 			return
 		}
 
-		sendStreamStatus(ch, fmt.Sprintf("Remote event stream disconnected: %v; reconnecting", err))
+		sendStreamStatus(ctx, ch, fmt.Sprintf("Remote event stream disconnected: %v; reconnecting", err), false)
 		backoff := time.Second
 		for {
 			timer := time.NewTimer(backoff)
@@ -428,10 +428,10 @@ func (s *RemoteDownloadService) streamWithReconnect(ctx context.Context, ch chan
 
 			resp, err = s.openSSE(ctx)
 			if err == nil {
-				sendStreamStatus(ch, "Remote event stream reconnected")
+				sendStreamStatus(ctx, ch, "Remote event stream reconnected", true)
 				break
 			}
-			sendStreamStatus(ch, fmt.Sprintf("Remote event stream reconnect failed: %v; retrying in %s", err, backoff))
+			sendStreamStatus(ctx, ch, fmt.Sprintf("Remote event stream reconnect failed: %v; retrying in %s", err, backoff), false)
 			if backoff < 30*time.Second {
 				backoff *= 2
 			}
@@ -542,10 +542,10 @@ func (s *RemoteDownloadService) consumeSSE(ctx context.Context, ch chan types.Do
 	}
 }
 
-func sendStreamStatus(ch chan types.DownloadEvent, message string) {
+func sendStreamStatus(ctx context.Context, ch chan types.DownloadEvent, message string, resync bool) {
 	select {
-	case ch <- types.DownloadEvent{Type: types.EventSystem, Message: message}:
-	default:
+	case ch <- types.DownloadEvent{Type: types.EventSystem, Message: message, ResyncRequired: resync}:
+	case <-ctx.Done():
 	}
 }
 
@@ -575,4 +575,17 @@ func (s *RemoteDownloadService) doClearDownloads(endpoint string) (int64, error)
 	}
 
 	return result.Deleted, nil
+}
+
+func (s *RemoteDownloadService) AssignCategory(id, category string, move bool) error {
+	resp, err := s.doRequest("PUT", "/category?id="+url.QueryEscape(id), map[string]any{"category": category, "move": move})
+	if err != nil {
+		return err
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return fmt.Errorf("category update failed (HTTP %d): %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return nil
 }

@@ -113,6 +113,7 @@ func (m RootModel) submitInputForm() (tea.Model, tea.Cmd) {
 	headers := m.pendingHeaders
 
 	if d := m.checkForDuplicate(url); d != nil {
+		m.pendingDownloadID = ""
 		m.pendingURL = url
 		m.pendingMirrors = mirrors
 		m.pendingHeaders = headers

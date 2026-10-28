@@ -38,6 +38,7 @@ type KeyMap struct {
 
 // DashboardKeyMap defines keybindings for the main dashboard
 type DashboardKeyMap struct {
+	TabAll           key.Binding
 	TabQueued        key.Binding
 	TabActive        key.Binding
 	TabDone          key.Binding
@@ -56,6 +57,8 @@ type DashboardKeyMap struct {
 	Log              key.Binding
 	ToggleHelp       key.Binding
 	ReportBug        key.Binding
+	CopyURL          key.Binding
+	CopyID           key.Binding
 	OpenFile         key.Binding
 	OpenFolder       key.Binding
 	Quit             key.Binding
@@ -113,20 +116,24 @@ type ExtensionKeyMap struct {
 
 // SettingsKeyMap defines keybindings for the settings view
 type SettingsKeyMap struct {
-	Tab1      key.Binding
-	Tab2      key.Binding
-	Tab3      key.Binding
-	Tab4      key.Binding
-	Tab5      key.Binding
-	NextTab   key.Binding
-	PrevTab   key.Binding
-	Browse    key.Binding
-	Edit      key.Binding
-	Up        key.Binding
-	Down      key.Binding
-	Reset     key.Binding
-	Close     key.Binding
-	ReportBug key.Binding
+	MoveCategoryUp   key.Binding
+	MoveCategoryDown key.Binding
+	Tab1             key.Binding
+	Tab2             key.Binding
+	Tab3             key.Binding
+	Tab4             key.Binding
+	Tab5             key.Binding
+	NextTab          key.Binding
+	PrevTab          key.Binding
+	Browse           key.Binding
+	Edit             key.Binding
+	Up               key.Binding
+	Down             key.Binding
+	Reset            key.Binding
+	ResetAll         key.Binding
+	DeleteCategory   key.Binding
+	Close            key.Binding
+	ReportBug        key.Binding
 }
 
 // SettingsEditorKeyMap defines keybindings for editing a setting
@@ -273,6 +280,18 @@ func (k *KeyMap) ApplyConfig(cfg *KeyMapConfig) {
 			if len(candidate) == 1 && candidate[0] >= 'A' && candidate[0] <= 'Z' {
 				display = "shift+" + strings.ToLower(candidate)
 			}
+			parts := strings.Split(display, "+")
+			switch parts[len(parts)-1] {
+			case "left":
+				parts[len(parts)-1] = "\u2190"
+			case "right":
+				parts[len(parts)-1] = "\u2192"
+			case "up":
+				parts[len(parts)-1] = "\u2191"
+			case "down":
+				parts[len(parts)-1] = "\u2193"
+			}
+			display = strings.Join(parts, "+")
 			if !seen[display] {
 				seen[display] = true
 				formatted = append(formatted, display)
@@ -327,11 +346,28 @@ func (k *KeyMap) ApplyConfig(cfg *KeyMapConfig) {
 		}
 	}
 	applyToStruct(&k.Dashboard, dashboardConfig)
+	settingsConfig := maps.Clone(cfg.Settings)
+	// The former default used both r and R for the same selected-setting reset.
+	// Leave Shift+R available for the new, separately configurable reset-all action.
+	for name, binding := range settingsConfig {
+		if strings.EqualFold(name, "Reset") && (slices.Equal(binding.Keys, []string{"r", "R"}) || slices.Equal(binding.Keys, []string{"r", "shift+r"})) {
+			binding.Keys = []string{"r"}
+			settingsConfig[name] = binding
+		}
+	}
 	applyToStruct(&k.Input, cfg.Input)
-	applyToStruct(&k.FilePicker, cfg.FilePicker)
+	filePickerConfig := maps.Clone(cfg.FilePicker)
+	// Free lowercase h for jumping to files when loading the former default.
+	for name, binding := range filePickerConfig {
+		if strings.EqualFold(name, "GotoHome") && (slices.Equal(binding.Keys, []string{"h", "H"}) || slices.Equal(binding.Keys, []string{"h", "shift+h"})) {
+			binding.Keys = []string{"H", "shift+h"}
+			filePickerConfig[name] = binding
+		}
+	}
+	applyToStruct(&k.FilePicker, filePickerConfig)
 	applyToStruct(&k.Duplicate, cfg.Duplicate)
 	applyToStruct(&k.Extension, cfg.Extension)
-	applyToStruct(&k.Settings, cfg.Settings)
+	applyToStruct(&k.Settings, settingsConfig)
 	applyToStruct(&k.SettingsEditor, cfg.SettingsEditor)
 	applyToStruct(&k.BatchConfirm, cfg.BatchConfirm)
 	applyToStruct(&k.Update, cfg.Update)
@@ -427,6 +463,7 @@ func (k *KeyMap) Validate() {
 func DefaultKeyMap() *KeyMap {
 	return &KeyMap{
 		Dashboard: DashboardKeyMap{
+			TabAll: key.NewBinding(key.WithKeys("0"), key.WithHelp("0", "all downloads")),
 			TabQueued: key.NewBinding(
 				key.WithKeys("q"),
 				key.WithHelp("q", "queued tab"),
@@ -499,6 +536,8 @@ func DefaultKeyMap() *KeyMap {
 				key.WithKeys("?"),
 				key.WithHelp("?", "bug report"),
 			),
+			CopyID:  key.NewBinding(key.WithKeys("i"), key.WithHelp("i", "copy ID")),
+			CopyURL: key.NewBinding(key.WithKeys("u"), key.WithHelp("u", "copy URL")),
 			OpenFile: key.NewBinding(
 				key.WithKeys("o"),
 				key.WithHelp("o", "open file"),
@@ -588,8 +627,8 @@ func DefaultKeyMap() *KeyMap {
 				key.WithHelp("enter", "use current"),
 			),
 			GotoHome: key.NewBinding(
-				key.WithKeys("h", "H"),
-				key.WithHelp("h/H", "home"),
+				key.WithKeys("H", "shift+h"),
+				key.WithHelp("shift+h", "home"),
 			),
 			Back: key.NewBinding(
 				key.WithKeys("left"),
@@ -649,6 +688,8 @@ func DefaultKeyMap() *KeyMap {
 			),
 		},
 		Settings: SettingsKeyMap{
+			MoveCategoryUp:   key.NewBinding(key.WithKeys("shift+up", "K"), key.WithHelp("shift+\u2191/K", "move up")),
+			MoveCategoryDown: key.NewBinding(key.WithKeys("shift+down", "J"), key.WithHelp("shift+\u2193/J", "move down")),
 			Tab1: key.NewBinding(
 				key.WithKeys("1"),
 				key.WithHelp("1", "general"),
@@ -694,9 +735,11 @@ func DefaultKeyMap() *KeyMap {
 				key.WithHelp("\u2193/j", "down"),
 			),
 			Reset: key.NewBinding(
-				key.WithKeys("r", "R"),
-				key.WithHelp("r", "reset"),
+				key.WithKeys("r"),
+				key.WithHelp("r", "reset setting"),
 			),
+			ResetAll:       key.NewBinding(key.WithKeys("R", "shift+r"), key.WithHelp("shift+r", "reset all")),
+			DeleteCategory: key.NewBinding(key.WithKeys("d"), key.WithHelp("d", "delete category")),
 			Close: key.NewBinding(
 				key.WithKeys("esc", "q"),
 				key.WithHelp("esc/q", "save & close"),
@@ -805,9 +848,9 @@ func (k DashboardKeyMap) ShortHelp() []key.Binding {
 // FullHelp returns keybindings for the expanded help view
 func (k DashboardKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
-		{k.TabQueued, k.TabActive, k.TabDone, k.NextTab, k.PrevTab},
+		{k.TabAll, k.TabQueued, k.TabActive, k.TabDone, k.NextTab, k.PrevTab},
 		{k.Add, k.AddFromClipboard, k.BatchImport, k.Search, k.CategoryFilter, k.AssignCategory, k.Pause, k.Refresh, k.Delete, k.PurgeFile, k.Settings, k.SpeedLimits, k.PinTab},
-		{k.Log, k.OpenFile, k.OpenFolder, k.ToggleHelp, k.ReportBug, k.Quit},
+		{k.Log, k.CopyURL, k.CopyID, k.OpenFile, k.OpenFolder, k.ToggleHelp, k.ReportBug, k.Quit},
 	}
 }
 
@@ -844,13 +887,14 @@ func (k ExtensionKeyMap) FullHelp() [][]key.Binding {
 }
 
 func (k SettingsKeyMap) ShortHelp() []key.Binding {
-	return []key.Binding{k.PrevTab, k.NextTab, k.Edit, k.Reset, k.Close}
+	return []key.Binding{k.PrevTab, k.NextTab, k.Edit, k.Reset, k.ResetAll, k.Close}
 }
 
 func (k SettingsKeyMap) FullHelp() [][]key.Binding {
 	return [][]key.Binding{
 		{k.Tab1, k.Tab2, k.Tab3, k.Tab4, k.Tab5},
 		{k.PrevTab, k.NextTab, k.Up, k.Down, k.Edit, k.Reset, k.Browse, k.ReportBug, k.Close},
+		{k.MoveCategoryUp, k.MoveCategoryDown, k.DeleteCategory, k.ResetAll},
 	}
 }
 

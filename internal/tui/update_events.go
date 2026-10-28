@@ -2,6 +2,7 @@ package tui
 
 import (
 	engineprogress "github.com/SurgeDM/Surge/internal/progress"
+	downloadservice "github.com/SurgeDM/Surge/internal/service"
 
 	"fmt"
 	"strings"
@@ -26,6 +27,9 @@ func stateProgress(state interface{}) *engineprogress.DownloadProgress {
 
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if ev, ok := msg.(types.DownloadEvent); ok {
+		if ev.ResyncRequired || (ev.Type != types.EventProgress && ev.Type != types.EventBatchProgress && ev.Type != types.EventSystem) {
+			m.lifecycleRevision++
+		}
 		model, cmd := m.handleDownloadEvent(ev)
 		root, ok := model.(RootModel)
 		if !ok {
@@ -36,6 +40,45 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	switch msg := msg.(type) {
+	case resyncDownloadsMsg:
+		if msg.revision != m.lifecycleRevision {
+			return m, m.resyncDownloadsCmd()
+		}
+		if msg.err != nil {
+			if downloadservice.IsTransientReadError(msg.err) {
+				// Log once per outage and keep a single delayed recovery pending.
+				if m.resyncRetryDelay == 0 {
+					m.addLogEntry(LogStyleError.Render("Could not refresh download state; retrying: " + msg.err.Error()))
+				}
+				m.resyncing = true
+				m.resyncRetryDelay = min(max(m.resyncRetryDelay*2, time.Second), 30*time.Second)
+				generation := m.resyncGeneration
+				return m, tea.Tick(m.resyncRetryDelay, func(time.Time) tea.Msg {
+					return resyncRetryMsg{generation: generation}
+				})
+			}
+			m.resyncing = false
+			m.resyncRetryDelay = 0
+			m.addLogEntry(LogStyleError.Render("Could not refresh download state: " + msg.err.Error()))
+			return m, nil
+		}
+		m.resyncing = false
+		m.resyncRetryDelay = 0
+		downloads := make([]*DownloadModel, 0, len(msg.statuses))
+		for _, status := range msg.statuses {
+			downloads = append(downloads, downloadModelFromStatus(status, false))
+		}
+		m.downloads = downloads
+		m.cachedTotalSpeed = m.calcTotalSpeedBps()
+		m.UpdateListItems()
+		return m, nil
+
+	case resyncRetryMsg:
+		if !m.resyncing || msg.generation != m.resyncGeneration {
+			return m, nil
+		}
+		return m, m.resyncDownloadsCmd()
+
 	case autoShutdownCheckMsg:
 		return m.refreshAutoShutdown()
 
@@ -51,7 +94,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		needsSpinner := false
 		for _, d := range m.downloads {
-			if d.pausing || d.resuming || components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming) == components.StatusQueued {
+			if d.moving || d.pausing || d.resuming || components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming) == components.StatusQueued {
 				needsSpinner = true
 				break
 			}
@@ -64,10 +107,11 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case resumeResultMsg:
 		if msg.err != nil {
-			m.addLogEntry(LogStyleError.Render(fmt.Sprintf("\u2716 Auto-resume failed for %s: %v", msg.id, msg.err)))
+			m.addStyledLogEntry(logError, fmt.Sprintf("\u2716 Auto-resume failed for %s: %v", msg.id, msg.err))
 			return m, nil
 		}
-		if d := m.FindDownloadByID(msg.id); d != nil {
+		if d := m.FindDownloadByID(msg.id); d != nil && (d.paused || !d.started) {
+			d.started = false
 			d.done = false
 			d.err = nil
 			d.paused = false
@@ -131,14 +175,14 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			m.UpdateListItems()
 		}
-		m.addLogEntry(LogStyleError.Render("\u2716 Failed to enqueue download: " + msg.err.Error()))
+		m.addStyledLogEntry(logError, "\u2716 Failed to enqueue download: "+msg.err.Error())
 		m, autoCmd := m.refreshAutoShutdown()
 		return m, autoCmd
 
 	case startupConfigWarningMsg:
 		for _, w := range msg {
 			if w != "" {
-				m.addLogEntry(LogStyleError.Render("\u26a0 " + w))
+				m.addStyledLogEntry(logError, "\u26a0 "+w)
 			}
 		}
 		return m, nil
@@ -148,6 +192,31 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.Cmd) {
+	if msg.Moving != nil {
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.moving = *msg.Moving
+		}
+		m.UpdateListItems()
+		if *msg.Moving {
+			return m, m.spinner.Tick
+		}
+		return m, nil
+	}
+	if msg.CategoryOverride != nil {
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			category := *msg.CategoryOverride
+			d.categoryOverride = &category
+			if msg.DestPath != "" {
+				d.Destination = msg.DestPath
+			}
+		}
+		if msg.Message != "" {
+			m.addStyledLogEntry(logError, msg.Message)
+		}
+		m.UpdateListItems()
+		return m, nil
+	}
+
 	switch msg.Type {
 	case types.EventRequest:
 		return m.handleDownloadRequestMsg(msg, true)
@@ -185,7 +254,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			d.started = true
 			m.SelectedDownloadID = msg.DownloadID
 			m.UpdateListItems()
-			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
+			m.addStyledLogEntry(logStarted, "\u2b07 Started: "+msg.Filename)
 			return m, tea.Batch(progressCmd, m.spinner.Tick)
 		}
 
@@ -201,12 +270,12 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			m.downloads = append(m.downloads, newDownload)
 			m.SelectedDownloadID = msg.DownloadID
 			m.UpdateListItems()
-			m.addLogEntry(LogStyleStarted.Render("\u2b07 Started: " + msg.Filename))
+			m.addStyledLogEntry(logStarted, "\u2b07 Started: "+msg.Filename)
 			return m, m.spinner.Tick
 		}
 
 	case types.EventProgress:
-		if d := m.FindDownloadByID(msg.DownloadID); d != nil && !d.done && !d.paused {
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil && d.started && !d.done && !d.paused {
 			d.Speed = msg.Speed
 		}
 		m.cachedTotalSpeed = m.calcTotalSpeedBps()
@@ -216,7 +285,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	case types.EventBatchProgress:
 		var cmds []tea.Cmd
 		for _, bm := range msg.BatchEvents {
-			if d := m.FindDownloadByID(bm.DownloadID); d != nil && !d.done && !d.paused {
+			if d := m.FindDownloadByID(bm.DownloadID); d != nil && d.started && !d.done && !d.paused {
 				d.Speed = bm.Speed
 			}
 		}
@@ -243,7 +312,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 				} else if msg.Elapsed.Seconds() > 0 {
 					speed = float64(d.Total) / msg.Elapsed.Seconds()
 				}
-				m.addLogEntry(LogStyleComplete.Render(fmt.Sprintf("\u2714 Done: %s (%.2f MiB/s)", d.Filename, speed/float64(utils.MiB))))
+				m.addStyledLogEntry(logComplete, fmt.Sprintf("\u2714 Done: %s (%.2f MiB/s)", d.Filename, speed/float64(utils.MiB)))
 			}
 		}
 		m.cachedTotalSpeed = m.calcTotalSpeedBps()
@@ -255,7 +324,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
 			d.err = msg.Err
 			d.done = true
-			m.addLogEntry(LogStyleError.Render("\u2716 Error: " + d.Filename))
+			m.addStyledLogEntry(logError, "\u2716 Error: "+d.Filename)
 			found = true
 		}
 		if !found {
@@ -263,7 +332,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			newDownload.err = msg.Err
 			newDownload.done = true
 			m.downloads = append(m.downloads, newDownload)
-			m.addLogEntry(LogStyleError.Render("\u2716 Error: " + msg.Filename))
+			m.addStyledLogEntry(logError, "\u2716 Error: "+msg.Filename)
 		}
 		m.cachedTotalSpeed = m.calcTotalSpeedBps()
 		m.UpdateListItems()
@@ -278,7 +347,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			d.RateLimit = msg.RateLimit
 			d.RateLimitSet = msg.RateLimitSet
 			d.Speed = 0
-			m.addLogEntry(LogStylePaused.Render("\u23f8 Paused: " + d.Filename))
+			m.addStyledLogEntry(logPaused, "\u23f8 Paused: "+d.Filename)
 		}
 		m.cachedTotalSpeed = m.calcTotalSpeedBps()
 		m.UpdateListItems()
@@ -286,6 +355,9 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 
 	case types.EventResumed:
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.started = false
+			d.Speed = 0
+			d.Connections = 0
 			d.done = false
 			d.err = nil
 			d.paused = false
@@ -294,7 +366,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			d.hasEtaSpeed = false
 			d.etaSpeed = 0
 			d.lastETA = 0
-			m.addLogEntry(LogStyleStarted.Render("\u25b6 Resumed: " + d.Filename))
+			m.addStyledLogEntry(logStarted, "\u25b6 Resumed: "+d.Filename)
 		}
 		m.UpdateListItems()
 		return m, m.spinner.Tick
@@ -302,9 +374,17 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	case types.EventQueued:
 		found := false
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.started = false
+			d.resuming = false
+			d.paused = false
+			d.pausing = false
+			d.Speed = 0
+			d.Connections = 0
 			d.RateLimit = msg.RateLimit
 			d.RateLimitSet = msg.RateLimitSet
 			found = true
+			m.cachedTotalSpeed = m.calcTotalSpeedBps()
+			m.UpdateListItems()
 		}
 		if !found {
 			newDownload := NewDownloadModel(msg.DownloadID, msg.URL, msg.Filename, 0)
@@ -321,7 +401,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	case types.EventRemoved:
 		if m.removeDownloadByID(msg.DownloadID) {
 			if msg.Filename != "" {
-				m.addLogEntry(LogStyleError.Render("\u2716 Removed: " + msg.Filename))
+				m.addStyledLogEntry(logError, "\u2716 Removed: "+msg.Filename)
 			}
 			m.cachedTotalSpeed = m.calcTotalSpeedBps()
 			m.UpdateListItems()
@@ -330,10 +410,25 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 
 	case types.EventSystem:
 		if msg.Message != "" {
-			m.addLogEntry(LogStyleStarted.Render("\u2139 " + msg.Message))
+			m.addStyledLogEntry(logStarted, "\u2139 "+msg.Message)
+		}
+		if msg.ResyncRequired && m.Service != nil && !m.resyncing {
+			m.resyncing = true
+			m.resyncGeneration++
+			return m, m.resyncDownloadsCmd()
 		}
 		return m, nil
 	}
 
 	return m, nil
+}
+
+// A snapshot is applied only if no lifecycle transition occurred while it was
+// loading. Progress updates do not force retries or add polling to normal use.
+func (m RootModel) resyncDownloadsCmd() tea.Cmd {
+	service, revision := m.Service, m.lifecycleRevision
+	return func() tea.Msg {
+		statuses, err := service.List()
+		return resyncDownloadsMsg{statuses: statuses, err: err, revision: revision}
+	}
 }

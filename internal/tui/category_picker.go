@@ -1,12 +1,19 @@
 package tui
 
 import (
+	"fmt"
+	downloadservice "github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/tui/components"
+	"github.com/SurgeDM/Surge/internal/types"
+	"strings"
+
 	"charm.land/bubbles/v2/key"
 	tea "charm.land/bubbletea/v2"
+	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
-	"github.com/SurgeDM/Surge/internal/tui/components"
 )
 
 func (m RootModel) categoryPickerOptions() []string {
@@ -44,14 +51,13 @@ func (m RootModel) updateCategoryPicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 		selected := options[m.categoryPickerCursor]
 		if m.categoryPickerAssign {
 			if d := m.FindDownloadByID(m.categoryPickerTarget); d != nil {
-				category := selected
-				if category == "Uncategorized" {
-					category = ""
+				m.pendingCategory = selected
+				if selected == "Uncategorized" {
+					m.pendingCategory = ""
 				}
-				d.categoryOverride = &category
-				label := selected
-				m.addLogEntry(LogStyleStarted.Render("Category: " + label))
-				m.UpdateListItems()
+				m.quitConfirmFocused = 1
+				m.state = CategoryMoveConfirmState
+				return m, nil
 			}
 			m.categoryPickerTarget = ""
 			m.state = DashboardState
@@ -62,17 +68,18 @@ func (m RootModel) updateCategoryPicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 		if label == "" {
 			label = "All"
 		}
-		m.addLogEntry(LogStyleStarted.Render("Filter: " + label))
+		m.addStyledLogEntry(logStarted, "Filter: "+label)
 		m.UpdateListItems()
 		m.state = DashboardState
 	}
 	return m, nil
 }
 
+type categoryPickerItem struct{ Label, Value string }
+
 func (m RootModel) viewCategoryPicker() string {
 	options := m.categoryPickerOptions()
-	items := make([]components.ListInputItem, len(options))
-	contentRows := len(options)
+	items := make([]categoryPickerItem, len(options))
 	for i, option := range options {
 		label, value := option, ""
 		switch option {
@@ -90,29 +97,113 @@ func (m RootModel) viewCategoryPicker() string {
 				}
 			}
 		}
-		items[i] = components.ListInputItem{Label: label, Value: value}
-		if value != "" {
-			contentRows++
-		}
+		items[i] = categoryPickerItem{Label: label, Value: value}
 	}
-	// Two border rows, two content-padding rows, and a hint plus its margin.
-	w, h := GetDynamicModalDimensions(m.width, m.height, 36, 8, 52, contentRows+6)
+	w, h := GetDynamicModalDimensions(m.width, m.height, 36, 8, 88, len(options)+6)
 	title := "Filter by Category"
 	if m.categoryPickerAssign {
 		title = "Assign Category"
 	}
-	subtitle := m.keys.Settings.Up.Help().Key + "/" + m.keys.Settings.Down.Help().Key +
+	innerWidth := max(1, w-6)
+	visible := max(1, h-6)
+	listWidth := min(24, max(12, innerWidth/3))
+	detailWidth := max(1, innerWidth-listWidth-3)
+	start := max(0, m.categoryPickerCursor-visible+1)
+	start = min(start, max(0, len(items)-visible))
+	var rows []string
+	for i := start; i < min(len(items), start+visible); i++ {
+		prefix := "  "
+		style := lipgloss.NewStyle().Foreground(colors.LightGray())
+		if i == m.categoryPickerCursor {
+			prefix = "\u25b8 "
+			style = style.Foreground(colors.Pink()).Bold(true)
+		}
+		rows = append(rows, style.Render(ansi.Truncate(prefix+items[i].Label, listWidth, "\u2026")))
+	}
+	list := lipgloss.NewStyle().Width(listWidth).Height(visible).Render(strings.Join(rows, "\n"))
+	description := ""
+	if m.categoryPickerCursor >= 0 && m.categoryPickerCursor < len(items) {
+		description = items[m.categoryPickerCursor].Value
+	}
+	detail := lipgloss.NewStyle().Foreground(colors.White()).Width(detailWidth).MaxHeight(visible).Render(description)
+	divider := lipgloss.NewStyle().Foreground(colors.Gray()).Render(strings.TrimSuffix(strings.Repeat(" \u2502 \n", visible), "\n"))
+	panes := lipgloss.JoinHorizontal(lipgloss.Top, list, divider, detail)
+	hint := m.keys.Settings.Up.Help().Key + "/" + m.keys.Settings.Down.Help().Key +
 		" navigate   " + m.keys.Settings.Edit.Help().Key + " select   " + m.keys.Settings.Close.Help().Key + " close"
-	return components.ListInputModal{
-		Title:              title,
-		Subtitle:           subtitle,
-		PlainSubtitle:      true,
-		Items:              items,
-		Cursor:             m.categoryPickerCursor,
-		BorderColor:        colors.Magenta(),
-		InactiveLabelColor: colors.LightGray(),
-		Width:              w,
-		Height:             h,
-		Compact:            true,
-	}.RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
+	footer := lipgloss.NewStyle().Foreground(colors.Gray()).Render(ansi.Truncate(hint, innerWidth, "\u2026"))
+	content := lipgloss.NewStyle().Padding(1, 2).Render(lipgloss.JoinVertical(lipgloss.Left, panes, "", footer))
+	return renderBtopBox(PaneTitleStyle.Render(" "+title+" "), "", content, w, h, colors.Magenta())
+}
+
+type categoryAssignedMsg struct {
+	id, category string
+	status       *types.DownloadStatus
+	err          error
+}
+
+func (m RootModel) updateCategoryMoveConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if d := m.FindDownloadByID(m.categoryPickerTarget); d != nil && d.moving {
+		m.state = DashboardState
+		m.addStyledLogEntry(logError, types.ErrMoving.Error())
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.QuitConfirm.Cancel) {
+		m.state = CategoryPickerState
+		return m, nil
+	}
+	m, decision, handled := m.handleYesNoSelection(msg)
+	if !handled || decision == yesNoNone {
+		return m, nil
+	}
+	id, category := m.categoryPickerTarget, m.pendingCategory
+	assign := m.AssignCategoryFunc
+	if assign == nil {
+		if backend, ok := m.Service.(downloadservice.CategoryService); ok {
+			assign = backend.AssignCategory
+		}
+	}
+	if assign == nil {
+		m.addStyledLogEntry(logError, "Backend does not support persistent category assignments")
+		m.state = DashboardState
+		return m, nil
+	}
+	m.state = DashboardState
+	if d := m.FindDownloadByID(id); d != nil && decision == yesNoYes && d.done && d.err == nil {
+		d.moving = true
+		m.UpdateListItems()
+	}
+	return m, func() tea.Msg {
+		err := assign(id, category, decision == yesNoYes)
+		var status *types.DownloadStatus
+		if m.Service != nil {
+			status, _ = m.Service.GetStatus(id)
+		}
+		return categoryAssignedMsg{id: id, category: category, status: status, err: err}
+	}
+}
+
+func (m RootModel) viewCategoryMoveConfirm() string {
+	detail := "Move the completed file now, or keep its current location."
+	if d := m.FindDownloadByID(m.categoryPickerTarget); d != nil && (!d.done || d.err != nil) {
+		detail = "The move will wait until downloading completes. Resume data stays in place."
+	}
+	directory := config.Resolve[string](m.Settings.General.DefaultDownloadDir)
+	for _, rule := range m.Settings.Categories.Categories {
+		if rule.Name == m.pendingCategory {
+			directory = config.ResolveCategoryPath(&rule, directory)
+			break
+		}
+	}
+	detail = lipgloss.NewStyle().Foreground(colors.White()).Render(detail) + "\n" +
+		lipgloss.NewStyle().Foreground(colors.Gray()).Render("Folder: ") + lipgloss.NewStyle().Foreground(colors.Cyan()).Render(directory)
+	label := m.pendingCategory
+	if label == "" {
+		label = "Uncategorized"
+	}
+	w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 80, 14)
+	return (components.ConfirmationModal{
+		Title: "Change Category", Message: fmt.Sprintf("Assign to %q and move to its folder?", label), Detail: detail,
+		Keys: m.keys.QuitConfirm, Help: m.help, BorderColor: colors.Magenta(), ButtonColor: colors.Cyan(), Width: w, Height: h,
+		ShowYesNoButtons: true, YesNoFocused: m.quitConfirmFocused, YesLabel: "Move file", NoLabel: "Keep location",
+	}).RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 }

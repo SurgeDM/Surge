@@ -46,6 +46,9 @@ jobs:
             system: aarch64-darwin
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 20
+    env:
+      # Hosted runners use a multi-user install; never fall back to the local DB.
+      NIX_REMOTE: daemon
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
@@ -58,6 +61,20 @@ jobs:
           name: ${{ inputs.release-artifact }}
           path: nix
       - uses: cachix/install-nix-action@d9186cbdca7adedf113a159fa91f725a27866771 # v31
+      - name: Wait for the Nix daemon
+        shell: bash
+        run: |
+          for attempt in {1..30}; do
+            if nix --extra-experimental-features nix-command store info; then
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Nix daemon did not become ready within 30 attempts" >&2
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            sudo launchctl print system/org.nixos.nix-daemon || true
+          fi
+          exit 1
       - name: Check package and version
         env:
           NIX_CONFIG: extra-experimental-features = nix-command flakes

@@ -140,12 +140,19 @@ func startLifecycleEventWorker(service service.DownloadService, mgr *orchestrato
 		return nil, nil
 	}
 
-	managerStream, managerCleanup, err := service.StreamEvents(context.Background())
+	streamEvents := service.StreamEvents
+	if source, ok := service.(interface {
+		StreamLifecycleEvents(context.Context) (<-chan types.DownloadEvent, func(), error)
+	}); ok {
+		streamEvents = source.StreamLifecycleEvents
+	}
+	managerStream, managerCleanup, err := streamEvents(context.Background())
 	if err != nil {
 		return nil, err
 	}
-	go mgr.StartEventWorker(managerStream)
-	return managerCleanup, nil
+	done := make(chan struct{})
+	go func() { defer close(done); mgr.StartEventWorker(managerStream) }()
+	return func() { managerCleanup(); <-done }, nil
 }
 
 func currentLifecycle() *orchestrator.LifecycleManager {

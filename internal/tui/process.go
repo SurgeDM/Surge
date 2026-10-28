@@ -16,7 +16,7 @@ import (
 
 func (m *RootModel) processProgressMsg(msg types.DownloadEvent) tea.Cmd {
 	d := m.FindDownloadByID(msg.DownloadID)
-	if d == nil || d.done || d.paused {
+	if d == nil || !d.started || d.done || d.paused {
 		return nil
 	}
 
@@ -86,7 +86,7 @@ func (m *RootModel) processProgressMsg(msg types.DownloadEvent) tea.Cmd {
 // startDownload initiates a new download
 func (m RootModel) startDownload(url string, mirrors []string, headers map[string]string, path string, isDefaultPath bool, filename, id string, workers int, minChunkSize int64) (RootModel, tea.Cmd) {
 	if m.Service == nil {
-		m.addLogEntry(LogStyleError.Render("\u2716 Service unavailable"))
+		m.addStyledLogEntry(logError, "\u2716 Service unavailable")
 		return m, nil
 	}
 
@@ -98,7 +98,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	if requestID != "" {
 		for _, download := range m.downloads {
 			if download.ID == requestID {
-				m.addLogEntry(LogStyleError.Render("\u2716 Download ID already exists"))
+				m.addStyledLogEntry(logError, "\u2716 Download ID already exists")
 				return m, nil
 			}
 		}
@@ -152,7 +152,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 	}
 	m.downloads = append(m.downloads, newDownload)
 	m.SelectedDownloadID = optimisticID
-	if m.pinnedTab == -1 {
+	if m.pinnedTab == -1 && m.activeTab != TabAll {
 		m.activeTab = TabQueued
 	}
 	m.UpdateListItems()
@@ -190,7 +190,7 @@ func (m RootModel) startDownload(url string, mirrors []string, headers map[strin
 		if err != nil {
 			m.removeDownloadByID(optimisticID)
 			m.UpdateListItems()
-			m.addLogEntry(LogStyleError.Render("\u2716 Failed to add download: " + err.Error()))
+			m.addStyledLogEntry(logError, "\u2716 Failed to add download: "+err.Error())
 			return m, nil
 		}
 

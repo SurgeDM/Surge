@@ -17,6 +17,14 @@ import (
 type extensionTokenFlashFadeMsg struct{}
 
 func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if !m.SettingsIsEditing && (m.settingsSearchActive || msg.String() == "/" || key.Matches(msg, m.keys.Dashboard.Search)) {
+		model, cmd := m.updateSettingsSearch(msg)
+		next := model.(RootModel)
+		next.SettingsSelectedRow = 0
+		next.SettingsFocusedPane = 1
+		next.normalizeSettingsSelection()
+		return next, cmd
+	}
 	if m.SettingsBaseline == nil {
 		m.snapshotSettings()
 	}
@@ -28,7 +36,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if m.SettingsReadOnly && (m.SettingsIsEditing || key.Matches(msg, m.keys.Settings.Edit, m.keys.Settings.Reset, m.keys.Settings.Browse)) {
+	if m.SettingsReadOnly && (m.SettingsIsEditing || key.Matches(msg, m.keys.Settings.Edit, m.keys.Settings.Reset, m.keys.Settings.ResetAll, m.keys.Settings.DeleteCategory, m.keys.Settings.Browse)) {
 		m.settingsError = "This daemon does not support editing settings"
 		return m, nil
 	}
@@ -119,7 +127,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if key.Matches(msg, m.keys.SettingsEditor.Confirm) {
-			currentCategory := categories[m.SettingsActiveTab]
+			currentCategory := m.currentSettingsCategory()
 			settingKey := m.getCurrentSettingKey()
 			val := m.SettingsInput.Value()
 
@@ -153,6 +161,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.settingsError = "Failed to save settings: " + err.Error()
 			return m, nil
 		}
+		m.clearSettingsSearch()
 		if requiresRestart && m.IsRemote {
 			m.addLogEntry("Settings saved. Restart Surge on the server to apply restart-required changes.")
 		} else if requiresRestart {
@@ -171,12 +180,16 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.SettingsBaseline = nil
+		m.clearSettingsSearch()
 
 		m.quitConfirmFocused = 0
 		m.bugReportIncludeSystemInfo = true
 		m.bugReportIncludeLatestLog = true
 		m.state = BugReportTargetState
 		return m, nil
+	}
+	if key.Matches(msg, m.keys.Settings.ResetAll) {
+		return m.requestSettingsConfirmation(settingsResetAll), nil
 	}
 	tabBindings := []key.Binding{
 		m.keys.Settings.Tab1,
@@ -196,7 +209,12 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Tab Navigation (NextTab/PrevTab) - always switches active tab
+	// Category rows have their own controls. Numbered tab shortcuts remain
+	// available while left/right (and their configured aliases) are inactive.
+	if m.categoryListFocused() && key.Matches(msg, m.keys.Settings.NextTab, m.keys.Settings.PrevTab) {
+		return m, nil
+	}
+	// Tab Navigation (NextTab/PrevTab)
 	if key.Matches(msg, m.keys.Settings.NextTab) {
 		m.SettingsActiveTab = (m.SettingsActiveTab + 1) % categoryCount
 		m.SettingsSelectedRow = 0
@@ -207,6 +225,27 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.SettingsActiveTab = (m.SettingsActiveTab - 1 + categoryCount) % categoryCount
 		m.SettingsSelectedRow = 0
 		m.settingsError = ""
+		return m, nil
+	}
+
+	// Category order determines matching priority; move the selected rule with it.
+	if m.SettingsFocusedPane == 1 && m.settingsSearchQuery == "" && m.getCurrentSettingType() == config.TypeCustomCategory && key.Matches(msg, m.keys.Settings.MoveCategoryUp, m.keys.Settings.MoveCategoryDown) {
+		if m.SettingsReadOnly {
+			m.settingsError = "This daemon does not support editing settings"
+			return m, nil
+		}
+		idx, err := strconv.Atoi(strings.TrimPrefix(m.getCurrentSettingKey(), "category_"))
+		delta := 1
+		if key.Matches(msg, m.keys.Settings.MoveCategoryUp) {
+			delta = -1
+		}
+		next := idx + delta
+		cats := m.Settings.Categories.Categories
+		if err == nil && idx >= 0 && idx < len(cats) && next >= 0 && next < len(cats) {
+			cats[idx], cats[next] = cats[next], cats[idx]
+			m.SettingsSelectedRow += delta
+			m.settingsError = ""
+		}
 		return m, nil
 	}
 
@@ -291,6 +330,9 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 		settingKey := m.getCurrentSettingKey()
+		if settingKey == "" {
+			return m, nil
+		}
 		// Prevent editing ignored settings
 		if settingKey == "max_global_connections" {
 			return m, nil
@@ -321,7 +363,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 
 		if typ == "link" {
-			currentCategory := categories[m.SettingsActiveTab]
+			currentCategory := m.currentSettingsCategory()
 			values := m.getSettingsValues(currentCategory)
 			if url, ok := values[settingKey].(string); ok && url != "" {
 				_ = utils.OpenBrowser(url)
@@ -329,7 +371,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
-		currentCategory := categories[m.SettingsActiveTab]
+		currentCategory := m.currentSettingsCategory()
 		switch typ {
 		case "bool":
 			if err := m.setSettingValue(currentCategory, settingKey, ""); err != nil {
@@ -375,43 +417,11 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	// Reset
-	if key.Matches(msg, m.keys.Settings.Reset) {
-		if m.SettingsFocusedPane == 0 {
-			return m, nil // Can't reset when tabs are focused
-		}
-		settingKey := m.getCurrentSettingKey()
-		if settingKey == "max_global_connections" {
-			return m, nil
-		}
-
-		// Categories tab \u2192 'Manage Categories' selected \u2192 confirm full reset
-		// If deleting a custom category
-		typ := m.getCurrentSettingType()
-		if typ == config.TypeCustomCategory && strings.HasPrefix(settingKey, "category_") {
-			idx, _ := strconv.Atoi(strings.TrimPrefix(settingKey, "category_"))
-			if idx >= 0 && idx < len(m.Settings.Categories.Categories) {
-				m.Settings.Categories.Categories = append(
-					m.Settings.Categories.Categories[:idx],
-					m.Settings.Categories.Categories[idx+1:]...,
-				)
-				if m.SettingsSelectedRow >= m.getSettingsCount() {
-					m.SettingsSelectedRow = m.getSettingsCount() - 1
-				}
-			}
-			return m, nil
-		}
-
-		defaults := config.DefaultSettings()
-		currentCategory := categories[m.SettingsActiveTab]
-		if err := m.resetSettingToDefault(currentCategory, settingKey, defaults); err != nil {
-			m.settingsError = err.Error()
-			return m, nil
-		}
-		if settingKey == "theme" || settingKey == "theme_path" {
-			m.ApplyTheme(config.Resolve[int](m.Settings.General.Theme), config.Resolve[string](m.Settings.General.ThemePath))
-		}
-		return m, nil
+	if m.SettingsFocusedPane == 1 && key.Matches(msg, m.keys.Settings.DeleteCategory) {
+		return m.requestSettingsConfirmation(settingsDeleteCategory), nil
+	}
+	if m.SettingsFocusedPane == 1 && key.Matches(msg, m.keys.Settings.Reset) {
+		return m.requestSettingsConfirmation(settingsResetOne), nil
 	}
 
 	return m, nil

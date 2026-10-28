@@ -82,7 +82,7 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 			if v <= 0 {
 				return "0 MiB/s"
 			}
-			return utils.FormatRateLimit(int64(v))
+			return utils.FormatSpeed(v)
 		}
 
 		axisLines := make([]string, h)
@@ -154,11 +154,11 @@ func (m *RootModel) renderGraphBox(width, height int, stats ViewStats) string {
 
 		speedStr := "0 MiB/s"
 		if currentSpeed > 0 {
-			speedStr = utils.FormatRateLimit(int64(currentSpeed))
+			speedStr = utils.FormatSpeed(currentSpeed)
 		}
 		topStr := "0 MiB/s"
 		if topSpeedBps > 0 {
-			topStr = utils.FormatRateLimit(int64(topSpeedBps))
+			topStr = utils.FormatSpeed(topSpeedBps)
 		}
 
 		statsContent := lipgloss.JoinVertical(lipgloss.Left,

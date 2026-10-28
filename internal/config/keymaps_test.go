@@ -11,6 +11,50 @@ import (
 	"charm.land/bubbles/v2/key"
 )
 
+func TestFilePickerHomeMigratesToShiftH(t *testing.T) {
+	for _, keys := range [][]string{{"h", "H"}, {"h", "shift+h"}, {"ctrl+h"}} {
+		cfg := &KeyMapConfig{FilePicker: map[string]KeyBindingConfig{"GotoHome": {Keys: keys}}}
+		km := DefaultKeyMap()
+		km.ApplyConfig(cfg)
+		want := []string{"H", "shift+h"}
+		if keys[0] == "ctrl+h" {
+			want = keys
+		}
+		if !reflect.DeepEqual(km.FilePicker.GotoHome.Keys(), want) {
+			t.Fatalf("home keys = %v, want %v", km.FilePicker.GotoHome.Keys(), want)
+		}
+		if !reflect.DeepEqual(cfg.FilePicker["GotoHome"].Keys, keys) {
+			t.Fatal("migration mutated source config")
+		}
+	}
+}
+
+func TestConfiguredArrowHelpUsesGlyphs(t *testing.T) {
+	km := DefaultKeyMap()
+	km.ApplyConfig(&KeyMapConfig{Settings: map[string]KeyBindingConfig{
+		"Up":      {Keys: []string{"up", "shift+up", "k"}},
+		"Down":    {Keys: []string{"down"}},
+		"PrevTab": {Keys: []string{"left", "h"}},
+		"NextTab": {Keys: []string{"right", "l"}},
+	}})
+	for _, check := range []struct {
+		binding key.Binding
+		want    string
+	}{
+		{km.Settings.Up, "\u2191/shift+\u2191/k"},
+		{km.Settings.Down, "\u2193"},
+		{km.Settings.PrevTab, "\u2190/h"},
+		{km.Settings.NextTab, "\u2192/l"},
+	} {
+		if got := check.binding.Help().Key; got != check.want {
+			t.Errorf("help = %q, want %q", got, check.want)
+		}
+	}
+	if !reflect.DeepEqual(km.Settings.Up.Keys(), []string{"up", "shift+up", "k"}) {
+		t.Fatal("display formatting changed functional keys")
+	}
+}
+
 func TestDefaultKeyMap(t *testing.T) {
 	km := DefaultKeyMap()
 	if km == nil {
@@ -37,6 +81,25 @@ func TestDefaultKeyMap(t *testing.T) {
 	}
 	if !foundOpenFolder {
 		t.Error("Dashboard.OpenFolder missing from FullHelp")
+	}
+}
+
+func TestSettingsResetBindingsMigrateLegacyShiftR(t *testing.T) {
+	cfg := &KeyMapConfig{Settings: map[string]KeyBindingConfig{"Reset": {Keys: []string{"r", "R"}, Help: "reset"}}}
+	km := DefaultKeyMap()
+	km.ApplyConfig(cfg)
+	if !reflect.DeepEqual(km.Settings.Reset.Keys(), []string{"r"}) || !reflect.DeepEqual(km.Settings.DeleteCategory.Keys(), []string{"d"}) {
+		t.Fatal("legacy selected-reset keys did not migrate")
+	}
+	if !reflect.DeepEqual(cfg.Settings["Reset"].Keys, []string{"r", "R"}) {
+		t.Fatal("migration mutated caller configuration")
+	}
+	if km.Settings.ResetAll.Help().Key != "shift+r" {
+		t.Fatal("reset all is not advertised as Shift+R")
+	}
+	km.ApplyConfig(&KeyMapConfig{Settings: map[string]KeyBindingConfig{"Reset": {Keys: []string{"ctrl+r"}}, "ResetAll": {Keys: []string{"ctrl+shift+r"}}, "DeleteCategory": {Keys: []string{"ctrl+d"}}}})
+	if km.Settings.Reset.Help().Key != "ctrl+r" || km.Settings.ResetAll.Help().Key != "ctrl+shift+r" || km.Settings.DeleteCategory.Help().Key != "ctrl+d" {
+		t.Fatal("explicit custom settings bindings were not preserved")
 	}
 }
 

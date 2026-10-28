@@ -10,8 +10,8 @@ import (
 
 func TestDefaultCategories(t *testing.T) {
 	cats := DefaultCategories()
-	if len(cats) != 6 {
-		t.Errorf("Expected 6 default categories, got %d", len(cats))
+	if len(cats) != 8 {
+		t.Errorf("Expected 8 default categories, got %d", len(cats))
 	}
 
 	for _, c := range cats {
@@ -93,8 +93,8 @@ func TestGetCategoryForFile_MultipleMatches(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetCategoryForFile returned unexpected error: %v", err)
 	}
-	if cat == nil || cat.Name != "Cat2" {
-		t.Fatalf("expected later category to override earlier match, got %#v", cat)
+	if cat == nil || cat.Name != "Cat1" {
+		t.Fatalf("expected first matching category, got %#v", cat)
 	}
 }
 
@@ -180,7 +180,7 @@ func TestDefaultCategories_FallbackWhenUserDirsMissing(t *testing.T) {
 	}
 
 	downloadsPath := pathByName["Compressed"]
-	for _, name := range []string{"Videos", "Music", "Documents", "Images"} {
+	for _, name := range []string{"Videos", "Movies", "Shows", "Music", "Documents", "Images"} {
 		if got := pathByName[name]; got != downloadsPath {
 			t.Fatalf("%s path = %q, want fallback %q", name, got, downloadsPath)
 		}
@@ -286,5 +286,23 @@ func TestGetCompiledPattern_Concurrent(t *testing.T) {
 	// Verify valid pattern returns non-nil
 	if re := getCompiledPattern(`(?i)\.mp4$`); re == nil {
 		t.Error("Expected non-nil for valid pattern")
+	}
+}
+
+func TestDefaultMovieAndShowCategories(t *testing.T) {
+	cats := DefaultCategories()
+	for _, tc := range []struct{ filename, want string }{
+		{"Movie.1999.1080p.mkv", "Movies"},
+		{"Movie.2024.zip", "Movies"},
+		{"Show.2024.S01E02.mkv", "Shows"},
+		{"Show.S01.1080p.zip", "Shows"},
+		{"clip.mp4", "Videos"},
+		{"report.2024.pdf", "Documents"},
+		{"video.1080p.mkv", "Videos"},
+	} {
+		cat, err := GetCategoryForFile(tc.filename, cats)
+		if err != nil || cat == nil || cat.Name != tc.want {
+			t.Errorf("%s: got %v, %v; want %s", tc.filename, cat, err, tc.want)
+		}
 	}
 }

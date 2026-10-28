@@ -25,11 +25,13 @@ const (
 )
 
 type DownloadEvent struct {
-	Type       EventType `json:"type"`
-	DownloadID string    `json:"download_id,omitempty"`
-	URL        string    `json:"url,omitempty"`
-	Filename   string    `json:"filename,omitempty"`
-	DestPath   string    `json:"dest_path,omitempty"`
+	Moving           *bool     `json:"moving,omitempty"`
+	CategoryOverride *string   `json:"category_override,omitempty"`
+	Type             EventType `json:"type"`
+	DownloadID       string    `json:"download_id,omitempty"`
+	URL              string    `json:"url,omitempty"`
+	Filename         string    `json:"filename,omitempty"`
+	DestPath         string    `json:"dest_path,omitempty"`
 
 	// Progress
 	Downloaded    int64   `json:"downloaded,omitempty"`
@@ -73,7 +75,8 @@ type DownloadEvent struct {
 	BatchEvents []DownloadEvent `json:"batch_events,omitempty"`
 
 	// System
-	Message string `json:"message,omitempty"`
+	Message        string `json:"message,omitempty"`
+	ResyncRequired bool   `json:"resync_required,omitempty"`
 }
 
 func (m DownloadEvent) MarshalJSON() ([]byte, error) {
