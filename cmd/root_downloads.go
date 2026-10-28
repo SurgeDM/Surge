@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"runtime"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/orchestrator"
@@ -109,7 +111,7 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		return
 	}
 
-	if maybeRequireDownloadApproval(w, service, resolved) {
+	if maybeRequireDownloadApproval(r.Context(), w, service, resolved) {
 		return
 	}
 
@@ -424,7 +426,7 @@ func resolveDuplicateState(urlForAdd string) (bool, bool) {
 	return dupResult.Exists, dupResult.IsActive
 }
 
-func maybeRequireDownloadApproval(w http.ResponseWriter, service service.DownloadService, resolved *resolvedDownloadRequest) bool {
+func maybeRequireDownloadApproval(ctx context.Context, w http.ResponseWriter, service service.DownloadService, resolved *resolvedDownloadRequest) bool {
 	req := resolved.request
 
 	// EXTENSION VETTING SHORTCUT:
@@ -447,6 +449,14 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 		if downloadID == "" {
 			downloadID = uuid.New().String()
 		}
+		var approvalResult chan error
+		var approvalContext context.Context
+		if req.ID != "" {
+			approvalResult = make(chan error, 1)
+			var cancel context.CancelFunc
+			approvalContext, cancel = context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+		}
 		if err := service.Publish(types.DownloadEvent{
 			Type:                 types.EventRequest,
 			DownloadID:           downloadID,
@@ -459,11 +469,25 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 			SkipDuplicateWarning: req.SkipDuplicateWarning,
 			Workers:              req.Workers,
 			MinChunkSize:         req.MinChunkSize,
+			ApprovalResult:       approvalResult,
+			ApprovalContext:      approvalContext,
 		}); err != nil {
 			recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
 			publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(resolved.urlForAdd), err))
 			http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
 			return true
+		}
+		if approvalResult != nil {
+			select {
+			case err := <-approvalResult:
+				if err != nil {
+					http.Error(w, err.Error(), http.StatusConflict)
+					return true
+				}
+			case <-approvalContext.Done():
+				http.Error(w, "TUI did not respond to download request", http.StatusServiceUnavailable)
+				return true
+			}
 		}
 
 		writeJSONResponse(w, http.StatusAccepted, map[string]string{

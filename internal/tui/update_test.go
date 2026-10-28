@@ -711,6 +711,23 @@ func TestUpdate_BatchDownloadRequestMsg_QueuesWhileConfirmationActive(t *testing
 	}
 }
 
+func TestDownloadRequest_RejectsExistingAndPendingIDs(t *testing.T) {
+	for _, m := range []RootModel{
+		{downloads: []*DownloadModel{{ID: "same"}}},
+		{state: ExtensionConfirmationState, pendingDownloadID: "same"},
+		{pendingRequestQueue: []types.DownloadEvent{{DownloadID: "same"}}},
+	} {
+		reply := make(chan error, 1)
+		updated, _ := m.handleDownloadRequestMsg(types.DownloadEvent{DownloadID: "same", ApprovalResult: reply}, true)
+		if err := <-reply; err == nil {
+			t.Fatal("expected duplicate ID rejection")
+		}
+		if len(updated.(RootModel).pendingRequestQueue) != len(m.pendingRequestQueue) {
+			t.Fatal("rejected request was queued")
+		}
+	}
+}
+
 func TestStartDownload_RejectsExistingID(t *testing.T) {
 	existing := &DownloadModel{ID: "request-id", Filename: "existing.zip"}
 	m := RootModel{Service: &mockService{}, downloads: []*DownloadModel{existing}, SelectedDownloadID: "request-id"}

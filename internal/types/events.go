@@ -1,6 +1,7 @@
 package types
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"time"
@@ -64,6 +65,8 @@ type DownloadEvent struct {
 	Path                 string            `json:"path,omitempty"`
 	IsExplicitCategory   bool              `json:"is_explicit_category,omitempty"`
 	SkipDuplicateWarning bool              `json:"skip_duplicate_warning,omitempty"`
+	ApprovalResult       chan error        `json:"-"`
+	ApprovalContext      context.Context   `json:"-"`
 
 	// Batch
 	BatchEvents []DownloadEvent `json:"batch_events,omitempty"`

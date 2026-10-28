@@ -2,15 +2,39 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
 )
+
+type approvalReplyService struct{ *httpAPITestService }
+
+func (s *approvalReplyService) Publish(event types.DownloadEvent) error {
+	event.ApprovalResult <- errors.New("download ID already exists")
+	return nil
+}
+
+func TestApprovalRejectsDuplicateIDBeforeAcknowledgment(t *testing.T) {
+	previous := serverProgram
+	serverProgram = &tea.Program{}
+	t.Cleanup(func() { serverProgram = previous })
+	settings := config.DefaultSettings()
+	settings.Extension.ExtensionPrompt.Value = true
+	resolved := &resolvedDownloadRequest{request: DownloadRequest{ID: "same"}, settings: settings}
+	rec := httptest.NewRecorder()
+	if !maybeRequireDownloadApproval(context.Background(), rec, &approvalReplyService{&httpAPITestService{}}, resolved) || rec.Code != http.StatusConflict {
+		t.Fatalf("expected conflict, got %d: %s", rec.Code, rec.Body.String())
+	}
+}
 
 func TestDuplicateCheckIncludesPersistedDownloads(t *testing.T) {
 	setupIsolatedCmdState(t)
@@ -84,7 +108,7 @@ func TestSkipDuplicateWarningAutoApprovesInHeadlessMode(t *testing.T) {
 		request:     DownloadRequest{SkipDuplicateWarning: true},
 	}
 	rec := httptest.NewRecorder()
-	if maybeRequireDownloadApproval(rec, nil, resolved) {
+	if maybeRequireDownloadApproval(context.Background(), rec, nil, resolved) {
 		t.Fatalf("headless duplicate was rejected: %d %s", rec.Code, rec.Body.String())
 	}
 }
