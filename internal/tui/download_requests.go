@@ -38,10 +38,25 @@ func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy
 			}
 		}
 		if duplicate {
-			msg.ApprovalResult <- errors.New("download ID already exists")
+			if msg.ApprovalContext == nil {
+				msg.ApprovalResult <- errors.New("download ID already exists")
+			} else {
+				select {
+				case msg.ApprovalResult <- errors.New("download ID already exists"):
+				case <-msg.ApprovalContext.Done():
+				}
+			}
 			return m, nil
 		}
-		msg.ApprovalResult <- nil
+		if msg.ApprovalContext == nil {
+			msg.ApprovalResult <- nil
+		} else {
+			select {
+			case msg.ApprovalResult <- nil:
+			case <-msg.ApprovalContext.Done():
+				return m, nil
+			}
+		}
 		msg.ApprovalResult = nil
 	}
 	if queueIfBusy && m.isRequestConfirmationBusy() {

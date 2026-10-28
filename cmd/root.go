@@ -566,6 +566,9 @@ func startTUI(port int, exitWhenDone bool, noResume bool, releaseLock func()) er
 	// Background listener for progress events
 	go func() {
 		for msg := range stream {
+			if msg.SkipLocalTUI {
+				continue
+			}
 			p.Send(msg)
 		}
 	}()

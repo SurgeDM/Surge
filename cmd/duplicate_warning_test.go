@@ -16,23 +16,37 @@ import (
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
-type approvalReplyService struct{ *httpAPITestService }
+type rejectingApprovalModel struct{}
 
-func (s *approvalReplyService) Publish(event types.DownloadEvent) error {
-	event.ApprovalResult <- errors.New("download ID already exists")
-	return nil
+func (rejectingApprovalModel) Init() tea.Cmd { return nil }
+func (m rejectingApprovalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if event, ok := msg.(types.DownloadEvent); ok && event.ApprovalResult != nil {
+		select {
+		case event.ApprovalResult <- errors.New("download ID already exists"):
+		case <-event.ApprovalContext.Done():
+		}
+	}
+	return m, nil
 }
+func (rejectingApprovalModel) View() tea.View { return tea.NewView("") }
 
 func TestApprovalRejectsDuplicateIDBeforeAcknowledgment(t *testing.T) {
 	previous := serverProgram
-	serverProgram = &tea.Program{}
-	t.Cleanup(func() { serverProgram = previous })
+	serverProgram = tea.NewProgram(rejectingApprovalModel{}, tea.WithInput(nil), tea.WithOutput(&bytes.Buffer{}))
+	program := serverProgram
+	done := make(chan struct{})
+	go func() { _, _ = program.Run(); close(done) }()
+	t.Cleanup(func() { program.Quit(); <-done; serverProgram = previous })
 	settings := config.DefaultSettings()
 	settings.Extension.ExtensionPrompt.Value = true
 	resolved := &resolvedDownloadRequest{request: DownloadRequest{ID: "same"}, settings: settings}
 	rec := httptest.NewRecorder()
-	if !maybeRequireDownloadApproval(context.Background(), rec, &approvalReplyService{&httpAPITestService{}}, resolved) || rec.Code != http.StatusConflict {
+	service := &publishRecordingHTTPService{httpAPITestService: &httpAPITestService{}}
+	if !maybeRequireDownloadApproval(context.Background(), rec, service, resolved) || rec.Code != http.StatusConflict {
 		t.Fatalf("expected conflict, got %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(service.published) != 0 {
+		t.Fatal("rejected request was broadcast")
 	}
 }
 

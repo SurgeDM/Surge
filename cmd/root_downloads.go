@@ -452,12 +452,12 @@ func maybeRequireDownloadApproval(ctx context.Context, w http.ResponseWriter, se
 		var approvalResult chan error
 		var approvalContext context.Context
 		if req.ID != "" {
-			approvalResult = make(chan error, 1)
+			approvalResult = make(chan error)
 			var cancel context.CancelFunc
 			approvalContext, cancel = context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
 		}
-		if err := service.Publish(types.DownloadEvent{
+		event := types.DownloadEvent{
 			Type:                 types.EventRequest,
 			DownloadID:           downloadID,
 			URL:                  resolved.urlForAdd,
@@ -471,13 +471,9 @@ func maybeRequireDownloadApproval(ctx context.Context, w http.ResponseWriter, se
 			MinChunkSize:         req.MinChunkSize,
 			ApprovalResult:       approvalResult,
 			ApprovalContext:      approvalContext,
-		}); err != nil {
-			recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
-			publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(resolved.urlForAdd), err))
-			http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
-			return true
 		}
 		if approvalResult != nil {
+			go serverProgram.Send(event)
 			select {
 			case err := <-approvalResult:
 				if err != nil {
@@ -488,6 +484,15 @@ func maybeRequireDownloadApproval(ctx context.Context, w http.ResponseWriter, se
 				http.Error(w, "TUI did not respond to download request", http.StatusServiceUnavailable)
 				return true
 			}
+			event.ApprovalResult = nil
+			event.ApprovalContext = nil
+			event.SkipLocalTUI = true
+		}
+		if err := service.Publish(event); err != nil {
+			recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
+			publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(resolved.urlForAdd), err))
+			http.Error(w, "Failed to notify TUI: "+err.Error(), http.StatusInternalServerError)
+			return true
 		}
 
 		writeJSONResponse(w, http.StatusAccepted, map[string]string{
