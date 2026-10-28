@@ -163,3 +163,8 @@ new exit codes or JSON shapes accidentally.
 `wait` is a new command with the v1 exit codes in human and JSON modes. It accepts
 both `--json` and `--output-version 1`. See [wait](commands/wait.md) for timeout,
 interruption, finalized-result capability, and artifact-location semantics.
+
+`fetch` also uses the v1 contract in JSON and human exit statuses. See
+[foreground downloads](commands/fetch.md) and its schema for ownership,
+verification, no-clobber publication, and bounded interruption. Termination by
+SIGTERM returns 143 (`terminated`) where supported.

@@ -70,7 +70,7 @@
             "unavailable",
             "conflict",
             "timeout",
-            "interrupted"
+            "interrupted", "terminated"
           ]
         },
         "message": {

@@ -70,7 +70,8 @@
             "unavailable",
             "conflict",
             "timeout",
-            "interrupted"
+            "interrupted",
+            "terminated"
           ]
         },
         "message": {
@@ -145,7 +146,14 @@
           "pattern": "^(0|[1-9][0-9]*)$"
         },
         "verification": {
-          "const": "not_requested"
+          "enum": [
+            "not_requested",
+            "verified"
+          ]
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
         }
       },
       "allOf": [
