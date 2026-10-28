@@ -529,6 +529,40 @@ func AddToMasterList(entry types.DownloadRecord) error {
 	found := false
 	for i, e := range list.Downloads {
 		if e.ID == entry.ID {
+			entry.CategoryOverride = e.CategoryOverride
+			entry.CategoryAssigned = e.CategoryAssigned
+			entry.PendingCategoryMove = e.PendingCategoryMove
+			if e.Status == "completed" {
+				entry.DestPath = e.DestPath
+			}
+			if entry.Status == "completed" && entry.PendingCategoryMove != "" {
+				target := filepath.Join(entry.PendingCategoryMove, filepath.Base(entry.DestPath))
+				if target == entry.DestPath {
+					entry.PendingCategoryMove = ""
+				} else {
+					moveErr := os.MkdirAll(entry.PendingCategoryMove, 0755)
+					if moveErr == nil {
+						moveErr = copyCategoryFile(entry.DestPath, target)
+					}
+					if moveErr != nil {
+						entry.CategoryMoveError = moveErr.Error()
+					} else {
+						oldPath := entry.DestPath
+						entry.DestPath = target
+						entry.PendingCategoryMove = ""
+						entry.CategoryMoveError = ""
+						list.Downloads[i] = entry
+						if err := saveMasterListLocked(list); err != nil {
+							_ = os.Remove(target)
+							return err
+						}
+						if err := os.Remove(oldPath); err != nil {
+							return fmt.Errorf("moved file, but old copy remains: %w", err)
+						}
+						return nil
+					}
+				}
+			}
 			list.Downloads[i] = entry
 			found = true
 			break
@@ -570,6 +604,10 @@ func loadMasterListWithUnsupportedVersionCleanupUnlocked(cleanupUnsupported bool
 	}
 	for index := range ms.Downloads {
 		sanitizeMasterDownload(&ms.Downloads[index])
+		if ms.Downloads[index].CategoryAssigned && ms.Downloads[index].CategoryOverride == nil {
+			empty := ""
+			ms.Downloads[index].CategoryOverride = &empty
+		}
 	}
 	return &types.MasterList{Downloads: ms.Downloads}, nil
 }
@@ -987,4 +1025,138 @@ func ValidateIntegrity() (int, error) {
 	}
 
 	return removed, nil
+}
+
+// SetCategory persists an explicit assignment independently of engine snapshots.
+func SetCategory(id, category string) error {
+	masterMu.Lock()
+	defer masterMu.Unlock()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
+	for i := range list.Downloads {
+		if list.Downloads[i].ID == id {
+			list.Downloads[i].CategoryMoveError = ""
+			list.Downloads[i].PendingCategoryMove = ""
+			list.Downloads[i].CategoryAssigned = true
+			list.Downloads[i].CategoryOverride = &category
+			return saveMasterListLocked(list)
+		}
+	}
+	return fmt.Errorf("%w: %s", types.ErrNotFound, id)
+}
+
+// MoveCompletedCategory saves the new destination before removing the source.
+// Destination creation is exclusive, so existing files are never replaced.
+func MoveCompletedCategory(id, category, directory string) error {
+	masterMu.Lock()
+	defer masterMu.Unlock()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
+	for i := range list.Downloads {
+		entry := &list.Downloads[i]
+		if entry.ID != id {
+			continue
+		}
+		if entry.Status != "completed" {
+			return fmt.Errorf("download must complete before moving")
+		}
+		source := entry.DestPath
+		if _, err := os.Stat(source); err != nil {
+			if os.IsNotExist(err) {
+				return fmt.Errorf("move failed: file missing: %w", err)
+			}
+			return fmt.Errorf("move failed: cannot access source: %w", err)
+		}
+		target := filepath.Join(directory, filepath.Base(source))
+		if target == source {
+			entry.PendingCategoryMove = ""
+			entry.CategoryMoveError = ""
+			entry.CategoryAssigned = true
+			entry.CategoryOverride = &category
+			return saveMasterListLocked(list)
+		}
+		if err := os.MkdirAll(directory, 0755); err != nil {
+			return err
+		}
+		if err := copyCategoryFile(source, target); err != nil {
+			return fmt.Errorf("move failed: %w", err)
+		}
+		entry.DestPath = target
+		entry.CategoryMoveError = ""
+		entry.PendingCategoryMove = ""
+		entry.CategoryAssigned = true
+		entry.CategoryOverride = &category
+		if err := saveMasterListLocked(list); err != nil {
+			_ = os.Remove(target)
+			return err
+		}
+		if err := os.Remove(source); err != nil {
+			return fmt.Errorf("file saved at %s, but old copy could not be removed: %w", target, err)
+		}
+		return nil
+	}
+	return fmt.Errorf("%w: %s", types.ErrNotFound, id)
+}
+
+// ScheduleCategoryMove persists a move request without changing an open file.
+func ScheduleCategoryMove(id, category, directory string) error {
+	masterMu.Lock()
+	defer masterMu.Unlock()
+	list, err := loadMasterListUnlocked()
+	if err != nil {
+		return err
+	}
+	for i := range list.Downloads {
+		if list.Downloads[i].ID == id {
+			if list.Downloads[i].Status == "completed" {
+				return fmt.Errorf("download completed; retry category move")
+			}
+			list.Downloads[i].CategoryAssigned = true
+			list.Downloads[i].CategoryOverride = &category
+			list.Downloads[i].CategoryMoveError = ""
+			list.Downloads[i].PendingCategoryMove = directory
+			return saveMasterListLocked(list)
+		}
+	}
+	return types.ErrNotFound
+}
+
+// copyCategoryFile creates a durable destination without overwriting anything.
+func copyCategoryFile(source, target string) (err error) {
+	info, err := os.Lstat(source)
+	if err != nil {
+		return err
+	}
+	if !info.Mode().IsRegular() {
+		return fmt.Errorf("source is not a regular file")
+	}
+	if err := os.Link(source, target); err == nil {
+		return nil
+	}
+	in, err := os.Open(source)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+	out, err := os.OpenFile(target, os.O_WRONLY|os.O_CREATE|os.O_EXCL, info.Mode().Perm())
+	if err != nil {
+		return err
+	}
+	defer func() {
+		_ = out.Close()
+		if err != nil {
+			_ = os.Remove(target)
+		}
+	}()
+	if _, err = io.Copy(out, in); err != nil {
+		return err
+	}
+	if err = out.Sync(); err != nil {
+		return err
+	}
+	return out.Close()
 }

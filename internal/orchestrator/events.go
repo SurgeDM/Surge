@@ -380,6 +380,14 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 			if err := store.AddToMasterList(entry); err != nil {
 				utils.Debug("Lifecycle: Failed to persist completed download: %v", err)
 			}
+
+			if saved, err := store.GetDownload(m.DownloadID); err == nil && saved.CategoryOverride != nil && mgr.eventBus != nil {
+				event := types.DownloadEvent{Type: types.EventSystem, DownloadID: m.DownloadID, CategoryOverride: saved.CategoryOverride, DestPath: saved.DestPath}
+				if saved.CategoryMoveError != "" {
+					event.Message = "Category move failed; file kept at original location: " + saved.CategoryMoveError
+				}
+				_ = mgr.eventBus.Publish(event)
+			}
 			if err := store.DeleteTasks(m.DownloadID); err != nil {
 				utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)
 			}

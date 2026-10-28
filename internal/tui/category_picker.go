@@ -1,6 +1,10 @@
 package tui
 
 import (
+	"fmt"
+	downloadservice "github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/tui/components"
+	"github.com/SurgeDM/Surge/internal/types"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
@@ -47,14 +51,13 @@ func (m RootModel) updateCategoryPicker(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 		selected := options[m.categoryPickerCursor]
 		if m.categoryPickerAssign {
 			if d := m.FindDownloadByID(m.categoryPickerTarget); d != nil {
-				category := selected
-				if category == "Uncategorized" {
-					category = ""
+				m.pendingCategory = selected
+				if selected == "Uncategorized" {
+					m.pendingCategory = ""
 				}
-				d.categoryOverride = &category
-				label := selected
-				m.addStyledLogEntry(logStarted, "Category: "+label)
-				m.UpdateListItems()
+				m.quitConfirmFocused = 1
+				m.state = CategoryMoveConfirmState
+				return m, nil
 			}
 			m.categoryPickerTarget = ""
 			m.state = DashboardState
@@ -130,4 +133,74 @@ func (m RootModel) viewCategoryPicker() string {
 	footer := lipgloss.NewStyle().Foreground(colors.Gray()).Render(ansi.Truncate(hint, innerWidth, "\u2026"))
 	content := lipgloss.NewStyle().Padding(1, 2).Render(lipgloss.JoinVertical(lipgloss.Left, panes, "", footer))
 	return renderBtopBox(PaneTitleStyle.Render(" "+title+" "), "", content, w, h, colors.Magenta())
+}
+
+type categoryAssignedMsg struct {
+	id, category string
+	status       *types.DownloadStatus
+	err          error
+}
+
+func (m RootModel) updateCategoryMoveConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.categoryAssigning {
+		return m, nil
+	}
+	if key.Matches(msg, m.keys.QuitConfirm.Cancel) {
+		m.state = CategoryPickerState
+		return m, nil
+	}
+	m, decision, handled := m.handleYesNoSelection(msg)
+	if !handled || decision == yesNoNone {
+		return m, nil
+	}
+	id, category := m.categoryPickerTarget, m.pendingCategory
+	assign := m.AssignCategoryFunc
+	if assign == nil {
+		if backend, ok := m.Service.(downloadservice.CategoryService); ok {
+			assign = backend.AssignCategory
+		}
+	}
+	if assign == nil {
+		m.addStyledLogEntry(logError, "Backend does not support persistent category assignments")
+		m.state = DashboardState
+		return m, nil
+	}
+	m.categoryAssigning = true
+	return m, func() tea.Msg {
+		err := assign(id, category, decision == yesNoYes)
+		var status *types.DownloadStatus
+		if m.Service != nil {
+			status, _ = m.Service.GetStatus(id)
+		}
+		return categoryAssignedMsg{id: id, category: category, status: status, err: err}
+	}
+}
+
+func (m RootModel) viewCategoryMoveConfirm() string {
+	detail := "Move the completed file now, or keep its current location."
+	if d := m.FindDownloadByID(m.categoryPickerTarget); d != nil && (!d.done || d.err != nil) {
+		detail = "The move will wait until downloading completes. Resume data stays in place."
+	}
+	if m.categoryAssigning {
+		detail = "Saving category assignment..."
+	}
+	directory := config.Resolve[string](m.Settings.General.DefaultDownloadDir)
+	for _, rule := range m.Settings.Categories.Categories {
+		if rule.Name == m.pendingCategory {
+			directory = config.ResolveCategoryPath(&rule, directory)
+			break
+		}
+	}
+	detail = lipgloss.NewStyle().Foreground(colors.White()).Render(detail) + "\n" +
+		lipgloss.NewStyle().Foreground(colors.Gray()).Render("Folder: ") + lipgloss.NewStyle().Foreground(colors.Cyan()).Render(directory)
+	label := m.pendingCategory
+	if label == "" {
+		label = "Uncategorized"
+	}
+	w, h := GetDynamicModalDimensions(m.width, m.height, 40, 8, 80, 14)
+	return (components.ConfirmationModal{
+		Title: "Change Category", Message: fmt.Sprintf("Assign to %q and move to its folder?", label), Detail: detail,
+		Keys: m.keys.QuitConfirm, Help: m.help, BorderColor: colors.Magenta(), ButtonColor: colors.Cyan(), Width: w, Height: h,
+		ShowYesNoButtons: true, YesNoFocused: m.quitConfirmFocused, YesLabel: "Move file", NoLabel: "Keep location",
+	}).RenderWithBtopBox(renderBtopBox, PaneTitleStyle)
 }

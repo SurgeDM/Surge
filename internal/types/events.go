@@ -24,11 +24,12 @@ const (
 )
 
 type DownloadEvent struct {
-	Type       EventType `json:"type"`
-	DownloadID string    `json:"download_id,omitempty"`
-	URL        string    `json:"url,omitempty"`
-	Filename   string    `json:"filename,omitempty"`
-	DestPath   string    `json:"dest_path,omitempty"`
+	CategoryOverride *string   `json:"category_override,omitempty"`
+	Type             EventType `json:"type"`
+	DownloadID       string    `json:"download_id,omitempty"`
+	URL              string    `json:"url,omitempty"`
+	Filename         string    `json:"filename,omitempty"`
+	DestPath         string    `json:"dest_path,omitempty"`
 
 	// Progress
 	Downloaded    int64   `json:"downloaded,omitempty"`

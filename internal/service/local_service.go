@@ -286,6 +286,13 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 	}
 	if s.lifecycle != nil && s.lifecycle.GetScheduler() != nil {
 		if status := s.lifecycle.GetScheduler().GetStatus(id); status != nil {
+			if entry, err := store.GetDownload(id); err == nil {
+				status.CategoryOverride = entry.CategoryOverride
+				if entry.Status == "completed" {
+					status.DestPath = entry.DestPath
+				}
+			}
+			status.FileMissing = completedFileMissing(status.Status, status.DestPath)
 			return status, nil
 		}
 	}
@@ -298,21 +305,23 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 			progress = 100.0
 		}
 		status := types.DownloadStatus{
-			ID:           entry.ID,
-			URL:          entry.URL,
-			Filename:     entry.Filename,
-			DestPath:     entry.DestPath,
-			TotalSize:    entry.TotalSize,
-			Downloaded:   entry.Downloaded,
-			Progress:     progress,
-			Speed:        completedSpeedBps(*entry),
-			Status:       entry.Status,
-			Error:        entry.Error,
-			TimeTaken:    entry.TimeTaken,
-			AvgSpeed:     entry.AvgSpeed,
-			RateLimit:    entry.RateLimit,
-			RateLimitSet: entry.RateLimitSet,
+			CategoryOverride: entry.CategoryOverride,
+			ID:               entry.ID,
+			URL:              entry.URL,
+			Filename:         entry.Filename,
+			DestPath:         entry.DestPath,
+			TotalSize:        entry.TotalSize,
+			Downloaded:       entry.Downloaded,
+			Progress:         progress,
+			Speed:            completedSpeedBps(*entry),
+			Status:           entry.Status,
+			Error:            entry.Error,
+			TimeTaken:        entry.TimeTaken,
+			AvgSpeed:         entry.AvgSpeed,
+			RateLimit:        entry.RateLimit,
+			RateLimitSet:     entry.RateLimitSet,
 		}
+		status.FileMissing = completedFileMissing(status.Status, status.DestPath)
 		return &status, nil
 	}
 	return nil, types.ErrNotFound
@@ -499,23 +508,96 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 				progress = 100.0
 			}
 			statuses = append(statuses, types.DownloadStatus{
-				ID:           d.ID,
-				URL:          d.URL,
-				Filename:     d.Filename,
-				DestPath:     d.DestPath,
-				Status:       d.Status,
-				Error:        d.Error,
-				TotalSize:    d.TotalSize,
-				Downloaded:   d.Downloaded,
-				Progress:     progress,
-				Speed:        completedSpeedBps(d),
-				Connections:  0,
-				TimeTaken:    d.TimeTaken,
-				AvgSpeed:     d.AvgSpeed,
-				RateLimit:    d.RateLimit,
-				RateLimitSet: d.RateLimitSet,
+				CategoryOverride: d.CategoryOverride,
+				ID:               d.ID,
+				URL:              d.URL,
+				Filename:         d.Filename,
+				DestPath:         d.DestPath,
+				Status:           d.Status,
+				Error:            d.Error,
+				TotalSize:        d.TotalSize,
+				Downloaded:       d.Downloaded,
+				Progress:         progress,
+				Speed:            completedSpeedBps(d),
+				Connections:      0,
+				TimeTaken:        d.TimeTaken,
+				AvgSpeed:         d.AvgSpeed,
+				RateLimit:        d.RateLimit,
+				RateLimitSet:     d.RateLimitSet,
 			})
 		}
 	}
+	persisted := make(map[string]types.DownloadRecord, len(dbDownloads))
+	for _, entry := range dbDownloads {
+		persisted[entry.ID] = entry
+	}
+	for i := range statuses {
+		if entry, ok := persisted[statuses[i].ID]; ok {
+			statuses[i].CategoryOverride = entry.CategoryOverride
+			if entry.Status == "completed" {
+				statuses[i].DestPath = entry.DestPath
+			}
+		}
+	}
+
+	for i := range statuses {
+		statuses[i].FileMissing = completedFileMissing(statuses[i].Status, statuses[i].DestPath)
+	}
 	return statuses, nil
+}
+
+func (s *LocalDownloadService) AssignCategory(id, category string, move bool) error {
+	if s.lifecycle == nil {
+		return types.ErrServiceUnavailable
+	}
+	settings := s.lifecycle.GetSettings()
+	directory := config.Resolve[string](settings.General.DefaultDownloadDir)
+	if category != "" {
+		found := false
+		for _, rule := range settings.Categories.Categories {
+			if rule.Name == category {
+				directory = config.ResolveCategoryPath(&rule, directory)
+				found = true
+				break
+			}
+		}
+		if !found {
+			return fmt.Errorf("unknown category %q", category)
+		}
+	}
+	var err error
+	if move && !filepath.IsAbs(directory) {
+		return fmt.Errorf("category destination must be an absolute path")
+	}
+	if move {
+		var entry *types.DownloadRecord
+		entry, err = store.GetDownload(id)
+		if err == nil {
+			if entry.Status != "completed" {
+				err = store.ScheduleCategoryMove(id, category, directory)
+			} else {
+				err = store.MoveCompletedCategory(id, category, directory)
+			}
+		}
+	} else {
+		err = store.SetCategory(id, category)
+	}
+	if err == nil {
+		entry, _ := store.GetDownload(id)
+		event := types.DownloadEvent{Type: types.EventSystem, DownloadID: id, CategoryOverride: &category}
+		if entry != nil {
+			event.DestPath = entry.DestPath
+		}
+		_ = s.Publish(event)
+	}
+	return err
+}
+
+// Permission and temporary I/O errors do not establish that a file is missing.
+func completedFileMissing(status, path string) bool {
+	if status != "completed" || path == "" {
+		return false
+	}
+	_, err := os.Stat(path)
+	return os.IsNotExist(err)
 }

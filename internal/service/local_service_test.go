@@ -623,3 +623,49 @@ func TestListCompletedDownloadUsesActualFileSize(t *testing.T) {
 		t.Fatalf("completed status should use file size: %+v", statuses)
 	}
 }
+
+func TestCategoryAssignmentIsDurableAndExposedByService(t *testing.T) {
+	testutil.SetupStateDB(t)
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = []config.Category{{Name: "Videos", Path: t.TempDir(), Pattern: ".*"}}
+	mgr := orchestrator.NewLifecycleManager(nil, orchestrator.NewEventBus(), settings)
+	svc := NewLocalDownloadService(mgr)
+	defer svc.Shutdown()
+	entry := types.DownloadRecord{ID: "category", Status: "paused", DestPath: filepath.Join(t.TempDir(), "file.bin")}
+	if err := store.AddToMasterList(entry); err != nil {
+		t.Fatal(err)
+	}
+	if err := svc.AssignCategory(entry.ID, "Videos", true); err != nil {
+		t.Fatal(err)
+	}
+	status, err := svc.GetStatus(entry.ID)
+	if err != nil || status.CategoryOverride == nil || *status.CategoryOverride != "Videos" || status.DestPath != entry.DestPath {
+		t.Fatalf("status=%+v error=%v", status, err)
+	}
+	if err := svc.AssignCategory(entry.ID, "", false); err != nil {
+		t.Fatal(err)
+	}
+	statuses, err := svc.List()
+	if err != nil || len(statuses) != 1 || statuses[0].CategoryOverride == nil || *statuses[0].CategoryOverride != "" {
+		t.Fatalf("list=%+v error=%v", statuses, err)
+	}
+	if err := svc.AssignCategory(entry.ID, "missing", false); err == nil {
+		t.Fatal("unknown category accepted")
+	}
+}
+
+func TestCompletedFileMissingIsTransient(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "file.bin")
+	if !completedFileMissing("completed", path) {
+		t.Fatal("missing completed file not detected")
+	}
+	if completedFileMissing("paused", path) {
+		t.Fatal("paused file treated as missing")
+	}
+	if err := os.WriteFile(path, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	if completedFileMissing("completed", path) {
+		t.Fatal("restored file still missing")
+	}
+}

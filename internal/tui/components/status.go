@@ -18,6 +18,7 @@ const (
 	StatusDownloading
 	StatusPaused
 	StatusComplete
+	StatusMissing
 	StatusError
 )
 
@@ -32,6 +33,7 @@ var statusMap = map[DownloadStatus]statusInfo{
 	StatusDownloading: {icon: "\u2b07", label: "Downloading"},
 	StatusPaused:      {icon: "\u23f8", label: "Paused"},
 	StatusComplete:    {icon: "\u2714", label: "Completed"},
+	StatusMissing:     {icon: "\u2716", label: "File missing"},
 	StatusError:       {icon: "\u2716", label: "Error"},
 }
 
@@ -87,7 +89,7 @@ func (s DownloadStatus) Color() color.Color {
 		return colors.StateDownloading()
 	case StatusComplete:
 		return colors.StateDone()
-	case StatusError:
+	case StatusMissing, StatusError:
 		return colors.StateError()
 	default:
 		return colors.Gray()

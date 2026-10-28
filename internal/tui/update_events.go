@@ -149,6 +149,21 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.Cmd) {
+	if msg.CategoryOverride != nil {
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			category := *msg.CategoryOverride
+			d.categoryOverride = &category
+			if msg.DestPath != "" {
+				d.Destination = msg.DestPath
+			}
+		}
+		if msg.Message != "" {
+			m.addStyledLogEntry(logError, msg.Message)
+		}
+		m.UpdateListItems()
+		return m, nil
+	}
+
 	switch msg.Type {
 	case types.EventRequest:
 		return m.handleDownloadRequestMsg(msg, true)

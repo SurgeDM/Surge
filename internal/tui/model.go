@@ -65,6 +65,7 @@ const (
 	BugReportLogPathState
 	SpeedLimitsState
 	CategoryPickerState
+	CategoryMoveConfirmState
 	PurgeConfirmState
 	RemoveConfirmState
 	SettingsConfirmState
@@ -90,6 +91,7 @@ const (
 )
 
 type DownloadModel struct {
+	fileMissing      bool
 	ID               string
 	URL              string
 	Filename         string
@@ -234,6 +236,9 @@ type RootModel struct {
 	categoryPickerCursor int
 	categoryPickerAssign bool
 	categoryPickerTarget string
+	pendingCategory      string
+	categoryAssigning    bool
+	AssignCategoryFunc   func(string, string, bool) error
 	catMgrEditField      int                // 0=Name, 1=Description, 2=Pattern, 3=Path
 	catMgrInputs         [4]textinput.Model // Inputs for Name, Description, Pattern, Path
 	catMgrIsNew          bool               // Whether adding a new category
@@ -426,6 +431,8 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 	downloads := make([]*DownloadModel, 0, len(statuses))
 	for _, s := range statuses {
 		dm := NewDownloadModel(s.ID, s.URL, s.Filename, s.TotalSize)
+		dm.fileMissing = s.FileMissing
+		dm.categoryOverride = s.CategoryOverride
 		dm.Downloaded = s.Downloaded
 		if s.DestPath != "" {
 			dm.Destination = s.DestPath

@@ -80,6 +80,33 @@ func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 
 // Update handles messages and updates the model
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if result, ok := msg.(categoryAssignedMsg); ok {
+		m.categoryAssigning = false
+		m.state = DashboardState
+		if d := m.FindDownloadByID(result.id); d != nil && result.status != nil {
+			d.fileMissing = result.status.FileMissing
+		}
+		if result.err != nil {
+			if result.status != nil && result.status.FileMissing {
+				m.addStyledLogEntry(logError, "Move failed: file missing")
+				return m, nil
+			}
+			m.addStyledLogEntry(logError, "Category update failed: "+result.err.Error())
+			return m, nil
+		}
+		if d := m.FindDownloadByID(result.id); d != nil {
+			category := result.category
+			d.categoryOverride = &category
+			if result.status != nil {
+				d.Destination = result.status.DestPath
+				d.fileMissing = result.status.FileMissing
+			}
+		}
+		m.addStyledLogEntry(logStarted, "Category assignment saved")
+		m.UpdateListItems()
+		return m, nil
+	}
+
 	// Dynamically reload keymap.json on the fly if it is updated on disk
 	if time.Since(m.lastConfigCheckTime) > 1*time.Second {
 		m.lastConfigCheckTime = time.Now()
@@ -275,6 +302,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case SpeedLimitsState:
 			return m.updateSpeedLimits(msg)
+
+		case CategoryMoveConfirmState:
+			return m.updateCategoryMoveConfirm(msg)
 
 		case CategoryPickerState:
 			return m.updateCategoryPicker(msg)

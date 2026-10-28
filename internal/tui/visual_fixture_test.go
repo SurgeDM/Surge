@@ -35,6 +35,7 @@ func NewVisualTestModel(settings *config.Settings, version string, commit ...str
 }
 
 func seedVisualTestData(root *RootModel) {
+	root.AssignCategoryFunc = func(string, string, bool) error { return nil }
 	root.activeTab = TabAll
 	apply := func(event types.DownloadEvent) {
 		updated, _ := root.Update(event)
@@ -132,7 +133,7 @@ func (m VisualTestModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		keys := m.root.keys.Dashboard
 		// External actions have no backend in this fixture. Ordinary UI
 		// interactions go through RootModel.Update.
-		if !key.Matches(k, keys.Up, keys.Down, keys.TabAll, keys.TabQueued, keys.TabActive, keys.TabDone, keys.NextTab, keys.PrevTab, keys.Search, keys.ToggleHelp, keys.Settings, keys.SpeedLimits, keys.Add, keys.Log, keys.PinTab, keys.Quit, keys.ForceQuit, keys.LogUp, keys.LogDown, keys.LogTop, keys.LogBottom, keys.LogClose) && k.String() != "/" {
+		if !key.Matches(k, keys.Up, keys.Down, keys.TabAll, keys.TabQueued, keys.TabActive, keys.TabDone, keys.NextTab, keys.PrevTab, keys.Search, keys.ToggleHelp, keys.Settings, keys.SpeedLimits, keys.Add, keys.Log, keys.PinTab, keys.AssignCategory, keys.CategoryFilter, keys.Quit, keys.ForceQuit, keys.LogUp, keys.LogDown, keys.LogTop, keys.LogBottom, keys.LogClose) && k.String() != "/" {
 			return m, nil
 		}
 	}

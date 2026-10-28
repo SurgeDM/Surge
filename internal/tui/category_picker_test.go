@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"reflect"
 	"strings"
 	"testing"
@@ -61,6 +62,19 @@ func TestCategoryPickerAssignsSelectedDownload(t *testing.T) {
 
 	updated, _ := m.updateCategoryPicker(tea.KeyPressMsg{Code: tea.KeyEnter})
 	m2 := updated.(RootModel)
+	if m2.state != CategoryMoveConfirmState || d.categoryOverride != nil {
+		t.Fatal("category changed before confirmation")
+	}
+	m2.AssignCategoryFunc = func(id, category string, move bool) error {
+		if id != d.ID || category != "Videos" || move {
+			t.Fatal("wrong category operation")
+		}
+		return nil
+	}
+	updated, cmd := m2.updateCategoryMoveConfirm(tea.KeyPressMsg{Code: 'n', Text: "n"})
+	m2 = updated.(RootModel)
+	updated, _ = m2.Update(cmd())
+	m2 = updated.(RootModel)
 	if d.categoryOverride == nil || *d.categoryOverride != "Videos" {
 		t.Fatalf("category override = %v, want Videos", d.categoryOverride)
 	}
@@ -68,7 +82,7 @@ func TestCategoryPickerAssignsSelectedDownload(t *testing.T) {
 	if m2.categoryLabel(d) != "Videos" || !m2.matchesCategoryFilter(d) {
 		t.Fatalf("assignment not reflected: filter=%q label=%q", m2.categoryFilter, m2.categoryLabel(d))
 	}
-	if !strings.Contains(m2.logEntries[0], "Category: Videos") {
+	if !strings.Contains(m2.logEntries[0], "Category assignment saved") {
 		t.Fatalf("unexpected assignment log: %#v", m2.logEntries)
 	}
 }
@@ -125,5 +139,34 @@ func TestCategoryLabelMatchesFilterFallbackAndDisabledState(t *testing.T) {
 	settings.Categories.CategoryEnabled.Value = false
 	if got := m.categoryLabel(d); got != "" {
 		t.Fatalf("disabled categories produced label %q", got)
+	}
+}
+
+func TestCategoryMoveCancelAndFailurePreserveAssignment(t *testing.T) {
+	m := confirmationSettingsModel(t, "General", "clipboard_monitor")
+	d := NewDownloadModel("id", "https://example.com/file", "file", 100)
+	m.downloads = []*DownloadModel{d}
+	m.categoryPickerTarget = d.ID
+	m.pendingCategory = "Videos"
+	m.state = CategoryMoveConfirmState
+	m.AssignCategoryFunc = func(string, string, bool) error { t.Fatal("cancel performed backend operation"); return nil }
+	updated, _ := m.updateCategoryMoveConfirm(tea.KeyPressMsg{Code: tea.KeyEsc})
+	m = updated.(RootModel)
+	if m.state != CategoryPickerState || d.categoryOverride != nil {
+		t.Fatal("cancel changed category")
+	}
+	m.state = CategoryMoveConfirmState
+	m.AssignCategoryFunc = func(id, cat string, move bool) error {
+		if !move {
+			t.Fatal("move not requested")
+		}
+		return fmt.Errorf("destination exists")
+	}
+	updated, cmd := m.updateCategoryMoveConfirm(tea.KeyPressMsg{Code: 'y', Text: "y"})
+	m = updated.(RootModel)
+	updated, _ = m.Update(cmd())
+	m = updated.(RootModel)
+	if d.categoryOverride != nil || !strings.Contains(strings.Join(m.logEntries, "\n"), "destination exists") {
+		t.Fatal("failed move changed assignment or hid error")
 	}
 }

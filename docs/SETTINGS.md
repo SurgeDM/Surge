@@ -165,3 +165,22 @@ Category rules are checked from top to bottom; the first matching rule determine
 These dialogs initially select **Cancel**. Changes remain staged in Settings until you save and close it.
 
 Category rows show their own shortcut help. Left/right tab switching is inactive while the category list is focused; use `1`–`5` to switch settings tabs. In a category editor, Tab/Down and Shift+Tab/Up move between fields. The `Reset`, `ResetAll`, and `DeleteCategory` bindings can be customized in the `settings` section of the keymap.
+
+### Assigning a download category
+
+The dashboard category picker saves an explicit assignment with the download,
+including **Uncategorized**. Assignments survive restarts and are shared with
+clients connected to the daemon.
+
+After selecting a category, choose **Move file** or **Keep location**. Escape
+returns to the picker without changing the assignment. The dialog shows the
+category folder; Uncategorized uses the default download directory.
+
+Completed files move immediately. Queued, downloading, paused, and failed
+downloads keep their working files and resume data where they are; an approved
+move happens after successful completion. Pending moves survive restarts.
+Choosing Keep location cancels an earlier pending move.
+
+Existing destination files are never overwritten. If a deferred move fails, the
+download remains completed at its original location and the activity log reports
+the failure. Select the category again to retry the move.

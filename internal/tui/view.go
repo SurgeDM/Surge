@@ -173,6 +173,10 @@ func (m RootModel) View() tea.View {
 		return m.wrapView(m.renderModalWithOverlay(m.viewSpeedLimits()))
 	}
 
+	if m.state == CategoryMoveConfirmState {
+		return m.wrapView(m.renderModalWithOverlay(m.viewCategoryMoveConfirm()))
+	}
+
 	if m.state == CategoryPickerState {
 		return m.wrapView(m.renderModalWithOverlay(m.viewCategoryPicker()))
 	}
@@ -876,6 +880,9 @@ func getDownloadStatus(d *DownloadModel, spinnerView string) string {
 	}
 	if d.resuming && d.started {
 		return lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(spinnerView + " Resuming...")
+	}
+	if d.done && d.err == nil && d.fileMissing {
+		return components.StatusMissing.Render()
 	}
 	status := components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming)
 	return status.RenderWithSpinner(spinnerView)

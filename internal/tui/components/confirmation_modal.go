@@ -98,8 +98,8 @@ func renderYesNoButtonsWithSpacing(yesLabel, noLabel string, focused int, btnCol
 	activeRest := lipgloss.NewStyle().Foreground(colors.ContrastForeground(btnColor)).Background(btnColor).Bold(true)
 	activePad := lipgloss.NewStyle().Background(btnColor)
 
-	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(colors.SelectionBackground()).Underline(true)
-	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(colors.SelectionBackground())
+	inactiveFirst := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.SelectionBackground()).Underline(true)
+	inactiveRest := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.SelectionBackground())
 	inactivePad := lipgloss.NewStyle().Background(colors.SelectionBackground())
 
 	yesFirst, yesRest := splitFirst(yesLabel)
