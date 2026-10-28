@@ -19,6 +19,9 @@ func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy
 		}
 		if duplicateID {
 			m.addStyledLogEntry(logError, "\u2716 Download ID already exists")
+			if !queueIfBusy {
+				return m.showNextPendingRequest()
+			}
 			return m, nil
 		}
 	}
