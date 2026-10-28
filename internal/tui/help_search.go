@@ -25,7 +25,7 @@ func (m RootModel) updateHelpModal(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 	}
-	if msg.String() == "/" || key.Matches(msg, m.keys.Dashboard.Search) {
+	if key.Matches(msg, m.keys.Dashboard.Search) {
 		m.helpSearchActive = true
 		m.helpSearchInput.Prompt = ""
 		m.helpSearchInput.Placeholder = "Type to search..."

@@ -96,6 +96,7 @@ type MasterList struct {
 
 // DownloadStatus is the transient view returned to the TUI and API clients.
 type DownloadStatus struct {
+	Moving           bool    `json:"moving,omitempty"`
 	FileMissing      bool    `json:"file_missing,omitempty"`
 	CategoryOverride *string `json:"category_override,omitempty"`
 	ID               string  `json:"id"`

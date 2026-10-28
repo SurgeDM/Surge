@@ -137,7 +137,8 @@ func (m VisualTestModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 	}
-	if k, ok := msg.(tea.KeyPressMsg); ok && m.root.state == SettingsState && !m.root.SettingsIsEditing && !m.root.settingsSearchActive && key.Matches(k, m.root.keys.Settings.ReportBug) {
+	if k, ok := msg.(tea.KeyPressMsg); ok && m.root.state == SettingsState && !m.root.SettingsIsEditing && !m.root.settingsSearchActive && (key.Matches(k, m.root.keys.Settings.ReportBug) ||
+		(key.Matches(k, m.root.keys.Settings.Edit) && m.root.SettingsFocusedPane == 1 && m.root.getCurrentSettingType() == "link")) {
 		return m, nil
 	}
 	updated, cmd := m.root.Update(msg)

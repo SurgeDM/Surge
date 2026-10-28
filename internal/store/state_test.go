@@ -3,9 +3,11 @@ package store
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -1760,5 +1762,155 @@ func TestMissingFileMoveDoesNotChangeCategoryEvenAtSamePath(t *testing.T) {
 	saved, _ := GetDownload(entry.ID)
 	if *saved.CategoryOverride != "Videos" || saved.DestPath != entry.DestPath {
 		t.Fatal("missing-file move changed metadata")
+	}
+}
+
+func TestCategoryCopyReleasesMasterLockAndReservesOnlyMovingDownload(t *testing.T) {
+	for _, deferred := range []bool{false, true} {
+		t.Run(fmt.Sprint("deferred=", deferred), func(t *testing.T) {
+			dir := setupTestDB(t)
+			defer func() { _ = os.RemoveAll(dir) }()
+			entry := types.DownloadRecord{ID: uuid.NewString(), Status: "completed", DestPath: filepath.Join(dir, "file.bin")}
+			if deferred {
+				entry.Status = "paused"
+			}
+			if err := os.WriteFile(entry.DestPath, []byte("contents"), 0600); err != nil {
+				t.Fatal(err)
+			}
+			if err := AddToMasterList(entry); err != nil {
+				t.Fatal(err)
+			}
+			destination := filepath.Join(dir, "Videos")
+			if deferred {
+				if err := ScheduleCategoryMove(entry.ID, "Videos", destination); err != nil {
+					t.Fatal(err)
+				}
+			}
+			started, release := make(chan struct{}), make(chan struct{})
+			var once sync.Once
+			unblock := func() { once.Do(func() { close(release) }) }
+			t.Cleanup(unblock)
+			result := make(chan error, 1)
+			go func() {
+				notify := func(moving bool) {
+					if moving {
+						close(started)
+						<-release
+					}
+				}
+				if deferred {
+					entry.Status = "completed"
+					result <- AddToMasterList(entry, notify)
+				} else {
+					result <- MoveCompletedCategory(entry.ID, "Videos", destination, notify)
+				}
+			}()
+			select {
+			case <-started:
+			case <-time.After(time.Second):
+				t.Fatal("copy did not start")
+			}
+			checked := make(chan error, 1)
+			go func() {
+				if !IsMoving(entry.ID) {
+					checked <- fmt.Errorf("move not exposed")
+					return
+				}
+				saved, err := GetDownload(entry.ID)
+				if err != nil || saved == nil || saved.DestPath != entry.DestPath || (deferred && saved.Status == "completed") {
+					checked <- fmt.Errorf("state advanced before copy: %+v, %v", saved, err)
+					return
+				}
+				for _, mutate := range []func() error{
+					func() error { return SetCategory(entry.ID, "Other") },
+					func() error { return UpdateURL(entry.ID, "other") },
+					func() error { return UpdateRateLimit(entry.ID, 1) },
+					func() error { return DeleteState(entry.ID) },
+					func() error { return MoveCompletedCategory(entry.ID, "Other", destination) },
+				} {
+					if err := mutate(); !errors.Is(err, types.ErrMoving) {
+						checked <- fmt.Errorf("mutation while moving: %v", err)
+						return
+					}
+				}
+				checked <- AddToMasterList(types.DownloadRecord{ID: "unrelated", Status: "paused"})
+			}()
+			select {
+			case err := <-checked:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("copy holds global master lock")
+			}
+			unblock()
+			select {
+			case err := <-result:
+				if err != nil {
+					t.Fatal(err)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("move did not finish")
+			}
+			if IsMoving(entry.ID) {
+				t.Fatal("move reservation leaked")
+			}
+			saved, err := GetDownload(entry.ID)
+			if err != nil || saved == nil || saved.DestPath != filepath.Join(destination, "file.bin") || saved.Status != "completed" {
+				t.Fatalf("incorrect final state: %+v %v", saved, err)
+			}
+			if other, err := GetDownload("unrelated"); err != nil || other == nil {
+				t.Fatal("move overwrote unrelated record")
+			}
+			if _, err := os.Stat(entry.DestPath); !os.IsNotExist(err) {
+				t.Fatal("source remains after success")
+			}
+		})
+	}
+}
+
+func TestCategoryCopyDiscardsDestinationIfRecordChanged(t *testing.T) {
+	dir := setupTestDB(t)
+	defer func() { _ = os.RemoveAll(dir) }()
+	source := filepath.Join(dir, "file.bin")
+	destination := filepath.Join(dir, "Videos")
+	if err := os.WriteFile(source, []byte("contents"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := AddToMasterList(types.DownloadRecord{ID: "changing", Status: "completed", DestPath: source}); err != nil {
+		t.Fatal(err)
+	}
+	err := MoveCompletedCategory("changing", "Videos", destination, func(moving bool) {
+		if !moving {
+			return
+		}
+		// Simulate an independent metadata writer to exercise the final snapshot
+		// check, even though normal mutations are rejected by the reservation.
+		masterMu.Lock()
+		defer masterMu.Unlock()
+		list, loadErr := loadMasterListUnlocked()
+		if loadErr != nil {
+			t.Fatal(loadErr)
+		}
+		list.Downloads[0].URL = "changed"
+		if err := saveMasterListLocked(list); err != nil {
+			t.Fatal(err)
+		}
+	})
+	if err == nil || !strings.Contains(err.Error(), "download changed") {
+		t.Fatalf("got %v, want record-change error", err)
+	}
+	saved, err := GetDownload("changing")
+	if err != nil || saved.DestPath != source || saved.URL != "changed" {
+		t.Fatalf("record overwritten: %+v %v", saved, err)
+	}
+	if _, err := os.Stat(source); err != nil {
+		t.Fatal("source removed after conflicting write")
+	}
+	if _, err := os.Stat(filepath.Join(destination, "file.bin")); !os.IsNotExist(err) {
+		t.Fatal("copy left behind after conflicting write")
+	}
+	if IsMoving("changing") {
+		t.Fatal("reservation leaked after conflict")
 	}
 }

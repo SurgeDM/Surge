@@ -142,7 +142,9 @@ type categoryAssignedMsg struct {
 }
 
 func (m RootModel) updateCategoryMoveConfirm(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.categoryAssigning {
+	if d := m.FindDownloadByID(m.categoryPickerTarget); d != nil && d.moving {
+		m.state = DashboardState
+		m.addStyledLogEntry(logError, types.ErrMoving.Error())
 		return m, nil
 	}
 	if key.Matches(msg, m.keys.QuitConfirm.Cancel) {
@@ -165,7 +167,11 @@ func (m RootModel) updateCategoryMoveConfirm(msg tea.KeyPressMsg) (tea.Model, te
 		m.state = DashboardState
 		return m, nil
 	}
-	m.categoryAssigning = true
+	m.state = DashboardState
+	if d := m.FindDownloadByID(id); d != nil && decision == yesNoYes && d.done && d.err == nil {
+		d.moving = true
+		m.UpdateListItems()
+	}
 	return m, func() tea.Msg {
 		err := assign(id, category, decision == yesNoYes)
 		var status *types.DownloadStatus
@@ -180,9 +186,6 @@ func (m RootModel) viewCategoryMoveConfirm() string {
 	detail := "Move the completed file now, or keep its current location."
 	if d := m.FindDownloadByID(m.categoryPickerTarget); d != nil && (!d.done || d.err != nil) {
 		detail = "The move will wait until downloading completes. Resume data stays in place."
-	}
-	if m.categoryAssigning {
-		detail = "Saving category assignment..."
 	}
 	directory := config.Resolve[string](m.Settings.General.DefaultDownloadDir)
 	for _, rule := range m.Settings.Categories.Categories {

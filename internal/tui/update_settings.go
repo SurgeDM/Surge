@@ -161,6 +161,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.settingsError = "Failed to save settings: " + err.Error()
 			return m, nil
 		}
+		m.clearSettingsSearch()
 		if requiresRestart && m.IsRemote {
 			m.addLogEntry("Settings saved. Restart Surge on the server to apply restart-required changes.")
 		} else if requiresRestart {
@@ -179,6 +180,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		m.SettingsBaseline = nil
+		m.clearSettingsSearch()
 
 		m.quitConfirmFocused = 0
 		m.bugReportIncludeSystemInfo = true

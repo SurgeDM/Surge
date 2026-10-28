@@ -25,7 +25,7 @@ func (m RootModel) hasPendingDownloads() bool {
 		if d == nil {
 			continue
 		}
-		if d.done || d.err != nil {
+		if !d.moving && (d.done || d.err != nil) {
 			continue
 		}
 		return true

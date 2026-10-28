@@ -10,6 +10,7 @@ import (
 	"maps"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"time"
 
@@ -212,6 +213,9 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadReco
 	// after ensureDirs() had already released its own RLock.
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	if movingDownloads[state.ID] {
+		return types.ErrMoving
+	}
 
 	dir := baseDir
 	if dir == "" {
@@ -411,6 +415,9 @@ func LoadStates(ids []string) (map[string]*types.DownloadRecord, error) {
 func DeleteState(id string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	if movingDownloads[id] {
+		return types.ErrMoving
+	}
 
 	detailPath, err := getDetailPath(baseDir, id)
 	if err != nil {
@@ -511,9 +518,14 @@ func saveMasterListLocked(list *types.MasterList) error {
 	return atomicWrite(getMasterPath(), ms)
 }
 
-func AddToMasterList(entry types.DownloadRecord) error {
+func AddToMasterList(entry types.DownloadRecord, onMoving ...func(bool)) error {
+	notify := moveNotifier(onMoving)
+	defer notify(false)
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	if movingDownloads[entry.ID] {
+		return types.ErrMoving
+	}
 
 	if entry.ID == "" {
 		entry.ID = uuid.New().String()
@@ -540,10 +552,11 @@ func AddToMasterList(entry types.DownloadRecord) error {
 				if target == entry.DestPath {
 					entry.PendingCategoryMove = ""
 				} else {
-					moveErr := os.MkdirAll(entry.PendingCategoryMove, 0755)
-					if moveErr == nil {
-						moveErr = copyCategoryFile(entry.DestPath, target)
+					fresh, index, moveErr := copyCategoryOutsideLock(e, target, notify)
+					if fresh == nil {
+						return moveErr
 					}
+					list, i = fresh, index
 					if moveErr != nil {
 						entry.CategoryMoveError = moveErr.Error()
 					} else {
@@ -615,6 +628,9 @@ func loadMasterListWithUnsupportedVersionCleanupUnlocked(cleanupUnsupported bool
 func RemoveFromMasterList(id string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	if movingDownloads[id] {
+		return types.ErrMoving
+	}
 
 	list, err := loadMasterListUnlocked()
 	if err != nil {
@@ -690,6 +706,9 @@ func CheckDownloadExists(url string) (bool, error) {
 func UpdateStatus(id string, status string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	if movingDownloads[id] {
+		return types.ErrMoving
+	}
 
 	list, err := loadMasterListUnlocked()
 	if err != nil {
@@ -712,6 +731,9 @@ func UpdateStatus(id string, status string) error {
 func UpdateURL(id string, newURL string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	if movingDownloads[id] {
+		return types.ErrMoving
+	}
 
 	list, err := loadMasterListUnlocked()
 	if err != nil {
@@ -793,7 +815,7 @@ func removeDownloadsByStatus(status string) (int64, error) {
 	}
 	detailPaths := make([]string, len(list.Downloads))
 	for i, entry := range list.Downloads {
-		if entry.Status != status {
+		if entry.Status != status || movingDownloads[entry.ID] {
 			continue
 		}
 		detailPaths[i], err = getDetailPath(baseDir, entry.ID)
@@ -804,7 +826,7 @@ func removeDownloadsByStatus(status string) (int64, error) {
 	var count int64
 	out := []types.DownloadRecord{}
 	for i, e := range list.Downloads {
-		if e.Status == status {
+		if e.Status == status && !movingDownloads[e.ID] {
 			count++
 			_ = utils.RemoveFile(detailPaths[i])
 		} else {
@@ -833,6 +855,9 @@ func computeFileHash(path string) (string, error) {
 func UpdateRateLimit(id string, rate int64) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	if movingDownloads[id] {
+		return types.ErrMoving
+	}
 	list, err := loadMasterListUnlocked()
 	if err != nil {
 		return err
@@ -857,6 +882,9 @@ func UpdateRateLimit(id string, rate int64) error {
 func UpdateDefaultRateLimit(id string, rate int64) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	if movingDownloads[id] {
+		return types.ErrMoving
+	}
 	list, err := loadMasterListUnlocked()
 	if err != nil {
 		return err
@@ -877,6 +905,9 @@ func UpdateDefaultRateLimit(id string, rate int64) error {
 func ClearRateLimit(id string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	if movingDownloads[id] {
+		return types.ErrMoving
+	}
 	list, err := loadMasterListUnlocked()
 	if err != nil {
 		return err
@@ -1031,6 +1062,9 @@ func ValidateIntegrity() (int, error) {
 func SetCategory(id, category string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	if movingDownloads[id] {
+		return types.ErrMoving
+	}
 	list, err := loadMasterListUnlocked()
 	if err != nil {
 		return err
@@ -1049,9 +1083,14 @@ func SetCategory(id, category string) error {
 
 // MoveCompletedCategory saves the new destination before removing the source.
 // Destination creation is exclusive, so existing files are never replaced.
-func MoveCompletedCategory(id, category, directory string) error {
+func MoveCompletedCategory(id, category, directory string, onMoving ...func(bool)) error {
+	notify := moveNotifier(onMoving)
+	defer notify(false)
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	if movingDownloads[id] {
+		return types.ErrMoving
+	}
 	list, err := loadMasterListUnlocked()
 	if err != nil {
 		return err
@@ -1079,12 +1118,12 @@ func MoveCompletedCategory(id, category, directory string) error {
 			entry.CategoryOverride = &category
 			return saveMasterListLocked(list)
 		}
-		if err := os.MkdirAll(directory, 0755); err != nil {
-			return err
-		}
-		if err := copyCategoryFile(source, target); err != nil {
+		fresh, index, err := copyCategoryOutsideLock(*entry, target, notify)
+		if err != nil {
 			return fmt.Errorf("move failed: %w", err)
 		}
+		list = fresh
+		entry = &list.Downloads[index]
 		entry.DestPath = target
 		entry.CategoryMoveError = ""
 		entry.PendingCategoryMove = ""
@@ -1106,6 +1145,9 @@ func MoveCompletedCategory(id, category, directory string) error {
 func ScheduleCategoryMove(id, category, directory string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	if movingDownloads[id] {
+		return types.ErrMoving
+	}
 	list, err := loadMasterListUnlocked()
 	if err != nil {
 		return err
@@ -1159,4 +1201,87 @@ func copyCategoryFile(source, target string) (err error) {
 		return err
 	}
 	return out.Close()
+}
+
+// movingDownloads is transient: persisted completion and destination only change
+// after a successful copy. All access is protected by masterMu.
+var movingDownloads = make(map[string]bool)
+var changingDownloads = make(map[string]int)
+
+// BeginDownloadChange prevents a move from starting midway through a service
+// mutation (for example, between deleting metadata and deleting a file).
+func BeginDownloadChange(id string) (func(), error) {
+	masterMu.Lock()
+	defer masterMu.Unlock()
+	if movingDownloads[id] {
+		return nil, types.ErrMoving
+	}
+	changingDownloads[id]++
+	return func() {
+		masterMu.Lock()
+		defer masterMu.Unlock()
+		changingDownloads[id]--
+		if changingDownloads[id] == 0 {
+			delete(changingDownloads, id)
+		}
+	}, nil
+}
+
+func IsMoving(id string) bool {
+	masterMu.RLock()
+	defer masterMu.RUnlock()
+	return movingDownloads[id]
+}
+
+// moveNotifier only sends the end notification if a copy actually started.
+func moveNotifier(callbacks []func(bool)) func(bool) {
+	started := false
+	return func(moving bool) {
+		if !moving && !started {
+			return
+		}
+		started = moving
+		if len(callbacks) > 0 && callbacks[0] != nil {
+			callbacks[0](moving)
+		}
+	}
+}
+
+// Called with masterMu held; returns with it held. Other downloads remain
+// readable and writable during filesystem work. The moving record is reserved.
+func copyCategoryOutsideLock(snapshot types.DownloadRecord, target string, notify func(bool)) (*types.MasterList, int, error) {
+	if changingDownloads[snapshot.ID] > 0 {
+		list, err := loadMasterListUnlocked()
+		if err != nil {
+			return nil, 0, err
+		}
+		for i, entry := range list.Downloads {
+			if entry.ID == snapshot.ID {
+				return list, i, fmt.Errorf("download is being changed; retry move")
+			}
+		}
+		return nil, 0, types.ErrNotFound
+	}
+	movingDownloads[snapshot.ID] = true
+	masterMu.Unlock()
+	notify(true)
+	copyErr := os.MkdirAll(filepath.Dir(target), 0755)
+	if copyErr == nil {
+		copyErr = copyCategoryFile(snapshot.DestPath, target)
+	}
+	masterMu.Lock()
+	delete(movingDownloads, snapshot.ID)
+	list, err := loadMasterListUnlocked()
+	if err == nil {
+		for i, entry := range list.Downloads {
+			if entry.ID == snapshot.ID && reflect.DeepEqual(entry, snapshot) {
+				return list, i, copyErr
+			}
+		}
+		err = fmt.Errorf("download changed while moving; file kept at original location")
+	}
+	if copyErr == nil {
+		_ = os.Remove(target)
+	}
+	return nil, 0, err
 }

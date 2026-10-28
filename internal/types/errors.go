@@ -9,6 +9,7 @@ import (
 
 // Common errors
 var (
+	ErrMoving             = errors.New("file is moving; changes are temporarily disabled")
 	ErrPaused             = errors.New("download paused")
 	ErrNotFound           = errors.New("download not found")
 	ErrCompleted          = errors.New("download already completed")

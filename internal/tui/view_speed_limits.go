@@ -9,6 +9,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 	"github.com/SurgeDM/Surge/internal/tui/components"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 )
 
@@ -175,6 +176,9 @@ func (m *RootModel) setSpeedLimitValue(key, value string) error {
 
 	if strings.HasPrefix(key, "dl:") {
 		dlID := strings.TrimPrefix(key, "dl:")
+		if d := m.FindDownloadByID(dlID); d != nil && d.moving {
+			return types.ErrMoving
+		}
 		if isRateLimitInheritValue(value) {
 			if err := m.clearDownloadRateLimit(dlID); err != nil {
 				return err
@@ -243,6 +247,9 @@ func (m *RootModel) resetSpeedLimitToDefault(key string, defaults *config.Settin
 	}
 	if strings.HasPrefix(key, "dl:") {
 		dlID := strings.TrimPrefix(key, "dl:")
+		if d := m.FindDownloadByID(dlID); d != nil && d.moving {
+			return types.ErrMoving
+		}
 		if err := m.clearDownloadRateLimit(dlID); err != nil {
 			return err
 		}

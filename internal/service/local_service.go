@@ -212,6 +212,11 @@ func (s *LocalDownloadService) AddWithID(url string, path string, filename strin
 }
 
 func (s *LocalDownloadService) Pause(id string) error {
+	finish, changeErr := store.BeginDownloadChange(id)
+	if changeErr != nil {
+		return changeErr
+	}
+	defer finish()
 	if s.lifecycle == nil {
 		return types.ErrServiceUnavailable
 	}
@@ -219,6 +224,11 @@ func (s *LocalDownloadService) Pause(id string) error {
 }
 
 func (s *LocalDownloadService) Resume(id string) error {
+	finish, changeErr := store.BeginDownloadChange(id)
+	if changeErr != nil {
+		return changeErr
+	}
+	defer finish()
 	if s.lifecycle == nil {
 		return types.ErrServiceUnavailable
 	}
@@ -233,6 +243,11 @@ func (s *LocalDownloadService) ResumeBatch(ids []string) []error {
 }
 
 func (s *LocalDownloadService) UpdateURL(id string, newURL string) error {
+	finish, changeErr := store.BeginDownloadChange(id)
+	if changeErr != nil {
+		return changeErr
+	}
+	defer finish()
 	if s.lifecycle == nil {
 		return types.ErrServiceUnavailable
 	}
@@ -240,6 +255,11 @@ func (s *LocalDownloadService) UpdateURL(id string, newURL string) error {
 }
 
 func (s *LocalDownloadService) Delete(id string) error {
+	finish, changeErr := store.BeginDownloadChange(id)
+	if changeErr != nil {
+		return changeErr
+	}
+	defer finish()
 	if s.lifecycle == nil {
 		return types.ErrServiceUnavailable
 	}
@@ -247,6 +267,11 @@ func (s *LocalDownloadService) Delete(id string) error {
 }
 
 func (s *LocalDownloadService) Purge(id string) error {
+	finish, changeErr := store.BeginDownloadChange(id)
+	if changeErr != nil {
+		return changeErr
+	}
+	defer finish()
 	destPath := ""
 	status, err := s.GetStatus(id)
 	if err == nil && status != nil {
@@ -286,12 +311,13 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 	}
 	if s.lifecycle != nil && s.lifecycle.GetScheduler() != nil {
 		if status := s.lifecycle.GetScheduler().GetStatus(id); status != nil {
-			if entry, err := store.GetDownload(id); err == nil {
+			if entry, err := store.GetDownload(id); err == nil && entry != nil {
 				status.CategoryOverride = entry.CategoryOverride
 				if entry.Status == "completed" {
 					status.DestPath = entry.DestPath
 				}
 			}
+			status.Moving = store.IsMoving(id)
 			status.FileMissing = completedFileMissing(status.Status, status.DestPath)
 			return status, nil
 		}
@@ -305,6 +331,7 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 			progress = 100.0
 		}
 		status := types.DownloadStatus{
+			Moving:           store.IsMoving(id),
 			CategoryOverride: entry.CategoryOverride,
 			ID:               entry.ID,
 			URL:              entry.URL,
@@ -338,6 +365,11 @@ func (s *LocalDownloadService) ClearFailed() (int64, error) {
 }
 
 func (s *LocalDownloadService) SetRateLimit(id string, rate int64) error {
+	finish, changeErr := store.BeginDownloadChange(id)
+	if changeErr != nil {
+		return changeErr
+	}
+	defer finish()
 	if rate < 0 {
 		return fmt.Errorf("rate limit must be non-negative")
 	}
@@ -368,6 +400,11 @@ func (s *LocalDownloadService) SetRateLimit(id string, rate int64) error {
 }
 
 func (s *LocalDownloadService) ClearRateLimit(id string) error {
+	finish, changeErr := store.BeginDownloadChange(id)
+	if changeErr != nil {
+		return changeErr
+	}
+	defer finish()
 	if s.lifecycle == nil || s.lifecycle.GetScheduler() == nil {
 		return types.ErrPoolNotInit
 	}
@@ -541,12 +578,16 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 	}
 
 	for i := range statuses {
+		statuses[i].Moving = store.IsMoving(statuses[i].ID)
 		statuses[i].FileMissing = completedFileMissing(statuses[i].Status, statuses[i].DestPath)
 	}
 	return statuses, nil
 }
 
 func (s *LocalDownloadService) AssignCategory(id, category string, move bool) error {
+	if store.IsMoving(id) {
+		return types.ErrMoving
+	}
 	if s.lifecycle == nil {
 		return types.ErrServiceUnavailable
 	}
@@ -572,11 +613,16 @@ func (s *LocalDownloadService) AssignCategory(id, category string, move bool) er
 	if move {
 		var entry *types.DownloadRecord
 		entry, err = store.GetDownload(id)
+		if err == nil && entry == nil {
+			return types.ErrNotFound
+		}
 		if err == nil {
 			if entry.Status != "completed" {
 				err = store.ScheduleCategoryMove(id, category, directory)
 			} else {
-				err = store.MoveCompletedCategory(id, category, directory)
+				err = store.MoveCompletedCategory(id, category, directory, func(moving bool) {
+					_ = s.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: id, Moving: &moving})
+				})
 			}
 		}
 	} else {

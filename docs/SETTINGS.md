@@ -180,6 +180,8 @@ Completed files move immediately. Queued, downloading, paused, and failed
 downloads keep their working files and resume data where they are; an approved
 move happens after successful completion. Pending moves survive restarts.
 Choosing Keep location cancels an earlier pending move.
+While a file is moving, its status shows **Moving** and changes to that download
+are temporarily disabled. Other downloads remain usable.
 
 Existing destination files are never overwritten. If a deferred move fails, the
 download remains completed at its original location and the activity log reports

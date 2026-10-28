@@ -51,7 +51,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		needsSpinner := false
 		for _, d := range m.downloads {
-			if d.pausing || d.resuming || components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming) == components.StatusQueued {
+			if d.moving || d.pausing || d.resuming || components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming) == components.StatusQueued {
 				needsSpinner = true
 				break
 			}
@@ -149,6 +149,16 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.Cmd) {
+	if msg.Moving != nil {
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.moving = *msg.Moving
+		}
+		m.UpdateListItems()
+		if *msg.Moving {
+			return m, m.spinner.Tick
+		}
+		return m, nil
+	}
 	if msg.CategoryOverride != nil {
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
 			category := *msg.CategoryOverride

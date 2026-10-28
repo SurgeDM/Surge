@@ -81,11 +81,14 @@ func (m RootModel) updatePaste(msg tea.PasteMsg) (tea.Model, tea.Cmd) {
 // Update handles messages and updates the model
 func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if result, ok := msg.(categoryAssignedMsg); ok {
-		m.categoryAssigning = false
-		m.state = DashboardState
-		if d := m.FindDownloadByID(result.id); d != nil && result.status != nil {
-			d.fileMissing = result.status.FileMissing
+		if d := m.FindDownloadByID(result.id); d != nil {
+			d.moving = false
+			if result.status != nil {
+				d.fileMissing = result.status.FileMissing
+				d.moving = result.status.Moving
+			}
 		}
+		m.UpdateListItems()
 		if result.err != nil {
 			if result.status != nil && result.status.FileMissing {
 				m.addStyledLogEntry(logError, "Move failed: file missing")

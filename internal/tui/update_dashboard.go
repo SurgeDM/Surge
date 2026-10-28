@@ -45,6 +45,13 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
+	if d := m.GetSelectedDownload(); d != nil && d.moving && key.Matches(msg,
+		m.keys.Dashboard.Delete, m.keys.Dashboard.PurgeFile, m.keys.Dashboard.Pause,
+		m.keys.Dashboard.Refresh, m.keys.Dashboard.AssignCategory) {
+		m.addStyledLogEntry(logError, types.ErrMoving.Error())
+		return m, nil
+	}
+
 	// Tab switching
 	pinnedGuard := func() bool {
 		if m.pinnedTab != -1 {
@@ -309,6 +316,7 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.addLogEntry("Failed to retrieve settings: " + err.Error())
 			return m, nil
 		}
+		m.clearSettingsSearch()
 		m.snapshotSettings()
 		m.state = SettingsState
 		m.SettingsActiveTab = 0

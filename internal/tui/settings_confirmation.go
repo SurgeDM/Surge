@@ -106,6 +106,9 @@ func (m RootModel) updateSettingsConfirmation(msg tea.KeyPressMsg) (tea.Model, t
 			m.settingsError = err.Error()
 			return m, nil
 		}
+		if m.IsRemote {
+			defaults.General.DefaultDownloadDir.Value = m.Settings.General.DefaultDownloadDir.Value
+		}
 		m.Settings = defaults
 		m.ApplyTheme(config.Resolve[int](defaults.General.Theme), config.Resolve[string](defaults.General.ThemePath))
 		m.applyAutoShutdownSettingChange()

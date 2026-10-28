@@ -4,6 +4,7 @@ import (
 	"strings"
 	"testing"
 
+	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 )
@@ -90,5 +91,23 @@ func TestCtrlCClearsSearchWithoutClosingView(t *testing.T) {
 		if m.state != state || m.searchActive || m.helpSearchActive || m.searchQuery != "" || m.helpSearchQuery != "" {
 			t.Fatalf("Ctrl+C did not clear search in state %v", state)
 		}
+	}
+}
+
+func TestHelpSearchHonorsRemappedSlashHelp(t *testing.T) {
+	m := InitialRootModel(1701, "test", nil, nil, nil, false)
+	m.state = HelpModalState
+	m.keys.Dashboard.Search = key.NewBinding(key.WithKeys("s"))
+	m.keys.Dashboard.ToggleHelp = key.NewBinding(key.WithKeys("/"))
+	updated, _ := m.Update(tea.KeyPressMsg{Code: '/', Text: "/"})
+	m = updated.(RootModel)
+	if m.state != DashboardState || m.helpSearchActive {
+		t.Fatal("slash did not honor remapped help toggle")
+	}
+	m.state = HelpModalState
+	updated, _ = m.Update(tea.KeyPressMsg{Code: 's', Text: "s"})
+	m = updated.(RootModel)
+	if !m.helpSearchActive {
+		t.Fatal("configured search key did not activate search")
 	}
 }

@@ -222,3 +222,18 @@ func TestReadOnlySettingsCannotResetOrDelete(t *testing.T) {
 		}
 	}
 }
+
+func TestRemoteResetAllPreservesServerDownloadDirectory(t *testing.T) {
+	m := confirmationSettingsModel(t, "General", "clipboard_monitor")
+	m.IsRemote = true
+	m.Settings.General.DefaultDownloadDir.Value = "/server/downloads"
+	m.Settings.Network.MaxConcurrentDownloads.Value = 19
+	m = settingsPress(t, m, settingRune('R'))
+	m = settingsPress(t, m, settingRune('y'))
+	if got := config.Resolve[string](m.Settings.General.DefaultDownloadDir); got != "/server/downloads" {
+		t.Fatalf("server directory replaced: %q", got)
+	}
+	if config.Resolve[int](m.Settings.Network.MaxConcurrentDownloads) != config.Resolve[int](config.DefaultSettings().Network.MaxConcurrentDownloads) {
+		t.Fatal("other settings did not reset")
+	}
+}

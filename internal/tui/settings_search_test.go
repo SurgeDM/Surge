@@ -89,3 +89,21 @@ func TestGlobalSettingsSearchChangesValueInOriginalCategory(t *testing.T) {
 		t.Fatalf("wrong saved value: %v", m.Settings.Network.GlobalRateLimit.Value)
 	}
 }
+
+func TestSettingsSearchClearedOnCloseAndReopen(t *testing.T) {
+	m := confirmationSettingsModel(t, "General", "clipboard_monitor")
+	m.SaveSettingsFunc = func(*config.Settings) error { return nil }
+	m.settingsSearchQuery = "clipboard_monitor"
+	m.settingsSearchInput.SetValue(m.settingsSearchQuery)
+	m = settingsPress(t, m, tea.KeyPressMsg{Code: tea.KeyEsc})
+	if m.state != DashboardState || m.settingsSearchQuery != "" || m.settingsSearchInput.Value() != "" || m.settingsSearchActive {
+		t.Fatal("closing settings retained search")
+	}
+	// Also cover entry with a stale filter, independently of the close path.
+	m.settingsSearchQuery = "old filter"
+	m.settingsSearchInput.SetValue(m.settingsSearchQuery)
+	m = settingsPress(t, m, settingRune('s'))
+	if m.state != SettingsState || m.settingsSearchQuery != "" || m.settingsSearchInput.Value() != "" || m.settingsSearchActive {
+		t.Fatal("reopening settings retained search")
+	}
+}

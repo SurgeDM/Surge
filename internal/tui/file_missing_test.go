@@ -2,9 +2,12 @@ package tui
 
 import (
 	"fmt"
-	"github.com/SurgeDM/Surge/internal/types"
 	"strings"
 	"testing"
+
+	"charm.land/bubbles/v2/key"
+	tea "charm.land/bubbletea/v2"
+	"github.com/SurgeDM/Surge/internal/types"
 )
 
 func TestMissingFileStatusAndRecovery(t *testing.T) {
@@ -42,5 +45,48 @@ func TestFailedMoveUpdatesMissingStatusAndActivityLog(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(m.logEntries, "\n"), "Move failed: file missing") {
 		t.Fatal("activity log did not clearly report missing file")
+	}
+}
+
+func TestMovingStatusBlocksOnlySelectedDownloadChanges(t *testing.T) {
+	InitializeTUI()
+	m := InitialRootModel(1701, "test", nil, nil, nil, false)
+	d := NewDownloadModel("moving", "url", "file.bin", 100)
+	d.done = true
+	other := NewDownloadModel("other", "url", "other.bin", 100)
+	m.downloads = []*DownloadModel{d, other}
+	m.activeTab = TabAll
+	m.SelectedDownloadID = d.ID
+	m.UpdateListItems()
+	moving := true
+	updated, _ := m.Update(types.DownloadEvent{Type: types.EventSystem, DownloadID: d.ID, Moving: &moving})
+	m = updated.(RootModel)
+	if !strings.Contains(stripANSI.ReplaceAllString(getDownloadStatus(d, ""), ""), "Moving") {
+		t.Fatal("moving status not rendered")
+	}
+	for _, binding := range []key.Binding{m.keys.Dashboard.Delete, m.keys.Dashboard.PurgeFile, m.keys.Dashboard.AssignCategory} {
+		keys := binding.Keys()
+		if len(keys[0]) != 1 {
+			t.Fatal("test expects a single-rune binding")
+		}
+		ch := []rune(keys[0])[0]
+		updated, cmd := m.updateDashboard(tea.KeyPressMsg{Code: ch, Text: string(ch)})
+		m = updated.(RootModel)
+		if cmd != nil || m.state != DashboardState {
+			t.Fatal("moving download accepted mutation")
+		}
+	}
+	m.SelectedDownloadID = other.ID
+	m.list.Select(1)
+	updated, _ = m.updateDashboard(tea.KeyPressMsg{Code: 'x', Text: "x"})
+	m = updated.(RootModel)
+	if m.state != RemoveConfirmState {
+		t.Fatal("other download was locked")
+	}
+	moving = false
+	updated, _ = m.Update(types.DownloadEvent{Type: types.EventSystem, DownloadID: d.ID, Moving: &moving})
+	m = updated.(RootModel)
+	if d.moving || !strings.Contains(stripANSI.ReplaceAllString(getDownloadStatus(d, ""), ""), "Completed") {
+		t.Fatal("moving status did not clear")
 	}
 }

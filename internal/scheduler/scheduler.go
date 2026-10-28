@@ -168,6 +168,17 @@ func (p *Scheduler) Add(cfg types.DownloadRecord) bool {
 // then makes the task runnable. prepare runs under the scheduler lock and must
 // not call scheduler methods. If it fails, no task is queued.
 func (p *Scheduler) AddWithPreparation(cfg types.DownloadRecord, prepare func() error) (bool, error) {
+	return p.addPrepared(cfg, prepare, nil)
+}
+
+// AddWithBeforeStart reserves admission, then runs beforeStart without holding
+// the scheduler mutex. Workers cannot start this task until the callback returns.
+// Cancellation or shutdown during the callback prevents the task from starting.
+func (p *Scheduler) AddWithBeforeStart(cfg types.DownloadRecord, beforeStart func() error) (bool, error) {
+	return p.addPrepared(cfg, nil, beforeStart)
+}
+
+func (p *Scheduler) addPrepared(cfg types.DownloadRecord, prepare, beforeStart func() error) (bool, error) {
 	if cfg.ProgressCh == nil {
 		cfg.ProgressCh = p.progressCh
 	}
@@ -196,10 +207,31 @@ func (p *Scheduler) AddWithPreparation(cfg types.DownloadRecord, prepare func() 
 		}
 	}
 	p.ensureLimiterForConfigLocked(&cfg)
-	qt := &queuedTask{cfg: cfg}
+	qt := &queuedTask{cfg: cfg, inFlight: beforeStart != nil}
 	p.queued[cfg.ID] = qt
 	p.queueOrder = append(p.queueOrder, cfg.ID)
 	p.wg.Add(1)
+	if beforeStart != nil {
+		p.mu.Unlock()
+		err := beforeStart()
+		p.mu.Lock()
+		if p.queued[cfg.ID] != qt {
+			// Pause, cancellation, or shutdown removed the reservation. As with an
+			// in-flight worker, the callback owner settles its own wait-group count.
+			p.mu.Unlock()
+			p.wg.Done()
+			return false, err
+		}
+		if err != nil {
+			delete(p.queued, cfg.ID)
+			p.removeQueueOrderLocked(cfg.ID)
+			delete(p.downloadLimiters, cfg.ID)
+			p.mu.Unlock()
+			p.wg.Done()
+			return false, err
+		}
+		qt.inFlight = false
+	}
 	p.taskCond.Signal()
 	p.mu.Unlock()
 	return true, nil

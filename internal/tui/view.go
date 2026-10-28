@@ -875,6 +875,9 @@ func getDownloadStatus(d *DownloadModel, spinnerView string) string {
 	// The spinner's own ANSI reset must not terminate the surrounding status
 	// color before the label is rendered.
 	spinnerView = ansi.Strip(spinnerView)
+	if d.moving {
+		return lipgloss.NewStyle().Foreground(colors.Cyan()).Render(spinnerView + " Moving")
+	}
 	if d.pausing {
 		return lipgloss.NewStyle().Foreground(colors.StatePaused()).Render(spinnerView + " Pausing...")
 	}

@@ -24,6 +24,7 @@ const (
 )
 
 type DownloadEvent struct {
+	Moving           *bool     `json:"moving,omitempty"`
 	CategoryOverride *string   `json:"category_override,omitempty"`
 	Type             EventType `json:"type"`
 	DownloadID       string    `json:"download_id,omitempty"`

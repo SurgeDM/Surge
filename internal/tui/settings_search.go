@@ -69,3 +69,10 @@ func (m RootModel) currentSettingsCategory() string {
 	}
 	return ""
 }
+
+func (m *RootModel) clearSettingsSearch() {
+	m.settingsSearchActive = false
+	m.settingsSearchQuery = ""
+	m.settingsSearchInput.Reset()
+	m.settingsSearchInput.Blur()
+}
