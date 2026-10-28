@@ -877,3 +877,41 @@ func TestHandleDownload_WithCustomID_LifecycleEnqueue(t *testing.T) {
 		t.Fatalf("expected response id %q, got %v", "my-custom-uuid-456", resp["id"])
 	}
 }
+
+func TestHandleDownload_RejectsInvalidCustomIDs(t *testing.T) {
+	setupIsolatedCmdState(t)
+	for _, target := range []struct{ url, body string }{
+		{"/download", `{"url":"https://example.com/file","id":"../bad","skip_approval":true}`},
+		{"/download?id=bad%2Fid", `{"url":"https://example.com/file","skip_approval":true}`},
+		{"/download", `{"url":"https://example.com/file","id":"bad\\\\id","skip_approval":true}`},
+	} {
+		svc := &trackingDownloadService{}
+		rec := httptest.NewRecorder()
+		handleDownload(rec, httptest.NewRequest(http.MethodPost, target.url, strings.NewReader(target.body)), "", svc)
+		if rec.Code != http.StatusBadRequest || svc.addWithIDCalls != 0 || svc.addCalls != 0 {
+			t.Fatalf("%s: status %d, service calls %d/%d", target.url, rec.Code, svc.addCalls, svc.addWithIDCalls)
+		}
+	}
+}
+
+type duplicateIDService struct{ trackingDownloadService }
+
+func (s *duplicateIDService) AddWithID(url, path, filename string, mirrors []string, headers map[string]string, id string, explicit bool, workers int, minChunkSize int64) (string, error) {
+	return "", fmt.Errorf("admission: %w", types.ErrIDExists)
+}
+
+func TestHandleDownload_DuplicateIDDoesNotRecordPreflightError(t *testing.T) {
+	setupIsolatedCmdState(t)
+	rec := httptest.NewRecorder()
+	handleDownload(rec, httptest.NewRequest(http.MethodPost, "/download", strings.NewReader(`{"url":"https://example.com/file","id":"existing","skip_approval":true}`)), "", &duplicateIDService{})
+	if rec.Code != http.StatusConflict {
+		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
+	}
+	list, err := store.LoadMasterList()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(list.Downloads) != 0 {
+		t.Fatalf("unexpected preflight records: %+v", list.Downloads)
+	}
+}

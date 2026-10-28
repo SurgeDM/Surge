@@ -150,9 +150,16 @@ func getMasterPath() string {
 	return filepath.Join(baseDir, "master.gob")
 }
 
-func getDetailPath(dir, id string) (string, error) {
+func ValidateDownloadID(id string) error {
 	if !filepath.IsLocal(id) || strings.ContainsAny(id, "/\\:\x00") || id == "." {
-		return "", fmt.Errorf("invalid download ID %q", id)
+		return fmt.Errorf("invalid download ID %q", id)
+	}
+	return nil
+}
+
+func getDetailPath(dir, id string) (string, error) {
+	if err := ValidateDownloadID(id); err != nil {
+		return "", err
 	}
 	return filepath.Join(dir, "details", id+".gob"), nil
 }
@@ -519,6 +526,15 @@ func saveMasterListLocked(list *types.MasterList) error {
 }
 
 func AddToMasterList(entry types.DownloadRecord, onMoving ...func(bool)) error {
+	return addToMasterList(entry, false, onMoving...)
+}
+
+// AddNewToMasterList reserves an ID without replacing an existing record.
+func AddNewToMasterList(entry types.DownloadRecord) error {
+	return addToMasterList(entry, true)
+}
+
+func addToMasterList(entry types.DownloadRecord, rejectExisting bool, onMoving ...func(bool)) error {
 	notify := moveNotifier(onMoving)
 	defer notify(false)
 	masterMu.Lock()
@@ -541,6 +557,9 @@ func AddToMasterList(entry types.DownloadRecord, onMoving ...func(bool)) error {
 	found := false
 	for i, e := range list.Downloads {
 		if e.ID == entry.ID {
+			if rejectExisting {
+				return types.ErrIDExists
+			}
 			entry.CategoryOverride = e.CategoryOverride
 			entry.CategoryAssigned = e.CategoryAssigned
 			entry.PendingCategoryMove = e.PendingCategoryMove

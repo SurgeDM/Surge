@@ -424,7 +424,7 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 		// published only after AddWithPreparation returns so Publish
 		// backpressure cannot stall the lock, and EventStarted may arrive first.
 		accepted, err := mgr.pool.AddWithPreparation(*cfg, func() error {
-			if err := store.AddToMasterList(types.DownloadRecord{
+			if err := store.AddNewToMasterList(types.DownloadRecord{
 				ID:           queuedEvent.DownloadID,
 				URL:          queuedEvent.URL,
 				URLHash:      store.URLHash(queuedEvent.URL),
@@ -437,6 +437,9 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 				Workers:      queuedEvent.Workers,
 				MinChunkSize: queuedEvent.MinChunkSize,
 			}); err != nil {
+				if errors.Is(err, types.ErrIDExists) {
+					return err
+				}
 				utils.Debug("Lifecycle: Failed to persist queued download synchronously: %v", err)
 			}
 			if len(cfg.Headers) > 0 {

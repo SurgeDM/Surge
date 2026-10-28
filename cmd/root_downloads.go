@@ -17,6 +17,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/orchestrator"
 	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/google/uuid"
@@ -117,6 +118,10 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 
 	newID, filename, err := enqueueDownloadRequest(r, service, resolved)
 	if err != nil {
+		if errors.Is(err, types.ErrIDExists) {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
 		recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
 		publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(resolved.urlForAdd), err))
 		http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -185,6 +190,11 @@ func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) 
 
 func validateDownloadRequest(req DownloadRequest) (DownloadRequest, error) {
 	req.ID = strings.TrimSpace(req.ID)
+	if req.ID != "" {
+		if err := store.ValidateDownloadID(req.ID); err != nil {
+			return DownloadRequest{}, err
+		}
+	}
 	if req.URL == "" {
 		return DownloadRequest{}, fmt.Errorf("url is required")
 	}
@@ -379,6 +389,11 @@ func resolveDownloadRequest(r *http.Request, defaultOutputDir string) (*resolved
 
 	if req.ID == "" && r != nil && r.URL != nil {
 		req.ID = strings.TrimSpace(r.URL.Query().Get("id"))
+	}
+	if req.ID != "" {
+		if err := store.ValidateDownloadID(req.ID); err != nil {
+			return nil, err
+		}
 	}
 
 	utils.Debug("Received download request: host=%s, Filename=%s, Path=%s, HeaderCount=%d", utils.URLHostForLog(req.URL), req.Filename, req.Path, len(req.Headers))
