@@ -131,6 +131,31 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
 		handleDownload(w, r, defaultOutputDir, service)
 	})
+	mux.HandleFunc("/download/result", requireMethod(http.MethodGet, withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
+		owner, ok := service.(downloadservice.ResultService)
+		if !ok {
+			http.Error(w, "Finalized results are unavailable on this server", http.StatusNotImplemented)
+			return
+		}
+		// Only this endpoint certifies the post-finalization status contract.
+		w.Header().Set("X-Surge-Result-Version", "1")
+		status, err := owner.GetResult(id)
+		if err != nil {
+			code := lifecycleErrorStatus(err)
+			if errors.Is(err, downloadservice.ErrArtifactUnavailable) {
+				code = http.StatusConflict
+			}
+			http.Error(w, "Unable to retrieve finalized download result", code)
+			return
+		}
+		if status == nil {
+			http.Error(w, "Result unavailable", http.StatusInternalServerError)
+			return
+		}
+		result := *status
+		result.URL, result.Error = "", "" // No source credentials or raw errors in result snapshots.
+		writeJSONResponse(w, http.StatusOK, result)
+	})))
 	mux.HandleFunc("/download/duplicate", requireMethod(http.MethodPost, handleDuplicateCheck))
 
 	mux.HandleFunc("/download/batch", func(w http.ResponseWriter, r *http.Request) {

@@ -69,7 +69,8 @@
             "unauthorized",
             "unavailable",
             "conflict",
-            "timeout"
+            "timeout",
+            "interrupted"
           ]
         },
         "message": {

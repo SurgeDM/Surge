@@ -1,7 +1,7 @@
 # CLI output contract
 
 The versioned contract is opt-in. It is available for `ls` (and its alias `l`)
-with or without a download ID, for `add` (and its alias `get`), and for `pause`, `resume`, and `cancel`:
+with or without a download ID, for `add` (and its alias `get`), and for `pause`, `resume`, `cancel`, and `wait`:
 
 ```bash
 surge ls --output-version 1
@@ -102,6 +102,7 @@ raw errors and server response bodies are not copied into the JSON result.
 | 6 | `unavailable` | Network connection/DNS failure or HTTP 429, 502, or 503 |
 | 7 | `conflict` | Ambiguous ID prefix or HTTP 409 |
 | 8 | `timeout` | Context deadline exceeded or HTTP 408/504 |
+| 130 | `interrupted` | Observation or command context cancelled |
 
 A successful snapshot can include a job whose state is `failed`: `ok` describes
 the listing operation, not the outcome of every listed download. No new signal,
@@ -142,3 +143,9 @@ new exit codes or JSON shapes accidentally.
 `pause`, `resume`, and `cancel` accept `--output-version 1`. See
 [lifecycle commands](commands/lifecycle.md) and the
 [lifecycle result schema](schemas/lifecycle-output-v1.schema.json).
+
+## Waiting for artifacts
+
+`wait` is a new command with the v1 exit codes in human and JSON modes. It accepts
+both `--json` and `--output-version 1`. See [wait](commands/wait.md) for timeout,
+interruption, finalized-result capability, and artifact-location semantics.
