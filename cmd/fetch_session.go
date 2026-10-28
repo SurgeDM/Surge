@@ -209,3 +209,11 @@ func (o *fetchOwner) resume(ctx context.Context) error {
 }
 
 func (o *fetchOwner) trackJob(id string) { o.trackedJobs[id] = true }
+
+func (o *fetchOwner) saveSession() error {
+	data, err := json.Marshal(o.session)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(filepath.Join(config.GetStateDir(), "foreground", o.session.ID, "session.json"), data, 0600)
+}

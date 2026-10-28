@@ -156,5 +156,14 @@ func downloadItems(statuses []types.DownloadStatus) []downloadItem {
 }
 
 func isContractCommand(cmd *cobra.Command) bool {
-	return cmd != nil && (cmd.Name() == "wait" || cmd.Annotations["surge.contract"] == "1")
+	if cmd == nil {
+		return false
+	}
+	if cmd.Name() == "add" {
+		jsonOutput, _ := cmd.Flags().GetBool("json")
+		manifest, _ := cmd.Flags().GetString("manifest")
+		key, _ := cmd.Flags().GetString("idempotency-key")
+		return jsonOutput || manifest != "" || key != ""
+	}
+	return cmd.Name() == "wait" || cmd.Annotations["surge.contract"] == "1"
 }

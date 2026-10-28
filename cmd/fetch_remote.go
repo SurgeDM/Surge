@@ -26,6 +26,9 @@ func runRemoteFetch(cmd *cobra.Command, ctx context.Context, force <-chan struct
 	if !caps.Features["finalized_results"] || !caps.Features["destination_policy"] {
 		return clioutput.NewError(clioutput.Conflict, "Upgrade this server to support foreground artifact requests.", nil)
 	}
+	if opts.idempotencyKey != "" && !caps.Features["idempotency"] {
+		return clioutput.NewError(clioutput.Conflict, "This server does not support durable idempotency.", nil)
+	}
 	for _, request := range requests {
 		if request.Artifact.ExpectedSHA256 != "" && !caps.Features["artifact_sha256"] {
 			return clioutput.NewError(clioutput.Conflict, "The server does not support SHA-256 verification.", nil)
@@ -38,7 +41,12 @@ func runRemoteFetch(cmd *cobra.Command, ctx context.Context, force <-chan struct
 	ids := make([]string, 0, len(requests))
 	positions := make(map[string]int, len(requests))
 	for i, request := range requests {
-		item := fetchItem{waitItem: waitItem{Status: "not_submitted", DownloadedBytes: "0"}, InputIndex: i + 1}
+		item := fetchItem{waitItem: waitItem{Status: "not_submitted", DownloadedBytes: "0"}, InputIndex: i + 1, ClientRef: request.ClientRef}
+		if request.inputFailure != nil {
+			item.Error = request.inputFailure
+			items = append(items, item)
+			continue
+		}
 		if ctx.Err() != nil {
 			failure := fetchFailure(context.Cause(ctx))
 			item.Error = &failure
@@ -55,6 +63,9 @@ func runRemoteFetch(cmd *cobra.Command, ctx context.Context, force <-chan struct
 		}
 		req.Header.Set("Authorization", "Bearer "+token)
 		req.Header.Set("Content-Type", "application/json")
+		if opts.idempotencyKey != "" {
+			req.Header.Set("Idempotency-Key", itemIdempotencyKey(opts.idempotencyKey, request.ClientRef, i+1))
+		}
 		resp, submitErr := client.Do(req)
 		if submitErr != nil {
 			item.Status = "unknown"

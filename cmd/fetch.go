@@ -16,9 +16,10 @@ import (
 )
 
 type fetchOptions struct {
-	resume      string
-	timeout     time.Duration
-	onInterrupt string
+	resume         string
+	timeout        time.Duration
+	idempotencyKey string
+	onInterrupt    string
 }
 type fetchItem struct {
 	CheckpointBytes string `json:"checkpoint_bytes"`
@@ -48,11 +49,35 @@ func newFetchCommand() *cobra.Command {
 			if err := validateFetchProgress(cmd); err != nil {
 				return err
 			}
+			prepared, hasManifest, err := manifestRequests(cmd, args)
+			if err != nil {
+				return err
+			}
+			key, _ := cmd.Flags().GetString("idempotency-key")
+			if key != "" && resolveHostTarget() == "" {
+				return usageError("--idempotency-key requires a remote host; local retries use --resume SESSION.")
+			}
+			if hasManifest {
+				timeout, _ := cmd.Flags().GetDuration("timeout")
+				action, _ := cmd.Flags().GetString("on-interrupt")
+				if timeout < 0 || (action != "" && action != "detach" && action != "pause" && action != "cancel") || (resolveHostTarget() == "" && action != "" && action != "pause") {
+					return usageError("Invalid timeout or interruption policy.")
+				}
+				return runFetch(cmd, prepared, fetchOptions{timeout: timeout, onInterrupt: action, idempotencyKey: key})
+			}
+			batch, _ := cmd.Flags().GetString("batch")
+			if batch != "" {
+				extra, err := readBatchInputs(cmd, batch)
+				if err != nil {
+					return err
+				}
+				args = append(args, extra...)
+			}
 			output, _ := cmd.Flags().GetString("output")
 			filename, _ := cmd.Flags().GetString("filename")
 			digest, _ := cmd.Flags().GetString("sha256")
 			onExists, _ := cmd.Flags().GetString("on-exists")
-			opts := fetchOptions{}
+			opts := fetchOptions{idempotencyKey: key}
 			opts.resume, _ = cmd.Flags().GetString("resume")
 			opts.timeout, _ = cmd.Flags().GetDuration("timeout")
 			opts.onInterrupt, _ = cmd.Flags().GetString("on-interrupt")
@@ -60,7 +85,7 @@ func newFetchCommand() *cobra.Command {
 				return usageError("--timeout must be nonnegative.")
 			}
 			if opts.resume != "" {
-				if len(args) > 0 || resolveHostTarget() != "" || filename != "" || digest != "" || cmd.Flags().Changed("output") || cmd.Flags().Changed("on-exists") {
+				if key != "" || batch != "" || len(args) > 0 || resolveHostTarget() != "" || filename != "" || digest != "" || cmd.Flags().Changed("output") || cmd.Flags().Changed("on-exists") {
 					return usageError("--resume accepts only a local session ID and observation/output options.")
 				}
 			} else if len(args) == 0 || len(args) > maxWaitIDs {
@@ -102,6 +127,8 @@ func newFetchCommand() *cobra.Command {
 	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return clioutput.NewError(clioutput.InvalidArguments, "Invalid fetch flags.", err)
 	})
+	command.Flags().StringP("batch", "b", "", "URL line file or - for stdin (max 1 MiB, 256 inputs)")
+	configureManifest(command)
 	configureFetchProgress(command)
 	return command
 }
@@ -149,7 +176,16 @@ func runFetch(cmd *cobra.Command, requests []DownloadRequest, opts fetchOptions)
 	reused := make(map[string]int64, len(items))
 	for i, job := range owner.session.Jobs {
 		items[i] = fetchItem{waitItem: waitItem{ID: job.ID, Status: "not_submitted", DownloadedBytes: "0"}, InputIndex: job.InputIndex, ClientRef: job.ClientRef}
+		if opts.resume == "" {
+			items[i].ClientRef = requests[i].ClientRef
+			owner.session.Jobs[i].ClientRef = requests[i].ClientRef
+		}
 		positions[job.ID] = i
+	}
+	if opts.resume == "" {
+		if err := owner.saveSession(); err != nil {
+			return err
+		}
 	}
 	if opts.resume != "" {
 		for _, job := range owner.session.Jobs {
@@ -168,6 +204,11 @@ func runFetch(cmd *cobra.Command, requests []DownloadRequest, opts fetchOptions)
 		}
 	} else {
 		for i, request := range requests {
+			if request.inputFailure != nil {
+				items[i].Status = "not_submitted"
+				items[i].Error = request.inputFailure
+				continue
+			}
 			if ctx.Err() != nil {
 				err = ctx.Err()
 				break

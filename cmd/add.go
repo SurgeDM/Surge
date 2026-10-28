@@ -5,7 +5,6 @@ import (
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/clioutput"
-	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/spf13/cobra"
 )
 
@@ -22,6 +21,8 @@ func newAddCommand() *cobra.Command {
 	command.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
 	command.Flags().Bool("confirm", false, "Request confirmation in the running TUI before starting downloads")
 	command.Flags().String("output-version", "", "Use a versioned JSON contract (supported: 1)")
+	configureManifest(command)
+	command.Flags().Bool("json", false, "Write version 1 acceptance receipts")
 	command.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
 		return clioutput.NewError(clioutput.InvalidArguments, "Invalid command flags.", err)
 	})
@@ -33,18 +34,27 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	if cmd.Flags().Changed("output-version") && version != "1" {
 		return clioutput.NewError(clioutput.InvalidArguments, "Only --output-version 1 is supported.", nil)
 	}
+	prepared, hasManifest, err := manifestRequests(cmd, args)
+	if err != nil {
+		return err
+	}
+	key, _ := cmd.Flags().GetString("idempotency-key")
+	jsonOutput, _ := cmd.Flags().GetBool("json")
+	if jsonOutput {
+		version = "1"
+	}
 	batchFile, _ := cmd.Flags().GetString("batch")
 	output, _ := cmd.Flags().GetString("output")
 	confirm, _ := cmd.Flags().GetBool("confirm")
 	urls := append([]string(nil), args...)
 	if batchFile != "" {
-		fileURLs, err := utils.ReadURLsFromFile(batchFile)
+		fileURLs, err := readBatchInputs(cmd, batchFile)
 		if err != nil {
 			return clioutput.NewError(clioutput.InvalidArguments, "Could not read the batch URL file.", fmt.Errorf("error reading batch file: %w", err))
 		}
 		urls = append(urls, fileURLs...)
 	}
-	if len(urls) == 0 {
+	if len(urls) == 0 && !hasManifest {
 		return clioutput.NewError(clioutput.InvalidArguments, "Provide at least one URL or a nonempty --batch file.", nil)
 	}
 	if err := initializeClientState(); err != nil {
@@ -56,7 +66,24 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	}
 	resolvedOutput := resolveClientOutputPath(output)
 	var items []submissionItem
-	if batchFile != "" && confirm {
+	if hasManifest || key != "" {
+		if confirm {
+			return usageError("Idempotent and manifest submissions require immediate acceptance.")
+		}
+		if !hasManifest {
+			for _, input := range urls {
+				url, mirrors, e := parseAndNormalizeURLArg(input)
+				if e != nil || url == "" {
+					return usageError("Invalid download URL; no work was submitted.")
+				}
+				prepared = append(prepared, DownloadRequest{URL: url, Mirrors: mirrors, Path: resolvedOutput, SkipApproval: true})
+			}
+		}
+		items, err = submitPrepared(cmd, prepared, baseURL, token, key)
+		if err != nil {
+			return err
+		}
+	} else if batchFile != "" && confirm {
 		items = collectConfirmedBatch(urls, resolvedOutput, baseURL, token)
 	} else {
 		items = collectSubmissions(urls, resolvedOutput, baseURL, token, confirm)

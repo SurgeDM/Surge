@@ -14,6 +14,7 @@ import (
 // submissionItem correlates a receipt with its one-based position in the input.
 // Approval request IDs are deliberately separate from queued download IDs.
 type submissionItem struct {
+	ClientRef  string             `json:"client_ref,omitempty"`
 	InputIndex int                `json:"input_index"`
 	Status     string             `json:"status"`
 	ID         string             `json:"id,omitempty"`
