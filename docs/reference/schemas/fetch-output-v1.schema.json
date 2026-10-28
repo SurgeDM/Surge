@@ -104,7 +104,8 @@
         "input_index",
         "reused_bytes",
         "duration_seconds",
-        "average_bytes_per_second"
+        "average_bytes_per_second",
+        "checkpoint_bytes"
       ],
       "properties": {
         "id": {
@@ -139,7 +140,10 @@
           "type": "string"
         },
         "reused_bytes": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "pattern": "^[0-9]+$"
         },
         "duration_seconds": {
@@ -152,6 +156,10 @@
             "null"
           ],
           "minimum": 0
+        },
+        "checkpoint_bytes": {
+          "type": "string",
+          "pattern": "^[0-9]+$"
         }
       }
     },

@@ -24,6 +24,7 @@ const (
 )
 
 type DownloadEvent struct {
+	Phase            string         `json:"phase,omitempty"`
 	Artifact         ArtifactPolicy `json:"artifact,omitzero"`
 	Moving           *bool          `json:"moving,omitempty"`
 	CategoryOverride *string        `json:"category_override,omitempty"`

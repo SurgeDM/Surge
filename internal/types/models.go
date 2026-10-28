@@ -98,6 +98,8 @@ type MasterList struct {
 
 // DownloadStatus is the transient view returned to the TUI and API clients.
 type DownloadStatus struct {
+	Phase            string         `json:"phase,omitempty"`
+	MaxConnections   int            `json:"max_connections,omitempty"`
 	Artifact         ArtifactPolicy `json:"artifact,omitzero"`
 	ErrorCode        string         `json:"error_code,omitempty"`
 	Moving           bool           `json:"moving,omitempty"`

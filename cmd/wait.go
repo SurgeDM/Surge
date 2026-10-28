@@ -212,10 +212,7 @@ func observeDownloads(ctx context.Context, ids []string, lookup func(context.Con
 			}
 			switch status.Status {
 			case "completed":
-				items[i].Artifact = &waitArtifact{Location: location, Server: server, Path: status.DestPath, SizeBytes: items[i].DownloadedBytes, Verification: "not_requested", SHA256: status.Artifact.SHA256}
-				if status.Artifact.Verification == "verified" {
-					items[i].Artifact.Verification = "verified"
-				}
+				items[i].Artifact = completedWaitArtifact(status, location, server)
 			case "paused", "cancelled":
 				failure := clioutput.Describe(clioutput.NewError(clioutput.Conflict, "The job is stopped; explicitly resume it before waiting for completion.", nil))
 				items[i].Error = &failure
@@ -317,3 +314,11 @@ func writeWaitResult(cmd *cobra.Command, items []waitItem, err error) error {
 }
 
 func init() { rootCmd.AddCommand(newWaitCommand()) }
+
+func completedWaitArtifact(status *types.DownloadStatus, location, server string) *waitArtifact {
+	verification := "not_requested"
+	if status.Artifact.Verification == "verified" {
+		verification = "verified"
+	}
+	return &waitArtifact{Location: location, Server: server, Path: status.DestPath, SizeBytes: strconv.FormatInt(status.Downloaded, 10), Verification: verification, SHA256: status.Artifact.SHA256}
+}

@@ -767,12 +767,18 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 	} else if d.rateLimited {
 		speedStr = "Rate limited, retrying..."
 		etaStr = "..."
-	} else if d.paused || d.Speed == 0 {
+	} else if d.phase == "verifying" || d.phase == "finalizing" {
+		speedStr = d.phase
+		etaStr = "--"
+	} else if d.paused {
 		speedStr = "Paused"
 		if d.RateLimitSet && d.RateLimit > 0 {
 			speedStr += fmt.Sprintf(" (Limit: %s)", utils.FormatRateLimitDisplay(d.RateLimit))
 		}
 		etaStr = "\u221e"
+	} else if d.Speed <= 0 {
+		speedStr = "Waiting for transfer"
+		etaStr = "--"
 	} else {
 		speedStr = utils.FormatSpeed(d.Speed)
 		if d.RateLimitSet && d.RateLimit > 0 {
@@ -896,7 +902,7 @@ func (m RootModel) calcTotalSpeedBps() int64 {
 	total := int64(0)
 	for _, d := range m.downloads {
 		// Skip completed downloads
-		if d.done {
+		if d.done || d.paused || d.pausing || d.err != nil || d.phase == "verifying" || d.phase == "finalizing" {
 			continue
 		}
 		total += int64(d.Speed)

@@ -112,6 +112,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if d := m.FindDownloadByID(msg.id); d != nil && (d.paused || !d.started) {
 			d.started = false
+			d.phase = "downloading"
 			d.done = false
 			d.err = nil
 			d.paused = false
@@ -277,6 +278,9 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	case types.EventProgress:
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil && d.started && !d.done && !d.paused {
 			d.Speed = msg.Speed
+			if msg.Phase != "" {
+				d.phase = msg.Phase
+			}
 		}
 		m.cachedTotalSpeed = m.calcTotalSpeedBps()
 		cmd := m.processProgressMsg(msg)
@@ -287,6 +291,9 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 		for _, bm := range msg.BatchEvents {
 			if d := m.FindDownloadByID(bm.DownloadID); d != nil && d.started && !d.done && !d.paused {
 				d.Speed = bm.Speed
+				if bm.Phase != "" {
+					d.phase = bm.Phase
+				}
 			}
 		}
 		m.cachedTotalSpeed = m.calcTotalSpeedBps()
@@ -409,6 +416,14 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 		return m, nil
 
 	case types.EventSystem:
+		if msg.Artifact.Verification == "verifying" {
+			if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+				d.phase = "verifying"
+				d.Speed = 0
+				d.lastETA = 0
+				m.cachedTotalSpeed = m.calcTotalSpeedBps()
+			}
+		}
 		if msg.Message != "" {
 			m.addStyledLogEntry(logStarted, "\u2139 "+msg.Message)
 		}

@@ -130,7 +130,12 @@ func (pa *ProgressAggregator) reportProgressLoop() {
 			}
 			lastSpeeds[cfg.ID] = currentSpeed
 
-			msg := types.DownloadEvent{
+			phase := "downloading"
+			if progress.CfgProgress(&cfg).Verifying.Load() {
+				phase = "verifying"
+				currentSpeed = 0
+			}
+			msg := types.DownloadEvent{Phase: phase,
 				Type:        types.EventProgress,
 				DownloadID:  cfg.ID,
 				Downloaded:  downloaded,

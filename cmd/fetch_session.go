@@ -14,6 +14,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/scheduler"
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/store"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/google/uuid"
 )
 
@@ -28,12 +29,14 @@ type fetchSession struct {
 	Jobs          []fetchJob `json:"jobs"`
 }
 type fetchOwner struct {
-	manager       *orchestrator.LifecycleManager
-	service       *service.LocalDownloadService
-	lock          *InstanceLock
-	session       fetchSession
-	workerDone    <-chan struct{}
-	previousState string
+	finalStatuses    map[string]*types.DownloadStatus
+	checkpointsValid bool
+	manager          *orchestrator.LifecycleManager
+	service          *service.LocalDownloadService
+	lock             *InstanceLock
+	session          fetchSession
+	workerDone       <-chan struct{}
+	previousState    string
 }
 
 func newFetchOwner(resume string, count int) (*fetchOwner, error) {
@@ -114,7 +117,39 @@ func newFetchOwner(resume string, count int) (*fetchOwner, error) {
 // validates the last saved checkpoint; no final checkpoint is promised.
 func (o *fetchOwner) close(force <-chan struct{}) bool {
 	done := make(chan struct{})
-	go func() { o.manager.Shutdown(); <-o.workerDone; close(done) }()
+	go func() {
+		o.manager.Shutdown()
+		<-o.workerDone
+		o.finalStatuses = make(map[string]*types.DownloadStatus)
+		o.checkpointsValid = true
+		for _, job := range o.session.Jobs {
+			status, err := o.service.GetResult(job.ID)
+			if err != nil || status == nil {
+				o.checkpointsValid = false
+				continue
+			}
+			o.finalStatuses[job.ID] = status
+			if status.Status == "queued" || status.Status == "completed" {
+				continue
+			}
+			if status.Status != "paused" {
+				o.checkpointsValid = false
+				continue
+			}
+			if status.Downloaded > 0 {
+				record, readErr := store.GetDownload(job.ID)
+				if readErr != nil || record == nil {
+					o.checkpointsValid = false
+					continue
+				}
+				saved, readErr := store.LoadState(record.URL, record.DestPath)
+				if readErr != nil || saved == nil {
+					o.checkpointsValid = false
+				}
+			}
+		}
+		close(done)
+	}()
 	timer := time.NewTimer(10 * time.Second)
 	defer timer.Stop()
 	select {

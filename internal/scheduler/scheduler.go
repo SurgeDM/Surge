@@ -1118,6 +1118,8 @@ func (p *Scheduler) GetStatus(id string) *types.DownloadStatus {
 	var adRateLimitBps int64
 	var adRateLimitSet bool
 	var adState *progress.DownloadProgress
+	var capacity int
+	var retryAt time.Time
 	var queuedCfg types.DownloadRecord
 
 	p.mu.RLock()
@@ -1125,8 +1127,12 @@ func (p *Scheduler) GetStatus(id string) *types.DownloadStatus {
 	qCfg, qExists := p.queued[id]
 	if qExists {
 		queuedCfg = qCfg.cfg
+		retryAt = qCfg.retryAt
 	}
 	if exists {
+		if ad.config.Runtime != nil {
+			capacity = ad.config.Runtime.GetMaxConnectionsPerDownload()
+		}
 		adURL = ad.config.URL
 		adFilename = ad.config.Filename
 		adDestPath = ad.config.DestPath
@@ -1141,7 +1147,11 @@ func (p *Scheduler) GetStatus(id string) *types.DownloadStatus {
 	}
 
 	if qExists {
-		return &types.DownloadStatus{
+		phase := "queued"
+		if retryAt.After(time.Now()) {
+			phase = "retrying"
+		}
+		return &types.DownloadStatus{Phase: phase,
 			ID:           id,
 			URL:          queuedCfg.URL,
 			Filename:     queuedCfg.Filename,
@@ -1166,9 +1176,9 @@ func (p *Scheduler) GetStatus(id string) *types.DownloadStatus {
 	}
 
 	// Calculate progress and speed (thread-safe)
-	downloaded, totalSize, _, sessionElapsed, _, sessionStart := state.GetProgress()
+	downloaded, totalSize, _, sessionElapsed, connections, sessionStart := state.GetProgress()
 
-	status := &types.DownloadStatus{
+	status := &types.DownloadStatus{MaxConnections: capacity, Connections: int(connections),
 		ID:           id,
 		URL:          adURL,
 		Filename:     filename,

@@ -9,6 +9,7 @@ import (
 	"strconv"
 
 	"github.com/SurgeDM/Surge/internal/clioutput"
+	"github.com/SurgeDM/Surge/internal/transferui"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/spf13/cobra"
 )
@@ -110,6 +111,10 @@ func remoteStatusError(status int, cause error) error {
 // Unknown totals/rates are null. Source URLs and raw error strings are excluded
 // because either can contain credentials or signed query parameters.
 type downloadItem struct {
+	Phase               string   `json:"phase"`
+	ETASeconds          *float64 `json:"eta_seconds"`
+	ActiveConnections   int      `json:"active_connections"`
+	MaxConnections      *int     `json:"max_connections"`
 	ID                  string   `json:"id"`
 	Filename            string   `json:"filename"`
 	Status              string   `json:"status"`
@@ -122,6 +127,21 @@ func downloadItems(statuses []types.DownloadStatus) []downloadItem {
 	items := make([]downloadItem, 0, len(statuses))
 	for _, status := range statuses {
 		item := downloadItem{ID: status.ID, Filename: status.Filename, Status: status.Status, DownloadedBytes: strconv.FormatInt(status.Downloaded, 10)}
+		item.Phase = status.Phase
+		if item.Phase == "" {
+			item.Phase = status.Status
+		}
+		item.ActiveConnections = max(0, status.Connections)
+		if status.MaxConnections > 0 {
+			capacity := status.MaxConnections
+			item.MaxConnections = &capacity
+		}
+		if status.Status == "downloading" {
+			if eta, known := transferui.ETA(status.TotalSize, status.Downloaded, status.Speed); known {
+				seconds := eta.Seconds()
+				item.ETASeconds = &seconds
+			}
+		}
 		if status.TotalSize > 0 {
 			total := strconv.FormatInt(status.TotalSize, 10)
 			item.TotalBytes = &total

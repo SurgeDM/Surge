@@ -31,12 +31,14 @@ func runRemoteFetch(cmd *cobra.Command, ctx context.Context, force <-chan struct
 			return clioutput.NewError(clioutput.Conflict, "The server does not support SHA-256 verification.", nil)
 		}
 	}
+	progress := startFetchProgress(cmd)
+	defer progress.stop()
 	started := time.Now()
 	items := make([]fetchItem, 0, len(requests))
 	ids := make([]string, 0, len(requests))
 	positions := make(map[string]int, len(requests))
 	for i, request := range requests {
-		item := fetchItem{waitItem: waitItem{Status: "not_submitted", DownloadedBytes: "0"}, InputIndex: i + 1, ReusedBytes: "0"}
+		item := fetchItem{waitItem: waitItem{Status: "not_submitted", DownloadedBytes: "0"}, InputIndex: i + 1}
 		if ctx.Err() != nil {
 			failure := fetchFailure(context.Cause(ctx))
 			item.Error = &failure
@@ -77,7 +79,9 @@ func runRemoteFetch(cmd *cobra.Command, ctx context.Context, force <-chan struct
 	}
 	if len(ids) > 0 && ctx.Err() == nil {
 		observed, observeErr := observeDownloads(ctx, ids, func(ctx context.Context, id string) (*types.DownloadStatus, error) {
-			return getWaitStatus(ctx, client, baseURL, token, id)
+			status, err := getWaitStatus(ctx, client, baseURL, token, id)
+			progress.update(status)
+			return status, err
 		}, time.Second, "remote", baseURL)
 		for _, item := range observed {
 			items[positions[item.ID]].waitItem = item
@@ -105,5 +109,6 @@ func runRemoteFetch(cmd *cobra.Command, ctx context.Context, force <-chan struct
 	if err == nil {
 		err = fetchBatchFailure(items)
 	}
+	progress.stop()
 	return writeFetchResult(cmd, items, "", nil, actions, err)
 }

@@ -3,6 +3,7 @@ package tui
 import (
 	"github.com/SurgeDM/Surge/internal/orchestrator"
 	engineprogress "github.com/SurgeDM/Surge/internal/progress"
+	"github.com/SurgeDM/Surge/internal/transferui"
 
 	"context"
 	"errors"
@@ -118,6 +119,7 @@ type DownloadModel struct {
 	// No direct state access or polling reporter
 	state *engineprogress.DownloadProgress // Keep for now if needed for details view, but mostly passive
 
+	phase       string
 	done        bool
 	started     bool // Engine has confirmed start
 	err         error
@@ -310,11 +312,10 @@ func NewDownloadModel(id string, url string, filename string, total int64) *Down
 // UpdateETA calculates the remaining time and applies EMA smoothing to prevent jitter.
 // This should be called once per progress update, NOT per render frame.
 func (d *DownloadModel) UpdateETA() {
-	if d.Total <= 0 || d.Speed <= 0 {
-		return // Do not clear lastETA to preserve EMA history when speed drops to 0 momentarily
+	if d.Total <= 0 || d.Speed <= 0 || !transferui.FiniteRate(d.Speed) {
+		d.lastETA = 0
+		return
 	}
-
-	remaining := d.Total - d.Downloaded
 
 	if !d.hasEtaSpeed {
 		d.etaSpeed = d.Speed
@@ -324,15 +325,12 @@ func (d *DownloadModel) UpdateETA() {
 		d.etaSpeed = etaAlpha*d.Speed + (1-etaAlpha)*d.etaSpeed
 	}
 
-	etaSeconds := float64(remaining) / d.etaSpeed
-
-	// Clamp ETA to 24 hours max to prevent bonkers values
-	const maxETASeconds = 24 * 60 * 60
-	if etaSeconds > maxETASeconds || etaSeconds < 0 {
-		return // Keep previous displayed ETA; etaSpeed itself is already updated above
+	eta, known := transferui.ETA(d.Total, d.Downloaded, d.etaSpeed)
+	if !known {
+		d.lastETA = 0
+		return
 	}
-
-	d.lastETA = time.Duration(etaSeconds * float64(time.Second))
+	d.lastETA = eta
 }
 
 func InitialRootModel(serverPort int, currentVersion string, service downloadservice.DownloadService, orchestrator *orchestrator.LifecycleManager, settings *config.Settings, noResume bool, currentCommit ...string) RootModel {
@@ -862,6 +860,11 @@ func downloadModelFromStatus(s types.DownloadStatus, autoResume bool) *DownloadM
 	dm.moving = s.Moving
 	dm.fileMissing = s.FileMissing
 	dm.categoryOverride = s.CategoryOverride
+	dm.phase = s.Phase
+	if s.Status == "verifying" || s.Status == "finalizing" {
+		dm.phase = s.Status
+		dm.started = true
+	}
 	dm.Downloaded = s.Downloaded
 	if s.DestPath != "" {
 		dm.Destination = s.DestPath
@@ -905,9 +908,9 @@ func downloadModelFromStatus(s types.DownloadStatus, autoResume bool) *DownloadM
 	if s.TotalSize > 0 {
 		dm.progress.SetPercent(s.Progress / 100.0)
 	}
-	if s.AvgSpeed > 0 {
+	if s.Status == "completed" && s.AvgSpeed > 0 {
 		dm.Speed = s.AvgSpeed
-	} else if s.Speed > 0 {
+	} else if s.Status == "downloading" && transferui.FiniteRate(s.Speed) {
 		dm.Speed = s.Speed
 	}
 	if s.Status == "completed" && s.TimeTaken > 0 {
