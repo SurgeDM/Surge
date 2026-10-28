@@ -11,6 +11,36 @@ import (
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
+func TestSnapshotPreservesDownloadMetadataOnStartupAndResync(t *testing.T) {
+	InitializeTUI()
+	category := "Videos"
+	statuses := []types.DownloadStatus{
+		{ID: "moving", Filename: "moving.bin", Status: "completed", Moving: true, CategoryOverride: &category},
+		{ID: "missing", Filename: "missing.bin", Status: "completed", FileMissing: true},
+	}
+	model := InitialRootModelWithStatuses(1701, "test", nil, nil, nil, false, statuses)
+	t.Cleanup(model.cancelEnqueue)
+	assertSnapshot := func(t *testing.T, model RootModel) {
+		t.Helper()
+		if len(model.downloads) != len(statuses) {
+			t.Fatalf("got %d downloads, want %d", len(model.downloads), len(statuses))
+		}
+		moving := model.FindDownloadByID("moving")
+		if moving == nil || !moving.moving || moving.categoryOverride == nil || *moving.categoryOverride != category {
+			t.Fatalf("moving download lost its move or category state: %+v", moving)
+		}
+		missing := model.FindDownloadByID("missing")
+		if missing == nil || !missing.done || !missing.fileMissing {
+			t.Fatalf("missing download lost its completion or file state: %+v", missing)
+		}
+	}
+	t.Run("startup", func(t *testing.T) { assertSnapshot(t, model) })
+	t.Run("resync", func(t *testing.T) {
+		updated, _ := model.updateEvents(resyncDownloadsMsg{statuses: statuses})
+		assertSnapshot(t, updated.(RootModel))
+	})
+}
+
 func TestResyncUpdatesTerminalStatesAndRemovesDeletedRows(t *testing.T) {
 	model := benchModel(2)
 	model.SelectedDownloadID = model.downloads[0].ID

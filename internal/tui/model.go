@@ -136,24 +136,13 @@ type RootModel struct {
 	width             int
 	height            int
 	state             UIState
-	activeTab         int // 0=Queued, 1=Active, 2=Done
-	pinnedTab         int // -1=None, 0=Queued, 1=Active, 2=Done
+	activeTab         int // TabQueued, TabActive, TabDone, or TabAll
+	pinnedTab         int // -1=None, otherwise a dashboard tab
 	inputs            []textinput.Model
 	focusedInput      int
 	hideMirrors       bool
 	purgeTargetID     string
 	removeTargetID    string
-	downloads      []*DownloadModel
-	width          int
-	height         int
-	state          UIState
-	activeTab      int // TabQueued, TabActive, TabDone, or TabAll
-	pinnedTab      int // -1=None, otherwise a dashboard tab
-	inputs         []textinput.Model
-	focusedInput   int
-	hideMirrors    bool
-	purgeTargetID  string
-	removeTargetID string
 	// Service Interface
 	// Core
 	Service      downloadservice.DownloadService
@@ -447,66 +436,6 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 	downloads := make([]*DownloadModel, 0, len(statuses))
 	for _, status := range statuses {
 		downloads = append(downloads, downloadModelFromStatus(status, config.Resolve[bool](settings.General.AutoResume)))
-	for _, s := range statuses {
-		dm := NewDownloadModel(s.ID, s.URL, s.Filename, s.TotalSize)
-		dm.moving = s.Moving
-		dm.fileMissing = s.FileMissing
-		dm.categoryOverride = s.CategoryOverride
-		dm.Downloaded = s.Downloaded
-		if s.DestPath != "" {
-			dm.Destination = s.DestPath
-		} else {
-			dm.Destination = s.Filename // Fallback
-		}
-		// Status mapping
-		switch s.Status {
-		case "completed":
-			dm.done = true
-			dm.started = true
-			dm.progress.SetPercent(1.0)
-		case "error":
-			dm.done = true
-			dm.started = true
-			if s.Error != "" {
-				dm.err = errors.New(s.Error)
-			} else {
-				dm.err = errors.New("download failed")
-			}
-		case "pausing":
-			dm.pausing = true
-			dm.started = true
-		case "paused":
-			if config.Resolve[bool](settings.General.AutoResume) {
-				dm.resuming = true
-				dm.paused = true // Will update when resume event received
-			} else {
-				dm.paused = true
-			}
-			dm.started = true
-		case "queued":
-			// Always resume queued items
-			dm.resuming = true
-			dm.paused = true // Will update when resume event received
-			dm.started = false
-		case "downloading":
-			dm.started = true
-		}
-
-		if s.TotalSize > 0 {
-			dm.progress.SetPercent(s.Progress / 100.0)
-		}
-		if s.AvgSpeed > 0 {
-			dm.Speed = s.AvgSpeed
-		} else if s.Speed > 0 {
-			dm.Speed = s.Speed
-		}
-		if s.Status == "completed" && s.TimeTaken > 0 {
-			dm.Elapsed = time.Duration(s.TimeTaken) * time.Millisecond
-		}
-		dm.RateLimit = s.RateLimit
-		dm.RateLimitSet = s.RateLimitSet
-
-		downloads = append(downloads, dm)
 	}
 
 	// Initialize the download list
@@ -930,6 +859,9 @@ func (m RootModel) isResizing() bool {
 // downloadModelFromStatus is shared by initial loading and event-loss recovery.
 func downloadModelFromStatus(s types.DownloadStatus, autoResume bool) *DownloadModel {
 	dm := NewDownloadModel(s.ID, s.URL, s.Filename, s.TotalSize)
+	dm.moving = s.Moving
+	dm.fileMissing = s.FileMissing
+	dm.categoryOverride = s.CategoryOverride
 	dm.Downloaded = s.Downloaded
 	if s.DestPath != "" {
 		dm.Destination = s.DestPath
