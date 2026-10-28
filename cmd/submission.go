@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/SurgeDM/Surge/internal/clioutput"
+	"github.com/google/uuid"
 )
 
 // submissionItem correlates a receipt with its one-based position in the input.
@@ -44,14 +45,22 @@ func requestSubmission(baseURL, token, endpoint string, request any) (submission
 
 func readSubmissionReceipt(resp *http.Response) (submissionItem, error) {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
+		item := submissionItem{Status: "failed"}
+		if id := resp.Header.Get("X-Surge-Download-ID"); id != "" {
+			if _, err := uuid.Parse(id); err == nil {
+				item.ID = id
+				item.Status = "unknown"
+			}
+		}
 		cause := fmt.Errorf("server rejected submission: HTTP %d", resp.StatusCode)
 		if resp.StatusCode >= 500 {
-			return submissionItem{Status: "unknown"}, uncertainSubmission()
+			item.Status = "unknown"
+			return item, uncertainSubmission()
 		}
 		if resp.StatusCode == http.StatusBadRequest || resp.StatusCode == http.StatusUnprocessableEntity {
-			return submissionItem{Status: "failed"}, clioutput.NewError(clioutput.InvalidArguments, "The server rejected the download input.", cause)
+			return item, clioutput.NewError(clioutput.InvalidArguments, "The server rejected the download input.", cause)
 		}
-		return submissionItem{Status: "failed"}, remoteStatusError(resp.StatusCode, cause)
+		return item, remoteStatusError(resp.StatusCode, cause)
 	}
 
 	// Bound a receipt independently of arbitrary server error bodies. Decode

@@ -145,6 +145,22 @@ func validateOutputVersion(cmd *cobra.Command) error {
 }
 
 func runFetch(cmd *cobra.Command, requests []DownloadRequest, opts fetchOptions) error {
+	if opts.resume == "" {
+		valid := 0
+		for _, request := range requests {
+			if request.inputFailure == nil {
+				valid++
+			}
+		}
+		if valid == 0 {
+			items := make([]fetchItem, len(requests))
+			for i, request := range requests {
+				items[i] = fetchItem{waitItem: waitItem{Status: "not_submitted", DownloadedBytes: "0", Error: request.inputFailure}, InputIndex: i + 1, ClientRef: request.ClientRef}
+			}
+			finishFetchMetrics(items, nil, 0)
+			return writeFetchResult(cmd, items, "", nil, nil, fetchBatchFailure(items))
+		}
+	}
 	ctx := cmd.Context()
 	if opts.timeout > 0 {
 		var cancel context.CancelFunc
@@ -181,6 +197,15 @@ func runFetch(cmd *cobra.Command, requests []DownloadRequest, opts fetchOptions)
 			owner.session.Jobs[i].ClientRef = requests[i].ClientRef
 		}
 		positions[job.ID] = i
+	}
+	if opts.resume == "" {
+		validJobs := make([]fetchJob, 0, len(owner.session.Jobs))
+		for i, job := range owner.session.Jobs {
+			if requests[i].inputFailure == nil {
+				validJobs = append(validJobs, job)
+			}
+		}
+		owner.session.Jobs = validJobs
 	}
 	if opts.resume == "" {
 		if err := owner.saveSession(); err != nil {

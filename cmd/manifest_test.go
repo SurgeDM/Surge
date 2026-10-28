@@ -1,6 +1,12 @@
 package cmd
 
 import (
+	"context"
+	"encoding/json"
+	"github.com/SurgeDM/Surge/internal/testutil"
+	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -39,5 +45,35 @@ func TestManifestValidationBeforeSubmission(t *testing.T) {
 func TestManifestKeyUsesStableReferences(t *testing.T) {
 	if itemIdempotencyKey("key", "a", 1) == itemIdempotencyKey("key", "b", 1) {
 		t.Fatal("different references share key")
+	}
+}
+
+func TestPartialManifestSessionContainsOnlyValidJobs(t *testing.T) {
+	setupIsolatedCmdState(t)
+	resetCommandConnectionState(t)
+	source := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Length", "3")
+		if r.Method != http.MethodHead {
+			_, _ = w.Write([]byte("abc"))
+		}
+	}))
+	defer source.Close()
+	directory := t.TempDir()
+	path := filepath.Join(directory, "manifest.json")
+	manifest := downloadManifest{SchemaVersion: 1, Items: []manifestItem{{ClientRef: "invalid", URL: "file:///secret"}, {ClientRef: "valid", URL: source.URL, Output: directory, Filename: "model.bin"}}}
+	data, err := json.Marshal(manifest)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, data, 0600); err != nil {
+		t.Fatal(err)
+	}
+	code, result, _ := executeFetchTest(t, context.Background(), "--manifest", path, "--allow-partial")
+	if code != 3 || len(result.Items) != 2 || result.Items[0].Error == nil || result.Items[1].Artifact == nil {
+		t.Fatalf("partial manifest lost outcomes: %d %+v", code, result)
+	}
+	code, resumed, _ := executeFetchTest(t, context.Background(), "--resume", result.SessionID)
+	if code != 0 || len(resumed.Items) != 1 || resumed.Items[0].InputIndex != 2 || resumed.Items[0].ClientRef != "valid" {
+		t.Fatalf("invalid input entered saved session: %d %+v", code, resumed)
 	}
 }
