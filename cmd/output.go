@@ -51,6 +51,14 @@ func runCommand(root *cobra.Command, args []string, stdout, stderr io.Writer) in
 		}
 	}
 
+	// wait is a new command: its --json flag selects the v1 contract even
+	// when argument validation fails before RunE.
+	if !versionSelected && version == "" && command != nil && command.Name() == "wait" {
+		if jsonOutput, _ := command.Flags().GetBool("json"); jsonOutput {
+			version = "1"
+		}
+	}
+
 	var writeError *clioutput.WriteError
 	if errors.As(err, &writeError) {
 		_, _ = fmt.Fprintln(stderr, err)
@@ -69,6 +77,9 @@ func runCommand(root *cobra.Command, args []string, stdout, stderr io.Writer) in
 		return clioutput.ExitCode(err)
 	}
 	_, _ = fmt.Fprintln(stderr, err)
+	if command != nil && command.Name() == "wait" {
+		return clioutput.ExitCode(err)
+	}
 	if versionSelected {
 		return clioutput.ExitCode(err)
 	}

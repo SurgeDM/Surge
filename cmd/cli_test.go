@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -680,7 +681,7 @@ func TestPauseAllDownloads(t *testing.T) {
 	globalToken = "test-token"
 	t.Cleanup(func() { globalToken = origToken })
 
-	if err := pauseAllDownloads(); err != nil {
+	if err := runLifecycleAll(context.Background(), pauseCmd, "pause"); err != nil {
 		t.Fatalf("pauseAllDownloads() error = %v", err)
 	}
 	if !pausedIDs["active-id"] || !pausedIDs["queued-id"] || pausedIDs["complete-id"] {
@@ -729,7 +730,7 @@ func TestResumeAllDownloads(t *testing.T) {
 	globalToken = "test-token"
 	t.Cleanup(func() { globalToken = origToken })
 
-	if err := resumeAllDownloads(); err != nil {
+	if err := runLifecycleAll(context.Background(), resumeCmd, "resume"); err != nil {
 		t.Fatalf("resumeAllDownloads() error = %v", err)
 	}
 	if got, want := strings.Join(resumedIDs, ","), "paused-a,paused-z"; got != want {
@@ -870,7 +871,11 @@ func TestActionCommandsRunE_ReturnAmbiguousIDErrors(t *testing.T) {
 			if err == nil {
 				t.Fatalf("expected %s command to return an ambiguous ID error", tt.name)
 			}
-			if !strings.Contains(err.Error(), "ambiguous ID prefix") {
+			want := "server returned HTTP" // Mutations must resolve IDs against the live server only.
+			if tt.name == "rm" {
+				want = "ambiguous ID prefix"
+			}
+			if !strings.Contains(err.Error(), want) {
 				t.Fatalf("unexpected %s error: %v", tt.name, err)
 			}
 		})

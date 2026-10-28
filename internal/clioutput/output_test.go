@@ -83,7 +83,7 @@ func TestExitCodesAndSafeMessages(t *testing.T) {
 		exit int
 	}{
 		{OperationFailed, 1}, {InvalidArguments, 2}, {PartialFailure, 3},
-		{NotFound, 4}, {Unauthorized, 5}, {Unavailable, 6}, {Conflict, 7}, {Timeout, 8},
+		{NotFound, 4}, {Unauthorized, 5}, {Unavailable, 6}, {Conflict, 7}, {Timeout, 8}, {Interrupted, 130},
 	} {
 		t.Run(string(tc.code), func(t *testing.T) {
 			cause := errors.New("legacy diagnostic with token=secret")

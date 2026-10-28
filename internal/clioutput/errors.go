@@ -20,6 +20,7 @@ const (
 	Unavailable      Code = "unavailable"
 	Conflict         Code = "conflict"
 	Timeout          Code = "timeout"
+	Interrupted      Code = "interrupted"
 )
 
 // Failure is the public, safe-to-display description of an operation's error.
@@ -57,6 +58,9 @@ func Describe(err error) Failure {
 	if errors.As(err, &classified) {
 		return classified.Failure
 	}
+	if errors.Is(err, context.Canceled) {
+		return Failure{Code: Interrupted, Message: "The operation was interrupted."}
+	}
 	if errors.Is(err, context.DeadlineExceeded) {
 		return Failure{Code: Timeout, Message: "The operation timed out."}
 	}
@@ -89,6 +93,8 @@ func ExitCode(err error) int {
 		return 7
 	case Timeout:
 		return 8
+	case Interrupted:
+		return 130
 	default:
 		return 1
 	}

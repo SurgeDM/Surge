@@ -48,7 +48,7 @@
       "required": ["code", "message", "retryable"],
       "properties": {
         "code": {
-          "enum": ["operation_failed", "invalid_arguments", "partial_failure", "not_found", "unauthorized", "unavailable", "conflict", "timeout"]
+          "enum": ["operation_failed", "invalid_arguments", "partial_failure", "not_found", "unauthorized", "unavailable", "conflict", "timeout", "interrupted"]
         },
         "message": { "type": "string" },
         "retryable": { "type": "boolean" }

@@ -127,6 +127,11 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 			}
 
 		case types.EventPaused:
+			// Completion wins over a late pause acknowledgment, including the
+			// fallback emitted for a download no longer tracked by the pool.
+			if existing, _ := store.GetDownload(m.DownloadID); existing != nil && existing.Status == "completed" {
+				break
+			}
 			if m.State == nil {
 				existing, _ := store.GetDownload(m.DownloadID)
 				if existing == nil {

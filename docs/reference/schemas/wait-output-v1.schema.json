@@ -1,0 +1,169 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Surge wait output version 1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "operation",
+    "ok",
+    "items"
+  ],
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "operation": {
+      "const": "wait"
+    },
+    "ok": {
+      "type": "boolean"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/receipt"
+      }
+    },
+    "error": {
+      "$ref": "#/$defs/failure"
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "ok": {
+            "const": true
+          }
+        }
+      },
+      "then": {
+        "not": {
+          "required": [
+            "error"
+          ]
+        }
+      },
+      "else": {
+        "required": [
+          "error"
+        ]
+      }
+    }
+  ],
+  "$defs": {
+    "failure": {
+      "type": "object",
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "operation_failed",
+            "invalid_arguments",
+            "partial_failure",
+            "not_found",
+            "unauthorized",
+            "unavailable",
+            "conflict",
+            "timeout",
+            "interrupted"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      }
+    },
+    "receipt": {
+      "type": "object",
+      "required": [
+        "id",
+        "status",
+        "downloaded_bytes",
+        "total_bytes"
+      ],
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "status": {
+          "type": "string",
+          "minLength": 1
+        },
+        "downloaded_bytes": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "total_bytes": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "artifact": {
+          "$ref": "#/$defs/artifact"
+        },
+        "error": {
+          "$ref": "#/$defs/failure"
+        }
+      }
+    },
+    "artifact": {
+      "type": "object",
+      "required": [
+        "location",
+        "path",
+        "size_bytes",
+        "verification"
+      ],
+      "properties": {
+        "location": {
+          "enum": [
+            "local",
+            "remote"
+          ]
+        },
+        "server": {
+          "type": "string",
+          "minLength": 1
+        },
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "size_bytes": {
+          "type": "string",
+          "pattern": "^(0|[1-9][0-9]*)$"
+        },
+        "verification": {
+          "const": "not_requested"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "location": {
+                "const": "remote"
+              }
+            }
+          },
+          "then": {
+            "required": [
+              "server"
+            ]
+          }
+        }
+      ]
+    }
+  }
+}

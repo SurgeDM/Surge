@@ -36,6 +36,9 @@ func (mgr *LifecycleManager) Pause(id string) error {
 	// synthesize a paused event so the UI can clear any transient "pausing" spinner.
 	entry, err := store.GetDownload(id)
 	if err == nil && entry != nil {
+		if entry.Status == "completed" || entry.Status == "paused" || entry.Status == "error" {
+			return nil // A stopped record must not be rewritten as a fresh pause.
+		}
 		if mgr.eventBus != nil {
 			_ = mgr.eventBus.Publish(types.DownloadEvent{
 				Type:         types.EventPaused,

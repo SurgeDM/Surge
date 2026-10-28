@@ -131,6 +131,31 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 	mux.HandleFunc("/download", func(w http.ResponseWriter, r *http.Request) {
 		handleDownload(w, r, defaultOutputDir, service)
 	})
+	mux.HandleFunc("/download/result", requireMethod(http.MethodGet, withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
+		owner, ok := service.(downloadservice.ResultService)
+		if !ok {
+			http.Error(w, "Finalized results are unavailable on this server", http.StatusNotImplemented)
+			return
+		}
+		// Only this endpoint certifies the post-finalization status contract.
+		w.Header().Set("X-Surge-Result-Version", "1")
+		status, err := owner.GetResult(id)
+		if err != nil {
+			code := lifecycleErrorStatus(err)
+			if errors.Is(err, downloadservice.ErrArtifactUnavailable) {
+				code = http.StatusConflict
+			}
+			http.Error(w, "Unable to retrieve finalized download result", code)
+			return
+		}
+		if status == nil {
+			http.Error(w, "Result unavailable", http.StatusInternalServerError)
+			return
+		}
+		result := *status
+		result.URL, result.Error = "", "" // No source credentials or raw errors in result snapshots.
+		writeJSONResponse(w, http.StatusOK, result)
+	})))
 	mux.HandleFunc("/download/duplicate", requireMethod(http.MethodPost, handleDuplicateCheck))
 
 	mux.HandleFunc("/download/batch", func(w http.ResponseWriter, r *http.Request) {
@@ -139,20 +164,30 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 
 	mux.HandleFunc("/pause", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
 		if err := service.Pause(id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), lifecycleErrorStatus(err))
 			return
 		}
-		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "paused", "id": id})
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "pause_requested", "id": id})
+	})))
+
+	// Cancellation retains the same resumable checkpoint and record as pause.
+	// Keep the destructive Delete operation separate for existing API clients.
+	mux.HandleFunc("/cancel", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
+		if err := service.Pause(id); err != nil {
+			http.Error(w, err.Error(), lifecycleErrorStatus(err))
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "cancel_requested", "id": id})
 	})))
 
 	mux.HandleFunc("/pause-all", requireMethod(http.MethodPost, handlePauseAll(service)))
 
 	mux.HandleFunc("/resume", requireMethod(http.MethodPost, withRequiredID(func(w http.ResponseWriter, _ *http.Request, id string) {
 		if err := service.Resume(id); err != nil {
-			http.Error(w, err.Error(), http.StatusInternalServerError)
+			http.Error(w, err.Error(), lifecycleErrorStatus(err))
 			return
 		}
-		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "resumed", "id": id})
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "resume_requested", "id": id})
 	})))
 
 	mux.HandleFunc("/resume/batch", requireMethod(http.MethodPost, handleBatchResume(service)))
@@ -749,4 +784,19 @@ func jsonDecodeErrorStatus(err error) int {
 		return http.StatusRequestEntityTooLarge
 	}
 	return http.StatusBadRequest
+}
+
+// lifecycleErrorStatus gives clients a stable distinction between missing jobs,
+// transition conflicts, and an unavailable engine without parsing diagnostics.
+func lifecycleErrorStatus(err error) int {
+	switch {
+	case errors.Is(err, types.ErrNotFound):
+		return http.StatusNotFound
+	case errors.Is(err, types.ErrCompleted), errors.Is(err, types.ErrPausing), errors.Is(err, types.ErrAlreadyActive):
+		return http.StatusConflict
+	case errors.Is(err, types.ErrServiceUnavailable), errors.Is(err, types.ErrEngineNotInit), errors.Is(err, types.ErrPoolNotInit):
+		return http.StatusServiceUnavailable
+	default:
+		return http.StatusInternalServerError
+	}
 }
