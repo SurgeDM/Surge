@@ -336,6 +336,9 @@ func (m RootModel) View() tea.View {
 	if m.state == QuitConfirmState {
 		return m.wrapView(m.renderModalWithOverlay(m.viewQuitConfirm()))
 	}
+	if m.state == SettingsConfirmState {
+		return m.wrapView(m.renderModalWithOverlay(m.viewSettingsConfirmation()))
+	}
 
 	if m.state == RestartConfirmState {
 		return m.wrapView(m.renderModalWithOverlay(m.viewRestartConfirm()))

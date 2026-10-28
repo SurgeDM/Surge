@@ -225,12 +225,44 @@ func (m RootModel) renderSettingsHelp(width int) string {
 	help := m.help
 	help.SetWidth(width)
 	helpText := help.View(m.keys.Settings)
-	if !m.SettingsIsEditing && m.settingsSearchQuery == "" && m.SettingsFocusedPane == 1 && m.getCurrentSettingType() == config.TypeCustomCategory {
-		reorder := help.ShortHelpView([]key.Binding{m.keys.Settings.MoveCategoryUp, m.keys.Settings.MoveCategoryDown})
-		helpText = lipgloss.JoinVertical(lipgloss.Center, helpText, reorder)
+	if !m.SettingsIsEditing && m.categoryListFocused() {
+		keys := []key.Binding{m.keys.Settings.Up, m.keys.Settings.Down, m.keys.Settings.Edit}
+		switch m.getCurrentSettingType() {
+		case config.TypeCustomCategory:
+			keys = append(keys, m.keys.Settings.DeleteCategory)
+		case config.TypeCustomCategoryAdd:
+			// Add has no existing category to delete or setting to reset.
+		default:
+			keys = append(keys, m.keys.Settings.Reset)
+		}
+		keys = append(keys, m.keys.Settings.ResetAll, m.keys.Settings.Close)
+		helpText = help.ShortHelpView(keys)
+		var secondary []key.Binding
+		if m.settingsSearchQuery == "" && m.getCurrentSettingType() == config.TypeCustomCategory {
+			secondary = append(secondary, m.keys.Settings.MoveCategoryUp, m.keys.Settings.MoveCategoryDown)
+		}
+		tabKeys := []key.Binding{m.keys.Settings.Tab1, m.keys.Settings.Tab2, m.keys.Settings.Tab3, m.keys.Settings.Tab4, m.keys.Settings.Tab5}
+		var tabLabels []string
+		var tabShortcuts []string
+		for _, binding := range tabKeys {
+			tabLabels = append(tabLabels, binding.Help().Key)
+			tabShortcuts = append(tabShortcuts, binding.Keys()...)
+		}
+		secondary = append(secondary, key.NewBinding(key.WithHelp(strings.Join(tabLabels, "/"), "tabs"), key.WithKeys(tabShortcuts...)))
+		helpText = lipgloss.JoinVertical(lipgloss.Center, helpText, help.ShortHelpView(secondary))
 	}
 	if m.SettingsIsEditing {
 		helpText = help.View(m.keys.SettingsEditor)
+		if typ := m.getCurrentSettingType(); typ == config.TypeCustomCategory || typ == config.TypeCustomCategoryAdd {
+			navigation := []key.Binding{
+				key.NewBinding(key.WithKeys("tab", "down"), key.WithHelp("tab/\u2193", "next field")),
+				key.NewBinding(key.WithKeys("shift+tab", "up"), key.WithHelp("shift+tab/\u2191", "prev field")),
+			}
+			if m.catMgrEditField == 3 && !m.IsRemote {
+				navigation = append(navigation, m.keys.Settings.Browse)
+			}
+			helpText = lipgloss.JoinVertical(lipgloss.Center, helpText, help.ShortHelpView(navigation))
+		}
 	}
 
 	return lipgloss.NewStyle().
@@ -391,8 +423,11 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		if meta.Type == config.TypeCustomCategory || meta.Type == config.TypeCustomCategoryAdd {
 			valueStr = lipgloss.JoinVertical(lipgloss.Left,
 				m.renderCategoryInputLine("Name:", 0, innerWidth),
+				"",
 				m.renderCategoryInputLine("Desc:", 1, innerWidth),
+				"",
 				m.renderCategoryInputLine("Regex:", 2, innerWidth),
+				"",
 				m.renderCategoryInputLine("Path:", 3, innerWidth),
 			)
 			valueLabel = ""
@@ -430,8 +465,11 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 			labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Width(8)
 			valueStr = lipgloss.JoinVertical(lipgloss.Left,
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Name:"), utils.TruncateMiddle(cat.Name, innerWidth-20)),
+				"",
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Desc:"), utils.TruncateMiddle(cat.Description, innerWidth-20)),
+				"",
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Regex:"), utils.TruncateMiddle(cat.Pattern, innerWidth-20)),
+				"",
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Path:"), utils.TruncateMiddle(cat.Path, innerWidth-20)),
 			)
 			valueLabel = ""

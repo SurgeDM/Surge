@@ -67,6 +67,7 @@ const (
 	CategoryPickerState
 	PurgeConfirmState
 	RemoveConfirmState
+	SettingsConfirmState
 )
 
 type FilePickerOrigin int
@@ -193,7 +194,8 @@ type RootModel struct {
 	SettingsIsEditing     bool             // Whether currently editing a value
 	SettingsInput         textinput.Model  // Input for editing string/int values
 	settingsError         string           // Current validation error in settings
-	ExtensionTokenCopied  bool             // Flash message for "Token Copied!"
+	settingsAction        *settingsAction
+	ExtensionTokenCopied  bool // Flash message for "Token Copied!"
 
 	// Speed Limits Modal
 	speedLimitsCursor    int
@@ -539,6 +541,7 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 
 	m := RootModel{
 		downloads:             downloads,
+		activeTab:             TabAll,
 		pinnedTab:             -1,
 		inputs:                []textinput.Model{urlInput, mirrorsInput, pathInput, filenameInput},
 		state:                 DashboardState,

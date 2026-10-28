@@ -281,6 +281,8 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		case SettingsState:
 			return m.updateSettings(msg)
+		case SettingsConfirmState:
+			return m.updateSettingsConfirmation(msg)
 
 		case UpdateAvailableState:
 			return m.updateUpdateAvailable(msg)

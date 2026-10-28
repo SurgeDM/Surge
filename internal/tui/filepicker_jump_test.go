@@ -5,8 +5,41 @@ import (
 	"path/filepath"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
 )
+
+func TestFilepickerHJumpAndShiftHHome(t *testing.T) {
+	for _, batch := range []bool{false, true} {
+		dir, home := t.TempDir(), t.TempDir()
+		for _, name := range []string{"apple.txt", "hello.txt"} {
+			if err := os.WriteFile(filepath.Join(dir, name), nil, 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		m := RootModel{Settings: config.DefaultSettings(), keys: config.DefaultKeyMap(), filepicker: newFilepicker(dir)}
+		m.Settings.General.DefaultDownloadDir.Value = home
+		m.filepicker.SetHeight(20)
+		m.filepicker, _ = m.filepicker.Update(m.filepicker.Init()())
+		press := func(msg tea.KeyPressMsg) {
+			var updated tea.Model
+			if batch {
+				updated, _ = m.updateBatchFilePicker(msg)
+			} else {
+				updated, _ = m.updateFilePicker(msg)
+			}
+			m = updated.(RootModel)
+		}
+		press(tea.KeyPressMsg{Code: 'h', Text: "h"})
+		if m.filepicker.CurrentDirectory != dir || filepath.Base(m.filepicker.HighlightedPath()) != "hello.txt" {
+			t.Fatalf("batch=%v: lowercase h did not jump to hello.txt", batch)
+		}
+		press(tea.KeyPressMsg{Code: 'H', Text: "H", Mod: tea.ModShift})
+		if m.filepicker.CurrentDirectory != home {
+			t.Fatalf("batch=%v: Shift+H did not navigate home", batch)
+		}
+	}
+}
 
 func TestFilepickerJump(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "fp-test")

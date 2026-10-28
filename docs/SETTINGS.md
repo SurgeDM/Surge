@@ -155,3 +155,13 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 ### Category priority
 
 Category rules are checked from top to bottom; the first matching rule determines the category and download path. In Settings → Categories, select a category and use Shift+Up / Shift+Down or Shift+K / Shift+J to change its priority. Save the order by closing Settings. Custom categories are added at the bottom and can be moved above broader rules.
+
+### Settings shortcuts and confirmations
+
+- `r` resets the selected setting after confirmation. It does not delete category rules.
+- `Shift+R` resets all settings and category rules to defaults after confirmation. Custom keybindings are kept.
+- `d` deletes the selected category rule after confirmation. Existing downloads and files are kept.
+
+These dialogs initially select **Cancel**. Changes remain staged in Settings until you save and close it.
+
+Category rows show their own shortcut help. Left/right tab switching is inactive while the category list is focused; use `1`–`5` to switch settings tabs. In a category editor, Tab/Down and Shift+Tab/Up move between fields. The `Reset`, `ResetAll`, and `DeleteCategory` bindings can be customized in the `settings` section of the keymap.
