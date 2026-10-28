@@ -1,4 +1,0 @@
-#!/bin/sh
-set -eu
-cd "$(git rev-parse --show-toplevel)"
-exec ./scripts/lint.sh

@@ -1,6 +1,0 @@
-#!/bin/sh
-set -eu
-
-go run github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest run
-go run github.com/malikov73/flakylint/cmd/flakylint@v0.2.0 ./...
-go test ./internal/lint/...

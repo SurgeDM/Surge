@@ -294,12 +294,6 @@ Huge thanks to the teams and sponsors helping us build and ship Surge:
 
 ---
 
-## Local lint checks
-
-Run `./scripts/lint.sh` to run the Go lint checks used by CI. Enable the pre-push
-hook once per clone with `git config core.hooksPath .githooks`; pushes will then
-run these checks automatically. The first run downloads the lint tools.
-
 ## Community & Contributing
 
 We love community contributions! Whether it's a bug fix, a new feature, or just cleaning up typos.
