@@ -1,8 +1,10 @@
 package components
 
 import (
+	"charm.land/bubbles/v2/key"
 	"fmt"
 	"image/color"
+	"strings"
 
 	"charm.land/bubbles/v2/help"
 	"charm.land/lipgloss/v2"
@@ -10,6 +12,8 @@ import (
 
 // HelpModal renders a styled help overlay showing all keyboard shortcuts
 type HelpModal struct {
+	Query       string
+	SearchTitle string
 	Title       string
 	HelpKeys    help.KeyMap // Must implement FullHelp() [][]key.Binding
 	Help        help.Model  // Help model for rendering
@@ -30,7 +34,28 @@ func (m HelpModal) RenderWithBtopBox(
 	// Render the full help view from the keybindings
 	h := m.Help
 	h.SetWidth(innerWidth)
-	helpText := h.FullHelpView(m.HelpKeys.FullHelp())
+	groups := m.HelpKeys.FullHelp()
+	if m.Query != "" {
+		var filtered [][]key.Binding
+		query := strings.ToLower(m.Query)
+		for _, group := range groups {
+			var matches []key.Binding
+			for _, binding := range group {
+				label := binding.Help()
+				if binding.Enabled() && strings.Contains(strings.ToLower(label.Key+" "+label.Desc), query) {
+					matches = append(matches, binding)
+				}
+			}
+			if len(matches) > 0 {
+				filtered = append(filtered, matches)
+			}
+		}
+		groups = filtered
+	}
+	helpText := h.FullHelpView(groups)
+	if m.Query != "" && len(groups) == 0 {
+		helpText = "No matching shortcuts"
+	}
 
 	// Wrap to box width and center as a block, preserving column alignment
 	helpContent := lipgloss.PlaceHorizontal(innerWidth, lipgloss.Center, helpText)
@@ -56,5 +81,5 @@ func (m HelpModal) RenderWithBtopBox(
 
 	fullContent := "\n" + lipgloss.JoinVertical(lipgloss.Left, lines...) + "\n"
 
-	return renderBox("", fmt.Sprintf("  %s  ", titleStyle.Render(m.Title)), fullContent, m.Width, m.Height, m.BorderColor)
+	return renderBox(m.SearchTitle, fmt.Sprintf("  %s  ", titleStyle.Render(m.Title)), fullContent, m.Width, m.Height, m.BorderColor)
 }

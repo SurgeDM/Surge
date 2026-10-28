@@ -1,19 +1,16 @@
 package cmd
 
 import (
-	"encoding/json"
+	"context"
 	"errors"
 	"fmt"
 	"io"
-	"net/http"
-	"net/url"
 	"strings"
 	"text/tabwriter"
 	"time"
 	"unicode/utf8"
 
 	"github.com/SurgeDM/Surge/internal/clioutput"
-	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/spf13/cobra"
@@ -56,40 +53,43 @@ func newListCommand() *cobra.Command {
 			}
 
 			strictRemote := resolveHostTarget() != ""
-			if version == "1" {
-				var statuses []types.DownloadStatus
+			lastWarning := ""
+			render := func(out io.Writer) error {
+				var snapshot downloadSnapshot
+				var err error
 				if len(args) == 1 {
-					status, err := getDownloadDetails(args[0], baseURL, token)
-					if err != nil {
-						return err
-					}
-					statuses = []types.DownloadStatus{status}
+					snapshot, err = readDownloadDetails(cmd.Context(), args[0], baseURL, token, strictRemote)
 				} else {
-					statuses, err = listDownloads(baseURL, token, strictRemote)
-					if err != nil {
+					snapshot, err = readDownloadSnapshot(cmd.Context(), baseURL, token, strictRemote)
+				}
+				if err != nil {
+					return err
+				}
+				if version != "1" && (len(snapshot.downloads) > 0 || baseURL != "") && snapshot.warning != "" && snapshot.warning != lastWarning {
+					if err := clioutput.WriteText(cmd.ErrOrStderr(), snapshot.warning+"\n"); err != nil {
 						return err
 					}
 				}
-				return clioutput.WriteJSON(cmd.OutOrStdout(), clioutput.Success("ls", downloadItems(statuses)))
+				lastWarning = snapshot.warning
+				if version == "1" {
+					return clioutput.WriteJSON(out, snapshot.result())
+				}
+				if watch {
+					if err := clioutput.WriteText(out, "Source: "+snapshot.source+"\n"); err != nil {
+						return err
+					}
+				}
+				if len(args) == 1 {
+					return printDownloadDetail(out, snapshot.downloads[0], jsonOutput)
+				}
+				return renderDownloads(out, jsonOutput, snapshot.downloads)
 			}
-
-			if len(args) == 1 {
-				return showDownloadDetails(cmd.OutOrStdout(), args[0], jsonOutput, baseURL, token)
-			}
-
 			if watch {
-				for {
-					// Clear screen first for watch mode
-					if err := clioutput.WriteText(cmd.OutOrStdout(), "\033[H\033[2J"); err != nil {
-						return err
-					}
-					if err := printDownloads(cmd.OutOrStdout(), jsonOutput, baseURL, token, strictRemote); err != nil {
-						return err
-					}
-					time.Sleep(1 * time.Second)
-				}
+				ticker := time.NewTicker(time.Second)
+				defer ticker.Stop()
+				return watchDownloads(cmd.Context(), cmd.OutOrStdout(), ticker.C, supportsWatchRedraw(cmd.OutOrStdout()), render)
 			}
-			return printDownloads(cmd.OutOrStdout(), jsonOutput, baseURL, token, strictRemote)
+			return render(cmd.OutOrStdout())
 		},
 	}
 	command.Flags().Bool("json", false, "Output in JSON format (legacy list/detail shapes)")
@@ -124,33 +124,8 @@ type downloadInfo struct {
 }
 
 func listDownloads(baseURL string, token string, strictRemote bool) ([]types.DownloadStatus, error) {
-	var downloads []types.DownloadStatus
-
-	// Try to get from running server first
-	if baseURL != "" {
-		serverDownloads, err := GetRemoteDownloads(baseURL, token)
-		if err != nil {
-			if strictRemote {
-				return nil, fmt.Errorf("error listing remote downloads: %w", err)
-			}
-		} else {
-			downloads = serverDownloads
-		}
-	}
-
-	// Fall back to database only when not explicitly targeting a remote host.
-	if len(downloads) == 0 && (!strictRemote || baseURL == "") {
-		dbDownloads, err := store.ListAllDownloads()
-		if err != nil {
-			return nil, fmt.Errorf("error listing downloads: %w", err)
-		}
-
-		for _, download := range dbDownloads {
-			downloads = append(downloads, statusFromRecord(download))
-		}
-	}
-
-	return downloads, nil
+	snapshot, err := readDownloadSnapshot(context.Background(), baseURL, token, strictRemote)
+	return snapshot.downloads, err
 }
 
 func printDownloads(out io.Writer, jsonOutput bool, baseURL string, token string, strictRemote bool) error {
@@ -158,6 +133,10 @@ func printDownloads(out io.Writer, jsonOutput bool, baseURL string, token string
 	if err != nil {
 		return err
 	}
+	return renderDownloads(out, jsonOutput, statuses)
+}
+
+func renderDownloads(out io.Writer, jsonOutput bool, statuses []types.DownloadStatus) error {
 	downloads := make([]downloadInfo, 0, len(statuses))
 	for _, status := range statuses {
 		downloads = append(downloads, downloadInfoFromStatus(status))
@@ -189,15 +168,15 @@ func printDownloads(out io.Writer, jsonOutput bool, baseURL string, token string
 		}
 
 		// Truncate ID for display
-		id := d.ID
+		id := safeTerminalText(d.ID)
 		if len(id) > 8 {
 			id = id[:8]
 		}
 
 		// Truncate filename
-		filename := truncateFilenameForDisplay(d.Filename, 25)
+		filename := truncateFilenameForDisplay(safeTerminalText(d.Filename), 25)
 
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", id, filename, d.Status, progress, speed, size)
+		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%s\t%s\n", id, filename, safeTerminalText(d.Status), progress, speed, size)
 	}
 	if err := w.Flush(); err != nil {
 		return err
@@ -214,66 +193,15 @@ func showDownloadDetails(out io.Writer, partialID string, jsonOutput bool, baseU
 }
 
 func getDownloadDetails(partialID string, baseURL string, token string) (types.DownloadStatus, error) {
-	strictRemote := resolveHostTarget() != ""
-
-	// Resolve partial ID
-	fullID, err := resolveDownloadID(partialID)
+	snapshot, err := readDownloadDetails(context.Background(), partialID, baseURL, token, resolveHostTarget() != "")
 	if err != nil {
 		return types.DownloadStatus{}, err
 	}
-
-	// Try to get from running server first
-	if baseURL != "" {
-		path := fmt.Sprintf("/download?id=%s", url.QueryEscape(fullID))
-		resp, err := doAPIRequest(http.MethodGet, baseURL, token, path, nil)
-		if err != nil {
-			if strictRemote {
-				return types.DownloadStatus{}, fmt.Errorf("error fetching remote download details: %w", err)
-			}
-		} else {
-			defer func() {
-				if err := resp.Body.Close(); err != nil {
-					utils.Debug("Error closing response body: %v", err)
-				}
-			}()
-			if resp.StatusCode == http.StatusOK {
-				var status types.DownloadStatus
-				if err := json.NewDecoder(resp.Body).Decode(&status); err == nil {
-					return status, nil
-				} else if strictRemote {
-					return types.DownloadStatus{}, fmt.Errorf("error decoding remote download details: %w", err)
-				}
-			} else if strictRemote {
-				if resp.StatusCode == http.StatusNotFound {
-					return types.DownloadStatus{}, clioutput.NewError(clioutput.NotFound, "Download not found on the Surge server.", fmt.Errorf("remote download not found: %s", partialID))
-				}
-				return types.DownloadStatus{}, remoteStatusError(resp.StatusCode, fmt.Errorf("remote server returned %s", resp.Status))
-			}
-		}
-	}
-
-	// Fall back to database - search through all downloads
-	downloads, err := store.ListAllDownloads()
-	if err != nil {
-		return types.DownloadStatus{}, fmt.Errorf("error listing downloads: %w", err)
-	}
-
-	var found *types.DownloadRecord
-	for _, d := range downloads {
-		if d.ID == fullID {
-			found = &d
-			break
-		}
-	}
-
-	if found == nil {
-		return types.DownloadStatus{}, clioutput.NewError(clioutput.NotFound, "Download not found.", fmt.Errorf("download not found: %s", partialID))
-	}
-
-	return statusFromRecord(*found), nil
+	return snapshot.downloads[0], nil
 }
 
 func downloadInfoFromStatus(status types.DownloadStatus) downloadInfo {
+	status = withoutInactiveRates(status)
 	return downloadInfo{
 		ID:         status.ID,
 		URL:        status.URL,
@@ -304,7 +232,7 @@ func statusFromRecord(record types.DownloadRecord) types.DownloadStatus {
 		TotalSize:    record.TotalSize,
 		Downloaded:   record.Downloaded,
 		Progress:     progress,
-		Speed:        record.AvgSpeed,
+		Speed:        0,
 		AddedAt:      record.CreatedAt,
 		TimeTaken:    record.TimeTaken,
 		AvgSpeed:     record.AvgSpeed,
@@ -321,22 +249,26 @@ func truncateFilenameForDisplay(filename string, maxRunes int) string {
 }
 
 func printDownloadDetail(out io.Writer, d types.DownloadStatus, jsonOutput bool) error {
+	d = withoutInactiveRates(d)
 	if jsonOutput {
 		return clioutput.WriteJSON(out, d)
 	}
 
 	var text strings.Builder
-	fmt.Fprintf(&text, "ID:         %s\n", d.ID)
-	fmt.Fprintf(&text, "URL:        %s\n", d.URL)
-	fmt.Fprintf(&text, "Filename:   %s\n", d.Filename)
-	fmt.Fprintf(&text, "Status:     %s\n", d.Status)
+	fmt.Fprintf(&text, "ID:         %s\n", safeTerminalText(d.ID))
+	fmt.Fprintf(&text, "URL:        %s\n", safeTerminalText(d.URL))
+	fmt.Fprintf(&text, "Filename:   %s\n", safeTerminalText(d.Filename))
+	fmt.Fprintf(&text, "Status:     %s\n", safeTerminalText(d.Status))
 	fmt.Fprintf(&text, "Progress:   %.1f%%\n", d.Progress)
 	fmt.Fprintf(&text, "Downloaded: %s / %s\n", utils.FormatBytes(d.Downloaded), utils.FormatBytes(d.TotalSize))
 	if d.Speed > 0 {
 		fmt.Fprintf(&text, "Speed:      %s\n", utils.FormatSpeed(d.Speed))
 	}
+	if d.AvgSpeed > 0 {
+		fmt.Fprintf(&text, "Average:    %s\n", utils.FormatSpeed(d.AvgSpeed))
+	}
 	if d.Error != "" {
-		fmt.Fprintf(&text, "Error:      %s\n", d.Error)
+		fmt.Fprintf(&text, "Error:      %s\n", safeTerminalText(d.Error))
 	}
 	return clioutput.WriteText(out, text.String())
 }

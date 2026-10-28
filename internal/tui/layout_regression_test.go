@@ -668,3 +668,13 @@ func TestLayout_ChunkMapSpaceReclaimedForDetails(t *testing.T) {
 		})
 	}
 }
+
+func TestSearchDoesNotMoveRightBorderTitle(t *testing.T) {
+	normal := stripANSI.ReplaceAllString(components.RenderBtopBox("", " Downloads ", "", 120, 8, nil), "")
+	searching := stripANSI.ReplaceAllString(components.RenderBtopBox(" > Type to search... [esc] Exit ", " Downloads ", "", 120, 8, nil), "")
+	normalTop := strings.Split(normal, "\n")[0]
+	searchTop := strings.Split(searching, "\n")[0]
+	if lipgloss.Width(strings.Split(normalTop, "Downloads")[0]) != lipgloss.Width(strings.Split(searchTop, "Downloads")[0]) || !strings.HasSuffix(searchTop, " Downloads ─╮") {
+		t.Fatalf("title moved during search:\n%s\n%s", normalTop, searchTop)
+	}
+}

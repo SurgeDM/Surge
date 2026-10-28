@@ -93,14 +93,14 @@ func runLimitCommand(cmd *cobra.Command, args []string) error {
 		if rate == 0 {
 			success = "Set global speed limit to \u221E"
 		} else {
-			success = fmt.Sprintf("Set global speed limit to %s", utils.FormatRateLimit(rate))
+			success = fmt.Sprintf("Set global speed limit to %s", utils.FormatRateLimitDisplay(rate))
 		}
 		path = rateLimitPath("/rate-limit/global", url.Values{"rate": {strconv.FormatInt(rate, 10)}})
 	case defaultLimit:
 		if rate == 0 {
 			success = "Set default download speed limit to \u221E"
 		} else {
-			success = fmt.Sprintf("Set default download speed limit to %s", utils.FormatRateLimit(rate))
+			success = fmt.Sprintf("Set default download speed limit to %s", utils.FormatRateLimitDisplay(rate))
 		}
 		path = rateLimitPath("/rate-limit/default", url.Values{"rate": {strconv.FormatInt(rate, 10)}})
 	default:
@@ -117,7 +117,7 @@ func runLimitCommand(cmd *cobra.Command, args []string) error {
 			if rate == 0 {
 				success = fmt.Sprintf("Set speed limit for %s to \u221E", id)
 			} else {
-				success = fmt.Sprintf("Set speed limit for %s to %s", id, utils.FormatRateLimit(rate))
+				success = fmt.Sprintf("Set speed limit for %s to %s", id, utils.FormatRateLimitDisplay(rate))
 			}
 		}
 	}

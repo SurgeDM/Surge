@@ -94,13 +94,13 @@ func renderYesNoButtonsWithSpacing(yesLabel, noLabel string, focused int, btnCol
 		btnColor = colors.Pink()
 	}
 
-	activeFirst := lipgloss.NewStyle().Foreground(colors.White()).Background(btnColor).Bold(true).Underline(true)
-	activeRest := lipgloss.NewStyle().Foreground(colors.White()).Background(btnColor).Bold(true)
+	activeFirst := lipgloss.NewStyle().Foreground(colors.ContrastForeground(btnColor)).Background(btnColor).Bold(true).Underline(true)
+	activeRest := lipgloss.NewStyle().Foreground(colors.ContrastForeground(btnColor)).Background(btnColor).Bold(true)
 	activePad := lipgloss.NewStyle().Background(btnColor)
 
-	inactiveFirst := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236")).Underline(true)
-	inactiveRest := lipgloss.NewStyle().Foreground(colors.LightGray()).Background(lipgloss.Color("236"))
-	inactivePad := lipgloss.NewStyle().Background(lipgloss.Color("236"))
+	inactiveFirst := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.SelectionBackground()).Underline(true)
+	inactiveRest := lipgloss.NewStyle().Foreground(colors.White()).Background(colors.SelectionBackground())
+	inactivePad := lipgloss.NewStyle().Background(colors.SelectionBackground())
 
 	yesFirst, yesRest := splitFirst(yesLabel)
 	noFirst, noRest := splitFirst(noLabel)

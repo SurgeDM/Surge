@@ -98,6 +98,8 @@ surge https://example.com/file.zip --batch urls.txt
 
 `--no-server` keeps the TUI fully local and skips the embedded HTTP API. CLI control commands such as `surge add`, `surge pause`, and browser-extension requests will not be able to target that instance.
 
+The **All** tab (`0`) shows downloads in every state. The existing Queued (`q`), Active (`w`), and Done (`e`) tabs keep their filters. Tab/Shift+Tab cycle through all four tabs, and search, category filters, and tab pinning work in All too.
+
 ### 2. Server Mode (Headless)
 
 Great for servers, Raspberry Pis, or background processes.
@@ -296,6 +298,8 @@ Huge thanks to the teams and sponsors helping us build and ship Surge:
 
 We love community contributions! Whether it's a bug fix, a new feature, or just cleaning up typos.
 PRs are always welcome. For a quick guide, see [CONTRIBUTING.md](CONTRIBUTING.md).
+
+For internal TUI visual checks, run `./scripts/visual-test.sh`. The fixture uses the production TUI and is compiled only into a temporary test binary. See [Visual testing](docs/development/visual-testing.md).
 
 You can check out the [Discussions](https://github.com/SurgeDM/Surge/discussions) for any questions or ideas, or follow us on [X (Twitter)](https://x.com/SurgeDownloader)!
 

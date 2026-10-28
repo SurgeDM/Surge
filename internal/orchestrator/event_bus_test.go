@@ -3,6 +3,7 @@ package orchestrator
 import (
 	"context"
 	"errors"
+	"sync"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -58,28 +59,30 @@ func TestEventBus_MultipleSubscribers(t *testing.T) {
 	}
 }
 
-func TestEventBus_ProgressMsgDropBehavior(t *testing.T) {
+func TestEventBus_SlowObserversNeverWait(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		eb := &EventBus{listeners: []chan types.DownloadEvent{make(chan types.DownloadEvent, 1)}}
-		eb.listeners[0] <- types.DownloadEvent{}
-
-		start := time.Now()
-		eb.broadcastMsg(types.DownloadEvent{Type: types.EventProgress, DownloadID: "test"})
-		if elapsed := time.Since(start); elapsed != 0 {
-			t.Fatalf("progress event wait = %v, want 0", elapsed)
+		sub := newEventSubscription(false)
+		for range eventQueueCapacity {
+			sub.critical <- types.DownloadEvent{Type: types.EventQueued}
 		}
-	})
-}
-
-func TestEventBus_CriticalMsgWaitBehavior(t *testing.T) {
-	synctest.Test(t, func(t *testing.T) {
-		eb := &EventBus{listeners: []chan types.DownloadEvent{make(chan types.DownloadEvent, 1)}}
-		eb.listeners[0] <- types.DownloadEvent{}
-
+		eb := &EventBus{listeners: map[*eventSubscription]struct{}{sub: {}}}
 		start := time.Now()
-		eb.broadcastMsg(types.DownloadEvent{Message: "critical"})
-		if elapsed := time.Since(start); elapsed != time.Second {
-			t.Fatalf("critical event wait = %v, want 1s", elapsed)
+		eb.broadcastMsg(types.DownloadEvent{Type: types.EventProgress, Downloaded: 1})
+		eb.broadcastMsg(types.DownloadEvent{Type: types.EventProgress, Downloaded: 2})
+		if got := (<-sub.progress).Downloaded; got != 2 {
+			t.Fatalf("latest progress=%d", got)
+		}
+		eb.broadcastMsg(types.DownloadEvent{Type: types.EventComplete})
+		if elapsed := time.Since(start); elapsed != 0 {
+			t.Fatalf("observer wait=%v", elapsed)
+		}
+		select {
+		case <-sub.done:
+		default:
+			t.Fatal("overflowing observer was not disconnected")
+		}
+		if len(eb.listeners) != 0 {
+			t.Fatal("disconnected observer retained")
 		}
 	})
 }
@@ -141,4 +144,83 @@ func TestEventBus_Unsubscribe(t *testing.T) {
 
 	// Should be safe to call cleanup multiple times (sync.Once)
 	cleanup()
+}
+
+func TestEventBus_SaturatedObserverDoesNotDelayLifecycleOrHealthyClient(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		bus := NewEventBus()
+		slow, stopSlow := bus.Subscribe()
+		defer stopSlow()
+		healthy, stopHealthy := bus.Subscribe()
+		defer stopHealthy()
+		core, stopCore := bus.SubscribeLifecycle()
+		defer stopCore()
+		persisted := make(chan int, 1)
+		go func() {
+			count := 0
+			for range core {
+				count++
+			}
+			persisted <- count
+		}()
+		start := time.Now()
+		const events = 500
+		for index := range events {
+			msg := types.DownloadEvent{Type: types.EventQueued, Downloaded: int64(index)}
+			if err := bus.Publish(msg); err != nil {
+				t.Fatal(err)
+			}
+			select {
+			case got, ok := <-healthy:
+				if !ok || got.Downloaded != int64(index) {
+					t.Fatalf("healthy observer lost lifecycle event %d", index)
+				}
+			case <-time.After(time.Second):
+				t.Fatal("healthy observer blocked behind slow client")
+			}
+		}
+		if elapsed := time.Since(start); elapsed != 0 {
+			t.Fatalf("observer added wait time: %v", elapsed)
+		}
+		for range slow {
+		} // Overflow closes even an observer that never read before.
+		bus.Shutdown()
+		if got := <-persisted; got != events {
+			t.Fatalf("persisted %d events, want %d", got, events)
+		}
+		after, cleanup := bus.Subscribe()
+		defer cleanup()
+		if _, ok := <-after; ok {
+			t.Fatal("subscription after shutdown is not closed")
+		}
+	})
+}
+
+func TestEventBus_ConcurrentCleanupAndShutdown(t *testing.T) {
+	bus := NewEventBus()
+	var wg sync.WaitGroup
+	for range 20 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			for range 20 {
+				_, cleanup := bus.Subscribe()
+				_ = bus.Publish(types.DownloadEvent{Type: types.EventProgress})
+				cleanup()
+				cleanup()
+			}
+		}()
+	}
+	bus.Shutdown()
+	wg.Wait()
+}
+
+func BenchmarkEventBusSaturatedObserver(b *testing.B) {
+	sub := newEventSubscription(false)
+	bus := &EventBus{listeners: map[*eventSubscription]struct{}{sub: {}}}
+	msg := types.DownloadEvent{Type: types.EventBatchProgress}
+	b.ReportAllocs()
+	for b.Loop() {
+		bus.broadcastMsg(msg)
+	}
 }

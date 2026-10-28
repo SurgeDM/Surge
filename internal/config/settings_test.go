@@ -6,12 +6,33 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
+	"unicode"
 
 	"github.com/SurgeDM/Surge/internal/utils"
 )
+
+func TestSettingsLabelsUseSentenceCase(t *testing.T) {
+	words := regexp.MustCompile(`[A-Za-z]+`)
+	allowed := map[string]bool{"URL": true, "DNS": true, "EMA": true, "Chrome": true, "Firefox": true}
+	for category, settings := range GetSettingsMetadata() {
+		for _, setting := range settings {
+			parts := words.FindAllString(setting.Label, -1)
+			if len(parts) == 0 || !unicode.IsUpper(rune(parts[0][0])) {
+				t.Errorf("%s/%s: label %q should start with a capital letter", category, setting.Key, setting.Label)
+				continue
+			}
+			for _, word := range parts[1:] {
+				if unicode.IsUpper(rune(word[0])) && !allowed[word] {
+					t.Errorf("%s/%s: label %q has unexpected capitalized word %q", category, setting.Key, setting.Label, word)
+				}
+			}
+		}
+	}
+}
 
 func TestDefaultSettings(t *testing.T) {
 	settings := DefaultSettings()

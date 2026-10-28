@@ -7,6 +7,7 @@ import (
 	"github.com/SurgeDM/Surge/internal/tui/colors"
 
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 // DownloadStatus represents the state of a download
@@ -17,6 +18,7 @@ const (
 	StatusDownloading
 	StatusPaused
 	StatusComplete
+	StatusMissing
 	StatusError
 )
 
@@ -31,6 +33,7 @@ var statusMap = map[DownloadStatus]statusInfo{
 	StatusDownloading: {icon: "\u2b07", label: "Downloading"},
 	StatusPaused:      {icon: "\u23f8", label: "Paused"},
 	StatusComplete:    {icon: "\u2714", label: "Completed"},
+	StatusMissing:     {icon: "\u2716", label: "File missing"},
 	StatusError:       {icon: "\u2716", label: "Error"},
 }
 
@@ -86,7 +89,7 @@ func (s DownloadStatus) Color() color.Color {
 		return colors.StateDownloading()
 	case StatusComplete:
 		return colors.StateDone()
-	case StatusError:
+	case StatusMissing, StatusError:
 		return colors.StateError()
 	default:
 		return colors.Gray()
@@ -109,7 +112,7 @@ func (s DownloadStatus) RenderWithSpinner(spinnerView string) string {
 		cacheMu.RLock()
 		style := queuedSpinnerStyle
 		cacheMu.RUnlock()
-		return style.Render(spinnerView + " " + s.Label())
+		return style.Render(ansi.Strip(spinnerView) + " " + s.Label())
 	}
 	return s.Render()
 }

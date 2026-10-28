@@ -29,10 +29,10 @@ func TestTabFiltering(t *testing.T) {
 			expectedCount: 1,
 		},
 		{
-			name:      "Active Tab shows resuming downloads",
+			name:      "Active Tab shows started resuming downloads",
 			activeTab: TabActive,
 			downloads: []*DownloadModel{
-				{ID: "1", Speed: 0, done: false, paused: false, resuming: true},
+				{ID: "1", Speed: 0, done: false, paused: false, resuming: true, started: true},
 			},
 			expectedCount: 1,
 		},

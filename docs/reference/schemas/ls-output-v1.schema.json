@@ -11,7 +11,9 @@
       "type": "array",
       "items": { "$ref": "#/$defs/download" }
     },
-    "error": { "$ref": "#/$defs/failure" }
+    "error": { "$ref": "#/$defs/failure" },
+    "source": { "enum": ["live", "history"] },
+    "stale": { "type": "boolean" }
   },
   "allOf": [
     {

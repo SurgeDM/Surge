@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/utils"
 )
 
 func newSpeedLimitsTestModel(t *testing.T) RootModel {
@@ -94,5 +95,90 @@ func TestUpdateSpeedLimits_ArrowNavClearsError(t *testing.T) {
 	mDown := updatedDown.(RootModel)
 	if mDown.speedLimitsError != "" {
 		t.Fatal("expected error to be cleared on Down arrow")
+	}
+}
+
+func TestSpeedLimitsPreserveBinaryMegabytes(t *testing.T) {
+	m := newSpeedLimitsTestModel(t)
+	m.downloads = []*DownloadModel{{ID: "download"}}
+	for _, key := range []string{"global_rate_limit", "default_download_rate_limit", "dl:download"} {
+		t.Run(key, func(t *testing.T) {
+			value := "10 MiB/s"
+			for i := 0; i < 3; i++ {
+				if err := m.setSpeedLimitValue(key, value); err != nil {
+					t.Fatal(err)
+				}
+				value = m.getSpeedLimitsValues()[key].(string)
+				if value != "10 MiB/s" {
+					t.Fatalf("saved limit = %q, want 10 MiB/s", value)
+				}
+			}
+		})
+	}
+}
+
+func TestSpeedLimitsSaveAndReopen(t *testing.T) {
+	for cursor, name := range []string{"global", "default", "download"} {
+		for _, input := range []string{"10", "100", "0.00000095367431640625", "1.234375"} {
+			t.Run(name+"/"+input, func(t *testing.T) {
+				m := newSpeedLimitsTestModel(t)
+				m.downloads = []*DownloadModel{{ID: "download"}}
+				m.speedLimitsCursor = cursor
+				m.speedLimitsIsEditing = true
+				m.SettingsInput.SetValue(input)
+				for i := 0; i < 3; i++ {
+					updated, _ := m.updateSpeedLimits(tea.KeyPressMsg{Code: tea.KeyEnter})
+					m = updated.(RootModel)
+					if m.speedLimitsIsEditing || m.speedLimitsError != "" {
+						t.Fatalf("save failed: %s", m.speedLimitsError)
+					}
+					updated, _ = m.updateSpeedLimits(tea.KeyPressMsg{Code: tea.KeyEnter})
+					m = updated.(RootModel)
+					if got := m.SettingsInput.Value(); got != input {
+						t.Fatalf("reopened input = %q, want %q", got, input)
+					}
+				}
+			})
+		}
+	}
+}
+
+func TestSpeedLimitsEditingPreservesLegacyLimits(t *testing.T) {
+	for cursor, key := range []string{"global_rate_limit", "default_download_rate_limit", "dl:download"} {
+		t.Run(key, func(t *testing.T) {
+			m := newSpeedLimitsTestModel(t)
+			m.Settings.Network.GlobalRateLimit.Value = "10"
+			m.Settings.Network.DefaultDownloadRateLimit.Value = "10"
+			m.downloads = []*DownloadModel{{ID: "download", RateLimit: 10_000_000, RateLimitSet: true}}
+			m.speedLimitsCursor = cursor
+			for i := 0; i < 3; i++ {
+				updated, _ := m.updateSpeedLimits(tea.KeyPressMsg{Code: tea.KeyEnter})
+				m = updated.(RootModel)
+				if got := m.SettingsInput.Value(); got != "9.5367431640625" {
+					t.Fatalf("editor should convert legacy MB to MiB, got %q", got)
+				}
+				updated, _ = m.updateSpeedLimits(tea.KeyPressMsg{Code: tea.KeyEnter})
+				m = updated.(RootModel)
+				rate, err := utils.ParseRateLimitValue(m.getSpeedLimitsValues()[key])
+				if err != nil || rate != 10_000_000 || m.speedLimitsIsEditing {
+					t.Fatalf("saved legacy limit = (%d, %v), error = %s", rate, err, m.speedLimitsError)
+				}
+			}
+		})
+	}
+}
+
+func TestSpeedLimitsInheritedUnlimitedDisplay(t *testing.T) {
+	m := newSpeedLimitsTestModel(t)
+	m.width, m.height = 120, 40
+	m.Settings.Network.DefaultDownloadRateLimit.Value = "0"
+	m.speedLimitsCursor = 2
+	m.speedLimitsIsEditing = true
+	m.SettingsInput.SetValue("-1")
+	m.downloads = []*DownloadModel{NewDownloadModel("id", "url", "file.bin", 100)}
+	text := stripANSI.ReplaceAllString(m.viewSpeedLimits(), "")
+	want := "-1 to inherit " + utils.FormatRateLimitDisplay(0)
+	if !strings.Contains(text, want) || strings.Contains(text, "inherit 0 MiB/s") {
+		t.Fatalf("incorrect inherited unlimited hint: %s", text)
 	}
 }

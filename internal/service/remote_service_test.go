@@ -385,6 +385,9 @@ func TestRemoteDownloadService_StreamEventsReportsReconnect(t *testing.T) {
 			if msg.Type != types.EventSystem {
 				continue
 			}
+			if wantResync := strings.Contains(msg.Message, "reconnected"); msg.ResyncRequired != wantResync {
+				t.Fatalf("status %q: resync=%v, want %v", msg.Message, msg.ResyncRequired, wantResync)
+			}
 			sawDisconnect = sawDisconnect || strings.Contains(msg.Message, "disconnected")
 			sawReconnect = sawReconnect || strings.Contains(msg.Message, "reconnected")
 			sawReconnectFailure = sawReconnectFailure || strings.Contains(msg.Message, "reconnect failed")

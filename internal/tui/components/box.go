@@ -44,9 +44,9 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	rightTitleWidth := lipgloss.Width(rightTitle)
 
 	// Truncate titles so they can never push the top border wider than innerWidth.
-	// We always reserve at least one horizontal dash (the one after ╭) so the
+	// Reserve a horizontal dash at each end so the
 	// border looks correct even on very narrow terminals.
-	const minBorderDashes = 1
+	const minBorderDashes = 2
 	maxTitleSpace := innerWidth - minBorderDashes
 	if maxTitleSpace <= 0 {
 		// No room for any title at this width - suppress both
@@ -57,7 +57,10 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 	} else if leftTitleWidth+rightTitleWidth > maxTitleSpace {
 		// Shorten left title first; if still too wide, also shorten right.
 		half := maxTitleSpace / 2
-		if leftTitleWidth > half {
+		if half == 0 {
+			leftTitle = ""
+			leftTitleWidth = 0
+		} else if leftTitleWidth > half {
 			leftTitle = lipgloss.NewStyle().MaxWidth(half).Render(leftTitle)
 			leftTitleWidth = lipgloss.Width(leftTitle)
 		}
@@ -84,7 +87,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 
 	// Case 1: Both Titles
 	if leftTitle != "" && rightTitle != "" {
-		remainingWidth := innerWidth - leftTitleWidth - rightTitleWidth - lipgloss.Width(horizontal)
+		remainingWidth := innerWidth - leftTitleWidth - rightTitleWidth - 2*lipgloss.Width(horizontal)
 		if remainingWidth < 0 {
 			remainingWidth = 0
 		}
@@ -93,7 +96,7 @@ func RenderBtopBox(leftTitle, rightTitle string, content string, width, height i
 			leftTitle +
 			borderStyler.Render(strings.Repeat(horizontal, remainingWidth)) +
 			rightTitle +
-			borderStyler.Render(topRight)
+			borderStyler.Render(horizontal+topRight)
 	} else if leftTitle != "" {
 		// Case 2: Only Left Title
 		remainingWidth := innerWidth - leftTitleWidth - lipgloss.Width(horizontal)

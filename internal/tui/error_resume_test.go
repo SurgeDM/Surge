@@ -89,6 +89,9 @@ func TestResumeEventsClearErrorAndBindCurrentProgress(t *testing.T) {
 		if ev, ok := event.(types.DownloadEvent); ok && ev.Type == types.EventStarted && d.state != stateProgress(ev.State) {
 			t.Fatal("new transfer retained the previous progress state")
 		}
+		if !d.started {
+			_, _ = m.updateEvents(types.DownloadEvent{Type: types.EventStarted, DownloadID: d.ID, Filename: "file.bin", Total: 100})
+		}
 		_, _ = m.updateEvents(types.DownloadEvent{Type: types.EventProgress, DownloadID: d.ID, Downloaded: 60, Total: 100})
 		if d.Downloaded != 60 {
 			t.Fatal("resumed download ignored subsequent progress")

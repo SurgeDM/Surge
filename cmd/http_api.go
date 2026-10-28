@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	downloadservice "github.com/SurgeDM/Surge/internal/service"
@@ -342,6 +343,27 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "ok", "id": id})
 	})))
 
+	mux.HandleFunc("/category", requireMethod(http.MethodPut, withRequiredID(func(w http.ResponseWriter, r *http.Request, id string) {
+		backend, ok := service.(downloadCategoryService)
+		if !ok {
+			http.Error(w, "Category assignment unsupported", http.StatusNotImplemented)
+			return
+		}
+		var req struct {
+			Category string `json:"category"`
+			Move     bool   `json:"move"`
+		}
+		if err := decodeJSONBody(r, &req); err != nil {
+			http.Error(w, "Invalid request body", jsonDecodeErrorStatus(err))
+			return
+		}
+		if err := backend.AssignCategory(id, req.Category, req.Move); err != nil {
+			http.Error(w, err.Error(), http.StatusConflict)
+			return
+		}
+		writeJSONResponse(w, http.StatusOK, map[string]string{"status": "updated"})
+	})))
+
 	mux.HandleFunc("/update-url", requireMethod(http.MethodPut, withRequiredID(func(w http.ResponseWriter, r *http.Request, id string) {
 		var req map[string]string
 		if err := decodeJSONBody(r, &req); err != nil {
@@ -621,12 +643,19 @@ func eventsHandler(service downloadservice.DownloadService) http.HandlerFunc {
 		}
 		defer cleanup()
 
-		flusher, ok := w.(http.Flusher)
+		_, ok := w.(http.Flusher)
 		if !ok {
 			http.Error(w, "Streaming unsupported", http.StatusInternalServerError)
 			return
 		}
-		flusher.Flush()
+		controller := http.NewResponseController(w)
+		defer func() { _ = controller.SetWriteDeadline(time.Time{}) }()
+		if err := prepareSSEWrite(controller); err != nil {
+			return
+		}
+		if err := flushSSEWrite(controller); err != nil {
+			return
+		}
 
 		done := r.Context().Done()
 		for {
@@ -647,14 +676,43 @@ func eventsHandler(service downloadservice.DownloadService) http.HandlerFunc {
 					continue
 				}
 
-				for _, frame := range frames {
-					_, _ = fmt.Fprintf(w, "event: %s\n", frame.Event)
-					_, _ = fmt.Fprintf(w, "data: %s\n\n", frame.Data)
+				if err := prepareSSEWrite(controller); err != nil {
+					return
 				}
-				flusher.Flush()
+				for _, frame := range frames {
+					if _, err := fmt.Fprintf(w, "event: %s\ndata: %s\n\n", frame.Event, frame.Data); err != nil {
+						return
+					}
+				}
+				if err := flushSSEWrite(controller); err != nil {
+					return
+				}
 			}
 		}
 	}
+}
+
+// Bound writes per SSE batch so a stalled socket cannot retain a subscriber
+// indefinitely. Test/middleware writers may not expose deadline support.
+func prepareSSEWrite(controller *http.ResponseController) error {
+	err := controller.SetWriteDeadline(time.Now().Add(10 * time.Second))
+	if errors.Is(err, http.ErrNotSupported) {
+		return nil
+	}
+	return err
+}
+
+// Flush under the current deadline, then leave idle streams without a deadline.
+// An expired write deadline cannot reliably be renewed after an idle interval.
+func flushSSEWrite(controller *http.ResponseController) error {
+	if err := controller.Flush(); err != nil {
+		return err
+	}
+	err := controller.SetWriteDeadline(time.Time{})
+	if errors.Is(err, http.ErrNotSupported) {
+		return nil
+	}
+	return err
 }
 
 func requireMethod(method string, next http.HandlerFunc) http.HandlerFunc {
@@ -784,6 +842,10 @@ func jsonDecodeErrorStatus(err error) int {
 		return http.StatusRequestEntityTooLarge
 	}
 	return http.StatusBadRequest
+}
+
+type downloadCategoryService interface {
+	AssignCategory(string, string, bool) error
 }
 
 // lifecycleErrorStatus gives clients a stable distinction between missing jobs,

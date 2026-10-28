@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+
+	"github.com/pelletier/go-toml/v2"
 )
 
 func colorHex(c color.Color) string {
@@ -126,5 +128,71 @@ white = "#000010"
 	}
 	if got := colorHex(Pink()); got != "#00000a" {
 		t.Errorf("Pink() = %q, want #00000a (bright red)", got)
+	}
+}
+
+func TestBundledThemesUseTheirPaletteInBothModes(t *testing.T) {
+	t.Cleanup(func() { LoadTheme("", true) })
+	for _, theme := range []string{"surge", "nord", "catppuccin", "gruvbox"} {
+		path := filepath.Join("..", "..", "..", "themes", theme+".toml")
+		data, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var cfg ThemeConfig
+		if err := toml.Unmarshal(data, &cfg); err != nil {
+			t.Fatal(err)
+		}
+		for _, dark := range []bool{true, false} {
+			t.Run(fmt.Sprintf("%s/dark=%v", theme, dark), func(t *testing.T) {
+				LoadTheme(path, dark)
+				expected := cfg.Colors
+				if !dark {
+					expected = cfg.Colors.Light
+				}
+				if colorHex(Background()) != expected.Primary.Background || colorHex(Foreground()) != expected.Primary.Foreground {
+					t.Fatal("theme mode selected the wrong palette")
+				}
+				if colorHex(Gray()) == colorHex(Background()) {
+					t.Fatal("borders disappear into the theme background")
+				}
+				graph := GraphColors()
+				if len(expected.Graph) == 0 {
+					for i, want := range []color.Color{Blue(), Cyan(), Pink(), Magenta()} {
+						if colorHex(graph[i]) != colorHex(want) {
+							t.Fatal("graph fallback did not follow the active palette")
+						}
+					}
+				} else {
+					for i, want := range expected.Graph {
+						if colorHex(graph[i]) != want {
+							t.Fatal("explicit theme graph colors were ignored")
+						}
+					}
+				}
+				fg := colorHex(ContrastForeground(Pink()))
+				if fg != expected.Primary.Foreground && fg != expected.Primary.Background {
+					t.Fatal("button foreground escaped the active palette")
+				}
+			})
+		}
+	}
+}
+
+func TestDefaultGraphPreservesOriginalPurpleGradient(t *testing.T) {
+	t.Cleanup(func() { LoadTheme("", true) })
+	for _, tc := range []struct {
+		dark bool
+		want []string
+	}{
+		{true, []string{"#700070", "#9800c0", "#c000e8", "#ff55ff"}},
+		{false, []string{"#d99ce3", "#b658c7", "#9934b5", "#5b259d"}},
+	} {
+		LoadTheme("", tc.dark)
+		for i, got := range GraphColors() {
+			if colorHex(got) != tc.want[i] {
+				t.Errorf("dark=%v graph stop %d = %s, want original %s", tc.dark, i, colorHex(got), tc.want[i])
+			}
+		}
 	}
 }
