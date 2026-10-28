@@ -1507,6 +1507,9 @@ func TestDownloadConfirmationPreservesRequestID(t *testing.T) {
 				t.Fatalf("confirmed download ID = %q, want %q", got, request.DownloadID)
 			}
 		})
+	}
+}
+
 func TestQueuedAndResumedDownloadsWaitForStart(t *testing.T) {
 	for _, event := range []types.EventType{types.EventQueued, types.EventResumed} {
 		d := NewDownloadModel("id-1", "http://example.com/file", "file", 100)
