@@ -257,7 +257,7 @@ func (d *ConcurrentDownloader) applyClientSettings(client *http.Client) {
 // Download downloads a file using multiple concurrent connections
 // Uses pre-probed metadata (file size already known)
 func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, candidateMirrors []string, activeMirrors []string, destPath string, fileSize int64) error {
-	utils.Debug("ConcurrentDownloader.Download: %s -> %s (size: %d, mirrors: %d)", rawurl, destPath, fileSize, len(activeMirrors))
+	utils.Debug("ConcurrentDownloader.Download: host %s -> %s (size: %d, mirrors: %d)", utils.URLHostForLog(rawurl), destPath, fileSize, len(activeMirrors))
 
 	d.soft403Mu.Lock()
 	d.forbiddenByMirror = make(map[string]int)

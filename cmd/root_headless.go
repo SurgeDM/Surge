@@ -3,7 +3,6 @@ package cmd
 import (
 	"context"
 	"fmt"
-	"sync/atomic"
 
 	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -35,10 +34,8 @@ func StartHeadlessConsumer(ctx context.Context, service service.DownloadService)
 				case types.EventStarted:
 					fmt.Printf("Started: %s [%s]\n", msg.Filename, truncateID(msg.DownloadID))
 				case types.EventComplete:
-					atomic.AddInt32(&activeDownloads, -1)
 					fmt.Printf("Completed: %s [%s] (in %s)\n", msg.Filename, truncateID(msg.DownloadID), msg.Elapsed)
 				case types.EventError:
-					atomic.AddInt32(&activeDownloads, -1)
 					fmt.Printf("Error: %s [%s]: %v\n", msg.Filename, truncateID(msg.DownloadID), msg.Err)
 				case types.EventQueued:
 					fmt.Printf("Queued: %s [%s]\n", msg.Filename, truncateID(msg.DownloadID))

@@ -3,7 +3,6 @@ package cmd
 import (
 	"fmt"
 	"path/filepath"
-	"sync/atomic"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
@@ -112,8 +111,8 @@ func resumePausedDownloads() {
 		if GlobalService == nil || entry.ID == "" {
 			continue
 		}
-		if err := GlobalService.Resume(entry.ID); err == nil {
-			atomic.AddInt32(&activeDownloads, 1)
+		if err := GlobalService.Resume(entry.ID); err != nil {
+			utils.Debug("Failed to resume download %s at startup: %v", entry.ID, err)
 		}
 	}
 }

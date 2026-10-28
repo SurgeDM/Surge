@@ -21,12 +21,15 @@ func (m RootModel) handleDownloadRequestMsg(msg types.DownloadEvent, queueIfBusy
 		isDefaultPath = true
 		path = m.defaultDownloadPath()
 	}
+	if msg.IsExplicitCategory {
+		isDefaultPath = false
+	}
 
 	duplicate := m.checkForDuplicate(msg.URL)
 	m.pendingSkipDuplicateWarning = msg.SkipDuplicateWarning
 
 	if duplicate != nil && config.Resolve[bool](m.Settings.General.WarnOnDuplicate) && !msg.SkipDuplicateWarning {
-		utils.Debug("Duplicate download detected in TUI: %s", msg.URL)
+		utils.Debug("Duplicate download detected in TUI for host %s", utils.URLHostForLog(msg.URL))
 		m.pendingDownloadID = msg.DownloadID
 		m.pendingURL = msg.URL
 		m.pendingMirrors = msg.Mirrors

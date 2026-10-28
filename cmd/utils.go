@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -12,6 +13,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/SurgeDM/Surge/internal/clioutput"
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
@@ -261,8 +263,24 @@ func resolveAPIConnection(requireServer bool) (string, string, error) {
 }
 
 func doAPIRequest(method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
+	return doAPIRequestContext(context.Background(), method, baseURL, token, path, body)
+}
+
+func doAPIRequestContext(ctx context.Context, method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
+	client, err := newRemoteAPIHTTPClient()
+	if err != nil {
+		return nil, err
+	}
+	return doAPIRequestWithClientContext(ctx, client, method, baseURL, token, path, body)
+}
+
+func doAPIRequestWithClient(client *http.Client, method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
+	return doAPIRequestWithClientContext(context.Background(), client, method, baseURL, token, path, body)
+}
+
+func doAPIRequestWithClientContext(ctx context.Context, client *http.Client, method string, baseURL string, token string, path string, body io.Reader) (*http.Response, error) {
 	reqURL := fmt.Sprintf("%s%s", strings.TrimRight(baseURL, "/"), path)
-	req, err := http.NewRequest(method, reqURL, body)
+	req, err := http.NewRequestWithContext(ctx, method, reqURL, body)
 	if err != nil {
 		return nil, err
 	}
@@ -274,10 +292,6 @@ func doAPIRequest(method string, baseURL string, token string, path string, body
 		req.Header.Set("Content-Type", "application/json")
 	}
 
-	client, err := newRemoteAPIHTTPClient()
-	if err != nil {
-		return nil, err
-	}
 	return client.Do(req)
 }
 
@@ -365,7 +379,11 @@ func sendBatchToServer(urls []string, outPath string, baseURL string, token stri
 
 // GetRemoteDownloads fetches all downloads from the running server
 func GetRemoteDownloads(baseURL string, token string) ([]types.DownloadStatus, error) {
-	resp, err := doAPIRequest(http.MethodGet, baseURL, token, "/list", nil)
+	return getRemoteDownloadsContext(context.Background(), baseURL, token)
+}
+
+func getRemoteDownloadsContext(ctx context.Context, baseURL, token string) ([]types.DownloadStatus, error) {
+	resp, err := doAPIRequestContext(ctx, http.MethodGet, baseURL, token, "/list", nil)
 	if err != nil {
 		return nil, err
 	}
@@ -376,7 +394,7 @@ func GetRemoteDownloads(baseURL string, token string) ([]types.DownloadStatus, e
 	}()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("server returned status: %s", resp.Status)
+		return nil, remoteStatusError(resp.StatusCode, fmt.Errorf("server returned status: %s", resp.Status))
 	}
 
 	var statuses []types.DownloadStatus
@@ -441,11 +459,12 @@ func resolveDownloadID(partialID string) (string, error) {
 	if baseURL != "" {
 		remoteDownloads, err := GetRemoteDownloads(baseURL, token)
 		if err != nil {
-			if strictRemote {
+			if !canUseHistory(err, strictRemote) {
 				return "", fmt.Errorf("failed to list remote downloads: %w", err)
 			}
 		} else {
 			appendCandidateIDs(&candidates, remoteDownloads)
+			return resolveIDFromCandidates(partialID, candidates)
 		}
 	}
 
@@ -491,7 +510,7 @@ func resolveIDFromCandidates(partialID string, candidates []string) (string, err
 		return matches[0], nil
 	}
 	if len(matches) > 1 {
-		return "", fmt.Errorf("ambiguous ID prefix '%s' matches %d downloads", partialID, len(matches))
+		return "", clioutput.NewError(clioutput.Conflict, "The download ID prefix is ambiguous; use a longer ID.", fmt.Errorf("ambiguous ID prefix '%s' matches %d downloads", partialID, len(matches)))
 	}
 
 	return partialID, nil // No match, use as-is (will fail with "not found" later)

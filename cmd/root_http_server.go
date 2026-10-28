@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/service"
@@ -25,6 +26,8 @@ func resolveRuntimeDir() string {
 }
 
 const serverBindHost = "0.0.0.0"
+
+const maxAPIRequestBodyBytes = 8 << 20
 
 // findAvailablePort tries ports starting from 'start' until one is available
 func findAvailablePort(start int) (int, net.Listener) {
@@ -96,15 +99,27 @@ func startHTTPServer(ln net.Listener, port int, defaultOutputDir string, service
 	registerHTTPRoutes(mux, port, defaultOutputDir, service)
 
 	// Wrap mux with Auth and CORS (CORS outermost to ensure 401/403 include headers)
-	handler := corsMiddleware(authMiddleware(authToken, mux))
+	handler := corsMiddleware(authMiddleware(authToken, limitAPIRequestBody(mux)))
 
-	server := &http.Server{Handler: handler}
+	server := &http.Server{
+		Handler:           handler,
+		ReadHeaderTimeout: 10 * time.Second,
+		ReadTimeout:       30 * time.Second,
+		IdleTimeout:       60 * time.Second,
+	}
 	globalHTTPServerMu.Lock()
 	globalHTTPServer = server
 	globalHTTPServerMu.Unlock()
 	if err := server.Serve(ln); err != nil && err != http.ErrServerClosed {
 		utils.Debug("HTTP server error: %v", err)
 	}
+}
+
+func limitAPIRequestBody(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		r.Body = http.MaxBytesReader(w, r.Body, maxAPIRequestBodyBytes)
+		next.ServeHTTP(w, r)
+	})
 }
 
 func corsMiddleware(next http.Handler) http.Handler {

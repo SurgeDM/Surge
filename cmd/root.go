@@ -60,10 +60,7 @@ func buildInfoSetting(settings []debug.BuildSetting, key string) string {
 	return ""
 }
 
-// activeDownloads tracks in-flight downloads for headless/server exit logic.
-var activeDownloads int32
-
-// pendingEnqueue tracks the number of pending batch enqueues to avoid premature exit
+// pendingEnqueue tracks startup and HTTP enqueues to avoid premature exit.
 var pendingEnqueue int32
 
 var (
@@ -278,7 +275,7 @@ func recordPreflightDownloadError(url, outPath string, err error) {
 		Status:   "error",
 	}
 	if addErr := store.AddToMasterList(entry); addErr != nil {
-		utils.Debug("Failed to persist preflight download error for %s: %v", url, addErr)
+		utils.Debug("Failed to persist preflight download error for host %s: %v", utils.URLHostForLog(url), addErr)
 	}
 	if GlobalService != nil {
 		_ = GlobalService.Publish(types.DownloadEvent{

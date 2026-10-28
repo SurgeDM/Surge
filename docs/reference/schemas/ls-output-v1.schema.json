@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Surge ls output version 1",
+  "type": "object",
+  "required": ["schema_version", "operation", "ok", "items"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "operation": { "const": "ls" },
+    "ok": { "type": "boolean" },
+    "items": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/download" }
+    },
+    "error": { "$ref": "#/$defs/failure" },
+    "source": { "enum": ["live", "history"] },
+    "stale": { "type": "boolean" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "ok": { "const": true } } },
+      "then": { "not": { "required": ["error"] } },
+      "else": {
+        "required": ["error"],
+        "properties": { "items": { "maxItems": 0 } }
+      }
+    }
+  ],
+  "$defs": {
+    "byteCount": {
+      "type": "string",
+      "pattern": "^-?(0|[1-9][0-9]*)$",
+      "description": "Decimal signed 64-bit integer, encoded as a string to preserve precision."
+    },
+    "download": {
+      "type": "object",
+      "required": ["id", "filename", "status", "downloaded_bytes", "total_bytes", "speed_bytes_per_second"],
+      "properties": {
+        "id": { "type": "string" },
+        "filename": { "type": "string" },
+        "status": { "type": "string" },
+        "downloaded_bytes": { "$ref": "#/$defs/byteCount" },
+        "total_bytes": {
+          "anyOf": [{ "$ref": "#/$defs/byteCount" }, { "type": "null" }]
+        },
+        "speed_bytes_per_second": { "type": ["number", "null"], "minimum": 0 }
+      }
+    },
+    "failure": {
+      "type": "object",
+      "required": ["code", "message", "retryable"],
+      "properties": {
+        "code": {
+          "enum": ["operation_failed", "invalid_arguments", "partial_failure", "not_found", "unauthorized", "unavailable", "conflict", "timeout"]
+        },
+        "message": { "type": "string" },
+        "retryable": { "type": "boolean" }
+      }
+    }
+  }
+}

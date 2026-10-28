@@ -403,15 +403,17 @@ func (s *publishRecordingHTTPService) Publish(msg types.DownloadEvent) error {
 
 type batchAddRecordingService struct {
 	*httpAPITestService
-	added  []string
-	failOn string
+	added    []string
+	explicit []bool
+	failOn   string
 }
 
-func (s *batchAddRecordingService) Add(url string, _ string, _ string, _ []string, _ map[string]string, _ bool, _ int, _ int64) (string, error) {
+func (s *batchAddRecordingService) Add(url string, _ string, _ string, _ []string, _ map[string]string, explicit bool, _ int, _ int64) (string, error) {
 	if url == s.failOn {
 		return "", errors.New("enqueue failed")
 	}
 	s.added = append(s.added, url)
+	s.explicit = append(s.explicit, explicit)
 	return "id-" + url, nil
 }
 
@@ -690,7 +692,7 @@ func TestHandleBatchDownload_ConfirmPublishesSingleBatchRequest(t *testing.T) {
 		"path": "/tmp/downloads",
 		"skip_approval": false,
 		"downloads": [
-			{"url": "https://example.com/one.zip"},
+			{"url": "https://example.com/one.zip", "is_explicit_category": true},
 			{"url": "https://example.com/two.zip"}
 		]
 	}`
@@ -712,6 +714,9 @@ func TestHandleBatchDownload_ConfirmPublishesSingleBatchRequest(t *testing.T) {
 	if msg.BatchEvents[0].URL != "https://example.com/one.zip" || msg.BatchEvents[1].URL != "https://example.com/two.zip" {
 		t.Fatalf("unexpected batch URLs: %#v", msg.BatchEvents)
 	}
+	if !msg.BatchEvents[0].IsExplicitCategory || msg.BatchEvents[1].IsExplicitCategory {
+		t.Fatalf("batch category intent was lost: %#v", msg.BatchEvents)
+	}
 }
 
 func TestHandleBatchDownload_SkipApprovalReportsPartialFailure(t *testing.T) {
@@ -732,7 +737,7 @@ func TestHandleBatchDownload_SkipApprovalReportsPartialFailure(t *testing.T) {
 		"path": "/tmp/downloads",
 		"skip_approval": true,
 		"downloads": [
-			{"url": "https://example.com/one.zip"},
+			{"url": "https://example.com/one.zip", "is_explicit_category": true},
 			{"url": "https://example.com/two.zip"},
 			{"url": "https://example.com/three.zip"}
 		]
@@ -747,6 +752,9 @@ func TestHandleBatchDownload_SkipApprovalReportsPartialFailure(t *testing.T) {
 	}
 	if len(service.added) != 2 {
 		t.Fatalf("expected 2 queued downloads, got %d: %#v", len(service.added), service.added)
+	}
+	if len(service.explicit) != 2 || !service.explicit[0] || service.explicit[1] {
+		t.Fatalf("batch category intent was lost: %#v", service.explicit)
 	}
 
 	var response struct {
