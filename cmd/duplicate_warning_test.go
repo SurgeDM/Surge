@@ -50,6 +50,51 @@ func TestApprovalRejectsDuplicateIDBeforeAcknowledgment(t *testing.T) {
 	}
 }
 
+type acceptingApprovalModel struct{}
+
+func (acceptingApprovalModel) Init() tea.Cmd { return nil }
+func (m acceptingApprovalModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if event, ok := msg.(types.DownloadEvent); ok && event.ApprovalResult != nil {
+		select {
+		case event.ApprovalResult <- nil:
+		case <-event.ApprovalContext.Done():
+		}
+	}
+	return m, nil
+}
+func (acceptingApprovalModel) View() tea.View { return tea.NewView("") }
+
+func TestApprovalBroadcastsNonActionableNotification(t *testing.T) {
+	previous := serverProgram
+	program := tea.NewProgram(acceptingApprovalModel{}, tea.WithInput(nil), tea.WithOutput(&bytes.Buffer{}))
+	serverProgram = program
+	done := make(chan struct{})
+	go func() { _, _ = program.Run(); close(done) }()
+	t.Cleanup(func() { program.Quit(); <-done; serverProgram = previous })
+	settings := config.DefaultSettings()
+	settings.Extension.ExtensionPrompt.Value = true
+	resolved := &resolvedDownloadRequest{request: DownloadRequest{ID: "request-id"}, settings: settings}
+	rec := httptest.NewRecorder()
+	service := &publishRecordingHTTPService{httpAPITestService: &httpAPITestService{}}
+	if !maybeRequireDownloadApproval(context.Background(), rec, service, resolved) || rec.Code != http.StatusAccepted {
+		t.Fatalf("status = %d: %s", rec.Code, rec.Body.String())
+	}
+	if len(service.published) != 1 {
+		t.Fatalf("published %d events", len(service.published))
+	}
+	data, err := json.Marshal(service.published[0])
+	if err != nil {
+		t.Fatal(err)
+	}
+	var received types.DownloadEvent
+	if err := json.Unmarshal(data, &received); err != nil {
+		t.Fatal(err)
+	}
+	if received.Type != types.EventSystem || received.DownloadID != "request-id" {
+		t.Fatalf("unexpected remote event: %+v", received)
+	}
+}
+
 func TestDuplicateCheckIncludesPersistedDownloads(t *testing.T) {
 	setupIsolatedCmdState(t)
 	const duplicateURL = "https://example.com/finished.zip"

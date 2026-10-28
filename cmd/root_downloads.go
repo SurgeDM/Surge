@@ -499,9 +499,11 @@ func maybeRequireDownloadApproval(ctx context.Context, w http.ResponseWriter, se
 				http.Error(w, "TUI did not respond to download request", http.StatusServiceUnavailable)
 				return true
 			}
-			event.ApprovalResult = nil
-			event.ApprovalContext = nil
-			event.SkipLocalTUI = true
+			event = types.DownloadEvent{
+				Type:       types.EventSystem,
+				DownloadID: downloadID,
+				Message:    "Download request sent to TUI for confirmation",
+			}
 		}
 		if err := service.Publish(event); err != nil {
 			recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
