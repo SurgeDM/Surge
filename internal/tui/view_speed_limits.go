@@ -46,9 +46,6 @@ func (m RootModel) viewSpeedLimits() string {
 				}
 			}
 			displayRate := utils.FormatRateLimitDisplay(defaultRate)
-			if defaultRate <= 0 {
-				displayRate = "0 MiB/s"
-			}
 			suffix = fmt.Sprintf("MiB/s (-1 to inherit %s)", displayRate)
 		}
 		items = append(items, components.ListInputItem{

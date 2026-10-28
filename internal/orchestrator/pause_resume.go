@@ -113,7 +113,9 @@ func (mgr *LifecycleManager) Resume(id string) error {
 
 		accepted, resumeErr := mgr.pool.AddWithBeforeStart(*cfg, func() error {
 			if mgr.eventBus != nil {
-				return mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventResumed, DownloadID: id, Filename: cfg.Filename})
+				if err := mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventResumed, DownloadID: id, Filename: cfg.Filename}); err != nil {
+					utils.Debug("Lifecycle: Failed to publish resumed event for %s: %v", id, err)
+				}
 			}
 			return nil
 		})
@@ -155,7 +157,9 @@ func (mgr *LifecycleManager) Resume(id string) error {
 	}
 	accepted, resumeErr := mgr.pool.AddWithBeforeStart(cfg, func() error {
 		if mgr.eventBus != nil {
-			return mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventResumed, DownloadID: id, Filename: entry.Filename})
+			if err := mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventResumed, DownloadID: id, Filename: entry.Filename}); err != nil {
+				utils.Debug("Lifecycle: Failed to publish resumed event for %s: %v", id, err)
+			}
 		}
 		return nil
 	})
@@ -224,7 +228,9 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 
 			accepted, resumeErr := mgr.pool.AddWithBeforeStart(*cfg, func() error {
 				if mgr.eventBus != nil {
-					return mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventResumed, DownloadID: id, Filename: cfg.Filename})
+					if err := mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventResumed, DownloadID: id, Filename: cfg.Filename}); err != nil {
+						utils.Debug("Lifecycle: Failed to publish resumed event for %s: %v", id, err)
+					}
 				}
 				return nil
 			})
@@ -288,7 +294,9 @@ func (mgr *LifecycleManager) ResumeBatch(ids []string) []error {
 
 		accepted, resumeErr := mgr.pool.AddWithBeforeStart(cfg, func() error {
 			if mgr.eventBus != nil {
-				return mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventResumed, DownloadID: id, Filename: cfg.Filename})
+				if err := mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventResumed, DownloadID: id, Filename: cfg.Filename}); err != nil {
+					utils.Debug("Lifecycle: Failed to publish resumed event for %s: %v", id, err)
+				}
 			}
 			return nil
 		})

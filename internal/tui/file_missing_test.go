@@ -90,3 +90,20 @@ func TestMovingStatusBlocksOnlySelectedDownloadChanges(t *testing.T) {
 		t.Fatal("moving status did not clear")
 	}
 }
+
+func TestCategoryAssignmentPreservesDestinationOnEmptyStatusPath(t *testing.T) {
+	m := confirmationSettingsModel(t, "General", "clipboard_monitor")
+	d := NewDownloadModel("id", "url", "file.bin", 100)
+	d.Destination = "/downloads/file.bin"
+	d.moving = true
+	m.downloads = []*DownloadModel{d}
+	updated, _ := m.Update(categoryAssignedMsg{id: d.ID, category: "Videos", status: &types.DownloadStatus{FileMissing: true}})
+	m = updated.(RootModel)
+	if d.Destination != "/downloads/file.bin" || !d.fileMissing || d.moving || d.categoryOverride == nil || *d.categoryOverride != "Videos" {
+		t.Fatalf("incorrect assignment result: %+v", d)
+	}
+	_, _ = m.Update(categoryAssignedMsg{id: d.ID, category: "Videos", status: &types.DownloadStatus{DestPath: "/videos/file.bin"}})
+	if d.Destination != "/videos/file.bin" || d.fileMissing {
+		t.Fatal("nonempty destination was not applied")
+	}
+}

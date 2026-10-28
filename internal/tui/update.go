@@ -101,7 +101,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			category := result.category
 			d.categoryOverride = &category
 			if result.status != nil {
-				d.Destination = result.status.DestPath
+				if result.status.DestPath != "" {
+					d.Destination = result.status.DestPath
+				}
 				d.fileMissing = result.status.FileMissing
 			}
 		}

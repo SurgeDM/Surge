@@ -167,3 +167,18 @@ func TestSpeedLimitsEditingPreservesLegacyLimits(t *testing.T) {
 		})
 	}
 }
+
+func TestSpeedLimitsInheritedUnlimitedDisplay(t *testing.T) {
+	m := newSpeedLimitsTestModel(t)
+	m.width, m.height = 120, 40
+	m.Settings.Network.DefaultDownloadRateLimit.Value = "0"
+	m.speedLimitsCursor = 2
+	m.speedLimitsIsEditing = true
+	m.SettingsInput.SetValue("-1")
+	m.downloads = []*DownloadModel{NewDownloadModel("id", "url", "file.bin", 100)}
+	text := stripANSI.ReplaceAllString(m.viewSpeedLimits(), "")
+	want := "-1 to inherit " + utils.FormatRateLimitDisplay(0)
+	if !strings.Contains(text, want) || strings.Contains(text, "inherit 0 MiB/s") {
+		t.Fatalf("incorrect inherited unlimited hint: %s", text)
+	}
+}
