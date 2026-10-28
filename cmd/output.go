@@ -53,7 +53,7 @@ func runCommand(root *cobra.Command, args []string, stdout, stderr io.Writer) in
 
 	// wait is a new command: its --json flag selects the v1 contract even
 	// when argument validation fails before RunE.
-	if !versionSelected && version == "" && command != nil && command.Name() == "wait" {
+	if !versionSelected && version == "" && command != nil && isContractCommand(command) {
 		if jsonOutput, _ := command.Flags().GetBool("json"); jsonOutput {
 			version = "1"
 		}
@@ -77,7 +77,7 @@ func runCommand(root *cobra.Command, args []string, stdout, stderr io.Writer) in
 		return clioutput.ExitCode(err)
 	}
 	_, _ = fmt.Fprintln(stderr, err)
-	if command != nil && command.Name() == "wait" {
+	if command != nil && isContractCommand(command) {
 		return clioutput.ExitCode(err)
 	}
 	if versionSelected {
@@ -133,4 +133,8 @@ func downloadItems(statuses []types.DownloadStatus) []downloadItem {
 		items = append(items, item)
 	}
 	return items
+}
+
+func isContractCommand(cmd *cobra.Command) bool {
+	return cmd != nil && (cmd.Name() == "wait" || cmd.Annotations["surge.contract"] == "1")
 }

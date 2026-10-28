@@ -112,3 +112,7 @@ func loadGob(path string, v interface{}) error {
 	defer func() { _ = f.Close() }()
 	return gob.NewDecoder(f).Decode(v)
 }
+
+// StateDirectory lets invocation-scoped clients restore the previous backend
+// after their workers have stopped. It does not create or scan any state.
+func StateDirectory() string { masterMu.RLock(); defer masterMu.RUnlock(); return baseDir }

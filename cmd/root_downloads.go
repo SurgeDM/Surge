@@ -22,17 +22,18 @@ import (
 
 // DownloadRequest represents a download request from the browser extension
 type DownloadRequest struct {
-	URL                  string            `json:"url"`
-	Filename             string            `json:"filename,omitempty"`
-	Path                 string            `json:"path,omitempty"`
-	RelativeToDefaultDir bool              `json:"relative_to_default_dir,omitempty"`
-	Mirrors              []string          `json:"mirrors,omitempty"`
-	SkipApproval         bool              `json:"skip_approval,omitempty"`          // Extension validated request, skip TUI prompt
-	SkipDuplicateWarning bool              `json:"skip_duplicate_warning,omitempty"` // Client opted out of duplicate warnings
-	Headers              map[string]string `json:"headers,omitempty"`                // Custom HTTP headers from browser (cookies, auth, etc.)
-	IsExplicitCategory   bool              `json:"is_explicit_category,omitempty"`
-	Workers              int               `json:"workers,omitempty"`        // Per-task worker count override (bypasses √size heuristic when >0)
-	MinChunkSize         int64             `json:"min_chunk_size,omitempty"` // Per-task minimum chunk size override
+	Artifact             types.ArtifactPolicy `json:"artifact,omitzero"`
+	URL                  string               `json:"url"`
+	Filename             string               `json:"filename,omitempty"`
+	Path                 string               `json:"path,omitempty"`
+	RelativeToDefaultDir bool                 `json:"relative_to_default_dir,omitempty"`
+	Mirrors              []string             `json:"mirrors,omitempty"`
+	SkipApproval         bool                 `json:"skip_approval,omitempty"`          // Extension validated request, skip TUI prompt
+	SkipDuplicateWarning bool                 `json:"skip_duplicate_warning,omitempty"` // Client opted out of duplicate warnings
+	Headers              map[string]string    `json:"headers,omitempty"`                // Custom HTTP headers from browser (cookies, auth, etc.)
+	IsExplicitCategory   bool                 `json:"is_explicit_category,omitempty"`
+	Workers              int                  `json:"workers,omitempty"`        // Per-task worker count override (bypasses √size heuristic when >0)
+	MinChunkSize         int64                `json:"min_chunk_size,omitempty"` // Per-task minimum chunk size override
 }
 
 type BatchDownloadRequest struct {
@@ -116,7 +117,11 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 	if err != nil {
 		recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
 		publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(resolved.urlForAdd), err))
-		http.Error(w, err.Error(), http.StatusInternalServerError)
+		status := http.StatusInternalServerError
+		if errors.Is(err, types.ErrDestinationExists) {
+			status = http.StatusConflict
+		}
+		http.Error(w, err.Error(), status)
 		return
 	}
 
@@ -181,6 +186,10 @@ func decodeAndValidateDownloadRequest(r *http.Request) (DownloadRequest, error) 
 }
 
 func validateDownloadRequest(req DownloadRequest) (DownloadRequest, error) {
+	if err := req.Artifact.Validate(); err != nil {
+		return DownloadRequest{}, err
+	}
+	req.Artifact = req.Artifact.Normalized()
 	if req.URL == "" {
 		return DownloadRequest{}, fmt.Errorf("url is required")
 	}
@@ -207,7 +216,7 @@ func validateDownloadRequest(req DownloadRequest) (DownloadRequest, error) {
 		}
 		requestPath = cleanPath
 	}
-	return DownloadRequest{
+	return DownloadRequest{Artifact: req.Artifact,
 		URL:                  req.URL,
 		Filename:             filename,
 		Path:                 requestPath,
@@ -495,7 +504,7 @@ func enqueueDownloadRequest(r *http.Request, service service.DownloadService, re
 	reqID := r.URL.Query().Get("id")
 
 	if lifecycle != nil {
-		dlReq := &orchestrator.DownloadRequest{
+		dlReq := &orchestrator.DownloadRequest{Artifact: req.Artifact,
 			URL:                resolved.urlForAdd,
 			Filename:           req.Filename,
 			Path:               resolved.outPath,
@@ -518,6 +527,9 @@ func enqueueDownloadRequest(r *http.Request, service service.DownloadService, re
 		return lifecycle.Enqueue(ctx, dlReq)
 	}
 
+	if req.Artifact != (types.ArtifactPolicy{}) {
+		return "", "", fmt.Errorf("server service does not support artifact policies")
+	}
 	if reqID != "" {
 		id, err := service.AddWithID(resolved.urlForAdd, resolved.outPath, req.Filename, resolved.mirrorsForAdd, req.Headers, reqID, req.IsExplicitCategory, req.Workers, req.MinChunkSize)
 		return id, req.Filename, err

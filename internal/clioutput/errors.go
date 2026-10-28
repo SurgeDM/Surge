@@ -21,6 +21,7 @@ const (
 	Conflict         Code = "conflict"
 	Timeout          Code = "timeout"
 	Interrupted      Code = "interrupted"
+	Terminated       Code = "terminated"
 )
 
 // Failure is the public, safe-to-display description of an operation's error.
@@ -95,6 +96,8 @@ func ExitCode(err error) int {
 		return 8
 	case Interrupted:
 		return 130
+	case Terminated:
+		return 143
 	default:
 		return 1
 	}

@@ -38,6 +38,10 @@ func requestSubmission(baseURL, token, endpoint string, request any) (submission
 	}
 	defer func() { _ = resp.Body.Close() }()
 
+	return readSubmissionReceipt(resp)
+}
+
+func readSubmissionReceipt(resp *http.Response) (submissionItem, error) {
 	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusAccepted {
 		cause := fmt.Errorf("server rejected submission: HTTP %d", resp.StatusCode)
 		if resp.StatusCode >= 500 {
@@ -52,7 +56,7 @@ func requestSubmission(baseURL, token, endpoint string, request any) (submission
 	// Bound a receipt independently of arbitrary server error bodies. Decode
 	// exactly one document and require an ID before claiming acceptance.
 	const maxReceiptBytes = 64 * 1024
-	data, err = io.ReadAll(io.LimitReader(resp.Body, maxReceiptBytes+1))
+	data, err := io.ReadAll(io.LimitReader(resp.Body, maxReceiptBytes+1))
 	var receipt submissionReceipt
 	if err != nil || len(data) > maxReceiptBytes || json.Unmarshal(data, &receipt) != nil || strings.TrimSpace(receipt.ID) == "" {
 		return submissionItem{Status: "unknown"}, uncertainSubmission()
