@@ -275,9 +275,14 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
+		if !req.SkipApproval && validated.Artifact != (types.ArtifactPolicy{}) {
+			http.Error(w, "Interactive approval does not support artifact policies", http.StatusConflict)
+			return
+		}
 		urlForAdd, mirrorsForAdd := normalizeDownloadTargets(validated.URL, validated.Mirrors)
 		itemPath := utils.EnsureAbsPath(resolveOutputDir(validated.Path, validated.RelativeToDefaultDir, defaultOutputDir, settings))
 		requests = append(requests, types.DownloadEvent{
+			Artifact:           validated.Artifact,
 			Type:               types.EventRequest,
 			DownloadID:         uuid.New().String(),
 			URL:                urlForAdd,
@@ -322,6 +327,7 @@ func handleBatchDownload(w http.ResponseWriter, r *http.Request, defaultOutputDi
 	for _, item := range requests {
 		resolved := &resolvedDownloadRequest{
 			request: DownloadRequest{
+				Artifact:           item.Artifact,
 				URL:                item.URL,
 				Filename:           item.Filename,
 				Path:               item.Path,
@@ -443,6 +449,10 @@ func maybeRequireDownloadApproval(w http.ResponseWriter, service service.Downloa
 	}
 
 	if serverProgram != nil {
+		if req.Artifact != (types.ArtifactPolicy{}) {
+			http.Error(w, "Interactive approval does not support artifact policies", http.StatusConflict)
+			return true
+		}
 		utils.Debug("Requesting TUI confirmation for host %s (Duplicate: %v)", utils.URLHostForLog(req.URL), resolved.isDuplicate)
 
 		downloadID := uuid.New().String()

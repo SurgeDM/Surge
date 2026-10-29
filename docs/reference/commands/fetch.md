@@ -55,3 +55,7 @@ Receipts include decimal-string byte counts, reused checkpoint bytes, invocation
 duration in seconds, and average newly downloaded bytes per second. The average
 includes verification and finalization time. A completed job is returned only
 after finalization and persistence, followed by an existence/size check.
+
+The direct API rejects interactive approval requests that specify artifact
+policies. Immediate submissions retain the complete policy, including batches;
+unsupported services fail instead of silently dropping verification.
