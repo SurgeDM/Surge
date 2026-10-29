@@ -132,6 +132,15 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		finalFilename = filepath.Base(finalDestPath)
 		utils.Debug("Resuming download, using saved destPath: %s", finalDestPath)
 	}
+	// A cleanup failure or a crash can leave both published and working names
+	// pointing to one inode. Never open that working name for another transfer.
+	published, err := utils.SameFilePaths(finalDestPath, finalDestPath+types.IncompleteSuffix)
+	if err != nil {
+		return err
+	}
+	if published {
+		return types.ErrCompleted
+	}
 	utils.Debug("Destination path: %s", finalDestPath)
 
 	var progState *progress.DownloadProgress

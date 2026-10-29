@@ -59,3 +59,9 @@ after finalization and persistence, followed by an existence/size check.
 The direct API rejects interactive approval requests that specify artifact
 policies. Immediate submissions retain the complete policy, including batches;
 unsupported services fail instead of silently dropping verification.
+
+Digest-only direct API requests also publish without replacing a late-created
+destination. After a successful publication, failure to remove the working hard
+link is logged separately and does not change the completed outcome. Transfer
+startup refuses to write through a working name linked to an existing artifact,
+including when recovering an older checkpoint after a crash.

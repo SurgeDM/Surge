@@ -30,6 +30,7 @@ func TestEnospcPolicy(t *testing.T) {
 			{"raw ENOSPC errno excluded", diskFullErr, 0, false, false},
 			{"permanent HTTP excluded", errPermanentHTTP, 0, false, false},
 			{"cancel excluded", cancelErr, 0, false, false},
+			{"published artifact excluded", types.ErrCompleted, 0, false, false},
 			{"deadline excluded", deadlineErr, 0, false, false},
 			{"shutdown excluded", errors.New("some error"), 0, true, false},
 			{"max retries excluded", errors.New("some error"), 10, false, false},

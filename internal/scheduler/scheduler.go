@@ -1097,7 +1097,7 @@ func shouldRetryFailedDownload(isShuttingDown bool, err error, retries int) bool
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 		return false
 	}
-	if errors.Is(err, types.ErrIntegrityMismatch) || errors.Is(err, types.ErrDestinationExists) {
+	if errors.Is(err, types.ErrIntegrityMismatch) || errors.Is(err, types.ErrDestinationExists) || errors.Is(err, types.ErrCompleted) {
 		return false
 	}
 	if types.IsPermanentHTTPError(err) {

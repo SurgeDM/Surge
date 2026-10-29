@@ -33,3 +33,24 @@ func CopyFile(src, dst string) error {
 	}
 	return out.Sync()
 }
+
+// SameFilePaths reports whether two names refer to the same filesystem object.
+// A missing name is distinct; other metadata errors fail closed for callers
+// deciding whether opening a working path could modify a published artifact.
+func SameFilePaths(first, second string) (bool, error) {
+	firstInfo, err := os.Stat(first)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	secondInfo, err := os.Stat(second)
+	if os.IsNotExist(err) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return os.SameFile(firstInfo, secondInfo), nil
+}

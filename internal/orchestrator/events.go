@@ -14,9 +14,10 @@ import (
 )
 
 var (
-	renameCompletedFile = retryRename
-	copyCompletedFile   = utils.CopyFile
-	notify              = utils.Notify
+	removeCompletedWorkingFile = retryRemove
+	renameCompletedFile        = retryRename
+	copyCompletedFile          = utils.CopyFile
+	notify                     = utils.Notify
 )
 
 // advanceRemainingTasks keeps saved chunk boundaries aligned when pause
@@ -643,7 +644,7 @@ func finalizeArtifact(path string, policy types.ArtifactPolicy) error {
 	if policy.ExpectedSHA256 != "" && (policy.Verification != "verified" || policy.SHA256 != policy.ExpectedSHA256) {
 		return types.ErrIntegrityMismatch
 	}
-	if policy.OnExists == "" {
+	if policy.OnExists == "" && policy.ExpectedSHA256 == "" {
 		return finalizeCompletedFile(path)
 	}
 	if path == "" {
@@ -652,5 +653,10 @@ func finalizeArtifact(path string, policy types.ArtifactPolicy) error {
 	if err := os.Link(path+types.IncompleteSuffix, path); err != nil {
 		return err
 	}
-	return retryRemove(path + types.IncompleteSuffix)
+	// Linking publishes the artifact. Cleanup failure must not turn it back into
+	// retryable working data; RunDownload also rejects retained published links.
+	if err := removeCompletedWorkingFile(path + types.IncompleteSuffix); err != nil && !os.IsNotExist(err) {
+		utils.Debug("Lifecycle: Published artifact at %s; working-link cleanup failed: %v", path, err)
+	}
+	return nil
 }
