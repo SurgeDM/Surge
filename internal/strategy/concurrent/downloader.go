@@ -30,7 +30,7 @@ type ConcurrentDownloader struct {
 	State        *progress.DownloadProgress // Shared state for TUI polling
 	activeTasks  map[int]*ActiveTask
 	activeMu     sync.Mutex
-	// abandonedRemaining holds ENOSPC in-flight residuals captured off the
+	// abandonedRemaining holds canceled and disk-full residuals captured off the
 	// live queue (no Push during the storm window). saveStateSnapshot unions
 	// these with active+queue drains so Resume does not lose the failing range.
 	abandonedRemaining []types.Task
