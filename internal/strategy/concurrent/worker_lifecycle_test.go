@@ -60,7 +60,7 @@ func TestWorkerTaskLifecycle(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			defer file.Close()
+			defer func() { _ = file.Close() }()
 			state := progress.New(tc.name, 8)
 			d := NewConcurrentDownloader(tc.name, nil, state, &types.RuntimeConfig{MaxTaskRetries: 1})
 			d.hostLimiter = transport.NewHostRateLimiter()
