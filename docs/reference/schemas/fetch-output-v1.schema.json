@@ -104,8 +104,7 @@
         "input_index",
         "reused_bytes",
         "duration_seconds",
-        "average_bytes_per_second",
-        "checkpoint_bytes"
+        "average_bytes_per_second"
       ],
       "properties": {
         "id": {
@@ -140,11 +139,9 @@
           "type": "string"
         },
         "reused_bytes": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "pattern": "^[0-9]+$"
+          "type": "string",
+          "pattern": "^[0-9]+$",
+          "description": "Legacy checkpoint-based estimate; actual reuse is unknown when reused_bytes_exact is false."
         },
         "duration_seconds": {
           "type": "number",
@@ -159,7 +156,12 @@
         },
         "checkpoint_bytes": {
           "type": "string",
-          "pattern": "^[0-9]+$"
+          "pattern": "^[0-9]+$",
+          "description": "Saved byte offset before the resume attempt."
+        },
+        "reused_bytes_exact": {
+          "type": "boolean",
+          "description": "False when actual byte reuse cannot be confirmed, including resumed work."
         }
       }
     },

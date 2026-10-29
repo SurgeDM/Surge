@@ -202,7 +202,7 @@ func (p *fetchProgress) render(ctx context.Context) {
 func (p *fetchProgress) progressLine(s progressSnapshot, width int) string {
 	name := transferui.SafeText(s.Filename)
 	if name == "" {
-		name = s.ID
+		name = transferui.SafeText(s.ID)
 	}
 	state := transferui.SafeText(s.State)
 	line := fmt.Sprintf("%s  %s  %s", name, state, transferui.Bytes(s.Downloaded))
@@ -265,7 +265,7 @@ func (p *fetchProgress) progressFrame(snapshots []progressSnapshot, width, heigh
 	for _, snapshot := range snapshots[:visible] {
 		name := transferui.SafeText(snapshot.Filename)
 		if name == "" {
-			name = snapshot.ID
+			name = transferui.SafeText(snapshot.ID)
 		}
 		name = truncateProgressFilename(name, max(4, width/2), p.ascii)
 		state := transferui.SafeText(snapshot.State)

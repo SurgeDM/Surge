@@ -95,4 +95,10 @@ block transfer workers, checkpoint persistence, or the final stdout result.
 No alternate-screen or cursor-hiding mode is used. TUI and foreground views share
 finite-rate/ETA rules; stopped jobs' historical rates are excluded from live totals.
 
-`checkpoint_bytes` is the saved offset before a resume attempt. Exact reuse can differ when the server rejects ranges or validators change, so resumed results with a nonzero checkpoint report `reused_bytes` and `average_bytes_per_second` as null. Fresh downloads report zero reused bytes and an invocation average including probing and verification.
+`reused_bytes` retains its v1 decimal-string type and checkpoint-based estimate.
+The additive `checkpoint_bytes` field identifies that saved offset explicitly.
+`reused_bytes_exact` is false for resumed work: ranges or validators can force a
+restart, so the estimate is not proof of actual reuse. Resumed work reports a null
+`average_bytes_per_second` instead of inventing a transfer rate. Fresh downloads
+report exact zero reused bytes and an invocation average including probing and
+verification. Older v1 receipts may omit the new checkpoint and exactness fields.

@@ -10,6 +10,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/clioutput"
 	"github.com/SurgeDM/Surge/internal/orchestrator"
+	"github.com/SurgeDM/Surge/internal/service"
 	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/spf13/cobra"
 )
@@ -24,7 +25,8 @@ type fetchItem struct {
 	waitItem
 	InputIndex            int      `json:"input_index"`
 	ClientRef             string   `json:"client_ref,omitempty"`
-	ReusedBytes           *string  `json:"reused_bytes"`
+	ReusedBytesExact      bool     `json:"reused_bytes_exact"`
+	ReusedBytes           string   `json:"reused_bytes"`
 	DurationSeconds       float64  `json:"duration_seconds"`
 	AverageBytesPerSecond *float64 `json:"average_bytes_per_second"`
 }
@@ -151,6 +153,7 @@ func runFetch(cmd *cobra.Command, requests []DownloadRequest, opts fetchOptions)
 	}
 	if opts.resume != "" {
 		for _, job := range owner.session.Jobs {
+			reused[job.ID] = 0
 			if record, readErr := owner.service.GetStatus(job.ID); readErr == nil && record != nil {
 				reused[job.ID] = record.Downloaded
 			}
@@ -182,6 +185,7 @@ func runFetch(cmd *cobra.Command, requests []DownloadRequest, opts fetchOptions)
 				failure := fetchFailure(enqueueErr)
 				items[i].Error = &failure
 				items[i].Status = "failed"
+				progress.update(&types.DownloadStatus{ID: items[i].ID, Filename: request.Filename, Status: "error"})
 				continue
 			}
 			ids = append(ids, items[i].ID)
@@ -203,15 +207,7 @@ func runFetch(cmd *cobra.Command, requests []DownloadRequest, opts fetchOptions)
 	confirmed := stopped && owner.checkpointsValid
 	closed = true
 	if stopped {
-		for id, status := range owner.finalStatuses {
-			index := positions[id]
-			items[index].Status = status.Status
-			items[index].DownloadedBytes = strconv.FormatInt(status.Downloaded, 10)
-			if status.Status == "completed" {
-				items[index].Artifact = completedWaitArtifact(status, "local", "")
-				items[index].Error = nil
-			}
-		}
+		applyFinalFetchResults(items, positions, owner.finalStatuses, owner.finalErrors)
 	}
 	if ctx.Err() != nil {
 		err = context.Cause(ctx)
@@ -235,10 +231,35 @@ func runFetch(cmd *cobra.Command, requests []DownloadRequest, opts fetchOptions)
 	return writeFetchResult(cmd, items, owner.session.ID, &confirmed, nil, err)
 }
 
+func applyFinalFetchResults(items []fetchItem, positions map[string]int, statuses map[string]*types.DownloadStatus, failures map[string]error) {
+	for id, status := range statuses {
+		index := positions[id]
+		items[index].Status = status.Status
+		items[index].DownloadedBytes = strconv.FormatInt(status.Downloaded, 10)
+		if status.Status == "completed" {
+			items[index].Artifact = completedWaitArtifact(status, "local", "")
+			items[index].Error = nil
+		}
+	}
+	for id, err := range failures {
+		index := positions[id]
+		if items[index].Artifact == nil {
+			continue
+		}
+		items[index].Artifact = nil
+		items[index].Status = "error"
+		failure := fetchFailure(err)
+		items[index].Error = &failure
+	}
+}
+
 func downloadRequestForEngine(request DownloadRequest, path string) *orchestrator.DownloadRequest {
 	return &orchestrator.DownloadRequest{URL: request.URL, Path: path, Filename: request.Filename, Mirrors: request.Mirrors, Headers: request.Headers, IsExplicitCategory: true, SkipApproval: true, Workers: request.Workers, MinChunkSize: request.MinChunkSize, Artifact: request.Artifact}
 }
 func fetchFailure(err error) clioutput.Failure {
+	if errors.Is(err, service.ErrArtifactUnavailable) {
+		return clioutput.Describe(clioutput.NewError(clioutput.Conflict, "The completed artifact could not be validated; inspect its destination.", nil))
+	}
 	if errors.Is(err, types.ErrDestinationExists) || errors.Is(err, types.ErrIntegrityMismatch) {
 		return clioutput.Describe(clioutput.NewError(clioutput.Conflict, err.Error(), nil))
 	}
@@ -247,11 +268,11 @@ func fetchFailure(err error) clioutput.Failure {
 func finishFetchMetrics(items []fetchItem, reused map[string]int64, elapsed time.Duration) {
 	for i := range items {
 		items[i].DurationSeconds = elapsed.Seconds()
-		items[i].CheckpointBytes = strconv.FormatInt(reused[items[i].ID], 10)
-		zero := "0"
-		items[i].ReusedBytes = &zero
-		if reused[items[i].ID] > 0 {
-			items[i].ReusedBytes = nil
+		checkpoint, resuming := reused[items[i].ID]
+		items[i].CheckpointBytes = strconv.FormatInt(checkpoint, 10)
+		items[i].ReusedBytes = items[i].CheckpointBytes
+		items[i].ReusedBytesExact = !resuming
+		if resuming {
 			continue
 		}
 		if items[i].Artifact != nil && elapsed > 0 {

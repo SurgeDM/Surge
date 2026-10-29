@@ -29,6 +29,7 @@ type fetchSession struct {
 	Jobs          []fetchJob `json:"jobs"`
 }
 type fetchOwner struct {
+	finalErrors      map[string]error
 	finalStatuses    map[string]*types.DownloadStatus
 	checkpointsValid bool
 	manager          *orchestrator.LifecycleManager
@@ -121,10 +122,15 @@ func (o *fetchOwner) close(force <-chan struct{}) bool {
 		o.manager.Shutdown()
 		<-o.workerDone
 		o.finalStatuses = make(map[string]*types.DownloadStatus)
+		o.finalErrors = make(map[string]error)
 		o.checkpointsValid = true
 		for _, job := range o.session.Jobs {
 			status, err := o.service.GetResult(job.ID)
 			if err != nil || status == nil {
+				if err == nil {
+					err = clioutput.NewError(clioutput.OperationFailed, "Final download status is unavailable.", nil)
+				}
+				o.finalErrors[job.ID] = err
 				o.checkpointsValid = false
 				continue
 			}
@@ -136,16 +142,17 @@ func (o *fetchOwner) close(force <-chan struct{}) bool {
 				o.checkpointsValid = false
 				continue
 			}
-			if status.Downloaded > 0 {
-				record, readErr := store.GetDownload(job.ID)
-				if readErr != nil || record == nil {
-					o.checkpointsValid = false
-					continue
-				}
-				saved, readErr := store.LoadState(record.URL, record.DestPath)
-				if readErr != nil || saved == nil {
-					o.checkpointsValid = false
-				}
+			record, readErr := store.GetDownload(job.ID)
+			if readErr != nil || record == nil {
+				o.checkpointsValid = false
+				continue
+			}
+			saved, readErr := store.LoadState(record.URL, record.DestPath)
+			if readErr != nil || saved == nil ||
+				saved.ID != record.ID || saved.URL != record.URL || saved.DestPath != record.DestPath ||
+				saved.Downloaded != record.Downloaded || saved.TotalSize != record.TotalSize ||
+				saved.Elapsed/int64(time.Millisecond) != record.TimeTaken {
+				o.checkpointsValid = false
 			}
 		}
 		close(done)
