@@ -743,3 +743,22 @@ func TestNormalizeValuesRejectsInvalidIntegers(t *testing.T) {
 		}
 	}
 }
+
+func TestFileExistsActionValidation(t *testing.T) {
+	s := DefaultSettings()
+	if got := Resolve[string](s.General.FileExistsAction); got != FileExistsRename {
+		t.Fatalf("default file_exists_action = %q, want %q", got, FileExistsRename)
+	}
+
+	s.General.FileExistsAction.Value = FileExistsOverwrite
+	s.Validate()
+	if got := Resolve[string](s.General.FileExistsAction); got != FileExistsOverwrite {
+		t.Fatalf("valid value was reset: got %q", got)
+	}
+
+	s.General.FileExistsAction.Value = "delete-everything"
+	s.Validate()
+	if got := Resolve[string](s.General.FileExistsAction); got != FileExistsRename {
+		t.Fatalf("invalid value not reset: got %q", got)
+	}
+}

@@ -291,3 +291,91 @@ func TestCategoryDirectoryFailureIdentifiesDestination(t *testing.T) {
 		t.Fatalf("expected an error identifying the blocked destination, got %v", err)
 	}
 }
+
+func TestResolveDestination_FileExistsAction(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "report.pdf"), []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	settings := config.DefaultSettings()
+	settings.Categories.CategoryEnabled.Value = false
+
+	// Default (rename) keeps the existing behavior.
+	if _, name, err := ResolveDestination("http://example.com/report.pdf", "report.pdf", dir, false, settings, nil, nil); err != nil || name != "report(1).pdf" {
+		t.Fatalf("rename: got %q, %v; want report(1).pdf", name, err)
+	}
+
+	settings.General.FileExistsAction.Value = config.FileExistsOverwrite
+
+	// Overwrite reuses the existing name so finalize replaces the old file.
+	if _, name, err := ResolveDestination("http://example.com/report.pdf", "report.pdf", dir, false, settings, nil, nil); err != nil || name != "report.pdf" {
+		t.Fatalf("overwrite: got %q, %v; want report.pdf", name, err)
+	}
+
+	// A name owned by an active download must never be overwritten.
+	active := func(_, name string) bool { return name == "report.pdf" }
+	if _, name, _ := ResolveDestination("http://example.com/report.pdf", "report.pdf", dir, false, settings, nil, active); name != "report(1).pdf" {
+		t.Fatalf("overwrite with active download: got %q, want report(1).pdf", name)
+	}
+
+	// Neither may a pending .surge working file of another download.
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"), []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "notes.txt"+types.IncompleteSuffix), nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, name, _ := ResolveDestination("http://example.com/notes.txt", "notes.txt", dir, false, settings, nil, nil); name != "notes(1).txt" {
+		t.Fatalf("overwrite with .surge sibling: got %q, want notes(1).txt", name)
+	}
+
+	// Directories are not replaced.
+	if err := os.Mkdir(filepath.Join(dir, "data"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if _, name, _ := ResolveDestination("http://example.com/data", "data", dir, false, settings, nil, nil); name != "data(1)" {
+		t.Fatalf("overwrite with directory: got %q, want data(1)", name)
+	}
+}
+
+func TestFinalizeCompletedFile_OverwritesExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	finalPath := filepath.Join(dir, "report.pdf")
+	if err := os.WriteFile(finalPath, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(finalPath+types.IncompleteSuffix, []byte("new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := finalizeCompletedFile(finalPath); err != nil {
+		t.Fatalf("finalizeCompletedFile: %v", err)
+	}
+	got, err := os.ReadFile(finalPath)
+	if err != nil || string(got) != "new" {
+		t.Fatalf("final file = %q, %v; want %q", got, err, "new")
+	}
+	if _, err := os.Stat(finalPath + types.IncompleteSuffix); !os.IsNotExist(err) {
+		t.Fatalf("working file still present: %v", err)
+	}
+}
+
+func TestFinalizeCompletedFile_FailedReplaceIsNotSuccess(t *testing.T) {
+	dir := t.TempDir()
+	finalPath := filepath.Join(dir, "report.pdf")
+	if err := os.WriteFile(finalPath, []byte("old"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(finalPath+types.IncompleteSuffix, []byte("new"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	orig := renameCompletedFile
+	renameCompletedFile = func(string, string) error { return os.ErrPermission }
+	t.Cleanup(func() { renameCompletedFile = orig })
+
+	if err := finalizeCompletedFile(finalPath); err == nil {
+		t.Fatal("expected error when the working file could not replace the existing file")
+	}
+}

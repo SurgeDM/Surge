@@ -41,6 +41,7 @@ type Settings struct {
 type GeneralSettings struct {
 	DefaultDownloadDir           *Setting `json:"default_download_dir"`
 	WarnOnDuplicate              *Setting `json:"warn_on_duplicate"`
+	FileExistsAction             *Setting `json:"file_exists_action"`
 	DownloadCompleteNotification *Setting `json:"download_complete_notification"`
 	AutoShutdownAfterDownloads   *Setting `json:"auto_shutdown_after_downloads"`
 	AllowRemoteOpenActions       *Setting `json:"allow_remote_open_actions"`
@@ -261,6 +262,7 @@ func (s *Settings) initializeCategoriesList() {
 			Settings: []*Setting{
 				s.General.DefaultDownloadDir,
 				s.General.WarnOnDuplicate,
+				s.General.FileExistsAction,
 				s.General.DownloadCompleteNotification,
 				s.General.AutoShutdownAfterDownloads,
 				s.General.AllowRemoteOpenActions,
@@ -497,6 +499,13 @@ func CategoryOrder() []string {
 	}
 }
 
+// File exists actions control what happens when a new download would land on
+// a file that is already present in the destination directory.
+const (
+	FileExistsRename    = "rename"
+	FileExistsOverwrite = "overwrite"
+)
+
 const (
 	ThemeAdaptive = 0
 	ThemeLight    = 1
@@ -552,6 +561,25 @@ func DefaultSettings() *Settings {
 				Type:         TypeBool,
 				DefaultValue: true,
 				Value:        true,
+			},
+			FileExistsAction: &Setting{
+				Key:          "file_exists_action",
+				Label:        "If File Exists",
+				Description:  "What to do when the destination file already exists: rename (save as name(1).ext) or overwrite (replace the existing file once the download completes).",
+				Type:         TypeString,
+				DefaultValue: FileExistsRename,
+				Value:        FileExistsRename,
+				ValidateFunc: func(val any) error {
+					sVal, ok := val.(string)
+					if !ok {
+						return fmt.Errorf("must be a string")
+					}
+					switch sVal {
+					case FileExistsRename, FileExistsOverwrite:
+						return nil
+					}
+					return fmt.Errorf("must be %q or %q", FileExistsRename, FileExistsOverwrite)
+				},
 			},
 			DownloadCompleteNotification: &Setting{
 				Key:          "download_complete_notification",

@@ -346,6 +346,16 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 
+		// Cycle between the supported file exists actions
+		if settingKey == "file_exists_action" {
+			next := config.FileExistsOverwrite
+			if config.Resolve[string](m.Settings.General.FileExistsAction) == config.FileExistsOverwrite {
+				next = config.FileExistsRename
+			}
+			m.Settings.General.FileExistsAction.Value = next
+			return m, nil
+		}
+
 		// Toggle bool or enter edit mode for other types
 		typ := m.getCurrentSettingType()
 

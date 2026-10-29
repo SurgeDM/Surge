@@ -109,6 +109,7 @@ Surge follows OS conventions for storing its files. Below is a breakdown of ever
 | `default_download_dir` | string | Directory where new downloads are saved. If empty, defaults to `~/Downloads` or current directory. | `""`    |
 | `allow_remote_open_actions` | bool | Allow `/open-file` and `/open-folder` API requests from remote clients. Keep disabled unless you trust your network and auth setup. | `false` |
 | `warn_on_duplicate`    | bool   | Show a warning when adding a download that already exists in the list.                             | `true`  |
+| `file_exists_action`   | string | What to do when the destination file already exists: `rename` saves the new download as `name(1).ext`; `overwrite` replaces the existing file once the download completes. Files that belong to another active or paused download are never overwritten (they are renamed instead). | `"rename"` |
 | `extension_prompt`     | bool   | Prompt for confirmation in the TUI when adding downloads via the browser extension.                | `false` |
 | `auto_resume`          | bool   | Automatically resume paused downloads when Surge starts.                                           | `false` |
 | `auto_start`           | bool   | Install the current user's Surge service and start it with that user's login session. (See [Run Surge as a service](guides/run-as-a-service.md)). | `false` |
