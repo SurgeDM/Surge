@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"crypto/md5"
 	"crypto/sha256"
 	"encoding/hex"
@@ -28,7 +29,9 @@ const (
 type SaveStateOptions struct {
 	// SkipFileHash disables file_hash computation entirely for this save.
 	SkipFileHash bool
-	// InlineHashTimeout limits synchronous hashing time. If zero or negative, DefaultInlineHashTimeout is used.
+	// InlineHashTimeout is retained for compatibility and limits background hashing.
+	// If zero or negative, DefaultInlineHashTimeout is used. Filesystem calls may
+	// exceed this budget; they never run on the saving caller.
 	InlineHashTimeout time.Duration
 }
 
@@ -139,6 +142,9 @@ func fromPersistedDetail(state *persistedDetailRecord) *types.DownloadRecord {
 type DetailState struct {
 	Version int
 	State   *persistedDetailRecord
+	// Revision identifies this checkpoint, including identical saves in one second.
+	// Gob readers of older state files leave it empty.
+	Revision string
 }
 
 func URLHash(url string) string {
@@ -176,17 +182,9 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadReco
 	if hashTimeout <= 0 {
 		hashTimeout = DefaultInlineHashTimeout
 	}
-	if opts.SkipFileHash {
-		state.FileHash = ""
-	} else {
-		fileHash, timedOut, err := computeFileHashMD5WithTimeout(state.DestPath+types.IncompleteSuffix, hashTimeout)
-		if err != nil {
-			utils.Debug("SaveState: skipping file hash for %s due to error: %v", state.DestPath, err)
-		} else if timedOut {
-			utils.Debug("SaveState: skipping file hash for %s after timeout %v", state.DestPath, hashTimeout)
-		}
-		state.FileHash = fileHash
-	}
+	// A checkpoint is useful without its optional integrity hint. Never retain a
+	// hash from a previous checkpoint or read the payload on the caller's path.
+	state.FileHash = ""
 
 	if state.ChunkBitmap == nil {
 		state.ChunkBitmap = []byte{}
@@ -199,8 +197,9 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadReco
 	}
 
 	ds := DetailState{
-		Version: 2,
-		State:   toPersistedDetail(state),
+		Version:  2,
+		State:    toPersistedDetail(state),
+		Revision: uuid.NewString(),
 	}
 
 	if err := ensureDirs(); err != nil {
@@ -226,6 +225,7 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadReco
 	if err != nil {
 		return err
 	}
+	cancelStateHashLocked(state.ID)
 	if err := atomicWrite(detailPath, ds); err != nil {
 		return fmt.Errorf("failed to write detail state: %w", err)
 	}
@@ -256,11 +256,18 @@ func SaveStateWithOptions(url string, destPath string, state *types.DownloadReco
 	if !found {
 		utils.Debug("SaveState: ID %s not found in master list; call AddToMasterList first", state.ID)
 	}
+	if !opts.SkipFileHash {
+		startStateHashLocked(dir, detailPath, ds, hashTimeout)
+	}
 
 	return nil
 }
 
 func computeFileHashMD5WithTimeout(path string, timeout time.Duration) (string, bool, error) {
+	return computeStableFileHashMD5(context.Background(), path, timeout)
+}
+
+func computeStableFileHashMD5(ctx context.Context, path string, timeout time.Duration) (string, bool, error) {
 	if timeout <= 0 {
 		timeout = DefaultInlineHashTimeout
 	}
@@ -268,18 +275,28 @@ func computeFileHashMD5WithTimeout(path string, timeout time.Duration) (string, 
 		return "", true, nil
 	}
 
+	if ctx.Err() != nil {
+		return "", true, nil
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return "", false, err
 	}
 	defer func() { _ = f.Close() }()
 
+	before, err := f.Stat()
+	if err != nil {
+		return "", false, err
+	}
+	if !before.Mode().IsRegular() {
+		return "", false, fmt.Errorf("hash source is not a regular file")
+	}
 	h := md5.New()
 	buf := make([]byte, utils.MiB)
 	deadline := time.Now().Add(timeout)
 
 	for {
-		if time.Now().After(deadline) {
+		if ctx.Err() != nil || time.Now().After(deadline) {
 			return "", true, nil
 		}
 		n, readErr := f.Read(buf)
@@ -296,6 +313,16 @@ func computeFileHashMD5WithTimeout(path string, timeout time.Duration) (string, 
 		}
 	}
 
+	if ctx.Err() != nil || time.Now().After(deadline) {
+		return "", true, nil
+	}
+	after, err := os.Stat(path)
+	if err != nil {
+		return "", false, err
+	}
+	if !sameHashFile(before, after) {
+		return "", false, fmt.Errorf("hash source changed while reading")
+	}
 	return hashPrefixMD5 + hex.EncodeToString(h.Sum(nil)), false, nil
 }
 
@@ -415,6 +442,7 @@ func LoadStates(ids []string) (map[string]*types.DownloadRecord, error) {
 func DeleteState(id string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	cancelStateHashLocked(id)
 	if movingDownloads[id] {
 		return types.ErrMoving
 	}
@@ -446,6 +474,7 @@ func DeleteState(id string) error {
 func DeleteTasks(id string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	cancelStateHashLocked(id)
 	var ds DetailState
 	detailPath, err := getDetailPath(baseDir, id)
 	if err != nil {
@@ -523,6 +552,7 @@ func AddToMasterList(entry types.DownloadRecord, onMoving ...func(bool)) error {
 	defer notify(false)
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	cancelStateHashLocked(entry.ID)
 	if movingDownloads[entry.ID] {
 		return types.ErrMoving
 	}
@@ -628,6 +658,7 @@ func loadMasterListWithUnsupportedVersionCleanupUnlocked(cleanupUnsupported bool
 func RemoveFromMasterList(id string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	cancelStateHashLocked(id)
 	if movingDownloads[id] {
 		return types.ErrMoving
 	}
@@ -706,6 +737,7 @@ func CheckDownloadExists(url string) (bool, error) {
 func UpdateStatus(id string, status string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	cancelStateHashLocked(id)
 	if movingDownloads[id] {
 		return types.ErrMoving
 	}
@@ -731,6 +763,7 @@ func UpdateStatus(id string, status string) error {
 func UpdateURL(id string, newURL string) error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	cancelStateHashLocked(id)
 	if movingDownloads[id] {
 		return types.ErrMoving
 	}
@@ -773,6 +806,7 @@ func PauseAllDownloads() error {
 func ResumeAllDownloads() error {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	cancelAllStateHashesLocked()
 
 	list, err := loadMasterListUnlocked()
 	if err != nil {
@@ -1213,6 +1247,7 @@ var changingDownloads = make(map[string]int)
 func BeginDownloadChange(id string) (func(), error) {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	cancelStateHashLocked(id)
 	if movingDownloads[id] {
 		return nil, types.ErrMoving
 	}

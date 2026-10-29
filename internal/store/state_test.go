@@ -294,20 +294,22 @@ func TestSaveStateWithOptions_ComputesHashForSmallFile(t *testing.T) {
 		},
 	}
 
+	if err := AddToMasterList(types.DownloadRecord{ID: downloadState.ID, URL: testURL, DestPath: testDestPath, Status: "paused"}); err != nil {
+		t.Fatal(err)
+	}
+
 	err = SaveStateWithOptions(testURL, testDestPath, downloadState, SaveStateOptions{
 		InlineHashTimeout: time.Second,
 	})
 	if err != nil {
 		t.Fatalf("SaveStateWithOptions failed: %v", err)
 	}
-	_ = AddToMasterList(types.DownloadRecord{ID: "hash-small-id", URL: testURL, DestPath: testDestPath, Status: "paused"})
-
-	loaded, err := LoadState(testURL, testDestPath)
-	if err != nil {
-		t.Fatalf("LoadState failed: %v", err)
-	}
-	if loaded.FileHash != expectedHash {
-		t.Fatalf("FileHash = %q, want %q", loaded.FileHash, expectedHash)
+	waitStateHash(t, func() bool {
+		loaded, err := LoadState(testURL, testDestPath)
+		return err == nil && loaded.FileHash == expectedHash
+	})
+	if downloadState.FileHash != "" {
+		t.Fatal("background hashing mutated the caller's record")
 	}
 }
 

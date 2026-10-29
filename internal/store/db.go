@@ -24,6 +24,7 @@ var (
 func Configure(path string) {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	cancelAllStateHashesLocked()
 	baseDir = filepath.Dir(path)
 	configured = true
 }
@@ -72,6 +73,8 @@ func cleanupOrphans(dir string) {
 func CloseDB() {
 	masterMu.Lock()
 	defer masterMu.Unlock()
+	// Do not wait for a filesystem read which the OS may not allow us to cancel.
+	cancelAllStateHashesLocked()
 	baseDir = ""
 	configured = false
 	// Reset cleanupOnce under its own dedicated mutex so it is safe to call
