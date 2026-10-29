@@ -52,7 +52,7 @@ func TestProgressWriterCannotBlockSnapshotUpdatesOrShutdown(t *testing.T) {
 }
 func TestProgressFramesHandleTinyResizesAndHostileNames(t *testing.T) {
 	progress := &fetchProgress{mode: "bar", color: "never", ascii: true, writer: io.Discard}
-	snapshots := []progressSnapshot{{ID: "id", Filename: "\x1b]0;title\a" + strings.Repeat("large界", 40) + ".gguf", State: "downloading", Downloaded: 100, Total: 1000, Speed: 10, Connections: 2, Capacity: 8}}
+	snapshots := []progressSnapshot{{ID: "id", Filename: "\x1b]0;title\a" + strings.Repeat("large界", 40) + ".gguf", State: "\x1b[2Jdownloading", Downloaded: 100, Total: 1000, Speed: 10, Connections: 2, Capacity: 8}}
 	for _, size := range [][2]int{{0, 0}, {1, 1}, {20, 3}, {40, 8}, {120, 30}} {
 		for _, line := range progress.progressFrame(snapshots, size[0], size[1]) {
 			if strings.ContainsAny(line, "\x1b\a\n") {

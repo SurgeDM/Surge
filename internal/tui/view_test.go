@@ -56,7 +56,8 @@ func TestFormatDurationForUI(t *testing.T) {
 		{"23h59m59s", 23*time.Hour + 59*time.Minute + 59*time.Second, "23:59:59"},
 		{"1 day", 24 * time.Hour, "1d"},
 		{"1d 5h", 29 * time.Hour, "1d 5h"},
-		{"30+ days", 31 * 24 * time.Hour, "\u221E"},
+		{"30 days", 30 * 24 * time.Hour, "30d"},
+		{"30+ days", 31 * 24 * time.Hour, "31d"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

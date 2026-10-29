@@ -268,7 +268,7 @@ func (p *fetchProgress) progressFrame(snapshots []progressSnapshot, width, heigh
 			name = snapshot.ID
 		}
 		name = truncateProgressFilename(name, max(4, width/2), p.ascii)
-		state := snapshot.State
+		state := transferui.SafeText(snapshot.State)
 		head := name + "  " + state
 		if snapshot.Total > 0 {
 			fraction := min(1, float64(max(0, snapshot.Downloaded))/float64(snapshot.Total))

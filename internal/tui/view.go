@@ -17,20 +17,13 @@ import (
 	"github.com/charmbracelet/x/ansi"
 )
 
-// Viewport layout
-const maxUIDuration = 30 * 24 * time.Hour
-
 // formatDurationForUI formats a duration as a human-readable clock string.
 // Returns "M:SS" for sub-hour durations, "H:MM:SS" for multi-hour, "Xd Yh" for days.
 func formatDurationForUI(d time.Duration) string {
 	if d < 0 {
 		d = 0
 	}
-	if d >= maxUIDuration {
-		return "\u221e"
-	}
-
-	totalSec := int(d.Seconds())
+	totalSec := int64(d / time.Second)
 
 	if totalSec >= 86400 {
 		days := totalSec / 86400
