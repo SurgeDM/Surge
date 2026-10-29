@@ -29,6 +29,7 @@ type fetchSession struct {
 	Jobs          []fetchJob `json:"jobs"`
 }
 type fetchOwner struct {
+	trackedJobs      map[string]bool
 	finalErrors      map[string]error
 	finalStatuses    map[string]*types.DownloadStatus
 	checkpointsValid bool
@@ -110,7 +111,7 @@ func newFetchOwner(resume string, count int) (*fetchOwner, error) {
 	done := make(chan struct{})
 	go func() { defer close(done); mgr.StartEventWorker(stream) }()
 	success = true
-	return &fetchOwner{manager: mgr, service: service.NewLocalDownloadService(mgr), lock: lock, session: session, workerDone: done, previousState: previous}, nil
+	return &fetchOwner{trackedJobs: make(map[string]bool), manager: mgr, service: service.NewLocalDownloadService(mgr), lock: lock, session: session, workerDone: done, previousState: previous}, nil
 }
 
 // Never restore the global store while workers might still be writing to it.
@@ -125,6 +126,9 @@ func (o *fetchOwner) close(force <-chan struct{}) bool {
 		o.finalErrors = make(map[string]error)
 		o.checkpointsValid = true
 		for _, job := range o.session.Jobs {
+			if !o.trackedJobs[job.ID] {
+				continue
+			}
 			status, err := o.service.GetResult(job.ID)
 			if err != nil || status == nil {
 				if err == nil {
@@ -190,6 +194,7 @@ func (o *fetchOwner) resume(ctx context.Context) error {
 		if record == nil {
 			continue
 		}
+		o.trackJob(job.ID)
 		if record.Status == "completed" {
 			continue
 		}
@@ -202,3 +207,5 @@ func (o *fetchOwner) resume(ctx context.Context) error {
 	}
 	return nil
 }
+
+func (o *fetchOwner) trackJob(id string) { o.trackedJobs[id] = true }

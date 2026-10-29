@@ -26,6 +26,7 @@ func TestFetchClearsReceiptWhenFinalArtifactCheckFails(t *testing.T) {
 		}
 	}()
 	id := owner.session.Jobs[0].ID
+	owner.trackJob(id)
 	path := filepath.Join(t.TempDir(), "model.bin")
 	if err := os.WriteFile(path, []byte("abc"), 0600); err != nil {
 		t.Fatal(err)
@@ -65,7 +66,7 @@ func TestFetchCheckpointConfirmationMatchesSavedDetail(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			setupIsolatedCmdState(t)
 			resetCommandConnectionState(t)
-			owner, err := newFetchOwner("", 1)
+			owner, err := newFetchOwner("", 2)
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -76,6 +77,7 @@ func TestFetchCheckpointConfirmationMatchesSavedDetail(t *testing.T) {
 				}
 			}()
 			id := owner.session.Jobs[0].ID
+			owner.trackJob(id)
 			path := filepath.Join(t.TempDir(), "model.bin")
 			saved := types.DownloadRecord{ID: id, URL: "https://example.com/model", DestPath: path, Filename: "model.bin", Status: "paused", TotalSize: 100, Downloaded: tc.savedBytes, Elapsed: int64(time.Millisecond)}
 			if err := store.SaveStateWithOptions(saved.URL, path, &saved, store.SaveStateOptions{SkipFileHash: true}); err != nil {
@@ -106,5 +108,24 @@ func TestFetchReuseMetricsPreserveV1TypesAndExposeUncertainty(t *testing.T) {
 	}
 	if items[1].ReusedBytes != "0" || !items[1].ReusedBytesExact || items[1].AverageBytesPerSecond == nil {
 		t.Fatalf("fresh metrics unavailable: %+v", items[1])
+	}
+}
+
+func TestFetchCheckpointConfirmationFailsForLostTrackedRecord(t *testing.T) {
+	setupIsolatedCmdState(t)
+	resetCommandConnectionState(t)
+	owner, err := newFetchOwner("", 2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	owner.trackJob(owner.session.Jobs[0].ID)
+	if !owner.close(nil) {
+		t.Fatal("owner did not stop")
+	}
+	if owner.checkpointsValid || owner.finalErrors[owner.session.Jobs[0].ID] == nil {
+		t.Fatal("missing tracked record was ignored")
+	}
+	if owner.finalErrors[owner.session.Jobs[1].ID] != nil {
+		t.Fatal("unsubmitted job was treated as a checkpoint failure")
 	}
 }

@@ -161,7 +161,9 @@ func runFetch(cmd *cobra.Command, requests []DownloadRequest, opts fetchOptions)
 		err = owner.resume(ctx)
 		if err == nil {
 			for _, job := range owner.session.Jobs {
-				ids = append(ids, job.ID)
+				if owner.trackedJobs[job.ID] {
+					ids = append(ids, job.ID)
+				}
 			}
 		}
 	} else {
@@ -188,6 +190,7 @@ func runFetch(cmd *cobra.Command, requests []DownloadRequest, opts fetchOptions)
 				progress.update(&types.DownloadStatus{ID: items[i].ID, Filename: request.Filename, Status: "error"})
 				continue
 			}
+			owner.trackJob(items[i].ID)
 			ids = append(ids, items[i].ID)
 			items[i].Status = "queued"
 		}
