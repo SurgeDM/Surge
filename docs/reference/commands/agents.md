@@ -52,3 +52,7 @@ Idempotency cannot bypass an interactive approval requirement.
 
 Embedded `fetch` retries use `--resume SESSION`; durable submission namespaces are
 remote-only. A malformed manifest creates no session or network request.
+
+Remote `fetch` treats replayed receipts as observation of existing work: it does
+not claim an invocation transfer speed from previously downloaded bytes. Reuse
+exactness is false and the invocation average is null for replayed jobs.

@@ -40,6 +40,7 @@ func runRemoteFetch(cmd *cobra.Command, ctx context.Context, force <-chan struct
 	items := make([]fetchItem, 0, len(requests))
 	ids := make([]string, 0, len(requests))
 	positions := make(map[string]int, len(requests))
+	reused := make(map[string]int64)
 	for i, request := range requests {
 		item := fetchItem{waitItem: waitItem{Status: "not_submitted", DownloadedBytes: "0"}, InputIndex: i + 1, ClientRef: request.ClientRef}
 		if request.inputFailure != nil {
@@ -82,6 +83,9 @@ func runRemoteFetch(cmd *cobra.Command, ctx context.Context, force <-chan struct
 				failure := clioutput.Failure{Code: clioutput.Conflict, Message: "Foreground work requires immediate acceptance; approval was requested."}
 				item.Error = &failure
 			} else {
+				if resp.Header.Get("Idempotency-Replayed") == "true" {
+					reused[item.ID] = 0
+				}
 				positions[item.ID] = len(items)
 				ids = append(ids, item.ID)
 			}
@@ -116,7 +120,7 @@ func runRemoteFetch(cmd *cobra.Command, ctx context.Context, force <-chan struct
 			cancel()
 		}
 	}
-	finishFetchMetrics(items, nil, time.Since(started))
+	finishFetchMetrics(items, reused, time.Since(started))
 	if err == nil {
 		err = fetchBatchFailure(items)
 	}

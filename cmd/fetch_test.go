@@ -17,6 +17,7 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/testutil"
+	"github.com/SurgeDM/Surge/internal/types"
 	"github.com/spf13/cobra"
 )
 
@@ -178,5 +179,48 @@ func TestRemoteFetchTimeoutDoesNotMutateDaemonJobs(t *testing.T) {
 	code, result, _ := executeFetchTest(t, ctx, "https://example.com/model")
 	if code != 130 || result.SessionID != "" || mutations.Load() != 1 || len(result.Items) != 1 || result.Items[0].ID != id {
 		t.Fatalf("observer changed daemon ownership: exit=%d mutations=%d %+v", code, mutations.Load(), result)
+	}
+}
+
+func TestRemoteFetchReplayDoesNotInventInvocationTransferSpeed(t *testing.T) {
+	for _, replayed := range []bool{false, true} {
+		name := "fresh"
+		if replayed {
+			name = "replayed"
+		}
+		t.Run(name, func(t *testing.T) {
+			setupIsolatedCmdState(t)
+			resetCommandConnectionState(t)
+			const id = "12345678-1234-1234-1234-123456789012"
+			server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				switch r.URL.Path {
+				case "/capabilities":
+					_ = json.NewEncoder(w).Encode(serverCapabilities{SchemaVersion: 1, Features: map[string]bool{"finalized_results": true, "destination_policy": true, "idempotency": true}})
+				case "/download":
+					if r.Header.Get("Idempotency-Key") == "" {
+						t.Error("missing durable key")
+					}
+					if replayed {
+						w.Header().Set("Idempotency-Replayed", "true")
+					}
+					_ = json.NewEncoder(w).Encode(submissionReceipt{ID: id})
+				case "/download/result":
+					w.Header().Set("X-Surge-Result-Version", "1")
+					_ = json.NewEncoder(w).Encode(types.DownloadStatus{ID: id, Status: "completed", DestPath: "/remote/model.bin", Downloaded: 1024, TotalSize: 1024})
+				default:
+					http.NotFound(w, r)
+				}
+			}))
+			defer server.Close()
+			globalHost, globalToken = server.URL, "test-token"
+			code, result, _ := executeFetchTest(t, context.Background(), "--idempotency-key", "model", "https://example.com/model")
+			if code != 0 || len(result.Items) != 1 || result.Items[0].Artifact == nil {
+				t.Fatalf("remote result: exit=%d %+v", code, result)
+			}
+			item := result.Items[0]
+			if item.ReusedBytesExact == replayed || (item.AverageBytesPerSecond == nil) != replayed {
+				t.Fatalf("replayed=%t has misleading invocation metrics: %+v", replayed, item)
+			}
+		})
 	}
 }
