@@ -31,9 +31,8 @@ func TestRemoteClientDoesNotResetOrCreateLocalEngine(t *testing.T) {
 	}))
 	defer server.Close()
 	globalHost, globalToken = server.URL, "test-token"
-	// Exercise the real root hooks with a fresh command tree to avoid retaining
-	// parsed global flags between test cases.
-	root := &cobra.Command{Use: "surge", SilenceUsage: true, SilenceErrors: true, PersistentPreRun: rootCmd.PersistentPreRun, PersistentPreRunE: rootCmd.PersistentPreRunE}
+	// Use a fresh command tree to avoid retaining parsed global flags between tests.
+	root := &cobra.Command{Use: "surge", SilenceUsage: true, SilenceErrors: true}
 	root.AddCommand(newAddCommand())
 	var out, diagnostic bytes.Buffer
 	if code := runCommand(root, []string{"add", "--output-version=1", "https://example.com/file"}, &out, &diagnostic); code != 0 {
@@ -45,6 +44,9 @@ func TestRemoteClientDoesNotResetOrCreateLocalEngine(t *testing.T) {
 }
 
 func TestCompletionDoesNotResetLocalEngine(t *testing.T) {
+	if rootCmd.PersistentPreRun != nil || rootCmd.PersistentPreRunE != nil {
+		t.Fatal("root command must not define inherited startup hooks")
+	}
 	setupIsolatedCmdState(t)
 	previousService, previousPool := GlobalService, GlobalPool
 	sentinel := &countingLifecycleService{}
@@ -55,7 +57,7 @@ func TestCompletionDoesNotResetLocalEngine(t *testing.T) {
 		}
 		GlobalService, GlobalPool = previousService, previousPool
 	})
-	root := &cobra.Command{Use: "surge", PersistentPreRun: rootCmd.PersistentPreRun, PersistentPreRunE: rootCmd.PersistentPreRunE}
+	root := &cobra.Command{Use: "surge"}
 	var out bytes.Buffer
 	root.SetOut(&out)
 	root.SetErr(&out)
