@@ -40,8 +40,10 @@ continues to be observed. This is a point-in-time existence/size check, not a
 checksum, identity guarantee, or lock preventing later file changes.
 
 A receipt contains an absolute artifact path on the daemon's filesystem,
-`size_bytes` as a decimal string, and `verification: "not_requested"`. Byte counts
-are strings to preserve 64-bit precision; an unknown total is `null`.
+`size_bytes` as a decimal string, and `verification`. A job that requested and
+passed SHA-256 verification reports `"verified"` with a `sha256` field; other jobs
+report `"not_requested"`. Byte counts are strings to preserve 64-bit precision;
+an unknown total is `null`.
 
 Auto-discovered local daemons produce `location: "local"`. An explicit `--host`
 or `SURGE_HOST` produces `location: "remote"` and a `server` address, even for a

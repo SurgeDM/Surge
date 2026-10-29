@@ -39,7 +39,7 @@ type waitItem struct {
 func newWaitCommand() *cobra.Command {
 	command := &cobra.Command{
 		Use: "wait ID...", Short: "Wait for selected downloads to finish finalization",
-		Long: "Wait for a fixed set of daemon jobs. Timeout and Ctrl+C detach observation and leave jobs running. Completed receipts identify artifacts on the daemon's filesystem; they do not certify a checksum.",
+		Long: "Wait for a fixed set of daemon jobs. Timeout and Ctrl+C detach observation and leave jobs running. Completed receipts identify artifacts on the daemon's filesystem; they include a verified SHA-256 only when the job requested verification.",
 		Args: func(_ *cobra.Command, args []string) error {
 			if len(args) == 0 || len(args) > maxWaitIDs {
 				return clioutput.NewError(clioutput.InvalidArguments, "Provide between 1 and 256 download IDs.", nil)
@@ -300,7 +300,11 @@ func writeWaitResult(cmd *cobra.Command, items []waitItem, err error) error {
 	for _, item := range items {
 		text := fmt.Sprintf("%q: %s", item.ID, item.Status)
 		if item.Artifact != nil {
-			text += fmt.Sprintf(" -> %s %q (%s bytes, checksum not requested)", item.Artifact.Location, item.Artifact.Path, item.Artifact.SizeBytes)
+			verification := "checksum not requested"
+			if item.Artifact.Verification == "verified" {
+				verification = "sha256 verified"
+			}
+			text += fmt.Sprintf(" -> %s %q (%s bytes, %s)", item.Artifact.Location, item.Artifact.Path, item.Artifact.SizeBytes, verification)
 		}
 		if item.Error != nil {
 			text += ": " + item.Error.Message

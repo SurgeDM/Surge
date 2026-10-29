@@ -108,8 +108,7 @@
       ],
       "properties": {
         "id": {
-          "type": "string",
-          "minLength": 1
+          "type": "string"
         },
         "status": {
           "type": "string",

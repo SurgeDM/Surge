@@ -196,3 +196,32 @@ func TestResultEndpointRequiresOwnerCapability(t *testing.T) {
 		t.Fatalf("response=%+v", recorder)
 	}
 }
+
+func TestWaitHumanReceiptMatchesVerifiedArtifact(t *testing.T) {
+	for _, verified := range []bool{false, true} {
+		t.Run(fmt.Sprint(verified), func(t *testing.T) {
+			policy := types.ArtifactPolicy{}
+			expected := "checksum not requested"
+			if verified {
+				policy.Verification = "verified"
+				policy.SHA256 = strings.Repeat("a", 64)
+				expected = "sha256 verified"
+			}
+			items, err := observeDownloads(context.Background(), []string{"job"}, func(context.Context, string) (*types.DownloadStatus, error) {
+				return &types.DownloadStatus{ID: "job", Status: "completed", DestPath: "/model.bin", Downloaded: 42, Artifact: policy}, nil
+			}, time.Second, "local", "")
+			if err != nil {
+				t.Fatal(err)
+			}
+			command := newWaitCommand()
+			var out bytes.Buffer
+			command.SetOut(&out)
+			if err := writeWaitResult(command, items, nil); err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out.String(), expected) || (verified && strings.Contains(out.String(), "checksum not requested")) {
+				t.Fatalf("misleading verification receipt: %s", out.String())
+			}
+		})
+	}
+}
