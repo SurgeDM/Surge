@@ -50,7 +50,7 @@ func blockedStateHasher(t *testing.T) chan struct{} {
 
 func TestStateHashDoesNotBlockCheckpointOrMutateCaller(t *testing.T) {
 	dir := setupTestDB(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	defer CloseDB()
 	release := blockedStateHasher(t)
 	state := &types.DownloadRecord{ID: "async", DestPath: filepath.Join(dir, "file"), Tasks: []types.Task{{Offset: 3, Length: 7}}, Headers: map[string]string{"Test": "original"}, FileHash: "stale"}
@@ -75,7 +75,7 @@ func TestStateHashDiscardsInvalidatedResults(t *testing.T) {
 	for _, action := range []string{"replace", "identical-replace", "delete", "tasks", "status", "url", "reconfigure", "close", "remove", "resume-all"} {
 		t.Run(action, func(t *testing.T) {
 			dir := setupTestDB(t)
-			defer os.RemoveAll(dir)
+			defer func() { _ = os.RemoveAll(dir) }()
 			defer CloseDB()
 			release := blockedStateHasher(t)
 			state := &types.DownloadRecord{ID: "stale", URL: "url", DestPath: filepath.Join(dir, "file"), Tasks: []types.Task{{Length: 10}}}
@@ -129,7 +129,7 @@ func TestStateHashDiscardsInvalidatedResults(t *testing.T) {
 
 func TestStateHashAdmissionIsBoundedAcrossBackendReset(t *testing.T) {
 	dir := setupTestDB(t)
-	defer os.RemoveAll(dir)
+	defer func() { _ = os.RemoveAll(dir) }()
 	defer CloseDB()
 	blockedStateHasher(t)
 	for _, id := range []string{"one", "two", "three"} {
