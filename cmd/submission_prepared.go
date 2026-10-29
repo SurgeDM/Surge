@@ -12,7 +12,11 @@ import (
 )
 
 func submitPrepared(cmd *cobra.Command, requests []DownloadRequest, baseURL, token, key string) ([]submissionItem, error) {
-	client := &http.Client{Timeout: 30 * time.Second}
+	client, err := newRemoteAPIHTTPClient()
+	if err != nil {
+		return nil, err
+	}
+	client.Timeout = 30 * time.Second
 	defer client.CloseIdleConnections()
 	ctx, cancel := context.WithTimeout(cmd.Context(), 30*time.Second)
 	defer cancel()
