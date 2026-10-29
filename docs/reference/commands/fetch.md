@@ -22,8 +22,10 @@ accepted jobs still finish. `get` remains an alias for asynchronous `add`.
 Existing destinations fail by default. `--on-exists rename` selects an unused name
 at submission. Both policies publish without replacing a destination created by
 another process while the download runs; a late collision leaves working data
-and returns a conflict. Publication uses filesystem hard links and may fail on a
-filesystem without hard-link support. Legacy downloads keep their existing policy.
+and returns a conflict. Publication uses native atomic no-replace renames on Linux, macOS, and Windows.
+Where that operation is unavailable, a hard link provides the same no-overwrite
+guarantee. Filesystems supporting neither primitive fail without publishing and
+retain the working file. Legacy downloads keep their existing policy.
 
 An expected SHA-256 is checked in a bounded, cancellable post-transfer read before
 publication. Verification uses the existing per-job worker, outside progress

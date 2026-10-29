@@ -56,6 +56,9 @@ func TestPublishedArtifactRemainsCompletedWhenWorkingLinkCleanupFails(t *testing
 	if err := os.WriteFile(path+types.IncompleteSuffix, []byte("published bytes"), 0600); err != nil {
 		t.Fatal(err)
 	}
+	previousRename := renameArtifactNoReplace
+	renameArtifactNoReplace = func(string, string) error { return errors.ErrUnsupported }
+	defer func() { renameArtifactNoReplace = previousRename }()
 	previousRemove := removeCompletedWorkingFile
 	removeCompletedWorkingFile = func(string) error { return os.ErrPermission }
 	defer func() { removeCompletedWorkingFile = previousRemove }()

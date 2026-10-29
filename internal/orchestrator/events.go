@@ -14,6 +14,7 @@ import (
 )
 
 var (
+	renameArtifactNoReplace    = utils.RenameNoReplace
 	removeCompletedWorkingFile = retryRemove
 	renameCompletedFile        = retryRename
 	copyCompletedFile          = utils.CopyFile
@@ -649,6 +650,9 @@ func finalizeArtifact(path string, policy types.ArtifactPolicy) error {
 	}
 	if path == "" {
 		return fmt.Errorf("missing artifact path")
+	}
+	if err := renameArtifactNoReplace(path+types.IncompleteSuffix, path); !errors.Is(err, errors.ErrUnsupported) {
+		return err
 	}
 	if err := os.Link(path+types.IncompleteSuffix, path); err != nil {
 		return err
