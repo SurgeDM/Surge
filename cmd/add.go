@@ -57,15 +57,7 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	if len(urls) == 0 && !hasManifest {
 		return clioutput.NewError(clioutput.InvalidArguments, "Provide at least one URL or a nonempty --batch file.", nil)
 	}
-	if err := initializeClientState(); err != nil {
-		return err
-	}
-	baseURL, token, err := resolveAPIConnection(true)
-	if err != nil {
-		return err
-	}
 	resolvedOutput := resolveClientOutputPath(output)
-	var items []submissionItem
 	if hasManifest || key != "" {
 		if confirm {
 			return usageError("Idempotent and manifest submissions require immediate acceptance.")
@@ -79,6 +71,30 @@ func runAdd(cmd *cobra.Command, args []string) error {
 				prepared = append(prepared, DownloadRequest{URL: url, Mirrors: mirrors, Path: resolvedOutput, SkipApproval: true})
 			}
 		}
+		hasValidInput := false
+		for _, request := range prepared {
+			if request.inputFailure == nil {
+				hasValidInput = true
+				break
+			}
+		}
+		if !hasValidInput {
+			items := make([]submissionItem, 0, len(prepared))
+			for index, request := range prepared {
+				items = append(items, submissionItem{InputIndex: index + 1, ClientRef: request.ClientRef, Status: "not_submitted", Error: request.inputFailure})
+			}
+			return writeSubmissionResults(cmd, version, items)
+		}
+	}
+	if err := initializeClientState(); err != nil {
+		return err
+	}
+	baseURL, token, err := resolveAPIConnection(true)
+	if err != nil {
+		return err
+	}
+	var items []submissionItem
+	if hasManifest || key != "" {
 		items, err = submitPrepared(cmd, prepared, baseURL, token, key)
 		if err != nil {
 			return err
@@ -88,7 +104,11 @@ func runAdd(cmd *cobra.Command, args []string) error {
 	} else {
 		items = collectSubmissions(urls, resolvedOutput, baseURL, token, confirm)
 	}
-	err = submissionFailure(items)
+	return writeSubmissionResults(cmd, version, items)
+}
+
+func writeSubmissionResults(cmd *cobra.Command, version string, items []submissionItem) error {
+	err := submissionFailure(items)
 	if version == "1" {
 		if err != nil {
 			return &commandResultError{result: clioutput.FailedItems("add", items, err), cause: err}
