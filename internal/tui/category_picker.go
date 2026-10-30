@@ -115,7 +115,7 @@ func (m RootModel) viewCategoryPicker() string {
 		prefix := "  "
 		style := lipgloss.NewStyle().Foreground(colors.LightGray())
 		if i == m.categoryPickerCursor {
-			prefix = "\u25b8 "
+			prefix = "> "
 			style = style.Foreground(colors.Pink()).Bold(true)
 		}
 		rows = append(rows, style.Render(ansi.Truncate(prefix+items[i].Label, listWidth, "\u2026")))

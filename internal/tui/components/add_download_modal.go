@@ -30,7 +30,7 @@ type AddDownloadModal struct {
 
 // View renders the inner content (without border box).
 func (m AddDownloadModal) View() string {
-	labelStyle := lipgloss.NewStyle().Width(10).Foreground(colors.LightGray())
+	labelStyle := lipgloss.NewStyle().Width(12).Foreground(colors.LightGray())
 	hintBase := lipgloss.NewStyle().MarginLeft(1).Foreground(colors.LightGray())
 	content := []string{""}
 
@@ -47,7 +47,7 @@ func (m AddDownloadModal) View() string {
 	for i := 0; i < len(m.Inputs) && i < len(m.Labels); i++ {
 		// Calculate available width for inputs
 		// Accounts for: horizontal padding (4), label (10), and box borders (2)
-		const labelWidth = 10
+		const labelWidth = 12
 		horizontalPadding := lipgloss.NewStyle().Padding(0, 2).GetHorizontalFrameSize()
 		inputW := m.Width - BorderFrameWidth - horizontalPadding - labelWidth
 
@@ -60,7 +60,13 @@ func (m AddDownloadModal) View() string {
 		ti := m.Inputs[i]
 		ti.SetWidth(inputW)
 
-		row := lipgloss.JoinHorizontal(lipgloss.Left, labelStyle.Render(m.Labels[i]), ti.View())
+		label := "  " + m.Labels[i]
+		style := labelStyle
+		if m.FocusedInput == i {
+			label = "> " + m.Labels[i]
+			style = style.Foreground(colors.Pink()).Bold(true)
+		}
+		row := lipgloss.JoinHorizontal(lipgloss.Left, style.Render(label), ti.View())
 		if m.BrowseHintIndex == i {
 			hintStyle := hintBase
 			if m.FocusedInput == i {

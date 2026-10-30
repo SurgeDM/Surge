@@ -356,7 +356,7 @@ func (m RootModel) renderSettingsListViewport(settingsMeta []config.SettingMeta,
 		style := lipgloss.NewStyle().Foreground(colors.LightGray())
 		if idx == selectedRow {
 			if m.SettingsFocusedPane == 1 {
-				prefix = "\u25b8 "
+				prefix = "> "
 				style = lipgloss.NewStyle().Foreground(colors.Cyan()).Bold(true)
 			} else {
 				prefix = "  "
