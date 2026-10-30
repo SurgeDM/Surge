@@ -334,3 +334,54 @@ func TestLifecycleManager_ResumeBatch_CorruptStateIgnored(t *testing.T) {
 		t.Errorf("expected id-corrupt to be in pool")
 	}
 }
+
+func TestLifecycleManager_EnqueueBlocksWebpageWhenEnabled(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Length", "128")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	pool := scheduler.New(make(chan types.DownloadEvent, 4), 1)
+	mgr := NewLifecycleManager(pool, nil, nil)
+	defer mgr.Shutdown()
+
+	settings := config.DefaultSettings()
+	settings.General.BlockWebpageDownloads.Value = true
+	mgr.ApplySettings(settings)
+
+	req := &DownloadRequest{
+		URL:      ts.URL + "/landing",
+		Filename: "expected.bin",
+		Path:     t.TempDir(),
+	}
+
+	_, _, err := mgr.Enqueue(context.Background(), req)
+	if !errors.Is(err, types.ErrWebpageDownloadBlocked) {
+		t.Fatalf("expected ErrWebpageDownloadBlocked, got %v", err)
+	}
+}
+
+func TestLifecycleManager_EnqueueAllowsWebpageWhenDisabled(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Header().Set("Content-Length", "128")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer ts.Close()
+
+	pool := scheduler.New(make(chan types.DownloadEvent, 4), 1)
+	mgr := NewLifecycleManager(pool, nil, nil)
+	defer mgr.Shutdown()
+
+	req := &DownloadRequest{
+		URL:      ts.URL + "/landing",
+		Filename: "landing.html",
+		Path:     t.TempDir(),
+	}
+
+	if _, _, err := mgr.Enqueue(context.Background(), req); err != nil {
+		t.Fatalf("expected enqueue to succeed with blocking disabled, got %v", err)
+	}
+}

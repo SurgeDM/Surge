@@ -362,6 +362,12 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 		}
 	}
 
+	if probeResult != nil &&
+		config.Resolve[bool](settings.General.BlockWebpageDownloads) &&
+		probing.LooksLikeWebpage(probeResult.Filename, probeResult.ContentType) {
+		return "", "", types.ErrWebpageDownloadBlocked
+	}
+
 	isNameActive := mgr.buildIsNameActive()
 
 	for attempt := 0; attempt < maxWorkingFileReservationAttempts; attempt++ {

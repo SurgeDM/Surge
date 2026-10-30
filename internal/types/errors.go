@@ -33,6 +33,10 @@ var (
 	// the user's quota has been exhausted. Retry is pointless.
 	ErrInsufficientDiskSpace = errors.New("insufficient disk space")
 
+	// ErrWebpageDownloadBlocked indicates the probe identified a web page rather
+	// than a binary download and the user enabled block_webpage_downloads.
+	ErrWebpageDownloadBlocked = errors.New("webpage download blocked by settings")
+
 	// ErrRangeUnsupported indicates the server returned 200 OK without range content when requested
 	ErrRangeUnsupported = errors.New("server indicated success (200) but ignored range request (expected 206)")
 
