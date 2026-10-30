@@ -1,10 +1,10 @@
 [colors]
 name = "Surge"
 graph = [
-    '#e1bee7', # Bottom
-    '#ce93d8',
+    '#ab47bc', # Bottom
     '#ba68c8',
-    '#ab47bc', # Top
+    '#ce93d8',
+    '#e1bee7', # Top
 ]
 
 [colors.primary]
@@ -34,7 +34,7 @@ white =   '#f8f8f2'
 
 # Standard Light
 [colors.light]
-graph = ['#d99ce3', '#b658c7', '#9934b5', '#5b259d']
+graph = ['#5b259d', '#9934b5', '#b658c7', '#d99ce3']
 
 [colors.light.primary]
 background = "#ffffff"
