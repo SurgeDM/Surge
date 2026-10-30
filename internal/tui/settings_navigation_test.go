@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
@@ -102,5 +103,43 @@ func TestSettingsNavigation_ResetAndBrowseGuards(t *testing.T) {
 	m3 := updated.(RootModel)
 	if m3.SettingsFocusedPane != 0 {
 		t.Errorf("Expected Browse key to be ignored when tabs are focused")
+	}
+}
+
+func TestDisplayCategoriesExposeStoredValues(t *testing.T) {
+	m := RootModel{Settings: config.DefaultSettings()}
+	m.Settings.General.DefaultDownloadDir.Value = "/example/downloads"
+	m.Settings.Network.GlobalRateLimit.Value = "12 MiB/s"
+	for _, tc := range []struct {
+		category, key string
+		want          any
+	}{
+		{"Downloads", "default_download_dir", "/example/downloads"},
+		{"Downloads", "global_rate_limit", "12 MiB/s"},
+		{"Appearance", "transparent_background", false},
+		{"Network", "allow_remote_open_actions", false},
+	} {
+		if got := m.getSettingsValues(tc.category)[tc.key]; got != tc.want {
+			t.Errorf("%s/%s: got %v, want %v", tc.category, tc.key, got, tc.want)
+		}
+	}
+}
+
+func TestDownloadsTabShowsAndEditsConfiguredDirectory(t *testing.T) {
+	m := InitialRootModel(1701, "test", nil, nil, config.DefaultSettings(), false)
+	m.width, m.height, m.state = 140, 40, SettingsState
+	m.SettingsActiveTab, m.SettingsSelectedRow, m.SettingsFocusedPane = 1, 0, 1
+	m.Settings.General.DefaultDownloadDir.Value = "/example/downloads"
+	if !strings.Contains(m.View().Content, "/example/downloads") {
+		t.Fatal("configured directory missing from view")
+	}
+	m = settingsPress(t, m, tea.KeyPressMsg{Code: tea.KeyEnter})
+	if m.SettingsInput.Value() != "/example/downloads" {
+		t.Fatalf("editing started with %q", m.SettingsInput.Value())
+	}
+	m.SettingsIsEditing = false
+	m.Settings.General.DefaultDownloadDir.Value = ""
+	if !strings.Contains(m.View().Content, "(current directory)") {
+		t.Fatal("empty directory fallback is not explained")
 	}
 }

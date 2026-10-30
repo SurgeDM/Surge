@@ -17,7 +17,7 @@ func TestSettingsSearchEditsFilteredSetting(t *testing.T) {
 	press(tea.KeyPressMsg{Code: '/', Text: "/"})
 	updated, _ := m.Update(tea.PasteMsg{Content: "sequential_download"})
 	m = updated.(RootModel)
-	if m.currentSettingsCategory() != "Network" || m.getSettingsCount() != 1 || m.getCurrentSettingKey() != "sequential_download" {
+	if m.currentSettingsCategory() != "Downloads" || m.getSettingsCount() != 1 || m.getCurrentSettingKey() != "sequential_download" {
 		t.Fatalf("wrong filtered setting: %s", m.getCurrentSettingKey())
 	}
 	press(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -69,7 +69,7 @@ func TestGlobalSettingsSearchChangesValueInOriginalCategory(t *testing.T) {
 	m.settingsSearchQuery = "global_rate_limit"
 	m.settingsSearchInput.SetValue(m.settingsSearchQuery)
 	m.SettingsFocusedPane = 1
-	if m.getCurrentSettingKey() != "global_rate_limit" || m.currentSettingsCategory() != "Network" {
+	if m.getCurrentSettingKey() != "global_rate_limit" || m.currentSettingsCategory() != "Downloads" {
 		t.Fatal("search did not find setting outside current category")
 	}
 	if !strings.Contains(m.viewSettings(), "[enter] Change value") {

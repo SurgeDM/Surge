@@ -197,6 +197,8 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		m.keys.Settings.Tab3,
 		m.keys.Settings.Tab4,
 		m.keys.Settings.Tab5,
+		m.keys.Settings.Tab6,
+		m.keys.Settings.Tab7,
 	}
 	for i, binding := range tabBindings {
 		if key.Matches(msg, binding) {

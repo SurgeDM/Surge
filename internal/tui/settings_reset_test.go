@@ -85,46 +85,10 @@ func verifyIsDefault(t *testing.T, actual, expected *config.Settings, categoryLa
 
 // getFieldByJsonKey finds the reflect.Value for a setting field based on its UI category and JSON key.
 func getFieldByJsonKey(t *testing.T, s *config.Settings, categoryLabel, jsonKey string) reflect.Value {
-	v := reflect.ValueOf(s).Elem()
-
-	// Find category struct field
-	var catField reflect.Value
-	for i := 0; i < v.NumField(); i++ {
-		field := v.Type().Field(i)
-		label := field.Tag.Get("ui_label")
-		if label == "" {
-			label = field.Name
-		}
-		if label == categoryLabel {
-			catField = v.Field(i)
-			break
-		}
+	t.Helper()
+	setting := s.FindSetting(categoryLabel, jsonKey)
+	if setting == nil {
+		t.Fatalf("Could not find setting %s in category %s", jsonKey, categoryLabel)
 	}
-
-	if !catField.IsValid() {
-		if categoryLabel == "Appearance" {
-			catField = reflect.ValueOf(s).Elem().FieldByName("General")
-		}
-		if categoryLabel == "Speed Limits" {
-			catField = reflect.ValueOf(s).Elem().FieldByName("Network")
-		}
-		if !catField.IsValid() {
-			t.Fatalf("Could not find category: %s", categoryLabel)
-		}
-	}
-
-	// Find setting field within category
-	for i := 0; i < catField.NumField(); i++ {
-		field := catField.Type().Field(i)
-		key := field.Tag.Get("json")
-		if key == "" {
-			key = field.Name
-		}
-		if key == jsonKey {
-			return catField.Field(i)
-		}
-	}
-
-	t.Fatalf("Could not find setting %s in category %s", jsonKey, categoryLabel)
-	return reflect.Value{}
+	return reflect.ValueOf(setting)
 }

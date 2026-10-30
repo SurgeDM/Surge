@@ -2,6 +2,10 @@
 
 This document covers all configuration options available in Surge. For CLI commands and flags, see the [CLI reference](reference/cli.md).
 
+## Settings screen
+
+The TUI groups options into General, Downloads, Appearance, Network, Categories, Extension, and Advanced. Use the numbered tabs or left and right arrows to switch groups. The configuration file keeps its existing sections independently of these display groups. Deprecated `dial_hedge_count` is accepted for compatibility but is hidden from the settings screen.
+
 ## Configuration File
 
 You can **access the settings in TUI** or configure them via the CLI tool `surge config`. 

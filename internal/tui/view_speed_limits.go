@@ -80,7 +80,7 @@ func (m RootModel) viewSpeedLimits() string {
 }
 
 func (m RootModel) getSpeedLimitsMetadata() []config.SettingMeta {
-	networkMeta := config.GetSettingsMetadata()["Network"]
+	networkMeta := config.GetSettingsMetadata()["Downloads"]
 	keyToMeta := make(map[string]config.SettingMeta, len(networkMeta))
 	for _, m := range networkMeta {
 		keyToMeta[m.Key] = m

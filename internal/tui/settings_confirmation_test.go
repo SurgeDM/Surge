@@ -56,7 +56,7 @@ func settingsPress(t *testing.T, m RootModel, msg tea.KeyPressMsg) RootModel {
 func settingRune(ch rune) tea.KeyPressMsg { return tea.KeyPressMsg{Code: ch, Text: string(ch)} }
 
 func TestSelectedSettingResetRequiresConfirmation(t *testing.T) {
-	m := confirmationSettingsModel(t, "Network", "max_concurrent_downloads")
+	m := confirmationSettingsModel(t, "Downloads", "max_concurrent_downloads")
 	m.Settings.Network.MaxConcurrentDownloads.Value = 7
 	m.Settings.General.ClipboardMonitor.Value = false
 	before := m.Settings.Clone()
@@ -190,7 +190,7 @@ func TestResetOneFromSearchTargetsOriginalCategory(t *testing.T) {
 	m.settingsSearchQuery = "max_concurrent_downloads"
 	m.SettingsSelectedRow = 0
 	m = settingsPress(t, m, settingRune('r'))
-	if m.settingsAction.category != "Network" {
+	if m.settingsAction.category != "Downloads" {
 		t.Fatal("search reset captured the visible tab instead of the setting category")
 	}
 	m = settingsPress(t, m, settingRune('y'))
@@ -200,7 +200,7 @@ func TestResetOneFromSearchTargetsOriginalCategory(t *testing.T) {
 }
 
 func TestResetAllServiceFailurePreservesOtherSettings(t *testing.T) {
-	m := confirmationSettingsModel(t, "Network", "max_concurrent_downloads")
+	m := confirmationSettingsModel(t, "Downloads", "max_concurrent_downloads")
 	m.Settings.General.AutoStart.Value = true
 	m.Settings.Network.MaxConcurrentDownloads.Value = 7
 	before := m.Settings.Clone()

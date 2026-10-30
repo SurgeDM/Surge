@@ -257,92 +257,89 @@ func (s *Setting) Resolve() any {
 
 func (s *Settings) initializeCategoriesList() {
 	s.CategoriesList = []*SettingsCategory{
-		{
-			Name: "General",
-			Settings: []*Setting{
-				s.General.DefaultDownloadDir,
-				s.General.WarnOnDuplicate,
-				s.General.DownloadCompleteNotification,
-				s.General.AutoShutdownAfterDownloads,
-				s.General.AllowRemoteOpenActions,
-				s.General.AutoResume,
-				s.General.AutoStart,
-				s.General.SkipUpdateCheck,
-				s.General.ClipboardMonitor,
-				s.General.LogRetentionCount,
-			},
-		},
-		{
-			Name: "Appearance",
-			Settings: []*Setting{
-				s.General.Theme,
-				s.General.ThemePath,
-				s.General.TransparentBackground,
-				s.General.LiveSpeedGraph,
-				s.General.ShowSpeedGraph,
-			},
-		},
-		{
-			Name: "Network",
-			Settings: []*Setting{
-				s.Network.MaxConnectionsPerDownload,
-				s.Network.MaxConcurrentDownloads,
-				s.Network.MaxConcurrentProbes,
-				s.Network.UserAgent,
-				s.Network.ProxyURL,
-				s.Network.CustomDNS,
-				s.Network.SequentialDownload,
-				s.Network.MinChunkSize,
-				s.Network.WorkerBufferSize,
-				s.Network.DialHedgeCount,
-				s.Network.GlobalRateLimit,
-				s.Network.DefaultDownloadRateLimit,
-			},
-		},
-
-		{
-			Name: "Performance",
-			Settings: []*Setting{
-				s.Performance.MaxTaskRetries,
-				s.Performance.SlowWorkerThreshold,
-				s.Performance.SlowWorkerGracePeriod,
-				s.Performance.StallTimeout,
-				s.Performance.SpeedEmaAlpha,
-				s.Performance.AdaptiveConcurrencyInterval,
-			},
-		},
-		{
-			Name: "Categories",
-			Settings: []*Setting{
-				s.Categories.CategoryEnabled,
-			},
-		},
-		{
-			Name: "Extension",
-			Settings: []*Setting{
-				s.Extension.ExtensionPrompt,
-				s.Extension.ChromeExtensionURL,
-				s.Extension.FirefoxExtensionURL,
-				s.Extension.AuthToken,
-				s.Extension.InstructionsURL,
-			},
-		},
+		{Name: "General", Settings: []*Setting{
+			s.General.DefaultDownloadDir,
+			s.General.WarnOnDuplicate,
+			s.General.DownloadCompleteNotification,
+			s.General.AutoShutdownAfterDownloads,
+			s.General.AllowRemoteOpenActions,
+			s.General.AutoResume,
+			s.General.AutoStart,
+			s.General.SkipUpdateCheck,
+			s.General.ClipboardMonitor,
+			s.General.Theme,
+			s.General.ThemePath,
+			s.General.TransparentBackground,
+			s.General.LogRetentionCount,
+			s.General.LiveSpeedGraph,
+			s.General.ShowSpeedGraph,
+		}},
+		{Name: "Network", Settings: []*Setting{
+			s.Network.MaxConnectionsPerDownload,
+			s.Network.MaxConcurrentDownloads,
+			s.Network.MaxConcurrentProbes,
+			s.Network.UserAgent,
+			s.Network.ProxyURL,
+			s.Network.CustomDNS,
+			s.Network.SequentialDownload,
+			s.Network.MinChunkSize,
+			s.Network.WorkerBufferSize,
+			s.Network.DialHedgeCount,
+			s.Network.GlobalRateLimit,
+			s.Network.DefaultDownloadRateLimit,
+		}},
+		{Name: "Performance", Settings: []*Setting{
+			s.Performance.MaxTaskRetries,
+			s.Performance.SlowWorkerThreshold,
+			s.Performance.SlowWorkerGracePeriod,
+			s.Performance.StallTimeout,
+			s.Performance.SpeedEmaAlpha,
+			s.Performance.AdaptiveConcurrencyInterval,
+		}},
+		{Name: "Categories", Settings: []*Setting{
+			s.Categories.CategoryEnabled,
+		}},
+		{Name: "Extension", Settings: []*Setting{
+			s.Extension.ExtensionPrompt,
+			s.Extension.ChromeExtensionURL,
+			s.Extension.FirefoxExtensionURL,
+			s.Extension.AuthToken,
+			s.Extension.InstructionsURL,
+		}},
 	}
+}
+
+// settingsDisplayGroups is independent of the stable config and API sections.
+var settingsDisplayGroups = map[string][]string{
+	"General":    {"auto_start", "auto_resume", "auto_shutdown_after_downloads", "clipboard_monitor", "download_complete_notification", "skip_update_check"},
+	"Downloads":  {"default_download_dir", "warn_on_duplicate", "max_concurrent_downloads", "max_connections_per_host", "global_rate_limit", "default_download_rate_limit", "sequential_download"},
+	"Appearance": {"theme", "theme_path", "transparent_background", "show_speed_graph", "live_speed_graph"},
+	"Network":    {"proxy_url", "custom_dns", "user_agent", "allow_remote_open_actions"},
+	"Categories": {"category_enabled"},
+	"Extension":  {"extension_prompt", "auth_token", "chrome_extension_url", "firefox_extension_url", "instructions_url"},
+	"Advanced":   {"max_concurrent_probes", "min_chunk_size", "worker_buffer_size", "max_task_retries", "slow_worker_threshold", "slow_worker_grace_period", "stall_timeout", "speed_ema_alpha", "adaptive_concurrency_interval", "log_retention_count"},
 }
 
 // FindSetting returns a setting by its category and JSON key without using reflection.
 func (s *Settings) FindSetting(categoryName, key string) *Setting {
-	for _, cat := range s.CategoriesList {
-		if cat.Name == categoryName {
+	// A display category can contain settings from several storage sections.
+	if keys, ok := settingsDisplayGroups[categoryName]; ok && slices.Contains(keys, key) {
+		for _, cat := range s.CategoriesList {
 			for _, set := range cat.Settings {
-				if set.Key == key {
+				if set != nil && set.Key == key {
 					return set
 				}
 			}
-			if categoryName == "General" {
-				return s.FindSetting("Appearance", key)
+		}
+	}
+	// Preserve direct lookups using existing config and API section names.
+	for _, cat := range s.CategoriesList {
+		if cat.Name == categoryName {
+			for _, set := range cat.Settings {
+				if set != nil && set.Key == key {
+					return set
+				}
 			}
-			return nil
 		}
 	}
 	return nil
@@ -478,19 +475,14 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 	settingsMetadataOnce.Do(func() {
 		s := DefaultSettings()
 		cachedSettingsMetadata = make(map[string][]SettingMeta)
-		for _, cat := range s.CategoriesList {
-			list := make([]SettingMeta, 0, len(cat.Settings))
-			for _, set := range cat.Settings {
-				list = append(list, SettingMeta{
-					Key:             set.Key,
-					Label:           set.Label,
-					Description:     set.Description,
-					Type:            set.Type,
-					Unit:            set.Unit,
-					RequiresRestart: set.NeedsRestart,
+		for _, category := range CategoryOrder() {
+			for _, key := range settingsDisplayGroups[category] {
+				set := s.FindSetting(category, key)
+				cachedSettingsMetadata[category] = append(cachedSettingsMetadata[category], SettingMeta{
+					Key: set.Key, Label: set.Label, Description: set.Description,
+					Type: set.Type, Unit: set.Unit, RequiresRestart: set.NeedsRestart,
 				})
 			}
-			cachedSettingsMetadata[cat.Name] = list
 		}
 	})
 	return cachedSettingsMetadata
@@ -498,14 +490,7 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 
 // CategoryOrder returns the display order of settings categories.
 func CategoryOrder() []string {
-	return []string{
-		"General",
-		"Appearance",
-		"Network",
-		"Performance",
-		"Categories",
-		"Extension",
-	}
+	return []string{"General", "Downloads", "Appearance", "Network", "Categories", "Extension", "Advanced"}
 }
 
 const (
@@ -1403,11 +1388,6 @@ func SaveSettings(s *Settings) error {
 			continue
 		}
 
-		// Keep appearance settings in the existing general section for
-		// compatibility with older clients and configuration files.
-		if cat.Name == "Appearance" {
-			catKey = "general"
-		}
 		catMap, ok := raw[catKey].(map[string]any)
 		if !ok {
 			catMap = make(map[string]any)

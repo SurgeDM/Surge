@@ -148,6 +148,10 @@ func shortSettingsCategoryLabel(label string) string {
 	switch label {
 	case "General":
 		return "Gen"
+	case "Downloads":
+		return "DLs"
+	case "Advanced":
+		return "Adv"
 	case "Appearance":
 		return "Look"
 	case "Network":
@@ -482,6 +486,12 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		}
 	}
 
+	if meta.Key == "default_download_dir" && !m.SettingsIsEditing {
+		if path, ok := value.(string); ok && strings.TrimSpace(path) == "" {
+			valueStr = "(current directory)"
+		}
+	}
+
 	if (meta.Key == "default_download_dir" || meta.Key == "theme_path") && !m.SettingsIsEditing {
 		valueLabel = "[" + m.keys.Settings.Browse.Help().Key + "] Browse: "
 	}
@@ -717,12 +727,9 @@ func (m RootModel) getSettingsValues(category string) map[string]interface{} {
 		return values
 	}
 
-	for _, cat := range m.Settings.CategoriesList {
-		if cat.Name == category {
-			for _, set := range cat.Settings {
-				values[set.Key] = set.Value
-			}
-			break
+	for _, meta := range config.GetSettingsMetadata()[category] {
+		if setting := m.Settings.FindSetting(category, meta.Key); setting != nil {
+			values[meta.Key] = setting.Value
 		}
 	}
 
