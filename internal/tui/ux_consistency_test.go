@@ -157,3 +157,29 @@ func TestRemoteSettingsAcceptServerDirectoryAndDoNotOfferLocalRestart(t *testing
 		t.Fatal("server restart requirement was not shown")
 	}
 }
+
+func TestSettingsDownloadDirectoryDisplay(t *testing.T) {
+	m := InitialRootModel(1701, "test", nil, nil, config.DefaultSettings(), false)
+	m.keys = config.DefaultKeyMap()
+	meta := []config.SettingMeta{{Key: "default_download_dir", Label: "Directory", Type: config.TypeString}}
+	for _, tc := range []struct {
+		name, path string
+		current    bool
+	}{
+		{"empty", "", true},
+		{"spaces", "   ", false},
+		{"tab", "\t", false},
+		{"configured path", " /tmp/downloads ", false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			values := map[string]interface{}{"default_download_dir": tc.path}
+			got := ansiEscapeRE.ReplaceAllString(m.renderSettingsDetailBlock(meta, 0, values, 80, 8), "")
+			if strings.Contains(got, "(current directory)") != tc.current {
+				t.Fatalf("directory display for %q: %q", tc.path, got)
+			}
+			if tc.name == "configured path" && !strings.Contains(got, tc.path) {
+				t.Fatalf("configured path missing from display: %q", got)
+			}
+		})
+	}
+}

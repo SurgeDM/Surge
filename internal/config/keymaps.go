@@ -249,6 +249,20 @@ func LoadKeyMap() (*KeyMap, error) {
 		return defaults, err
 	}
 
+	// Update saved descriptions from the former default settings groups.
+	oldTabHelp := map[string]struct{ old, new string }{
+		"tab2": {"network", defaults.Settings.Tab2.Help().Desc},
+		"tab3": {"performance", defaults.Settings.Tab3.Help().Desc},
+		"tab4": {"categories", defaults.Settings.Tab4.Help().Desc},
+		"tab5": {"extension", defaults.Settings.Tab5.Help().Desc},
+	}
+	for name, binding := range cfg.Settings {
+		if migration, ok := oldTabHelp[strings.ToLower(name)]; ok && binding.Help == migration.old {
+			binding.Help = migration.new
+			cfg.Settings[name] = binding
+		}
+	}
+
 	defaults.ApplyConfig(&cfg)
 	defaults.Validate()
 

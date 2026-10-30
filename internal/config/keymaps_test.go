@@ -272,3 +272,78 @@ func TestReportBugAndToggleHelpKeymaps(t *testing.T) {
 		t.Errorf("Expected Settings.ReportBug help desc to be 'bug report', got %q", km.Settings.ReportBug.Help().Desc)
 	}
 }
+
+func TestLoadKeyMapMigratesFormerSettingsTabHelp(t *testing.T) {
+	for _, tc := range []struct {
+		tab, oldHelp, newHelp string
+	}{
+		{"Tab2", "network", "downloads"},
+		{"Tab3", "performance", "appearance"},
+		{"Tab4", "categories", "network"},
+		{"Tab5", "extension", "categories"},
+	} {
+		for _, custom := range []bool{false, true} {
+			name := tc.tab
+			if custom {
+				name += "/custom"
+			}
+			t.Run(name, func(t *testing.T) {
+				tmp := t.TempDir()
+				t.Setenv("XDG_CONFIG_HOME", tmp)
+				t.Setenv("APPDATA", tmp)
+				if err := os.MkdirAll(GetSurgeDir(), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				cfg := DefaultKeyMap().ToConfig()
+				binding := cfg.Settings[tc.tab]
+				binding.Keys = []string{"alt+9"}
+				binding.Help = tc.oldHelp
+				wantHelp := tc.newHelp
+				if custom {
+					binding.Help = "custom " + tc.oldHelp
+					wantHelp = binding.Help
+				}
+				// Binding names are accepted case-insensitively by ApplyConfig.
+				delete(cfg.Settings, tc.tab)
+				cfg.Settings[strings.ToLower(tc.tab)] = binding
+				data, err := json.MarshalIndent(cfg, "", "  ")
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(GetKeyMapConfigPath(), data, 0o600); err != nil {
+					t.Fatal(err)
+				}
+
+				loaded, err := LoadKeyMap()
+				if err != nil {
+					t.Fatal(err)
+				}
+				got := loaded.ToConfig().Settings[tc.tab]
+				if got.Help != wantHelp || !reflect.DeepEqual(got.Keys, binding.Keys) {
+					t.Fatalf("loaded binding = %+v, want help %q and keys %v", got, wantHelp, binding.Keys)
+				}
+				saved, err := os.ReadFile(GetKeyMapConfigPath())
+				if err != nil {
+					t.Fatal(err)
+				}
+				var persisted KeyMapConfig
+				if err := json.Unmarshal(saved, &persisted); err != nil {
+					t.Fatal(err)
+				}
+				if got := persisted.Settings[tc.tab]; got.Help != wantHelp || !reflect.DeepEqual(got.Keys, binding.Keys) {
+					t.Fatalf("persisted binding = %+v, want help %q and keys %v", got, wantHelp, binding.Keys)
+				}
+				if _, err := LoadKeyMap(); err != nil {
+					t.Fatal(err)
+				}
+				again, err := os.ReadFile(GetKeyMapConfigPath())
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(saved) != string(again) {
+					t.Fatal("keymap changed on second load")
+				}
+			})
+		}
+	}
+}

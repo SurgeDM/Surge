@@ -487,7 +487,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	}
 
 	if meta.Key == "default_download_dir" && !m.SettingsIsEditing {
-		if path, ok := value.(string); ok && strings.TrimSpace(path) == "" {
+		if path, ok := value.(string); ok && path == "" {
 			valueStr = "(current directory)"
 		}
 	}
