@@ -2,8 +2,10 @@ package tui
 
 import (
 	"fmt"
+	"image/color"
 	"path"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -65,21 +67,9 @@ func (m RootModel) renderModalWithOverlay(modal string) string {
 func (m RootModel) wrapView(content string) tea.View {
 	transparent := m.Settings != nil && m.Settings.General.TransparentBackground != nil && config.Resolve[bool](m.Settings.General.TransparentBackground)
 	if transparent {
-		// Button text normally contrasts with a colored fill; use the regular
-		// foreground when that fill is removed.
-		backgroundFG := strings.TrimSuffix(strings.TrimPrefix(ansi.NewStyle().ForegroundColor(colors.Background()).String(), "\x1b["), "m")
-		foregroundFG := strings.TrimSuffix(strings.TrimPrefix(ansi.NewStyle().ForegroundColor(colors.Foreground()).String(), "\x1b["), "m")
-		content = sgrSequence.ReplaceAllStringFunc(content, func(seq string) string {
-			params := strings.Split(seq[2:len(seq)-1], ";")
-			backgroundParams := strings.Split(backgroundFG, ";")
-			for i := 0; i+len(backgroundParams) <= len(params); i++ {
-				if strings.Join(params[i:i+len(backgroundParams)], ";") == backgroundFG {
-					params = append(append(params[:i:i], strings.Split(foregroundFG, ";")...), params[i+len(backgroundParams):]...)
-					break
-				}
-			}
-			return "\x1b[" + strings.Join(params, ";") + "m"
-		})
+		// Focused buttons and tabs use a colored fill. Preserve that color as
+		// their foreground so focus remains visible without the fill.
+		content = highlightTransparentFocus(content)
 		content = stripBackgroundColors(content)
 	}
 	v := tea.NewView(content)
@@ -93,6 +83,31 @@ func (m RootModel) wrapView(content string) tea.View {
 
 // stripBackgroundColors removes SGR background colors while preserving other styles.
 var sgrSequence = regexp.MustCompile(`\x1b\[([0-9;:]*)m`)
+
+func highlightTransparentFocus(content string) string {
+	accents := []string{}
+	for _, c := range []color.Color{colors.Pink(), colors.Magenta(), colors.Cyan(), colors.Orange(), colors.Red()} {
+		accents = append(accents, strings.TrimSuffix(strings.TrimPrefix(ansi.NewStyle().BackgroundColor(c).String(), "\x1b["), "m"))
+	}
+	return sgrSequence.ReplaceAllStringFunc(content, func(seq string) string {
+		params := strings.Split(seq[2:len(seq)-1], ";")
+		if !slices.Contains(params, "1") {
+			return seq
+		}
+		for i := 0; i+4 < len(params); i++ {
+			if params[i] != "48" || params[i+1] != "2" || !slices.Contains(accents, strings.Join(params[i:i+5], ";")) {
+				continue
+			}
+			for j := 0; j+4 < len(params); j++ {
+				if params[j] == "38" && params[j+1] == "2" {
+					copy(params[j+2:j+5], params[i+2:i+5])
+					return "\x1b[" + strings.Join(params, ";") + "m"
+				}
+			}
+		}
+		return seq
+	})
+}
 
 func stripBackgroundColors(content string) string {
 	return sgrSequence.ReplaceAllStringFunc(content, func(seq string) string {

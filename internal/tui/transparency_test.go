@@ -36,3 +36,31 @@ func TestTransparentBackgroundViews(t *testing.T) {
 		t.Fatal("disabling transparency did not restore themed rendering")
 	}
 }
+
+func TestTransparentConfirmationHighlightsFocusedButton(t *testing.T) {
+	InitializeTUI()
+	m := InitialRootModel(1701, "test", nil, nil, config.DefaultSettings(), false)
+	m.width, m.height, m.state = 100, 30, QuitConfirmState
+	m.Settings.General.TransparentBackground.Value = true
+	for _, tc := range []struct {
+		focus           int
+		selected, other string
+	}{{0, "Y", "N"}, {1, "N", "Y"}} {
+		m.quitConfirmFocused = tc.focus
+		content := m.View().Content
+		selected := "38;2;255;121;198"
+		for _, c := range []struct {
+			label string
+			want  bool
+		}{{tc.selected, true}, {tc.other, false}} {
+			pos := strings.Index(content, "m"+c.label+"\x1b[")
+			if pos < 0 {
+				t.Fatalf("button %s not found", c.label)
+			}
+			start := strings.LastIndex(content[:pos], "\x1b[")
+			if start < 0 || strings.Contains(content[start:pos], selected) != c.want {
+				t.Fatalf("focus %d: wrong highlight for %s: %q", tc.focus, c.label, content[start:pos+2])
+			}
+		}
+	}
+}
