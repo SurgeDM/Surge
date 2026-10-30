@@ -177,7 +177,7 @@ Category rules are checked from top to bottom; the first matching rule determine
 
 These dialogs initially select **Cancel**. Changes remain staged in Settings until you save and close it.
 
-Category rows show their own shortcut help. Left/right tab switching is inactive while the category list is focused; use `1`–`5` to switch settings tabs. In a category editor, Tab/Down and Shift+Tab/Up move between fields. The `Reset`, `ResetAll`, and `DeleteCategory` bindings can be customized in the `settings` section of the keymap.
+Category rows show their own shortcut help. Left/right tab switching is inactive while the category list is focused; use `1`–`7` to switch settings tabs. In a category editor, Tab/Down and Shift+Tab/Up move between fields. The `Reset`, `ResetAll`, and `DeleteCategory` bindings can be customized in the `settings` section of the keymap.
 
 ### Assigning a download category
 
