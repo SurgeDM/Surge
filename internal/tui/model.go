@@ -196,7 +196,7 @@ type RootModel struct {
 	SettingsReadOnly      bool
 	SettingsBaseline      *config.Settings // Snapshot of settings when entering the settings view
 	StartupConfigWarnings []string         // Config validation warnings to emit on first render
-	SettingsActiveTab     int              // Active category tab (0-3)
+	SettingsActiveTab     int              // Active category tab
 	SettingsSelectedRow   int              // Selected setting within current tab
 	SettingsFocusedPane   int              // Focused settings pane (0 = Tabs, 1 = List)
 	SettingsIsEditing     bool             // Whether currently editing a value

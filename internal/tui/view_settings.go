@@ -148,6 +148,8 @@ func shortSettingsCategoryLabel(label string) string {
 	switch label {
 	case "General":
 		return "Gen"
+	case "Appearance":
+		return "Look"
 	case "Network":
 		return "Net"
 	case "Performance":

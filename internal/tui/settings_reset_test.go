@@ -102,6 +102,9 @@ func getFieldByJsonKey(t *testing.T, s *config.Settings, categoryLabel, jsonKey 
 	}
 
 	if !catField.IsValid() {
+		if categoryLabel == "Appearance" {
+			catField = reflect.ValueOf(s).Elem().FieldByName("General")
+		}
 		if categoryLabel == "Speed Limits" {
 			catField = reflect.ValueOf(s).Elem().FieldByName("Network")
 		}

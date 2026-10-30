@@ -50,6 +50,7 @@ type GeneralSettings struct {
 	ClipboardMonitor             *Setting `json:"clipboard_monitor"`
 	Theme                        *Setting `json:"theme"`
 	ThemePath                    *Setting `json:"theme_path"`
+	TransparentBackground        *Setting `json:"transparent_background"`
 	LogRetentionCount            *Setting `json:"log_retention_count"`
 	LiveSpeedGraph               *Setting `json:"live_speed_graph"`
 	ShowSpeedGraph               *Setting `json:"show_speed_graph"`
@@ -268,9 +269,15 @@ func (s *Settings) initializeCategoriesList() {
 				s.General.AutoStart,
 				s.General.SkipUpdateCheck,
 				s.General.ClipboardMonitor,
+				s.General.LogRetentionCount,
+			},
+		},
+		{
+			Name: "Appearance",
+			Settings: []*Setting{
 				s.General.Theme,
 				s.General.ThemePath,
-				s.General.LogRetentionCount,
+				s.General.TransparentBackground,
 				s.General.LiveSpeedGraph,
 				s.General.ShowSpeedGraph,
 			},
@@ -331,6 +338,9 @@ func (s *Settings) FindSetting(categoryName, key string) *Setting {
 				if set.Key == key {
 					return set
 				}
+			}
+			if categoryName == "General" {
+				return s.FindSetting("Appearance", key)
 			}
 			return nil
 		}
@@ -490,6 +500,7 @@ func GetSettingsMetadata() map[string][]SettingMeta {
 func CategoryOrder() []string {
 	return []string{
 		"General",
+		"Appearance",
 		"Network",
 		"Performance",
 		"Categories",
@@ -638,6 +649,14 @@ func DefaultSettings() *Settings {
 				Type:         TypeString,
 				DefaultValue: "",
 				Value:        "",
+			},
+			TransparentBackground: &Setting{
+				Key:          "transparent_background",
+				Label:        "Transparent background",
+				Description:  "Use the terminal background throughout the UI.",
+				Type:         TypeBool,
+				DefaultValue: false,
+				Value:        false,
 			},
 			LogRetentionCount: &Setting{
 				Key:          "log_retention_count",
@@ -1384,7 +1403,15 @@ func SaveSettings(s *Settings) error {
 			continue
 		}
 
-		catMap := make(map[string]any)
+		// Keep appearance settings in the existing general section for
+		// compatibility with older clients and configuration files.
+		if cat.Name == "Appearance" {
+			catKey = "general"
+		}
+		catMap, ok := raw[catKey].(map[string]any)
+		if !ok {
+			catMap = make(map[string]any)
+		}
 		for _, set := range cat.Settings {
 			if set.Type == TypeDuration {
 				if d, ok := set.Value.(time.Duration); ok {

@@ -454,6 +454,8 @@ func TestSaveSettings_RealFunction(t *testing.T) {
 	original := DefaultSettings()
 	original.Network.MaxConnectionsPerDownload.Value = 48
 	original.General.AutoResume.Value = true
+	original.General.Theme.Value = ThemeDark
+	original.General.TransparentBackground.Value = true
 
 	err := SaveSettings(original)
 	if err != nil {
@@ -470,6 +472,12 @@ func TestSaveSettings_RealFunction(t *testing.T) {
 	}
 	if !Resolve[bool](loaded.General.AutoResume) {
 		t.Error("AutoResume should be true")
+	}
+	if Resolve[int](loaded.General.Theme) != ThemeDark || !Resolve[bool](loaded.General.TransparentBackground) {
+		t.Error("appearance settings did not survive save and load")
+	}
+	if loaded.FindSetting("Appearance", "theme") != loaded.FindSetting("General", "theme") {
+		t.Error("legacy general lookup must address the appearance setting")
 	}
 }
 

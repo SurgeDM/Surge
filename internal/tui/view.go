@@ -3,6 +3,8 @@ package tui
 import (
 	"fmt"
 	"path"
+	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
@@ -61,11 +63,62 @@ func (m RootModel) renderModalWithOverlay(modal string) string {
 }
 
 func (m RootModel) wrapView(content string) tea.View {
+	transparent := m.Settings != nil && m.Settings.General.TransparentBackground != nil && config.Resolve[bool](m.Settings.General.TransparentBackground)
+	if transparent {
+		// Button text normally contrasts with a colored fill; use the regular
+		// foreground when that fill is removed.
+		backgroundFG := strings.TrimSuffix(strings.TrimPrefix(ansi.NewStyle().ForegroundColor(colors.Background()).String(), "\x1b["), "m")
+		foregroundFG := strings.TrimSuffix(strings.TrimPrefix(ansi.NewStyle().ForegroundColor(colors.Foreground()).String(), "\x1b["), "m")
+		content = sgrSequence.ReplaceAllStringFunc(content, func(seq string) string {
+			params := strings.Split(seq[2:len(seq)-1], ";")
+			backgroundParams := strings.Split(backgroundFG, ";")
+			for i := 0; i+len(backgroundParams) <= len(params); i++ {
+				if strings.Join(params[i:i+len(backgroundParams)], ";") == backgroundFG {
+					params = append(append(params[:i:i], strings.Split(foregroundFG, ";")...), params[i+len(backgroundParams):]...)
+					break
+				}
+			}
+			return "\x1b[" + strings.Join(params, ";") + "m"
+		})
+		content = stripBackgroundColors(content)
+	}
 	v := tea.NewView(content)
 	v.AltScreen = true
-	v.BackgroundColor = colors.Background()
+	if !transparent {
+		v.BackgroundColor = colors.Background()
+	}
 	v.ForegroundColor = colors.Foreground()
 	return v
+}
+
+// stripBackgroundColors removes SGR background colors while preserving other styles.
+var sgrSequence = regexp.MustCompile(`\x1b\[([0-9;:]*)m`)
+
+func stripBackgroundColors(content string) string {
+	return sgrSequence.ReplaceAllStringFunc(content, func(seq string) string {
+		params := strings.Split(seq[2:len(seq)-1], ";")
+		kept := make([]string, 0, len(params))
+		for i := 0; i < len(params); i++ {
+			part := params[i]
+			code, err := strconv.Atoi(strings.SplitN(part, ":", 2)[0])
+			if err == nil && (code == 48 || code == 49 || code >= 40 && code <= 47 || code >= 100 && code <= 107) {
+				if code == 48 && !strings.Contains(part, ":") && i+1 < len(params) {
+					switch params[i+1] {
+					case "2":
+						i += min(4, len(params)-1-i)
+					case "5":
+						i += min(2, len(params)-1-i)
+					}
+				}
+				continue
+			}
+			kept = append(kept, part)
+		}
+		if len(kept) == 0 {
+			return ""
+		}
+		return "\x1b[" + strings.Join(kept, ";") + "m"
+	})
 }
 
 func (m RootModel) View() tea.View {
