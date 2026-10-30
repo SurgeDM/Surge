@@ -41,6 +41,7 @@ type Settings struct {
 type GeneralSettings struct {
 	DefaultDownloadDir           *Setting `json:"default_download_dir"`
 	WarnOnDuplicate              *Setting `json:"warn_on_duplicate"`
+	BlockWebpageDownloads        *Setting `json:"block_webpage_downloads"`
 	DownloadCompleteNotification *Setting `json:"download_complete_notification"`
 	AutoShutdownAfterDownloads   *Setting `json:"auto_shutdown_after_downloads"`
 	AllowRemoteOpenActions       *Setting `json:"allow_remote_open_actions"`
@@ -261,6 +262,7 @@ func (s *Settings) initializeCategoriesList() {
 			Settings: []*Setting{
 				s.General.DefaultDownloadDir,
 				s.General.WarnOnDuplicate,
+				s.General.BlockWebpageDownloads,
 				s.General.DownloadCompleteNotification,
 				s.General.AutoShutdownAfterDownloads,
 				s.General.AllowRemoteOpenActions,
@@ -552,6 +554,14 @@ func DefaultSettings() *Settings {
 				Type:         TypeBool,
 				DefaultValue: true,
 				Value:        true,
+			},
+			BlockWebpageDownloads: &Setting{
+				Key:          "block_webpage_downloads",
+				Label:        "Block webpage downloads",
+				Description:  "Reject downloads when the server returns HTML or the filename ends with .html, .htm, or .xhtml.",
+				Type:         TypeBool,
+				DefaultValue: false,
+				Value:        false,
 			},
 			DownloadCompleteNotification: &Setting{
 				Key:          "download_complete_notification",

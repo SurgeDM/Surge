@@ -249,6 +249,21 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 	return result, nil
 }
 
+// LooksLikeWebpage reports whether probe metadata indicates an HTML document
+// rather than a typical file download.
+func LooksLikeWebpage(filename, contentType string) bool {
+	ct := strings.ToLower(contentType)
+	if strings.Contains(ct, "text/html") || strings.Contains(ct, "application/xhtml+xml") {
+		return true
+	}
+	switch strings.ToLower(filepath.Ext(filename)) {
+	case ".html", ".htm", ".xhtml":
+		return true
+	default:
+		return false
+	}
+}
+
 func suspiciousResponseWarning(filename, contentType string, size int64) string {
 	if size <= 0 || size > 512 {
 		return ""
