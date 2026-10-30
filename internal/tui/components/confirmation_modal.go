@@ -119,7 +119,14 @@ func renderYesNoButtonsWithSpacing(yesLabel, noLabel string, focused int, btnCol
 	yesBtn := renderBtn(yesPadStyle, yesFirstStyle, yesRestStyle, yesFirst, yesRest)
 	noBtn := renderBtn(noPadStyle, noFirstStyle, noRestStyle, noFirst, noRest)
 
-	return lipgloss.JoinHorizontal(lipgloss.Center, yesBtn, gap, noBtn)
+	yesMarker, noMarker := "  ", "  "
+	if focused == 1 {
+		noMarker = "> "
+	} else {
+		yesMarker = "> "
+	}
+	markerStyle := lipgloss.NewStyle().Foreground(btnColor).Bold(true)
+	return lipgloss.JoinHorizontal(lipgloss.Center, markerStyle.Render(yesMarker), yesBtn, gap, markerStyle.Render(noMarker), noBtn)
 }
 
 func splitFirst(label string) (string, string) {

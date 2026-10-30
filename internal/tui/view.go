@@ -2,11 +2,7 @@ package tui
 
 import (
 	"fmt"
-	"image/color"
 	"path"
-	"regexp"
-	"slices"
-	"strconv"
 	"strings"
 	"time"
 
@@ -57,83 +53,26 @@ func formatDurationForUI(d time.Duration) string {
 
 // renderModalWithOverlay renders a modal centered on the themed surface.
 func (m RootModel) renderModalWithOverlay(modal string) string {
-	// Place modal centered with dark gray background fill for overlay effect
+	style := lipgloss.NewStyle()
+	if !m.transparentBackground() {
+		style = style.Background(colors.Background())
+	}
 	return lipgloss.Place(m.width, m.height, lipgloss.Center, lipgloss.Center, modal,
-		lipgloss.WithWhitespaceChars(" "), // Changed from "░" to avoid terminal rendering glitches
-		lipgloss.WithWhitespaceStyle(lipgloss.NewStyle().Background(colors.Background())),
-	)
+		lipgloss.WithWhitespaceChars(" "), lipgloss.WithWhitespaceStyle(style))
+}
+
+func (m RootModel) transparentBackground() bool {
+	return m.Settings != nil && m.Settings.General.TransparentBackground != nil && config.Resolve[bool](m.Settings.General.TransparentBackground)
 }
 
 func (m RootModel) wrapView(content string) tea.View {
-	transparent := m.Settings != nil && m.Settings.General.TransparentBackground != nil && config.Resolve[bool](m.Settings.General.TransparentBackground)
-	if transparent {
-		// Focused buttons and tabs use a colored fill. Preserve that color as
-		// their foreground so focus remains visible without the fill.
-		content = highlightTransparentFocus(content)
-		content = stripBackgroundColors(content)
-	}
 	v := tea.NewView(content)
 	v.AltScreen = true
-	if !transparent {
+	if !m.transparentBackground() {
 		v.BackgroundColor = colors.Background()
 	}
 	v.ForegroundColor = colors.Foreground()
 	return v
-}
-
-// stripBackgroundColors removes SGR background colors while preserving other styles.
-var sgrSequence = regexp.MustCompile(`\x1b\[([0-9;:]*)m`)
-
-func highlightTransparentFocus(content string) string {
-	accents := []string{}
-	for _, c := range []color.Color{colors.Pink(), colors.Magenta(), colors.Cyan(), colors.Orange(), colors.Red()} {
-		accents = append(accents, strings.TrimSuffix(strings.TrimPrefix(ansi.NewStyle().BackgroundColor(c).String(), "\x1b["), "m"))
-	}
-	return sgrSequence.ReplaceAllStringFunc(content, func(seq string) string {
-		params := strings.Split(seq[2:len(seq)-1], ";")
-		if !slices.Contains(params, "1") {
-			return seq
-		}
-		for i := 0; i+4 < len(params); i++ {
-			if params[i] != "48" || params[i+1] != "2" || !slices.Contains(accents, strings.Join(params[i:i+5], ";")) {
-				continue
-			}
-			for j := 0; j+4 < len(params); j++ {
-				if params[j] == "38" && params[j+1] == "2" {
-					copy(params[j+2:j+5], params[i+2:i+5])
-					return "\x1b[" + strings.Join(params, ";") + "m"
-				}
-			}
-		}
-		return seq
-	})
-}
-
-func stripBackgroundColors(content string) string {
-	return sgrSequence.ReplaceAllStringFunc(content, func(seq string) string {
-		params := strings.Split(seq[2:len(seq)-1], ";")
-		kept := make([]string, 0, len(params))
-		for i := 0; i < len(params); i++ {
-			part := params[i]
-			code, err := strconv.Atoi(strings.SplitN(part, ":", 2)[0])
-			if err == nil && (code == 48 || code == 49 || code >= 40 && code <= 47 || code >= 100 && code <= 107) {
-				if code == 48 && !strings.Contains(part, ":") && i+1 < len(params) {
-					switch params[i+1] {
-					case "2":
-						i += min(4, len(params)-1-i)
-					case "5":
-						i += min(2, len(params)-1-i)
-					}
-				}
-				continue
-			}
-			kept = append(kept, part)
-		}
-		if len(kept) == 0 {
-			return ""
-		}
-		return "\x1b[" + strings.Join(kept, ";") + "m"
-	})
 }
 
 func (m RootModel) View() tea.View {
