@@ -9,7 +9,7 @@ const {
   releaseMetadata, updateNeeded, prepareUpdate, publishUpdate,
 } = require('./nix-release.cjs');
 
-function fixture(version = '0.12.3', checksumName = 'checksums.txt') {
+function fixture(version = '0.12.3') {
   const files = new Map();
   const assets = [];
   const lines = [];
@@ -24,7 +24,7 @@ function fixture(version = '0.12.3', checksumName = 'checksums.txt') {
     const name = `Surge_${version}_${suffix}.tar.gz`;
     lines.push(`${add(name, Buffer.from(name))}  ${name}`);
   }
-  add(checksumName, Buffer.from(`${lines.join('\n')}\n`));
+  add('checksums.txt', Buffer.from(`${lines.join('\n')}\n`));
   return {
     release: { tag_name: `v${version}`, draft: false, prerelease: false, assets },
     getBytes: async file => files.get(file.name), files,
@@ -208,9 +208,4 @@ test('failed archive verification leaves the committed metadata untouched', asyn
       assert.deepEqual(JSON.parse(fs.readFileSync('nix/release.json')), before);
     });
   } finally { global.fetch = originalFetch; }
-});
-
-test('supports the legacy versioned checksum filename', async () => {
-  const f = fixture('0.12.3', 'Surge_0.12.3_checksums.txt');
-  assert.equal((await releaseMetadata(f.release, f.getBytes)).version, '0.12.3');
 });

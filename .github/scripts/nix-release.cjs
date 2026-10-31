@@ -81,10 +81,7 @@ async function releaseMetadata(release, getBytes = download) {
   assert(!release.draft && !release.prerelease && release.tag_name?.startsWith('v') &&
     VERSION.test(release.tag_name.slice(1)), 'Expected a published stable Surge release');
   const version = release.tag_name.slice(1);
-  // Retain support for releases published before checksums.txt became canonical.
-  const checksumName = release.assets.some(file => file.name === 'checksums.txt')
-    ? 'checksums.txt' : `Surge_${version}_checksums.txt`;
-  const checksumFile = asset(release, checksumName);
+  const checksumFile = asset(release, 'checksums.txt');
   const checksumBytes = await getBytes(checksumFile);
   if (checksumFile.digest) {
     assert(/^sha256:[a-f0-9]{64}$/.test(checksumFile.digest), 'Invalid checksum file digest');
