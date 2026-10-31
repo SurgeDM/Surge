@@ -24,7 +24,7 @@ function fixture(version = '0.12.3') {
     const name = `Surge_${version}_${suffix}.tar.gz`;
     lines.push(`${add(name, Buffer.from(name))}  ${name}`);
   }
-  add(`Surge_${version}_checksums.txt`, Buffer.from(`${lines.join('\n')}\n`));
+  add('checksums.txt', Buffer.from(`${lines.join('\n')}\n`));
   return {
     release: { tag_name: `v${version}`, draft: false, prerelease: false, assets },
     getBytes: async file => files.get(file.name), files,

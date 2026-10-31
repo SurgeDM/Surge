@@ -1,5 +1,8 @@
 version: 2
 
+checksum:
+  name_template: checksums.txt
+
 builds:
   - env:
       - CGO_ENABLED=0
