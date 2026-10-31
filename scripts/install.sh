@@ -67,7 +67,10 @@ curl -fsSL -o "${WORKDIR}/${ASSET}" "${BASE_URL}/${ASSET}" \
   || die "failed to download ${BASE_URL}/${ASSET} (this OS/arch combination may not be published — see https://github.com/${REPO}/releases)"
 
 log "Verifying checksum..."
-curl -fsSL -o "${WORKDIR}/checksums.txt" "${BASE_URL}/Surge_${VERSION_NUM}_checksums.txt"
+# Older releases only published a versioned checksum filename.
+if ! curl -fsSL -o "${WORKDIR}/checksums.txt" "${BASE_URL}/checksums.txt"; then
+  curl -fsSL -o "${WORKDIR}/checksums.txt" "${BASE_URL}/Surge_${VERSION_NUM}_checksums.txt"
+fi
 (
   cd "$WORKDIR"
   EXPECTED="$(grep " ${ASSET}\$" checksums.txt | awk '{print $1}')"
