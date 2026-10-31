@@ -62,6 +62,7 @@ Surge is available on multiple platforms. Choose the method that works best for 
 | Platform / Method                  | Command / Instructions                                                           | Notes                                        |
 | :--------------------------------- | :------------------------------------------------------------------------------- | :------------------------------------------- |
 | **Prebuilt Binary**          | [Download from Releases](https://github.com/SurgeDM/Surge/releases/latest) | Easiest method. Just download and run.       |
+| **macOS / Linux (Install Script)** | `curl -fsSL https://surgedm.github.io/install \| sh` | Verifies the release checksum and installs to `~/.local/bin`. Run again to update. [Script options](docs/getting-started.md#install-surge). |
 | **Linux AppImage**           | [Download from Releases](https://github.com/SurgeDM/Surge/releases/latest) | Run `chmod +x Surge_..._linux_x86_64.AppImage`, then `./Surge_..._linux_x86_64.AppImage`. Supports delta updates. |
 | **Arch Linux (AUR)**         | `yay -S surge`                                                                 | Managed via AUR.                             |
 | **macOS / Linux (Homebrew)** | `brew install SurgeDM/tap/surge`                                      | Recommended for Mac/Linux users.             |

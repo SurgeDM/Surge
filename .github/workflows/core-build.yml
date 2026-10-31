@@ -237,6 +237,21 @@ jobs:
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           CHOCOLATEY_API_KEY: ${{ secrets.CHOCOLATEY_API_KEY }}
 
+      # Existing self-updaters require this name; installers and Nix use the versioned file.
+      - name: Publish checksum alias for self-updates
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          checksum_dir=$(mktemp -d)
+          trap 'rm -rf "$checksum_dir"' EXIT
+          checksum_name="Surge_${GITHUB_REF_NAME#v}_checksums.txt"
+          gh release download "$GITHUB_REF_NAME" --pattern "$checksum_name" --dir "$checksum_dir"
+          test -s "$checksum_dir/$checksum_name"
+          cp "$checksum_dir/$checksum_name" "$checksum_dir/checksums.txt"
+          gh release upload "$GITHUB_REF_NAME" "$checksum_dir/checksums.txt" --clobber
+
   appimage:
     name: Package AppImage
     runs-on: ubuntu-latest
