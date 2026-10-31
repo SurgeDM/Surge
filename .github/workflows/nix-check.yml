@@ -21,6 +21,27 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      nixos: ${{ steps.filter.outputs.nixos }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            nixos:
+              - 'nix/**'
+              - 'packaging/nix/**'
+              - 'flake.nix'
+              - 'flake.lock'
+              - 'package.nix'
+              - '.github/workflows/nix-check.yml'
+              - '**/*.go'
+              - 'go.mod'
+              - 'go.sum'
+
   tooling:
     runs-on: ubuntu-latest
     steps:
@@ -99,6 +120,8 @@ jobs:
 
   nixos:
     name: NixOS integration
+    needs: changes
+    if: github.event_name != 'pull_request' || needs.changes.outputs.nixos == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
