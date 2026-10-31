@@ -29,6 +29,7 @@ jobs:
           ref: ${{ inputs.source-ref || github.sha }}
           persist-credentials: false
       - run: node --test .github/scripts/nix-release.test.cjs
+      - run: bash packaging/nix/check-token-test.sh
 
   package:
     name: Package (${{ matrix.system }})
@@ -83,6 +84,10 @@ jobs:
           test "$(nix eval --impure --raw --expr builtins.currentSystem)" = "$EXPECTED_SYSTEM"
           nix flake check --no-write-lock-file --print-build-logs
           nix run --no-write-lock-file .#surge -- --version
+      - name: Check Home Manager configurations
+        env:
+          NIX_CONFIG: extra-experimental-features = nix-command flakes
+        run: nix eval --impure --json --file packaging/nix/tests.nix
       - name: Verify profile installation and PATH
         env:
           NIX_CONFIG: extra-experimental-features = nix-command flakes
@@ -108,7 +113,7 @@ jobs:
           name: ${{ inputs.release-artifact }}
           path: nix
       - uses: cachix/install-nix-action@d9186cbdca7adedf113a159fa91f725a27866771 # v31
-      - name: Evaluate NixOS package and service
+      - name: Evaluate NixOS package integration
         env:
           NIX_CONFIG: extra-experimental-features = nix-command flakes
         run: nix eval --impure --json --file nix/check-nixos.nix

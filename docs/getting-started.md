@@ -119,3 +119,34 @@ service.
 - [Add, inspect, pause, resume, and remove downloads](guides/download-files.md)
 - [Learn the TUI controls](guides/use-the-tui.md)
 - [Read the CLI reference](reference/cli.md)
+
+#### Home Manager
+
+Import `inputs.surge.homeModules.default` into your Home Manager configuration:
+
+```nix
+{
+  imports = [ inputs.surge.homeModules.default ];
+  programs.surge = {
+    enable = true;
+    headless.enable = true;
+    # Optional: a protected runtime path managed by sops-nix or another secret manager.
+    # headless.tokenFile = "/run/secrets/surge-token";
+    settings.general.default_download_dir = "/home/alice/Downloads";
+  };
+}
+```
+
+Headless mode creates a systemd user service on Linux and a LaunchAgent on macOS.
+Without `tokenFile`, Surge uses its persisted or auto-generated token (`surge token`).
+Keep an override token file readable only by the account running Surge. Changing
+its contents requires restarting the service.
+
+Settings and keymaps are optional. When declared, Home Manager owns those files
+and replaces runtime edits at the next activation. Back up existing configuration
+before switching. Settings changes restart the headless service; keymap changes
+do not. On macOS with XDG disabled, configuration and token files use
+`~/Library/Application Support/surge`.
+
+The NixOS module installs the package only. Configure the user service through
+Home Manager rather than the old `programs.surge.systemd.enable` option.

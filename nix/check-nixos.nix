@@ -9,17 +9,14 @@ let
       {
         system.stateVersion = "26.05";
         programs.surge.enable = true;
-        programs.surge.systemd.enable = true;
       }
     ];
   };
-  package = nixos.pkgs.surge;
-  service = nixos.config.systemd.services.surge.serviceConfig;
+  package = flake.packages.${system}.surge;
 in
-assert builtins.elem package nixos.config.environment.systemPackages;
-assert service.ExecStart == "${package}/bin/surge server start --is-system-service";
+assert builtins.any (p: p.drvPath == package.drvPath) nixos.config.environment.systemPackages;
+assert !(nixos.config.systemd.services ? surge);
 assert package.version == flake.packages.${system}.surge.version;
 {
   inherit (package) version;
-  inherit (service) ExecStart;
 }
