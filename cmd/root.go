@@ -525,7 +525,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool, releaseLock func()) er
 
 	configureServiceUI(&m)
 
-	m.ServerHost = serverBindHost
+	m.ServerHost = serverBindHost()
 	if m.ServerHost == "" {
 		m.ServerHost = "127.0.0.1"
 	}

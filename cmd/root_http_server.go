@@ -25,13 +25,21 @@ func resolveRuntimeDir() string {
 	return config.GetRuntimeDir()
 }
 
-const serverBindHost = "0.0.0.0"
+// serverBindHost returns the configured HTTP API bind address.
+func serverBindHost() string {
+	if settings := getSettings(); settings != nil && settings.Network.BindHost != nil {
+		if host, ok := settings.Network.BindHost.Value.(string); ok && strings.TrimSpace(host) != "" {
+			return strings.TrimSpace(host)
+		}
+	}
+	return config.DefaultBindHost
+}
 
 const maxAPIRequestBodyBytes = 8 << 20
 
 // findAvailablePort tries ports starting from 'start' until one is available
 func findAvailablePort(start int) (int, net.Listener) {
-	bindHost := serverBindHost
+	bindHost := serverBindHost()
 	for port := start; port < start+100; port++ {
 		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindHost, port))
 		if err == nil {
@@ -42,8 +50,8 @@ func findAvailablePort(start int) (int, net.Listener) {
 }
 
 func bindServerListener(portFlag int) (int, net.Listener, error) {
-	bindHost := serverBindHost
 	if portFlag > 0 {
+		bindHost := serverBindHost()
 		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindHost, portFlag))
 		if err != nil {
 			return 0, nil, fmt.Errorf("could not bind to port %d: %w", portFlag, err)

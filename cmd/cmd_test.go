@@ -69,7 +69,7 @@ func TestFindAvailablePort_ReturnsListener(t *testing.T) {
 func TestFindAvailablePort_SkipsOccupiedPorts(t *testing.T) {
 	requireTCPListener(t)
 	// Occupy any port
-	ln1, err := net.Listen("tcp", fmt.Sprintf("%s:0", serverBindHost))
+	ln1, err := net.Listen("tcp", fmt.Sprintf("%s:0", serverBindHost()))
 	if err != nil {
 		t.Fatalf("Failed to occupy any port: %v", err)
 	}
@@ -420,9 +420,41 @@ func TestIsLoopbackHost(t *testing.T) {
 }
 
 func TestGetServerBindHost(t *testing.T) {
-	host := serverBindHost
-	if host != "0.0.0.0" {
-		t.Errorf("getServerBindHost should be 0.0.0.0, got: %q", host)
+	previousService, previousSettings := GlobalService, globalSettings
+	t.Cleanup(func() { GlobalService, globalSettings = previousService, previousSettings })
+	GlobalService = nil
+
+	settings := config.DefaultSettings()
+	setGlobalSettings(settings)
+	if host := serverBindHost(); host != "0.0.0.0" {
+		t.Errorf("serverBindHost should default to 0.0.0.0, got: %q", host)
+	}
+
+	settings.Network.BindHost.Value = "127.0.0.1"
+	setGlobalSettings(settings)
+	if host := serverBindHost(); host != "127.0.0.1" {
+		t.Errorf("serverBindHost should follow network.bind_host, got: %q", host)
+	}
+}
+
+func TestBindServerListener_UsesConfiguredBindHost(t *testing.T) {
+	requireTCPListener(t)
+	previousService, previousSettings := GlobalService, globalSettings
+	t.Cleanup(func() { GlobalService, globalSettings = previousService, previousSettings })
+	GlobalService = nil
+
+	settings := config.DefaultSettings()
+	settings.Network.BindHost.Value = "127.0.0.1"
+	setGlobalSettings(settings)
+
+	_, ln, err := bindServerListener(0)
+	if err != nil {
+		t.Fatalf("bindServerListener failed: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	if ip := ln.Addr().(*net.TCPAddr).IP; !ip.Equal(net.IPv4(127, 0, 0, 1)) {
+		t.Errorf("listener bound to %v, want 127.0.0.1", ip)
 	}
 }
 

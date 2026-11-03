@@ -533,6 +533,28 @@ func TestSettings_Validate(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "Loopback Bind Host Kept",
+			modify: func(s *Settings) {
+				s.Network.BindHost.Value = "127.0.0.1"
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if got := s.Network.BindHost.Value; got != "127.0.0.1" {
+					t.Errorf("Expected 127.0.0.1, got %v", got)
+				}
+			},
+		},
+		{
+			name: "Unreachable Bind Host Reset",
+			modify: func(s *Settings) {
+				s.Network.BindHost.Value = "192.168.1.10"
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if got := s.Network.BindHost.Value; got != defaults.Network.BindHost.Value {
+					t.Errorf("Expected default %v, got %v", defaults.Network.BindHost.Value, got)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {
