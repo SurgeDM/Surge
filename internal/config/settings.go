@@ -64,22 +64,31 @@ func LoadBindHost() (string, error) {
 	if err := toml.Unmarshal(data, &raw); err != nil {
 		return "", fmt.Errorf("parse %s: %w", path, err)
 	}
+	// Match sections case-insensitively and the key exactly, as LoadSettings
+	// does, so both loaders agree on the value in effect.
+	var host any
+	found := false
 	for section, sectionRaw := range raw {
 		values, ok := sectionRaw.(map[string]any)
 		if !ok || !strings.EqualFold(section, "network") {
 			continue
 		}
-		for key, val := range values {
-			if !strings.EqualFold(key, "bind_host") {
-				continue
-			}
-			if err := validateBindHost(val); err != nil {
-				return "", fmt.Errorf("%s: network.bind_host %v: %w", path, val, err)
-			}
-			return strings.TrimSpace(val.(string)), nil
+		val, ok := values["bind_host"]
+		if !ok {
+			continue
 		}
+		if found {
+			return "", fmt.Errorf("%s: network.bind_host is set in more than one network section", path)
+		}
+		host, found = val, true
 	}
-	return DefaultBindHost, nil
+	if !found {
+		return DefaultBindHost, nil
+	}
+	if err := validateBindHost(host); err != nil {
+		return "", fmt.Errorf("%s: network.bind_host %v: %w", path, host, err)
+	}
+	return strings.TrimSpace(host.(string)), nil
 }
 
 type Settings struct {

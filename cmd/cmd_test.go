@@ -419,20 +419,17 @@ func TestIsLoopbackHost(t *testing.T) {
 	}
 }
 
-// writeSettingsFile replaces settings.toml for the duration of the test.
+// writeSettingsFile writes settings.toml into a config directory owned by the
+// test, so it never touches a real settings file even without TestMain's setup.
 func writeSettingsFile(t *testing.T, content string) {
 	t.Helper()
-	path := config.GetSettingsPath()
-	previous, readErr := os.ReadFile(path)
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("APPDATA", dir)
 	previousHost := activeBindHost
-	t.Cleanup(func() {
-		activeBindHost = previousHost
-		if readErr == nil {
-			_ = os.WriteFile(path, previous, 0o644)
-		} else {
-			_ = os.Remove(path)
-		}
-	})
+	t.Cleanup(func() { activeBindHost = previousHost })
+
+	path := config.GetSettingsPath()
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		t.Fatalf("create settings dir: %v", err)
 	}

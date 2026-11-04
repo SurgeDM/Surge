@@ -381,6 +381,8 @@ func TestLoadBindHost(t *testing.T) {
 		{name: "key not set", content: "[network]\nproxy_url = ''\n", want: DefaultBindHost},
 		{name: "loopback", content: "[network]\nbind_host = '127.0.0.1'\n", want: "127.0.0.1"},
 		{name: "section name case", content: "[Network]\nbind_host = '127.0.0.1'\n", want: "127.0.0.1"},
+		{name: "key name case ignored like LoadSettings", content: "[network]\nBIND_HOST = '127.0.0.1'\n", want: DefaultBindHost},
+		{name: "set in two sections", content: "[network]\nbind_host = '127.0.0.1'\n[Network]\nbind_host = '0.0.0.0'\n", wantErr: true},
 		{name: "invalid value", content: "[network]\nbind_host = '192.168.1.10'\n", wantErr: true},
 		{name: "not a string", content: "[network]\nbind_host = 1\n", wantErr: true},
 		{name: "corrupt file", content: "[network\nbind_host = '127.0.0.1'\n", wantErr: true},
