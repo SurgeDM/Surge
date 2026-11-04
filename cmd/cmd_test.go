@@ -34,7 +34,7 @@ func init() {
 
 func TestFindAvailablePort_Success(t *testing.T) {
 	requireTCPListener(t)
-	port, ln := findAvailablePort(50000)
+	port, ln := findAvailablePort(config.DefaultBindHost, 50000)
 	if ln == nil {
 		t.Fatal("findAvailablePort returned nil listener")
 	}
@@ -53,7 +53,7 @@ func TestFindAvailablePort_Success(t *testing.T) {
 
 func TestFindAvailablePort_ReturnsListener(t *testing.T) {
 	requireTCPListener(t)
-	port, ln := findAvailablePort(51000)
+	port, ln := findAvailablePort(config.DefaultBindHost, 51000)
 	if ln == nil {
 		t.Fatal("Expected non-nil listener")
 	}
@@ -69,7 +69,7 @@ func TestFindAvailablePort_ReturnsListener(t *testing.T) {
 func TestFindAvailablePort_SkipsOccupiedPorts(t *testing.T) {
 	requireTCPListener(t)
 	// Occupy any port
-	ln1, err := net.Listen("tcp", fmt.Sprintf("%s:0", serverBindHost))
+	ln1, err := net.Listen("tcp", fmt.Sprintf("%s:0", config.DefaultBindHost))
 	if err != nil {
 		t.Fatalf("Failed to occupy any port: %v", err)
 	}
@@ -78,7 +78,7 @@ func TestFindAvailablePort_SkipsOccupiedPorts(t *testing.T) {
 	occupiedPort := ln1.Addr().(*net.TCPAddr).Port
 
 	// findAvailablePort should skip occupiedPort and find another
-	port, ln2 := findAvailablePort(occupiedPort)
+	port, ln2 := findAvailablePort(config.DefaultBindHost, occupiedPort)
 	if ln2 == nil {
 		t.Fatal("findAvailablePort returned nil listener")
 	}
@@ -419,10 +419,55 @@ func TestIsLoopbackHost(t *testing.T) {
 	}
 }
 
-func TestGetServerBindHost(t *testing.T) {
-	host := serverBindHost
-	if host != "0.0.0.0" {
-		t.Errorf("getServerBindHost should be 0.0.0.0, got: %q", host)
+// writeSettingsFile writes settings.toml into a config directory owned by the
+// test, so it never touches a real settings file even without TestMain's setup.
+func writeSettingsFile(t *testing.T, content string) {
+	t.Helper()
+	dir := t.TempDir()
+	t.Setenv("XDG_CONFIG_HOME", dir)
+	t.Setenv("APPDATA", dir)
+	previousHost := activeBindHost
+	t.Cleanup(func() { activeBindHost = previousHost })
+
+	path := config.GetSettingsPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("create settings dir: %v", err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("write settings: %v", err)
+	}
+}
+
+func TestBindServerListener_UsesConfiguredBindHost(t *testing.T) {
+	requireTCPListener(t)
+	writeSettingsFile(t, "[network]\nbind_host = '127.0.0.1'\n")
+
+	_, ln, err := bindServerListener(0)
+	if err != nil {
+		t.Fatalf("bindServerListener failed: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	if ip := ln.Addr().(*net.TCPAddr).IP; !ip.Equal(net.IPv4(127, 0, 0, 1)) {
+		t.Errorf("listener bound to %v, want 127.0.0.1", ip)
+	}
+	if activeBindHost != "127.0.0.1" {
+		t.Errorf("activeBindHost = %q, want 127.0.0.1", activeBindHost)
+	}
+}
+
+func TestBindServerListener_RefusesUnknownBindHost(t *testing.T) {
+	for _, tc := range []struct{ name, content string }{
+		{"corrupt settings file", "[network\nbind_host = '127.0.0.1'\n"},
+		{"invalid bind_host", "[network]\nbind_host = '127.0.0.l'\n"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			writeSettingsFile(t, tc.content)
+			if _, ln, err := bindServerListener(0); err == nil {
+				_ = ln.Close()
+				t.Fatal("expected bindServerListener to refuse to start")
+			}
+		})
 	}
 }
 
@@ -1365,7 +1410,7 @@ func TestFindAvailablePort_MultipleSequential(t *testing.T) {
 	// Get 5 sequential ports
 	startPort := 53000
 	for i := 0; i < 5; i++ {
-		port, ln := findAvailablePort(startPort)
+		port, ln := findAvailablePort(config.DefaultBindHost, startPort)
 		if ln == nil {
 			t.Fatalf("Failed to find port on iteration %d", i)
 		}
@@ -1386,7 +1431,7 @@ func TestFindAvailablePort_MultipleSequential(t *testing.T) {
 
 func TestFindAvailablePort_HighPort(t *testing.T) {
 	requireTCPListener(t)
-	port, ln := findAvailablePort(60000)
+	port, ln := findAvailablePort(config.DefaultBindHost, 60000)
 	if ln == nil {
 		t.Fatal("Failed to find high port")
 	}

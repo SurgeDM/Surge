@@ -370,6 +370,56 @@ func TestLoadSettings_MissingFile(t *testing.T) {
 	}
 }
 
+func TestLoadBindHost(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string // empty means no settings file
+		want    string
+		wantErr bool
+	}{
+		{name: "no settings file", want: DefaultBindHost},
+		{name: "key not set", content: "[network]\nproxy_url = ''\n", want: DefaultBindHost},
+		{name: "loopback", content: "[network]\nbind_host = '127.0.0.1'\n", want: "127.0.0.1"},
+		{name: "section name case", content: "[Network]\nbind_host = '127.0.0.1'\n", want: "127.0.0.1"},
+		{name: "key name case ignored like LoadSettings", content: "[network]\nBIND_HOST = '127.0.0.1'\n", want: DefaultBindHost},
+		{name: "set in two sections", content: "[network]\nbind_host = '127.0.0.1'\n[Network]\nbind_host = '0.0.0.0'\n", wantErr: true},
+		{name: "invalid value", content: "[network]\nbind_host = '192.168.1.10'\n", wantErr: true},
+		{name: "not a string", content: "[network]\nbind_host = 1\n", wantErr: true},
+		{name: "corrupt file", content: "[network\nbind_host = '127.0.0.1'\n", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			t.Setenv("XDG_CONFIG_HOME", tmpDir)
+			t.Setenv("APPDATA", tmpDir)
+			if tt.content != "" {
+				path := GetSettingsPath()
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(tt.content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			got, err := LoadBindHost()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected an error, got %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("LoadBindHost() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadSettings_CorruptedJSON(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "surge-corrupt-test-*")
 	if err != nil {
@@ -530,6 +580,28 @@ func TestSettings_Validate(t *testing.T) {
 			validate: func(t *testing.T, s *Settings) {
 				if Resolve[int](s.Network.MaxConnectionsPerDownload) != Resolve[int](defaults.Network.MaxConnectionsPerDownload) {
 					t.Errorf("Expected default %d, got %d", Resolve[int](defaults.Network.MaxConnectionsPerDownload), Resolve[int](s.Network.MaxConnectionsPerDownload))
+				}
+			},
+		},
+		{
+			name: "Loopback Bind Host Kept",
+			modify: func(s *Settings) {
+				s.Network.BindHost.Value = "127.0.0.1"
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if got := s.Network.BindHost.Value; got != "127.0.0.1" {
+					t.Errorf("Expected 127.0.0.1, got %v", got)
+				}
+			},
+		},
+		{
+			name: "Unreachable Bind Host Reset",
+			modify: func(s *Settings) {
+				s.Network.BindHost.Value = "192.168.1.10"
+			},
+			validate: func(t *testing.T, s *Settings) {
+				if got := s.Network.BindHost.Value; got != defaults.Network.BindHost.Value {
+					t.Errorf("Expected default %v, got %v", defaults.Network.BindHost.Value, got)
 				}
 			},
 		},
