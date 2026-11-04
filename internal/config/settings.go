@@ -32,6 +32,56 @@ const (
 	LoopbackBindHost = "127.0.0.1"
 )
 
+func validateBindHost(val any) error {
+	sVal, ok := val.(string)
+	if !ok {
+		return fmt.Errorf("must be a string")
+	}
+	// Local CLI commands and the browser extension always connect
+	// through 127.0.0.1, so other addresses would lock them out.
+	switch strings.TrimSpace(sVal) {
+	case DefaultBindHost, LoopbackBindHost:
+		return nil
+	}
+	return fmt.Errorf("must be %s (all interfaces) or %s (this machine only)", DefaultBindHost, LoopbackBindHost)
+}
+
+// LoadBindHost reads network.bind_host for the server's bind decision. Unlike
+// LoadSettings it does not fall back to defaults on errors, so an unreadable
+// settings file or an invalid value cannot silently expose the API on all
+// interfaces. A missing file or key still means DefaultBindHost.
+func LoadBindHost() (string, error) {
+	path := GetSettingsPath()
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return DefaultBindHost, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var raw map[string]any
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return "", fmt.Errorf("parse %s: %w", path, err)
+	}
+	for section, sectionRaw := range raw {
+		values, ok := sectionRaw.(map[string]any)
+		if !ok || !strings.EqualFold(section, "network") {
+			continue
+		}
+		for key, val := range values {
+			if !strings.EqualFold(key, "bind_host") {
+				continue
+			}
+			if err := validateBindHost(val); err != nil {
+				return "", fmt.Errorf("%s: network.bind_host %v: %w", path, val, err)
+			}
+			return strings.TrimSpace(val.(string)), nil
+		}
+	}
+	return DefaultBindHost, nil
+}
+
 type Settings struct {
 	General     GeneralSettings     `json:"general"`
 	Network     NetworkSettings     `json:"network"`
@@ -889,19 +939,7 @@ func DefaultSettings() *Settings {
 				NeedsRestart: true,
 				DefaultValue: DefaultBindHost,
 				Value:        DefaultBindHost,
-				ValidateFunc: func(val any) error {
-					sVal, ok := val.(string)
-					if !ok {
-						return fmt.Errorf("must be a string")
-					}
-					// Local CLI commands and the browser extension always connect
-					// through 127.0.0.1, so other addresses would lock them out.
-					switch strings.TrimSpace(sVal) {
-					case DefaultBindHost, LoopbackBindHost:
-						return nil
-					}
-					return fmt.Errorf("must be %s (all interfaces) or %s (this machine only)", DefaultBindHost, LoopbackBindHost)
-				},
+				ValidateFunc: validateBindHost,
 			},
 		},
 		Performance: PerformanceSettings{

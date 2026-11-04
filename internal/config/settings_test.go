@@ -370,6 +370,54 @@ func TestLoadSettings_MissingFile(t *testing.T) {
 	}
 }
 
+func TestLoadBindHost(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string // empty means no settings file
+		want    string
+		wantErr bool
+	}{
+		{name: "no settings file", want: DefaultBindHost},
+		{name: "key not set", content: "[network]\nproxy_url = ''\n", want: DefaultBindHost},
+		{name: "loopback", content: "[network]\nbind_host = '127.0.0.1'\n", want: "127.0.0.1"},
+		{name: "section name case", content: "[Network]\nbind_host = '127.0.0.1'\n", want: "127.0.0.1"},
+		{name: "invalid value", content: "[network]\nbind_host = '192.168.1.10'\n", wantErr: true},
+		{name: "not a string", content: "[network]\nbind_host = 1\n", wantErr: true},
+		{name: "corrupt file", content: "[network\nbind_host = '127.0.0.1'\n", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			t.Setenv("XDG_CONFIG_HOME", tmpDir)
+			t.Setenv("APPDATA", tmpDir)
+			if tt.content != "" {
+				path := GetSettingsPath()
+				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(path, []byte(tt.content), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+
+			got, err := LoadBindHost()
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("expected an error, got %q", got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != tt.want {
+				t.Errorf("LoadBindHost() = %q, want %q", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestLoadSettings_CorruptedJSON(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "surge-corrupt-test-*")
 	if err != nil {
