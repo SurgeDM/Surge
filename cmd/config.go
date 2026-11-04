@@ -171,7 +171,7 @@ func handleSetOperation(cmd *cobra.Command, settings *config.Settings, args []st
 	// would persist it. Until bind_host is valid, only allow fixing bind_host.
 	if !strings.EqualFold(path, "network.bind_host") {
 		if _, err := config.LoadBindHost(); err != nil {
-			return fmt.Errorf("cannot save settings until network.bind_host is fixed (run 'surge config network.bind_host 127.0.0.1' or 'surge config open'): %w", err)
+			return fmt.Errorf("cannot save settings until network.bind_host can be read; repair the file with 'surge config open': %w", err)
 		}
 	}
 
