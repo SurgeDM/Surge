@@ -37,8 +37,8 @@ func OpenContainingFolder(path string) error {
 	targetPath := path
 	if info, err := os.Stat(path); err == nil {
 		if !info.IsDir() {
-			if cmd := buildRevealCommand(path); cmd != nil {
-				return startCommand(cmd)
+			if revealFile(path) == nil {
+				return nil
 			}
 			targetPath = filepath.Dir(path)
 		}

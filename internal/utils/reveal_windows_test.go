@@ -2,20 +2,15 @@
 
 package utils
 
-import "testing"
+import (
+	"path/filepath"
+	"testing"
+)
 
-func TestBuildRevealCommand_SelectsFileInExplorer(t *testing.T) {
-	for _, path := range []string{
-		`D:\Download\My Files\report 1.pdf`,
-		`D:/Download/My Files/report 1.pdf`,
-	} {
-		cmd := buildRevealCommand(path)
-		if cmd == nil || cmd.SysProcAttr == nil {
-			t.Fatal("expected an Explorer command with a raw command line")
-		}
-		want := `explorer.exe /select,"D:\Download\My Files\report 1.pdf"`
-		if cmd.SysProcAttr.CmdLine != want {
-			t.Errorf("CmdLine for %q = %q, want %q", path, cmd.SysProcAttr.CmdLine, want)
-		}
+func TestRevealFile_MissingFileFails(t *testing.T) {
+	// A path the shell cannot resolve must fail before any window opens, so
+	// OpenContainingFolder falls back to opening the directory.
+	if err := revealFile(filepath.Join(t.TempDir(), "missing.txt")); err == nil {
+		t.Fatal("expected an error for a file that does not exist")
 	}
 }
