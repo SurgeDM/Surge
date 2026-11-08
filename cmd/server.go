@@ -235,7 +235,7 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 	})
 
 	fmt.Printf("Surge %s running in server mode.\n", Version)
-	host := serverBindHost
+	host := activeBindHost
 	fmt.Printf("Serving on %s:%d\n", host, port)
 	fmt.Println("Press Ctrl+C to exit.")
 

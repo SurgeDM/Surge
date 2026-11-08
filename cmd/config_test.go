@@ -189,6 +189,37 @@ func TestConfigCmd_SetAndReset(t *testing.T) {
 	}
 }
 
+func TestConfigCmd_InvalidBindHostBlocksOtherWrites(t *testing.T) {
+	setupIsolatedCmdState(t)
+	path := config.GetSettingsPath()
+	invalid := "[network]\nbind_host = '127.0.0.l'\n"
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte(invalid), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	buf := new(bytes.Buffer)
+	rootCmd.SetOut(buf)
+	rootCmd.SetErr(buf)
+	rootCmd.SetArgs([]string{"config", "general.auto_resume", "true"})
+	if err := rootCmd.Execute(); err == nil {
+		t.Fatal("expected setting another key to fail while bind_host is invalid")
+	}
+	if data, _ := os.ReadFile(path); string(data) != invalid {
+		t.Fatalf("settings file was rewritten:\n%s", data)
+	}
+
+	rootCmd.SetArgs([]string{"config", "network.bind_host", "127.0.0.1"})
+	if err := rootCmd.Execute(); err != nil {
+		t.Fatalf("fixing bind_host should succeed: %v", err)
+	}
+	if host, err := config.LoadBindHost(); err != nil || host != "127.0.0.1" {
+		t.Fatalf("LoadBindHost() = %q, %v; want 127.0.0.1", host, err)
+	}
+}
+
 func TestConfigCmd_Open(t *testing.T) {
 	setupIsolatedCmdState(t)
 

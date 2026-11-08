@@ -25,6 +25,72 @@ import (
 
 var ErrCategoryExists = errors.New("category already exists")
 
+const (
+	// DefaultBindHost exposes the HTTP API on all interfaces.
+	DefaultBindHost = "0.0.0.0"
+	// LoopbackBindHost restricts the HTTP API to this machine.
+	LoopbackBindHost = "127.0.0.1"
+)
+
+func validateBindHost(val any) error {
+	sVal, ok := val.(string)
+	if !ok {
+		return fmt.Errorf("must be a string")
+	}
+	// Local CLI commands and the browser extension always connect
+	// through 127.0.0.1, so other addresses would lock them out.
+	switch strings.TrimSpace(sVal) {
+	case DefaultBindHost, LoopbackBindHost:
+		return nil
+	}
+	return fmt.Errorf("must be %s (all interfaces) or %s (this machine only)", DefaultBindHost, LoopbackBindHost)
+}
+
+// LoadBindHost reads network.bind_host for the server's bind decision. Unlike
+// LoadSettings it does not fall back to defaults on errors, so an unreadable
+// settings file or an invalid value cannot silently expose the API on all
+// interfaces. A missing file or key still means DefaultBindHost.
+func LoadBindHost() (string, error) {
+	path := GetSettingsPath()
+	data, err := os.ReadFile(path)
+	if os.IsNotExist(err) {
+		return DefaultBindHost, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("read %s: %w", path, err)
+	}
+
+	var raw map[string]any
+	if err := toml.Unmarshal(data, &raw); err != nil {
+		return "", fmt.Errorf("parse %s: %w", path, err)
+	}
+	// Match sections case-insensitively and the key exactly, as LoadSettings
+	// does, so both loaders agree on the value in effect.
+	var host any
+	found := false
+	for section, sectionRaw := range raw {
+		values, ok := sectionRaw.(map[string]any)
+		if !ok || !strings.EqualFold(section, "network") {
+			continue
+		}
+		val, ok := values["bind_host"]
+		if !ok {
+			continue
+		}
+		if found {
+			return "", fmt.Errorf("%s: network.bind_host is set in more than one network section", path)
+		}
+		host, found = val, true
+	}
+	if !found {
+		return DefaultBindHost, nil
+	}
+	if err := validateBindHost(host); err != nil {
+		return "", fmt.Errorf("%s: network.bind_host %v: %w", path, host, err)
+	}
+	return strings.TrimSpace(host.(string)), nil
+}
+
 type Settings struct {
 	General     GeneralSettings     `json:"general"`
 	Network     NetworkSettings     `json:"network"`
@@ -70,6 +136,7 @@ type NetworkSettings struct {
 	DialHedgeCount           *Setting `json:"dial_hedge_count"`
 	GlobalRateLimit          *Setting `json:"global_rate_limit"`
 	DefaultDownloadRateLimit *Setting `json:"default_download_rate_limit"`
+	BindHost                 *Setting `json:"bind_host"`
 }
 
 type PerformanceSettings struct {
@@ -287,6 +354,7 @@ func (s *Settings) initializeCategoriesList() {
 			s.Network.DialHedgeCount,
 			s.Network.GlobalRateLimit,
 			s.Network.DefaultDownloadRateLimit,
+			s.Network.BindHost,
 		}},
 		{Name: "Performance", Settings: []*Setting{
 			s.Performance.MaxTaskRetries,
@@ -314,7 +382,7 @@ var settingsDisplayGroups = map[string][]string{
 	"General":    {"auto_start", "auto_resume", "auto_shutdown_after_downloads", "clipboard_monitor", "download_complete_notification", "skip_update_check"},
 	"Downloads":  {"default_download_dir", "warn_on_duplicate", "max_concurrent_downloads", "max_connections_per_host", "global_rate_limit", "default_download_rate_limit", "sequential_download"},
 	"Appearance": {"theme", "theme_path", "transparent_background", "show_speed_graph", "live_speed_graph"},
-	"Network":    {"proxy_url", "custom_dns", "user_agent", "allow_remote_open_actions"},
+	"Network":    {"proxy_url", "custom_dns", "user_agent", "allow_remote_open_actions", "bind_host"},
 	"Categories": {"category_enabled"},
 	"Extension":  {"extension_prompt", "auth_token", "chrome_extension_url", "firefox_extension_url", "instructions_url"},
 	"Advanced":   {"max_concurrent_probes", "min_chunk_size", "worker_buffer_size", "max_task_retries", "slow_worker_threshold", "slow_worker_grace_period", "stall_timeout", "speed_ema_alpha", "adaptive_concurrency_interval", "log_retention_count"},
@@ -871,6 +939,16 @@ func DefaultSettings() *Settings {
 					_, err := utils.ParseRateLimitValue(val)
 					return err
 				},
+			},
+			BindHost: &Setting{
+				Key:          "bind_host",
+				Label:        "API bind address",
+				Description:  "Address the HTTP API listens on. Use 127.0.0.1 to accept connections from this machine only.",
+				Type:         TypeString,
+				NeedsRestart: true,
+				DefaultValue: DefaultBindHost,
+				Value:        DefaultBindHost,
+				ValidateFunc: validateBindHost,
 			},
 		},
 		Performance: PerformanceSettings{
