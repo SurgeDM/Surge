@@ -46,6 +46,9 @@ func (s *LocalDownloadService) ReloadSettingsFromDisk() error {
 	if s.lifecycle == nil {
 		return types.ErrServiceUnavailable
 	}
+	if _, err := config.LoadBindHost(); err != nil {
+		return fmt.Errorf("cannot reload settings until network.bind_host can be read; repair the file with 'surge config open': %w", err)
+	}
 	settings, err := config.LoadSettings()
 	if err != nil {
 		return err
@@ -127,6 +130,11 @@ func (s *LocalDownloadService) updateSettings(settings *config.Settings) error {
 		return fmt.Errorf("%w: %w", ErrInvalidSettings, err)
 	}
 	settings.Extension.AuthToken.Value = s.lifecycle.GetSettings().Extension.AuthToken.Value
+	// A snapshot may predate an invalid on-disk edit. Do not overwrite that
+	// edit and silently make the next server start listen on all interfaces.
+	if _, err := config.LoadBindHost(); err != nil {
+		return fmt.Errorf("cannot save settings until network.bind_host can be read; repair the file with 'surge config open': %w", err)
+	}
 	if err := config.SaveSettings(settings); err != nil {
 		return err
 	}
