@@ -25,13 +25,10 @@ func resolveRuntimeDir() string {
 	return config.GetRuntimeDir()
 }
 
-const serverBindHost = "0.0.0.0"
-
 const maxAPIRequestBodyBytes = 8 << 20
 
 // findAvailablePort tries ports starting from 'start' until one is available
-func findAvailablePort(start int) (int, net.Listener) {
-	bindHost := serverBindHost
+func findAvailablePort(bindHost string, start int) (int, net.Listener) {
 	for port := start; port < start+100; port++ {
 		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindHost, port))
 		if err == nil {
@@ -41,19 +38,26 @@ func findAvailablePort(start int) (int, net.Listener) {
 	return 0, nil
 }
 
+// bindServerListener refuses to start when network.bind_host cannot be read,
+// rather than falling back to all interfaces.
 func bindServerListener(portFlag int) (int, net.Listener, error) {
-	bindHost := serverBindHost
+	bindHost, err := config.LoadBindHost()
+	if err != nil {
+		return 0, nil, fmt.Errorf("cannot determine the HTTP API bind address: %w", err)
+	}
 	if portFlag > 0 {
 		ln, err := net.Listen("tcp", fmt.Sprintf("%s:%d", bindHost, portFlag))
 		if err != nil {
 			return 0, nil, fmt.Errorf("could not bind to port %d: %w", portFlag, err)
 		}
+		activeBindHost = bindHost
 		return portFlag, ln, nil
 	}
-	port, ln := findAvailablePort(1700)
+	port, ln := findAvailablePort(bindHost, 1700)
 	if ln == nil {
 		return 0, nil, fmt.Errorf("could not find available port")
 	}
+	activeBindHost = bindHost
 	return port, ln, nil
 }
 
@@ -84,6 +88,8 @@ var (
 	globalHTTPServer   *http.Server
 	globalHTTPServerMu sync.Mutex
 	activeServerMode   = "local"
+	// activeBindHost is the address the HTTP API listener was bound to.
+	activeBindHost = config.DefaultBindHost
 )
 
 // startHTTPServer starts the HTTP server using an existing listener

@@ -480,6 +480,55 @@ func TestUpdateSettingsAppliesInheritedRateLimit(t *testing.T) {
 	}
 }
 
+func TestInvalidBindHostPreservesDiskAndLiveSettings(t *testing.T) {
+	for _, content := range []string{
+		"[network]\nbind_host = '127.0.0.l'\n",
+		"[network\nbind_host = '127.0.0.1'\n",
+	} {
+		t.Run(content, func(t *testing.T) {
+			t.Setenv("XDG_CONFIG_HOME", t.TempDir())
+			t.Setenv("APPDATA", t.TempDir())
+			baseline := config.DefaultSettings()
+			baseline.Network.BindHost.Value = config.LoopbackBindHost
+			if err := config.SaveSettings(baseline); err != nil {
+				t.Fatal(err)
+			}
+			mgr := orchestrator.NewLifecycleManager(nil, nil, baseline)
+			svc := NewLocalDownloadService(mgr)
+			path := config.GetSettingsPath()
+			if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if err := svc.ReloadSettingsFromDisk(); err == nil {
+				t.Fatal("reload accepted invalid bind host")
+			}
+			updated := baseline.Clone()
+			updated.General.AutoResume.Value = !config.Resolve[bool](baseline.General.AutoResume)
+			if err := svc.UpdateSettings(updated); err == nil {
+				t.Fatal("snapshot save overwrote invalid bind host")
+			}
+			if _, err := svc.PatchSettings(config.DiffSettings(baseline, updated)); err == nil {
+				t.Fatal("patch save overwrote invalid bind host")
+			}
+			data, err := os.ReadFile(path)
+			if err != nil || string(data) != content {
+				t.Fatalf("disk settings changed: %q, %v", data, err)
+			}
+			live, err := svc.GetSettings()
+			if err != nil || live.Network.BindHost.Value != config.LoopbackBindHost || live.General.AutoResume.Value != baseline.General.AutoResume.Value {
+				t.Fatalf("live settings changed: %+v, %v", live, err)
+			}
+			// Once repaired, normal settings edits must work again.
+			if err := config.SaveSettings(baseline); err != nil {
+				t.Fatal(err)
+			}
+			if err := svc.UpdateSettings(updated); err != nil {
+				t.Fatalf("save after repair: %v", err)
+			}
+		})
+	}
+}
+
 func TestConcurrentSettingsPatchesPreserveBothEdits(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", t.TempDir())
 	t.Setenv("APPDATA", t.TempDir())

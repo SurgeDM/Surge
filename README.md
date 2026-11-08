@@ -147,6 +147,7 @@ surge service uninstall
 
 `surge` and `surge server` bind the HTTP API to `0.0.0.0` (all interfaces) by default.
 This means the server is accessible via `localhost` (127.0.0.1) as well as your local network IP.
+To accept connections from this machine only, run `surge config Network.bind_host 127.0.0.1` and restart Surge.
 
 The API is token-protected. Generate/read your token by running:
 

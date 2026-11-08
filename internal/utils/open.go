@@ -27,7 +27,8 @@ func OpenFile(path string) error {
 	return openWithSystem(path)
 }
 
-// OpenContainingFolder opens the containing folder of a file in the system's default file explorer.
+// OpenContainingFolder opens the containing folder of a file in the system's
+// default file explorer, with the file selected where the platform supports it.
 func OpenContainingFolder(path string) error {
 	if path == "" {
 		return fmt.Errorf("path is empty")
@@ -36,6 +37,9 @@ func OpenContainingFolder(path string) error {
 	targetPath := path
 	if info, err := os.Stat(path); err == nil {
 		if !info.IsDir() {
+			if revealFile(path) == nil {
+				return nil
+			}
 			targetPath = filepath.Dir(path)
 		}
 	} else {
@@ -55,7 +59,11 @@ func OpenContainingFolder(path string) error {
 
 // openWithSystem opens a path using the system's default command.
 func openWithSystem(path string) error {
-	cmd := buildOpenCommand(path)
+	return startCommand(buildOpenCommand(path))
+}
+
+// startCommand starts cmd without blocking and reaps it in the background.
+func startCommand(cmd *exec.Cmd) error {
 	err := cmd.Start()
 	if err == nil {
 		go func() {

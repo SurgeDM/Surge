@@ -35,6 +35,7 @@ var serverStartCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if managedServiceFlag {
 			activeServerMode = "service"
+			detachConsole()
 		}
 		if checkUserServiceRunning() && !managedServiceFlag {
 			return fmt.Errorf("the Surge user service is already running; use 'surge connect' or stop the service first")
@@ -234,7 +235,7 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 	})
 
 	fmt.Printf("Surge %s running in server mode.\n", Version)
-	host := serverBindHost
+	host := activeBindHost
 	fmt.Printf("Serving on %s:%d\n", host, port)
 	fmt.Println("Press Ctrl+C to exit.")
 
