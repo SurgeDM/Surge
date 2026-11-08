@@ -35,6 +35,7 @@ var serverStartCmd = &cobra.Command{
 	RunE: func(cmd *cobra.Command, args []string) error {
 		if managedServiceFlag {
 			activeServerMode = "service"
+			detachConsole()
 		}
 		if checkUserServiceRunning() && !managedServiceFlag {
 			return fmt.Errorf("the Surge user service is already running; use 'surge connect' or stop the service first")
