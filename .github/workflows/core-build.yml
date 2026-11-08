@@ -135,6 +135,8 @@ jobs:
           release: '14.3'
           prepare: pkg install -y go git
           run: |
+            set -eu
+            git config --global --add safe.directory "$GITHUB_WORKSPACE"
             go build -v ./...
             go test ./...
 
@@ -181,10 +183,25 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
 
+      - name: Save macOS release artifacts
+        shell: bash
+        run: mv dist/darwin "$RUNNER_TEMP/goreleaser-darwin"
+
+      - name: Prepare FreeBSD release artifacts
+        uses: goreleaser/goreleaser-action@v6
+        with:
+          distribution: goreleaser-pro
+          version: latest
+          args: release --clean --split --skip=chocolatey
+        env:
+          GGOOS: freebsd
+          GORELEASER_KEY: ${{ secrets.GORELEASER_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
+
       - name: Combine Unix release artifacts
         shell: bash
         run: |
-          mv dist/darwin "$RUNNER_TEMP/goreleaser-darwin"
           mkdir -p dist
           mv "$RUNNER_TEMP/goreleaser-linux" dist/linux
           mv "$RUNNER_TEMP/goreleaser-darwin" dist/darwin
