@@ -36,6 +36,11 @@ func (m *RootModel) processProgressMsg(msg types.DownloadEvent) tea.Cmd {
 		d.resuming = false
 	}
 
+	// Highlight only byte ranges that advanced between visualization snapshots.
+	if msg.BitmapWidth > 0 && msg.CompletedRanges != nil {
+		d.updateWritingRanges(msg.CompletedRanges, time.Now())
+	}
+
 	// Update Chunk State if provided
 	if !d.liveProgress && msg.BitmapWidth > 0 && len(msg.ChunkBitmap) > 0 {
 		if d.state != nil && msg.Total > 0 {

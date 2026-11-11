@@ -19,6 +19,7 @@ type ChunkMapModel struct {
 	ActualChunkSize int64
 	ChunkProgress   []int64
 	CompletedRanges []types.Task
+	WritingRanges   []types.Task
 }
 
 // NewChunkMapModel creates a new chunk map visualization
@@ -79,6 +80,7 @@ func (m ChunkMapModel) View() string {
 
 	// Downsample logic
 	visualChunks := make([]types.ChunkStatus, targetChunks)
+	writing := make([]bool, targetChunks)
 
 	// We calculate progress based on byte ranges of the visual blocks
 	bytesPerBlock := float64(m.TotalSize) / float64(targetChunks)
@@ -91,6 +93,14 @@ func (m ChunkMapModel) View() string {
 			blockEndByte = m.TotalSize
 		}
 
+		if !m.Paused {
+			for _, r := range m.WritingRanges {
+				if r.Offset < blockEndByte && r.Offset+r.Length > blockStartByte {
+					writing[i] = true
+					break
+				}
+			}
+		}
 		blockSize := blockEndByte - blockStartByte
 		if blockSize <= 0 {
 			visualChunks[i] = types.ChunkPending
@@ -216,8 +226,9 @@ func (m ChunkMapModel) View() string {
 	var s strings.Builder
 
 	// Styles
-	pendingStyle := lipgloss.NewStyle().Foreground(colors.DarkGray())           // Dark gray
-	downloadingStyle := lipgloss.NewStyle().Foreground(colors.Pink())           // Neon Pink
+	pendingStyle := lipgloss.NewStyle().Foreground(colors.DarkGray()) // Dark gray
+	downloadingStyle := lipgloss.NewStyle().Foreground(colors.Pink()) // Neon Pink
+	writingStyle := lipgloss.NewStyle().Foreground(colors.Blue())
 	pausedStyle := lipgloss.NewStyle().Foreground(colors.StatePaused())         // Yellow/Gold for paused Partial
 	completedStyle := lipgloss.NewStyle().Foreground(colors.StateDownloading()) // Neon Green / Cyan
 
@@ -236,6 +247,8 @@ func (m ChunkMapModel) View() string {
 		case types.ChunkDownloading:
 			if m.Paused {
 				s.WriteString(pausedStyle.Render(block))
+			} else if writing[i] {
+				s.WriteString(writingStyle.Render(block))
 			} else {
 				s.WriteString(downloadingStyle.Render(block))
 			}

@@ -254,3 +254,21 @@ func TestChunkMapUsesExactFileRangesWithinOneChunk(t *testing.T) {
 		t.Fatalf("map does not preserve file positions:\ngot %q\nwant %q", got, want)
 	}
 }
+
+func TestChunkMapWritingIsBlueAndCompletedStaysGreen(t *testing.T) {
+	model := NewChunkMapModel([]byte{byte(types.ChunkDownloading)}, 1, 2, 3, false, 300, 300, []int64{120})
+	model.CompletedRanges = []types.Task{{Offset: 0, Length: 100}, {Offset: 150, Length: 20}}
+	model.WritingRanges = []types.Task{{Offset: 0, Length: 100}, {Offset: 150, Length: 20}}
+	block := "■"
+	want := lipgloss.NewStyle().Foreground(colors.StateDownloading()).Render(block) + "\n" +
+		lipgloss.NewStyle().Foreground(colors.Blue()).Render(block) + "\n" +
+		lipgloss.NewStyle().Foreground(colors.DarkGray()).Render(block)
+	if got := model.View(); got != want {
+		t.Fatalf("writing map = %q, want %q", got, want)
+	}
+	model.WritingRanges = nil
+	want = strings.Replace(want, lipgloss.NewStyle().Foreground(colors.Blue()).Render(block), lipgloss.NewStyle().Foreground(colors.Pink()).Render(block), 1)
+	if got := model.View(); got != want {
+		t.Fatalf("idle partial map = %q, want %q", got, want)
+	}
+}
