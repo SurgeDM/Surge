@@ -240,3 +240,17 @@ func TestChunkMap_BlockTurnsCompletedWhenItsByteRangeIsFullyDownloaded(t *testin
 		t.Errorf("Row 0 should not be Downloading (pink) when fully covered by downloaded bytes")
 	}
 }
+
+func TestChunkMapUsesExactFileRangesWithinOneChunk(t *testing.T) {
+	// Six visual blocks over a single source chunk. Completed bytes in the
+	// middle and at the end must not appear as a prefix of the file.
+	bitmap := []byte{byte(types.ChunkDownloading)}
+	model := NewChunkMapModel(bitmap, 1, 4, 3, false, 600, 600, []int64{200})
+	model.CompletedRanges = []types.Task{{Offset: 100, Length: 100}, {Offset: 500, Length: 100}}
+	expected := NewChunkMapModel([]byte{0, 0}, 6, 4, 3, false, 600, 100, nil)
+	setChunk(expected.Bitmap, 1, int(types.ChunkCompleted))
+	setChunk(expected.Bitmap, 5, int(types.ChunkCompleted))
+	if got, want := model.View(), expected.View(); got != want {
+		t.Fatalf("map does not preserve file positions:\ngot %q\nwant %q", got, want)
+	}
+}

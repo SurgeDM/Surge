@@ -37,17 +37,19 @@ func (m *RootModel) processProgressMsg(msg types.DownloadEvent) tea.Cmd {
 	}
 
 	// Update Chunk State if provided
-	if msg.BitmapWidth > 0 && len(msg.ChunkBitmap) > 0 {
+	if !d.liveProgress && msg.BitmapWidth > 0 && len(msg.ChunkBitmap) > 0 {
 		if d.state != nil && msg.Total > 0 {
 			d.state.SetTotalSize(msg.Total)
 		}
-		// We only get bitmap, no progress array (to save bandwidth)
-		// State needs to be updated carefully
+		// Remote sessions reconstruct visualization state from snapshots.
 		if d.state != nil {
 			d.state.RestoreBitmap(msg.ChunkBitmap, msg.ChunkSize)
 		}
 		if d.state != nil && len(msg.ChunkProgress) > 0 {
 			d.state.SetChunkProgress(msg.ChunkProgress)
+		}
+		if d.state != nil {
+			d.state.Bitmap.SetCompletedRanges(msg.CompletedRanges)
 		}
 	}
 

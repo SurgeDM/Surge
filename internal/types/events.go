@@ -45,6 +45,9 @@ type DownloadEvent struct {
 	ChunkSize     int64   `json:"chunk_size,omitempty"`
 	ChunkProgress []int64 `json:"chunk_progress,omitempty"`
 
+	// CompletedRanges preserves file positions within partially downloaded chunks.
+	CompletedRanges []Task `json:"completed_ranges"`
+
 	// Completion
 	Elapsed   time.Duration `json:"elapsed,omitempty"`
 	AvgSpeed  float64       `json:"avg_speed,omitempty"`
