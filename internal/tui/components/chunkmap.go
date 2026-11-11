@@ -18,6 +18,7 @@ type ChunkMapModel struct {
 	TotalSize       int64
 	ActualChunkSize int64
 	ChunkProgress   []int64
+	CompletedRanges []types.Task
 }
 
 // NewChunkMapModel creates a new chunk map visualization
@@ -93,6 +94,25 @@ func (m ChunkMapModel) View() string {
 		blockSize := blockEndByte - blockStartByte
 		if blockSize <= 0 {
 			visualChunks[i] = types.ChunkPending
+			continue
+		}
+
+		if m.CompletedRanges != nil {
+			var downloaded int64
+			for _, r := range m.CompletedRanges {
+				if r.Offset >= blockEndByte {
+					break
+				}
+				downloaded += max(int64(0), min(blockEndByte, r.Offset+r.Length)-max(blockStartByte, r.Offset))
+			}
+			switch {
+			case downloaded >= blockSize:
+				visualChunks[i] = types.ChunkCompleted
+			case downloaded > 0:
+				visualChunks[i] = types.ChunkDownloading
+			default:
+				visualChunks[i] = types.ChunkPending
+			}
 			continue
 		}
 

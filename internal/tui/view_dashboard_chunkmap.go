@@ -42,6 +42,9 @@ func (m *RootModel) renderChunkMapBox(width, height int, selected *DownloadModel
 		}
 
 		chunkMap := components.NewChunkMapModel(bitmap, bitmapWidth, chunkMapContentWidth, targetRows, paused, totalSize, chunkSize, chunkProgress)
+		if selected != nil && selected.state != nil {
+			chunkMap.CompletedRanges = selected.state.Bitmap.GetCompletedRanges()
+		}
 		chunkContentWrapper := chunkMapPadding.Render(chunkMap.View())
 
 		innerContent = lipgloss.Place(contentWidth, contentHeight, lipgloss.Center, lipgloss.Top, chunkContentWrapper)

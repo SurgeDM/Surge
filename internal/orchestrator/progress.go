@@ -153,6 +153,7 @@ func (pa *ProgressAggregator) reportProgressLoop() {
 					msg.BitmapWidth = width
 					msg.ChunkSize = chunkSize
 					msg.ChunkProgress = chunkProgress
+					msg.CompletedRanges = progress.CfgProgress(&cfg).Bitmap.GetCompletedRanges()
 					lastChunkSnapshot[cfg.ID] = time.Now()
 				}
 			}

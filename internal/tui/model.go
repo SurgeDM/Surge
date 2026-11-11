@@ -92,6 +92,7 @@ const (
 )
 
 type DownloadModel struct {
+	liveProgress     bool // state belongs to the local engine; never overwrite it with event snapshots.
 	moving           bool
 	fileMissing      bool
 	ID               string
