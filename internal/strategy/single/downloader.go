@@ -115,12 +115,14 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 			return nil, err
 		}
 		for key, val := range d.Headers {
-			if strings.EqualFold(key, "Range") {
+			if strings.EqualFold(key, "Range") || strings.EqualFold(key, "Accept-Encoding") {
 				continue
 			}
 			req.Header.Set(key, val)
 		}
 		req.Header.Set("User-Agent", d.Runtime.GetUserAgent())
+		// The transport does not decompress, so ask for the raw bytes.
+		req.Header.Set("Accept-Encoding", "identity")
 		return req, nil
 	}
 
