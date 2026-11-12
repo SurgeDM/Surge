@@ -254,6 +254,41 @@ func TestSingleDownloader_RequestsIdentityEncoding(t *testing.T) {
 	}
 }
 
+// Browser handoffs forward the browser's User-Agent along with client hints;
+// replacing it with the default makes the request inconsistent.
+func TestSingleDownloader_KeepsForwardedUserAgent(t *testing.T) {
+	tmpDir, cleanup, _ := testutil.TempDir("surge-ua-single")
+	defer cleanup()
+
+	const browserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/142.0.0.0"
+	body := []byte("surge")
+	var gotUA string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "ua_single.bin")
+	fileSize := int64(len(body))
+	downloader := NewSingleDownloader("ua-id", nil, progress.New("ua-single", fileSize), &types.RuntimeConfig{})
+	downloader.Headers = map[string]string{"User-Agent": browserUA}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	if err := downloader.Download(ctx, server.URL, destPath, fileSize, "ua.bin"); err != nil {
+		t.Fatalf("download failed: %v", err)
+	}
+	if gotUA != browserUA {
+		t.Fatalf("User-Agent = %q, want the forwarded %q", gotUA, browserUA)
+	}
+}
+
 // =============================================================================
 // SingleDownloader - FailAfterBytes
 // =============================================================================
