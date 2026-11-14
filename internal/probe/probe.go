@@ -279,7 +279,7 @@ func applyProbeHeaders(req *http.Request, headers map[string]string, runCfg *typ
 	}
 
 	for key, val := range headers {
-		if strings.EqualFold(key, "Range") {
+		if strings.EqualFold(key, "Range") || strings.EqualFold(key, "Accept-Encoding") {
 			continue
 		}
 		req.Header.Set(key, val)
@@ -288,6 +288,9 @@ func applyProbeHeaders(req *http.Request, headers map[string]string, runCfg *typ
 	if includeRange {
 		req.Header.Set("Range", "bytes=0-0")
 	}
+	// Without Accept-Encoding a server may compress the response, and its size
+	// would then describe gzip bytes. Downloads fetch identity bytes, so probe them.
+	req.Header.Set("Accept-Encoding", "identity")
 	if req.Header.Get("User-Agent") == "" {
 		req.Header.Set("User-Agent", runCfg.GetUserAgent())
 	}

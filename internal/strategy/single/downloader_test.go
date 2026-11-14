@@ -1,6 +1,8 @@
 package single
 
 import (
+	"bytes"
+	"compress/gzip"
 	"context"
 	"errors"
 	"fmt"
@@ -205,6 +207,85 @@ func TestSingleDownloader_StreamingServer(t *testing.T) {
 
 	if err := testutil.VerifyFileSize(destPath+types.IncompleteSuffix, fileSize); err != nil {
 		t.Error(err)
+	}
+}
+
+// The transport does not decompress responses, so a request without
+// Accept-Encoding: identity could write a server's gzip bytes to disk.
+func TestSingleDownloader_RequestsIdentityEncoding(t *testing.T) {
+	tmpDir, cleanup, _ := testutil.TempDir("surge-identity-single")
+	defer cleanup()
+
+	body := bytes.Repeat([]byte("surge "), 4096)
+	var gz bytes.Buffer
+	zw := gzip.NewWriter(&gz)
+	_, _ = zw.Write(body)
+	_ = zw.Close()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Header.Get("Accept-Encoding") != "identity" {
+			w.Header().Set("Content-Encoding", "gzip")
+			_, _ = w.Write(gz.Bytes())
+			return
+		}
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "identity_single.bin")
+	fileSize := int64(len(body))
+	downloader := NewSingleDownloader("identity-id", nil, progress.New("identity-single", fileSize), &types.RuntimeConfig{})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	_ = downloader.Download(ctx, server.URL, destPath, fileSize, "identity.bin")
+
+	got, err := os.ReadFile(destPath + types.IncompleteSuffix)
+	if err != nil {
+		t.Fatalf("read download: %v", err)
+	}
+	if !bytes.Equal(got, body) {
+		t.Fatalf("downloaded %d bytes, want the %d identity bytes (gzip size is %d)", len(got), len(body), gz.Len())
+	}
+}
+
+// Browser handoffs forward the browser's User-Agent along with client hints;
+// replacing it with the default makes the request inconsistent.
+func TestSingleDownloader_KeepsForwardedUserAgent(t *testing.T) {
+	tmpDir, cleanup, _ := testutil.TempDir("surge-ua-single")
+	defer cleanup()
+
+	const browserUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Edg/142.0.0.0"
+	body := []byte("surge")
+	var gotUA string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotUA = r.Header.Get("User-Agent")
+		_, _ = w.Write(body)
+	}))
+	defer server.Close()
+
+	destPath := filepath.Join(tmpDir, "ua_single.bin")
+	fileSize := int64(len(body))
+	downloader := NewSingleDownloader("ua-id", nil, progress.New("ua-single", fileSize), &types.RuntimeConfig{})
+	downloader.Headers = map[string]string{"User-Agent": browserUA}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if f, err := os.Create(destPath + ".surge"); err == nil {
+		_ = f.Close()
+	}
+
+	if err := downloader.Download(ctx, server.URL, destPath, fileSize, "ua.bin"); err != nil {
+		t.Fatalf("download failed: %v", err)
+	}
+	if gotUA != browserUA {
+		t.Fatalf("User-Agent = %q, want the forwarded %q", gotUA, browserUA)
 	}
 }
 
