@@ -106,6 +106,13 @@ func TestDetermineFilename_PriorityOrder(t *testing.T) {
 			expected: "report.pdf",
 		},
 		{
+			name:     "Priority 2: Query Param name is case-insensitive",
+			url:      "https://example.com/download.do?id=1&fileName=report.pdf",
+			headers:  http.Header{},
+			body:     pdfContent,
+			expected: "report.pdf",
+		},
+		{
 			name:     "Priority 3: URL Path beats ZIP Header",
 			url:      "https://example.com/logs_january.zip",
 			headers:  http.Header{},
