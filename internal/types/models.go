@@ -102,6 +102,9 @@ type DownloadStatus struct {
 	MaxConnections   int            `json:"max_connections,omitempty"`
 	Artifact         ArtifactPolicy `json:"artifact,omitzero"`
 	ErrorCode        string         `json:"error_code,omitempty"`
+	Processing       bool           `json:"processing,omitempty"`
+	Processed        bool           `json:"processed,omitempty"`
+	HookError        string         `json:"hook_error,omitempty"`
 	Moving           bool           `json:"moving,omitempty"`
 	FileMissing      bool           `json:"file_missing,omitempty"`
 	CategoryOverride *string        `json:"category_override,omitempty"`

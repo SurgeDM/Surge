@@ -96,6 +96,9 @@ type DownloadModel struct {
 	writingRanges    []types.Task
 	lastMapWrite     time.Time
 	liveProgress     bool // state belongs to the local engine; never overwrite it with event snapshots.
+	processing       bool
+	processed        bool
+	hookError        string
 	moving           bool
 	fileMissing      bool
 	ID               string
@@ -251,7 +254,7 @@ type RootModel struct {
 	pendingCategory      string
 	AssignCategoryFunc   func(string, string, bool) error
 	catMgrEditField      int                // 0=Name, 1=Description, 2=Pattern, 3=Path
-	catMgrInputs         [4]textinput.Model // Inputs for Name, Description, Pattern, Path
+	catMgrInputs         [5]textinput.Model // Inputs for Name, Description, Pattern, Path, command
 	catMgrIsNew          bool               // Whether adding a new category
 	// Quit confirm button focus (0 = Yep!, 1 = Nope)
 	quitConfirmFocused int
@@ -488,6 +491,10 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 	catPathInput.SetWidth(50)
 	catPathInput.Prompt = ""
 
+	catCommandInput := textinput.New()
+	catCommandInput.Placeholder = `hatchzip x "$f" -y`
+	catCommandInput.Prompt = ""
+
 	enqueueCtx, cancelEnqueue := context.WithCancel(context.Background())
 
 	// A single root-level spinner provides a shared animation frame for rendering,
@@ -523,7 +530,7 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 		helpSearchInput:       textinput.New(),
 		settingsSearchInput:   textinput.New(),
 		urlUpdateInput:        urlUpdateInput,
-		catMgrInputs:          [4]textinput.Model{catNameInput, catDescInput, catPatternInput, catPathInput},
+		catMgrInputs:          [5]textinput.Model{catNameInput, catDescInput, catPatternInput, catPathInput, catCommandInput},
 		keys:                  keys,
 		lastKeyMapModTime:     keyMapModTime,
 		lastConfigCheckTime:   time.Now(),
@@ -862,6 +869,8 @@ func (m RootModel) isResizing() bool {
 func downloadModelFromStatus(s types.DownloadStatus, autoResume bool) *DownloadModel {
 	dm := NewDownloadModel(s.ID, s.URL, s.Filename, s.TotalSize)
 	dm.moving = s.Moving
+	dm.processing, dm.hookError = s.Processing, s.HookError
+	dm.processed = s.Processed
 	dm.fileMissing = s.FileMissing
 	dm.categoryOverride = s.CategoryOverride
 	dm.phase = s.Phase
