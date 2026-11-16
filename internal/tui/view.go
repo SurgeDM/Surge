@@ -687,12 +687,15 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 
 	if d.processing || d.processed {
 		result := "Done"
+		resultStyle := detailValueStyle
 		if d.processing {
 			result = "Running"
 		} else if d.hookError != "" {
-			result = "Encountered error: " + d.hookError
+			reason := strings.TrimPrefix(d.hookError, "Post-download command failed: ")
+			result = "Failed (" + reason + ")"
+			resultStyle = resultStyle.Foreground(colors.StateError())
 		}
-		fileInfoContent = lipgloss.JoinVertical(lipgloss.Left, fileInfoContent, detailValueStyle.Render("Processing: "+result))
+		fileInfoContent = lipgloss.JoinVertical(lipgloss.Left, fileInfoContent, detailValueStyle.Render("Processing: ")+resultStyle.Render(result))
 	}
 	fileSection := sectionStyle.Render(fileInfoContent)
 
