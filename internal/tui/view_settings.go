@@ -431,6 +431,8 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 				m.renderCategoryInputLine("Regex:", 2, innerWidth),
 				"",
 				m.renderCategoryInputLine("Path:", 3, innerWidth),
+				"",
+				m.renderCategoryInputLine("Command:", 4, innerWidth),
 			)
 			valueLabel = ""
 		} else {
@@ -473,6 +475,8 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Regex:"), utils.TruncateMiddle(cat.Pattern, innerWidth-20)),
 				"",
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Path:"), utils.TruncateMiddle(cat.Path, innerWidth-20)),
+				"",
+				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Command:"), utils.TruncateMiddle(cat.PostDownloadCommand, innerWidth-20)),
 			)
 			valueLabel = ""
 		default:

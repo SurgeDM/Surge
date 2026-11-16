@@ -1403,7 +1403,7 @@ func TestUpdate_SettingsEditingPasteRoutesToSettingsInput(t *testing.T) {
 }
 
 func TestUpdate_SettingsCategoryEditPasteRoutesToCatInput(t *testing.T) {
-	var catInputs [4]textinput.Model
+	var catInputs [5]textinput.Model
 	for i := range catInputs {
 		catInputs[i] = textinput.New()
 	}
