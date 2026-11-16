@@ -466,7 +466,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 			if !ok {
 				break
 			}
-			labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Width(8)
+			labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Width(9)
 			valueStr = lipgloss.JoinVertical(lipgloss.Left,
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Name:"), utils.TruncateMiddle(cat.Name, innerWidth-20)),
 				"",
@@ -542,6 +542,15 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	if meta.Key == "category_enabled" {
 		priority := utils.WrapText("Categories are checked from top to bottom; the first match wins.", innerWidth)
 		wrappedDesc += "\n\n" + lipgloss.NewStyle().Bold(true).Render(priority)
+		guidance := []string{
+			"Edit a category to set an optional Command that runs after a successful download, in the file's final directory.",
+			`$d is the download directory; $f is the filename. Quote variables to handle spaces.`,
+			`Example: 7z x "$f" -y`,
+			"Leave Command empty to skip post-download processing.",
+		}
+		for _, text := range guidance {
+			wrappedDesc += "\n\n" + utils.WrapText(text, innerWidth)
+		}
 	}
 	descDisplay := lipgloss.NewStyle().
 		Foreground(colors.LightGray()).
@@ -698,10 +707,10 @@ func (m *RootModel) updateSettingsInputWidthForViewport() {
 		_, rightWidth := calculateSettingsPaneWidths(modalWidth)
 
 		targetWidth = rightWidth - 10   // Fixed offset for labels
-		catInputWidth = rightWidth - 12 // rightWidth - 4 (padding) - 8 (label width)
+		catInputWidth = rightWidth - 13 // rightWidth - 4 (padding) - 9 (label width)
 	} else {
 		targetWidth = modalWidth - 16   // Fixed offset for labels
-		catInputWidth = modalWidth - 10 // modalWidth - 2 (padding) - 8 (label width)
+		catInputWidth = modalWidth - 11 // modalWidth - 2 (padding) - 9 (label width)
 	}
 
 	if targetWidth < MinSettingsInputW {
@@ -1178,13 +1187,13 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 }
 
 func (m RootModel) renderCategoryInputLine(label string, fieldIndex int, width int) string {
-	labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Width(8)
+	labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Width(9)
 	if m.catMgrEditField == fieldIndex {
 		labelStyle = labelStyle.Foreground(colors.Cyan()).Bold(true)
 	}
 
 	inputView := m.catMgrInputs[fieldIndex].View()
-	inputWidth := width - 8
+	inputWidth := width - 9
 	if inputWidth < 5 {
 		inputWidth = 5
 	}
