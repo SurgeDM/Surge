@@ -1,6 +1,8 @@
 package progress
 
 import (
+	"slices"
+	"sort"
 	"sync"
 	"sync/atomic"
 
@@ -14,6 +16,7 @@ type BitmapTracker struct {
 	chunkProgress   []atomic.Int64
 	actualChunkSize int64
 	width           int
+	completedRanges []types.Task // nil when only a legacy bitmap is available
 }
 
 // bitmapLayout returns the number of tracked chunks and backing bytes for a
@@ -36,6 +39,7 @@ func bitmapLayout(totalSize, chunkSize int64) (numChunks int, bytesNeeded int, o
 func (b *BitmapTracker) Reset() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	b.completedRanges = []types.Task{}
 	if b.width > 0 {
 		b.chunkStatus = make([]atomic.Int32, b.width)
 		b.chunkProgress = make([]atomic.Int64, b.width)
@@ -63,6 +67,7 @@ func (b *BitmapTracker) InitBitmap(totalSize int64, chunkSize int64) {
 		return
 	}
 
+	b.completedRanges = []types.Task{}
 	b.actualChunkSize = chunkSize
 	b.width = numChunks
 	b.chunkStatus = make([]atomic.Int32, numChunks)
@@ -83,6 +88,7 @@ func (b *BitmapTracker) RestoreBitmap(totalSize int64, bitmap []byte, actualChun
 		return
 	}
 
+	b.completedRanges = nil
 	b.actualChunkSize = actualChunkSize
 	b.width = numChunks
 	b.chunkStatus = make([]atomic.Int32, numChunks)
@@ -113,6 +119,7 @@ func (b *BitmapTracker) SetChunkProgress(progress []int64) {
 	if len(b.chunkProgress) != len(progress) {
 		b.chunkProgress = make([]atomic.Int64, len(progress))
 	}
+	b.completedRanges = nil
 	for i, v := range progress {
 		b.chunkProgress[i].Store(v)
 	}
@@ -120,8 +127,9 @@ func (b *BitmapTracker) SetChunkProgress(progress []int64) {
 
 // SetChunkState sets the state for a specific chunk index.
 func (b *BitmapTracker) SetChunkState(index int, status types.ChunkStatus) {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.completedRanges = nil
 	b.setChunkState(index, status)
 }
 
@@ -149,11 +157,15 @@ func (b *BitmapTracker) getChunkState(index int) types.ChunkStatus {
 
 // UpdateChunkStatus updates the bitmap based on byte range and returns the incremented progress.
 func (b *BitmapTracker) UpdateChunkStatus(totalSize, offset, length int64, status types.ChunkStatus) (increment int64) {
-	b.mu.RLock()
-	defer b.mu.RUnlock()
+	b.mu.Lock()
+	defer b.mu.Unlock()
 
 	if b.actualChunkSize == 0 || len(b.chunkStatus) == 0 {
 		return 0
+	}
+
+	if status == types.ChunkCompleted && b.completedRanges != nil {
+		b.addCompletedRange(max(0, offset), min(totalSize, offset+length))
 	}
 
 	startIdx := int(offset / b.actualChunkSize)
@@ -294,6 +306,24 @@ func (b *BitmapTracker) RecalculateProgress(totalSize int64, remainingTasks []ty
 		}
 	}
 
+	// Recover exact file positions from the complement of the remaining ranges.
+	b.completedRanges = []types.Task{}
+	remaining := slices.Clone(remainingTasks)
+	sort.Slice(remaining, func(i, j int) bool { return remaining[i].Offset < remaining[j].Offset })
+	var cursor int64
+	for _, task := range remaining {
+		if task.Length <= 0 {
+			continue
+		}
+		start := max(0, min(totalSize, task.Offset))
+		end := max(0, min(totalSize, task.Offset+task.Length))
+		if start > cursor {
+			b.addCompletedRange(cursor, start)
+		}
+		cursor = max(cursor, end)
+	}
+	b.addCompletedRange(cursor, totalSize)
+
 	// Restore-time ChunkCompleted bits mean the bytes are already on disk.
 	// Remaining coverage must not un-complete them before the status rewrite.
 	for i := 0; i < b.width; i++ {
@@ -305,6 +335,7 @@ func (b *BitmapTracker) RecalculateProgress(totalSize int64, remainingTasks []ty
 		if chunkEnd > totalSize {
 			chunkEnd = totalSize
 		}
+		b.addCompletedRange(chunkStart, chunkEnd)
 		chunkSize := chunkEnd - chunkStart
 		current := b.chunkProgress[i].Load()
 		if current < chunkSize {
@@ -364,4 +395,37 @@ func (b *BitmapTracker) GetBitmapSnapshot(totalSize int64, includeProgress bool)
 	}
 
 	return result, b.width, totalSize, b.actualChunkSize, progressResult
+}
+
+// addCompletedRange merges a written interval without losing its file position.
+// Caller holds b.mu. The ranges remain sorted and disjoint.
+func (b *BitmapTracker) addCompletedRange(start, end int64) {
+	if end <= start {
+		return
+	}
+	i := sort.Search(len(b.completedRanges), func(i int) bool {
+		r := b.completedRanges[i]
+		return r.Offset+r.Length >= start
+	})
+	j := i
+	for j < len(b.completedRanges) && b.completedRanges[j].Offset <= end {
+		r := b.completedRanges[j]
+		start = min(start, r.Offset)
+		end = max(end, r.Offset+r.Length)
+		j++
+	}
+	b.completedRanges = slices.Replace(b.completedRanges, i, j, types.Task{Offset: start, Length: end - start})
+}
+
+// GetCompletedRanges returns exact downloaded intervals, or nil for legacy snapshots.
+func (b *BitmapTracker) GetCompletedRanges() []types.Task {
+	b.mu.RLock()
+	defer b.mu.RUnlock()
+	return slices.Clone(b.completedRanges)
+}
+
+func (b *BitmapTracker) SetCompletedRanges(ranges []types.Task) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	b.completedRanges = slices.Clone(ranges)
 }
