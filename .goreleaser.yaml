@@ -10,6 +10,14 @@ builds:
       - linux
       - windows
       - darwin
+      - freebsd
+    goarch:
+      - amd64
+      - arm64
+      - "386"
+    ignore:
+      - goos: darwin
+        goarch: "386"
     binary: surge
     main: .
     ldflags:
