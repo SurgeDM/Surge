@@ -53,7 +53,7 @@ surge add \
   https://example.com/two.iso
 ```
 
-For a longer list, create a plain-text file with one URL per line and use
+For a longer list, create a `.txt`, `.csv`, or `.json` batch file and use
 `--batch`:
 
 ```text
@@ -61,6 +61,9 @@ For a longer list, create a plain-text file with one URL per line and use
 https://example.com/one.iso
 https://example.com/two.iso
 ```
+
+CSV files can use a `url` column, while JSON files can contain a `urls`,
+`links`, or `downloads` array of strings or objects with a `url` field.
 
 ```bash
 surge add --batch urls.txt
@@ -110,7 +113,8 @@ surge get --output-version 1 --batch urls.txt
 
 Each item contains `input_index`, `status`, and, when available, `id` or
 `request_id`. Indices follow positional URLs, then URLs parsed from the batch
-file; the batch reader's existing comment handling and deduplication still apply.
+file; the batch reader's existing text comment handling and deduplication still
+apply.
 Source URLs and raw server error bodies are not echoed in receipts.
 
 | Status | Meaning |

@@ -93,7 +93,7 @@ surge --no-server
 # Start TUI with downloads queued
 surge https://example.com/file1.zip https://example.com/file2.zip
 
-# Combine URLs and batch file
+# Combine URLs and a .txt/.csv/.json batch file
 surge https://example.com/file.zip --batch urls.txt
 ```
 
