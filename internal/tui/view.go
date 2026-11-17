@@ -239,7 +239,7 @@ func (m RootModel) View() tea.View {
 	if m.state == BatchFilePickerState {
 		fp := m.filepicker
 		picker := components.NewFilePickerModal(
-			" Select URL File (.txt) ",
+			" Select URL File (.txt/.csv/.json) ",
 			&fp,
 			m.help,
 			m.keys.FilePicker,
