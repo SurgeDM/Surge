@@ -10,10 +10,11 @@ import (
 
 // Category defines a download category for auto-sorting.
 type Category struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Pattern     string `json:"pattern"`
-	Path        string `json:"path"`
+	Name                string `json:"name"`
+	Description         string `json:"description,omitempty"`
+	Pattern             string `json:"pattern"`
+	Path                string `json:"path"`
+	PostDownloadCommand string `json:"post_download_command,omitempty"`
 }
 
 func (c *Category) Validate() error {

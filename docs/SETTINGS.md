@@ -200,3 +200,17 @@ are temporarily disabled. Other downloads remain usable.
 Existing destination files are never overwritten. If a deferred move fails, the
 download remains completed at its original location and the activity log reports
 the failure. Select the category again to retry the move.
+
+### Post-download category commands
+
+Each category can have an optional **Command** in its editor, or a
+`post_download_command` in `settings.toml`. After a successful download and
+any pending category move, Surge runs the selected category's command in the
+file's final directory. `$d` is that directory and `$f` is the filename. For
+example, use `hatchzip x "$f" -y` to extract archives; quote variables to
+handle spaces. An explicit category assignment takes precedence over automatic
+matching, and Uncategorized runs no command. Commands run through `sh` on
+Unix and PowerShell on Windows, with the permissions and environment of the
+Surge process. A command failure does not change the completed download's
+status and is reported in the event log. Commands run asynchronously and are
+not retried; keep Surge running until they finish.
