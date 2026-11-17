@@ -114,7 +114,9 @@ func TestResumeBatchRespectsMaxConcurrentDownloads(t *testing.T) {
 			t.Fatalf("%s status = %+v, want queued", id, status)
 		}
 	}
-	time.Sleep(100 * time.Millisecond)
+	if status := pool.GetStatus("active"); status == nil || status.Status != "downloading" {
+		t.Fatalf("active status = %+v, want downloading", status)
+	}
 	if got := peakRequests.Load(); got != 1 {
 		t.Fatalf("peak active requests = %d, want 1 while worker is occupied", got)
 	}
