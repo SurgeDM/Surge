@@ -371,7 +371,9 @@ func TestReadURLsFromFile_CSVWithoutHeader(t *testing.T) {
 	urlFile := filepath.Join(tmpDir, "urls.csv")
 	content := "first,https://example.com/file1.zip\n" +
 		"https://example.com/file2.zip,second\n" +
-		"example.com/file3.zip\n"
+		"example.com/file3.zip\n" +
+		"third,HTTPS://example.com/file4.zip\n" +
+		"HtTpS://example.com/file5.zip,fifth\n"
 	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
 		t.Fatalf("failed to write url file: %v", err)
 	}
@@ -384,6 +386,8 @@ func TestReadURLsFromFile_CSVWithoutHeader(t *testing.T) {
 		"https://example.com/file1.zip",
 		"https://example.com/file2.zip",
 		"example.com/file3.zip",
+		"HTTPS://example.com/file4.zip",
+		"HtTpS://example.com/file5.zip",
 	}
 	if len(urls) != len(want) {
 		t.Fatalf("expected %d URLs, got %d: %v", len(want), len(urls), urls)
@@ -402,7 +406,8 @@ func TestReadURLsFromFile_JSON(t *testing.T) {
 		"urls": [
 			"https://example.com/file1.zip",
 			{"url": "https://example.com/file2.zip/"},
-			{"download_url": "https://example.com/file2.zip"}
+			{"download_url": "https://example.com/file2.zip"},
+			{"url": "", "link": " \t", "download_url": "https://example.com/file3.zip"}
 		]
 	}`
 	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
@@ -416,6 +421,7 @@ func TestReadURLsFromFile_JSON(t *testing.T) {
 	want := []string{
 		"https://example.com/file1.zip",
 		"https://example.com/file2.zip/",
+		"https://example.com/file3.zip",
 	}
 	if len(urls) != len(want) {
 		t.Fatalf("expected %d URLs, got %d: %v", len(want), len(urls), urls)
@@ -424,6 +430,35 @@ func TestReadURLsFromFile_JSON(t *testing.T) {
 		if urls[i] != want[i] {
 			t.Errorf("expected URL %d to be %q, got %q", i, want[i], urls[i])
 		}
+	}
+}
+
+func TestReadURLsFromFile_UTF8BOM(t *testing.T) {
+	tests := []struct {
+		name    string
+		file    string
+		content string
+	}{
+		{name: "text", file: "urls.txt", content: "\ufeffhttps://example.com/file1.zip\n"},
+		{name: "csv", file: "urls.csv", content: "\ufeffurl\nhttps://example.com/file1.zip\n"},
+		{name: "json", file: "urls.json", content: "\ufeff[\"https://example.com/file1.zip\"]"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			urlFile := filepath.Join(t.TempDir(), tc.file)
+			if err := os.WriteFile(urlFile, []byte(tc.content), 0o644); err != nil {
+				t.Fatalf("failed to write url file: %v", err)
+			}
+
+			urls, err := utils.ReadURLsFromFile(urlFile)
+			if err != nil {
+				t.Fatalf("ReadURLsFromFile returned error: %v", err)
+			}
+			if len(urls) != 1 || urls[0] != "https://example.com/file1.zip" {
+				t.Fatalf("expected one BOM-free URL, got %v", urls)
+			}
+		})
 	}
 }
 
