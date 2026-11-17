@@ -248,6 +248,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			}
 			if currentState := stateProgress(msg.State); currentState != nil {
 				d.state = currentState
+				d.liveProgress = true
 			}
 			if d.state != nil {
 				d.state.SetTotalSize(msg.Total)
@@ -265,7 +266,10 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			newDownload.RateLimit = msg.RateLimit
 			newDownload.RateLimitSet = msg.RateLimitSet
 			if msg.State != nil {
-				newDownload.state = stateProgress(msg.State)
+				if currentState := stateProgress(msg.State); currentState != nil {
+					newDownload.state = currentState
+					newDownload.liveProgress = true
+				}
 			}
 			newDownload.started = true
 			m.downloads = append(m.downloads, newDownload)

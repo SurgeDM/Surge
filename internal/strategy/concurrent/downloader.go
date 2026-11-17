@@ -334,7 +334,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		}
 	}()
 
-	// Initialize chunk visualization (must happen BEFORE setupTasks so RestoreBitmap can overwrite it)
+	// Initialize chunk visualization using the current connection heuristic.
 	if d.State != nil {
 		d.State.InitBitmap(fileSize, chunkSize)
 	}
@@ -485,19 +485,23 @@ func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize i
 		if d.State != nil {
 			d.State.SetSavedElapsed(time.Duration(savedState.Elapsed))
 
-			if len(savedState.ChunkBitmap) > 0 && savedState.ActualChunkSize > 0 {
-				d.State.RestoreBitmap(savedState.ChunkBitmap, savedState.ActualChunkSize)
-				d.State.RecalculateProgress(savedState.Tasks)
-				downloaded := savedState.Downloaded
-				if vp := d.State.Bytes.VerifiedProgress.Load(); downloaded < vp {
-					downloaded = vp
-				}
-				d.State.Bytes.Downloaded.Store(downloaded)
-				utils.Debug("Restored chunk map: size %d", savedState.ActualChunkSize)
+			if len(savedState.ChunkBitmap) > 0 && savedState.ActualChunkSize == chunkSize {
+				d.State.RestoreBitmap(savedState.ChunkBitmap, chunkSize)
+				utils.Debug("Restored chunk map: size %d", chunkSize)
 			} else {
-				d.State.Bytes.Downloaded.Store(savedState.Downloaded)
-				d.State.Bytes.VerifiedProgress.Store(savedState.Downloaded)
+				// The connection heuristic may change on any resume. Do not let
+				// the persisted layout overwrite the newly calculated layout.
+				// Clear status bits before reconstructing progress from tasks.
+				chunks := (fileSize-1)/chunkSize + 1
+				d.State.RestoreBitmap(make([]byte, (chunks+3)/4), chunkSize)
+				utils.Debug("Rebuilt resume chunk map: old size %d, new size %d", savedState.ActualChunkSize, chunkSize)
 			}
+			d.State.RecalculateProgress(savedState.Tasks)
+			downloaded := savedState.Downloaded
+			if vp := d.State.Bytes.VerifiedProgress.Load(); downloaded < vp {
+				downloaded = vp
+			}
+			d.State.Bytes.Downloaded.Store(downloaded)
 			d.State.SyncSessionStart()
 		}
 		utils.Debug("Resuming from saved state: %d tasks, %d bytes downloaded", len(savedState.Tasks), savedState.Downloaded)

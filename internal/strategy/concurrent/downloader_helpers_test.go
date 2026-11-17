@@ -2,6 +2,7 @@ package concurrent
 
 import (
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -302,4 +303,41 @@ func TestSaveStateSnapshot_PersistsActiveAndQueuedTasks(t *testing.T) {
 		t.Errorf("active remaining task = %+v, want offset=600 length=400", saved.Tasks[0])
 	}
 
+}
+
+func TestResumeRebuildsBitmapForCurrentConnectionLimit(t *testing.T) {
+	const size = int64(128 * 1024 * 1024)
+	for _, limits := range [][2]int{{1, 8}, {8, 1}} {
+		t.Run(fmt.Sprintf("%d_to_%d", limits[0], limits[1]), func(t *testing.T) {
+			oldRuntime := &types.RuntimeConfig{MaxConnectionsPerDownload: limits[0]}
+			state := progress.New("resume-map", size)
+			d := &ConcurrentDownloader{State: state, Runtime: oldRuntime}
+			oldChunkSize := d.determineChunkSize(size, d.getInitialConnections(size))
+			state.InitBitmap(size, oldChunkSize)
+			bitmap, _, _, _, _ := state.GetBitmapSnapshot(false)
+			saved := &types.DownloadRecord{
+				TotalSize: size, Downloaded: size / 4,
+				ActualChunkSize: oldChunkSize, ChunkBitmap: bitmap,
+				Tasks: []types.Task{{Offset: size / 4, Length: size * 3 / 4}},
+			}
+			d.Runtime = &types.RuntimeConfig{MaxConnectionsPerDownload: limits[1]}
+			conns := d.getInitialConnections(d.getEffectiveSizeForWorkers(size, saved, true))
+			chunkSize := d.determineChunkSize(size, conns)
+			state.InitBitmap(size, chunkSize)
+			tasks, err := d.setupTasks("", size, chunkSize, conns, nil, saved, true)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, width, _, actualChunkSize, _ := state.GetBitmapSnapshot(false)
+			if actualChunkSize != chunkSize || width != int((size-1)/chunkSize+1) {
+				t.Fatalf("layout = %d chunks of %d bytes, want chunk size %d", width, actualChunkSize, chunkSize)
+			}
+			if got := state.Bytes.VerifiedProgress.Load(); got != size/4 {
+				t.Fatalf("verified progress = %d, want %d", got, size/4)
+			}
+			if len(tasks) != 1 || tasks[0] != saved.Tasks[0] {
+				t.Fatalf("remaining ranges changed: %v", tasks)
+			}
+		})
+	}
 }
