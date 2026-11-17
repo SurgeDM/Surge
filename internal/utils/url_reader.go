@@ -2,6 +2,7 @@ package utils
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/csv"
 	"encoding/json"
 	"fmt"
@@ -24,6 +25,11 @@ func ReadURLsFromFile(path string) ([]string, error) {
 	}
 	defer func() { _ = file.Close() }()
 
+	input := bufio.NewReader(file)
+	if bom, err := input.Peek(3); err == nil && bytes.Equal(bom, []byte{0xEF, 0xBB, 0xBF}) {
+		_, _ = input.Discard(3)
+	}
+
 	var urls []string
 	seen := make(map[string]bool)
 	addURL := func(url string) {
@@ -43,11 +49,11 @@ func ReadURLsFromFile(path string) ([]string, error) {
 
 	switch strings.ToLower(filepath.Ext(path)) {
 	case ".csv":
-		err = readCSVURLs(file, addURL)
+		err = readCSVURLs(input, addURL)
 	case ".json":
-		err = readJSONURLs(file, addURL)
+		err = readJSONURLs(input, addURL)
 	default:
-		err = readTextURLs(file, addURL)
+		err = readTextURLs(input, addURL)
 	}
 	if err != nil {
 		return nil, err
@@ -129,7 +135,8 @@ func readCSVURLs(r io.Reader, addURL func(string)) error {
 		}
 		for _, field := range record {
 			field = strings.TrimSpace(field)
-			if strings.HasPrefix(field, "http://") || strings.HasPrefix(field, "https://") {
+			lowerField := strings.ToLower(field)
+			if strings.HasPrefix(lowerField, "http://") || strings.HasPrefix(lowerField, "https://") {
 				addURL(field)
 			}
 		}
@@ -193,7 +200,7 @@ func jsonURLField(object map[string]any) string {
 		if !isURLFieldName(key) {
 			continue
 		}
-		if url, ok := value.(string); ok {
+		if url, ok := value.(string); ok && strings.TrimSpace(url) != "" {
 			return url
 		}
 	}
