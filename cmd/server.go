@@ -173,7 +173,7 @@ func init() {
 	serverCmd.AddCommand(serverStopCmd)
 	serverCmd.AddCommand(serverStatusCmd)
 
-	serverCmd.PersistentFlags().StringP("batch", "b", "", "File containing URLs to download")
+	serverCmd.PersistentFlags().StringP("batch", "b", "", "File containing URLs to download (.txt, .csv, or .json)")
 	serverCmd.PersistentFlags().IntP("port", "p", 0, "Port to listen on")
 	serverCmd.PersistentFlags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
 	serverCmd.PersistentFlags().Bool("exit-when-done", false, "Exit when all downloads complete")

@@ -635,7 +635,7 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&globalInsecureHTTP, "insecure-http", false, "Allow plain HTTP for non-loopback remote targets")
 	rootCmd.PersistentFlags().BoolVar(&globalInsecureTLS, "insecure-tls", false, "Skip TLS certificate verification for remote targets")
 	rootCmd.PersistentFlags().StringVar(&globalTLSCAFile, "tls-ca-file", "", "PEM bundle to trust for remote HTTPS targets")
-	rootCmd.Flags().StringP("batch", "b", "", "File containing URLs to download (one per line)")
+	rootCmd.Flags().StringP("batch", "b", "", "File containing URLs to download (.txt, .csv, or .json)")
 	rootCmd.Flags().IntP("port", "p", 0, "Port to listen on (default: 8080 or first available)")
 	rootCmd.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
 	rootCmd.Flags().Bool("no-resume", false, "Do not auto-resume paused downloads on startup")

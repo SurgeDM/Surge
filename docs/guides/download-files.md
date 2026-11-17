@@ -19,8 +19,8 @@ surge add https://example.com/video.mp4
 surge get https://example.com/audio.flac --output ~/Downloads
 ```
 
-Use `--confirm` to review the queued URLs before they start. To queue one URL
-per line from a file, use `--batch`:
+Use `--confirm` to review the queued URLs before they start. To queue URLs from
+a `.txt`, `.csv`, or `.json` file, use `--batch`:
 
 ```bash
 surge add --batch urls.txt
