@@ -114,7 +114,6 @@ func TestResumeBatchRespectsMaxConcurrentDownloads(t *testing.T) {
 			t.Fatalf("%s status = %+v, want queued", id, status)
 		}
 	}
-	time.Sleep(100 * time.Millisecond)
 	if got := peakRequests.Load(); got != 1 {
 		t.Fatalf("peak active requests = %d, want 1 while worker is occupied", got)
 	}
@@ -144,6 +143,9 @@ func TestResumeBatchRespectsMaxConcurrentDownloads(t *testing.T) {
 	case <-resumeBStarted:
 	case <-time.After(5 * time.Second):
 		t.Fatal("second resumed download did not start after the first resumed download finished")
+	}
+	if got := peakRequests.Load(); got != 1 {
+		t.Fatalf("peak active requests = %d, want 1 after second resume started", got)
 	}
 	releaseResumeB()
 }
