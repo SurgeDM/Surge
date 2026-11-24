@@ -372,6 +372,9 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 				}
 			}
 			status.Moving = store.IsMoving(id)
+			hook := store.GetHookState(id)
+			status.Processing, status.HookError = hook.Running, hook.Error
+			status.Processed = hook.Processed
 			status.FileMissing = completedFileMissing(status.Status, status.DestPath)
 			return status, nil
 		}
@@ -609,6 +612,9 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 
 	for i := range statuses {
 		statuses[i].Moving = store.IsMoving(statuses[i].ID)
+		hook := store.GetHookState(statuses[i].ID)
+		statuses[i].Processing, statuses[i].HookError = hook.Running, hook.Error
+		statuses[i].Processed = hook.Processed
 		statuses[i].FileMissing = completedFileMissing(statuses[i].Status, statuses[i].DestPath)
 	}
 	return statuses, nil
@@ -685,8 +691,12 @@ func statusFromDownloadRecord(entry types.DownloadRecord) types.DownloadStatus {
 	} else if entry.Status == "completed" {
 		progress = 100.0
 	}
+	hook := store.GetHookState(entry.ID)
 	return types.DownloadStatus{Artifact: entry.Artifact, ErrorCode: entry.ErrorCode,
 		Moving:           store.IsMoving(entry.ID),
+		Processing:       hook.Running,
+		HookError:        hook.Error,
+		Processed:        hook.Processed,
 		CategoryOverride: entry.CategoryOverride,
 		FileMissing:      completedFileMissing(entry.Status, entry.DestPath),
 		ID:               entry.ID,

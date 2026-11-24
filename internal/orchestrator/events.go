@@ -306,6 +306,9 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 			}
 
 		case types.EventComplete:
+			if existing, _ := store.GetDownload(m.DownloadID); existing != nil && existing.Status == "completed" {
+				break
+			}
 			var avgSpeed float64
 			if m.Elapsed.Seconds() > 0 {
 				avgSpeed = float64(m.Total) / m.Elapsed.Seconds()
@@ -403,6 +406,9 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 					event.Message = "Category move failed; file kept at original location: " + saved.CategoryMoveError
 				}
 				_ = mgr.eventBus.Publish(event)
+			}
+			if saved, err := store.GetDownload(m.DownloadID); err == nil && saved != nil && saved.Status == "completed" {
+				mgr.startPostDownload(postDownloadCommand(mgr.GetSettings(), saved), saved.DestPath, saved.ID)
 			}
 			if err := store.DeleteTasks(m.DownloadID); err != nil {
 				utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)

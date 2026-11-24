@@ -484,6 +484,9 @@ func LoadSettings() (*Settings, error) {
 								if p, ok := cMap["path"].(string); ok {
 									parsed.Path = p
 								}
+								if command, ok := cMap["post_download_command"].(string); ok {
+									parsed.PostDownloadCommand = command
+								}
 								parsedCats = append(parsedCats, parsed)
 							}
 						}
@@ -1454,10 +1457,11 @@ func SaveSettings(s *Settings) error {
 			catsRaw := make([]map[string]any, 0, len(s.Categories.Categories))
 			for _, c := range s.Categories.Categories {
 				cMap := map[string]any{
-					"name":        c.Name,
-					"description": c.Description,
-					"pattern":     c.Pattern,
-					"path":        c.Path,
+					"name":                  c.Name,
+					"description":           c.Description,
+					"pattern":               c.Pattern,
+					"path":                  c.Path,
+					"post_download_command": c.PostDownloadCommand,
 				}
 				catsRaw = append(catsRaw, cMap)
 			}

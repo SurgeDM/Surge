@@ -21,7 +21,7 @@ var (
 	visualSnapshot = flag.String("snapshot", "", "Write an ANSI snapshot to this path instead of opening the TUI")
 	visualWidth    = flag.Int("width", VisualTestWidth, "Snapshot columns")
 	visualHeight   = flag.Int("height", VisualTestHeight, "Snapshot rows")
-	visualSelected = flag.String("select", "downloading", "Selected fixture: downloading, queued, paused, pausing, resuming, completed, error")
+	visualSelected = flag.String("select", "downloading", "Selected fixture: downloading, queued, paused, pausing, resuming, completed, error, processing, processed, hook-error")
 )
 
 // TestVisualTUI is opt-in and lives only in the Go test binary. The wrapper
@@ -53,7 +53,7 @@ func TestVisualTUI(t *testing.T) {
 	}
 	t.Cleanup(func() { IsTestMode = previousTestMode })
 	m := NewVisualTestModel(settings, "visual-test")
-	states := []string{"downloading", "queued", "paused", "pausing", "resuming", "completed", "error"}
+	states := []string{"downloading", "queued", "paused", "pausing", "resuming", "completed", "error", "processing", "processed", "hook-error"}
 	selected := -1
 	for i, state := range states {
 		if state == *visualSelected {
@@ -207,7 +207,7 @@ func TestVisualFixtureUsesNormalNavigationAndSettings(t *testing.T) {
 		t.Fatal("normal queued shortcut failed")
 	}
 	press(tea.KeyPressMsg{Code: '0', Text: "0"})
-	if m.root.activeTab != TabAll || len(m.root.list.Items()) != 7 {
+	if m.root.activeTab != TabAll || len(m.root.list.Items()) != 10 {
 		t.Fatal("normal All shortcut failed")
 	}
 	press(tea.KeyPressMsg{Code: 's', Text: "s"})

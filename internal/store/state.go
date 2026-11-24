@@ -1294,3 +1294,23 @@ func copyCategoryOutsideLock(snapshot types.DownloadRecord, target string, notif
 	}
 	return nil, 0, err
 }
+
+// HookState is transient so a stopped process never leaves a stale running status.
+type HookState struct {
+	Running   bool
+	Processed bool
+	Error     string
+}
+
+var hookStates = make(map[string]HookState)
+
+func SetHookState(id string, state HookState) {
+	masterMu.Lock()
+	defer masterMu.Unlock()
+	hookStates[id] = state
+}
+func GetHookState(id string) HookState {
+	masterMu.RLock()
+	defer masterMu.RUnlock()
+	return hookStates[id]
+}
