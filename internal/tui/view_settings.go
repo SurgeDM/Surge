@@ -466,13 +466,17 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 			if !ok {
 				break
 			}
+			pattern := cat.Pattern
+			if strings.TrimSpace(pattern) == "" {
+				pattern = "Manual only"
+			}
 			labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Width(9)
 			valueStr = lipgloss.JoinVertical(lipgloss.Left,
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Name:"), utils.TruncateMiddle(cat.Name, innerWidth-20)),
 				"",
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Desc:"), utils.TruncateMiddle(cat.Description, innerWidth-20)),
 				"",
-				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Regex:"), utils.TruncateMiddle(cat.Pattern, innerWidth-20)),
+				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Regex:"), utils.TruncateMiddle(pattern, innerWidth-20)),
 				"",
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Path:"), utils.TruncateMiddle(cat.Path, innerWidth-20)),
 				"",
