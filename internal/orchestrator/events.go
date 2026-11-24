@@ -636,7 +636,9 @@ func (mgr *LifecycleManager) finalizeDownload(m types.DownloadEvent) *types.Down
 		}
 		mgr.eventBus.publishLifecycleResult(event)
 	}
-	if completionErr == nil && saved.PendingCategoryMove == "" && saved.CategoryMoveError == "" {
+	var cleanupErr *store.CategoryMoveCleanupError
+	if (completionErr == nil || errors.As(completionErr, &cleanupErr)) &&
+		saved.PendingCategoryMove == "" && saved.CategoryMoveError == "" {
 		mgr.startPostDownload(postDownloadCommand(mgr.GetSettings(), saved), saved.DestPath, saved.ID)
 	}
 	if err := store.DeleteTasks(m.DownloadID); err != nil {

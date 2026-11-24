@@ -201,6 +201,11 @@ func (p *Scheduler) addPrepared(cfg types.DownloadRecord, prepare, beforeStart f
 		utils.Debug("Scheduler: Add refused for %s: ID already active", cfg.ID)
 		return false, nil
 	}
+	if _, exists := p.finalizing[cfg.ID]; exists {
+		p.mu.Unlock()
+		utils.Debug("Scheduler: Add refused for %s: ID still finalizing", cfg.ID)
+		return false, nil
+	}
 	if prepare != nil {
 		if err := prepare(); err != nil {
 			p.mu.Unlock()
@@ -317,12 +322,17 @@ func (p *Scheduler) TrackFinalization() {
 	}
 }
 
-func (p *Scheduler) beginFinalization(id string) {
+func (p *Scheduler) beginFinalization(id string, owner *activeDownload) (bool, error) {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	if p.finalizing != nil {
-		p.finalizing[id] = struct{}{}
+	if p.finalizing == nil {
+		return false, nil
 	}
+	if p.downloads[id] != owner {
+		return false, context.Canceled
+	}
+	p.finalizing[id] = struct{}{}
+	return true, nil
 }
 
 func (p *Scheduler) FinishFinalization(id string) {
@@ -896,7 +906,14 @@ func (p *Scheduler) worker() {
 		localCfg := ad.config
 		p.mu.Unlock()
 
-		err := runDownload(ctx, &localCfg, p.beginFinalization)
+		err := runDownload(ctx, &localCfg, func(id string) (bool, error) {
+			return p.beginFinalization(id, ad)
+		})
+		if errors.Is(err, errCompletionUndelivered) {
+			// Ingress never accepted this event, so no lifecycle worker can clear it.
+			utils.Debug("Scheduler: %s: %v", localCfg.ID, err)
+			p.FinishFinalization(localCfg.ID)
+		}
 		ad.running.Store(false)
 		close(ad.done) // unblock any Cancel caller waiting for this worker to exit
 
@@ -1126,7 +1143,7 @@ func sendPausedFallback(ch chan<- types.DownloadEvent, cfg *types.DownloadRecord
 // requeued for another attempt. Cancel, deadline, permanent HTTP, and
 // disk-full errors are excluded — retrying them is pointless.
 func shouldRetryFailedDownload(isShuttingDown bool, err error, retries int) bool {
-	if isShuttingDown {
+	if isShuttingDown || errors.Is(err, errCompletionUndelivered) {
 		return false
 	}
 	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {

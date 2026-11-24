@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -141,4 +142,70 @@ waitForHook:
 		t.Fatalf("ordinary category move ran a hook: %v", err)
 	}
 
+}
+
+func TestMoveRetryRunsHookWhenOldCopyCannotBeRemoved(t *testing.T) {
+	if runtime.GOOS == "windows" || os.Geteuid() == 0 {
+		t.Skip("requires a POSIX shell and enforced directory permissions")
+	}
+	setupEventStateDB(t)
+	sourceDir, targetDir := t.TempDir(), t.TempDir()
+	path := filepath.Join(sourceDir, "file.bin")
+	target := filepath.Join(targetDir, filepath.Base(path))
+	for _, file := range []string{path, target} {
+		if err := os.WriteFile(file, []byte("data"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entry := types.DownloadRecord{ID: t.Name(), Filename: "file.bin", DestPath: path, Status: "queued"}
+	if err := store.AddToMasterList(entry); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ScheduleCategoryMove(entry.ID, "Files", targetDir); err != nil {
+		t.Fatal(err)
+	}
+	entry.Status = "completed"
+	if err := store.AddToMasterList(entry); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(target); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(sourceDir, 0500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(sourceDir, 0700) })
+
+	settings := config.DefaultSettings()
+	settings.Categories.Categories = []config.Category{{Name: "Files", PostDownloadCommand: `printf '%s' "$f" > hook-result`}}
+	bus := NewEventBus()
+	defer bus.Shutdown()
+	observer, stop := bus.Subscribe()
+	defer stop()
+	manager := NewLifecycleManager(nil, bus, settings)
+
+	err := manager.MoveCompletedCategory(entry.ID, "Files", targetDir)
+	var cleanupErr *store.CategoryMoveCleanupError
+	if !errors.As(err, &cleanupErr) || !errors.Is(err, os.ErrPermission) {
+		t.Fatalf("expected an old-copy cleanup error, got %v", err)
+	}
+	saved, err := store.GetDownload(entry.ID)
+	if err != nil || saved == nil || saved.DestPath != target || saved.PendingCategoryMove != "" {
+		t.Fatalf("expected committed category move, got %+v, %v", saved, err)
+	}
+	timeout := time.After(5 * time.Second)
+	for {
+		select {
+		case event := <-observer:
+			if event.Processing != nil && !*event.Processing {
+				data, err := os.ReadFile(filepath.Join(targetDir, "hook-result"))
+				if err != nil || string(data) != "file.bin" || event.HookError != "" {
+					t.Fatalf("hook result = %q, read error = %v, hook error = %q", data, err, event.HookError)
+				}
+				return
+			}
+		case <-timeout:
+			t.Fatal("hook did not finish after the committed move")
+		}
+	}
 }

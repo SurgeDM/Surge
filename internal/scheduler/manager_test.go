@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/SurgeDM/Surge/internal/progress"
@@ -927,4 +928,29 @@ func TestRunDownload_ChunkedSingleEmitsFinalWrittenSize(t *testing.T) {
 	if string(downloadedData) != string(body) {
 		t.Errorf("downloaded file content mismatch: got %q, want %q", string(downloadedData), string(body))
 	}
+}
+
+func TestManagedCompletionWaitsPastProgressTimeout(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		ch := make(chan types.DownloadEvent, 1)
+		ch <- types.DownloadEvent{Type: types.EventStarted}
+		event := types.DownloadEvent{Type: types.EventComplete, DownloadID: "complete"}
+		result := make(chan bool, 1)
+		go func() { result <- sendCompletion(ch, event, true) }()
+
+		time.Sleep(terminalSendTimeout + time.Second)
+		select {
+		case <-result:
+			t.Fatal("completion returned before ingress had capacity")
+		default:
+		}
+		<-ch
+		if !<-result || (<-ch).DownloadID != event.DownloadID {
+			t.Fatal("completion was not delivered after ingress recovered")
+		}
+		close(ch)
+		if sendCompletion(ch, event, true) {
+			t.Fatal("closed ingress reported a successful send")
+		}
+	})
 }

@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -126,17 +127,16 @@ func (mgr *LifecycleManager) MoveCompletedCategory(id, category, directory strin
 			publishMoving(false)
 		}
 	}()
-	if err := store.MoveCompletedCategory(id, category, directory, func(started bool) {
+	err = store.MoveCompletedCategory(id, category, directory, func(started bool) {
 		if started {
 			moving = true
 			publishMoving(true)
 		}
-	}); err != nil {
-		return err
-	}
-	if retry {
+	})
+	var cleanupErr *store.CategoryMoveCleanupError
+	if retry && (err == nil || errors.As(err, &cleanupErr)) {
 		path := filepath.Join(directory, filepath.Base(entry.DestPath))
 		mgr.startPostDownload(postDownloadCommand(mgr.GetSettings(), entry), path, id)
 	}
-	return nil
+	return err
 }
