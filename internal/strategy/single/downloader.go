@@ -89,7 +89,11 @@ func (d *SingleDownloader) applyClientSettings(client *http.Client) {
 // Download downloads a file using a single connection.
 // This is used for servers that don't support Range requests.
 // If interrupted, the download cannot be resumed and must restart from the beginning.
-func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string, fileSize int64, filename string) (err error) {
+func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string, fileSize int64, filename string) error {
+	return d.download(ctx, rawurl, destPath, fileSize, filename, preallocateFile)
+}
+
+func (d *SingleDownloader) download(ctx context.Context, rawurl, destPath string, fileSize int64, filename string, preallocate func(*os.File, int64) error) (err error) {
 	httpTransport := transport.DefaultNetworkPool.AcquireTransport(d.Runtime.ProxyURL, d.Runtime.CustomDNS, 0)
 	defer transport.DefaultNetworkPool.ReleaseTransport(httpTransport)
 
@@ -234,7 +238,7 @@ func (d *SingleDownloader) Download(ctx context.Context, rawurl, destPath string
 
 	preallocated := false
 	if fileSize > 0 {
-		if err := preallocateFile(outFile, fileSize); err != nil {
+		if err := preallocate(outFile, fileSize); err != nil {
 			return fmt.Errorf("failed to preallocate file: %w", err)
 		}
 		preallocated = true
