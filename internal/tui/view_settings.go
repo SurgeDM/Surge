@@ -545,7 +545,7 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		guidance := []string{
 			"Edit a category to set an optional Command that runs after a successful download, in the file's final directory.",
 			`$d is the download directory; $f is the filename. Quote variables to handle spaces.`,
-			`Example: 7z x "$f" -y`,
+			`Example: 7z x "$f" -aou`,
 			"Leave Command empty to skip post-download processing.",
 		}
 		for _, text := range guidance {

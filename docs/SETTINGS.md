@@ -208,7 +208,7 @@ optional **Command** field. Leave it empty to skip processing. You can also set 
 `post_download_command` in `settings.toml`. After a successful download and
 any pending category move, Surge runs the selected category's command in the
 file's final directory. `$d` is that directory and `$f` is the filename. For
-example, use `7z x "$f" -y` to extract archives; quote variables to
+example, use `7z x "$f" -aou` to extract archives; quote variables to
 handle spaces. An explicit category assignment takes precedence over automatic
 matching, and Uncategorized runs no command. Commands run through `sh` on
 Unix and PowerShell on Windows, with the permissions and environment of the
@@ -218,8 +218,9 @@ status and is reported in the activity log.
 While the command runs, the TUI displays an animated spinner with **Running
 post-download hooks**. After it finishes, the download displays **Completed**.
 File Details shows **Processing: Done**, or a red **Processing: Failed (exit
-status 2)** for a command that exits with that status. The activity log retains
-the full error. Processing results currently last for the running Surge session.
+status 2)** for a command that exits with that status. The activity log records the exit status, but not stdout or stderr. Redirect
+command output to a file to retain diagnostic details. Processing results
+currently last for the running Surge session.
 
 Commands run asynchronously and are
 not retried; keep Surge running until they finish.
