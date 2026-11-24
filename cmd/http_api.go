@@ -814,7 +814,17 @@ func isDirectLoopbackRequest(r *http.Request) bool {
 		host = r.RemoteAddr
 	}
 	ip := net.ParseIP(host)
-	return ip != nil && ip.IsLoopback() && strings.TrimSpace(r.Header.Get("X-Forwarded-For")) == "" && strings.TrimSpace(r.Header.Get("X-Real-IP")) == ""
+	if ip == nil || !ip.IsLoopback() ||
+		strings.TrimSpace(r.Header.Get("X-Forwarded-For")) != "" ||
+		strings.TrimSpace(r.Header.Get("X-Real-IP")) != "" {
+		return false
+	}
+	for _, value := range r.Header.Values("Forwarded") {
+		if strings.TrimSpace(value) != "" {
+			return false
+		}
+	}
+	return true
 }
 
 func categoryCommandsChanged(before, after []config.Category) bool {

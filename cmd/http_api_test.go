@@ -1659,6 +1659,19 @@ func TestCategoryCommandChangesRequireDirectLoopback(t *testing.T) {
 		t.Fatal("forwarded request accepted")
 	}
 	r.Header.Del("X-Forwarded-For")
+	r.Header.Set("Forwarded", " \tfor=192.0.2.1 \t")
+	if isDirectLoopbackRequest(r) {
+		t.Fatal("loopback request with only Forwarded was accepted")
+	}
+	r.Header.Set("Forwarded", " \t ")
+	if !isDirectLoopbackRequest(r) {
+		t.Fatal("loopback request with whitespace-only Forwarded was rejected")
+	}
+	r.Header.Add("Forwarded", "for=192.0.2.1")
+	if isDirectLoopbackRequest(r) {
+		t.Fatal("loopback request with a non-empty second Forwarded value was accepted")
+	}
+	r.Header.Del("Forwarded")
 	r.RemoteAddr = "192.0.2.1:1234"
 	if isDirectLoopbackRequest(r) {
 		t.Fatal("remote request accepted")
