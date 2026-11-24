@@ -562,6 +562,24 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		descDisplay,
 	)
 
+	if (meta.Type == config.TypeCustomCategory || meta.Type == config.TypeCustomCategoryAdd) && lipgloss.Height(detail) > rows {
+		lines := strings.Split(detail, "\n")
+		if m.SettingsIsEditing {
+			focus := min(2+2*m.catMgrEditField, len(lines)-1)
+			start := max(0, focus-rows+1)
+			detail = strings.Join(lines[start:], "\n")
+		} else if meta.Type == config.TypeCustomCategory {
+			// Compact the category fields first, keeping the command visible.
+			compact := []string{lines[0]}
+			for i := 2; i <= 10 && i < len(lines); i += 2 {
+				compact = append(compact, lines[i])
+			}
+			if len(compact) > rows {
+				compact = compact[len(compact)-rows:]
+			}
+			detail = strings.Join(compact, "\n")
+		}
+	}
 	return formatSettingsBlock(detail, innerWidth, rows)
 }
 
