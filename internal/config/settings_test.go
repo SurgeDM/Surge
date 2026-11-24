@@ -509,6 +509,8 @@ func TestSaveSettings_RealFunction(t *testing.T) {
 	original.General.AutoResume.Value = true
 	original.General.Theme.Value = ThemeDark
 	original.General.TransparentBackground.Value = true
+	manual := Category{Name: "Manual", Path: tmpDir}
+	original.Categories.Categories = []Category{manual}
 
 	err := SaveSettings(original)
 	if err != nil {
@@ -528,6 +530,9 @@ func TestSaveSettings_RealFunction(t *testing.T) {
 	}
 	if Resolve[int](loaded.General.Theme) != ThemeDark || !Resolve[bool](loaded.General.TransparentBackground) {
 		t.Error("appearance settings did not survive save and load")
+	}
+	if !reflect.DeepEqual(loaded.Categories.Categories, []Category{manual}) {
+		t.Errorf("manual-only category did not survive save and load: %+v", loaded.Categories.Categories)
 	}
 	if loaded.FindSetting("Appearance", "theme") != loaded.FindSetting("General", "theme") {
 		t.Error("legacy general lookup must address the appearance setting")

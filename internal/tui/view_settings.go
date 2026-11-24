@@ -431,6 +431,8 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 				m.renderCategoryInputLine("Regex:", 2, innerWidth),
 				"",
 				m.renderCategoryInputLine("Path:", 3, innerWidth),
+				"",
+				m.renderCategoryInputLine("Command:", 4, innerWidth),
 			)
 			valueLabel = ""
 		} else {
@@ -464,15 +466,21 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 			if !ok {
 				break
 			}
-			labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Width(8)
+			pattern := cat.Pattern
+			if strings.TrimSpace(pattern) == "" {
+				pattern = "Manual only"
+			}
+			labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Width(9)
 			valueStr = lipgloss.JoinVertical(lipgloss.Left,
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Name:"), utils.TruncateMiddle(cat.Name, innerWidth-20)),
 				"",
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Desc:"), utils.TruncateMiddle(cat.Description, innerWidth-20)),
 				"",
-				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Regex:"), utils.TruncateMiddle(cat.Pattern, innerWidth-20)),
+				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Regex:"), utils.TruncateMiddle(pattern, innerWidth-20)),
 				"",
 				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Path:"), utils.TruncateMiddle(cat.Path, innerWidth-20)),
+				"",
+				lipgloss.JoinHorizontal(lipgloss.Top, labelStyle.Render("Command:"), utils.TruncateMiddle(cat.PostDownloadCommand, innerWidth-20)),
 			)
 			valueLabel = ""
 		default:
@@ -538,6 +546,15 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 	if meta.Key == "category_enabled" {
 		priority := utils.WrapText("Categories are checked from top to bottom; the first match wins.", innerWidth)
 		wrappedDesc += "\n\n" + lipgloss.NewStyle().Bold(true).Render(priority)
+		guidance := []string{
+			"Edit a category to set an optional Command that runs after a successful download, in the file's final directory.",
+			`$d is the download directory; $f is the filename. Quote variables to handle spaces.`,
+			`Example: 7z x "$f" -aou`,
+			"Leave Command empty to skip post-download processing.",
+		}
+		for _, text := range guidance {
+			wrappedDesc += "\n\n" + utils.WrapText(text, innerWidth)
+		}
 	}
 	descDisplay := lipgloss.NewStyle().
 		Foreground(colors.LightGray()).
@@ -557,7 +574,33 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		"",
 		descDisplay,
 	)
+	if meta.Key == "category_enabled" && rows > 1 && lipgloss.Height(detail) > rows {
+		lines := strings.Split(detail, "\n")
+		visible := rows - 1
+		positions := len(lines) - visible + 1
+		start := ((m.settingsDetailScroll % positions) + positions) % positions
+		detail = strings.Join(lines[start:start+visible], "\n") + "\n" +
+			lipgloss.NewStyle().Foreground(colors.Gray()).Render("PgUp/PgDn scroll")
+	}
 
+	if (meta.Type == config.TypeCustomCategory || meta.Type == config.TypeCustomCategoryAdd) && lipgloss.Height(detail) > rows {
+		lines := strings.Split(detail, "\n")
+		if m.SettingsIsEditing {
+			focus := min(2+2*m.catMgrEditField, len(lines)-1)
+			start := max(0, focus-rows+1)
+			detail = strings.Join(lines[start:], "\n")
+		} else if meta.Type == config.TypeCustomCategory {
+			// Compact the category fields first, keeping the command visible.
+			compact := []string{lines[0]}
+			for i := 2; i <= 10 && i < len(lines); i += 2 {
+				compact = append(compact, lines[i])
+			}
+			if len(compact) > rows {
+				compact = compact[len(compact)-rows:]
+			}
+			detail = strings.Join(compact, "\n")
+		}
+	}
 	return formatSettingsBlock(detail, innerWidth, rows)
 }
 
@@ -694,10 +737,10 @@ func (m *RootModel) updateSettingsInputWidthForViewport() {
 		_, rightWidth := calculateSettingsPaneWidths(modalWidth)
 
 		targetWidth = rightWidth - 10   // Fixed offset for labels
-		catInputWidth = rightWidth - 12 // rightWidth - 4 (padding) - 8 (label width)
+		catInputWidth = rightWidth - 13 // rightWidth - 4 (padding) - 9 (label width)
 	} else {
 		targetWidth = modalWidth - 16   // Fixed offset for labels
-		catInputWidth = modalWidth - 10 // modalWidth - 2 (padding) - 8 (label width)
+		catInputWidth = modalWidth - 11 // modalWidth - 2 (padding) - 9 (label width)
 	}
 
 	if targetWidth < MinSettingsInputW {
@@ -1174,13 +1217,13 @@ func (m *RootModel) resetSettingToDefault(category, key string, defaults *config
 }
 
 func (m RootModel) renderCategoryInputLine(label string, fieldIndex int, width int) string {
-	labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Width(8)
+	labelStyle := lipgloss.NewStyle().Foreground(colors.LightGray()).Width(9)
 	if m.catMgrEditField == fieldIndex {
 		labelStyle = labelStyle.Foreground(colors.Cyan()).Bold(true)
 	}
 
 	inputView := m.catMgrInputs[fieldIndex].View()
-	inputWidth := width - 8
+	inputWidth := width - 9
 	if inputWidth < 5 {
 		inputWidth = 5
 	}

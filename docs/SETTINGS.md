@@ -170,6 +170,10 @@ These options are stored in the `[general]` section of the configuration file.
 
 Category rules are checked from top to bottom; the first matching rule determines the category and download path. In Settings → Categories, select a category and use Shift+Up / Shift+Down or Shift+K / Shift+J to change its priority. Save the order by closing Settings. Custom categories are added at the bottom and can be moved above broader rules.
 
+Leave **Regex** blank to create a manual-only category. Automatic sorting skips
+it, and you can still assign it from the dashboard category picker. In
+`settings.toml`, use `pattern = ""` or omit the pattern.
+
 ### Settings shortcuts and confirmations
 
 - `r` resets the selected setting after confirmation. It does not delete category rules.
@@ -200,3 +204,27 @@ are temporarily disabled. Other downloads remain usable.
 Existing destination files are never overwritten. If a deferred move fails, the
 download remains completed at its original location and the activity log reports
 the failure. Select the category again to retry the move.
+
+### Post-download category commands
+
+Open **Settings → Categories**, select a category, and press Enter to edit its
+optional **Command** field. Leave it empty to skip processing. You can also set a
+`post_download_command` in `settings.toml`. After a successful download and
+any pending category move, Surge runs the selected category's command in the
+file's final directory. `$d` is that directory and `$f` is the filename. For
+example, use `7z x "$f" -aou` to extract archives; quote variables to
+handle spaces. An explicit category assignment takes precedence over automatic
+matching, and Uncategorized runs no command. Commands run through `sh` on
+Unix and PowerShell on Windows, with the permissions and environment of the
+Surge process. A command failure does not change the completed download's
+status and is reported in the activity log.
+
+While the command runs, the TUI displays an animated spinner with **Running
+post-download hooks**. After it finishes, the download displays **Completed**.
+File Details shows **Processing: Done**, or a red **Processing: Failed (exit
+status 2)** for a command that exits with that status. The activity log records the exit status, but not stdout or stderr. Redirect
+command output to a file to retain diagnostic details. Processing results
+currently last for the running Surge session.
+
+Commands run asynchronously and are
+not retried; keep Surge running until they finish.

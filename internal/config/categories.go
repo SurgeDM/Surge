@@ -8,12 +8,13 @@ import (
 	"sync"
 )
 
-// Category defines a download category for auto-sorting.
+// Category defines a download category with an optional auto-sort pattern.
 type Category struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Pattern     string `json:"pattern"`
-	Path        string `json:"path"`
+	Name                string `json:"name"`
+	Description         string `json:"description,omitempty"`
+	Pattern             string `json:"pattern"`
+	Path                string `json:"path"`
+	PostDownloadCommand string `json:"post_download_command,omitempty"`
 }
 
 func (c *Category) Validate() error {
@@ -23,11 +24,10 @@ func (c *Category) Validate() error {
 	if strings.TrimSpace(c.Name) == "" {
 		return errors.New("category name cannot be empty")
 	}
-	if strings.TrimSpace(c.Pattern) == "" {
-		return errors.New("category pattern cannot be empty")
-	}
-	if _, err := regexp.Compile(strings.TrimSpace(c.Pattern)); err != nil {
-		return err
+	if pattern := strings.TrimSpace(c.Pattern); pattern != "" {
+		if _, err := regexp.Compile(pattern); err != nil {
+			return err
+		}
 	}
 	if strings.TrimSpace(c.Path) == "" {
 		return errors.New("category path cannot be empty")
@@ -147,7 +147,7 @@ func GetCategoryForFile(filename string, categories []Category) (*Category, erro
 	}
 	for i := range categories {
 		cat := &categories[i]
-		if cat.Pattern != "" {
+		if strings.TrimSpace(cat.Pattern) != "" {
 			if re := getCompiledPattern(cat.Pattern); re != nil && re.MatchString(filename) {
 				return cat, nil
 			}

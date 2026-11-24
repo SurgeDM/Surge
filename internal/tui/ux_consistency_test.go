@@ -183,3 +183,18 @@ func TestSettingsDownloadDirectoryDisplay(t *testing.T) {
 		})
 	}
 }
+
+func TestCategoryCommandVisibleInShortDetail(t *testing.T) {
+	m := InitialRootModel(1701, "test", nil, nil, config.DefaultSettings(), false)
+	meta := []config.SettingMeta{{Key: "category", Label: "Category", Type: config.TypeCustomCategory}}
+	values := map[string]interface{}{"category": config.Category{Name: "Archives", PostDownloadCommand: "unzip"}}
+	for _, editing := range []bool{false, true} {
+		m.SettingsIsEditing = editing
+		m.catMgrEditField = 4
+		m.catMgrInputs[4].SetValue("unzip")
+		got := ansiEscapeRE.ReplaceAllString(m.renderSettingsDetailBlock(meta, 0, values, 40, 6), "")
+		if !strings.Contains(got, "Command:") {
+			t.Fatalf("editing=%v: command missing: %q", editing, got)
+		}
+	}
+}

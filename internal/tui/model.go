@@ -92,6 +92,13 @@ const (
 )
 
 type DownloadModel struct {
+	lastMapRanges    []types.Task
+	writingRanges    []types.Task
+	lastMapWrite     time.Time
+	liveProgress     bool // state belongs to the local engine; never overwrite it with event snapshots.
+	processing       bool
+	processed        bool
+	hookError        string
 	moving           bool
 	fileMissing      bool
 	ID               string
@@ -200,10 +207,11 @@ type RootModel struct {
 	StartupConfigWarnings []string         // Config validation warnings to emit on first render
 	SettingsActiveTab     int              // Active category tab
 	SettingsSelectedRow   int              // Selected setting within current tab
-	SettingsFocusedPane   int              // Focused settings pane (0 = Tabs, 1 = List)
-	SettingsIsEditing     bool             // Whether currently editing a value
-	SettingsInput         textinput.Model  // Input for editing string/int values
-	settingsError         string           // Current validation error in settings
+	settingsDetailScroll  int
+	SettingsFocusedPane   int             // Focused settings pane (0 = Tabs, 1 = List)
+	SettingsIsEditing     bool            // Whether currently editing a value
+	SettingsInput         textinput.Model // Input for editing string/int values
+	settingsError         string          // Current validation error in settings
 	settingsAction        *settingsAction
 	ExtensionTokenCopied  bool // Flash message for "Token Copied!"
 
@@ -247,7 +255,7 @@ type RootModel struct {
 	pendingCategory      string
 	AssignCategoryFunc   func(string, string, bool) error
 	catMgrEditField      int                // 0=Name, 1=Description, 2=Pattern, 3=Path
-	catMgrInputs         [4]textinput.Model // Inputs for Name, Description, Pattern, Path
+	catMgrInputs         [5]textinput.Model // Inputs for Name, Description, Pattern, Path, command
 	catMgrIsNew          bool               // Whether adding a new category
 	// Quit confirm button focus (0 = Yep!, 1 = Nope)
 	quitConfirmFocused int
@@ -475,7 +483,7 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 	catDescInput.Prompt = ""
 
 	catPatternInput := textinput.New()
-	catPatternInput.Placeholder = "(?i)\\.(mp4|mkv)$"
+	catPatternInput.Placeholder = "Blank for manual only"
 	catPatternInput.SetWidth(50)
 	catPatternInput.Prompt = ""
 
@@ -483,6 +491,10 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 	catPathInput.Placeholder = "/home/user/Videos"
 	catPathInput.SetWidth(50)
 	catPathInput.Prompt = ""
+
+	catCommandInput := textinput.New()
+	catCommandInput.Placeholder = `hatchzip x "$f" -y`
+	catCommandInput.Prompt = ""
 
 	enqueueCtx, cancelEnqueue := context.WithCancel(context.Background())
 
@@ -519,7 +531,7 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 		helpSearchInput:       textinput.New(),
 		settingsSearchInput:   textinput.New(),
 		urlUpdateInput:        urlUpdateInput,
-		catMgrInputs:          [4]textinput.Model{catNameInput, catDescInput, catPatternInput, catPathInput},
+		catMgrInputs:          [5]textinput.Model{catNameInput, catDescInput, catPatternInput, catPathInput, catCommandInput},
 		keys:                  keys,
 		lastKeyMapModTime:     keyMapModTime,
 		lastConfigCheckTime:   time.Now(),
@@ -858,6 +870,8 @@ func (m RootModel) isResizing() bool {
 func downloadModelFromStatus(s types.DownloadStatus, autoResume bool) *DownloadModel {
 	dm := NewDownloadModel(s.ID, s.URL, s.Filename, s.TotalSize)
 	dm.moving = s.Moving
+	dm.processing, dm.hookError = s.Processing, s.HookError
+	dm.processed = s.Processed
 	dm.fileMissing = s.FileMissing
 	dm.categoryOverride = s.CategoryOverride
 	dm.phase = s.Phase

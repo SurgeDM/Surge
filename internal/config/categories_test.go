@@ -140,11 +140,6 @@ func TestCategoryValidate_RejectsWhitespaceFields(t *testing.T) {
 		t.Fatalf("expected name validation error, got %v", err)
 	}
 
-	cat = Category{Name: "Docs", Pattern: "   ", Path: "/tmp"}
-	if err := cat.Validate(); err == nil || err.Error() != "category pattern cannot be empty" {
-		t.Fatalf("expected pattern validation error, got %v", err)
-	}
-
 	cat = Category{Name: "Docs", Pattern: `(?i)\.txt$`, Path: "   "}
 	if err := cat.Validate(); err == nil || err.Error() != "category path cannot be empty" {
 		t.Fatalf("expected path validation error, got %v", err)
@@ -304,5 +299,26 @@ func TestDefaultMovieAndShowCategories(t *testing.T) {
 		if err != nil || cat == nil || cat.Name != tc.want {
 			t.Errorf("%s: got %v, %v; want %s", tc.filename, cat, err, tc.want)
 		}
+	}
+}
+
+func TestManualOnlyCategoriesAreSkippedByAutoMatching(t *testing.T) {
+	cats := []Category{
+		{Name: "Manual", Path: "/manual"},
+		{Name: "Also manual", Pattern: " \t", Path: "/other"},
+		{Name: "Text", Pattern: `\.txt$`, Path: "/text"},
+	}
+	for _, cat := range cats {
+		if err := cat.Validate(); err != nil {
+			t.Fatalf("category %q failed validation: %v", cat.Name, err)
+		}
+	}
+	match, err := GetCategoryForFile("notes.txt", cats)
+	if err != nil || match != &cats[2] {
+		t.Fatalf("expected automatic Text category, got %+v, %v", match, err)
+	}
+	match, err = GetCategoryForFile("photo.jpg", cats)
+	if err != nil || match != nil {
+		t.Fatalf("expected no automatic category, got %+v, %v", match, err)
 	}
 }

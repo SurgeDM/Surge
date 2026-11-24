@@ -334,7 +334,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		}
 	}()
 
-	// Initialize chunk visualization (must happen BEFORE setupTasks so RestoreBitmap can overwrite it)
+	// Initialize chunk visualization using the current connection heuristic.
 	if d.State != nil {
 		d.State.InitBitmap(fileSize, chunkSize)
 	}
@@ -482,26 +482,34 @@ func (d *ConcurrentDownloader) getEffectiveSizeForWorkers(fileSize int64, savedS
 
 func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize int64, numConns int, outFile *os.File, savedState *types.DownloadRecord, isResume bool) ([]types.Task, error) {
 	if isResume {
+		tasks := savedState.Tasks
+		if savedState.ActualChunkSize > 0 && savedState.ActualChunkSize != chunkSize && len(savedState.ChunkBitmap) > 0 {
+			tasks = intersectTasks(tasks, unverifiedTasksFromBitmap(savedState.ChunkBitmap, fileSize, savedState.ActualChunkSize))
+		}
 		if d.State != nil {
 			d.State.SetSavedElapsed(time.Duration(savedState.Elapsed))
 
-			if len(savedState.ChunkBitmap) > 0 && savedState.ActualChunkSize > 0 {
-				d.State.RestoreBitmap(savedState.ChunkBitmap, savedState.ActualChunkSize)
-				d.State.RecalculateProgress(savedState.Tasks)
-				downloaded := savedState.Downloaded
-				if vp := d.State.Bytes.VerifiedProgress.Load(); downloaded < vp {
-					downloaded = vp
-				}
-				d.State.Bytes.Downloaded.Store(downloaded)
-				utils.Debug("Restored chunk map: size %d", savedState.ActualChunkSize)
+			if len(savedState.ChunkBitmap) > 0 && savedState.ActualChunkSize == chunkSize {
+				d.State.RestoreBitmap(savedState.ChunkBitmap, chunkSize)
+				utils.Debug("Restored chunk map: size %d", chunkSize)
 			} else {
-				d.State.Bytes.Downloaded.Store(savedState.Downloaded)
-				d.State.Bytes.VerifiedProgress.Store(savedState.Downloaded)
+				// The connection heuristic may change on any resume. Do not let
+				// the persisted layout overwrite the newly calculated layout.
+				// Clear status bits before reconstructing progress from tasks.
+				chunks := (fileSize-1)/chunkSize + 1
+				d.State.RestoreBitmap(make([]byte, (chunks+3)/4), chunkSize)
+				utils.Debug("Rebuilt resume chunk map: old size %d, new size %d", savedState.ActualChunkSize, chunkSize)
 			}
+			d.State.RecalculateProgress(tasks)
+			downloaded := savedState.Downloaded
+			if vp := d.State.Bytes.VerifiedProgress.Load(); downloaded < vp {
+				downloaded = vp
+			}
+			d.State.Bytes.Downloaded.Store(downloaded)
 			d.State.SyncSessionStart()
 		}
 		utils.Debug("Resuming from saved state: %d tasks, %d bytes downloaded", len(savedState.Tasks), savedState.Downloaded)
-		return savedState.Tasks, nil
+		return tasks, nil
 	}
 
 	if err := outFile.Truncate(fileSize); err != nil {
@@ -671,6 +679,21 @@ func (d *ConcurrentDownloader) executeWorkers(ctx context.Context, cancel contex
 
 func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queue *TaskQueue, candidateMirrors []string) error {
 	return d.saveStateSnapshot(destPath, fileSize, queue, candidateMirrors, true)
+}
+
+// intersectTasks keeps only saved work that is not already verified by the bitmap.
+func intersectTasks(tasks, unverified []types.Task) []types.Task {
+	var result []types.Task
+	for _, task := range tasks {
+		for _, remaining := range unverified {
+			start := max(task.Offset, remaining.Offset)
+			end := min(task.Offset+task.Length, remaining.Offset+remaining.Length)
+			if start < end {
+				result = append(result, types.Task{Offset: start, Length: end - start})
+			}
+		}
+	}
+	return result
 }
 
 // unverifiedTasksFromBitmap rebuilds resumable work from the persisted bitmap.
