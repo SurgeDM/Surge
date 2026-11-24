@@ -47,6 +47,7 @@ type Scheduler struct {
 	progressDone   chan struct{}              // closed when progressCh must no longer be sent to
 	downloads      map[string]*activeDownload // Track active downloads for pause/resume
 	queued         map[string]*queuedTask     // Track queued downloads
+	finalizing     map[string]struct{}        // nil for standalone schedulers
 	mu             sync.RWMutex
 	wg             sync.WaitGroup // We use this to wait for all active downloads to pause before exiting the program
 	maxDownloads   int
@@ -306,15 +307,49 @@ func (p *Scheduler) HasDownload(url string) bool {
 	return false
 }
 
-// ActiveCount returns the number of currently active (downloading/pausing) downloads
+// TrackFinalization keeps transfers pending until the lifecycle worker settles
+// their artifact. Standalone scheduler callers do not have a lifecycle worker.
+func (p *Scheduler) TrackFinalization() {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.finalizing == nil {
+		p.finalizing = make(map[string]struct{})
+	}
+}
+
+func (p *Scheduler) beginFinalization(id string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.finalizing != nil {
+		p.finalizing[id] = struct{}{}
+	}
+}
+
+func (p *Scheduler) FinishFinalization(id string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	delete(p.finalizing, id)
+}
+
+func (p *Scheduler) IsFinalizing(id string) bool {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	_, pending := p.finalizing[id]
+	return pending
+}
+
+// ActiveCount returns the number of queued, transferring or finalizing jobs.
 func (p *Scheduler) ActiveCount() int {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	count := 0
-	for _, ad := range p.downloads {
-		// Count if not completed and not fully paused
-		if ad.config.ProgressState != nil && !progress.CfgProgress(&ad.config).Done.Load() && !progress.CfgProgress(&ad.config).IsPaused() {
+	count := len(p.finalizing)
+	for id, ad := range p.downloads {
+		if _, pending := p.finalizing[id]; pending {
+			continue
+		}
+		state := progress.CfgProgress(&ad.config)
+		if ad.running.Load() || (state != nil && !state.Done.Load() && !state.IsPaused()) {
 			count++
 		}
 	}
@@ -861,7 +896,7 @@ func (p *Scheduler) worker() {
 		localCfg := ad.config
 		p.mu.Unlock()
 
-		err := RunDownload(ctx, &localCfg)
+		err := runDownload(ctx, &localCfg, p.beginFinalization)
 		ad.running.Store(false)
 		close(ad.done) // unblock any Cancel caller waiting for this worker to exit
 

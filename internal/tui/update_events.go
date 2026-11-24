@@ -27,7 +27,7 @@ func stateProgress(state interface{}) *engineprogress.DownloadProgress {
 
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if ev, ok := msg.(types.DownloadEvent); ok {
-		if ev.Processing != nil || ev.ResyncRequired || (ev.Type != types.EventProgress && ev.Type != types.EventBatchProgress && ev.Type != types.EventSystem) {
+		if ev.Processing != nil || ev.Moving != nil || ev.ResyncRequired || (ev.Type != types.EventProgress && ev.Type != types.EventBatchProgress && ev.Type != types.EventSystem) {
 			m.lifecycleRevision++
 		}
 		model, cmd := m.handleDownloadEvent(ev)
@@ -322,6 +322,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	case types.EventComplete:
 		var cmds []tea.Cmd
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.phase = ""
 			if !d.done {
 				d.Total = msg.Total
 				d.Downloaded = d.Total
@@ -346,6 +347,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	case types.EventError:
 		found := false
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.phase = ""
 			d.err = msg.Err
 			d.done = true
 			m.addStyledLogEntry(logError, "\u2716 Error: "+d.Filename)

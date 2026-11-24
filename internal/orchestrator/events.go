@@ -306,155 +306,12 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 			}
 
 		case types.EventComplete:
-			if existing, _ := store.GetDownload(m.DownloadID); existing != nil && existing.Status == "completed" {
-				break
+			result := mgr.finalizeDownload(m)
+			if mgr.pool != nil {
+				mgr.pool.FinishFinalization(m.DownloadID)
 			}
-			var avgSpeed float64
-			if m.Elapsed.Seconds() > 0 {
-				avgSpeed = float64(m.Total) / m.Elapsed.Seconds()
-			}
-
-			destPath := ""
-			// DownloadCompleteMsg does not carry destPath, so we recover the stable final
-			// location from the DB entry written earlier on this same serialized event stream.
-			existing, _ := store.GetDownload(m.DownloadID)
-			var url, urlHash string
-			filename := m.Filename
-			if existing != nil {
-				destPath = existing.DestPath
-				url = existing.URL
-				urlHash = existing.URLHash
-				if filename == "" {
-					filename = existing.Filename
-				}
-			}
-
-			policy := m.Artifact
-			if existing != nil && existing.Artifact != (types.ArtifactPolicy{}) {
-				policy.OnExists = existing.Artifact.OnExists
-				policy.ExpectedSHA256 = existing.Artifact.ExpectedSHA256
-			}
-			// Completion only becomes durable once the working file is promoted, so a
-			// finalization failure must stay retryable instead of being recorded as done.
-			if err := finalizeArtifact(destPath, policy); err != nil {
-				utils.Debug("Lifecycle: Failed to finalize completed file at %s: %v", destPath, err)
-				errEntry := types.DownloadRecord{Artifact: policy, ErrorCode: artifactErrorCode(err),
-					ID:           m.DownloadID,
-					URL:          url,
-					URLHash:      urlHash,
-					DestPath:     destPath,
-					Filename:     filename,
-					Error:        err.Error(),
-					Status:       "error",
-					TotalSize:    m.Total,
-					Downloaded:   m.Total,
-					TimeTaken:    m.Elapsed.Milliseconds(),
-					AvgSpeed:     avgSpeed,
-					RateLimit:    m.RateLimit,
-					RateLimitSet: m.RateLimitSet,
-				}
-				if existing != nil {
-					errEntry.Workers = existing.Workers
-					errEntry.MinChunkSize = existing.MinChunkSize
-				}
-				if err := store.AddToMasterList(errEntry); err != nil {
-					utils.Debug("Lifecycle: Failed to persist finalization error state: %v", err)
-				}
-				if filename == "" {
-					filename = m.DownloadID
-				}
-				if mgr.eventBus != nil {
-					mgr.eventBus.publishLifecycleResult(types.DownloadEvent{
-						Type: types.EventError, DownloadID: m.DownloadID, Filename: filename,
-						DestPath: destPath, Downloaded: m.Total, Err: err,
-					})
-				}
-				msg := "Download failed"
-				if err != nil {
-					msg = err.Error()
-				}
-				if settings := mgr.GetSettings(); settings != nil && config.Resolve[bool](settings.General.DownloadCompleteNotification) {
-					notify(fmt.Sprintf("Download failed: %s", filename), msg)
-				}
-				break
-			}
-
-			entry := types.DownloadRecord{Artifact: policy,
-				ID:           m.DownloadID,
-				URL:          url,
-				URLHash:      urlHash,
-				DestPath:     destPath,
-				Filename:     filename,
-				Status:       "completed",
-				TotalSize:    m.Total,
-				Downloaded:   m.Total,
-				CompletedAt:  time.Now().Unix(),
-				TimeTaken:    m.Elapsed.Milliseconds(),
-				AvgSpeed:     avgSpeed,
-				RateLimit:    m.RateLimit,
-				RateLimitSet: m.RateLimitSet,
-			}
-			if existing != nil {
-				entry.Workers = existing.Workers
-				entry.MinChunkSize = existing.MinChunkSize
-			}
-			completionErr := store.AddToMasterList(entry, func(moving bool) {
-				if mgr.eventBus != nil {
-					mgr.eventBus.publishLifecycleResult(types.DownloadEvent{Type: types.EventSystem, DownloadID: entry.ID, Moving: &moving})
-				}
-			})
-			if completionErr != nil {
-				utils.Debug("Lifecycle: Failed to persist completed download: %v", completionErr)
-			}
-
-			saved, readErr := store.GetDownload(m.DownloadID)
-			if readErr != nil || saved == nil || saved.Status != "completed" {
-				err := completionErr
-				if err == nil {
-					err = fmt.Errorf("could not read committed completion: %v", readErr)
-				}
-				if mgr.eventBus != nil {
-					mgr.eventBus.publishLifecycleResult(types.DownloadEvent{
-						Type: types.EventError, DownloadID: m.DownloadID, Filename: filename,
-						DestPath: destPath, Downloaded: m.Total, Err: err,
-					})
-				}
-				break
-			}
-			if saved.CategoryOverride != nil && mgr.eventBus != nil {
-				event := types.DownloadEvent{Type: types.EventSystem, DownloadID: m.DownloadID, CategoryOverride: saved.CategoryOverride, DestPath: saved.DestPath}
-				if saved.CategoryMoveError != "" {
-					event.Message = "Category move failed; file kept at original location: " + saved.CategoryMoveError
-				} else if completionErr != nil {
-					event.Message = completionErr.Error()
-				}
-				mgr.eventBus.publishLifecycleResult(event)
-			}
-			if completionErr == nil && saved.PendingCategoryMove == "" && saved.CategoryMoveError == "" {
-				mgr.startPostDownload(postDownloadCommand(mgr.GetSettings(), saved), saved.DestPath, saved.ID)
-			}
-			if mgr.eventBus != nil {
-				m.Filename, m.DestPath = saved.Filename, saved.DestPath
-				mgr.eventBus.publishLifecycleResult(m)
-			}
-			if err := store.DeleteTasks(m.DownloadID); err != nil {
-				utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)
-			}
-			if settings := mgr.GetSettings(); settings != nil && config.Resolve[bool](settings.General.DownloadCompleteNotification) {
-				if filename == "" {
-					filename = m.Filename
-				}
-				if filename == "" {
-					filename = m.DownloadID
-				}
-
-				title := fmt.Sprintf("Download Complete: %s", filename)
-
-				if m.Elapsed.Seconds() <= 0 {
-					notify(title, "Download complete!")
-				} else {
-					notify(title, fmt.Sprintf("Download complete in %s (%.2f MiB/s)", m.Elapsed.Truncate(time.Second), avgSpeed/float64(utils.MiB)))
-				}
+			if result != nil && mgr.eventBus != nil {
+				mgr.eventBus.publishLifecycleResult(*result)
 			}
 
 		case types.EventError:
@@ -662,6 +519,147 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 			// file I/O churn without improving resume or history recovery.
 		}
 	}
+}
+
+func (mgr *LifecycleManager) finalizeDownload(m types.DownloadEvent) *types.DownloadEvent {
+	if existing, _ := store.GetDownload(m.DownloadID); existing != nil && existing.Status == "completed" {
+		return nil
+	}
+	var avgSpeed float64
+	if m.Elapsed.Seconds() > 0 {
+		avgSpeed = float64(m.Total) / m.Elapsed.Seconds()
+	}
+
+	destPath := ""
+	// DownloadCompleteMsg does not carry destPath, so we recover the stable final
+	// location from the DB entry written earlier on this same serialized event stream.
+	existing, _ := store.GetDownload(m.DownloadID)
+	var url, urlHash string
+	filename := m.Filename
+	if existing != nil {
+		destPath = existing.DestPath
+		url = existing.URL
+		urlHash = existing.URLHash
+		if filename == "" {
+			filename = existing.Filename
+		}
+	}
+
+	policy := m.Artifact
+	if existing != nil && existing.Artifact != (types.ArtifactPolicy{}) {
+		policy.OnExists = existing.Artifact.OnExists
+		policy.ExpectedSHA256 = existing.Artifact.ExpectedSHA256
+	}
+	// Completion only becomes durable once the working file is promoted, so a
+	// finalization failure must stay retryable instead of being recorded as done.
+	if err := finalizeArtifact(destPath, policy); err != nil {
+		utils.Debug("Lifecycle: Failed to finalize completed file at %s: %v", destPath, err)
+		errEntry := types.DownloadRecord{Artifact: policy, ErrorCode: artifactErrorCode(err),
+			ID:           m.DownloadID,
+			URL:          url,
+			URLHash:      urlHash,
+			DestPath:     destPath,
+			Filename:     filename,
+			Error:        err.Error(),
+			Status:       "error",
+			TotalSize:    m.Total,
+			Downloaded:   m.Total,
+			TimeTaken:    m.Elapsed.Milliseconds(),
+			AvgSpeed:     avgSpeed,
+			RateLimit:    m.RateLimit,
+			RateLimitSet: m.RateLimitSet,
+		}
+		if existing != nil {
+			errEntry.Workers = existing.Workers
+			errEntry.MinChunkSize = existing.MinChunkSize
+		}
+		if err := store.AddToMasterList(errEntry); err != nil {
+			utils.Debug("Lifecycle: Failed to persist finalization error state: %v", err)
+		}
+		if filename == "" {
+			filename = m.DownloadID
+		}
+		if settings := mgr.GetSettings(); settings != nil && config.Resolve[bool](settings.General.DownloadCompleteNotification) {
+			notify(fmt.Sprintf("Download failed: %s", filename), err.Error())
+		}
+		return &types.DownloadEvent{
+			Type: types.EventError, DownloadID: m.DownloadID, Filename: filename,
+			DestPath: destPath, Downloaded: m.Total, Err: err,
+		}
+	}
+
+	entry := types.DownloadRecord{Artifact: policy,
+		ID:           m.DownloadID,
+		URL:          url,
+		URLHash:      urlHash,
+		DestPath:     destPath,
+		Filename:     filename,
+		Status:       "completed",
+		TotalSize:    m.Total,
+		Downloaded:   m.Total,
+		CompletedAt:  time.Now().Unix(),
+		TimeTaken:    m.Elapsed.Milliseconds(),
+		AvgSpeed:     avgSpeed,
+		RateLimit:    m.RateLimit,
+		RateLimitSet: m.RateLimitSet,
+	}
+	if existing != nil {
+		entry.Workers = existing.Workers
+		entry.MinChunkSize = existing.MinChunkSize
+	}
+	completionErr := store.AddToMasterList(entry, func(moving bool) {
+		if mgr.eventBus != nil {
+			mgr.eventBus.publishLifecycleResult(types.DownloadEvent{Type: types.EventSystem, DownloadID: entry.ID, Moving: &moving})
+		}
+	})
+	if completionErr != nil {
+		utils.Debug("Lifecycle: Failed to persist completed download: %v", completionErr)
+	}
+
+	saved, readErr := store.GetDownload(m.DownloadID)
+	if readErr != nil || saved == nil || saved.Status != "completed" {
+		err := completionErr
+		if err == nil {
+			err = fmt.Errorf("could not read committed completion: %v", readErr)
+		}
+		return &types.DownloadEvent{
+			Type: types.EventError, DownloadID: m.DownloadID, Filename: filename,
+			DestPath: destPath, Downloaded: m.Total, Err: err,
+		}
+	}
+	if saved.CategoryOverride != nil && mgr.eventBus != nil {
+		event := types.DownloadEvent{Type: types.EventSystem, DownloadID: m.DownloadID, CategoryOverride: saved.CategoryOverride, DestPath: saved.DestPath}
+		if saved.CategoryMoveError != "" {
+			event.Message = "Category move failed; file kept at original location: " + saved.CategoryMoveError
+		} else if completionErr != nil {
+			event.Message = completionErr.Error()
+		}
+		mgr.eventBus.publishLifecycleResult(event)
+	}
+	if completionErr == nil && saved.PendingCategoryMove == "" && saved.CategoryMoveError == "" {
+		mgr.startPostDownload(postDownloadCommand(mgr.GetSettings(), saved), saved.DestPath, saved.ID)
+	}
+	if err := store.DeleteTasks(m.DownloadID); err != nil {
+		utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)
+	}
+	if settings := mgr.GetSettings(); settings != nil && config.Resolve[bool](settings.General.DownloadCompleteNotification) {
+		if filename == "" {
+			filename = m.Filename
+		}
+		if filename == "" {
+			filename = m.DownloadID
+		}
+
+		title := fmt.Sprintf("Download Complete: %s", filename)
+
+		if m.Elapsed.Seconds() <= 0 {
+			notify(title, "Download complete!")
+		} else {
+			notify(title, fmt.Sprintf("Download complete in %s (%.2f MiB/s)", m.Elapsed.Truncate(time.Second), avgSpeed/float64(utils.MiB)))
+		}
+	}
+	m.Filename, m.DestPath = saved.Filename, saved.DestPath
+	return &m
 }
 
 func artifactErrorCode(err error) string {

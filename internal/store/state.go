@@ -1314,3 +1314,18 @@ func GetHookState(id string) HookState {
 	defer masterMu.RUnlock()
 	return hookStates[id]
 }
+
+// HasPendingPostDownloadWork reports moves and hooks running in this process.
+func HasPendingPostDownloadWork() bool {
+	masterMu.RLock()
+	defer masterMu.RUnlock()
+	if len(movingDownloads) > 0 {
+		return true
+	}
+	for _, hook := range hookStates {
+		if hook.Running {
+			return true
+		}
+	}
+	return false
+}

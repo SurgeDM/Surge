@@ -254,7 +254,7 @@ func startServerLogic(cmd *cobra.Command, args []string, portFlag int, batchFile
 			defer ticker.Stop()
 			for range ticker.C {
 				if atomic.LoadInt32(&pendingEnqueue) == 0 {
-					if GlobalPool != nil && GlobalPool.ActiveCount() == 0 {
+					if downloadsSettled() {
 						select {
 						case exitWhenDoneCh <- struct{}{}:
 						default:

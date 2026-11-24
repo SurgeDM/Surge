@@ -88,6 +88,10 @@ func uniqueFilePath(path string) string {
 
 // RunDownload is the main entry point for downloads executed by the Engine pool
 func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
+	return runDownload(ctx, cfg, nil)
+}
+
+func runDownload(ctx context.Context, cfg *types.DownloadRecord, beforeComplete func(string)) error {
 	start := time.Now()
 	if cfg.Runtime == nil {
 		cfg.Runtime = types.DefaultRuntimeConfig()
@@ -355,6 +359,9 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		}
 
 		if cfg.ProgressCh != nil {
+			if beforeComplete != nil {
+				beforeComplete(cfg.ID)
+			}
 			rateLimit, rateLimitSet := currentRateLimit()
 			// EventComplete is terminal-reliable and must not be dropped due to canceled context.
 			safeSendProgress(cfg.ProgressCh, types.DownloadEvent{

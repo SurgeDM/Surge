@@ -120,6 +120,7 @@ func NewLifecycleManager(pool *scheduler.Scheduler, eventBus *EventBus, settings
 
 	var aggregator *ProgressAggregator
 	if pool != nil && eventBus != nil {
+		pool.TrackFinalization()
 		aggregator = NewProgressAggregator(pool, eventBus, settings)
 	}
 
@@ -157,6 +158,11 @@ func (mgr *LifecycleManager) Shutdown() {
 			mgr.eventBus.Shutdown()
 		}
 	})
+}
+
+// HasPendingDownloads includes work that outlives the transfer worker.
+func (mgr *LifecycleManager) HasPendingDownloads() bool {
+	return (mgr.pool != nil && mgr.pool.ActiveCount() > 0) || store.HasPendingPostDownloadWork()
 }
 
 // GetSettings returns a snapshot that callers can read without holding the lock.
