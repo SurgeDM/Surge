@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -42,6 +43,7 @@ type LifecycleManager struct {
 	// large batch of downloads does not flood the network with HEAD requests.
 	probeSem        chan struct{}
 	shutdownOnce    sync.Once
+	categoryMoves   atomic.Int64
 	inflightMu      sync.Mutex
 	inflight        map[string]*inflightEnqueue
 	downloadLocksMu sync.Mutex
@@ -162,7 +164,8 @@ func (mgr *LifecycleManager) Shutdown() {
 
 // HasPendingDownloads includes work that outlives the transfer worker.
 func (mgr *LifecycleManager) HasPendingDownloads() bool {
-	return (mgr.pool != nil && mgr.pool.ActiveCount() > 0) || store.HasPendingPostDownloadWork()
+	return (mgr.pool != nil && mgr.pool.ActiveCount() > 0) ||
+		mgr.categoryMoves.Load() > 0 || store.HasPendingPostDownloadWork()
 }
 
 // GetSettings returns a snapshot that callers can read without holding the lock.

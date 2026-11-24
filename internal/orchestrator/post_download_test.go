@@ -5,6 +5,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/store"
@@ -73,7 +74,14 @@ func TestPostDownloadHookSkipsFailedCategoryMove(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.General.DownloadCompleteNotification.Value = false
 	settings.Categories.Categories = []config.Category{{Name: "Files", PostDownloadCommand: "exit 0"}}
-	manager := NewLifecycleManager(nil, nil, settings)
+	if runtime.GOOS != "windows" {
+		settings.Categories.Categories[0].PostDownloadCommand = `printf '%s' "$f" >> hook-result`
+	}
+	bus := NewEventBus()
+	defer bus.Shutdown()
+	observer, stop := bus.Subscribe()
+	defer stop()
+	manager := NewLifecycleManager(nil, bus, settings)
 	events := make(chan types.DownloadEvent, 1)
 	events <- types.DownloadEvent{Type: types.EventComplete, DownloadID: id, Filename: entry.Filename, Total: 13}
 	close(events)
@@ -86,4 +94,43 @@ func TestPostDownloadHookSkipsFailedCategoryMove(t *testing.T) {
 	if state := store.GetHookState(id); state.Running || state.Processed {
 		t.Fatalf("hook started after failed move: %+v", state)
 	}
+	if runtime.GOOS == "windows" {
+		return // The retry fixture below uses a POSIX shell.
+	}
+	if err := os.Remove(filepath.Join(target, "file.bin")); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.MoveCompletedCategory(id, "Files", target); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.After(5 * time.Second)
+waitForHook:
+	for {
+		select {
+		case event := <-observer:
+			if event.Processing != nil && !*event.Processing {
+				if event.HookError != "" {
+					t.Fatal(event.HookError)
+				}
+				break waitForHook
+			}
+		case <-deadline:
+			t.Fatal("hook did not finish after the move retry")
+		}
+	}
+	other := t.TempDir()
+	if err := manager.MoveCompletedCategory(id, "Files", other); err != nil {
+		t.Fatal(err)
+	}
+	if err := manager.MoveCompletedCategory(id, "Files", target); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(target, "hook-result"))
+	if err != nil || string(got) != "file.bin" || manager.HasPendingDownloads() {
+		t.Fatalf("hook result = %q, error = %v, pending = %t", got, err, manager.HasPendingDownloads())
+	}
+	if _, err := os.Stat(filepath.Join(other, "hook-result")); !os.IsNotExist(err) {
+		t.Fatalf("ordinary category move ran a hook: %v", err)
+	}
+
 }

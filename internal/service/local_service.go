@@ -660,9 +660,7 @@ func (s *LocalDownloadService) AssignCategory(id, category string, move bool) er
 			if entry.Status != "completed" {
 				err = store.ScheduleCategoryMove(id, category, directory)
 			} else {
-				err = store.MoveCompletedCategory(id, category, directory, func(moving bool) {
-					_ = s.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: id, Moving: &moving})
-				})
+				err = s.lifecycle.MoveCompletedCategory(id, category, directory)
 			}
 		}
 	} else {

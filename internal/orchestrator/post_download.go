@@ -90,3 +90,53 @@ func (mgr *LifecycleManager) startPostDownload(command, path, id string) {
 	}
 	go func() { report(cmd.Wait()) }()
 }
+
+// MoveCompletedCategory continues post-download processing only when the user
+// retries the original failed category move.
+func (mgr *LifecycleManager) MoveCompletedCategory(id, category, directory string) error {
+	mgr.categoryMoves.Add(1)
+	defer mgr.categoryMoves.Add(-1)
+	unlock := mgr.lockDownload(id)
+	defer unlock()
+
+	if mgr.pool != nil && mgr.pool.IsFinalizing(id) {
+		return fmt.Errorf("download is still finalizing; retry category move")
+	}
+	entry, err := store.GetDownload(id)
+	if err != nil {
+		return err
+	}
+	if entry == nil {
+		return types.ErrNotFound
+	}
+	retry := entry.CategoryMoveError != "" && entry.PendingCategoryMove != "" &&
+		filepath.Clean(entry.PendingCategoryMove) == filepath.Clean(directory) &&
+		entry.CategoryOverride != nil && *entry.CategoryOverride == category
+
+	moving := false
+	publishMoving := func(value bool) {
+		if mgr.eventBus != nil {
+			mgr.eventBus.publishLifecycleResult(types.DownloadEvent{
+				Type: types.EventSystem, DownloadID: id, Moving: &value,
+			})
+		}
+	}
+	defer func() {
+		if moving {
+			publishMoving(false)
+		}
+	}()
+	if err := store.MoveCompletedCategory(id, category, directory, func(started bool) {
+		if started {
+			moving = true
+			publishMoving(true)
+		}
+	}); err != nil {
+		return err
+	}
+	if retry {
+		path := filepath.Join(directory, filepath.Base(entry.DestPath))
+		mgr.startPostDownload(postDownloadCommand(mgr.GetSettings(), entry), path, id)
+	}
+	return nil
+}
