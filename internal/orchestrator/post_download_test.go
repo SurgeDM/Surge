@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/config"
+	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
@@ -49,5 +50,40 @@ func TestPostDownloadCommandWorkingDirectoryAndVariables(t *testing.T) {
 	}
 	if err := runPostDownload("exit 7", path); err == nil {
 		t.Fatal("expected command error")
+	}
+}
+
+func TestPostDownloadHookSkipsFailedCategoryMove(t *testing.T) {
+	root := setupEventStateDB(t)
+	const id = "failed-move-hook"
+	source := filepath.Join(root, "file.bin")
+	target := t.TempDir()
+	for _, path := range []string{source + types.IncompleteSuffix, filepath.Join(target, "file.bin")} {
+		if err := os.WriteFile(path, []byte("file contents"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	entry := types.DownloadRecord{ID: id, Status: "queued", DestPath: source, Filename: "file.bin"}
+	if err := store.AddToMasterList(entry); err != nil {
+		t.Fatal(err)
+	}
+	if err := store.ScheduleCategoryMove(id, "Files", target); err != nil {
+		t.Fatal(err)
+	}
+	settings := config.DefaultSettings()
+	settings.General.DownloadCompleteNotification.Value = false
+	settings.Categories.Categories = []config.Category{{Name: "Files", PostDownloadCommand: "exit 0"}}
+	manager := NewLifecycleManager(nil, nil, settings)
+	events := make(chan types.DownloadEvent, 1)
+	events <- types.DownloadEvent{Type: types.EventComplete, DownloadID: id, Filename: entry.Filename, Total: 13}
+	close(events)
+	manager.StartEventWorker(events)
+
+	saved, err := store.GetDownload(id)
+	if err != nil || saved == nil || saved.Status != "completed" || saved.DestPath != source || saved.CategoryMoveError == "" {
+		t.Fatalf("expected completed download with failed move, got %+v, %v", saved, err)
+	}
+	if state := store.GetHookState(id); state.Running || state.Processed {
+		t.Fatalf("hook started after failed move: %+v", state)
 	}
 }
