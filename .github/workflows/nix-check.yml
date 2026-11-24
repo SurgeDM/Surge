@@ -22,12 +22,16 @@ permissions:
 
 jobs:
   changes:
+    permissions:
+      contents: read
+      pull-requests: read
     runs-on: ubuntu-latest
     outputs:
       nixos: ${{ steps.filter.outputs.nixos }}
     steps:
       - uses: actions/checkout@v4
       - uses: dorny/paths-filter@v3
+        if: github.event_name == 'pull_request'
         id: filter
         with:
           filters: |

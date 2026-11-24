@@ -9,7 +9,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 	"time"
 
@@ -669,10 +668,6 @@ func TestSingleDownloader_Download_ContentIntegrity(t *testing.T) {
 // =============================================================================
 
 func TestSingleDownloader_PreallocateFailure_ReleasesFileHandle(t *testing.T) {
-	// Cenário
-	tmpDir, cleanup, _ := testutil.TempDir("surge-prealloc-fail")
-	defer cleanup()
-
 	fileSize := int64(64 * utils.KiB)
 	server := testutil.NewMockServerT(t,
 		testutil.WithFileSize(fileSize),
@@ -680,42 +675,26 @@ func TestSingleDownloader_PreallocateFailure_ReleasesFileHandle(t *testing.T) {
 	)
 	defer server.Close()
 
-	destPath := filepath.Join(tmpDir, "prealloc_fail.bin")
-	runtime := &types.RuntimeConfig{}
-
-	downloader := NewSingleDownloader("prealloc-fail-id", nil, nil, runtime)
+	destPath := filepath.Join(t.TempDir(), "prealloc_fail.bin")
+	if err := os.WriteFile(destPath+types.IncompleteSuffix, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	downloader := NewSingleDownloader("prealloc-fail-id", nil, nil, &types.RuntimeConfig{})
 
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
-	// Cenário: criar o .surge como read-only para que preallocateFile (Truncate) falhe
-	surgePath := destPath + types.IncompleteSuffix
-	f, err := os.Create(surgePath)
-	if err != nil {
-		t.Fatal(err)
+	preallocateErr := errors.New("preallocation failed")
+	var openedFile *os.File
+	err := downloader.download(ctx, server.URL(), destPath, fileSize, "prealloc_fail.bin", func(file *os.File, _ int64) error {
+		openedFile = file
+		return preallocateErr
+	})
+	if !errors.Is(err, preallocateErr) {
+		t.Fatalf("download error = %v, want %v", err, preallocateErr)
 	}
-	_ = f.Close()
-	if err := os.Chmod(surgePath, 0o444); err != nil {
-		t.Fatal(err)
-	}
-	// Restaurar permissões no cleanup para que TempDir possa remover
-	defer func() { _ = os.Chmod(surgePath, 0o644) }()
-
-	// Ação
-	err = downloader.Download(ctx, server.URL(), destPath, fileSize, "prealloc_fail.bin")
-
-	// Validação
-	if err == nil {
-		t.Fatal("Expected error when preallocate fails on read-only file")
-	}
-	if !strings.Contains(err.Error(), "preallocate") && !strings.Contains(err.Error(), "permission") {
-		t.Logf("Got error: %v (acceptable - file handle should still be released)", err)
-	}
-
-	// Verificar que o file handle foi liberado: o arquivo pode ser removido
-	_ = os.Chmod(surgePath, 0o644)
-	if err := os.Remove(surgePath); err != nil {
-		t.Errorf("Failed to remove .surge file after preallocate failure - possible file handle leak: %v", err)
+	if _, err := openedFile.Stat(); !errors.Is(err, os.ErrClosed) {
+		t.Errorf("file stat after preallocation failure = %v, want closed file", err)
 	}
 }
 
