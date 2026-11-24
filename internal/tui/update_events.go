@@ -27,7 +27,7 @@ func stateProgress(state interface{}) *engineprogress.DownloadProgress {
 
 func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if ev, ok := msg.(types.DownloadEvent); ok {
-		if ev.ResyncRequired || (ev.Type != types.EventProgress && ev.Type != types.EventBatchProgress && ev.Type != types.EventSystem) {
+		if ev.Processing != nil || ev.Moving != nil || ev.ResyncRequired || (ev.Type != types.EventProgress && ev.Type != types.EventBatchProgress && ev.Type != types.EventSystem) {
 			m.lifecycleRevision++
 		}
 		model, cmd := m.handleDownloadEvent(ev)
@@ -94,7 +94,7 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		needsSpinner := false
 		for _, d := range m.downloads {
-			if d.moving || d.pausing || d.resuming || components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming) == components.StatusQueued {
+			if d.processing || d.moving || d.pausing || d.resuming || components.DetermineStatus(d.done, d.paused, d.err != nil, d.started, d.resuming) == components.StatusQueued {
 				needsSpinner = true
 				break
 			}
@@ -193,6 +193,19 @@ func (m RootModel) updateEvents(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.Cmd) {
+	if msg.Processing != nil {
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.processing = *msg.Processing
+			d.processed = !*msg.Processing
+			d.hookError = msg.HookError
+		}
+	}
+	if msg.Processing != nil {
+		m.UpdateListItems()
+		if *msg.Processing {
+			return m, m.spinner.Tick
+		}
+	}
 	if msg.Moving != nil {
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
 			d.moving = *msg.Moving
@@ -248,6 +261,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			}
 			if currentState := stateProgress(msg.State); currentState != nil {
 				d.state = currentState
+				d.liveProgress = true
 			}
 			if d.state != nil {
 				d.state.SetTotalSize(msg.Total)
@@ -265,7 +279,10 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			newDownload.RateLimit = msg.RateLimit
 			newDownload.RateLimitSet = msg.RateLimitSet
 			if msg.State != nil {
-				newDownload.state = stateProgress(msg.State)
+				if currentState := stateProgress(msg.State); currentState != nil {
+					newDownload.state = currentState
+					newDownload.liveProgress = true
+				}
 			}
 			newDownload.started = true
 			m.downloads = append(m.downloads, newDownload)
@@ -305,6 +322,12 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	case types.EventComplete:
 		var cmds []tea.Cmd
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.phase = ""
+			d.started = true
+			d.paused, d.pausing, d.resuming = false, false, false
+			if msg.DestPath != "" {
+				d.Destination = msg.DestPath
+			}
 			if !d.done {
 				d.Total = msg.Total
 				d.Downloaded = d.Total
@@ -329,6 +352,9 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 	case types.EventError:
 		found := false
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+			d.phase = ""
+			d.started = true
+			d.paused, d.pausing, d.resuming = false, false, false
 			d.err = msg.Err
 			d.done = true
 			m.addStyledLogEntry(logError, "\u2716 Error: "+d.Filename)
@@ -338,6 +364,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			newDownload := NewDownloadModel(msg.DownloadID, "", msg.Filename, 0)
 			newDownload.err = msg.Err
 			newDownload.done = true
+			newDownload.started = true
 			m.downloads = append(m.downloads, newDownload)
 			m.addStyledLogEntry(logError, "\u2716 Error: "+msg.Filename)
 		}
@@ -346,7 +373,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 		return m, nil
 
 	case types.EventPaused:
-		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil && !d.done {
 			d.paused = true
 			d.pausing = false
 			d.resuming = false

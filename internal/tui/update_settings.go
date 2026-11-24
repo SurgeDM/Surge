@@ -53,10 +53,11 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			if key.Matches(msg, m.keys.SettingsEditor.Confirm) {
 				// Validate and save
 				cat := config.Category{
-					Name:        strings.TrimSpace(m.catMgrInputs[0].Value()),
-					Description: strings.TrimSpace(m.catMgrInputs[1].Value()),
-					Pattern:     strings.TrimSpace(m.catMgrInputs[2].Value()),
-					Path:        strings.TrimSpace(m.catMgrInputs[3].Value()),
+					Name:                strings.TrimSpace(m.catMgrInputs[0].Value()),
+					Description:         strings.TrimSpace(m.catMgrInputs[1].Value()),
+					Pattern:             strings.TrimSpace(m.catMgrInputs[2].Value()),
+					Path:                strings.TrimSpace(m.catMgrInputs[3].Value()),
+					PostDownloadCommand: strings.TrimSpace(m.catMgrInputs[4].Value()),
 				}
 				if err := cat.Validate(); err != nil {
 					m.settingsError = err.Error()
@@ -100,13 +101,13 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 			if s == "tab" || s == "down" {
 				m.catMgrInputs[m.catMgrEditField].Blur()
-				m.catMgrEditField = (m.catMgrEditField + 1) % 4
+				m.catMgrEditField = (m.catMgrEditField + 1) % len(m.catMgrInputs)
 				m.catMgrInputs[m.catMgrEditField].Focus()
 				return m, nil
 			}
 			if s == "shift+tab" || s == "up" {
 				m.catMgrInputs[m.catMgrEditField].Blur()
-				m.catMgrEditField = (m.catMgrEditField - 1 + 4) % 4
+				m.catMgrEditField = (m.catMgrEditField - 1 + len(m.catMgrInputs)) % len(m.catMgrInputs)
 				m.catMgrInputs[m.catMgrEditField].Focus()
 				return m, nil
 			}
@@ -154,6 +155,19 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Not editing - handle navigation
+	if m.getCurrentSettingKey() == "category_enabled" && m.SettingsFocusedPane == 1 {
+		switch msg.Code {
+		case tea.KeyPgDown:
+			m.settingsDetailScroll++
+			return m, nil
+		case tea.KeyPgUp:
+			m.settingsDetailScroll--
+			return m, nil
+		}
+	}
+	if key.Matches(msg, m.keys.Settings.Up, m.keys.Settings.Down, m.keys.Settings.NextTab, m.keys.Settings.PrevTab, m.keys.Settings.Close) {
+		m.settingsDetailScroll = 0
+	}
 	if key.Matches(msg, m.keys.Settings.Close) {
 		requiresRestart := m.checkRestartRequirement()
 		// Save settings and exit
@@ -389,6 +403,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 				m.catMgrInputs[1].SetValue("")
 				m.catMgrInputs[2].SetValue("")
 				m.catMgrInputs[3].SetValue("")
+				m.catMgrInputs[4].SetValue("")
 			} else {
 				m.catMgrIsNew = false
 				if strings.HasPrefix(settingKey, "category_") {
@@ -399,6 +414,7 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 						m.catMgrInputs[1].SetValue(cat.Description)
 						m.catMgrInputs[2].SetValue(cat.Pattern)
 						m.catMgrInputs[3].SetValue(cat.Path)
+						m.catMgrInputs[4].SetValue(cat.PostDownloadCommand)
 					}
 				}
 			}

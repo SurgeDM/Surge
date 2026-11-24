@@ -685,6 +685,18 @@ func renderFocusedDetails(d *DownloadModel, w int, spinnerView string) string {
 		field("URL:", d.URL, detailValueStyle.Hyperlink(d.URL)),
 	)
 
+	if d.processing || d.processed {
+		result := "Done"
+		resultStyle := detailValueStyle
+		if d.processing {
+			result = "Running"
+		} else if d.hookError != "" {
+			reason := strings.TrimPrefix(d.hookError, "Post-download command failed: ")
+			result = "Failed (" + reason + ")"
+			resultStyle = resultStyle.Foreground(colors.StateError())
+		}
+		fileInfoContent = lipgloss.JoinVertical(lipgloss.Left, fileInfoContent, detailValueStyle.Render("Processing: ")+resultStyle.Render(result))
+	}
 	fileSection := sectionStyle.Render(fileInfoContent)
 
 	// --- 3. Progress Section ---
@@ -881,6 +893,9 @@ func getDownloadStatus(d *DownloadModel, spinnerView string) string {
 	// The spinner's own ANSI reset must not terminate the surrounding status
 	// color before the label is rendered.
 	spinnerView = ansi.Strip(spinnerView)
+	if d.processing {
+		return lipgloss.NewStyle().Foreground(colors.Cyan()).Render(spinnerView + " Running post-download hooks")
+	}
 	if d.moving {
 		return lipgloss.NewStyle().Foreground(colors.Cyan()).Render(spinnerView + " Moving")
 	}

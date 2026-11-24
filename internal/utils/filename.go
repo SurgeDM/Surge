@@ -43,10 +43,10 @@ func DetermineFilename(rawurl string, resp *http.Response) (string, io.Reader, e
 	// 2. Query Parameters (if no Content-Disposition)
 	if candidate == "" {
 		q := parsed.Query()
-		if name := q.Get("filename"); name != "" {
+		if name := queryParam(q, "filename"); name != "" {
 			candidate = name
 			Debug("Filename from query param 'filename': %s", candidate)
-		} else if name := q.Get("file"); name != "" {
+		} else if name := queryParam(q, "file"); name != "" {
 			candidate = name
 			Debug("Filename from query param 'file': %s", candidate)
 		}
@@ -120,6 +120,20 @@ func DetermineFilename(rawurl string, resp *http.Response) (string, io.Reader, e
 	Debug("Final resolved filename: %s", filename)
 
 	return filename, body, nil
+}
+
+// queryParam returns the first value for key, matching the parameter name
+// case-insensitively because servers spell it fileName, FileName and so on.
+func queryParam(q url.Values, key string) string {
+	if v := q.Get(key); v != "" {
+		return v
+	}
+	for name, values := range q {
+		if strings.EqualFold(name, key) && len(values) > 0 && values[0] != "" {
+			return values[0]
+		}
+	}
+	return ""
 }
 
 func sanitizedBecameExtensionOnly(original, sanitized string) bool {

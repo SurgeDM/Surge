@@ -43,10 +43,10 @@ func TestCategoryPickerOptionsPutSpecialChoicesFirst(t *testing.T) {
 	}
 }
 
-func TestCategoryPickerAssignsSelectedDownload(t *testing.T) {
+func TestCategoryPickerAssignsManualOnlyCategory(t *testing.T) {
 	settings := config.DefaultSettings()
 	settings.Categories.CategoryEnabled.Value = true
-	settings.Categories.Categories = []config.Category{{Name: "Videos", Pattern: `\.mp4$`}}
+	settings.Categories.Categories = []config.Category{{Name: "Videos", Path: t.TempDir()}}
 	d := NewDownloadModel("id", "https://example.com/file.zip", "file.zip", 0)
 	m := RootModel{
 		state: CategoryPickerState, Settings: settings, keys: config.DefaultKeyMap(),

@@ -41,7 +41,7 @@ func seedVisualTestData(root *RootModel) {
 		updated, _ := root.Update(event)
 		*root = updated.(RootModel)
 	}
-	filenames := []string{"fedora-workstation.iso", "design-assets.zip", "conference-recording.mp4", "project-backup.tar.zst", "game-update.bin", "holiday-photos.zip", "dataset.csv"}
+	filenames := []string{"fedora-workstation.iso", "design-assets.zip", "conference-recording.mp4", "project-backup.tar.zst", "game-update.bin", "holiday-photos.zip", "dataset.csv", "Example Show S01E01.zip", "Example Show S01E02.zip", "Example Show S01E03.zip"}
 	for i, filename := range filenames {
 		id := fmt.Sprintf("00000000-0000-4000-8000-%012d", i+1)
 		total := int64(i+1) * 256 * utils.MiB
@@ -49,7 +49,7 @@ func seedVisualTestData(root *RootModel) {
 		if i == 1 {
 			transferred = 0
 		}
-		if i == 5 {
+		if i == 5 || i >= 7 {
 			transferred = total
 		}
 		state := visualTestProgress(id, total, transferred)
@@ -81,6 +81,18 @@ func seedVisualTestData(root *RootModel) {
 			apply(started) // Running again, waiting for transfer progress.
 		case 5:
 			apply(types.DownloadEvent{Type: types.EventComplete, DownloadID: id, Total: total, Elapsed: progress.Elapsed, AvgSpeed: 21 * utils.MiB})
+		case 7, 8, 9:
+			apply(types.DownloadEvent{Type: types.EventComplete, DownloadID: id, Total: total, Elapsed: progress.Elapsed})
+			running := true
+			apply(types.DownloadEvent{Type: types.EventSystem, DownloadID: id, Processing: &running})
+			if i != 7 {
+				running = false
+				message := ""
+				if i == 9 {
+					message = "Post-download command failed: exit status 2"
+				}
+				apply(types.DownloadEvent{Type: types.EventSystem, DownloadID: id, Processing: &running, HookError: message})
+			}
 		case 6:
 			apply(types.DownloadEvent{Type: types.EventError, DownloadID: id, Err: errors.New("Server returned 503; resume to retry")})
 		}

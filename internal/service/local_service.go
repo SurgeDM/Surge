@@ -371,14 +371,14 @@ func (s *LocalDownloadService) GetStatus(id string) (*types.DownloadStatus, erro
 					status.DestPath = entry.DestPath
 				}
 			}
-			status.Moving = store.IsMoving(id)
-			status.FileMissing = completedFileMissing(status.Status, status.DestPath)
+			s.attachPostDownloadState(status)
 			return status, nil
 		}
 	}
 	entry, err := store.GetDownload(id)
 	if err == nil && entry != nil {
 		status := statusFromDownloadRecord(*entry)
+		s.attachPostDownloadState(&status)
 		return &status, nil
 	}
 	return nil, types.ErrNotFound
@@ -608,10 +608,20 @@ func (s *LocalDownloadService) List() ([]types.DownloadStatus, error) {
 	}
 
 	for i := range statuses {
-		statuses[i].Moving = store.IsMoving(statuses[i].ID)
-		statuses[i].FileMissing = completedFileMissing(statuses[i].Status, statuses[i].DestPath)
+		s.attachPostDownloadState(&statuses[i])
 	}
 	return statuses, nil
+}
+
+func (s *LocalDownloadService) attachPostDownloadState(status *types.DownloadStatus) {
+	if s.lifecycle != nil && s.lifecycle.GetScheduler() != nil &&
+		s.lifecycle.GetScheduler().IsFinalizing(status.ID) {
+		status.Phase = "finalizing"
+	}
+	status.Moving = store.IsMoving(status.ID)
+	hook := store.GetHookState(status.ID)
+	status.Processing, status.Processed, status.HookError = hook.Running, hook.Processed, hook.Error
+	status.FileMissing = completedFileMissing(status.Status, status.DestPath)
 }
 
 func (s *LocalDownloadService) AssignCategory(id, category string, move bool) error {
@@ -650,9 +660,7 @@ func (s *LocalDownloadService) AssignCategory(id, category string, move bool) er
 			if entry.Status != "completed" {
 				err = store.ScheduleCategoryMove(id, category, directory)
 			} else {
-				err = store.MoveCompletedCategory(id, category, directory, func(moving bool) {
-					_ = s.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: id, Moving: &moving})
-				})
+				err = s.lifecycle.MoveCompletedCategory(id, category, directory)
 			}
 		}
 	} else {
@@ -685,8 +693,12 @@ func statusFromDownloadRecord(entry types.DownloadRecord) types.DownloadStatus {
 	} else if entry.Status == "completed" {
 		progress = 100.0
 	}
+	hook := store.GetHookState(entry.ID)
 	return types.DownloadStatus{Artifact: entry.Artifact, ErrorCode: entry.ErrorCode,
 		Moving:           store.IsMoving(entry.ID),
+		Processing:       hook.Running,
+		HookError:        hook.Error,
+		Processed:        hook.Processed,
 		CategoryOverride: entry.CategoryOverride,
 		FileMissing:      completedFileMissing(entry.Status, entry.DestPath),
 		ID:               entry.ID,

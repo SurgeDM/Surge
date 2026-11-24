@@ -155,6 +155,11 @@ func startLifecycleEventWorker(service service.DownloadService, mgr *orchestrato
 	return func() { managerCleanup(); <-done }, nil
 }
 
+func downloadsSettled() bool {
+	lifecycle := currentLifecycle()
+	return lifecycle != nil && !lifecycle.HasPendingDownloads()
+}
+
 func currentLifecycle() *orchestrator.LifecycleManager {
 	globalLifecycleMu.Lock()
 	defer globalLifecycleMu.Unlock()
@@ -565,7 +570,7 @@ func startTUI(port int, exitWhenDone bool, noResume bool, releaseLock func()) er
 			ticker := time.NewTicker(2 * time.Second)
 			defer ticker.Stop()
 			for range ticker.C {
-				if atomic.LoadInt32(&pendingEnqueue) == 0 && GlobalPool != nil && GlobalPool.ActiveCount() == 0 {
+				if atomic.LoadInt32(&pendingEnqueue) == 0 && downloadsSettled() {
 					// Send quit message to TUI
 					p.Send(tea.Quit())
 					return

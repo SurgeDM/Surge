@@ -49,9 +49,22 @@ func (bus *EventBus) broadcastLoop() {
 }
 
 func (bus *EventBus) broadcastMsg(msg types.DownloadEvent) {
+	bus.deliver(msg, false)
+}
+
+// Lifecycle results have already been persisted. Send them only to observers,
+// without blocking the persistence worker on its own ingress queue.
+func (bus *EventBus) publishLifecycleResult(msg types.DownloadEvent) {
+	bus.deliver(msg, true)
+}
+
+func (bus *EventBus) deliver(msg types.DownloadEvent, result bool) {
 	bus.listenerMu.Lock()
 	listeners := make([]*eventSubscription, 0, len(bus.listeners))
 	for sub := range bus.listeners {
+		if (result && sub.reliable) || (!result && msg.Type == types.EventComplete && !sub.reliable) {
+			continue
+		}
 		listeners = append(listeners, sub)
 	}
 	bus.listenerMu.Unlock()

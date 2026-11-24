@@ -72,7 +72,7 @@ func TestEventBus_SlowObserversNeverWait(t *testing.T) {
 		if got := (<-sub.progress).Downloaded; got != 2 {
 			t.Fatalf("latest progress=%d", got)
 		}
-		eb.broadcastMsg(types.DownloadEvent{Type: types.EventComplete})
+		eb.publishLifecycleResult(types.DownloadEvent{Type: types.EventComplete})
 		if elapsed := time.Since(start); elapsed != 0 {
 			t.Fatalf("observer wait=%v", elapsed)
 		}
