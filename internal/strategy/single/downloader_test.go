@@ -693,8 +693,8 @@ func TestSingleDownloader_PreallocateFailure_ReleasesFileHandle(t *testing.T) {
 	if !errors.Is(err, preallocateErr) {
 		t.Fatalf("download error = %v, want %v", err, preallocateErr)
 	}
-	if _, err := openedFile.Stat(); !errors.Is(err, os.ErrClosed) {
-		t.Errorf("file stat after preallocation failure = %v, want closed file", err)
+	if err := openedFile.Close(); !errors.Is(err, os.ErrClosed) {
+		t.Errorf("file close after preallocation failure = %v, want closed file error", err)
 	}
 }
 
