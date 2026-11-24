@@ -68,7 +68,7 @@ func (mgr *LifecycleManager) startPostDownload(command, path, id string) {
 	update := func(running bool, message string) {
 		store.SetHookState(id, store.HookState{Running: running, Processed: !running, Error: message})
 		if mgr.eventBus != nil {
-			_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: id, Processing: &running, HookError: message, Message: message})
+			mgr.eventBus.publishLifecycleResult(types.DownloadEvent{Type: types.EventSystem, DownloadID: id, Processing: &running, HookError: message, Message: message})
 		}
 	}
 	update(true, "")

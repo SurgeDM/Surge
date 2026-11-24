@@ -363,6 +363,12 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 				if filename == "" {
 					filename = m.DownloadID
 				}
+				if mgr.eventBus != nil {
+					mgr.eventBus.publishLifecycleResult(types.DownloadEvent{
+						Type: types.EventError, DownloadID: m.DownloadID, Filename: filename,
+						DestPath: destPath, Downloaded: m.Total, Err: err,
+					})
+				}
 				msg := "Download failed"
 				if err != nil {
 					msg = err.Error()
@@ -394,25 +400,42 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 			}
 			completionErr := store.AddToMasterList(entry, func(moving bool) {
 				if mgr.eventBus != nil {
-					_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: entry.ID, Moving: &moving})
+					mgr.eventBus.publishLifecycleResult(types.DownloadEvent{Type: types.EventSystem, DownloadID: entry.ID, Moving: &moving})
 				}
 			})
 			if completionErr != nil {
 				utils.Debug("Lifecycle: Failed to persist completed download: %v", completionErr)
 			}
 
-			if saved, err := store.GetDownload(m.DownloadID); err == nil && saved != nil && saved.CategoryOverride != nil && mgr.eventBus != nil {
+			saved, readErr := store.GetDownload(m.DownloadID)
+			if readErr != nil || saved == nil || saved.Status != "completed" {
+				err := completionErr
+				if err == nil {
+					err = fmt.Errorf("could not read committed completion: %v", readErr)
+				}
+				if mgr.eventBus != nil {
+					mgr.eventBus.publishLifecycleResult(types.DownloadEvent{
+						Type: types.EventError, DownloadID: m.DownloadID, Filename: filename,
+						DestPath: destPath, Downloaded: m.Total, Err: err,
+					})
+				}
+				break
+			}
+			if saved.CategoryOverride != nil && mgr.eventBus != nil {
 				event := types.DownloadEvent{Type: types.EventSystem, DownloadID: m.DownloadID, CategoryOverride: saved.CategoryOverride, DestPath: saved.DestPath}
 				if saved.CategoryMoveError != "" {
 					event.Message = "Category move failed; file kept at original location: " + saved.CategoryMoveError
+				} else if completionErr != nil {
+					event.Message = completionErr.Error()
 				}
-				_ = mgr.eventBus.Publish(event)
+				mgr.eventBus.publishLifecycleResult(event)
 			}
-			if completionErr == nil {
-				saved, err := store.GetDownload(m.DownloadID)
-				if err == nil && saved != nil && saved.Status == "completed" && saved.PendingCategoryMove == "" && saved.CategoryMoveError == "" {
-					mgr.startPostDownload(postDownloadCommand(mgr.GetSettings(), saved), saved.DestPath, saved.ID)
-				}
+			if completionErr == nil && saved.PendingCategoryMove == "" && saved.CategoryMoveError == "" {
+				mgr.startPostDownload(postDownloadCommand(mgr.GetSettings(), saved), saved.DestPath, saved.ID)
+			}
+			if mgr.eventBus != nil {
+				m.Filename, m.DestPath = saved.Filename, saved.DestPath
+				mgr.eventBus.publishLifecycleResult(m)
 			}
 			if err := store.DeleteTasks(m.DownloadID); err != nil {
 				utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)
