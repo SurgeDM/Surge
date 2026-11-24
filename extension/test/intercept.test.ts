@@ -227,6 +227,35 @@ describe('download interception naming', () => {
     expect(mockFetch.mock.calls.filter(call => call[0].endsWith('/download'))).toHaveLength(1);
   });
 
+  it('hands off the resolved URL with only the headers captured for it', async () => {
+    const originalUrl = 'https://example.com/redirect';
+    const finalUrl = 'https://files.example.net/archive.zip';
+    __test__.captureHeaders({
+      url: originalUrl,
+      requestHeaders: [{ name: 'Cookie', value: 'redirect-session=secret' }],
+    });
+    __test__.captureHeaders({
+      url: finalUrl,
+      requestHeaders: [{ name: 'X-Download-Token', value: 'file-token' }],
+    });
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url.endsWith('/health')) return { ok: true };
+      if (url.endsWith('/duplicate')) return { ok: true, json: async () => ({ exists: false }) };
+      if (url.endsWith('/download')) return { ok: true, json: async () => ({ filename: 'archive.zip' }) };
+      return { ok: false };
+    });
+
+    await __test__.handleDownloadCreated({ id: 7999, url: originalUrl, finalUrl });
+
+    const duplicateCall = mockFetch.mock.calls.find(([url]) => url.endsWith('/duplicate'));
+    expect(JSON.parse(duplicateCall?.[1].body)).toEqual({ url: finalUrl });
+    const downloadCall = mockFetch.mock.calls.find(([url]) => url.endsWith('/download'));
+    expect(JSON.parse(downloadCall?.[1].body)).toMatchObject({
+      url: finalUrl,
+      headers: { 'X-Download-Token': 'file-token' },
+    });
+  });
+
   describe('browser fallback', () => {
     const failedItem = {
       id: 8001,
@@ -275,6 +304,33 @@ describe('download interception naming', () => {
         url: failedItem.url,
         headers: [{ name: 'X-Download-Token', value: 'token-123' }],
       });
+    });
+
+    it('leaves a browser retry alone when its created event has no extension ID', async () => {
+      vi.mocked(browser.downloads.download).mockImplementation(async () => {
+        await __test__.handleDownloadCreated({ ...failedItem, id: 9001 });
+        return 9001;
+      });
+
+      await __test__.handleDownloadCreated(failedItem);
+
+      expect(browser.downloads.cancel).toHaveBeenCalledExactlyOnceWith(failedItem.id);
+      expect(browser.downloads.download).toHaveBeenCalledOnce();
+    });
+
+    it('avoids a second download when the daemon response times out', async () => {
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.endsWith('/health')) return { ok: true };
+        if (url.endsWith('/download')) throw new DOMException('Timed out', 'TimeoutError');
+        return { ok: false };
+      });
+
+      await __test__.handleDownloadCreated(failedItem);
+
+      expect(browser.downloads.download).not.toHaveBeenCalled();
+      expect(browser.notifications.create).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringContaining('Surge did not confirm the handoff'),
+      }));
     });
 
     it('preserves the Surge failure without retrying when fallback is disabled', async () => {
