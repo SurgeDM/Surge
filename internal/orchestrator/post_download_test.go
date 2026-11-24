@@ -36,16 +36,24 @@ func TestPostDownloadCommandWorkingDirectoryAndVariables(t *testing.T) {
 	if runtime.GOOS == "windows" {
 		t.Skip("POSIX shell assertion")
 	}
-	dir := t.TempDir()
+	target := t.TempDir()
+	dir := filepath.Join(t.TempDir(), "linked-downloads")
+	if err := os.Symlink(target, dir); err != nil {
+		t.Fatal(err)
+	}
+	physicalDir, err := filepath.EvalSymlinks(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
 	path := filepath.Join(dir, "show with spaces.zip")
-	if err := runPostDownload(`printf '%s\n%s\n%s' "$PWD" "$d" "$f" > result`, path); err != nil {
+	if err := runPostDownload(`printf '%s\n%s\n%s' "$(pwd -P)" "$d" "$f" > result`, path); err != nil {
 		t.Fatal(err)
 	}
 	got, err := os.ReadFile(filepath.Join(dir, "result"))
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := dir + "\n" + dir + "\nshow with spaces.zip"
+	want := physicalDir + "\n" + dir + "\nshow with spaces.zip"
 	if string(got) != want {
 		t.Fatalf("got %q, want %q", got, want)
 	}
