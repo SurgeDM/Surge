@@ -483,7 +483,7 @@ func initialRootModel(serverPort int, currentVersion string, service downloadser
 	catDescInput.Prompt = ""
 
 	catPatternInput := textinput.New()
-	catPatternInput.Placeholder = "(?i)\\.(mp4|mkv)$"
+	catPatternInput.Placeholder = "Blank for manual only"
 	catPatternInput.SetWidth(50)
 	catPatternInput.Prompt = ""
 

@@ -170,6 +170,10 @@ These options are stored in the `[general]` section of the configuration file.
 
 Category rules are checked from top to bottom; the first matching rule determines the category and download path. In Settings → Categories, select a category and use Shift+Up / Shift+Down or Shift+K / Shift+J to change its priority. Save the order by closing Settings. Custom categories are added at the bottom and can be moved above broader rules.
 
+Leave **Regex** blank to create a manual-only category. Automatic sorting skips
+it, and you can still assign it from the dashboard category picker. In
+`settings.toml`, use `pattern = ""` or omit the pattern.
+
 ### Settings shortcuts and confirmations
 
 - `r` resets the selected setting after confirmation. It does not delete category rules.

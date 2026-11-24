@@ -243,3 +243,37 @@ func TestAutoShutdown_ShutdownFailureDoesNotRetryBeforeScheduledMessage(t *testi
 		t.Fatalf("shutdowns after retry message = %d, want 1", power.shutdowns)
 	}
 }
+
+func TestAutoShutdownWaitsForPostDownloadWork(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		setup func(*DownloadModel)
+		end   types.DownloadEvent
+	}{
+		{"finalizing", func(d *DownloadModel) { d.phase = "finalizing" }, types.DownloadEvent{Type: types.EventComplete}},
+		{"moving", func(d *DownloadModel) { d.moving = true }, types.DownloadEvent{Type: types.EventSystem, Moving: new(bool)}},
+		{"processing", func(d *DownloadModel) { d.processing = true }, types.DownloadEvent{Type: types.EventSystem, Processing: new(bool), HookError: "command failed"}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			power := &fakePowerController{}
+			d := NewDownloadModel("job", "", "file.bin", 100)
+			d.done = true
+			tc.setup(d)
+			m := newAutoShutdownTestModel(power, d)
+			m.applyAutoShutdownSettingChange()
+			updated, cmd := m.refreshAutoShutdown()
+			if !updated.autoShutdownArmed || updated.autoShutdownTriggered || cmd != nil {
+				t.Fatal("shutdown should be armed but waiting for post-download work")
+			}
+			tc.end.DownloadID = d.ID
+			next, cmd := updated.Update(tc.end)
+			if !next.(RootModel).autoShutdownTriggered {
+				t.Fatal("shutdown should trigger once post-download work settles")
+			}
+			executeCmds(cmd)
+			if power.shutdowns != 1 {
+				t.Fatalf("shutdown calls = %d, want 1", power.shutdowns)
+			}
+		})
+	}
+}

@@ -8,6 +8,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 
 	"github.com/SurgeDM/Surge/internal/scheduler"
 	"github.com/SurgeDM/Surge/internal/service"
+	"github.com/SurgeDM/Surge/internal/tui/components"
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
@@ -1526,5 +1528,40 @@ func TestQueuedAndResumedDownloadsWaitForStart(t *testing.T) {
 		if !d.started || len(m.getFilteredDownloads()) != 1 || m.ComputeViewStats().ActiveCount != 1 {
 			t.Fatalf("event %v: started download did not become active", event)
 		}
+	}
+}
+
+func TestUpdate_TerminalEventsClearTransferTransitions(t *testing.T) {
+	components.InitializeStatusCache()
+	for _, tc := range []struct {
+		name  string
+		event types.DownloadEvent
+		label string
+	}{
+		{"complete", types.DownloadEvent{Type: types.EventComplete, Total: 100}, "Completed"},
+		{"error", types.DownloadEvent{Type: types.EventError, Err: errors.New("transfer failed")}, "Error"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := NewDownloadModel("job", "", "file.bin", 100)
+			d.paused, d.pausing, d.resuming = true, true, true
+			d.phase = "verifying"
+			m := RootModel{
+				downloads:   []*DownloadModel{d},
+				list:        NewDownloadList(80, 20),
+				logViewport: viewport.New(viewport.WithWidth(40), viewport.WithHeight(5)),
+			}
+			tc.event.DownloadID = d.ID
+			updated, _ := m.Update(tc.event)
+			updated, _ = updated.Update(types.DownloadEvent{Type: types.EventPaused, DownloadID: d.ID})
+			updated, _ = updated.Update(resumeResultMsg{id: d.ID})
+			result := updated.(RootModel)
+			d = result.FindDownloadByID(d.ID)
+			if !d.done || d.paused || d.pausing || d.resuming || d.phase != "" {
+				t.Fatal("terminal result retained a transfer transition")
+			}
+			if label := getDownloadStatus(d, "spinner"); !strings.Contains(label, tc.label) {
+				t.Fatalf("displayed label %q does not contain %q", label, tc.label)
+			}
+		})
 	}
 }

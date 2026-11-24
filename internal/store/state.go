@@ -579,7 +579,7 @@ func AddToMasterList(entry types.DownloadRecord, onMoving ...func(bool)) error {
 							return err
 						}
 						if err := os.Remove(oldPath); err != nil {
-							return fmt.Errorf("moved file, but old copy remains: %w", err)
+							return &CategoryMoveCleanupError{fmt.Errorf("moved file, but old copy remains: %w", err)}
 						}
 						return nil
 					}
@@ -1090,6 +1090,13 @@ func SetCategory(id, category string) error {
 	return fmt.Errorf("%w: %s", types.ErrNotFound, id)
 }
 
+// CategoryMoveCleanupError reports a committed move whose original copy
+// could not be removed.
+type CategoryMoveCleanupError struct{ err error }
+
+func (e *CategoryMoveCleanupError) Error() string { return e.err.Error() }
+func (e *CategoryMoveCleanupError) Unwrap() error { return e.err }
+
 // MoveCompletedCategory saves the new destination before removing the source.
 // Destination creation is exclusive, so existing files are never replaced.
 func MoveCompletedCategory(id, category, directory string, onMoving ...func(bool)) error {
@@ -1143,7 +1150,7 @@ func MoveCompletedCategory(id, category, directory string, onMoving ...func(bool
 			return err
 		}
 		if err := os.Remove(source); err != nil {
-			return fmt.Errorf("file saved at %s, but old copy could not be removed: %w", target, err)
+			return &CategoryMoveCleanupError{fmt.Errorf("file saved at %s, but old copy could not be removed: %w", target, err)}
 		}
 		return nil
 	}
@@ -1313,4 +1320,19 @@ func GetHookState(id string) HookState {
 	masterMu.RLock()
 	defer masterMu.RUnlock()
 	return hookStates[id]
+}
+
+// HasPendingPostDownloadWork reports moves and hooks running in this process.
+func HasPendingPostDownloadWork() bool {
+	masterMu.RLock()
+	defer masterMu.RUnlock()
+	if len(movingDownloads) > 0 {
+		return true
+	}
+	for _, hook := range hookStates {
+		if hook.Running {
+			return true
+		}
+	}
+	return false
 }

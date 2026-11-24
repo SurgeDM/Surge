@@ -1,6 +1,7 @@
 package orchestrator
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -68,7 +69,7 @@ func (mgr *LifecycleManager) startPostDownload(command, path, id string) {
 	update := func(running bool, message string) {
 		store.SetHookState(id, store.HookState{Running: running, Processed: !running, Error: message})
 		if mgr.eventBus != nil {
-			_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: id, Processing: &running, HookError: message, Message: message})
+			mgr.eventBus.publishLifecycleResult(types.DownloadEvent{Type: types.EventSystem, DownloadID: id, Processing: &running, HookError: message, Message: message})
 		}
 	}
 	update(true, "")
@@ -89,4 +90,53 @@ func (mgr *LifecycleManager) startPostDownload(command, path, id string) {
 		return
 	}
 	go func() { report(cmd.Wait()) }()
+}
+
+// MoveCompletedCategory continues post-download processing only when the user
+// retries the original failed category move.
+func (mgr *LifecycleManager) MoveCompletedCategory(id, category, directory string) error {
+	mgr.categoryMoves.Add(1)
+	defer mgr.categoryMoves.Add(-1)
+	unlock := mgr.lockDownload(id)
+	defer unlock()
+
+	if mgr.pool != nil && mgr.pool.IsFinalizing(id) {
+		return fmt.Errorf("download is still finalizing; retry category move")
+	}
+	entry, err := store.GetDownload(id)
+	if err != nil {
+		return err
+	}
+	if entry == nil {
+		return types.ErrNotFound
+	}
+	retry := entry.CategoryMoveError != "" && entry.PendingCategoryMove != "" &&
+		filepath.Clean(entry.PendingCategoryMove) == filepath.Clean(directory) &&
+		entry.CategoryOverride != nil && *entry.CategoryOverride == category
+
+	moving := false
+	publishMoving := func(value bool) {
+		if mgr.eventBus != nil {
+			mgr.eventBus.publishLifecycleResult(types.DownloadEvent{
+				Type: types.EventSystem, DownloadID: id, Moving: &value,
+			})
+		}
+	}
+	defer func() {
+		if moving {
+			publishMoving(false)
+		}
+	}()
+	err = store.MoveCompletedCategory(id, category, directory, func(started bool) {
+		if started {
+			moving = true
+			publishMoving(true)
+		}
+	})
+	var cleanupErr *store.CategoryMoveCleanupError
+	if retry && (err == nil || errors.As(err, &cleanupErr)) {
+		path := filepath.Join(directory, filepath.Base(entry.DestPath))
+		mgr.startPostDownload(postDownloadCommand(mgr.GetSettings(), entry), path, id)
+	}
+	return err
 }

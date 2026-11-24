@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/SurgeDM/Surge/internal/scheduler"
 	"github.com/SurgeDM/Surge/internal/store"
 	"github.com/SurgeDM/Surge/internal/types"
 )
@@ -21,16 +22,26 @@ type ResultService interface {
 var ErrArtifactUnavailable = errors.New("completed artifact is missing, inaccessible, or has changed size")
 
 func (s *LocalDownloadService) GetResult(id string) (*types.DownloadStatus, error) {
+	var pool *scheduler.Scheduler
 	var live *types.DownloadStatus
-	if s.lifecycle != nil && s.lifecycle.GetScheduler() != nil {
-		live = s.lifecycle.GetScheduler().GetStatus(id)
+	if s.lifecycle != nil {
+		pool = s.lifecycle.GetScheduler()
+		if pool != nil {
+			live = pool.GetStatus(id)
+		}
 	}
 	if live != nil && (live.Status == "downloading" || live.Status == "queued" || live.Status == "pausing" || live.Status == "verifying") {
 		return live, nil
 	}
+	finalizing := pool != nil && pool.IsFinalizing(id)
 	entry, err := store.GetDownload(id)
 	if err != nil && !errors.Is(err, types.ErrNotFound) {
 		return nil, err
+	}
+	if finalizing && entry != nil {
+		status := statusFromDownloadRecord(*entry)
+		status.Status, status.Phase, status.Speed = "finalizing", "finalizing", 0
+		return &status, nil
 	}
 	// In-memory terminal events can precede persistence. Completed/error
 	// records come from the serialized lifecycle worker; a paused record only

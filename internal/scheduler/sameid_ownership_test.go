@@ -412,3 +412,24 @@ func TestScheduler_TerminalDeleteKeepsRegisteredReplacement(t *testing.T) {
 		})
 	}
 }
+
+func TestScheduler_AddRefusesIDUntilFinalizationSettles(t *testing.T) {
+	pool := newTestSchedulerWithoutWorkers(nil)
+	t.Cleanup(pool.GracefulShutdown)
+	pool.TrackFinalization()
+	cfg := types.DownloadRecord{ID: "finalizing"}
+	owner := &activeDownload{}
+	pool.downloads[cfg.ID] = owner
+	if tracked, err := pool.beginFinalization(cfg.ID, owner); !tracked || err != nil {
+		t.Fatalf("could not reserve finalization: %t, %v", tracked, err)
+	}
+	delete(pool.downloads, cfg.ID)
+
+	if pool.Add(cfg) || pool.ActiveCount() != 1 {
+		t.Fatal("pending finalization should own the ID and count as active")
+	}
+	pool.FinishFinalization(cfg.ID)
+	if pool.ActiveCount() != 0 || !pool.Add(cfg) {
+		t.Fatal("settled finalization should release the ID")
+	}
+}

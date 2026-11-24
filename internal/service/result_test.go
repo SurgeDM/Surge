@@ -75,7 +75,7 @@ func TestFinalResultWaitsForLifecycleFinalization(t *testing.T) {
 	mgr := orchestrator.NewLifecycleManager(pool, bus, config.DefaultSettings())
 	t.Cleanup(mgr.Shutdown)
 	svc := NewLocalDownloadService(mgr)
-	stream, cleanup, err := svc.StreamEvents(context.Background())
+	stream, cleanup, err := svc.StreamLifecycleEvents(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -102,8 +102,8 @@ collect:
 	}
 	pool.GracefulShutdown()
 	before, err := svc.GetResult(id)
-	if err != nil || before.Status == "completed" {
-		t.Fatalf("completion preceded finalization: %+v %v", before, err)
+	if err != nil || before.Status != "finalizing" || !mgr.HasPendingDownloads() {
+		t.Fatalf("expected finalization to remain pending: %+v %v", before, err)
 	}
 	ch := make(chan types.DownloadEvent, len(events))
 	for _, event := range events {
@@ -112,7 +112,7 @@ collect:
 	close(ch)
 	mgr.StartEventWorker(ch)
 	after, err := svc.GetResult(id)
-	if err != nil || after.Status != "completed" {
+	if err != nil || after.Status != "completed" || mgr.HasPendingDownloads() {
 		t.Fatalf("finalized result: %+v %v", after, err)
 	}
 	data, err := os.ReadFile(after.DestPath)

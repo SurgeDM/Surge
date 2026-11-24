@@ -21,23 +21,38 @@ import (
 
 const terminalSendTimeout = 3 * time.Second
 
+var errCompletionUndelivered = errors.New("could not deliver download completion")
+
 // safeSendProgress sends msg on ch, recovering from panics caused by sending
 // on a closed channel (which can happen during shutdown).
-func safeSendProgress(ch chan<- types.DownloadEvent, msg types.DownloadEvent, doneCh <-chan struct{}) {
+func safeSendProgress(ch chan<- types.DownloadEvent, msg types.DownloadEvent, doneCh <-chan struct{}) (sent bool) {
 	defer func() { _ = recover() }()
 	select {
 	case ch <- msg:
-		return
+		return true
 	default:
 	}
 	timer := time.NewTimer(terminalSendTimeout)
 	defer timer.Stop()
 	select {
 	case ch <- msg:
+		return true
 	case <-doneCh:
 	case <-timer.C:
 		utils.Debug("safeSendProgress: timed out delivering event %v", msg.Type)
 	}
+	return false
+}
+
+// The lifecycle bus drains ingress until its scheduler has stopped, so a
+// managed completion can wait through backpressure without timing out.
+func sendCompletion(ch chan<- types.DownloadEvent, msg types.DownloadEvent, managed bool) (sent bool) {
+	if !managed {
+		return safeSendProgress(ch, msg, nil)
+	}
+	defer func() { _ = recover() }()
+	ch <- msg
+	return true
 }
 
 // uniqueFilePath returns a unique file path by appending (1), (2), etc. if the file exists
@@ -88,6 +103,10 @@ func uniqueFilePath(path string) string {
 
 // RunDownload is the main entry point for downloads executed by the Engine pool
 func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
+	return runDownload(ctx, cfg, nil)
+}
+
+func runDownload(ctx context.Context, cfg *types.DownloadRecord, beforeComplete func(string) (bool, error)) error {
 	start := time.Now()
 	if cfg.Runtime == nil {
 		cfg.Runtime = types.DefaultRuntimeConfig()
@@ -355,9 +374,16 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 		}
 
 		if cfg.ProgressCh != nil {
+			var managed bool
+			if beforeComplete != nil {
+				var err error
+				managed, err = beforeComplete(cfg.ID)
+				if err != nil {
+					return err
+				}
+			}
 			rateLimit, rateLimitSet := currentRateLimit()
-			// EventComplete is terminal-reliable and must not be dropped due to canceled context.
-			safeSendProgress(cfg.ProgressCh, types.DownloadEvent{
+			if !sendCompletion(cfg.ProgressCh, types.DownloadEvent{
 				Type: types.EventComplete, Artifact: cfg.Artifact,
 				DownloadID:   cfg.ID,
 				Filename:     finalFilename,
@@ -366,7 +392,9 @@ func RunDownload(ctx context.Context, cfg *types.DownloadRecord) error {
 				AvgSpeed:     avgSpeed,
 				RateLimit:    rateLimit,
 				RateLimitSet: rateLimitSet,
-			}, nil)
+			}, managed) {
+				return errCompletionUndelivered
+			}
 		}
 		return nil
 	}
