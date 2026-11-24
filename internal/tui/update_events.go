@@ -323,6 +323,11 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 		var cmds []tea.Cmd
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
 			d.phase = ""
+			d.started = true
+			d.paused, d.pausing, d.resuming = false, false, false
+			if msg.DestPath != "" {
+				d.Destination = msg.DestPath
+			}
 			if !d.done {
 				d.Total = msg.Total
 				d.Downloaded = d.Total
@@ -348,6 +353,8 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 		found := false
 		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
 			d.phase = ""
+			d.started = true
+			d.paused, d.pausing, d.resuming = false, false, false
 			d.err = msg.Err
 			d.done = true
 			m.addStyledLogEntry(logError, "\u2716 Error: "+d.Filename)
@@ -357,6 +364,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 			newDownload := NewDownloadModel(msg.DownloadID, "", msg.Filename, 0)
 			newDownload.err = msg.Err
 			newDownload.done = true
+			newDownload.started = true
 			m.downloads = append(m.downloads, newDownload)
 			m.addStyledLogEntry(logError, "\u2716 Error: "+msg.Filename)
 		}
@@ -365,7 +373,7 @@ func (m RootModel) handleDownloadEvent(msg types.DownloadEvent) (tea.Model, tea.
 		return m, nil
 
 	case types.EventPaused:
-		if d := m.FindDownloadByID(msg.DownloadID); d != nil {
+		if d := m.FindDownloadByID(msg.DownloadID); d != nil && !d.done {
 			d.paused = true
 			d.pausing = false
 			d.resuming = false
