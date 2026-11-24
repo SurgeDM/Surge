@@ -341,3 +341,21 @@ func TestResumeRebuildsBitmapForCurrentConnectionLimit(t *testing.T) {
 		})
 	}
 }
+
+func TestResumeChangedLayoutPreservesCompletedBitmapRanges(t *testing.T) {
+	const size int64 = 100
+	state := progress.New("resume-overlap", size)
+	state.InitBitmap(size, 25)
+	d := &ConcurrentDownloader{State: state}
+	saved := &types.DownloadRecord{TotalSize: size, ActualChunkSize: 20, ChunkBitmap: []byte{byte(types.ChunkCompleted)}, Tasks: []types.Task{{Offset: 0, Length: 100}}}
+	tasks, err := d.setupTasks("", size, 25, 1, nil, saved, true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(tasks) != 1 || tasks[0] != (types.Task{Offset: 20, Length: 80}) {
+		t.Fatalf("remaining tasks = %v", tasks)
+	}
+	if got := state.Bytes.VerifiedProgress.Load(); got != 20 {
+		t.Fatalf("verified progress = %d, want 20", got)
+	}
+}

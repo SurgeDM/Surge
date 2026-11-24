@@ -482,6 +482,10 @@ func (d *ConcurrentDownloader) getEffectiveSizeForWorkers(fileSize int64, savedS
 
 func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize int64, numConns int, outFile *os.File, savedState *types.DownloadRecord, isResume bool) ([]types.Task, error) {
 	if isResume {
+		tasks := savedState.Tasks
+		if savedState.ActualChunkSize > 0 && savedState.ActualChunkSize != chunkSize && len(savedState.ChunkBitmap) > 0 {
+			tasks = intersectTasks(tasks, unverifiedTasksFromBitmap(savedState.ChunkBitmap, fileSize, savedState.ActualChunkSize))
+		}
 		if d.State != nil {
 			d.State.SetSavedElapsed(time.Duration(savedState.Elapsed))
 
@@ -496,7 +500,7 @@ func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize i
 				d.State.RestoreBitmap(make([]byte, (chunks+3)/4), chunkSize)
 				utils.Debug("Rebuilt resume chunk map: old size %d, new size %d", savedState.ActualChunkSize, chunkSize)
 			}
-			d.State.RecalculateProgress(savedState.Tasks)
+			d.State.RecalculateProgress(tasks)
 			downloaded := savedState.Downloaded
 			if vp := d.State.Bytes.VerifiedProgress.Load(); downloaded < vp {
 				downloaded = vp
@@ -505,7 +509,7 @@ func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize i
 			d.State.SyncSessionStart()
 		}
 		utils.Debug("Resuming from saved state: %d tasks, %d bytes downloaded", len(savedState.Tasks), savedState.Downloaded)
-		return savedState.Tasks, nil
+		return tasks, nil
 	}
 
 	if err := outFile.Truncate(fileSize); err != nil {
@@ -675,6 +679,21 @@ func (d *ConcurrentDownloader) executeWorkers(ctx context.Context, cancel contex
 
 func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queue *TaskQueue, candidateMirrors []string) error {
 	return d.saveStateSnapshot(destPath, fileSize, queue, candidateMirrors, true)
+}
+
+// intersectTasks keeps only saved work that is not already verified by the bitmap.
+func intersectTasks(tasks, unverified []types.Task) []types.Task {
+	var result []types.Task
+	for _, task := range tasks {
+		for _, remaining := range unverified {
+			start := max(task.Offset, remaining.Offset)
+			end := min(task.Offset+task.Length, remaining.Offset+remaining.Length)
+			if start < end {
+				result = append(result, types.Task{Offset: start, Length: end - start})
+			}
+		}
+	}
+	return result
 }
 
 // unverifiedTasksFromBitmap rebuilds resumable work from the persisted bitmap.
