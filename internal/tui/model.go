@@ -207,10 +207,11 @@ type RootModel struct {
 	StartupConfigWarnings []string         // Config validation warnings to emit on first render
 	SettingsActiveTab     int              // Active category tab
 	SettingsSelectedRow   int              // Selected setting within current tab
-	SettingsFocusedPane   int              // Focused settings pane (0 = Tabs, 1 = List)
-	SettingsIsEditing     bool             // Whether currently editing a value
-	SettingsInput         textinput.Model  // Input for editing string/int values
-	settingsError         string           // Current validation error in settings
+	settingsDetailScroll  int
+	SettingsFocusedPane   int             // Focused settings pane (0 = Tabs, 1 = List)
+	SettingsIsEditing     bool            // Whether currently editing a value
+	SettingsInput         textinput.Model // Input for editing string/int values
+	settingsError         string          // Current validation error in settings
 	settingsAction        *settingsAction
 	ExtensionTokenCopied  bool // Flash message for "Token Copied!"
 

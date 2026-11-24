@@ -570,6 +570,14 @@ func (m RootModel) renderSettingsDetailBlock(settingsMeta []config.SettingMeta, 
 		"",
 		descDisplay,
 	)
+	if meta.Key == "category_enabled" && rows > 1 && lipgloss.Height(detail) > rows {
+		lines := strings.Split(detail, "\n")
+		visible := rows - 1
+		positions := len(lines) - visible + 1
+		start := ((m.settingsDetailScroll % positions) + positions) % positions
+		detail = strings.Join(lines[start:start+visible], "\n") + "\n" +
+			lipgloss.NewStyle().Foreground(colors.Gray()).Render("PgUp/PgDn scroll")
+	}
 
 	if (meta.Type == config.TypeCustomCategory || meta.Type == config.TypeCustomCategoryAdd) && lipgloss.Height(detail) > rows {
 		lines := strings.Split(detail, "\n")

@@ -23,6 +23,26 @@ func TestSettingsFooterKeepsCategoryPaneHeightStable(t *testing.T) {
 	}
 }
 
+func TestCategoryGuidanceScrollsInShortDetailPane(t *testing.T) {
+	m := confirmationSettingsModel(t, "Categories", "category_enabled")
+	meta := m.buildSettingsMetaForCategory("Categories")
+	values := m.getSettingsValues("Categories")
+	var seen strings.Builder
+	for i := 0; i < 50; i++ {
+		detail := m.renderSettingsDetailBlock(meta, m.SettingsSelectedRow, values, 40, 10)
+		if lipgloss.Height(detail) != 10 {
+			t.Fatalf("detail height = %d, want 10", lipgloss.Height(detail))
+		}
+		seen.WriteString(ansiEscapeRE.ReplaceAllString(detail, ""))
+		m = settingsPress(t, m, tea.KeyPressMsg{Code: tea.KeyPgDown})
+	}
+	for _, text := range []string{"Manage categories", "Toggle:", "Sort downloads", "first match wins", "optional", "Command", "$d is the download", "7z x", "Leave Command empty", "PgUp/PgDn scroll"} {
+		if !strings.Contains(seen.String(), text) {
+			t.Errorf("scrolling never showed %q", text)
+		}
+	}
+}
+
 func confirmationSettingsModel(t *testing.T, category, setting string) RootModel {
 	t.Helper()
 	dir := t.TempDir()
