@@ -117,6 +117,10 @@ func registerHTTPRoutes(mux *http.ServeMux, port int, defaultOutputDir string, s
 			http.Error(w, "Invalid settings patch: "+err.Error(), jsonDecodeErrorStatus(err))
 			return
 		}
+		if patch.Categories != nil && categoryCommandsChanged(patch.Categories.Before, patch.Categories.Value) && !isDirectLoopbackRequest(r) {
+			http.Error(w, "post-download commands can only be changed from the local host", http.StatusForbidden)
+			return
+		}
 		updated, err := editor.PatchSettings(patch)
 		if err != nil {
 			status := http.StatusInternalServerError
@@ -801,6 +805,32 @@ func statusCodeForResolveDownloadError(err error) int {
 	default:
 		return http.StatusInternalServerError
 	}
+}
+
+// isDirectLoopbackRequest rejects forwarded requests even when the proxy is local.
+func isDirectLoopbackRequest(r *http.Request) bool {
+	host, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		host = r.RemoteAddr
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback() && strings.TrimSpace(r.Header.Get("X-Forwarded-For")) == "" && strings.TrimSpace(r.Header.Get("X-Real-IP")) == ""
+}
+
+func categoryCommandsChanged(before, after []config.Category) bool {
+	commands := make(map[string]string)
+	for _, c := range before {
+		if c.PostDownloadCommand != "" {
+			commands[c.Name] = c.PostDownloadCommand
+		}
+	}
+	for _, c := range after {
+		if c.PostDownloadCommand != commands[c.Name] {
+			return true
+		}
+		delete(commands, c.Name)
+	}
+	return len(commands) != 0
 }
 
 func ensureOpenActionRequestAllowed(r *http.Request) error {

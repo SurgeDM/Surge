@@ -1637,3 +1637,30 @@ func TestBulkActionCountsOnlySuccesses(t *testing.T) {
 		})
 	}
 }
+
+func TestCategoryCommandChangesRequireDirectLoopback(t *testing.T) {
+	before := []config.Category{{Name: "Archives", PostDownloadCommand: "unzip"}}
+	if categoryCommandsChanged(before, []config.Category{{Name: "Archives", PostDownloadCommand: "unzip", Pattern: "changed"}}) {
+		t.Fatal("unrelated category change was restricted")
+	}
+	if !categoryCommandsChanged(before, []config.Category{{Name: "Archives", PostDownloadCommand: "other"}}) {
+		t.Fatal("command change was missed")
+	}
+	if !categoryCommandsChanged(before, nil) {
+		t.Fatal("command removal was missed")
+	}
+	r := httptest.NewRequest(http.MethodPatch, "/settings", nil)
+	r.RemoteAddr = "127.0.0.1:1234"
+	if !isDirectLoopbackRequest(r) {
+		t.Fatal("loopback rejected")
+	}
+	r.Header.Set("X-Forwarded-For", "192.0.2.1")
+	if isDirectLoopbackRequest(r) {
+		t.Fatal("forwarded request accepted")
+	}
+	r.Header.Del("X-Forwarded-For")
+	r.RemoteAddr = "192.0.2.1:1234"
+	if isDirectLoopbackRequest(r) {
+		t.Fatal("remote request accepted")
+	}
+}
