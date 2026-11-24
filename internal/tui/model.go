@@ -92,6 +92,10 @@ const (
 )
 
 type DownloadModel struct {
+	lastMapRanges    []types.Task
+	writingRanges    []types.Task
+	lastMapWrite     time.Time
+	liveProgress     bool // state belongs to the local engine; never overwrite it with event snapshots.
 	moving           bool
 	fileMissing      bool
 	ID               string

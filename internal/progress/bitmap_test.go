@@ -2,6 +2,7 @@ package progress
 
 import (
 	"math/rand"
+	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -299,5 +300,40 @@ func BenchmarkBitmap_NewAtomic_GetSnapshot(b *testing.B) {
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		bt.GetBitmapSnapshot(totalSize, true)
+	}
+}
+
+func TestCompletedRangesPreserveFilePositions(t *testing.T) {
+	var b BitmapTracker
+	b.InitBitmap(1000, 1000)
+	b.UpdateChunkStatus(1000, 100, 100, types.ChunkCompleted)
+	b.UpdateChunkStatus(1000, 700, 100, types.ChunkCompleted)
+	b.UpdateChunkStatus(1000, 150, 100, types.ChunkCompleted)
+	want := []types.Task{{Offset: 100, Length: 150}, {Offset: 700, Length: 100}}
+	got := b.GetCompletedRanges()
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("completed ranges = %v, want %v", got, want)
+	}
+	got[0].Offset = 999
+	if b.GetCompletedRanges()[0].Offset != 100 {
+		t.Fatal("snapshot aliases live ranges")
+	}
+}
+
+func TestCompletedRangesReconstructedAfterResume(t *testing.T) {
+	var b BitmapTracker
+	b.InitBitmap(1000, 250)
+	remaining := []types.Task{{Offset: 800, Length: 200}, {Offset: 250, Length: 450}, {Offset: 0, Length: 100}}
+	if got := b.RecalculateProgress(1000, remaining); got != 250 {
+		t.Fatalf("verified = %d, want 250", got)
+	}
+	want := []types.Task{{Offset: 100, Length: 150}, {Offset: 700, Length: 100}}
+	if got := b.GetCompletedRanges(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("completed ranges = %v, want %v", got, want)
+	}
+	b.UpdateChunkStatus(1000, 250, 450, types.ChunkCompleted)
+	want = []types.Task{{Offset: 100, Length: 700}}
+	if got := b.GetCompletedRanges(); !reflect.DeepEqual(got, want) {
+		t.Fatalf("merged ranges = %v, want %v", got, want)
 	}
 }
