@@ -155,6 +155,19 @@ func (m RootModel) updateSettings(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// Not editing - handle navigation
+	if m.getCurrentSettingKey() == "category_enabled" && m.SettingsFocusedPane == 1 {
+		switch msg.Code {
+		case tea.KeyPgDown:
+			m.settingsDetailScroll++
+			return m, nil
+		case tea.KeyPgUp:
+			m.settingsDetailScroll--
+			return m, nil
+		}
+	}
+	if key.Matches(msg, m.keys.Settings.Up, m.keys.Settings.Down, m.keys.Settings.NextTab, m.keys.Settings.PrevTab, m.keys.Settings.Close) {
+		m.settingsDetailScroll = 0
+	}
 	if key.Matches(msg, m.keys.Settings.Close) {
 		requiresRestart := m.checkRestartRequirement()
 		// Save settings and exit

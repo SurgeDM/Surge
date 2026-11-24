@@ -392,12 +392,13 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 				entry.Workers = existing.Workers
 				entry.MinChunkSize = existing.MinChunkSize
 			}
-			if err := store.AddToMasterList(entry, func(moving bool) {
+			completionErr := store.AddToMasterList(entry, func(moving bool) {
 				if mgr.eventBus != nil {
 					_ = mgr.eventBus.Publish(types.DownloadEvent{Type: types.EventSystem, DownloadID: entry.ID, Moving: &moving})
 				}
-			}); err != nil {
-				utils.Debug("Lifecycle: Failed to persist completed download: %v", err)
+			})
+			if completionErr != nil {
+				utils.Debug("Lifecycle: Failed to persist completed download: %v", completionErr)
 			}
 
 			if saved, err := store.GetDownload(m.DownloadID); err == nil && saved != nil && saved.CategoryOverride != nil && mgr.eventBus != nil {
@@ -407,8 +408,11 @@ func (mgr *LifecycleManager) StartEventWorker(ch <-chan types.DownloadEvent) {
 				}
 				_ = mgr.eventBus.Publish(event)
 			}
-			if saved, err := store.GetDownload(m.DownloadID); err == nil && saved != nil && saved.Status == "completed" {
-				mgr.startPostDownload(postDownloadCommand(mgr.GetSettings(), saved), saved.DestPath, saved.ID)
+			if completionErr == nil {
+				saved, err := store.GetDownload(m.DownloadID)
+				if err == nil && saved != nil && saved.Status == "completed" && saved.PendingCategoryMove == "" && saved.CategoryMoveError == "" {
+					mgr.startPostDownload(postDownloadCommand(mgr.GetSettings(), saved), saved.DestPath, saved.ID)
+				}
 			}
 			if err := store.DeleteTasks(m.DownloadID); err != nil {
 				utils.Debug("Lifecycle: Failed to delete completed tasks: %v", err)

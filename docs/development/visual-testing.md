@@ -38,4 +38,6 @@ Preview post-download hooks with the same script:
 
 The running row uses the animated spinner and “Running post-download hooks”.
 The other two rows remain Completed; select them to see the Processing result
-in File Details. These fixtures do not execute commands.
+in File Details: `Processing: Done` or a red `Processing: Failed (exit status 2)`.
+Fixture events pass through production `RootModel.Update`, and all statuses and
+file details use production rendering. These fixtures do not execute commands.
