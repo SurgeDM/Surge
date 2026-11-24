@@ -399,6 +399,58 @@ func TestReadURLsFromFile_CSVWithoutHeader(t *testing.T) {
 	}
 }
 
+func TestReadURLsFromFile_CSVMissingURLColumn(t *testing.T) {
+	urlFile := filepath.Join(t.TempDir(), "urls.csv")
+	content := "name,url,description\n" +
+		"one,https://example.com/file1.zip,first\n" +
+		"short-row\n"
+	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write url file: %v", err)
+	}
+
+	_, err := utils.ReadURLsFromFile(urlFile)
+	if err == nil {
+		t.Fatal("expected missing URL column to return an error")
+	}
+	if !strings.Contains(err.Error(), "row 3") || !strings.Contains(err.Error(), "URL column 2") {
+		t.Fatalf("expected row and column details in error, got %v", err)
+	}
+}
+
+func TestReadURLsFromFile_JSONPrecedence(t *testing.T) {
+	urlFile := filepath.Join(t.TempDir(), "urls.json")
+	content := `{
+		"links": [
+			{"link": "https://example.com/link-field.zip", "url": "https://example.com/url-field.zip"},
+			"https://example.com/links.zip"
+		],
+		"downloads": ["https://example.com/downloads.zip"],
+		"urls": ["https://example.com/urls.zip"]
+	}`
+	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write url file: %v", err)
+	}
+
+	urls, err := utils.ReadURLsFromFile(urlFile)
+	if err != nil {
+		t.Fatalf("ReadURLsFromFile returned error: %v", err)
+	}
+	want := []string{
+		"https://example.com/urls.zip",
+		"https://example.com/url-field.zip",
+		"https://example.com/links.zip",
+		"https://example.com/downloads.zip",
+	}
+	if len(urls) != len(want) {
+		t.Fatalf("expected %d URLs, got %d: %v", len(want), len(urls), urls)
+	}
+	for i := range want {
+		if urls[i] != want[i] {
+			t.Errorf("expected URL %d to be %q, got %q", i, want[i], urls[i])
+		}
+	}
+}
+
 func TestReadURLsFromFile_JSON(t *testing.T) {
 	tmpDir := t.TempDir()
 	urlFile := filepath.Join(tmpDir, "urls.json")

@@ -9,7 +9,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
+)
+
+var (
+	jsonURLFieldNames = []string{"url", "link", "uri", "download_url"}
+	jsonURLListNames  = []string{"urls", "links", "downloads"}
 )
 
 // ReadURLsFromFile reads URLs from a text, CSV, or JSON file.
@@ -101,6 +107,7 @@ func readCSVURLs(r io.Reader, addURL func(string)) error {
 
 	urlColumn := -1
 	firstRecord := true
+	row := 0
 	for {
 		record, err := reader.Read()
 		if err == io.EOF {
@@ -109,6 +116,7 @@ func readCSVURLs(r io.Reader, addURL func(string)) error {
 		if err != nil {
 			return fmt.Errorf("failed to parse CSV: %w", err)
 		}
+		row++
 
 		if firstRecord {
 			firstRecord = false
@@ -124,9 +132,10 @@ func readCSVURLs(r io.Reader, addURL func(string)) error {
 		}
 
 		if urlColumn >= 0 {
-			if urlColumn < len(record) {
-				addURL(record[urlColumn])
+			if urlColumn >= len(record) {
+				return fmt.Errorf("CSV row %d is missing URL column %d", row, urlColumn+1)
 			}
+			addURL(record[urlColumn])
 			continue
 		}
 		if len(record) == 1 {
@@ -183,10 +192,9 @@ func collectJSONURLs(value any, addURL func(string)) bool {
 			addURL(url)
 			return true
 		}
-		for key, nested := range value {
-			switch strings.ToLower(key) {
-			case "urls", "links", "downloads":
-				if collectJSONURLs(nested, addURL) {
+		for _, listName := range jsonURLListNames {
+			for _, key := range matchingJSONKeys(value, listName) {
+				if collectJSONURLs(value[key], addURL) {
 					found = true
 				}
 			}
@@ -196,25 +204,39 @@ func collectJSONURLs(value any, addURL func(string)) bool {
 }
 
 func jsonURLField(object map[string]any) string {
-	for key, value := range object {
-		if !isURLFieldName(key) {
-			continue
-		}
-		if url, ok := value.(string); ok && strings.TrimSpace(url) != "" {
-			return url
+	for _, fieldName := range jsonURLFieldNames {
+		for _, key := range matchingJSONKeys(object, fieldName) {
+			if url, ok := object[key].(string); ok && strings.TrimSpace(url) != "" {
+				return url
+			}
 		}
 	}
 	return ""
 }
 
+func matchingJSONKeys(object map[string]any, normalizedName string) []string {
+	keys := make([]string, 0, len(object))
+	for key := range object {
+		if normalizeJSONFieldName(key) == normalizedName {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func isURLFieldName(name string) bool {
+	normalized := normalizeJSONFieldName(name)
+	for _, fieldName := range jsonURLFieldNames {
+		if normalized == fieldName {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeJSONFieldName(name string) string {
 	normalized := strings.ToLower(strings.TrimSpace(name))
 	normalized = strings.ReplaceAll(normalized, "-", "_")
-	normalized = strings.ReplaceAll(normalized, " ", "_")
-	switch normalized {
-	case "url", "link", "uri", "download_url":
-		return true
-	default:
-		return false
-	}
+	return strings.ReplaceAll(normalized, " ", "_")
 }
