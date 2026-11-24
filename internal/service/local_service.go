@@ -691,11 +691,12 @@ func statusFromDownloadRecord(entry types.DownloadRecord) types.DownloadStatus {
 	} else if entry.Status == "completed" {
 		progress = 100.0
 	}
+	hook := store.GetHookState(entry.ID)
 	return types.DownloadStatus{Artifact: entry.Artifact, ErrorCode: entry.ErrorCode,
 		Moving:           store.IsMoving(entry.ID),
-		Processing:       store.GetHookState(entry.ID).Running,
-		HookError:        store.GetHookState(entry.ID).Error,
-		Processed:        store.GetHookState(entry.ID).Processed,
+		Processing:       hook.Running,
+		HookError:        hook.Error,
+		Processed:        hook.Processed,
 		CategoryOverride: entry.CategoryOverride,
 		FileMissing:      completedFileMissing(entry.Status, entry.DestPath),
 		ID:               entry.ID,
