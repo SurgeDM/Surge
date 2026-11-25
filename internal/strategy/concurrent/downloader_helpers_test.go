@@ -14,6 +14,16 @@ import (
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
+func openSnapshotTestFile(t *testing.T, destPath string) *os.File {
+	t.Helper()
+	file, err := os.Create(destPath + types.IncompleteSuffix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = file.Close() })
+	return file
+}
+
 func TestHandlePause_Normal(t *testing.T) {
 	tmpDir := testutil.SetupStateDB(t)
 	cleanup := func() {}
@@ -30,7 +40,7 @@ func TestHandlePause_Normal(t *testing.T) {
 
 	remaining := []types.Task{{Offset: 500, Length: 500}}
 
-	err := downloader.handlePause(destPath, fileSize, remaining, nil)
+	err := downloader.handlePause(openSnapshotTestFile(t, destPath), destPath, fileSize, remaining, nil)
 	if !errors.Is(err, types.ErrPaused) {
 		t.Fatalf("Expected ErrPaused, got %v", err)
 	}
@@ -51,7 +61,7 @@ func TestHandlePause_PersistsWithoutLifecycleConsumer(t *testing.T) {
 	}
 	remaining := []types.Task{{Offset: 500, Length: 500}}
 
-	if err := download.handlePause(destPath, 1000, remaining, nil); !errors.Is(err, types.ErrPaused) {
+	if err := download.handlePause(openSnapshotTestFile(t, destPath), destPath, 1000, remaining, nil); !errors.Is(err, types.ErrPaused) {
 		t.Fatalf("handlePause = %v, want ErrPaused", err)
 	}
 	if snapshot := state.TakePendingResumeState(); snapshot == nil {
@@ -81,7 +91,7 @@ func TestHandlePause_UsesLiveRateLimitFromState(t *testing.T) {
 
 	remaining := []types.Task{{Offset: 500, Length: 500}}
 
-	err := downloader.handlePause(destPath, fileSize, remaining, nil)
+	err := downloader.handlePause(openSnapshotTestFile(t, destPath), destPath, fileSize, remaining, nil)
 	if !errors.Is(err, types.ErrPaused) {
 		t.Fatalf("Expected ErrPaused, got %v", err)
 	}
@@ -304,7 +314,7 @@ func TestSaveStateSnapshot_PersistsReturnedAndStolenRangesOnce(t *testing.T) {
 		t.Fatalf("worker received a task after dispatch stopped: %+v", task)
 	}
 
-	err := downloader.saveStateSnapshot(destPath, fileSize, queue.DrainRemaining(), nil, false)
+	err := downloader.saveStateSnapshot(openSnapshotTestFile(t, destPath), destPath, fileSize, queue.DrainRemaining(), nil, false)
 	if err != nil {
 		t.Fatalf("saveStateSnapshot failed: %v", err)
 	}

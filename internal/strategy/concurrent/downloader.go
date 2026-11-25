@@ -358,7 +358,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	// Handle pause request: must return types.ErrPaused to prevent finalization
 	if d.State != nil && d.State.IsPaused() && !types.IsInsufficientDiskSpace(downloadErr) {
-		pauseErr := d.handlePause(destPath, fileSize, remainingTasks, candidateMirrors)
+		pauseErr := d.handlePause(outFile, destPath, fileSize, remainingTasks, candidateMirrors)
 		if pauseErr == nil {
 			// Pause was requested at completion boundary, so handlePause finalized it.
 			return d.syncFile(outFile)
@@ -369,7 +369,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	if downloadErr != nil {
 		// Save state so that retries (like rate limit backoffs) resume from the correct progress
 		if d.State != nil && !errors.Is(downloadErr, context.Canceled) && !errors.Is(downloadErr, context.DeadlineExceeded) {
-			if saveErr := d.saveStateSnapshot(destPath, fileSize, remainingTasks, candidateMirrors, false); saveErr != nil {
+			if saveErr := d.saveStateSnapshot(outFile, destPath, fileSize, remainingTasks, candidateMirrors, false); saveErr != nil {
 				return errors.Join(downloadErr, fmt.Errorf("save resume state: %w", saveErr))
 			}
 		}
@@ -677,8 +677,8 @@ func (d *ConcurrentDownloader) executeWorkers(ctx context.Context, cancel contex
 	return downloadErr
 }
 
-func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, remainingTasks []types.Task, candidateMirrors []string) error {
-	return d.saveStateSnapshot(destPath, fileSize, remainingTasks, candidateMirrors, true)
+func (d *ConcurrentDownloader) handlePause(outFile *os.File, destPath string, fileSize int64, remainingTasks []types.Task, candidateMirrors []string) error {
+	return d.saveStateSnapshot(outFile, destPath, fileSize, remainingTasks, candidateMirrors, true)
 }
 
 // intersectTasks keeps only saved work that is not already verified by the bitmap.
@@ -727,7 +727,7 @@ func unverifiedTasksFromBitmap(bitmap []byte, fileSize, chunkSize int64) []types
 	return tasks
 }
 
-func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64, remainingTasks []types.Task, candidateMirrors []string, emitPauseEvent bool) error {
+func (d *ConcurrentDownloader) saveStateSnapshot(outFile *os.File, destPath string, fileSize int64, remainingTasks []types.Task, candidateMirrors []string, emitPauseEvent bool) error {
 	if d.State == nil {
 		if len(remainingTasks) == 0 {
 			return nil
@@ -780,6 +780,11 @@ func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64
 			}
 			return nil
 		}
+	}
+
+	// Resume will skip ranges this snapshot records as downloaded.
+	if err := d.syncFile(outFile); err != nil {
+		return err
 	}
 
 	computedDownloaded := fileSize - remainingBytes
@@ -854,11 +859,13 @@ func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64
 	return nil
 }
 
+var syncFileFn = (*os.File).Sync
+
 func (d *ConcurrentDownloader) syncFile(outFile *os.File) error {
 	if outFile == nil {
 		return nil
 	}
-	if err := outFile.Sync(); err != nil {
+	if err := syncFileFn(outFile); err != nil {
 		return fmt.Errorf("failed to sync file: %w", err)
 	}
 	return nil
