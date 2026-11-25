@@ -24,6 +24,11 @@ describe('download interception naming', () => {
             return Promise.resolve({});
           }),
           set: vi.fn(),
+          remove: vi.fn().mockResolvedValue(undefined),
+        },
+        session: {
+          get: vi.fn().mockResolvedValue({}),
+          set: vi.fn().mockResolvedValue(undefined),
         },
       },
       downloads: {
@@ -79,6 +84,7 @@ describe('download interception naming', () => {
     const downloadCall = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
     expect(downloadCall).toBeDefined();
 
+    expect(downloadCall?.[1].headers).toMatchObject({ 'X-Requested-With': 'SurgeExtension' });
     const body = JSON.parse(downloadCall?.[1].body);
     expect(body.filename).toBe('');
     expect(body.url).toBe(downloadItem.url);
@@ -227,6 +233,102 @@ describe('download interception naming', () => {
     expect(mockFetch.mock.calls.filter(call => call[0].endsWith('/download'))).toHaveLength(1);
   });
 
+  it('hands off the resolved URL with only the headers captured for it', async () => {
+    const originalUrl = 'https://example.com/redirect';
+    const finalUrl = 'https://files.example.net/archive.zip';
+    __test__.captureHeaders({
+      url: originalUrl,
+      requestHeaders: [{ name: 'Cookie', value: 'redirect-session=secret' }],
+    });
+    __test__.captureHeaders({
+      url: finalUrl,
+      requestHeaders: [{ name: 'X-Download-Token', value: 'file-token' }],
+    });
+    mockFetch.mockImplementation(async (url: string) => {
+      if (url.endsWith('/health')) return { ok: true };
+      if (url.endsWith('/duplicate')) return { ok: true, json: async () => ({ exists: false }) };
+      if (url.endsWith('/download')) return { ok: true, json: async () => ({ filename: 'archive.zip' }) };
+      return { ok: false };
+    });
+
+    await __test__.handleDownloadCreated({ id: 7999, url: originalUrl, finalUrl });
+
+    const duplicateCall = mockFetch.mock.calls.find(([url]) => url.endsWith('/duplicate'));
+    expect(JSON.parse(duplicateCall?.[1].body)).toEqual({ url: finalUrl });
+    const downloadCall = mockFetch.mock.calls.find(([url]) => url.endsWith('/download'));
+    expect(JSON.parse(downloadCall?.[1].body)).toMatchObject({
+      url: finalUrl,
+      headers: { 'X-Download-Token': 'file-token' },
+    });
+  });
+
+  describe('duplicate confirmation headers', () => {
+    const url = 'https://example.com/duplicate.zip';
+
+    beforeEach(() => {
+      mockFetch.mockImplementation(async (requestUrl: string) => {
+        if (requestUrl.endsWith('/health')) return { ok: true };
+        if (requestUrl.endsWith('/duplicate')) return { ok: true, json: async () => ({ exists: true }) };
+        if (requestUrl.endsWith('/download')) return { ok: true, json: async () => ({ filename: 'duplicate.zip' }) };
+        return { ok: false };
+      });
+    });
+
+    it('restores the original capture from session storage after a worker restart', async () => {
+      __test__.captureHeaders({ url, requestHeaders: [{ name: 'Cookie', value: 'session=original' }] });
+      await __test__.handleDownloadCreated({ id: 8000, url });
+
+      const [stored] = vi.mocked(browser.storage.session.set).mock.calls[0];
+      expect(stored).toMatchObject({
+        pendingDuplicates: [['dup_1', { url, headers: { Cookie: 'session=original' } }]],
+      });
+      expect(browser.storage.local.set).not.toHaveBeenCalled();
+
+      __test__.resetState();
+      (browser.storage.session.get as import('vitest').Mock).mockResolvedValue(stored);
+      __test__.captureHeaders({ url, requestHeaders: [{ name: 'Cookie', value: 'session=later-request' }] });
+      expect(await __test__.handleMessage({ type: 'confirmDuplicate', id: 'dup_1' })).toEqual({ success: true });
+
+      const downloadCall = mockFetch.mock.calls.find(([requestUrl]) => requestUrl.endsWith('/download'));
+      expect(JSON.parse(downloadCall?.[1].body).headers).toEqual({ Cookie: 'session=original' });
+      expect(browser.storage.session.set).toHaveBeenLastCalledWith({ pendingDuplicates: [] });
+    });
+
+    it.each([true, false])('restores legacy headers and only removes the entry after a successful write (%s)', async writeSucceeds => {
+      vi.mocked(browser.storage.local.get).mockImplementation(async key => {
+        if (key === 'pendingDuplicates') return {
+          pendingDuplicates: [['dup_1', { url, filename: 'duplicate.zip', directory: '', timestamp: Date.now() }]],
+        };
+        return {};
+      });
+
+      if (!writeSucceeds) {
+        vi.mocked(browser.storage.session.set).mockRejectedValueOnce(new Error('Session storage unavailable'));
+      }
+
+      const result = await __test__.handleMessage({ type: 'getPendingDuplicates' });
+      expect(result).toEqual({ duplicates: [{ id: 'dup_1', url, filename: 'duplicate.zip' }] });
+      expect(browser.storage.session.set).toHaveBeenCalledWith({
+        pendingDuplicates: [['dup_1', expect.objectContaining({ headers: {} })]],
+      });
+      if (writeSucceeds) {
+        expect(browser.storage.local.remove).toHaveBeenCalledWith('pendingDuplicates');
+      } else {
+        expect(browser.storage.local.remove).not.toHaveBeenCalled();
+      }
+    });
+
+    it('prunes expired entries before returning the popup list', async () => {
+      await __test__.handleDownloadCreated({ id: 8000, url });
+      expect(browser.action.setBadgeText).toHaveBeenLastCalledWith({ text: '1' });
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_001);
+
+      expect(await __test__.handleMessage({ type: 'getPendingDuplicates' })).toEqual({ duplicates: [] });
+      expect(browser.action.setBadgeText).toHaveBeenLastCalledWith({ text: '' });
+      expect(browser.storage.session.set).toHaveBeenLastCalledWith({ pendingDuplicates: [] });
+    });
+  });
+
   describe('browser fallback', () => {
     const failedItem = {
       id: 8001,
@@ -275,6 +377,33 @@ describe('download interception naming', () => {
         url: failedItem.url,
         headers: [{ name: 'X-Download-Token', value: 'token-123' }],
       });
+    });
+
+    it('leaves a browser retry alone when its created event has no extension ID', async () => {
+      vi.mocked(browser.downloads.download).mockImplementation(async () => {
+        await __test__.handleDownloadCreated({ ...failedItem, id: 9001 });
+        return 9001;
+      });
+
+      await __test__.handleDownloadCreated(failedItem);
+
+      expect(browser.downloads.cancel).toHaveBeenCalledExactlyOnceWith(failedItem.id);
+      expect(browser.downloads.download).toHaveBeenCalledOnce();
+    });
+
+    it('avoids a second download when the daemon response times out', async () => {
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.endsWith('/health')) return { ok: true };
+        if (url.endsWith('/download')) throw new DOMException('Timed out', 'TimeoutError');
+        return { ok: false };
+      });
+
+      await __test__.handleDownloadCreated(failedItem);
+
+      expect(browser.downloads.download).not.toHaveBeenCalled();
+      expect(browser.notifications.create).toHaveBeenCalledWith(expect.objectContaining({
+        message: expect.stringContaining('Surge did not confirm the handoff'),
+      }));
     });
 
     it('preserves the Surge failure without retrying when fallback is disabled', async () => {

@@ -19,7 +19,7 @@ import (
 )
 
 type probeHostLock struct {
-	mu   sync.Mutex
+	slot chan struct{}
 	refs int
 }
 
@@ -52,7 +52,7 @@ func ProbeServer(ctx context.Context, rawurl string, filenameHint string, header
 }
 
 // lockProbeHost sequentializes probes to one host without retaining a lock for every host ever seen.
-func lockProbeHost(rawurl string) func() {
+func lockProbeHost(ctx context.Context, rawurl string) (func(), error) {
 	parsed, err := neturl.Parse(rawurl)
 	host := "unknown"
 	if err == nil {
@@ -62,15 +62,13 @@ func lockProbeHost(rawurl string) func() {
 	probeHostLocks.Lock()
 	lock := probeHostLocks.hosts[host]
 	if lock == nil {
-		lock = &probeHostLock{}
+		lock = &probeHostLock{slot: make(chan struct{}, 1)}
 		probeHostLocks.hosts[host] = lock
 	}
 	lock.refs++
 	probeHostLocks.Unlock()
 
-	lock.mu.Lock()
-	return func() {
-		lock.mu.Unlock()
+	dropRef := func() {
 		probeHostLocks.Lock()
 		lock.refs--
 		if lock.refs == 0 {
@@ -78,6 +76,22 @@ func lockProbeHost(rawurl string) func() {
 		}
 		probeHostLocks.Unlock()
 	}
+
+	select {
+	case lock.slot <- struct{}{}:
+	case <-ctx.Done():
+		dropRef()
+		return nil, ctx.Err()
+	}
+	release := func() {
+		<-lock.slot
+		dropRef()
+	}
+	if err := ctx.Err(); err != nil {
+		release()
+		return nil, err
+	}
+	return release, nil
 }
 
 // ProbeServerWithProxy is the hot-path variant for callers that already know
@@ -85,6 +99,13 @@ func lockProbeHost(rawurl string) func() {
 // without re-reading settings from disk.
 func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint string, headers map[string]string, runCfg *types.RuntimeConfig) (*ProbeResult, error) {
 	utils.Debug("Probing server host: %s", utils.URLHostForLog(rawurl))
+
+	// Sequentialize probes to the same host to prevent rate limiting (e.g., Google Drive).
+	releaseHost, err := lockProbeHost(ctx, rawurl)
+	if err != nil {
+		return nil, fmt.Errorf("probe aborted while waiting for host: %w", err)
+	}
+	defer releaseHost()
 
 	// Embed custom headers in context so CheckRedirect can use them
 	if headers != nil {
@@ -115,10 +136,6 @@ func ProbeServerWithProxy(ctx context.Context, rawurl string, filenameHint strin
 		},
 	}
 
-	// Sequentialize probes to the same host to prevent rate limiting (e.g., Google Drive)
-	defer lockProbeHost(rawurl)()
-
-	var err error
 	var finalCancel context.CancelFunc
 
 	for attempt := range 3 {

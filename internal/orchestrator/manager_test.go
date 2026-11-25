@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -95,6 +96,36 @@ func TestLifecycleManager_EnqueueSuccess(t *testing.T) {
 		case <-timeout:
 			t.Fatal("timed out waiting for DownloadQueuedMsg")
 		}
+	}
+}
+
+func TestLifecycleManager_EnqueueRejectsProbeTimeout(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer ts.Close()
+
+	pool := scheduler.New(make(chan types.DownloadEvent, 10), 1)
+	mgr := NewLifecycleManager(pool, NewEventBus(), nil)
+	defer mgr.Shutdown()
+
+	destDir := t.TempDir()
+	id, _, err := mgr.Enqueue(context.Background(), &DownloadRequest{
+		URL:            ts.URL + "/archive.zip",
+		Filename:       "archive.zip",
+		Path:           destDir,
+		EnqueueTimeout: 500 * time.Millisecond,
+	})
+	if id != "" || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected a probe timeout without a queued ID, got id=%q, err=%v", id, err)
+	}
+	if message := err.Error(); !strings.Contains(message, "Download probe timed out for 127.0.0.1") ||
+		strings.Contains(message, context.DeadlineExceeded.Error()) {
+		t.Fatalf("expected a user-facing probe timeout, got %q", message)
+	}
+	files, err := os.ReadDir(destDir)
+	if err != nil || len(files) != 0 {
+		t.Fatalf("expected an empty destination after the probe timeout, got files=%v, err=%v", files, err)
 	}
 }
 

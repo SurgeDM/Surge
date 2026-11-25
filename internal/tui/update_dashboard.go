@@ -38,6 +38,12 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		}
 	}
 
+	if m.logFocused && (msg.String() == "enter" || key.Matches(msg,
+		m.keys.Dashboard.LogClose, m.keys.Dashboard.LogUp, m.keys.Dashboard.LogDown,
+		m.keys.Dashboard.LogTop, m.keys.Dashboard.LogBottom)) {
+		return m.updateActivityLog(msg)
+	}
+
 	// Focus search.
 	if msg.String() == "/" || key.Matches(msg, m.keys.Dashboard.Search) {
 		m.searchActive = true
@@ -295,6 +301,8 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	// Other keys...
 	if key.Matches(msg, m.keys.Dashboard.Log) {
 		m.logFocused = !m.logFocused
+		m.logCursor = max(0, len(m.logEntries)-1)
+		m.refreshLogViewportContent()
 		return m, nil
 	}
 
@@ -394,26 +402,6 @@ func (m RootModel) updateDashboard(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.logFocused {
-		if key.Matches(msg, m.keys.Dashboard.LogClose) {
-			m.logFocused = false
-			return m, nil
-		}
-		if key.Matches(msg, m.keys.Dashboard.LogDown) {
-			m.logViewport.ScrollDown(1)
-			return m, nil
-		}
-		if key.Matches(msg, m.keys.Dashboard.LogUp) {
-			m.logViewport.ScrollUp(1)
-			return m, nil
-		}
-		if key.Matches(msg, m.keys.Dashboard.LogTop) {
-			m.logViewport.GotoTop()
-			return m, nil
-		}
-		if key.Matches(msg, m.keys.Dashboard.LogBottom) {
-			m.logViewport.GotoBottom()
-			return m, nil
-		}
 		return m, nil
 	}
 

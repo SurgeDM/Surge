@@ -37,6 +37,7 @@ const (
 )
 
 func (m *RootModel) addStyledLogEntry(kind logKind, msg string) {
+	follow := !m.logFocused || (m.state != LogMessageState && m.logCursor >= len(m.logEntries)-1)
 	timestamp := time.Now().Format("15:04:05")
 	entry := fmt.Sprintf("[%s] %s", timestamp, msg)
 	if len(m.logKinds) != len(m.logEntries) {
@@ -49,11 +50,13 @@ func (m *RootModel) addStyledLogEntry(kind logKind, msg string) {
 	if len(m.logEntries) > 100 {
 		m.logEntries = m.logEntries[len(m.logEntries)-100:]
 		m.logKinds = m.logKinds[len(m.logKinds)-100:]
+		m.logCursor = max(0, m.logCursor-1)
 	}
 
+	if follow {
+		m.logCursor = len(m.logEntries) - 1
+	}
 	m.refreshLogViewportContent()
-	// Auto-scroll to bottom
-	m.logViewport.GotoBottom()
 }
 
 // refreshLogViewportContent re-renders log entries with current viewport wrapping.
@@ -67,6 +70,7 @@ func (m *RootModel) refreshLogViewportContent() {
 	// TruncateTwoLines ensures long messages don't overflow the UI.
 
 	var wrappedEntries []string
+	var selectedStart, selectedEnd int
 	for i, entry := range m.logEntries {
 		style := lipgloss.NewStyle().Foreground(colors.Foreground())
 		if i < len(m.logKinds) {
@@ -81,9 +85,16 @@ func (m *RootModel) refreshLogViewportContent() {
 				style = LogStylePaused
 			}
 		}
-		entry = style.Render(entry)
-		wrapped := utils.TruncateTwoLines(entry, width)
+		selected := m.logFocused && i == m.logCursor
+		if selected {
+			style = style.Reverse(true)
+			selectedStart = len(wrappedEntries)
+		}
+		wrapped := utils.TruncateTwoLines(style.Render(entry), width)
 		wrappedEntries = append(wrappedEntries, strings.Split(wrapped, "\n")...)
+		if selected {
+			selectedEnd = len(wrappedEntries)
+		}
 	}
 
 	// Bottom-align entries if they don't fill the viewport
@@ -91,9 +102,18 @@ func (m *RootModel) refreshLogViewportContent() {
 	if height > 0 && len(wrappedEntries) < height {
 		padding := make([]string, height-len(wrappedEntries), height)
 		wrappedEntries = append(padding, wrappedEntries...)
+		selectedStart += len(padding)
+		selectedEnd += len(padding)
 	}
 
 	m.logViewport.SetContent(strings.Join(wrappedEntries, "\n"))
+	if !m.logFocused || m.logCursor == len(m.logEntries)-1 {
+		m.logViewport.GotoBottom()
+	} else if selectedStart < m.logViewport.YOffset() {
+		m.logViewport.SetYOffset(selectedStart)
+	} else if selectedEnd > m.logViewport.YOffset()+height {
+		m.logViewport.SetYOffset(min(selectedStart, selectedEnd-height))
+	}
 }
 
 // removeDownloadByID removes a download from the in-memory list.
