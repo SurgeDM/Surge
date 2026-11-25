@@ -975,7 +975,7 @@ func (p *Scheduler) worker() {
 			_, slotTaken := p.queued[localCfg.ID]
 			foreignActive := p.downloads[localCfg.ID] != nil
 
-			if shouldRetryFailedDownload(p.isShuttingDown, err, qt.retries) && !slotTaken && !foreignActive {
+			if !isPaused && shouldRetryFailedDownload(p.isShuttingDown, err, qt.retries) && !slotTaken && !foreignActive {
 				qt.retries++
 				retryDelay := time.Second * time.Duration(qt.retries)
 				qt.retryAt = time.Now().Add(retryDelay)

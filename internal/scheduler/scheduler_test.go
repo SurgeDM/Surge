@@ -1380,13 +1380,13 @@ func TestScheduler_WorkerEndgameSuccessClearsPause(t *testing.T) {
 	}
 }
 
-func TestScheduler_WorkerRealErrorWithPauseFlagDoesNotSwallowError(t *testing.T) {
+func TestScheduler_WorkerRetryableErrorWhilePausedDoesNotRetry(t *testing.T) {
 	ch := make(chan types.DownloadEvent, 16)
 	pool := New(ch, 1)
 	t.Cleanup(func() { pool.GracefulShutdown() })
 
 	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusForbidden)
+		w.WriteHeader(http.StatusBadGateway)
 	}))
 	defer server.Close()
 
@@ -1415,14 +1415,14 @@ func TestScheduler_WorkerRealErrorWithPauseFlagDoesNotSwallowError(t *testing.T)
 		t.Fatal("timed out waiting for worker completion")
 	}
 
-	// Drain events: must receive EventError, must NOT receive EventPaused
+	// A retryable error should end the paused attempt and still reach the user.
 	var errorReceived bool
 	for len(ch) > 0 {
 		msg := <-ch
-		if msg.Type == types.EventPaused {
-			t.Fatalf("real error must not be swallowed into EventPaused: %+v", msg)
-		}
-		if msg.Type == types.EventError {
+		switch msg.Type {
+		case types.EventPaused, types.EventQueued:
+			t.Fatalf("unexpected event after paused worker failed: %+v", msg)
+		case types.EventError:
 			errorReceived = true
 		}
 	}
@@ -1432,8 +1432,9 @@ func TestScheduler_WorkerRealErrorWithPauseFlagDoesNotSwallowError(t *testing.T)
 
 	pool.mu.RLock()
 	_, inDownloads := pool.downloads[id]
+	_, inQueue := pool.queued[id]
 	pool.mu.RUnlock()
-	if inDownloads {
-		t.Error("failed download must not be retained in pool.downloads")
+	if inDownloads || inQueue {
+		t.Error("failed paused download was still active or queued")
 	}
 }
