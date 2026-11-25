@@ -185,9 +185,11 @@ function ensurePersistedStateLoaded(): Promise<void> {
 // Pending duplicates persistence
 // ---------------------------------------------------------------------------
 
-async function persistPendingDuplicates(): Promise<void> {
+async function persistPendingDuplicates(): Promise<boolean> {
   // Pending URLs and captured credential headers stay in extension session memory.
-  await browser.storage.session?.set({ [PENDING_DUP_KEY]: [...pendingDuplicates] }).catch(() => {});
+  const session = browser.storage.session;
+  if (!session) return false;
+  return session.set({ [PENDING_DUP_KEY]: [...pendingDuplicates] }).then(() => true, () => false);
 }
 
 function ensurePendingDuplicatesLoaded(): Promise<void> {
@@ -209,8 +211,8 @@ async function rehydratePendingDuplicates(): Promise<void> {
     if (!isNaN(num) && num > pendingDuplicateCounter) pendingDuplicateCounter = num;
   }
   if (legacyEntries || freshEntries.length !== entries.length) {
-    await persistPendingDuplicates();
-    if (legacyEntries) await browser.storage.local.remove(PENDING_DUP_KEY).catch(() => {});
+    const persisted = await persistPendingDuplicates();
+    if (legacyEntries && persisted) await browser.storage.local.remove(PENDING_DUP_KEY).catch(() => {});
   }
   updateBadge();
 }
@@ -222,6 +224,12 @@ function cleanupStaleDuplicates(): boolean {
     if (data.timestamp < cutoff) pendingDuplicates.delete(id);
   }
   return pendingDuplicates.size !== size;
+}
+
+async function prunePendingDuplicates(): Promise<void> {
+  if (!cleanupStaleDuplicates()) return;
+  updateBadge();
+  await persistPendingDuplicates();
 }
 
 async function persistDiscoveredServerUrl(url: string | null): Promise<void> {
@@ -1060,9 +1068,12 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
       return handleSkipDuplicate(message.id);
 
     case 'getPendingDuplicates':
-      return ensurePendingDuplicatesLoaded().then(() => ({
-        duplicates: [...pendingDuplicates].map(([id, { filename, url }]) => ({ id, filename, url })),
-      }));
+      return ensurePendingDuplicatesLoaded().then(async () => {
+        await prunePendingDuplicates();
+        return {
+          duplicates: [...pendingDuplicates].map(([id, { filename, url }]) => ({ id, filename, url })),
+        };
+      });
 
     // Bulk clear actions
     case 'clearCompleted':
@@ -1104,10 +1115,7 @@ async function notifyNextPendingDuplicate(): Promise<void> {
 
 async function handleConfirmDuplicate(id: string): Promise<{ success: boolean; error?: string }> {
   await ensurePendingDuplicatesLoaded();
-  if (cleanupStaleDuplicates()) {
-    updateBadge();
-    void persistPendingDuplicates();
-  }
+  await prunePendingDuplicates();
   const pending = pendingDuplicates.get(id);
   if (!pending) return { success: false, error: 'Pending download not found' };
 
@@ -1221,10 +1229,7 @@ export default defineBackground(() => {
 
   // Periodic full sync with backend
   setInterval(() => {
-    if (cleanupStaleDuplicates()) {
-      updateBadge();
-      void persistPendingDuplicates();
-    }
+    void prunePendingDuplicates();
     fullSync().catch(() => { });
   }, SYNC_INTERVAL_MS);
 

@@ -294,7 +294,7 @@ describe('download interception naming', () => {
       expect(browser.storage.session.set).toHaveBeenLastCalledWith({ pendingDuplicates: [] });
     });
 
-    it('restores a legacy entry with empty headers', async () => {
+    it.each([true, false])('restores legacy headers and only removes the entry after a successful write (%s)', async writeSucceeds => {
       vi.mocked(browser.storage.local.get).mockImplementation(async key => {
         if (key === 'pendingDuplicates') return {
           pendingDuplicates: [['dup_1', { url, filename: 'duplicate.zip', directory: '', timestamp: Date.now() }]],
@@ -302,12 +302,30 @@ describe('download interception naming', () => {
         return {};
       });
 
+      if (!writeSucceeds) {
+        vi.mocked(browser.storage.session.set).mockRejectedValueOnce(new Error('Session storage unavailable'));
+      }
+
       const result = await __test__.handleMessage({ type: 'getPendingDuplicates' });
       expect(result).toEqual({ duplicates: [{ id: 'dup_1', url, filename: 'duplicate.zip' }] });
       expect(browser.storage.session.set).toHaveBeenCalledWith({
         pendingDuplicates: [['dup_1', expect.objectContaining({ headers: {} })]],
       });
-      expect(browser.storage.local.remove).toHaveBeenCalledWith('pendingDuplicates');
+      if (writeSucceeds) {
+        expect(browser.storage.local.remove).toHaveBeenCalledWith('pendingDuplicates');
+      } else {
+        expect(browser.storage.local.remove).not.toHaveBeenCalled();
+      }
+    });
+
+    it('prunes expired entries before returning the popup list', async () => {
+      await __test__.handleDownloadCreated({ id: 8000, url });
+      expect(browser.action.setBadgeText).toHaveBeenLastCalledWith({ text: '1' });
+      vi.spyOn(Date, 'now').mockReturnValue(Date.now() + 60_001);
+
+      expect(await __test__.handleMessage({ type: 'getPendingDuplicates' })).toEqual({ duplicates: [] });
+      expect(browser.action.setBadgeText).toHaveBeenLastCalledWith({ text: '' });
+      expect(browser.storage.session.set).toHaveBeenLastCalledWith({ pendingDuplicates: [] });
     });
   });
 

@@ -161,7 +161,7 @@ interface QueueDuplicateDownloadOptions {
   filename: string;
   directory: string;
   headers: Record<string, string>;
-  persistPendingDuplicates: () => Promise<void>;
+  persistPendingDuplicates: () => Promise<unknown>;
   updateBadge: () => void;
   openPopup: () => Promise<void>;
   sendPrompt: (message: { type: 'promptDuplicate'; id: string; filename: string }) => Promise<unknown>;
