@@ -24,6 +24,11 @@ describe('download interception naming', () => {
             return Promise.resolve({});
           }),
           set: vi.fn(),
+          remove: vi.fn().mockResolvedValue(undefined),
+        },
+        session: {
+          get: vi.fn().mockResolvedValue({}),
+          set: vi.fn().mockResolvedValue(undefined),
         },
       },
       downloads: {
@@ -254,6 +259,55 @@ describe('download interception naming', () => {
     expect(JSON.parse(downloadCall?.[1].body)).toMatchObject({
       url: finalUrl,
       headers: { 'X-Download-Token': 'file-token' },
+    });
+  });
+
+  describe('duplicate confirmation headers', () => {
+    const url = 'https://example.com/duplicate.zip';
+
+    beforeEach(() => {
+      mockFetch.mockImplementation(async (requestUrl: string) => {
+        if (requestUrl.endsWith('/health')) return { ok: true };
+        if (requestUrl.endsWith('/duplicate')) return { ok: true, json: async () => ({ exists: true }) };
+        if (requestUrl.endsWith('/download')) return { ok: true, json: async () => ({ filename: 'duplicate.zip' }) };
+        return { ok: false };
+      });
+    });
+
+    it('restores the original capture from session storage after a worker restart', async () => {
+      __test__.captureHeaders({ url, requestHeaders: [{ name: 'Cookie', value: 'session=original' }] });
+      await __test__.handleDownloadCreated({ id: 8000, url });
+
+      const [stored] = vi.mocked(browser.storage.session.set).mock.calls[0];
+      expect(stored).toMatchObject({
+        pendingDuplicates: [['dup_1', { url, headers: { Cookie: 'session=original' } }]],
+      });
+      expect(browser.storage.local.set).not.toHaveBeenCalled();
+
+      __test__.resetState();
+      (browser.storage.session.get as import('vitest').Mock).mockResolvedValue(stored);
+      __test__.captureHeaders({ url, requestHeaders: [{ name: 'Cookie', value: 'session=later-request' }] });
+      expect(await __test__.handleMessage({ type: 'confirmDuplicate', id: 'dup_1' })).toEqual({ success: true });
+
+      const downloadCall = mockFetch.mock.calls.find(([requestUrl]) => requestUrl.endsWith('/download'));
+      expect(JSON.parse(downloadCall?.[1].body).headers).toEqual({ Cookie: 'session=original' });
+      expect(browser.storage.session.set).toHaveBeenLastCalledWith({ pendingDuplicates: [] });
+    });
+
+    it('restores a legacy entry with empty headers', async () => {
+      vi.mocked(browser.storage.local.get).mockImplementation(async key => {
+        if (key === 'pendingDuplicates') return {
+          pendingDuplicates: [['dup_1', { url, filename: 'duplicate.zip', directory: '', timestamp: Date.now() }]],
+        };
+        return {};
+      });
+
+      const result = await __test__.handleMessage({ type: 'getPendingDuplicates' });
+      expect(result).toEqual({ duplicates: [{ id: 'dup_1', url, filename: 'duplicate.zip' }] });
+      expect(browser.storage.session.set).toHaveBeenCalledWith({
+        pendingDuplicates: [['dup_1', expect.objectContaining({ headers: {} })]],
+      });
+      expect(browser.storage.local.remove).toHaveBeenCalledWith('pendingDuplicates');
     });
   });
 

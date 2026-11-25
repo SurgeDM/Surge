@@ -59,7 +59,9 @@ let sseRetryCount = 0;
 const capturedHeaders = new Map<string, { headers: Record<string, string>; timestamp: number }>();
 
 const PENDING_DUP_KEY = 'pendingDuplicates';
+const PENDING_DUP_TTL_MS = 60_000;
 let pendingDuplicateCounter = 0;
+let pendingDuplicatesLoaded: Promise<void> | undefined;
 const pendingDuplicates = new Map<string, PendingDup>();
 const activeDownloadIds = new Set<string>();
 
@@ -184,31 +186,42 @@ function ensurePersistedStateLoaded(): Promise<void> {
 // ---------------------------------------------------------------------------
 
 async function persistPendingDuplicates(): Promise<void> {
-  await browser.storage.local.set({ [PENDING_DUP_KEY]: [...pendingDuplicates] });
+  // Pending URLs and captured credential headers stay in extension session memory.
+  await browser.storage.session?.set({ [PENDING_DUP_KEY]: [...pendingDuplicates] }).catch(() => {});
+}
+
+function ensurePendingDuplicatesLoaded(): Promise<void> {
+  return pendingDuplicatesLoaded ??= rehydratePendingDuplicates();
 }
 
 async function rehydratePendingDuplicates(): Promise<void> {
-  try {
-    const result = await browser.storage.local.get(PENDING_DUP_KEY);
-    const entries = result[PENDING_DUP_KEY] as [string, PendingDup][] | undefined;
-    if (entries?.length) {
-      const freshEntries = filterPendingDuplicates(entries);
-      for (const [id, data] of freshEntries) {
-        pendingDuplicates.set(id, data);
-        const num = parseInt(id.replace('dup_', ''), 10);
-        if (!isNaN(num) && num > pendingDuplicateCounter) pendingDuplicateCounter = num;
-      }
-      if (freshEntries.length !== entries.length) await persistPendingDuplicates();
-      updateBadge();
-    }
-  } catch { /* ignore */ }
+  const session = await browser.storage.session?.get(PENDING_DUP_KEY).catch(() => undefined);
+  const legacy = await browser.storage.local.get(PENDING_DUP_KEY).catch(() => undefined);
+  const sessionEntries = session?.[PENDING_DUP_KEY];
+  const legacyEntries = legacy?.[PENDING_DUP_KEY];
+  const entries = (sessionEntries ?? legacyEntries) as [string, PendingDup][] | undefined;
+  if (!Array.isArray(entries)) return;
+
+  const freshEntries = filterPendingDuplicates(entries, Date.now(), PENDING_DUP_TTL_MS);
+  for (const [id, data] of freshEntries) {
+    pendingDuplicates.set(id, { ...data, headers: sessionEntries ? data.headers ?? {} : {} });
+    const num = parseInt(id.replace('dup_', ''), 10);
+    if (!isNaN(num) && num > pendingDuplicateCounter) pendingDuplicateCounter = num;
+  }
+  if (legacyEntries || freshEntries.length !== entries.length) {
+    await persistPendingDuplicates();
+    if (legacyEntries) await browser.storage.local.remove(PENDING_DUP_KEY).catch(() => {});
+  }
+  updateBadge();
 }
 
-function cleanupStaleDuplicates(): void {
-  const cutoff = Date.now() - 60_000;
+function cleanupStaleDuplicates(): boolean {
+  const size = pendingDuplicates.size;
+  const cutoff = Date.now() - PENDING_DUP_TTL_MS;
   for (const [id, data] of pendingDuplicates) {
     if (data.timestamp < cutoff) pendingDuplicates.delete(id);
   }
+  return pendingDuplicates.size !== size;
 }
 
 async function persistDiscoveredServerUrl(url: string | null): Promise<void> {
@@ -796,12 +809,14 @@ async function handleDownloadCreated(downloadItem: InterceptedDownload): Promise
     const warnOnDuplicate = (await storageGetBoolean(STORAGE_KEYS.WARN_ON_DUPLICATE)) !== false;
     if (warnOnDuplicate && await isDuplicateDownload(url)) {
       logDownload('queued duplicate confirmation', { id: downloadItem.id, url });
-      pendingDuplicateCounter = await queueDuplicateDownload({
+      await ensurePendingDuplicatesLoaded();
+      await queueDuplicateDownload({
         pendingDuplicates,
-        pendingDuplicateCounter,
+        pendingId: `dup_${++pendingDuplicateCounter}`,
         url,
         filename: duplicateDisplayName,
         directory,
+        headers,
         cleanupStaleDuplicates,
         persistPendingDuplicates,
         updateBadge,
@@ -1044,13 +1059,10 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
     case 'skipDuplicate':
       return handleSkipDuplicate(message.id);
 
-    case 'getPendingDuplicates': {
-      const dups = [];
-      for (const [id, data] of pendingDuplicates) {
-        dups.push({ id, filename: data.filename, url: data.url });
-      }
-      return Promise.resolve({ duplicates: dups });
-    }
+    case 'getPendingDuplicates':
+      return ensurePendingDuplicatesLoaded().then(() => ({
+        duplicates: [...pendingDuplicates].map(([id, { filename, url }]) => ({ id, filename, url })),
+      }));
 
     // Bulk clear actions
     case 'clearCompleted':
@@ -1091,6 +1103,11 @@ async function notifyNextPendingDuplicate(): Promise<void> {
 }
 
 async function handleConfirmDuplicate(id: string): Promise<{ success: boolean; error?: string }> {
+  await ensurePendingDuplicatesLoaded();
+  if (cleanupStaleDuplicates()) {
+    updateBadge();
+    void persistPendingDuplicates();
+  }
   const pending = pendingDuplicates.get(id);
   if (!pending) return { success: false, error: 'Pending download not found' };
 
@@ -1102,7 +1119,7 @@ async function handleConfirmDuplicate(id: string): Promise<{ success: boolean; e
     pending.url,
     '', // Force empty - rely on backend prober
     pending.directory,
-    getCapturedHeaders(pending.url) ?? {},
+    pending.headers,
     { skipApproval: true },
   );
   await notifyHandoffResult(result, pending.filename);
@@ -1113,6 +1130,7 @@ async function handleConfirmDuplicate(id: string): Promise<{ success: boolean; e
 }
 
 async function handleSkipDuplicate(id: string): Promise<{ success: boolean }> {
+  await ensurePendingDuplicatesLoaded();
   pendingDuplicates.delete(id);
   await persistPendingDuplicates();
   updateBadge();
@@ -1202,10 +1220,16 @@ export default defineBackground(() => {
   }, HEALTH_CHECK_INTERVAL_MS);
 
   // Periodic full sync with backend
-  setInterval(() => { fullSync().catch(() => { }); }, SYNC_INTERVAL_MS);
+  setInterval(() => {
+    if (cleanupStaleDuplicates()) {
+      updateBadge();
+      void persistPendingDuplicates();
+    }
+    fullSync().catch(() => { });
+  }, SYNC_INTERVAL_MS);
 
   // Startup: restore persisted state
-  rehydratePendingDuplicates().catch(() => { });
+  ensurePendingDuplicatesLoaded().catch(() => { });
   ensurePersistedStateLoaded()
     .then(() => checkHealthSilent())
     .then(() => {
@@ -1248,6 +1272,7 @@ export const __test__ = {
     sseRetryCount = 0;
     capturedHeaders.clear();
     pendingDuplicateCounter = 0;
+    pendingDuplicatesLoaded = undefined;
     pendingDuplicates.clear();
     startingBrowserRetries.clear();
     activeDownloadIds.clear();
