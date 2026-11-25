@@ -179,6 +179,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.logViewport.SetWidth(layout.LogWidth - BoxStyle.GetHorizontalFrameSize())
 		m.logViewport.SetHeight(logHeight)
 		m.refreshLogViewportContent()
+		if m.state == LogMessageState {
+			m.resizeLogMessage()
+		}
 
 		// Setup download list dimensions
 		listInnerPadding := lipgloss.NewStyle().Padding(1, 2)
@@ -274,6 +277,9 @@ func (m RootModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		switch m.state {
 		case DashboardState:
 			return m.updateDashboard(msg)
+
+		case LogMessageState:
+			return m.updateLogMessage(msg)
 
 		case DetailState:
 			if msg.String() == "esc" || msg.String() == "q" || msg.String() == "enter" {
