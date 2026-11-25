@@ -222,6 +222,7 @@ type DownloadRequest struct {
 	SkipApproval       bool
 	Workers            int
 	MinChunkSize       int64
+	EnqueueTimeout     time.Duration
 }
 
 // Enqueue probes and reserves a stable destination before dispatching to the queue layer.
@@ -320,8 +321,21 @@ func enqueueCoalescingKey(req *DownloadRequest) string {
 		writeString(req.Headers[name])
 	}
 
-	fmt.Fprintf(&key, "%t:%t:%d:%d", req.IsExplicitCategory, req.SkipApproval, req.Workers, req.MinChunkSize)
+	fmt.Fprintf(&key, "%t:%t:%d:%d:%d", req.IsExplicitCategory, req.SkipApproval, req.Workers, req.MinChunkSize, req.EnqueueTimeout)
 	return key.String()
+}
+
+type probeTimeoutError struct {
+	host  string
+	cause error
+}
+
+func (err *probeTimeoutError) Error() string {
+	return fmt.Sprintf("Download probe timed out for %s. Check the connection or DNS settings and try again.", err.host)
+}
+
+func (err *probeTimeoutError) Unwrap() error {
+	return err.cause
 }
 
 func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadRequest, requestID string) (string, string, error) {
@@ -330,6 +344,12 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 	}
 	req.Artifact = req.Artifact.Normalized()
 	settings := mgr.GetSettings()
+
+	if req.EnqueueTimeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, req.EnqueueTimeout)
+		defer cancel()
+	}
 
 	// Throttle concurrent probes — acquire a semaphore slot before probing.
 	// If the context is cancelled (e.g., shutdown) we abort immediately.
@@ -345,8 +365,14 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 
 	probeResult, probeErr := probing.ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
 	if probeErr != nil {
+		if err := ctx.Err(); err != nil {
+			probeErr = err
+		}
 		var networkErr net.Error
-		if errors.Is(probeErr, context.Canceled) || (errors.As(probeErr, &networkErr) && networkErr.Timeout()) {
+		if errors.As(probeErr, &networkErr) && networkErr.Timeout() {
+			return "", "", &probeTimeoutError{host: utils.URLHostForLog(req.URL), cause: probeErr}
+		}
+		if errors.Is(probeErr, context.Canceled) {
 			return "", "", probeErr
 		}
 

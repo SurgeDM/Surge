@@ -5,12 +5,14 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"github.com/SurgeDM/Surge/internal/config"
 	"github.com/SurgeDM/Surge/internal/orchestrator"
@@ -19,6 +21,9 @@ import (
 	"github.com/SurgeDM/Surge/internal/utils"
 	"github.com/google/uuid"
 )
+
+// Leave time to return a definitive failure before the extension's 25-second deadline.
+const browserHandoffTimeout = 20 * time.Second
 
 // DownloadRequest represents a download request from the browser extension
 type DownloadRequest struct {
@@ -118,7 +123,11 @@ func handleDownload(w http.ResponseWriter, r *http.Request, defaultOutputDir str
 		recordPreflightDownloadError(resolved.urlForAdd, resolved.outPath, err)
 		publishSystemLog(fmt.Sprintf("Error adding download from %s: %v", utils.URLHostForLog(resolved.urlForAdd), err))
 		status := http.StatusInternalServerError
-		if errors.Is(err, types.ErrDestinationExists) {
+		var networkErr net.Error
+		switch {
+		case errors.As(err, &networkErr) && networkErr.Timeout():
+			status = http.StatusGatewayTimeout
+		case errors.Is(err, types.ErrDestinationExists):
 			status = http.StatusConflict
 		}
 		http.Error(w, err.Error(), status)
@@ -524,6 +533,9 @@ func enqueueDownloadRequest(r *http.Request, service service.DownloadService, re
 			SkipApproval:       req.SkipApproval,
 			Workers:            req.Workers,
 			MinChunkSize:       req.MinChunkSize,
+		}
+		if r.Header.Get("X-Requested-With") == "SurgeExtension" {
+			dlReq.EnqueueTimeout = browserHandoffTimeout
 		}
 		// Use the application-level enqueue context instead of r.Context().
 		// The HTTP request context is cancelled when the handler returns or

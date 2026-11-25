@@ -79,6 +79,7 @@ describe('download interception naming', () => {
     const downloadCall = mockFetch.mock.calls.find(call => call[0].endsWith('/download'));
     expect(downloadCall).toBeDefined();
 
+    expect(downloadCall?.[1].headers).toMatchObject({ 'X-Requested-With': 'SurgeExtension' });
     const body = JSON.parse(downloadCall?.[1].body);
     expect(body.filename).toBe('');
     expect(body.url).toBe(downloadItem.url);

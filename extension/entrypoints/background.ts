@@ -545,7 +545,11 @@ async function sendToSurge(
     logDownload('starting Surge handoff', { url, base });
     const resp = await fetch(`${base}/download`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'SurgeExtension',
+        ...(await authHeaders()),
+      },
       body: JSON.stringify(buildDownloadRequestBody({
         url,
         filename,

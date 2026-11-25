@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -108,17 +109,19 @@ func TestLifecycleManager_EnqueueRejectsProbeTimeout(t *testing.T) {
 	mgr := NewLifecycleManager(pool, NewEventBus(), nil)
 	defer mgr.Shutdown()
 
-	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
-	defer cancel()
-
 	destDir := t.TempDir()
-	id, _, err := mgr.Enqueue(ctx, &DownloadRequest{
-		URL:      ts.URL + "/archive.zip",
-		Filename: "archive.zip",
-		Path:     destDir,
+	id, _, err := mgr.Enqueue(context.Background(), &DownloadRequest{
+		URL:            ts.URL + "/archive.zip",
+		Filename:       "archive.zip",
+		Path:           destDir,
+		EnqueueTimeout: 500 * time.Millisecond,
 	})
 	if id != "" || !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("expected a probe timeout without a queued ID, got id=%q, err=%v", id, err)
+	}
+	if message := err.Error(); !strings.Contains(message, "Download probe timed out for 127.0.0.1") ||
+		strings.Contains(message, context.DeadlineExceeded.Error()) {
+		t.Fatalf("expected a user-facing probe timeout, got %q", message)
 	}
 	files, err := os.ReadDir(destDir)
 	if err != nil || len(files) != 0 {
