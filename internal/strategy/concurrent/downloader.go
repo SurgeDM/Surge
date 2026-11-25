@@ -357,7 +357,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	remainingTasks := queue.DrainRemaining()
 
 	// Handle pause request: must return types.ErrPaused to prevent finalization
-	if d.State != nil && d.State.IsPaused() {
+	if d.State != nil && d.State.IsPaused() && !types.IsInsufficientDiskSpace(downloadErr) {
 		pauseErr := d.handlePause(destPath, fileSize, remainingTasks, candidateMirrors)
 		if pauseErr == nil {
 			// Pause was requested at completion boundary, so handlePause finalized it.
