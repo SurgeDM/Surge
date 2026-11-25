@@ -87,7 +87,7 @@ func (m RootModel) updateLogMessage(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m *RootModel) renderLogMessage() string {
 	hint := m.keys.Dashboard.LogClose.Help().Key + ": close"
 	if m.logMessageViewport.TotalLineCount() > m.logMessageViewport.Height() {
-		hint = "↑/↓: scroll · " + hint
+		hint = "\u2191/\u2193: scroll \u00b7 " + hint
 	}
 	return renderBtopBox(
 		PaneTitleStyle.Render(" Activity Message "),
