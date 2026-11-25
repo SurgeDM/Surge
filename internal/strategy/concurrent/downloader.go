@@ -25,32 +25,28 @@ import (
 
 // ConcurrentDownloader handles multi-connection downloads
 type ConcurrentDownloader struct {
-	ProgressChan chan<- types.DownloadEvent // Channel for events (start/complete/error)
-	ID           string                     // Download ID
-	State        *progress.DownloadProgress // Shared state for TUI polling
-	activeTasks  map[int]*ActiveTask
-	activeMu     sync.Mutex
-	// abandonedRemaining holds ENOSPC in-flight residuals captured off the
-	// live queue (no Push during the storm window). saveStateSnapshot unions
-	// these with active+queue drains so Resume does not lose the failing range.
-	abandonedRemaining []types.Task
-	URL                string // For pause/resume
-	DestPath           string // For pause/resume
-	Runtime            *types.RuntimeConfig
-	Limiter            types.ByteLimiter
-	RateLimitBps       int64
-	RateLimitSet       bool
-	TotalSize          int64
-	bufPool            sync.Pool
-	Headers            map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
-	hostLimiter        *transport.HostRateLimiter
-	workerHosts        []string
-	soft403Mu          sync.Mutex
-	forbiddenByMirror  map[string]int
-	nonRangeMirrors    map[string]bool
-	soft403Progress    int64
-	soft403Since       time.Time
-	concurrencyGate    *adaptiveConcurrencyGate
+	ProgressChan      chan<- types.DownloadEvent // Channel for events (start/complete/error)
+	ID                string                     // Download ID
+	State             *progress.DownloadProgress // Shared state for TUI polling
+	activeTasks       map[int]*ActiveTask
+	activeMu          sync.Mutex
+	URL               string // For pause/resume
+	DestPath          string // For pause/resume
+	Runtime           *types.RuntimeConfig
+	Limiter           types.ByteLimiter
+	RateLimitBps      int64
+	RateLimitSet      bool
+	TotalSize         int64
+	bufPool           sync.Pool
+	Headers           map[string]string // Custom HTTP headers from browser (cookies, auth, etc.)
+	hostLimiter       *transport.HostRateLimiter
+	workerHosts       []string
+	soft403Mu         sync.Mutex
+	forbiddenByMirror map[string]int
+	nonRangeMirrors   map[string]bool
+	soft403Progress   int64
+	soft403Since      time.Time
+	concurrencyGate   *adaptiveConcurrencyGate
 	// completing is set when the completion monitor has decided the download
 	// is done. Worker taskCtx cancel is then a completion signal, not a stall.
 	completing atomic.Bool
@@ -275,19 +271,20 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 
 	workingPath := destPath + types.IncompleteSuffix
 	downloadCtx, cancel := context.WithCancel(ctx)
+	queue := NewTaskQueue()
+	stopDownload := func() {
+		queue.StopDispatch()
+		cancel()
+	}
 
 	if d.State != nil {
-		d.State.SetCancelFunc(cancel)
+		d.State.SetCancelFunc(stopDownload)
 	}
 
 	client, httpTransport := d.setupNetwork()
 	// Release transport back to the pool ONLY after all helpers and workers are joined (LIFO: runs last)
 	defer transport.DefaultNetworkPool.ReleaseTransport(httpTransport)
 
-	// Helper synchronization for monitors and balancer
-	var wgHelpers sync.WaitGroup
-	// Ensure we wait for helpers to finish; run wait AFTER cancel (LIFO: Wait runs second, cancel runs first)
-	defer wgHelpers.Wait()
 	defer cancel()
 
 	// Ensure we have the total file size
@@ -344,18 +341,24 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 		return err
 	}
 
-	queue := NewTaskQueue()
 	queue.PushMultiple(tasks)
 
 	// Start monitoring and balancing helpers
-	d.startHelpers(downloadCtx, &wgHelpers, queue, fileSize, numConns)
+	var wgHelpers sync.WaitGroup
+	helpersCtx, stopHelpers := context.WithCancel(downloadCtx)
+	d.startHelpers(helpersCtx, &wgHelpers, queue, fileSize, numConns)
 
 	// Execute download workers
-	downloadErr := d.executeWorkers(downloadCtx, cancel, client, outFile, queue, fileSize, workerMirrors, numConns)
+	downloadErr := d.executeWorkers(downloadCtx, stopDownload, client, outFile, queue, fileSize, workerMirrors, numConns)
+
+	// Helpers can still move work between active tasks and the queue.
+	stopHelpers()
+	wgHelpers.Wait()
+	remainingTasks := queue.DrainRemaining()
 
 	// Handle pause request: must return types.ErrPaused to prevent finalization
 	if d.State != nil && d.State.IsPaused() {
-		pauseErr := d.handlePause(destPath, fileSize, queue, candidateMirrors)
+		pauseErr := d.handlePause(destPath, fileSize, remainingTasks, candidateMirrors)
 		if pauseErr == nil {
 			// Pause was requested at completion boundary, so handlePause finalized it.
 			return d.syncFile(outFile)
@@ -366,7 +369,7 @@ func (d *ConcurrentDownloader) Download(ctx context.Context, rawurl string, cand
 	if downloadErr != nil {
 		// Save state so that retries (like rate limit backoffs) resume from the correct progress
 		if d.State != nil && !errors.Is(downloadErr, context.Canceled) && !errors.Is(downloadErr, context.DeadlineExceeded) {
-			if saveErr := d.saveStateSnapshot(destPath, fileSize, queue, candidateMirrors, false); saveErr != nil {
+			if saveErr := d.saveStateSnapshot(destPath, fileSize, remainingTasks, candidateMirrors, false); saveErr != nil {
 				return errors.Join(downloadErr, fmt.Errorf("save resume state: %w", saveErr))
 			}
 		}
@@ -580,12 +583,11 @@ func (d *ConcurrentDownloader) runCompletionMonitor(ctx context.Context, queue *
 	for {
 		select {
 		case <-ctx.Done():
-			queue.Close()
+			queue.StopDispatch()
 			return
 		case <-ticker.C:
 			if d.State != nil && d.State.Bytes.VerifiedProgress.Load() >= fileSize {
-				// Mark first so a cancelled worker does not treat this as a
-				// health stall and Push after Close.
+				// Mark first so a cancelled worker recognizes completion.
 				d.completing.Store(true)
 				d.activeMu.Lock()
 				for _, at := range d.activeTasks {
@@ -594,10 +596,7 @@ func (d *ConcurrentDownloader) runCompletionMonitor(ctx context.Context, queue *
 					}
 				}
 				d.activeMu.Unlock()
-				queue.Close()
-				// Close only unblocks Pop waiters; already-queued leftovers
-				// would otherwise restick workers after 100%.
-				queue.DrainRemaining()
+				queue.StopDispatch()
 				return
 			}
 			parked := int64(0)
@@ -617,7 +616,7 @@ func (d *ConcurrentDownloader) runCompletionMonitor(ctx context.Context, queue *
 					}
 				}
 				d.activeMu.Unlock()
-				queue.Close()
+				queue.StopDispatch()
 				return
 			}
 		}
@@ -659,7 +658,6 @@ func (d *ConcurrentDownloader) executeWorkers(ctx context.Context, cancel contex
 	go func() {
 		wg.Wait()
 		close(workerErrors)
-		queue.Close()
 	}()
 
 	// Check for errors or pause
@@ -677,8 +675,8 @@ func (d *ConcurrentDownloader) executeWorkers(ctx context.Context, cancel contex
 	return downloadErr
 }
 
-func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, queue *TaskQueue, candidateMirrors []string) error {
-	return d.saveStateSnapshot(destPath, fileSize, queue, candidateMirrors, true)
+func (d *ConcurrentDownloader) handlePause(destPath string, fileSize int64, remainingTasks []types.Task, candidateMirrors []string) error {
+	return d.saveStateSnapshot(destPath, fileSize, remainingTasks, candidateMirrors, true)
 }
 
 // intersectTasks keeps only saved work that is not already verified by the bitmap.
@@ -727,26 +725,9 @@ func unverifiedTasksFromBitmap(bitmap []byte, fileSize, chunkSize int64) []types
 	return tasks
 }
 
-func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64, queue *TaskQueue, candidateMirrors []string, emitPauseEvent bool) error {
-	// 1. Collect active tasks as remaining work FIRST, then drain abandoned
-	// residuals (off-queue stashes from terminal-error workers), then drain
-	// the live queue.
-	var activeRemaining []types.Task
-	d.activeMu.Lock()
-	for _, active := range d.activeTasks {
-		if remaining := active.RemainingTask(); remaining != nil {
-			activeRemaining = append(activeRemaining, *remaining)
-		}
-	}
-	abandoned := d.abandonedRemaining
-	d.abandonedRemaining = nil
-	d.activeMu.Unlock()
-
-	// 2. Collect remaining tasks from queue
-	allTasks := append(append(append([]types.Task(nil), activeRemaining...), abandoned...), queue.DrainRemaining()...)
-
+func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64, remainingTasks []types.Task, candidateMirrors []string, emitPauseEvent bool) error {
 	if d.State == nil {
-		if len(allTasks) == 0 {
+		if len(remainingTasks) == 0 {
 			return nil
 		}
 		if emitPauseEvent {
@@ -755,9 +736,16 @@ func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64
 		return nil
 	}
 
+	vp := d.State.Bytes.VerifiedProgress.Load()
+	if vp >= fileSize {
+		utils.Debug("Download state save requested at completion boundary; finalizing as completed")
+		d.State.Resume()
+		_, _ = d.State.FinalizeSession(fileSize)
+		return nil
+	}
+
 	// Snapshot bitmap for state persistence and possible gap task reconstruction
 	bitmap, _, _, chunkSize, _ := d.State.GetBitmapSnapshot(false)
-	remainingTasks := allTasks
 
 	var remainingBytes int64
 	for _, task := range remainingTasks {
@@ -765,14 +753,6 @@ func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64
 	}
 
 	if remainingBytes == 0 {
-		vp := d.State.Bytes.VerifiedProgress.Load()
-		if vp >= fileSize {
-			utils.Debug("Download state save requested at completion boundary; finalizing as completed")
-			d.State.Resume()
-			_, _ = d.State.FinalizeSession(fileSize)
-			return nil
-		}
-
 		// If tasks drained before chunks were verified, rebuild remaining tasks from bitmap
 		// so the record stays resumable.
 		if len(bitmap) > 0 && chunkSize > 0 {
@@ -802,7 +782,7 @@ func (d *ConcurrentDownloader) saveStateSnapshot(destPath string, fileSize int64
 
 	computedDownloaded := fileSize - remainingBytes
 	// Never report less progress than physically verified on disk.
-	if vp := d.State.Bytes.VerifiedProgress.Load(); vp > computedDownloaded {
+	if vp > computedDownloaded {
 		computedDownloaded = vp
 	}
 	// Calculate total elapsed time
