@@ -84,11 +84,15 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 		d.activeMu.Unlock()
 
 		var lastErr error
-		var throttledRequeue *types.Task
 		maxRetries := d.Runtime.GetMaxTaskRetries()
 		genericAttempt := 0
 
 		for {
+			if err := ctx.Err(); err != nil {
+				lastErr = err
+				break
+			}
+
 			eligibleHosts := make([]string, 0, len(mirrors))
 			eligibleIndexes := make([]int, 0, len(mirrors))
 			d.soft403Mu.Lock()
@@ -101,16 +105,8 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			}
 			d.soft403Mu.Unlock()
 			if len(eligibleHosts) == 0 {
-				if remaining := d.detachRemainingTask(id, activeTask); remaining != nil && remaining.Length > 0 {
-					queue.Push(*remaining)
-				}
-				if d.State != nil {
-					d.State.ActiveWorkers.Add(-1)
-				}
-				if d.concurrencyGate != nil {
-					d.concurrencyGate.release()
-				}
-				return types.ErrRangeUnsupported
+				lastErr = types.ErrRangeUnsupported
+				break
 			}
 			idx, wait := d.hostLimiter.PickMirror(eligibleHosts, 0, time.Now())
 			currentMirrorIdx = eligibleIndexes[idx]
@@ -120,17 +116,12 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 					break
 				}
 				activeTask.WaitingOnLimiter.Store(true)
-				if !interruptibleSleep(ctx, wait) {
-					activeTask.WaitingOnLimiter.Store(false)
-					if d.State != nil {
-						d.State.ActiveWorkers.Add(-1)
-					}
-					if d.concurrencyGate != nil {
-						d.concurrencyGate.release()
-					}
-					return ctx.Err()
-				}
+				slept := interruptibleSleep(ctx, wait)
 				activeTask.WaitingOnLimiter.Store(false)
+				if !slept {
+					lastErr = ctx.Err()
+					break
+				}
 				// Another response may have extended the shared cooldown.
 				continue
 			}
@@ -163,43 +154,14 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			taskCancel()
 			utils.Debug("Worker %d: Task offset=%d length=%d took %v", id, task.Offset, task.Length, time.Since(taskStart))
 
-			// Disk full: fail immediately — no in-place retry, no mirror rotation,
-			// no residual requeue. Stricter than permanent HTTP.
-			// Stash RemainingTask off-queue so error-path saveStateSnapshot can
-			// still persist the unfinished range after peers are cancelled.
+			// Preserve the disk-full error even if the download was also canceled.
 			if types.IsInsufficientDiskSpace(lastErr) {
-				var stash *types.Task
-				if remaining := d.detachRemainingTask(id, activeTask); remaining != nil {
-					originalEnd := task.Offset + task.Length
-					if remaining.Offset+remaining.Length > originalEnd {
-						remaining.Length = originalEnd - remaining.Offset
-					}
-					if remaining.Length > 0 {
-						stash = remaining
-					}
-				}
-				if stash != nil {
-					d.activeMu.Lock()
-					d.abandonedRemaining = append(d.abandonedRemaining, *stash)
-					d.activeMu.Unlock()
-				}
-				if d.State != nil {
-					d.State.ActiveWorkers.Add(-1)
-				}
-				if d.concurrencyGate != nil {
-					d.concurrencyGate.release()
-				}
-				return lastErr
+				break
 			}
 
-			if ctx.Err() != nil {
-				if d.State != nil {
-					d.State.ActiveWorkers.Add(-1)
-				}
-				if d.concurrencyGate != nil {
-					d.concurrencyGate.release()
-				}
-				return ctx.Err()
+			if err := ctx.Err(); err != nil {
+				lastErr = err
+				break
 			}
 
 			if wasExternallyCancelled && lastErr != nil {
@@ -210,17 +172,6 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
 				utils.Debug("Worker %d: Health check cancelled task, rotating from mirror %s to %s", id, mirrors[(currentMirrorIdx+len(mirrors)-1)%len(mirrors)], mirrors[currentMirrorIdx])
 
-				if remaining := d.detachRemainingTask(id, activeTask); remaining != nil {
-					originalEnd := task.Offset + task.Length
-					if remaining.Offset+remaining.Length > originalEnd {
-						remaining.Length = originalEnd - remaining.Offset
-					}
-					if remaining.Length > 0 {
-						queue.Push(*remaining)
-						utils.Debug("Worker %d: health-cancelled task requeued (remaining: %d bytes from offset %d)",
-							id, remaining.Length, remaining.Offset)
-					}
-				}
 				lastErr = nil
 				break
 			}
@@ -286,11 +237,13 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				remainingBudget := 10*time.Minute - elapsedThrottle
 				if explicit && retryAfter > remainingBudget {
 					d.soft403Mu.Unlock()
-					return fmt.Errorf("throttled with Retry-After %v exceeding remaining budget %v: %w", retryAfter, remainingBudget, types.ErrRetryBudgetExceeded)
+					lastErr = fmt.Errorf("throttled with Retry-After %v exceeding remaining budget %v: %w", retryAfter, remainingBudget, types.ErrRetryBudgetExceeded)
+					break
 				}
 				if elapsedThrottle > 10*time.Minute {
 					d.soft403Mu.Unlock()
-					return fmt.Errorf("no download progress for %v due to sustained rate limiting: %w", elapsedThrottle, types.ErrRetryBudgetExceeded)
+					lastErr = fmt.Errorf("no download progress for %v due to sustained rate limiting: %w", elapsedThrottle, types.ErrRetryBudgetExceeded)
+					break
 				}
 				d.soft403Mu.Unlock()
 
@@ -318,9 +271,6 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				}
 				d.ReportMirrorError(currentURL)
 				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
-				if remaining := d.detachRemainingTask(id, activeTask); remaining != nil && remaining.Length > 0 {
-					throttledRequeue = remaining
-				}
 				lastErr = nil
 				break
 			}
@@ -337,9 +287,6 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 				d.soft403Mu.Unlock()
 				if allUnsupported {
 					break
-				}
-				if remaining := d.detachRemainingTask(id, activeTask); remaining != nil && remaining.Length > 0 {
-					throttledRequeue = remaining
 				}
 				currentMirrorIdx = (currentMirrorIdx + 1) % len(mirrors)
 				lastErr = nil
@@ -367,40 +314,40 @@ func (d *ConcurrentDownloader) worker(ctx context.Context, id int, mirrors []str
 			resumeOnRetryOffset(&task, activeTask)
 		}
 
-		if d.State != nil {
-			d.State.ActiveWorkers.Add(-1)
+		if lastErr == nil {
+			lastErr = ctx.Err()
 		}
-
-		d.activeMu.Lock()
-		delete(d.activeTasks, id)
-		d.activeMu.Unlock()
-		if d.concurrencyGate != nil {
-			d.concurrencyGate.release()
-		}
-
-		if d.completing.Load() {
+		complete := d.finishTask(id, activeTask, queue, totalSize, lastErr != nil)
+		if complete && !types.IsInsufficientDiskSpace(lastErr) {
 			return nil
 		}
-
-		if throttledRequeue != nil {
-			queue.Push(*throttledRequeue)
-			utils.Debug("Worker %d: throttled task requeued (remaining: %d bytes from offset %d)",
-				id, throttledRequeue.Length, throttledRequeue.Offset)
-			continue
-		}
-
 		if lastErr != nil {
-			utils.Debug("Worker %d: task at offset %d failed after %d retries: %v", id, task.Offset, maxRetries, lastErr)
-
-			remain := activeTask.RemainingTask()
-
-			if remain != nil {
-				queue.Push(*remain)
-			}
-
+			utils.Debug("Worker %d: stopped task at offset %d: %v", id, task.Offset, lastErr)
 			return lastErr
 		}
 	}
+}
+
+// finishTask releases a registered task and returns its unfinished bytes to the queue.
+func (d *ConcurrentDownloader) finishTask(id int, active *ActiveTask, queue *TaskQueue, totalSize int64, stopDispatch bool) bool {
+	if stopDispatch {
+		queue.StopDispatch()
+	}
+
+	remaining := d.detachRemainingTask(id, active)
+	complete := d.completing.Load() ||
+		(d.State != nil && d.State.Bytes.VerifiedProgress.Load() >= totalSize)
+	if remaining != nil && !complete {
+		queue.Push(*remaining)
+	}
+
+	if d.State != nil {
+		d.State.ActiveWorkers.Add(-1)
+	}
+	if d.concurrencyGate != nil {
+		d.concurrencyGate.release()
+	}
+	return complete
 }
 
 // detachRemainingTask removes an active task from the steal set and snapshots
