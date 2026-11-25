@@ -519,7 +519,9 @@ func (d *ConcurrentDownloader) setupTasks(destPath string, fileSize, chunkSize i
 		return nil, fmt.Errorf("failed to preallocate file: %w", err)
 	}
 	if d.State != nil {
+		d.State.Bitmap.Reset()
 		d.State.Bytes.Downloaded.Store(0)
+		d.State.Bytes.VerifiedProgress.Store(0)
 		d.State.SyncSessionStart()
 	}
 	if d.Runtime.SequentialDownload {

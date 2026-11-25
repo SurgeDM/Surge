@@ -101,7 +101,7 @@ func TestHandlePause_UsesLiveRateLimitFromState(t *testing.T) {
 	}
 }
 
-func TestSetupTasks_NewDownload(t *testing.T) {
+func TestSetupTasks_NewDownloadClearsStaleProgress(t *testing.T) {
 	tmpDir := testutil.SetupStateDB(t)
 	cleanup := func() {}
 	defer cleanup()
@@ -118,6 +118,9 @@ func TestSetupTasks_NewDownload(t *testing.T) {
 	defer func() { _ = f.Close() }()
 
 	state := progress.New("test-id", fileSize)
+	state.InitBitmap(fileSize, chunkSize)
+	state.UpdateChunkStatus(0, 600, types.ChunkCompleted)
+	state.Bytes.Downloaded.Store(600)
 	downloader := &ConcurrentDownloader{
 		ID:      "test-id",
 		State:   state,
@@ -131,6 +134,18 @@ func TestSetupTasks_NewDownload(t *testing.T) {
 
 	if len(tasks) != 2 {
 		t.Errorf("Expected 2 tasks, got %d", len(tasks))
+	}
+	if downloaded, verified := state.Bytes.Downloaded.Load(), state.Bytes.VerifiedProgress.Load(); downloaded != 0 || verified != 0 {
+		t.Fatalf("fresh download retained byte counts: downloaded=%d, verified=%d", downloaded, verified)
+	}
+	_, _, _, _, chunkProgress := state.GetBitmapSnapshot(true)
+	if !slices.Equal(chunkProgress, []int64{0, 0}) || len(state.Bitmap.GetCompletedRanges()) != 0 {
+		t.Fatalf("fresh download retained chunk progress: %v", chunkProgress)
+	}
+	for i := range chunkProgress {
+		if got := state.GetChunkState(i); got != types.ChunkPending {
+			t.Fatalf("chunk %d has status %v, want pending", i, got)
+		}
 	}
 }
 
