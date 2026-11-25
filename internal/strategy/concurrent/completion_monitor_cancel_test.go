@@ -100,7 +100,7 @@ func TestRunCompletionMonitor_IdleCompletionStillCloses(t *testing.T) {
 	}
 }
 
-func TestRunCompletionMonitor_VerifiedProgressCancelsActivesAndDrains(t *testing.T) {
+func TestRunCompletionMonitor_VerifiedProgressCancelsActivesAndStopsDispatch(t *testing.T) {
 	const fileSize int64 = 1024
 	queue := NewTaskQueue()
 	queue.Push(types.Task{Offset: 0, Length: 100})
@@ -143,8 +143,11 @@ func TestRunCompletionMonitor_VerifiedProgressCancelsActivesAndDrains(t *testing
 	default:
 		t.Fatal("active task 1 was not cancelled")
 	}
-	if remaining := queue.DrainRemaining(); len(remaining) != 0 {
-		t.Fatalf("VP path left %d queued tasks: %+v", len(remaining), remaining)
+	if task, ok := queue.Pop(); ok {
+		t.Fatalf("completion allowed a worker to take a queued task: %+v", task)
+	}
+	if remaining := queue.DrainRemaining(); len(remaining) != 2 {
+		t.Fatalf("completion left %d tasks for the final drain, want 2", len(remaining))
 	}
 	if !d.completing.Load() {
 		t.Fatal("completing was not set on the VP path")

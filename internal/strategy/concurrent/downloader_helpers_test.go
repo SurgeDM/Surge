@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/SurgeDM/Surge/internal/progress"
@@ -27,10 +28,9 @@ func TestHandlePause_Normal(t *testing.T) {
 		Runtime: &types.RuntimeConfig{},
 	}
 
-	queue := NewTaskQueue()
-	queue.Push(types.Task{Offset: 500, Length: 500})
+	remaining := []types.Task{{Offset: 500, Length: 500}}
 
-	err := downloader.handlePause(destPath, fileSize, queue, nil)
+	err := downloader.handlePause(destPath, fileSize, remaining, nil)
 	if !errors.Is(err, types.ErrPaused) {
 		t.Fatalf("Expected ErrPaused, got %v", err)
 	}
@@ -49,10 +49,9 @@ func TestHandlePause_PersistsWithoutLifecycleConsumer(t *testing.T) {
 		ProgressChan: progressCh,
 		Runtime:      &types.RuntimeConfig{},
 	}
-	queue := NewTaskQueue()
-	queue.Push(types.Task{Offset: 500, Length: 500})
+	remaining := []types.Task{{Offset: 500, Length: 500}}
 
-	if err := download.handlePause(destPath, 1000, queue, nil); !errors.Is(err, types.ErrPaused) {
+	if err := download.handlePause(destPath, 1000, remaining, nil); !errors.Is(err, types.ErrPaused) {
 		t.Fatalf("handlePause = %v, want ErrPaused", err)
 	}
 	if snapshot := state.TakePendingResumeState(); snapshot == nil {
@@ -80,10 +79,9 @@ func TestHandlePause_UsesLiveRateLimitFromState(t *testing.T) {
 		RateLimitSet: false,
 	}
 
-	queue := NewTaskQueue()
-	queue.Push(types.Task{Offset: 500, Length: 500})
+	remaining := []types.Task{{Offset: 500, Length: 500}}
 
-	err := downloader.handlePause(destPath, fileSize, queue, nil)
+	err := downloader.handlePause(destPath, fileSize, remaining, nil)
 	if !errors.Is(err, types.ErrPaused) {
 		t.Fatalf("Expected ErrPaused, got %v", err)
 	}
@@ -247,18 +245,17 @@ func TestSetupTasks_BitmapRestoration(t *testing.T) {
 	}
 }
 
-func TestSaveStateSnapshot_PersistsActiveAndQueuedTasks(t *testing.T) {
+func TestSaveStateSnapshot_PersistsReturnedAndStolenRangesOnce(t *testing.T) {
 	tmpDir := testutil.SetupStateDB(t)
-	cleanup := func() {}
-	defer cleanup()
 
-	fileSize := int64(1000)
+	const fileSize = 16 * types.AlignSize
+	const downloaded = 4 * types.AlignSize
 	destPath := filepath.Join(tmpDir, "snapshot.bin")
 	state := progress.New("test-id", fileSize)
 	downloader := &ConcurrentDownloader{
 		ID:          "test-id",
 		State:       state,
-		Runtime:     &types.RuntimeConfig{},
+		Runtime:     &types.RuntimeConfig{MinChunkSize: types.AlignSize},
 		URL:         "http://example.com/snapshot.bin",
 		activeTasks: make(map[int]*ActiveTask),
 	}
@@ -274,18 +271,25 @@ func TestSaveStateSnapshot_PersistsActiveAndQueuedTasks(t *testing.T) {
 	}
 
 	queue := NewTaskQueue()
-
-	queue.Push(types.Task{Offset: 500, Length: 500})
-
-	// Simulate an active worker that has advanced to 600
-	active := &ActiveTask{}
-	active.CurrentOffset.Store(600)
-	active.StopAt.Store(1000)
-
+	active := &ActiveTask{Task: types.Task{Length: fileSize}}
+	active.CurrentOffset.Store(downloaded)
+	active.StopAt.Store(fileSize)
 	downloader.activeTasks[0] = active
+	state.ActiveWorkers.Add(1)
+	if !downloader.StealWork(queue) {
+		t.Fatal("balancer did not split the active task")
+	}
+	if downloader.finishTask(0, active, queue, fileSize, true) {
+		t.Fatal("unfinished task reported complete")
+	}
+	if len(downloader.activeTasks) != 0 || state.ActiveWorkers.Load() != 0 {
+		t.Fatal("worker cleanup left the task registered")
+	}
+	if task, ok := queue.Pop(); ok {
+		t.Fatalf("worker received a task after dispatch stopped: %+v", task)
+	}
 
-	// Run saveStateSnapshot directly (false to not emit EventPaused, just write to store)
-	err := downloader.saveStateSnapshot(destPath, fileSize, queue, nil, false)
+	err := downloader.saveStateSnapshot(destPath, fileSize, queue.DrainRemaining(), nil, false)
 	if err != nil {
 		t.Fatalf("saveStateSnapshot failed: %v", err)
 	}
@@ -296,13 +300,16 @@ func TestSaveStateSnapshot_PersistsActiveAndQueuedTasks(t *testing.T) {
 		t.Fatalf("failed to load saved state: %v", err)
 	}
 
-	if len(saved.Tasks) != 2 {
-		t.Fatalf("Expected active and queued tasks, got %d", len(saved.Tasks))
+	want := []types.Task{
+		{Offset: 10 * types.AlignSize, Length: 6 * types.AlignSize},
+		{Offset: downloaded, Length: 6 * types.AlignSize},
 	}
-	if saved.Tasks[0].Offset != 600 || saved.Tasks[0].Length != 400 {
-		t.Errorf("active remaining task = %+v, want offset=600 length=400", saved.Tasks[0])
+	if !slices.Equal(saved.Tasks, want) {
+		t.Errorf("saved tasks = %+v, want %+v", saved.Tasks, want)
 	}
-
+	if saved.Downloaded != downloaded {
+		t.Errorf("saved downloaded bytes = %d, want %d", saved.Downloaded, downloaded)
+	}
 }
 
 func TestResumeRebuildsBitmapForCurrentConnectionLimit(t *testing.T) {
