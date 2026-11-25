@@ -40,7 +40,7 @@ export default function SettingsView() {
   const [isConnecting, setIsConnecting] = createSignal(false);
   const [connectionValid, setConnectionValid] = createSignal(false);
 
-  const extensionVersion = browser.runtime.getManifest().version;
+  const extensionVersion = __SURGE_LOCAL_COMMIT__ || `v${browser.runtime.getManifest().version}`;
   const isFirefox = (browser.runtime.getURL as (path?: string) => string)('').startsWith('moz-extension:');
 
   const makeStore = () => ({
@@ -300,7 +300,7 @@ export default function SettingsView() {
       <div class="settings-group">
         <div class="settings-group-header">
           <h3 class="settings-group-title">Support</h3>
-          <div class="version-badge">v{extensionVersion}</div>
+          <div class="version-badge">{extensionVersion}</div>
         </div>
         <a
           href="https://github.com/SurgeDM/Surge"

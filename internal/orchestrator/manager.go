@@ -345,8 +345,12 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 
 	probeResult, probeErr := probing.ProbeServerWithProxy(ctx, req.URL, req.Filename, req.Headers, settings.ToRuntimeConfig())
 	if probeErr != nil {
-		// Distinguish between terminal client errors (invalid scheme, etc.) and
-		// server-side rejections or timeouts that we can optimistically ignore.
+		var networkErr net.Error
+		if errors.Is(probeErr, context.Canceled) || (errors.As(probeErr, &networkErr) && networkErr.Timeout()) {
+			return "", "", probeErr
+		}
+
+		// Distinguish malformed requests from servers that reject a probe.
 		var urlErr *neturl.Error
 		var isTerminal bool
 		if errors.As(probeErr, &urlErr) {
@@ -362,8 +366,8 @@ func (mgr *LifecycleManager) enqueueNew(ctx context.Context, req *DownloadReques
 
 		utils.Debug("Lifecycle: Probe failed: %v - enqueueing with optimistic fallback metadata\n", probeErr)
 		// Probe failures are non-fatal for known server-side issues (403/405/500) or
-		// network timeouts: some servers reject lightweight probe requests but still
-		// serve the actual download correctly.
+		// similar responses: some servers reject lightweight probe requests but
+		// still serve the actual download correctly.
 		probeResult = &probing.ProbeResult{SupportsRange: true}
 		if req.Filename != "" {
 			probeResult.Filename = req.Filename

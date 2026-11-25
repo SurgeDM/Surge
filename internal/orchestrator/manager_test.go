@@ -98,6 +98,34 @@ func TestLifecycleManager_EnqueueSuccess(t *testing.T) {
 	}
 }
 
+func TestLifecycleManager_EnqueueRejectsProbeTimeout(t *testing.T) {
+	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-r.Context().Done()
+	}))
+	defer ts.Close()
+
+	pool := scheduler.New(make(chan types.DownloadEvent, 10), 1)
+	mgr := NewLifecycleManager(pool, NewEventBus(), nil)
+	defer mgr.Shutdown()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+
+	destDir := t.TempDir()
+	id, _, err := mgr.Enqueue(ctx, &DownloadRequest{
+		URL:      ts.URL + "/archive.zip",
+		Filename: "archive.zip",
+		Path:     destDir,
+	})
+	if id != "" || !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("expected a probe timeout without a queued ID, got id=%q, err=%v", id, err)
+	}
+	files, err := os.ReadDir(destDir)
+	if err != nil || len(files) != 0 {
+		t.Fatalf("expected an empty destination after the probe timeout, got files=%v, err=%v", files, err)
+	}
+}
+
 func TestLifecycleManager_EnqueueWithID(t *testing.T) {
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {}))
 	defer ts.Close()
