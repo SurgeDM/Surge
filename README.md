@@ -4,7 +4,6 @@
 
 **Blazing fast TUI download manager built in Go for power users**
 
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/SurgeDM/Surge)
 [![Release](https://img.shields.io/github/v/release/SurgeDM/Surge?style=flat-square&color=blue)](https://github.com/SurgeDM/Surge/releases)
 [![Go Version](https://img.shields.io/github/go-mod/go-version/SurgeDM/Surge?style=flat-square&color=cyan)](go.mod)
 [![License](https://img.shields.io/badge/License-MIT-grey.svg?style=flat-square)](LICENSE)
