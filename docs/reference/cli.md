@@ -42,7 +42,7 @@ See [CLI output contract](cli-output.md) for fields, failure handling, and schem
 
 | Flag | Meaning |
 | --- | --- |
-| `--batch`, `-b` | Read URLs from a file, one per line. |
+| `--batch`, `-b` | Read URLs from a `.txt`, `.csv`, or `.json` file. |
 | `--output`, `-o` | Choose the download directory; defaults to the current directory. |
 | `--port`, `-p` | Choose the listening port; the root command defaults to 8080 or the first available port. |
 | `--no-resume` | Do not resume paused downloads at startup. |

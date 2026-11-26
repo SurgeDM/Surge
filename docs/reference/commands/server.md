@@ -36,8 +36,8 @@ Use a batch file for longer lists:
 surge server --batch urls.txt --output /srv/downloads
 ```
 
-`urls.txt` contains one URL per line. The output directory defaults to the
-directory where you start Surge.
+Batch files may be `.txt`, `.csv`, or `.json`. Text files contain one URL per
+line. The output directory defaults to the directory where you start Surge.
 
 ## Choose a port and token
 

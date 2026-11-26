@@ -337,6 +337,194 @@ func TestReadURLsFromFile_DedupesTrailingSlashVariants(t *testing.T) {
 	}
 }
 
+func TestReadURLsFromFile_CSV(t *testing.T) {
+	tmpDir := t.TempDir()
+	urlFile := filepath.Join(tmpDir, "urls.csv")
+	content := "name,url\n" +
+		"one,https://example.com/file1.zip\n" +
+		"two,https://example.com/file2.zip/\n" +
+		"duplicate,https://example.com/file2.zip\n"
+	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write url file: %v", err)
+	}
+
+	urls, err := utils.ReadURLsFromFile(urlFile)
+	if err != nil {
+		t.Fatalf("ReadURLsFromFile returned error: %v", err)
+	}
+	want := []string{
+		"https://example.com/file1.zip",
+		"https://example.com/file2.zip/",
+	}
+	if len(urls) != len(want) {
+		t.Fatalf("expected %d URLs, got %d: %v", len(want), len(urls), urls)
+	}
+	for i := range want {
+		if urls[i] != want[i] {
+			t.Errorf("expected URL %d to be %q, got %q", i, want[i], urls[i])
+		}
+	}
+}
+
+func TestReadURLsFromFile_CSVWithoutHeader(t *testing.T) {
+	tmpDir := t.TempDir()
+	urlFile := filepath.Join(tmpDir, "urls.csv")
+	content := "first,https://example.com/file1.zip\n" +
+		"https://example.com/file2.zip,second\n" +
+		"example.com/file3.zip\n" +
+		"third,HTTPS://example.com/file4.zip\n" +
+		"HtTpS://example.com/file5.zip,fifth\n"
+	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write url file: %v", err)
+	}
+
+	urls, err := utils.ReadURLsFromFile(urlFile)
+	if err != nil {
+		t.Fatalf("ReadURLsFromFile returned error: %v", err)
+	}
+	want := []string{
+		"https://example.com/file1.zip",
+		"https://example.com/file2.zip",
+		"example.com/file3.zip",
+		"HTTPS://example.com/file4.zip",
+		"HtTpS://example.com/file5.zip",
+	}
+	if len(urls) != len(want) {
+		t.Fatalf("expected %d URLs, got %d: %v", len(want), len(urls), urls)
+	}
+	for i := range want {
+		if urls[i] != want[i] {
+			t.Errorf("expected URL %d to be %q, got %q", i, want[i], urls[i])
+		}
+	}
+}
+
+func TestReadURLsFromFile_CSVMissingURLColumn(t *testing.T) {
+	urlFile := filepath.Join(t.TempDir(), "urls.csv")
+	content := "name,url,description\n" +
+		"one,https://example.com/file1.zip,first\n" +
+		"short-row\n"
+	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write url file: %v", err)
+	}
+
+	_, err := utils.ReadURLsFromFile(urlFile)
+	if err == nil {
+		t.Fatal("expected missing URL column to return an error")
+	}
+	if !strings.Contains(err.Error(), "row 3") || !strings.Contains(err.Error(), "URL column 2") {
+		t.Fatalf("expected row and column details in error, got %v", err)
+	}
+}
+
+func TestReadURLsFromFile_JSONPrecedence(t *testing.T) {
+	urlFile := filepath.Join(t.TempDir(), "urls.json")
+	content := `{
+		"links": [
+			{"link": "https://example.com/link-field.zip", "url": "https://example.com/url-field.zip"},
+			"https://example.com/links.zip"
+		],
+		"downloads": ["https://example.com/downloads.zip"],
+		"urls": ["https://example.com/urls.zip"]
+	}`
+	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write url file: %v", err)
+	}
+
+	urls, err := utils.ReadURLsFromFile(urlFile)
+	if err != nil {
+		t.Fatalf("ReadURLsFromFile returned error: %v", err)
+	}
+	want := []string{
+		"https://example.com/urls.zip",
+		"https://example.com/url-field.zip",
+		"https://example.com/links.zip",
+		"https://example.com/downloads.zip",
+	}
+	if len(urls) != len(want) {
+		t.Fatalf("expected %d URLs, got %d: %v", len(want), len(urls), urls)
+	}
+	for i := range want {
+		if urls[i] != want[i] {
+			t.Errorf("expected URL %d to be %q, got %q", i, want[i], urls[i])
+		}
+	}
+}
+
+func TestReadURLsFromFile_JSON(t *testing.T) {
+	tmpDir := t.TempDir()
+	urlFile := filepath.Join(tmpDir, "urls.json")
+	content := `{
+		"urls": [
+			"https://example.com/file1.zip",
+			{"url": "https://example.com/file2.zip/"},
+			{"download_url": "https://example.com/file2.zip"},
+			{"url": "", "link": " \t", "download_url": "https://example.com/file3.zip"}
+		]
+	}`
+	if err := os.WriteFile(urlFile, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write url file: %v", err)
+	}
+
+	urls, err := utils.ReadURLsFromFile(urlFile)
+	if err != nil {
+		t.Fatalf("ReadURLsFromFile returned error: %v", err)
+	}
+	want := []string{
+		"https://example.com/file1.zip",
+		"https://example.com/file2.zip/",
+		"https://example.com/file3.zip",
+	}
+	if len(urls) != len(want) {
+		t.Fatalf("expected %d URLs, got %d: %v", len(want), len(urls), urls)
+	}
+	for i := range want {
+		if urls[i] != want[i] {
+			t.Errorf("expected URL %d to be %q, got %q", i, want[i], urls[i])
+		}
+	}
+}
+
+func TestReadURLsFromFile_UTF8BOM(t *testing.T) {
+	tests := []struct {
+		name    string
+		file    string
+		content string
+	}{
+		{name: "text", file: "urls.txt", content: "\ufeffhttps://example.com/file1.zip\n"},
+		{name: "csv", file: "urls.csv", content: "\ufeffurl\nhttps://example.com/file1.zip\n"},
+		{name: "json", file: "urls.json", content: "\ufeff[\"https://example.com/file1.zip\"]"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			urlFile := filepath.Join(t.TempDir(), tc.file)
+			if err := os.WriteFile(urlFile, []byte(tc.content), 0o644); err != nil {
+				t.Fatalf("failed to write url file: %v", err)
+			}
+
+			urls, err := utils.ReadURLsFromFile(urlFile)
+			if err != nil {
+				t.Fatalf("ReadURLsFromFile returned error: %v", err)
+			}
+			if len(urls) != 1 || urls[0] != "https://example.com/file1.zip" {
+				t.Fatalf("expected one BOM-free URL, got %v", urls)
+			}
+		})
+	}
+}
+
+func TestReadURLsFromFile_JSONInvalid(t *testing.T) {
+	urlFile := filepath.Join(t.TempDir(), "urls.json")
+	if err := os.WriteFile(urlFile, []byte(`{"urls": [`), 0o644); err != nil {
+		t.Fatalf("failed to write url file: %v", err)
+	}
+
+	if _, err := utils.ReadURLsFromFile(urlFile); err == nil {
+		t.Fatal("expected invalid JSON to return an error")
+	}
+}
+
 func TestReadURLsFromFile_LongLine(t *testing.T) {
 	tmpDir := t.TempDir()
 	urlFile := filepath.Join(tmpDir, "urls.txt")

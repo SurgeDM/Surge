@@ -18,7 +18,7 @@ func newAddCommand() *cobra.Command {
 		Long:  "Add URLs to a running Surge instance and report acceptance receipts, not completed downloads.",
 		RunE:  runAdd,
 	}
-	command.Flags().StringP("batch", "b", "", "File containing URLs to download (one per line)")
+	command.Flags().StringP("batch", "b", "", "File containing URLs to download (.txt, .csv, or .json)")
 	command.Flags().StringP("output", "o", "", "Output directory (defaults to current working directory)")
 	command.Flags().Bool("confirm", false, "Request confirmation in the running TUI before starting downloads")
 	command.Flags().String("output-version", "", "Use a versioned JSON contract (supported: 1)")
