@@ -14,6 +14,16 @@ import (
 	"github.com/SurgeDM/Surge/internal/types"
 )
 
+func openSnapshotTestFile(t *testing.T, destPath string) *os.File {
+	t.Helper()
+	file, err := os.Create(destPath + types.IncompleteSuffix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = file.Close() })
+	return file
+}
+
 func TestHandlePause_Normal(t *testing.T) {
 	tmpDir := testutil.SetupStateDB(t)
 	cleanup := func() {}
@@ -30,7 +40,7 @@ func TestHandlePause_Normal(t *testing.T) {
 
 	remaining := []types.Task{{Offset: 500, Length: 500}}
 
-	err := downloader.handlePause(destPath, fileSize, remaining, nil)
+	err := downloader.handlePause(openSnapshotTestFile(t, destPath), destPath, fileSize, remaining, nil)
 	if !errors.Is(err, types.ErrPaused) {
 		t.Fatalf("Expected ErrPaused, got %v", err)
 	}
@@ -51,7 +61,7 @@ func TestHandlePause_PersistsWithoutLifecycleConsumer(t *testing.T) {
 	}
 	remaining := []types.Task{{Offset: 500, Length: 500}}
 
-	if err := download.handlePause(destPath, 1000, remaining, nil); !errors.Is(err, types.ErrPaused) {
+	if err := download.handlePause(openSnapshotTestFile(t, destPath), destPath, 1000, remaining, nil); !errors.Is(err, types.ErrPaused) {
 		t.Fatalf("handlePause = %v, want ErrPaused", err)
 	}
 	if snapshot := state.TakePendingResumeState(); snapshot == nil {
@@ -81,7 +91,7 @@ func TestHandlePause_UsesLiveRateLimitFromState(t *testing.T) {
 
 	remaining := []types.Task{{Offset: 500, Length: 500}}
 
-	err := downloader.handlePause(destPath, fileSize, remaining, nil)
+	err := downloader.handlePause(openSnapshotTestFile(t, destPath), destPath, fileSize, remaining, nil)
 	if !errors.Is(err, types.ErrPaused) {
 		t.Fatalf("Expected ErrPaused, got %v", err)
 	}
@@ -101,7 +111,7 @@ func TestHandlePause_UsesLiveRateLimitFromState(t *testing.T) {
 	}
 }
 
-func TestSetupTasks_NewDownload(t *testing.T) {
+func TestSetupTasks_NewDownloadClearsStaleProgress(t *testing.T) {
 	tmpDir := testutil.SetupStateDB(t)
 	cleanup := func() {}
 	defer cleanup()
@@ -118,6 +128,9 @@ func TestSetupTasks_NewDownload(t *testing.T) {
 	defer func() { _ = f.Close() }()
 
 	state := progress.New("test-id", fileSize)
+	state.InitBitmap(fileSize, chunkSize)
+	state.UpdateChunkStatus(0, 600, types.ChunkCompleted)
+	state.Bytes.Downloaded.Store(600)
 	downloader := &ConcurrentDownloader{
 		ID:      "test-id",
 		State:   state,
@@ -131,6 +144,18 @@ func TestSetupTasks_NewDownload(t *testing.T) {
 
 	if len(tasks) != 2 {
 		t.Errorf("Expected 2 tasks, got %d", len(tasks))
+	}
+	if downloaded, verified := state.Bytes.Downloaded.Load(), state.Bytes.VerifiedProgress.Load(); downloaded != 0 || verified != 0 {
+		t.Fatalf("fresh download retained byte counts: downloaded=%d, verified=%d", downloaded, verified)
+	}
+	_, _, _, _, chunkProgress := state.GetBitmapSnapshot(true)
+	if !slices.Equal(chunkProgress, []int64{0, 0}) || len(state.Bitmap.GetCompletedRanges()) != 0 {
+		t.Fatalf("fresh download retained chunk progress: %v", chunkProgress)
+	}
+	for i := range chunkProgress {
+		if got := state.GetChunkState(i); got != types.ChunkPending {
+			t.Fatalf("chunk %d has status %v, want pending", i, got)
+		}
 	}
 }
 
@@ -289,7 +314,7 @@ func TestSaveStateSnapshot_PersistsReturnedAndStolenRangesOnce(t *testing.T) {
 		t.Fatalf("worker received a task after dispatch stopped: %+v", task)
 	}
 
-	err := downloader.saveStateSnapshot(destPath, fileSize, queue.DrainRemaining(), nil, false)
+	err := downloader.saveStateSnapshot(openSnapshotTestFile(t, destPath), destPath, fileSize, queue.DrainRemaining(), nil, false)
 	if err != nil {
 		t.Fatalf("saveStateSnapshot failed: %v", err)
 	}

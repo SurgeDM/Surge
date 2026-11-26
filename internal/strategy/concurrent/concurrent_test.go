@@ -888,3 +888,106 @@ func TestConcurrentDownloader_PauseDuringRetryBackoff(t *testing.T) {
 		t.Errorf("Expected 0 bytes downloaded in saved state, but got %d (progress jump bug!)", savedState.Downloaded)
 	}
 }
+
+func TestConcurrentDownloader_PausePreservesDiskFullError(t *testing.T) {
+	const fileSize = 4
+	const id = "pause-disk-full"
+	destPath := filepath.Join(testutil.SetupStateDB(t), "disk-full.bin")
+	if err := os.WriteFile(destPath+types.IncompleteSuffix, nil, 0600); err != nil {
+		t.Fatal(err)
+	}
+	server := testutil.NewMockServerT(t, testutil.WithFileSize(fileSize), testutil.WithRangeSupport(true))
+	defer server.Close()
+	state := progress.New(id, fileSize)
+	events := make(chan types.DownloadEvent, 8)
+	d := NewConcurrentDownloader(id, events, state, &types.RuntimeConfig{Workers: 1})
+
+	originalWriteAt := writeAtFn
+	t.Cleanup(func() { writeAtFn = originalWriteAt })
+	writeAtFn = func(_ *os.File, _ []byte, _ int64) (int, error) {
+		state.Pause()
+		return 0, types.ErrInsufficientDiskSpace
+	}
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	err := d.Download(ctx, server.URL(), nil, nil, destPath, fileSize)
+	if !types.IsInsufficientDiskSpace(err) || errors.Is(err, types.ErrPaused) {
+		t.Fatalf("Download returned %v, want a disk-full error", err)
+	}
+	close(events)
+	for event := range events {
+		if event.Type == types.EventPaused {
+			t.Fatal("disk-full failure emitted EventPaused")
+		}
+	}
+	snapshot := state.TakePendingResumeState()
+	if snapshot == nil || len(snapshot.Tasks) != 1 || snapshot.Tasks[0] != (types.Task{Length: fileSize}) {
+		t.Fatalf("missing unfinished range in the failure snapshot: %+v", snapshot)
+	}
+}
+
+func TestConcurrentDownloader_PauseSyncFailureKeepsPreviousCheckpoint(t *testing.T) {
+	const fileSize, downloaded = 8, 4
+	const id = "pause-sync-failure"
+	tmpDir := testutil.SetupStateDB(t)
+	destPath := filepath.Join(tmpDir, "sync-failure.bin")
+	if _, err := testutil.CreateSurgeFile(tmpDir, filepath.Base(destPath), fileSize, downloaded); err != nil {
+		t.Fatal(err)
+	}
+	server := testutil.NewHTTPServerT(t, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Range", "bytes 4-7/8")
+		w.WriteHeader(http.StatusPartialContent)
+		_, _ = w.Write([]byte{4, 5})
+		w.(http.Flusher).Flush()
+		<-r.Context().Done()
+	}))
+	defer server.Close()
+	remaining := types.Task{Offset: downloaded, Length: fileSize - downloaded}
+	checkpoint := types.DownloadRecord{
+		ID: id, URL: server.URL, DestPath: destPath, TotalSize: fileSize,
+		Downloaded: downloaded, Tasks: []types.Task{remaining},
+	}
+	testutil.SeedMasterList(t, checkpoint)
+	if err := store.SaveStateWithOptions(server.URL, destPath, &checkpoint, store.SaveStateOptions{SkipFileHash: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	state := progress.New(id, fileSize)
+	events := make(chan types.DownloadEvent, 8)
+	d := NewConcurrentDownloader(id, events, state, &types.RuntimeConfig{Workers: 1, WorkerBufferSize: 2})
+	originalWriteAt, originalSync := writeAtFn, syncFileFn
+	t.Cleanup(func() { writeAtFn, syncFileFn = originalWriteAt, originalSync })
+	writeAtFn = func(file *os.File, data []byte, offset int64) (int, error) {
+		n, err := originalWriteAt(file, data, offset)
+		state.Pause()
+		return n, err
+	}
+	syncErr := errors.New("injected file sync error")
+	syncFileFn = func(*os.File) error { return syncErr }
+
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	if err := d.Download(ctx, server.URL, nil, nil, destPath, fileSize); !errors.Is(err, syncErr) || errors.Is(err, types.ErrPaused) {
+		t.Fatalf("Download returned %v, want the sync error", err)
+	}
+	if verified := state.Bytes.VerifiedProgress.Load(); verified <= downloaded || verified >= fileSize {
+		t.Fatalf("expected new partial progress before the sync failure, got %d", verified)
+	}
+	if pending := state.TakePendingResumeState(); pending != nil {
+		t.Fatalf("sync failure published a pending snapshot: %+v", pending)
+	}
+	close(events)
+	for event := range events {
+		if event.Type == types.EventPaused {
+			t.Fatal("sync failure emitted EventPaused")
+		}
+	}
+	saved, err := store.LoadState(server.URL, destPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved == nil || saved.Downloaded != downloaded || len(saved.Tasks) != 1 || saved.Tasks[0] != remaining {
+		t.Fatalf("sync failure replaced the previous checkpoint: %+v", saved)
+	}
+}

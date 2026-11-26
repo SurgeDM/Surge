@@ -1540,6 +1540,7 @@ func TestUpdate_TerminalEventsClearTransferTransitions(t *testing.T) {
 	}{
 		{"complete", types.DownloadEvent{Type: types.EventComplete, Total: 100}, "Completed"},
 		{"error", types.DownloadEvent{Type: types.EventError, Err: errors.New("transfer failed")}, "Error"},
+		{"disk full", types.DownloadEvent{Type: types.EventError, Err: types.ErrInsufficientDiskSpace}, "Error"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			d := NewDownloadModel("job", "", "file.bin", 100)
