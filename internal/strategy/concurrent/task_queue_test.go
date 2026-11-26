@@ -67,6 +67,39 @@ func TestTaskQueue_Close(t *testing.T) {
 	}
 }
 
+func TestTaskQueue_StopDispatchWakesWorkersAndPreservesReturnedTasks(t *testing.T) {
+	q := NewTaskQueue()
+	defer q.StopDispatch()
+	popped := make(chan bool, 1)
+	go func() {
+		_, ok := q.Pop()
+		popped <- ok
+	}()
+
+	select {
+	case <-q.WorkerIdleCh():
+	case <-time.After(time.Second):
+		t.Fatal("worker did not wait for a task")
+	}
+	q.StopDispatch()
+	task := types.Task{Offset: 10, Length: 100}
+	q.Push(task)
+
+	select {
+	case ok := <-popped:
+		if ok {
+			t.Fatal("worker got a task after dispatch stopped")
+		}
+	case <-time.After(time.Second):
+		t.Fatal("stopping dispatch did not wake the worker")
+	}
+
+	remaining := q.DrainRemaining()
+	if len(remaining) != 1 || remaining[0] != task {
+		t.Fatalf("remaining tasks = %+v, want [%+v]", remaining, task)
+	}
+}
+
 func TestTaskQueue_DrainRemaining(t *testing.T) {
 	q := NewTaskQueue()
 

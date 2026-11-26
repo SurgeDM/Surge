@@ -9,14 +9,15 @@ import (
 
 // TaskQueue is a thread-safe work-stealing queue
 type TaskQueue struct {
-	tasks       []types.Task
-	head        int
-	mu          sync.Mutex
-	cond        *sync.Cond
-	done        bool
-	idleWorkers atomic.Int64 // Atomic counter for idle workers
-	waiting     atomic.Int64 // Number of workers currently waiting on cond
-	size        atomic.Int64 // Queue size to avoid lock contention in Len callers
+	tasks           []types.Task
+	head            int
+	mu              sync.Mutex
+	cond            *sync.Cond
+	done            bool
+	dispatchStopped bool
+	idleWorkers     atomic.Int64 // Atomic counter for idle workers
+	waiting         atomic.Int64 // Number of workers currently waiting on cond
+	size            atomic.Int64 // Queue size to avoid lock contention in Len callers
 	// workerIdleCh is written (non-blocking) whenever a worker transitions to idle.
 	// Consumers (e.g. the balancer) can select on WorkerIdleCh() for zero-latency
 	// notification instead of polling on a fixed ticker.
@@ -79,7 +80,7 @@ func (q *TaskQueue) Pop() (types.Task, bool) {
 		q.idleWorkers.Add(-1)
 	}
 
-	if len(q.tasks) == q.head {
+	if q.dispatchStopped || len(q.tasks) == q.head {
 		return types.Task{}, false
 	}
 
@@ -101,6 +102,15 @@ func (q *TaskQueue) Close() {
 	q.mu.Unlock()
 }
 
+// StopDispatch wakes workers and preserves all queued tasks for DrainRemaining.
+func (q *TaskQueue) StopDispatch() {
+	q.mu.Lock()
+	q.dispatchStopped = true
+	q.done = true
+	q.cond.Broadcast()
+	q.mu.Unlock()
+}
+
 func (q *TaskQueue) Len() int {
 	return int(q.size.Load())
 }
@@ -114,12 +124,11 @@ func (q *TaskQueue) DrainRemaining() []types.Task {
 	q.mu.Lock()
 	defer q.mu.Unlock()
 
-	if q.head >= len(q.tasks) {
-		return nil
+	var remaining []types.Task
+	if q.head < len(q.tasks) {
+		remaining = make([]types.Task, len(q.tasks)-q.head)
+		copy(remaining, q.tasks[q.head:])
 	}
-
-	remaining := make([]types.Task, len(q.tasks)-q.head)
-	copy(remaining, q.tasks[q.head:])
 	q.tasks = nil
 	q.head = 0
 	q.size.Store(0)

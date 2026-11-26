@@ -25,8 +25,7 @@ func TestHandlePause_RemainingZeroButVPLessThanFileSize_SavesStateNotFinalize(t 
 		Runtime: &types.RuntimeConfig{},
 	}
 
-	queue := NewTaskQueue()
-	err := d.handlePause(destPath, fileSize, queue, nil)
+	err := d.handlePause(destPath, fileSize, nil, nil)
 	if !errors.Is(err, types.ErrPaused) {
 		t.Fatalf("expected ErrPaused (save state for resume), got %v", err)
 	}
@@ -35,7 +34,7 @@ func TestHandlePause_RemainingZeroButVPLessThanFileSize_SavesStateNotFinalize(t 
 	}
 }
 
-func TestHandlePause_RemainingZeroAndVPEqualsFileSize_Finalizes(t *testing.T) {
+func TestHandlePause_VPEqualsFileSize_FinalizesDespiteLeftoverTasks(t *testing.T) {
 	tmpDir, cleanup := initTestState(t)
 	defer cleanup()
 
@@ -50,7 +49,8 @@ func TestHandlePause_RemainingZeroAndVPEqualsFileSize_Finalizes(t *testing.T) {
 		Runtime: &types.RuntimeConfig{},
 	}
 
-	err := d.handlePause(destPath, fileSize, NewTaskQueue(), nil)
+	remaining := []types.Task{{Offset: 500, Length: 500}}
+	err := d.handlePause(destPath, fileSize, remaining, nil)
 	if err != nil {
 		t.Fatalf("expected nil (finalize), got %v", err)
 	}
@@ -70,7 +70,7 @@ func TestHandlePause_RebuildsTasksFromBitmap(t *testing.T) {
 	state.UpdateChunkStatus(2*chunkSize, chunkSize, types.ChunkCompleted)
 
 	d := &ConcurrentDownloader{ID: "bitmap-resume", State: state, Runtime: &types.RuntimeConfig{}}
-	if err := d.handlePause(filepath.Join(tmpDir, "bitmap-resume.bin"), fileSize, NewTaskQueue(), nil); !errors.Is(err, types.ErrPaused) {
+	if err := d.handlePause(filepath.Join(tmpDir, "bitmap-resume.bin"), fileSize, nil, nil); !errors.Is(err, types.ErrPaused) {
 		t.Fatalf("handlePause = %v, want ErrPaused", err)
 	}
 
@@ -96,7 +96,7 @@ func TestHandlePause_CompleteBitmapDoesNotSaveIncompleteState(t *testing.T) {
 	}
 
 	d := &ConcurrentDownloader{ID: "bitmap-complete", State: state, Runtime: &types.RuntimeConfig{}}
-	if err := d.handlePause(filepath.Join(tmpDir, "bitmap-complete.bin"), fileSize, NewTaskQueue(), nil); err != nil {
+	if err := d.handlePause(filepath.Join(tmpDir, "bitmap-complete.bin"), fileSize, nil, nil); err != nil {
 		t.Fatalf("handlePause = %v, want nil", err)
 	}
 	if snapshot := state.TakePendingResumeState(); snapshot != nil {
@@ -112,7 +112,7 @@ func TestHandlePause_NilState_RemainingZero_NoPanic(t *testing.T) {
 	defer cleanup()
 
 	d := &ConcurrentDownloader{ID: "nil-state"}
-	err := d.handlePause(filepath.Join(tmpDir, "nil_state.bin"), 1000, NewTaskQueue(), nil)
+	err := d.handlePause(filepath.Join(tmpDir, "nil_state.bin"), 1000, nil, nil)
 	if err != nil {
 		t.Fatalf("expected nil for nil-state completion boundary, got %v", err)
 	}
@@ -126,15 +126,12 @@ func TestSaveStateSnapshot_NilState_RemainingTasksNoPanic(t *testing.T) {
 	destPath := filepath.Join(tmpDir, "nil_state_remain.bin")
 	d := &ConcurrentDownloader{ID: "nil-state-remain"}
 
-	queueFalse := NewTaskQueue()
-	queueFalse.Push(types.Task{Offset: 0, Length: fileSize})
-	if err := d.saveStateSnapshot(destPath, fileSize, queueFalse, nil, false); err != nil {
+	remaining := []types.Task{{Length: fileSize}}
+	if err := d.saveStateSnapshot(destPath, fileSize, remaining, nil, false); err != nil {
 		t.Fatalf("emit=false nil State: %v", err)
 	}
 
-	queueTrue := NewTaskQueue()
-	queueTrue.Push(types.Task{Offset: 0, Length: fileSize})
-	err := d.saveStateSnapshot(destPath, fileSize, queueTrue, nil, true)
+	err := d.saveStateSnapshot(destPath, fileSize, remaining, nil, true)
 	if !errors.Is(err, types.ErrPaused) {
 		t.Fatalf("emit=true nil State: got %v, want ErrPaused", err)
 	}
