@@ -88,7 +88,7 @@ jobs:
         with:
           name: ${{ inputs.release-artifact }}
           path: nix
-      - uses: cachix/install-nix-action@d9186cbdca7adedf113a159fa91f725a27866771 # v31
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
       - name: Wait for the Nix daemon
         shell: bash
         run: |
@@ -141,7 +141,7 @@ jobs:
         with:
           name: ${{ inputs.release-artifact }}
           path: nix
-      - uses: cachix/install-nix-action@d9186cbdca7adedf113a159fa91f725a27866771 # v31
+      - uses: cachix/install-nix-action@75c75c31ebece974e48ebc36b4ad125bd97bd97b # v31.11.3
       - name: Evaluate NixOS package integration
         env:
           NIX_CONFIG: extra-experimental-features = nix-command flakes
