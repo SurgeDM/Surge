@@ -100,6 +100,10 @@ func (m RootModel) View() tea.View {
 	// === Handle Modal States First ===
 	// These overlays sit on top of the dashboard or replace it
 
+	if m.state == LogMessageState {
+		return m.wrapView(m.renderModalWithOverlay(m.renderLogMessage()))
+	}
+
 	if m.state == InputState {
 		var activeInputs []textinput.Model
 		var activeLabels []string

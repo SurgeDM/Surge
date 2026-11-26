@@ -70,6 +70,7 @@ const (
 	PurgeConfirmState
 	RemoveConfirmState
 	SettingsConfirmState
+	LogMessageState
 )
 
 type FilePickerOrigin int
@@ -191,10 +192,13 @@ type RootModel struct {
 	lastResizeTime         time.Time
 
 	// Notification log system
-	logViewport viewport.Model // Scrollable log viewport
-	logEntries  []string       // Log entries for download events
-	logKinds    []logKind      // Semantic styles, applied using the current palette
-	logFocused  bool           // Whether the log viewport is focused
+	logViewport        viewport.Model // Scrollable log viewport
+	logEntries         []string       // Log entries for download events
+	logKinds           []logKind      // Semantic styles, applied using the current palette
+	logFocused         bool           // Whether the log viewport is focused
+	logCursor          int
+	logMessage         string
+	logMessageViewport viewport.Model
 
 	// Settings
 	Settings *config.Settings // Application settings

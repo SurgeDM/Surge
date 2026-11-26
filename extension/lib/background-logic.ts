@@ -3,6 +3,7 @@ export interface PendingDup {
   filename: string;
   directory: string;
   timestamp: number;
+  headers: Record<string, string>;
 }
 
 export function extractPathInfo(downloadItem: { filename?: string }): { filename: string; directory: string } {
@@ -155,11 +156,12 @@ export async function openEventStream(
 
 interface QueueDuplicateDownloadOptions {
   pendingDuplicates: Map<string, PendingDup>;
-  pendingDuplicateCounter: number;
+  pendingId: string;
   url: string;
   filename: string;
   directory: string;
-  persistPendingDuplicates: () => Promise<void>;
+  headers: Record<string, string>;
+  persistPendingDuplicates: () => Promise<unknown>;
   updateBadge: () => void;
   openPopup: () => Promise<void>;
   sendPrompt: (message: { type: 'promptDuplicate'; id: string; filename: string }) => Promise<unknown>;
@@ -167,13 +169,13 @@ interface QueueDuplicateDownloadOptions {
   now?: () => number;
 }
 
-export async function queueDuplicateDownload(opts: QueueDuplicateDownloadOptions): Promise<number> {
-  const nextCounter = opts.pendingDuplicateCounter + 1;
-  const pendingId = `dup_${nextCounter}`;
+export async function queueDuplicateDownload(opts: QueueDuplicateDownloadOptions): Promise<void> {
+  const { pendingId } = opts;
   opts.pendingDuplicates.set(pendingId, {
     url: opts.url,
     filename: opts.filename,
     directory: opts.directory,
+    headers: { ...opts.headers },
     timestamp: opts.now?.() ?? Date.now(),
   });
 
@@ -188,5 +190,4 @@ export async function queueDuplicateDownload(opts: QueueDuplicateDownloadOptions
   }
 
   opts.sendPrompt({ type: 'promptDuplicate', id: pendingId, filename: opts.filename }).catch(() => {});
-  return nextCounter;
 }

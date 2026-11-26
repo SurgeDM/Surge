@@ -115,12 +115,13 @@ describe('background logic', () => {
     const openPopup = vi.fn().mockResolvedValue(undefined);
     const sendPrompt = vi.fn().mockResolvedValue(undefined);
 
-    const nextCounter = await queueDuplicateDownload({
+    await queueDuplicateDownload({
       pendingDuplicates,
-      pendingDuplicateCounter: 0,
+      pendingId: 'dup_1',
       url: 'https://example.com/file.zip',
       filename: 'file.zip',
       directory: '/downloads',
+      headers: { 'X-Download-Token': 'snapshot' },
       persistPendingDuplicates,
       updateBadge,
       openPopup,
@@ -128,13 +129,13 @@ describe('background logic', () => {
       now: () => 1234,
     });
 
-    expect(nextCounter).toBe(1);
     expect([...pendingDuplicates]).toEqual([[
       'dup_1',
       {
         url: 'https://example.com/file.zip',
         filename: 'file.zip',
         directory: '/downloads',
+        headers: { 'X-Download-Token': 'snapshot' },
         timestamp: 1234,
       },
     ]]);
@@ -166,10 +167,10 @@ describe('background logic', () => {
 
   it('filters expired pending duplicates during rehydration', () => {
     expect(filterPendingDuplicates([
-      ['dup_1', { url: 'a', filename: 'a', directory: '', timestamp: 50 }],
-      ['dup_2', { url: 'b', filename: 'b', directory: '', timestamp: 150 }],
+      ['dup_1', { url: 'a', filename: 'a', directory: '', headers: {}, timestamp: 50 }],
+      ['dup_2', { url: 'b', filename: 'b', directory: '', headers: {}, timestamp: 150 }],
     ], 200, 100)).toEqual([
-      ['dup_2', { url: 'b', filename: 'b', directory: '', timestamp: 150 }],
+      ['dup_2', { url: 'b', filename: 'b', directory: '', headers: {}, timestamp: 150 }],
     ]);
   });
 

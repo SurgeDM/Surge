@@ -29,6 +29,7 @@ const DEFAULT_PORT = 1700;
 const MAX_PORT_SCAN = 100;
 const PORT_SCAN_BATCH_SIZE = 20;
 const BASE_URL_RETRY_COOLDOWN_MS = 5_000;
+const HANDOFF_TIMEOUT_MS = 25_000;
 const HEADER_EXPIRY_MS = 120_000;
 const HEALTH_CHECK_INTERVAL_MS = 5_000;
 const SYNC_INTERVAL_MS = 60_000;
@@ -58,7 +59,9 @@ let sseRetryCount = 0;
 const capturedHeaders = new Map<string, { headers: Record<string, string>; timestamp: number }>();
 
 const PENDING_DUP_KEY = 'pendingDuplicates';
+const PENDING_DUP_TTL_MS = 60_000;
 let pendingDuplicateCounter = 0;
+let pendingDuplicatesLoaded: Promise<void> | undefined;
 const pendingDuplicates = new Map<string, PendingDup>();
 const activeDownloadIds = new Set<string>();
 
@@ -66,6 +69,18 @@ const activeDownloadIds = new Set<string>();
 const processedIds = new Set<number>();
 // Coalesces duplicate onCreated events that use different browser download IDs.
 const interceptingUrls = new Set<string>();
+const startingBrowserRetries = new Set<string>();
+
+type InterceptedDownload = {
+  id: number;
+  url: string;
+  finalUrl?: string;
+  filename?: string;
+  state?: string;
+  startTime?: string;
+  totalBytes?: number;
+  byExtensionId?: string;
+};
 
 // ---------------------------------------------------------------------------
 // Storage helpers
@@ -170,32 +185,51 @@ function ensurePersistedStateLoaded(): Promise<void> {
 // Pending duplicates persistence
 // ---------------------------------------------------------------------------
 
-async function persistPendingDuplicates(): Promise<void> {
-  await browser.storage.local.set({ [PENDING_DUP_KEY]: [...pendingDuplicates] });
+async function persistPendingDuplicates(): Promise<boolean> {
+  // Pending URLs and captured credential headers stay in extension session memory.
+  const session = browser.storage.session;
+  if (!session) return false;
+  return session.set({ [PENDING_DUP_KEY]: [...pendingDuplicates] }).then(() => true, () => false);
+}
+
+function ensurePendingDuplicatesLoaded(): Promise<void> {
+  return pendingDuplicatesLoaded ??= rehydratePendingDuplicates();
 }
 
 async function rehydratePendingDuplicates(): Promise<void> {
-  try {
-    const result = await browser.storage.local.get(PENDING_DUP_KEY);
-    const entries = result[PENDING_DUP_KEY] as [string, PendingDup][] | undefined;
-    if (entries?.length) {
-      const freshEntries = filterPendingDuplicates(entries);
-      for (const [id, data] of freshEntries) {
-        pendingDuplicates.set(id, data);
-        const num = parseInt(id.replace('dup_', ''), 10);
-        if (!isNaN(num) && num > pendingDuplicateCounter) pendingDuplicateCounter = num;
-      }
-      if (freshEntries.length !== entries.length) await persistPendingDuplicates();
-      updateBadge();
-    }
-  } catch { /* ignore */ }
+  const session = await browser.storage.session?.get(PENDING_DUP_KEY).catch(() => undefined);
+  const legacy = await browser.storage.local.get(PENDING_DUP_KEY).catch(() => undefined);
+  const sessionEntries = session?.[PENDING_DUP_KEY];
+  const legacyEntries = legacy?.[PENDING_DUP_KEY];
+  const entries = (sessionEntries ?? legacyEntries) as [string, PendingDup][] | undefined;
+  if (!Array.isArray(entries)) return;
+
+  const freshEntries = filterPendingDuplicates(entries, Date.now(), PENDING_DUP_TTL_MS);
+  for (const [id, data] of freshEntries) {
+    pendingDuplicates.set(id, { ...data, headers: sessionEntries ? data.headers ?? {} : {} });
+    const num = parseInt(id.replace('dup_', ''), 10);
+    if (!isNaN(num) && num > pendingDuplicateCounter) pendingDuplicateCounter = num;
+  }
+  if (legacyEntries || freshEntries.length !== entries.length) {
+    const persisted = await persistPendingDuplicates();
+    if (legacyEntries && persisted) await browser.storage.local.remove(PENDING_DUP_KEY).catch(() => {});
+  }
+  updateBadge();
 }
 
-function cleanupStaleDuplicates(): void {
-  const cutoff = Date.now() - 60_000;
+function cleanupStaleDuplicates(): boolean {
+  const size = pendingDuplicates.size;
+  const cutoff = Date.now() - PENDING_DUP_TTL_MS;
   for (const [id, data] of pendingDuplicates) {
     if (data.timestamp < cutoff) pendingDuplicates.delete(id);
   }
+  return pendingDuplicates.size !== size;
+}
+
+async function prunePendingDuplicates(): Promise<void> {
+  if (!cleanupStaleDuplicates()) return;
+  updateBadge();
+  await persistPendingDuplicates();
 }
 
 async function persistDiscoveredServerUrl(url: string | null): Promise<void> {
@@ -484,15 +518,19 @@ async function fallbackToBrowser(
   capturedHeaders: Record<string, string>,
 ): Promise<HandoffResult> {
   const enabled = await storageGetBoolean(STORAGE_KEYS.FALLBACK_TO_BROWSER);
-  if (enabled === false) {
-    logDownload('browser fallback disabled', { url, surgeError });
+  if (enabled === false || startingBrowserRetries.has(url)) {
+    logDownload('browser fallback skipped', { url, surgeError });
     return { success: false, outcome: 'failed', error: surgeError, surgeError };
   }
 
+  startingBrowserRetries.add(url);
   try {
     const headers = buildBrowserDownloadHeaders(capturedHeaders);
     logDownload('starting browser fallback', { url, forwardedHeaderCount: headers?.length ?? 0 });
     const id = await browser.downloads.download(headers ? { url, headers } : { url });
+    // onCreated can arrive on either side of the download() response.
+    processedIds.add(id);
+    setTimeout(() => processedIds.delete(id), HEADER_EXPIRY_MS);
     logDownload('browser fallback started', { id, url });
     return { success: true, outcome: 'browser', surgeError };
   } catch (error) {
@@ -505,6 +543,8 @@ async function fallbackToBrowser(
       surgeError,
       fallbackError,
     };
+  } finally {
+    startingBrowserRetries.delete(url);
   }
 }
 
@@ -526,7 +566,11 @@ async function sendToSurge(
     logDownload('starting Surge handoff', { url, base });
     const resp = await fetch(`${base}/download`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(await authHeaders()) },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'SurgeExtension',
+        ...(await authHeaders()),
+      },
       body: JSON.stringify(buildDownloadRequestBody({
         url,
         filename,
@@ -535,7 +579,7 @@ async function sendToSurge(
         skipApproval: options?.skipApproval,
         skipDuplicateWarning: options?.skipDuplicateWarning,
       })),
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(HANDOFF_TIMEOUT_MS),
     });
 
     if (resp.ok) {
@@ -546,10 +590,11 @@ async function sendToSurge(
     const error = await resp.text().catch(() => '') || `Server returned ${resp.status}`;
     logDownload('Surge handoff failed', { url, status: resp.status, error });
     return fallbackToBrowser(url, error, headers);
-  } catch (error) {
-    const surgeError = error instanceof Error ? error.message : String(error);
-    logDownload('Surge handoff failed', { url, surgeError });
-    return fallbackToBrowser(url, surgeError, headers);
+  } catch {
+    // The daemon can still enqueue after the HTTP connection closes.
+    const surgeError = 'Surge did not confirm the handoff. Check Surge for the download before retrying.';
+    logDownload('Surge handoff unconfirmed', { url });
+    return { success: false, outcome: 'failed', error: surgeError, surgeError };
   }
 }
 
@@ -699,10 +744,8 @@ async function isDuplicateDownload(url: string): Promise<boolean> {
   return list.some(dl => (dl.url || '').replace(/\/$/, '') === normalized);
 }
 
-async function handleDownloadCreated(downloadItem: {
-  id: number; url: string; filename?: string; state?: string; startTime?: string; totalBytes?: number; byExtensionId?: string;
-}): Promise<void> {
-  if (downloadItem.byExtensionId === browser.runtime.id) {
+async function handleDownloadCreated(downloadItem: InterceptedDownload): Promise<void> {
+  if (downloadItem.byExtensionId === browser.runtime.id || startingBrowserRetries.has(downloadItem.url)) {
     logDownload('ignored extension-created download', { id: downloadItem.id, url: downloadItem.url });
     return;
   }
@@ -733,70 +776,76 @@ async function handleDownloadCreated(downloadItem: {
     return;
   }
 
-  if (interceptingUrls.has(downloadItem.url)) {
+  // Use the file request after redirects, with headers captured for that request.
+  const url = downloadItem.finalUrl || downloadItem.url;
+  if (shouldSkipUrl(url)) return;
+  const headers = getCapturedHeaders(url) ?? {};
+
+  if (interceptingUrls.has(url)) {
     // A second browser download ID is a real download, not a duplicate event
     // for the first ID. Cancel it so it cannot continue alongside the handoff
     // already in progress for this URL.
     try {
       await browser.downloads.cancel(downloadItem.id);
       await browser.downloads.erase({ id: downloadItem.id } as any).catch(() => {});
-      logDownload('cancelled: handoff already in progress', { id: downloadItem.id, url: downloadItem.url });
+      logDownload('cancelled: handoff already in progress', { id: downloadItem.id, url });
     } catch {
-      logDownload('could not cancel duplicate while handoff is in progress', { id: downloadItem.id, url: downloadItem.url });
+      logDownload('could not cancel duplicate while handoff is in progress', { id: downloadItem.id, url });
     }
     return;
   }
-  interceptingUrls.add(downloadItem.url);
+  interceptingUrls.add(url);
   try {
-  // Once health has passed, cancel the browser download immediately before any
-  // additional async work so the browser does not race ahead of the handoff.
-  try {
-    await browser.downloads.cancel(downloadItem.id);
-  } catch {
-    logDownload('handoff aborted: browser cancellation failed', { id: downloadItem.id, url: downloadItem.url });
-    return; // The original browser download is still active.
-  }
-  logDownload('browser download cancelled', { id: downloadItem.id, url: downloadItem.url });
-  try {
-    await browser.downloads.erase({ id: downloadItem.id } as any);
-  } catch { /* already removed - ignore */ }
+    // Once health has passed, cancel the browser download immediately before any
+    // additional async work so the browser does not race ahead of the handoff.
+    try {
+      await browser.downloads.cancel(downloadItem.id);
+    } catch {
+      logDownload('handoff aborted: browser cancellation failed', { id: downloadItem.id, url });
+      return; // The original browser download is still active.
+    }
+    logDownload('browser download cancelled', { id: downloadItem.id, url });
+    try {
+      await browser.downloads.erase({ id: downloadItem.id } as any);
+    } catch { /* already removed - ignore */ }
 
-  const { filename, directory } = extractPathInfo(downloadItem);
-  const duplicateDisplayName = filename || downloadItem.url.split('/').pop()?.split('?')[0] || 'Unknown file';
-  const headers = getCapturedHeaders(downloadItem.url) ?? {};
+    const { filename, directory } = extractPathInfo(downloadItem);
+    const duplicateDisplayName = filename || url.split('/').pop()?.split('?')[0] || 'Unknown file';
 
-  // Check for duplicates in the extension BEFORE sending to server.
-  // This way the TUI never sees a duplicate prompt.
-  const warnOnDuplicate = (await storageGetBoolean(STORAGE_KEYS.WARN_ON_DUPLICATE)) !== false;
-  if (warnOnDuplicate && await isDuplicateDownload(downloadItem.url)) {
-    logDownload('queued duplicate confirmation', { id: downloadItem.id, url: downloadItem.url });
-    pendingDuplicateCounter = await queueDuplicateDownload({
-      pendingDuplicates,
-      pendingDuplicateCounter,
-      url: downloadItem.url,
-      filename: duplicateDisplayName,
-      directory,
-      cleanupStaleDuplicates,
-      persistPendingDuplicates,
-      updateBadge,
-      openPopup: tryOpenPopup,
-      sendPrompt: message => browser.runtime.sendMessage(message),
+    // Check for duplicates in the extension BEFORE sending to server.
+    // This way the TUI never sees a duplicate prompt.
+    const warnOnDuplicate = (await storageGetBoolean(STORAGE_KEYS.WARN_ON_DUPLICATE)) !== false;
+    if (warnOnDuplicate && await isDuplicateDownload(url)) {
+      logDownload('queued duplicate confirmation', { id: downloadItem.id, url });
+      await ensurePendingDuplicatesLoaded();
+      await queueDuplicateDownload({
+        pendingDuplicates,
+        pendingId: `dup_${++pendingDuplicateCounter}`,
+        url,
+        filename: duplicateDisplayName,
+        directory,
+        headers,
+        cleanupStaleDuplicates,
+        persistPendingDuplicates,
+        updateBadge,
+        openPopup: tryOpenPopup,
+        sendPrompt: message => browser.runtime.sendMessage(message),
+      });
+      return;
+    }
+
+    // Force empty filename hint for backend - rely on backend prober.
+    const result = await sendToSurge(url, '', directory, headers, {
+      skipDuplicateWarning: !warnOnDuplicate,
     });
-    return;
-  }
+    logDownload('handoff complete', { id: downloadItem.id, url, outcome: result.outcome });
 
-  // Force empty filename hint for backend - rely on backend prober.
-  const result = await sendToSurge(downloadItem.url, '', directory, headers, {
-    skipDuplicateWarning: !warnOnDuplicate,
-  });
-  logDownload('handoff complete', { id: downloadItem.id, url: downloadItem.url, outcome: result.outcome });
-
-  if (result.outcome === 'surge') {
-    await tryOpenPopup();
-  }
-  await notifyHandoffResult(result, duplicateDisplayName);
+    if (result.outcome === 'surge') {
+      await tryOpenPopup();
+    }
+    await notifyHandoffResult(result, duplicateDisplayName);
   } finally {
-    interceptingUrls.delete(downloadItem.url);
+    interceptingUrls.delete(url);
   }
 }
 
@@ -1018,13 +1067,13 @@ function handleMessage(message: Record<string, any>): Promise<unknown> | unknown
     case 'skipDuplicate':
       return handleSkipDuplicate(message.id);
 
-    case 'getPendingDuplicates': {
-      const dups = [];
-      for (const [id, data] of pendingDuplicates) {
-        dups.push({ id, filename: data.filename, url: data.url });
-      }
-      return Promise.resolve({ duplicates: dups });
-    }
+    case 'getPendingDuplicates':
+      return ensurePendingDuplicatesLoaded().then(async () => {
+        await prunePendingDuplicates();
+        return {
+          duplicates: [...pendingDuplicates].map(([id, { filename, url }]) => ({ id, filename, url })),
+        };
+      });
 
     // Bulk clear actions
     case 'clearCompleted':
@@ -1065,6 +1114,8 @@ async function notifyNextPendingDuplicate(): Promise<void> {
 }
 
 async function handleConfirmDuplicate(id: string): Promise<{ success: boolean; error?: string }> {
+  await ensurePendingDuplicatesLoaded();
+  await prunePendingDuplicates();
   const pending = pendingDuplicates.get(id);
   if (!pending) return { success: false, error: 'Pending download not found' };
 
@@ -1076,7 +1127,7 @@ async function handleConfirmDuplicate(id: string): Promise<{ success: boolean; e
     pending.url,
     '', // Force empty - rely on backend prober
     pending.directory,
-    {},
+    pending.headers,
     { skipApproval: true },
   );
   await notifyHandoffResult(result, pending.filename);
@@ -1087,6 +1138,7 @@ async function handleConfirmDuplicate(id: string): Promise<{ success: boolean; e
 }
 
 async function handleSkipDuplicate(id: string): Promise<{ success: boolean }> {
+  await ensurePendingDuplicatesLoaded();
   pendingDuplicates.delete(id);
   await persistPendingDuplicates();
   updateBadge();
@@ -1100,9 +1152,7 @@ async function handleSkipDuplicate(id: string): Promise<{ success: boolean }> {
 
 export default defineBackground(() => {
   // Download interception
-  browser.downloads.onCreated.addListener((downloadItem: {
-    id: number; url: string; filename?: string; state?: string; startTime?: string; totalBytes?: number; byExtensionId?: string;
-  }) => {
+  browser.downloads.onCreated.addListener((downloadItem: InterceptedDownload) => {
     logDownload('created', {
       id: downloadItem.id,
       url: downloadItem.url,
@@ -1178,10 +1228,13 @@ export default defineBackground(() => {
   }, HEALTH_CHECK_INTERVAL_MS);
 
   // Periodic full sync with backend
-  setInterval(() => { fullSync().catch(() => { }); }, SYNC_INTERVAL_MS);
+  setInterval(() => {
+    void prunePendingDuplicates();
+    fullSync().catch(() => { });
+  }, SYNC_INTERVAL_MS);
 
   // Startup: restore persisted state
-  rehydratePendingDuplicates().catch(() => { });
+  ensurePendingDuplicatesLoaded().catch(() => { });
   ensurePersistedStateLoaded()
     .then(() => checkHealthSilent())
     .then(() => {
@@ -1224,7 +1277,9 @@ export const __test__ = {
     sseRetryCount = 0;
     capturedHeaders.clear();
     pendingDuplicateCounter = 0;
+    pendingDuplicatesLoaded = undefined;
     pendingDuplicates.clear();
+    startingBrowserRetries.clear();
     activeDownloadIds.clear();
     processedIds.clear();
     interceptingUrls.clear();

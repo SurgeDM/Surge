@@ -80,13 +80,15 @@ jobs:
         env:
           CURRENT_TAG: ${{ github.ref_name }}
         run: |
-          PREVIOUS_TAG="$(git describe --tags --abbrev=0 "${CURRENT_TAG}^" --match 'ext-v*')"
+          PREVIOUS_TAG="$(git tag --list 'ext-v*' --sort=version:refname |
+            awk -v current="$CURRENT_TAG" '$0 == current { print previous; exit } { previous = $0 }')"
+          : "${PREVIOUS_TAG:?Previous extension release tag not found}"
           {
             echo "## Extension changes"
             echo
-            git log --no-merges \
+            git log --right-only --cherry-pick --no-merges \
               --pretty=format:"- %s ([%h](https://github.com/${GITHUB_REPOSITORY}/commit/%H))" \
-              "${PREVIOUS_TAG}..${CURRENT_TAG}" -- \
+              "${PREVIOUS_TAG}...${CURRENT_TAG}" -- \
               extension/ \
               .github/workflows/extension.yml \
               .github/workflows/extension-checks.yml
