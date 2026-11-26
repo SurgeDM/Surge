@@ -30,6 +30,8 @@ jobs:
       nixos: ${{ steps.filter.outputs.nixos }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
       - uses: dorny/paths-filter@v3
         if: github.event_name == 'pull_request'
         id: filter
